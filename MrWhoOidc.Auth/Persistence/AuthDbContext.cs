@@ -86,6 +86,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.TokenHash).IsUnique();
             b.Property(x => x.ClientId).IsRequired();
             b.Property(x => x.ScopesJson).IsRequired();
+            b.Property(x => x.Audience).HasMaxLength(200);
+            b.Property(x => x.Jti).HasMaxLength(64);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
 
@@ -201,12 +203,16 @@ public class Token
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     [MaxLength(20)]
-    public string Type { get; set; } = "refresh"; // refresh
+    public string Type { get; set; } = "refresh"; // refresh | access (opaque)
     [MaxLength(200)]
     public string TokenHash { get; set; } = string.Empty; // SHA-256 of token
     public Guid UserId { get; set; }
     public string ClientId { get; set; } = string.Empty;
     public string ScopesJson { get; set; } = "[]";
+    [MaxLength(200)]
+    public string? Audience { get; set; } // for opaque access tokens
+    [MaxLength(64)]
+    public string? Jti { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }

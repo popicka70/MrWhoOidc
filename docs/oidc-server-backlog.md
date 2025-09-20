@@ -6,7 +6,7 @@ Status summary (MVP scope)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation; configurable API audiences)
 - [x] M5 UserInfo + Logout (sub-based userinfo, local + RP-initiated logout)
-- [~] M6 Introspection & Revocation (revocation implemented with client auth, idempotency + audit; introspection pending)
+- [~] M6 Introspection & Revocation (revocation done; basic introspection implemented incl. JWT/opaque; policy & hardening pending)
 - [x] M7 Key rotation & hardening (automated key rotation + JWKS overlap, rate limiting, antiforgery, login backoff, WWW-Authenticate, CORS allow-list, HTTPS/HSTS/forwarded headers)
 - [~] M8 Observability, DX & Docs (OpenTelemetry wired; custom meters + tags; ADRs + samples; docs pending)
 
@@ -60,7 +60,7 @@ M5 – UserInfo, Logout/End Session
 - [x] Logout: local `/logout` and RP-initiated `/connect/endsession` with allow-listed `post_logout_redirect_uri`.
 
 M6 – Introspection & Revocation (optional for MVP)
-- [ ] `/introspect` for confidential clients (when opaque access tokens are enabled).
+- [x] `/introspect` for confidential clients (supports JWT tokens now; opaque tokens supported when enabled).
 - [x] `/revoke` for refresh tokens with client auth (basic/post), idempotency, and audit.
 
 M7 – Key Rotation & Hardening
@@ -89,25 +89,25 @@ Backlog – Introspection (RFC 7662)
   - [x] Validate JWT access tokens against local keys; return `{ active:false }` on failures.
   - [x] Respond with: `active`, `token_type`, `scope`, `sub`, `username`, `aud`, `iss`, `iat`, `nbf`, `exp`.
   - [x] Rate limit policy `rl-introspect` (~60/min/IP).
-  - [ ] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
-  - [ ] Audit log minimal fields (client_id, outcome, ip, aud).
+  - [x] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
+  - [x] Audit log minimal fields (client_id, outcome, ip, aud).
 
 - Phase 2 – Policy & authorization
-  - [ ] Restrict which clients may call introspection (allow-list per client).
-  - [ ] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
-  - [ ] Add `introspection permissions` model/table or config (client_id -> allowed audiences/resources).
+  - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions`.
+  - [x] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
+  - [x] Add `introspection permissions` config (client_id -> allowed audiences/resources).
   - [ ] Return limited fields based on caller policy (privacy by default).
   - [ ] Optionally include `client_id` claim in response when caller is authorized to see it.
 
 - Phase 3 – Opaque access tokens
-  - [ ] Add server config to toggle opaque access tokens for APIs (per audience or global).
-  - [ ] Persist access tokens (opaque): hash, `client_id`, `user_id`, `scope[]`, `aud`, `exp`, `jti`, `revoked_at`.
-  - [ ] Update `/token` to issue opaque tokens when configured; include `jti`.
-  - [ ] Update `/introspect` to resolve opaque tokens from DB and reflect `revoked_at`/`exp` in `active`.
+  - [x] Add server config to toggle opaque access tokens for APIs (per audience or global).
+  - [x] Persist access tokens (opaque): hash, `client_id`, `user_id`, `scope[]`, `aud`, `exp`, `jti`, `revoked_at`.
+  - [x] Update `/token` to issue opaque tokens when configured; include `jti`.
+  - [x] Update `/introspect` to resolve opaque tokens from DB and reflect `revoked_at`/`exp` in `active`.
   - [ ] Background cleanup for expired tokens.
 
 - Phase 4 – Fidelity & extensions
-  - [ ] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
+  - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
   - [ ] Support `aud` as array in response when token carries multiple audiences.
   - [ ] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
   - [ ] Optional mTLS client auth for introspection (future hardening).
@@ -135,7 +135,7 @@ Next steps (proposed)
 3) Protocol fidelity improvements
    - Complete `private_key_jwt` by configuring per-client public JWKs (config or DB) and enabling validation.
    - Consider RFC 8707 resource indicators for APIs; keep discovery metadata strictly standard.
-   - Implement `/introspect` with opaque access token mode for confidential clients.
+   - Refine opaque tokens (cleanup job, lifecycle), and finalize introspection field policy per caller.
 
 4) Dev experience & Docs
    - Write full documentation in `/docs` (setup, flows, endpoints, examples) and export a Postman JSON.

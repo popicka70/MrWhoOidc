@@ -52,13 +52,31 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
         }
 
-        // Build access token first (include scopes claim)
-        var accessClaims = new List<System.Security.Claims.Claim>
+        // Determine opaque access token issuance
+        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
+            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
+             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+
+        string accessToken;
+        string? jti = null;
+        if (opaqueEnabled)
         {
-            new("sub", entity.UserId.ToString()),
-            new("scope", string.Join(' ', scopes))
-        };
-        var accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+            // Create opaque token (random 256-bit), persist with hash
+            var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            accessToken = raw;
+            jti = Guid.NewGuid().ToString("N");
+            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
+        }
+        else
+        {
+            // Build JWT access token first (include scopes claim)
+            var accessClaims = new List<System.Security.Claims.Claim>
+            {
+                new("sub", entity.UserId.ToString()),
+                new("scope", string.Join(' ', scopes))
+            };
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+        }
 
         // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
         var atHash = ComputeAtHash(accessToken);
@@ -127,12 +145,27 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
         var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
 
-        var accessClaims = new List<System.Security.Claims.Claim>
+        // Opaque issuance check matches authorization_code path
+        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
+            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
+             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+
+        string accessToken;
+        if (opaqueEnabled)
         {
-            new("sub", tokenEntity.UserId.ToString()),
-            new("scope", string.Join(' ', scopes))
-        };
-        var accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+            var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            accessToken = raw;
+            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
+        }
+        else
+        {
+            var accessClaims = new List<System.Security.Claims.Claim>
+            {
+                new("sub", tokenEntity.UserId.ToString()),
+                new("scope", string.Join(' ', scopes))
+            };
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+        }
 
         // Rotation: create new refresh token and revoke the old one
         var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct).ConfigureAwait(false);
@@ -148,6 +181,24 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             scope = string.Join(' ', scopes)
         };
         return (true, payload, null, 200);
+    }
+
+    async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, CancellationToken ct)
+    {
+        var hash = Hash(rawToken);
+        var entity = new Persistence.Token
+        {
+            Type = "access",
+            TokenHash = hash,
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = JsonSerializer.Serialize(scopes),
+            Audience = audience,
+            Jti = jti,
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
+        };
+        db.Tokens.Add(entity);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     static string ComputeS256(string verifier)

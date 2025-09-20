@@ -2,6 +2,9 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Observability;
 using System.Security.Cryptography;
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -16,7 +19,9 @@ public sealed class IntrospectionHandler(
     IClientStore clients,
     IClientAssertionValidator assertions,
     OidcMetrics metrics,
-    ILogger<IntrospectionHandler> logger
+    ILogger<IntrospectionHandler> logger,
+    AuthDbContext db,
+    IOptions<AuthOptions> authOptions
 ) : IIntrospectionHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -33,7 +38,7 @@ public sealed class IntrospectionHandler(
 
         var form = await http.Request.ReadFormAsync();
         var token = form["token"].ToString();
-        var hint = form["token_type_hint"].ToString(); // currently unused, supports access token only
+        var hint = form["token_type_hint"].ToString();
         var clientId = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form["client_id"].ToString();
         var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form["client_secret"].ToString();
         var clientBucket = string.IsNullOrEmpty(clientId) ? "unknown" : BucketizeClientId(clientId);
@@ -86,49 +91,101 @@ public sealed class IntrospectionHandler(
             return Results.BadRequest(new { error = "unauthorized_client" });
         }
 
-        // Validate access token (JWT) using local signing keys
+        // Introspection policy: check allowed audiences for this client, if configured
+        string? requestedAud = null;
+
+        // If token is JWT or opaque? Try JWT validation first.
         var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
         var (ok, principal, _) = tokenValidator.Validate(token, issuer);
-
-        if (!ok || principal is null)
+        if (ok && principal is not null)
         {
-            // Per RFC 7662, return 200 with { active:false } on invalid/non-existent token
+            requestedAud = principal.FindFirst("aud")?.Value;
+
+            if (!IsClientAllowedForAudience(clientId, requestedAud))
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "forbidden", aud: requestedAud);
+                // For privacy, respond as inactive
+                return Results.Json(new { active = false });
+            }
+
+            var scope = principal.FindFirst("scope")?.Value;
+            var sub = principal.FindFirst("sub")?.Value;
+            var iss = principal.FindFirst("iss")?.Value ?? issuer;
+            var iatStr = principal.FindFirst("iat")?.Value;
+            var nbfStr = principal.FindFirst("nbf")?.Value;
+            var expStr = principal.FindFirst("exp")?.Value;
+
+            long? ToLong(string? s) => long.TryParse(s, out var v) ? v : null;
+
+            var response = new Dictionary<string, object?>
+            {
+                ["active"] = true,
+                ["token_type"] = "Bearer",
+                ["scope"] = scope,
+                ["sub"] = sub,
+                ["username"] = sub,
+                ["aud"] = requestedAud,
+                ["iss"] = iss,
+                ["iat"] = ToLong(iatStr),
+                ["nbf"] = ToLong(nbfStr),
+                ["exp"] = ToLong(expStr)
+            };
+
+            metrics.IntrospectionActiveTrue.Add(1, tags);
+            LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: requestedAud);
+            metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+            return Results.Json(response);
+        }
+
+        // Opaque token path: look up by hash in DB
+        var hash = Hash(token);
+        var entity = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.Type == "access" && t.TokenHash == hash, http.RequestAborted);
+        if (entity is null)
+        {
             metrics.IntrospectionActiveFalse.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: null);
             metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
             return Results.Json(new { active = false });
         }
 
-        // Build introspection response. Only include common fields we can infer from JWT.
-        // Note: we do not persist access tokens, so we can't reflect revocation here.
-        var scope = principal.FindFirst("scope")?.Value;
-        var sub = principal.FindFirst("sub")?.Value;
-        var aud = principal.FindFirst("aud")?.Value;
-        var iss = principal.FindFirst("iss")?.Value ?? issuer;
-        var iatStr = principal.FindFirst("iat")?.Value;
-        var nbfStr = principal.FindFirst("nbf")?.Value;
-        var expStr = principal.FindFirst("exp")?.Value;
+        requestedAud = entity.Audience;
+        if (!IsClientAllowedForAudience(clientId, requestedAud))
+        {
+            metrics.IntrospectionActiveFalse.Add(1, tags);
+            metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+            LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "forbidden", aud: requestedAud);
+            return Results.Json(new { active = false });
+        }
 
-        long? ToLong(string? s) => long.TryParse(s, out var v) ? v : null;
+        var active = entity.RevokedAt is null && entity.ExpiresAt > DateTimeOffset.UtcNow;
+        if (!active)
+        {
+            metrics.IntrospectionActiveFalse.Add(1, tags);
+            LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+            metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+            return Results.Json(new { active = false });
+        }
 
-        var response = new Dictionary<string, object?>
+        // Minimal opaque response fields (privacy by default)
+        var scopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
+        var responseOpaque = new Dictionary<string, object?>
         {
             ["active"] = true,
             ["token_type"] = "Bearer",
-            ["scope"] = scope,
-            ["sub"] = sub,
-            ["username"] = sub,
-            ["aud"] = aud,
-            ["iss"] = iss,
-            ["iat"] = ToLong(iatStr),
-            ["nbf"] = ToLong(nbfStr),
-            ["exp"] = ToLong(expStr)
+            ["scope"] = string.Join(' ', scopes),
+            ["sub"] = entity.UserId.ToString(),
+            ["username"] = entity.UserId.ToString(),
+            ["aud"] = entity.Audience,
+            ["iss"] = issuer,
+            ["exp"] = entity.ExpiresAt.ToUnixTimeSeconds(),
         };
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
-        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: aud);
+        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);
         metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
-        return Results.Json(response);
+        return Results.Json(responseOpaque);
     }
 
     static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
@@ -153,11 +210,25 @@ public sealed class IntrospectionHandler(
         }
     }
 
+    bool IsClientAllowedForAudience(string clientId, string? audience)
+    {
+        if (string.IsNullOrEmpty(audience)) return true; // if not present, skip policy
+        var map = authOptions.Value.IntrospectionPermissions;
+        if (map is null || map.Count == 0) return true; // no policy configured
+        if (!map.TryGetValue(clientId, out var audiences)) return false;
+        return audiences.Contains(audience, StringComparer.Ordinal);
+    }
+
+    static string Hash(string value)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        return Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value)));
+    }
+
     // Simple privacy-preserving bucketization of client_id for logs/metrics
     static string BucketizeClientId(string clientId)
     {
-        // Use SHA-256 and keep first 8 bytes as hex prefix
-        var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(clientId));
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(clientId));
         return Convert.ToHexString(bytes.AsSpan(0, 8));
     }
 
