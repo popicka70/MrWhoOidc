@@ -32,9 +32,11 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandle
             response_types_supported = new[] { "code" },
             grant_types_supported = new[] { "authorization_code", "refresh_token" },
             token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
+            token_endpoint_auth_signing_alg_values_supported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512" },
             code_challenge_methods_supported = new[] { "S256" },
             id_token_signing_alg_values_supported = new[] { "RS256" },
-            scopes_supported = new[] { "openid", "profile", "email" }
+            scopes_supported = new[] { "openid", "profile", "email" },
+            resource_indicators_supported = true
         };
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(body);

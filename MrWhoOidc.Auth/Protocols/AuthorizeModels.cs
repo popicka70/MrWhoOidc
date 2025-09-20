@@ -10,6 +10,8 @@ public class AuthorizeRequest
     public string? nonce { get; set; }
     public string? code_challenge { get; set; }
     public string? code_challenge_method { get; set; }
+    // RFC 8707 resource indicator (single resource supported for now)
+    public string? resource { get; set; }
 }
 
 public class AuthorizeValidationResult
@@ -25,4 +27,5 @@ public class AuthorizeValidationResult
     public string? CodeChallenge { get; set; }
     public string? CodeChallengeMethod { get; set; }
     public bool RequireConsent { get; set; }
+    public string? Resource { get; set; }
 }

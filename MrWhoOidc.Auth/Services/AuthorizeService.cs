@@ -42,6 +42,10 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
         if (!scopes.Contains("openid"))
             return Error("invalid_scope", "scope must include 'openid'");
 
+        // RFC 8707 resource (optional): must be absolute URI when present
+        if (!string.IsNullOrEmpty(request.resource) && !IsValidAbsoluteUri(request.resource))
+            return Error("invalid_target", "resource must be an absolute URI");
+
         return new AuthorizeValidationResult
         {
             IsValid = true,
@@ -51,7 +55,8 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
             Nonce = request.nonce,
             CodeChallenge = request.code_challenge,
             CodeChallengeMethod = request.code_challenge_method,
-            RequireConsent = client.RequireConsent
+            RequireConsent = client.RequireConsent,
+            Resource = request.resource
         };
     }
 

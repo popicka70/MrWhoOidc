@@ -32,6 +32,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 nonce = http.Request.Query["nonce"],
                 code_challenge = http.Request.Query["code_challenge"],
                 code_challenge_method = http.Request.Query["code_challenge_method"],
+                resource = http.Request.Query["resource"],
             };
 
             var validation = await authorize.ValidateAsync(req);
