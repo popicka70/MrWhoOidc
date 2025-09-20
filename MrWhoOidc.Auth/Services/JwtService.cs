@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Services;
+using System.Globalization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -17,8 +18,12 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
-        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString()));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
         if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
+
+        // Required by OIDC: iat (issued at)
+        var now = DateTimeOffset.UtcNow;
+        list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
         // Use JsonWebKey to avoid lifetime issues with RSA instances
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
