@@ -8,13 +8,18 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IJwtService
 {
-    string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires);
+    string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null);
 }
 
 internal sealed class JwtService(IKeyStore keyStore) : IJwtService
 {
-    public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires)
+    public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null)
     {
+        var list = new List<Claim>(claims);
+        if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString()));
+        if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
+
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
         using var rsa = jwk.ToRSA();
         var key = new RsaSecurityKey(rsa) { KeyId = jwk.Kid };
@@ -23,7 +28,7 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,
-            claims: claims,
+            claims: list,
             notBefore: DateTime.UtcNow,
             expires: expires.UtcDateTime,
             signingCredentials: creds

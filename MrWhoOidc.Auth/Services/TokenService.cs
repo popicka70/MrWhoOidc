@@ -38,17 +38,26 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
         }
 
-        // Build ID token and access token
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
-        var claims = new List<System.Security.Claims.Claim>
+
+        var idClaims = new List<System.Security.Claims.Claim>
         {
             new("sub", entity.UserId.ToString()),
-            new("aud", clientId),
-            new("nonce", entity.Nonce ?? string.Empty)
+            new("aud", clientId)
         };
 
-        var idToken = jwt.CreateJwt(issuer, clientId, claims, DateTimeOffset.UtcNow.AddMinutes(5));
-        var accessToken = jwt.CreateJwt(issuer, "api", new [] { new System.Security.Claims.Claim("sub", entity.UserId.ToString()) }, DateTimeOffset.UtcNow.AddMinutes(15));
+        var idToken = jwt.CreateJwt(
+            issuer,
+            clientId,
+            idClaims,
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            nonce: entity.Nonce,
+            accessTokenHash: null,
+            authTime: DateTimeOffset.UtcNow // TODO: track real auth_time from login
+        );
+
+        var accessClaims = new [] { new System.Security.Claims.Claim("sub", entity.UserId.ToString()) };
+        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Refresh token issuance & rotation baseline
         var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);

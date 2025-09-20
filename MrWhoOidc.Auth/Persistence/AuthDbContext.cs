@@ -17,7 +17,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Username).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Email).HasMaxLength(256);
+            b.Property(x => x.Name).HasMaxLength(200);
             b.HasIndex(x => x.Username).IsUnique();
+            b.HasIndex(x => x.Email);
         });
 
         modelBuilder.Entity<Client>(b =>
@@ -72,6 +75,9 @@ public class User
     public string PasswordHash { get; set; } = string.Empty; // Argon2id
     public string? PasswordSalt { get; set; }
     public string HashAlgorithm { get; set; } = "argon2id";
+    public string? Email { get; set; }
+    public bool EmailVerified { get; set; }
+    public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

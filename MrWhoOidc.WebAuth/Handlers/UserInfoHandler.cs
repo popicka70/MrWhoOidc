@@ -23,6 +23,15 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         if (!ok || principal is null) return Results.Unauthorized();
 
         var sub = principal.FindFirstValue("sub");
-        return Results.Json(new { sub });
+        var name = principal.FindFirstValue("name");
+        var email = principal.FindFirstValue("email");
+        var emailVerified = principal.FindFirst("email_verified")?.Value;
+
+        var payload = new Dictionary<string, object?> { ["sub"] = sub };
+        if (!string.IsNullOrEmpty(name)) payload["name"] = name;
+        if (!string.IsNullOrEmpty(email)) payload["email"] = email;
+        if (!string.IsNullOrEmpty(emailVerified)) payload["email_verified"] = bool.TryParse(emailVerified, out var b) ? b : null;
+
+        return Results.Json(payload);
     }
 }
