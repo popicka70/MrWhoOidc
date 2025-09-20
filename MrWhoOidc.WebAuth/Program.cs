@@ -10,6 +10,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Configure issuer from configuration (fallback to runtime URL)
+var configuredIssuer = builder.Configuration["Oidc:Issuer"];
+
 // Add services to the container.
 builder.Services.AddRazorPages();
 
@@ -66,19 +69,25 @@ app.Lifetime.ApplicationStarted.Register(() =>
     });
 });
 
-app.MapGet("/.well-known/openid-configuration", (HttpContext ctx) => Results.Json(new
+app.MapGet("/.well-known/openid-configuration", (HttpContext ctx) =>
 {
-    issuer = $"{ctx.Request.Scheme}://{ctx.Request.Host}",
-    authorization_endpoint = "/authorize",
-    token_endpoint = "/token",
-    userinfo_endpoint = "/userinfo",
-    jwks_uri = "/jwks",
-    response_types_supported = new[] { "code" },
-    grant_types_supported = new[] { "authorization_code", "refresh_token" },
-    code_challenge_methods_supported = new[] { "S256" },
-    id_token_signing_alg_values_supported = new[] { "RS256" },
-    scopes_supported = new[] { "openid", "profile", "email" }
-}));
+    var issuer = configuredIssuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    var body = new
+    {
+        issuer,
+        authorization_endpoint = "/authorize",
+        token_endpoint = "/token",
+        userinfo_endpoint = "/userinfo",
+        jwks_uri = "/jwks",
+        response_types_supported = new[] { "code" },
+        grant_types_supported = new[] { "authorization_code", "refresh_token" },
+        code_challenge_methods_supported = new[] { "S256" },
+        id_token_signing_alg_values_supported = new[] { "RS256" },
+        scopes_supported = new[] { "openid", "profile", "email" }
+    };
+    ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
+    return Results.Json(body);
+});
 
 app.MapGet("/authorize", async (
     HttpContext http,
@@ -145,9 +154,33 @@ app.MapGet("/authorize", async (
     return Results.Redirect(redirect);
 });
 
-app.MapGet("/jwks", async (IKeyStore keys, CancellationToken ct) =>
+app.MapPost("/token", async (HttpContext http, ITokenService tokens) =>
+{
+    if (!http.Request.HasFormContentType)
+        return Results.BadRequest(new { error = "invalid_request" });
+
+    var form = await http.Request.ReadFormAsync();
+    var grantType = form["grant_type"].ToString();
+    if (!string.Equals(grantType, "authorization_code", StringComparison.Ordinal))
+        return Results.BadRequest(new { error = "unsupported_grant_type" });
+
+    var code = form["code"].ToString();
+    var redirectUri = form["redirect_uri"].ToString();
+    var clientId = form["client_id"].ToString();
+    var codeVerifier = form["code_verifier"].ToString();
+
+    if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri) || string.IsNullOrWhiteSpace(clientId))
+        return Results.BadRequest(new { error = "invalid_request" });
+
+    var issuer = configuredIssuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+    var (ok, payload, _, status) = await tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, clientId, codeVerifier, issuer);
+    return Results.Json(payload!, statusCode: status);
+});
+
+app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
 {
     var jwks = await keys.GetPublicJwksAsync(ct);
+    ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
     return Results.Json(new { keys = jwks });
 });
 
