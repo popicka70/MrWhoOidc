@@ -23,18 +23,31 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         if (!ok || principal is null)
             return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
 
-        var sub = principal.FindFirstValue("sub");
-        var name = principal.FindFirstValue("name");
-        var email = principal.FindFirstValue("email");
-        var emailVerified = principal.FindFirst("email_verified")?.Value;
+        var scopes = (principal.FindFirst("scope")?.Value ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var payload = new Dictionary<string, object?> { ["sub"] = sub };
-        if (!string.IsNullOrEmpty(name)) payload["name"] = name;
-        if (!string.IsNullOrEmpty(email)) payload["email"] = email;
-        if (!string.IsNullOrEmpty(emailVerified)) payload["email_verified"] = bool.TryParse(emailVerified, out var b) ? b : null;
+        var payload = new Dictionary<string, object?>
+        {
+            ["sub"] = principal.FindFirstValue("sub")
+        };
+
+        // Only include claims permitted by scopes
+        if (scopes.Contains("profile"))
+        {
+            var name = principal.FindFirstValue("name");
+            if (!string.IsNullOrEmpty(name)) payload["name"] = name;
+        }
+        if (scopes.Contains("email"))
+        {
+            var email = principal.FindFirstValue("email");
+            if (!string.IsNullOrEmpty(email)) payload["email"] = email;
+            var emailVerified = principal.FindFirst("email_verified")?.Value;
+            if (!string.IsNullOrEmpty(emailVerified) && bool.TryParse(emailVerified, out var b))
+                payload["email_verified"] = b;
+        }
 
         var result = Results.Json(payload);
-        // Set short private cache control header
         return new CacheHeaderResult(result, "private, max-age=60");
     }
 

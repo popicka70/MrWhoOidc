@@ -20,7 +20,10 @@ public static class DatabaseSeeder
             {
                 Username = "alice",
                 PasswordHash = hasher.Hash("P@ssw0rd!"),
-                HashAlgorithm = "argon2id"
+                HashAlgorithm = "argon2id",
+                Name = "Alice Adams",
+                Email = "alice@example.com",
+                EmailVerified = true
             });
         }
 

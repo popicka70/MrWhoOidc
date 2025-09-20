@@ -15,16 +15,24 @@ internal sealed class ConsentService(AuthDbContext db) : IConsentService
     {
         var consent = await db.Consents.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId && c.RevokedAt == null, ct);
         if (consent is null) return false;
-        // Basic: ignore per-scope checks for now, any consent covers scopes requested
-        return true;
+
+        // If no scopes requested beyond openid, treat as consented
+        var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (requested.Count == 0) return true;
+
+        var granted = System.Text.Json.JsonSerializer.Deserialize<string[]>(consent.ScopesJson) ?? Array.Empty<string>();
+        var grantedSet = new HashSet<string>(granted, StringComparer.OrdinalIgnoreCase);
+        // Ensure all requested scopes are already granted
+        return requested.All(s => grantedSet.Contains(s));
     }
 
     public async Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
     {
         var existing = await db.Consents.FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId, ct);
-        var scopesJson = System.Text.Json.JsonSerializer.Serialize(scopes);
+        var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase));
         if (existing is null)
         {
+            var scopesJson = System.Text.Json.JsonSerializer.Serialize(requested.Distinct(StringComparer.OrdinalIgnoreCase));
             db.Consents.Add(new Consent
             {
                 UserId = userId,
@@ -35,7 +43,9 @@ internal sealed class ConsentService(AuthDbContext db) : IConsentService
         }
         else
         {
-            existing.ScopesJson = scopesJson;
+            var current = System.Text.Json.JsonSerializer.Deserialize<string[]>(existing.ScopesJson) ?? Array.Empty<string>();
+            var merged = current.Concat(requested).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            existing.ScopesJson = System.Text.Json.JsonSerializer.Serialize(merged);
             existing.RevokedAt = null;
         }
         await db.SaveChangesAsync(ct);

@@ -91,6 +91,9 @@ builder.Services.AddAuthentication(options =>
         options.Scope.Add("profile");
         options.Scope.Add("email");
 
+        // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
+        options.TokenValidationParameters.NameClaimType = "name";
+
         // Custom backchannel to control TLS/protocols
         options.Backchannel = CreateBackchannel();
 
