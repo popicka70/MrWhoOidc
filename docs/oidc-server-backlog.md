@@ -17,6 +17,9 @@ Overview
 - UI Tech: Razor Pages in `MrWhoOidc.WebAuth` for login, logout, consent. The workspace also contains a Blazor project (`MrWhoOidc.Web`), but the server UI will be Razor Pages.
 - Target: .NET 9 across projects.
 
+Coding guidelines
+- In `MrWhoOidc.Auth` (library code), always use `ConfigureAwait(false)` on `await` for asynchronous calls to avoid capturing SynchronizationContext. Do not apply this guideline to `MrWhoOidc.WebAuth` or other application entrypoint projects.
+
 Milestones
 
 M0 – Repository readiness

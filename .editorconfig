@@ -42,3 +42,14 @@ dotnet_naming_symbols.private_fields.required_modifiers = readonly
 dotnet_naming_style.camel_case.capitalization = camel_case
 dotnet_naming_style.camel_case.required_prefix = _
 dotnet_naming_style.camel_case.required_suffix = 
+
+# Global settings
+[*.cs]
+# Don't enforce CA2007 globally.
+dotnet_diagnostic.CA2007.severity = none
+
+# MrWhoOidc.Auth library: always use ConfigureAwait(false)
+[MrWhoOidc.Auth/**/*.cs]
+# CA2007: Do not directly await a Task without ConfigureAwait
+# Set to warning to guide contributors without breaking builds.
+dotnet_diagnostic.CA2007.severity = warning
