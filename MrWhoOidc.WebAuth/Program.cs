@@ -203,6 +203,23 @@ app.MapPost("/token", async (HttpContext http, ITokenService tokens) =>
     return Results.Json(payload!, statusCode: status);
 });
 
+app.MapGet("/userinfo", (HttpContext http, ITokenValidator validator) =>
+{
+    var auth = http.Request.Headers.Authorization.ToString();
+    if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
+        return Results.Unauthorized();
+
+    var token = auth.Substring("Bearer ".Length).Trim();
+    var issuer = configuredIssuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+
+    var (ok, principal, _) = validator.Validate(token, issuer);
+    if (!ok || principal is null) return Results.Unauthorized();
+
+    // Map claims per scope (for now, return sub only)
+    var sub = principal.FindFirstValue("sub");
+    return Results.Json(new { sub });
+});
+
 app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
 {
     var jwks = await keys.GetPublicJwksAsync(ct);
