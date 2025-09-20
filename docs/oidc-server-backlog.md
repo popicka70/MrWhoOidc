@@ -1,13 +1,13 @@
 MrWhoOidc OIDC Server Backlog
 
 Status summary (MVP scope)
-- [x] M1 Infrastructure & Persistence (partial: core entities in place, migrations wired, Aspire Postgres)
+- [x] M1 Infrastructure & Persistence (partial: core entities, migrations, Aspire Postgres, persistent DataProtection keys)
 - [x] M2 Crypto & Discovery (JWKS, discovery with cache headers, configurable issuer)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation)
 - [x] M5 UserInfo + Logout (basic sub-only userinfo, local + RP-initiated logout)
 - [ ] M6 Introspection & Revocation (revocation implemented)
-- [ ] M7 Key rotation & hardening
+- [ ] M7 Key rotation & hardening (rate limiting + antiforgery + lockout/backoff done)
 - [ ] M8 Observability, DX & Docs
 
 Overview
@@ -35,9 +35,7 @@ M1 – Infrastructure & Persistence
 - [x] Create `AuthDbContext` and initial entities: `User`, `Client`, `SigningKey`, `AuthorizationCode`, `Consent`, `Token` (refresh).
 - [x] Migrations and database initialization (auto-migrate on startup).
 - [x] Seed script for one test client and one test user.
-- Notes:
-  - Always create schema changes with: dotnet ef migrations add <Name> --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations
-  - Remaining entities (future): `ClientSecret`, `RedirectUri`, `Scope`, etc.
+- [x] Persist ASP.NET Core DataProtection keys to DB (antiforgery survives restarts).
 
 M2 – Crypto & Discovery
 - [x] Key management service: RSA keypair persisted as JWK, `kid`, `alg`.
@@ -50,24 +48,27 @@ M3 – User auth & Authorization Endpoint (Code Flow + PKCE)
 
 M4 – Token Endpoint & ID/Access/Refresh Tokens
 - [x] `/token` grant `authorization_code` + PKCE verifier validation.
-- [x] ID token (minimal claims), access token (JWT) issuance; refresh token issuance + rotation.
+- [x] ID token (nonce, auth_time, at_hash + optional profile/email), access token (JWT + scope claim); refresh token issuance + rotation.
 - [x] Refresh token grant implemented.
 
 M5 – UserInfo, Logout/End Session
-- [x] `/userinfo`: validates bearer token, returns `sub`.
+- [x] `/userinfo`: validates bearer token, returns claims; sends `invalid_token` on failures; short private cache headers.
 - [x] Logout: local `/logout` and RP-initiated `/connect/endsession` with allow-listed `post_logout_redirect_uri`.
 
 M6 – Introspection & Revocation (optional for MVP)
 - [ ] `/introspect` for confidential clients (when opaque access tokens are enabled).
-- [x] `/revoke` for refresh/access tokens (refresh implemented).
+- [x] `/revoke` for refresh tokens.
 
 M7 – Key Rotation & Hardening
 - [ ] Automated signing key rotation + JWKS publishing overlap.
-- [ ] Security hardening:
-  - [ ] Rate limiting for login, token, introspection.
-  - [ ] RFC-compliant error objects throughout.
-  - [ ] Anti-forgery enforcement on forms (login/consent) and lockout policy.
-  - [ ] CORS allow-list for `/token` and `/userinfo` (if cross-origin).
+- [x] Rate limiting middleware:
+  - [x] `/authorize` (60/min/IP)
+  - [x] `/token` (30/min/IP)
+  - [x] `/userinfo` (120/min/IP)
+- [x] Anti-forgery tokens on login and consent forms.
+- [x] Basic lockout/backoff on login (in-memory, per IP+username).
+- [~] RFC-aligned error responses for `/token`, `/authorize` (when not redirecting), `/userinfo` (`invalid_token`).
+- [ ] CORS allow-list for `/token` and `/userinfo` (if cross-origin).
 
 M8 – Observability, DX & Docs
 - [ ] Logging & tracing via `MrWhoOidc.ServiceDefaults`/OpenTelemetry.
@@ -76,18 +77,21 @@ M8 – Observability, DX & Docs
 - [ ] Documentation in `/docs` (setup, endpoints, examples, ADRs).
 
 Next steps (proposed)
-1) Security & hardening
-   - Add anti-forgery tokens to login/consent and implement lockout/backoff.
-   - Add rate limiting on `/authorize`, `/token`, `/userinfo`.
-   - RFC-aligned error bodies + consistent cache headers.
-2) Rotation and revocation
-   - Implement key rotation with overlap; publish previous keys.
-   - Add `/revoke` client authentication (basic/private_key_jwt stub) and audit.
-3) Claims and tokens
-   - Map profile/email claims in access/ID tokens strictly by requested scopes.
-   - Add `c_hash` if returning code in front-channel in future flows.
-4) Observability and docs
-   - Wire OpenTelemetry and metrics.
-   - Add ADRs for token format and hashing; update docs and sample requests.
-5) Introspection (optional)
-   - Add opaque access token mode + `/introspect` for confidential clients.
+1) Key rotation and configuration
+   - Implement key rotation service with overlap; expose previous keys in JWKS until tokens expire.
+   - Add config for API audience(s) instead of hardcoded `api`; include in discovery.
+2) Client authentication & revocation
+   - Add client authentication for `/token` and `/revoke` (client_secret_basic; later private_key_jwt).
+   - Audit revocation events (user/client/time, IP) and add idempotency.
+3) Claims and scopes fidelity
+   - Enforce scope filtering in `/userinfo` (and ID token) strictly based on requested/granted scopes.
+   - Persist per-scope consent and honor deltas when scope changes.
+4) Security hardening
+   - Add CORS allow-list if cross-origin access to `/token`/`/userinfo` is required.
+   - Add `WWW-Authenticate` header on `invalid_token` responses per RFC 6750.
+   - Move rate limiting keys to a distributed store (for scale-out) and tune limits.
+5) Observability & DX
+   - Wire OpenTelemetry (traces, logs) and basic metrics (authorize/token/userinfo counts and latencies).
+   - Add ADRs for token format and password hashing; document endpoints and examples; add Postman/.http samples.
+6) Optional: Introspection/opaque tokens
+   - Add opaque access token mode and `/introspect` for confidential clients; return RFC 7662-compliant responses.
