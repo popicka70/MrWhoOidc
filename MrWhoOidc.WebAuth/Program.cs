@@ -75,6 +75,9 @@ builder.Services.AddMrWhoOidcAuthCore();
 // Add private_key_jwt validator
 builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 
+// Register PAR handler
+builder.Services.AddScoped<IParHandler, ParHandler>();
+
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();
@@ -139,6 +142,18 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("rl-par", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
@@ -233,6 +248,13 @@ app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
    .RequireCors("oidc")
    .RequireRateLimiting("rl-userinfo");
 app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
+   .RequireCors("oidc");
+
+// PAR endpoint
+app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+   .RequireCors("oidc")
+   .RequireRateLimiting("rl-par");
+app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
 
 app.MapStaticAssets();

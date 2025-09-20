@@ -24,6 +24,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IRevocationService, RevocationService>();
 
+        // PAR in-memory store
+        services.AddSingleton<IPushedAuthorizationRequestStore, InMemoryPushedAuthorizationRequestStore>();
+
         // Key rotation options and services
         services.AddOptions<KeyRotationOptions>();
         services.AddScoped<IKeyRotationService, KeyRotationService>();
