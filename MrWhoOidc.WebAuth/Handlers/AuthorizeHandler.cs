@@ -22,8 +22,23 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
         {
             metrics.AuthorizeRequests.Add(1);
 
+            // If request_uri is provided, sanitize the address bar by keeping only request_uri and optional state
+            string? requestUriRaw = http.Request.Query["request_uri"];
+            if (!string.IsNullOrEmpty(requestUriRaw))
+            {
+                var stateRaw = http.Request.Query["state"].ToString();
+                // If there are extra params beyond request_uri/state, issue a redirect to a minimal URL
+                var keys = http.Request.Query.Keys.Select(k => k.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (keys.Except(new[] { "request_uri", "state" }, StringComparer.OrdinalIgnoreCase).Any())
+                {
+                    var baseUrl = http.Request.Path;
+                    var qs = $"?request_uri={Uri.EscapeDataString(requestUriRaw)}" + (string.IsNullOrEmpty(stateRaw) ? string.Empty : $"&state={Uri.EscapeDataString(stateRaw)}");
+                    return Results.Redirect(baseUrl + qs);
+                }
+            }
+
             // If request_uri is provided, try to resolve the pushed request and merge it
-            string? requestUri = http.Request.Query["request_uri"];
+            string? requestUri = requestUriRaw;
             bool isPar = !string.IsNullOrEmpty(requestUri);
             AuthorizeRequest effectiveReq;
             if (isPar)
