@@ -1,8 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
 namespace MrWhoOidc.Auth.Persistence;
 
-public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options)
+public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
@@ -10,6 +11,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
     public DbSet<Consent> Consents => Set<Consent>();
     public DbSet<Token> Tokens => Set<Token>();
+
+    // IDataProtectionKeyContext requirement
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +68,14 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.ClientId).IsRequired();
             b.Property(x => x.ScopesJson).IsRequired();
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
+        });
+
+        // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
+        modelBuilder.Entity<DataProtectionKey>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.FriendlyName).HasMaxLength(200);
+            b.Property(x => x.Xml).IsRequired();
         });
     }
 }

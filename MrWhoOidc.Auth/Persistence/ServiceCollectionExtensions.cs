@@ -9,7 +9,6 @@ public static class PersistenceServiceCollectionExtensions
 {
     public static IServiceCollection AddAuthPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        // Aspire wires the Postgres connection as a connection string named after the resource ("authdb")
         var cs = configuration.GetConnectionString("authdb")
                  ?? configuration.GetConnectionString("AuthDb")
                  ?? configuration["ConnectionStrings:authdb"]; // fallback
@@ -19,7 +18,6 @@ public static class PersistenceServiceCollectionExtensions
             throw new InvalidOperationException("PostgreSQL connection string for 'authdb' was not found in configuration.");
         }
 
-        // Optionally enable Npgsql specific switches
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
         services.AddDbContext<AuthDbContext>(options =>
@@ -27,7 +25,6 @@ public static class PersistenceServiceCollectionExtensions
             options.UseNpgsql(cs, npgsql =>
             {
                 npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-                // Add basic resiliency for transient startup issues
                 npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(2), errorCodesToAdd: null);
             });
         });

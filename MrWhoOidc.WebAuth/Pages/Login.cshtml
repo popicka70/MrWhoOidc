@@ -6,7 +6,7 @@
 
 <h2>Login</h2>
 
-<form method="post">
+<form method="post" asp-antiforgery="true">
     <input type="hidden" asp-for="ReturnUrl" />
     <div class="mb-3">
         <label asp-for="Username" class="form-label"></label>

@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +37,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
 builder.Services.AddMrWhoOidcAuthCore();
+
+// Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AuthDbContext>();
 
 // Register handlers
 builder.Services.AddSingleton<IDiscoveryHandler, DiscoveryHandler>();
