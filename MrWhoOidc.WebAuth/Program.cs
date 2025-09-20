@@ -92,7 +92,8 @@ app.MapGet("/.well-known/openid-configuration", (HttpContext ctx) =>
 app.MapGet("/authorize", async (
     HttpContext http,
     IAuthorizeService authorize,
-    IAuthorizationCodeService codes
+    IAuthorizationCodeService codes,
+    IConsentService consents
 ) =>
 {
     var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
@@ -131,13 +132,19 @@ app.MapGet("/authorize", async (
         return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
     }
 
-    // TODO: check consent here; if required and not granted, redirect to /consent with ReturnUrl
-
-    // Issue auth code
     var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
     if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
         return Results.Unauthorized();
 
+    // Enforce consent
+    if (validation.RequireConsent && !await consents.HasConsentAsync(userId, validation.ClientId!, validation.Scopes))
+    {
+        var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+        var consentUrl = $"/consent?ClientId={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&" + string.Join("&", validation.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
+        return Results.Redirect(consentUrl);
+    }
+
+    // Issue auth code
     var (ok, _, redirect) = await codes.IssueAsync(validation, userId);
     if (!ok || redirect is null) return Results.Problem("Failed to issue code");
 
@@ -152,6 +159,25 @@ app.MapGet("/authorize", async (
     }
 
     return Results.Redirect(redirect);
+});
+
+app.MapPost("/consent", async (HttpContext http, IConsentService consents) =>
+{
+    if (!http.User.Identity?.IsAuthenticated ?? true)
+        return Results.Unauthorized();
+
+    var form = await http.Request.ReadFormAsync();
+    var clientId = form["ClientId"].ToString();
+    var returnUrl = form["ReturnUrl"].ToString();
+    var scopes = form["Scopes"].ToArray();
+
+    var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
+        return Results.Unauthorized();
+
+    await consents.GrantConsentAsync(userId, clientId, scopes);
+
+    return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
 });
 
 app.MapPost("/token", async (HttpContext http, ITokenService tokens) =>

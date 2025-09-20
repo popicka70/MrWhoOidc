@@ -13,8 +13,13 @@
 }
 </ul>
 
-<form method="post">
-    <input type="hidden" asp-for="ReturnUrl" />
+<form method="post" action="/consent">
+    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+    <input type="hidden" name="ClientId" value="@Model.ClientId" />
+    @foreach (var scope in Model.Scopes)
+    {
+        <input type="hidden" name="Scopes" value="@scope" />
+    }
     <button type="submit" class="btn btn-primary">Allow</button>
     <a class="btn btn-secondary" href="@Model.CancelUrl">Deny</a>
 </form>
