@@ -21,4 +21,10 @@ public sealed class OidcMetrics
     public Histogram<double> UserInfoDurationMs { get; } = Meter.CreateHistogram<double>("oidc.userinfo.duration.ms");
 
     public Counter<long> RevocationRequests { get; } = Meter.CreateCounter<long>("oidc.revocation.requests");
+
+    // Introspection metrics
+    public Counter<long> IntrospectionRequests { get; } = Meter.CreateCounter<long>("oidc.introspection.requests");
+    public Counter<long> IntrospectionActiveTrue { get; } = Meter.CreateCounter<long>("oidc.introspection.active_true");
+    public Counter<long> IntrospectionActiveFalse { get; } = Meter.CreateCounter<long>("oidc.introspection.active_false");
+    public Histogram<double> IntrospectionDurationMs { get; } = Meter.CreateHistogram<double>("oidc.introspection.duration.ms");
 }
