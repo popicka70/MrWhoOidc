@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -7,10 +8,12 @@ public interface IRevocationHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients) : IRevocationHandler
+public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcMetrics metrics) : IRevocationHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        metrics.RevocationRequests.Add(1);
+
         if (!http.Request.HasFormContentType)
             return Results.BadRequest(new { error = "invalid_request" });
 

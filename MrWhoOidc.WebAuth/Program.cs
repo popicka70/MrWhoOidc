@@ -9,6 +9,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using MrWhoOidc.WebAuth.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,9 @@ builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth")
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+
+// Metrics
+builder.Services.AddSingleton<OidcMetrics>();
 
 // CORS allow-list for OIDC endpoints
 builder.Services.AddCors(options =>
