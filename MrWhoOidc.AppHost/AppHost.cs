@@ -10,7 +10,9 @@ builder.AddProject<Projects.MrWhoOidc_Web>("webfrontend")
     .WaitFor(apiService);
 
 // Add a PostgreSQL server and a database for auth persistence
-var postgres = builder.AddPostgres("postgres");
+var postgres = builder.AddPostgres("postgres")
+    .WithDataVolume()
+    .WithLifetime(ContainerLifetime.Persistent);
 var authDb = postgres.AddDatabase("authdb");
 
 builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
