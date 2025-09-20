@@ -22,6 +22,25 @@ builder.Services.AddSingleton(oidcOptions);
 // Add services to the container.
 builder.Services.AddRazorPages();
 
+// CORS allow-list for OIDC endpoints
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("oidc", policy =>
+    {
+        if (oidcOptions.AllowedCorsOrigins is { Length: > 0 })
+        {
+            policy.WithOrigins(oidcOptions.AllowedCorsOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+        else
+        {
+            // Deny all by default if not configured
+            policy.SetIsOriginAllowed(_ => false);
+        }
+    });
+});
+
 // Cookies for local login session
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -108,6 +127,7 @@ if (!app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 app.UseRouting();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -142,10 +162,16 @@ app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync
 app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+   .RequireCors("oidc")
    .RequireRateLimiting("rl-token");
+app.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
+   .RequireCors("oidc");
 app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
 app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
+   .RequireCors("oidc")
    .RequireRateLimiting("rl-userinfo");
+app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
+   .RequireCors("oidc");
 
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();

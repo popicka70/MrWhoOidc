@@ -6,8 +6,8 @@ Status summary (MVP scope)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation)
 - [x] M5 UserInfo + Logout (sub-based userinfo, local + RP-initiated logout)
-- [~] M6 Introspection & Revocation (revocation implemented; introspection pending)
-- [~] M7 Key rotation & hardening (rate limiting + antiforgery + login backoff done; RFC headers/CORS/rotation pending)
+- [~] M6 Introspection & Revocation (revocation implemented with auth, idempotency + audit; introspection pending)
+- [~] M7 Key rotation & hardening (rate limiting + antiforgery + login backoff + WWW-Authenticate + CORS allow-list done; rotation pending)
 - [~] M8 Observability, DX & Docs (base OpenTelemetry via ServiceDefaults wired; metrics/docs pending)
 
 Overview
@@ -40,7 +40,7 @@ M1 – Infrastructure & Persistence
 M2 – Crypto & Discovery
 - [x] RSA key management with persisted JWKs, `kid`, `alg`.
 - [x] JWKS endpoint with cache headers.
-- [x] Discovery endpoint with configurable issuer.
+- [x] Discovery endpoint with configurable issuer (+ token_endpoint_auth_methods_supported, revocation_endpoint).
 
 M3 – User auth & Authorization Endpoint (Code Flow + PKCE)
 - [x] Razor Pages: `Login` (with antiforgery + basic lockout/backoff) and `Consent`.
@@ -52,12 +52,12 @@ M4 – Token Endpoint & ID/Access/Refresh Tokens
 - [x] Refresh token grant implemented.
 
 M5 – UserInfo, Logout/End Session
-- [x] `/userinfo`: validates bearer token, returns claims; sends `invalid_token` on failures; short private cache headers.
+- [x] `/userinfo`: validates bearer token, returns claims; sends `invalid_token` on failures; short private cache headers; adds `WWW-Authenticate` header on 401.
 - [x] Logout: local `/logout` and RP-initiated `/connect/endsession` with allow-listed `post_logout_redirect_uri`.
 
 M6 – Introspection & Revocation (optional for MVP)
 - [ ] `/introspect` for confidential clients (when opaque access tokens are enabled).
-- [x] `/revoke` for refresh tokens (no client auth yet; idempotency/audit pending).
+- [x] `/revoke` for refresh tokens with client auth (basic/post), idempotency, and audit.
 
 M7 – Key Rotation & Hardening
 - [ ] Automated signing key rotation + JWKS publishing overlap.
@@ -67,8 +67,8 @@ M7 – Key Rotation & Hardening
   - [x] `/userinfo` (120/min/IP)
 - [x] Anti-forgery tokens on login and consent forms.
 - [x] Basic lockout/backoff on login (in-memory, per IP+username).
-- [ ] RFC-aligned auth error headers (e.g., `WWW-Authenticate` on `invalid_token` for `/userinfo`).
-- [ ] CORS allow-list for `/token` and `/userinfo` (if cross-origin).
+- [x] RFC-aligned auth error headers (`WWW-Authenticate` on `invalid_token` for `/userinfo`).
+- [x] CORS allow-list for `/token` and `/userinfo` (config-driven).
 
 M8 – Observability, DX & Docs
 - [x] Logging & tracing via `MrWhoOidc.ServiceDefaults`/OpenTelemetry (base wiring).
@@ -77,28 +77,22 @@ M8 – Observability, DX & Docs
 - [ ] Documentation in `/docs` (setup, endpoints, examples, ADRs).
 
 Next steps (proposed)
-1) Client authentication & revocation
-   - Add client authentication for `/token` and `/revoke` (start with `client_secret_basic`; optionally support `client_secret_post`; later `private_key_jwt`).
-   - Add revocation idempotency and auditing (user/client/time, IP). Update discovery with `token_endpoint_auth_methods_supported`.
-
-2) Key rotation and configuration
+1) Key rotation and configuration
    - Implement signing key rotation with overlap; keep previous keys in JWKS until tokens expire.
    - Add configuration for API audience(s) instead of hardcoded `api`; include `audiences` in discovery if needed.
 
-3) Security hardening
-   - Add `WWW-Authenticate` header (per RFC 6750) on `invalid_token` responses; ensure consistent RFC 6749/8414 error payloads.
-   - Add CORS allow-list for `/token` and `/userinfo` if cross-origin access is required.
-   - Revisit HTTPS redirection/HSTS for production behind Aspire/reverse proxy.
-   - Move rate limiting counters to a distributed store for scale-out.
-
-4) Claims and scopes fidelity
+2) Claims and scopes fidelity
    - Enforce strict scope-based filtering in `/userinfo` (and ID token) based on requested/granted scopes.
    - Persist per-scope consent deltas when scope requests change and honor previously granted scopes.
 
-5) Observability & DX
+3) Security hardening
+   - Revisit HTTPS redirection/HSTS for production behind Aspire/reverse proxy.
+   - Move rate limiting counters to a distributed store for scale-out.
+
+4) Observability & DX
    - Add basic metrics (authorize/token/userinfo counts, error rates, latencies, token issuance, login failures) via OpenTelemetry Metrics.
    - Add ADRs for token format and password hashing; document endpoints and examples; add Postman/.http samples.
    - Add a convenient seeding experience (`dotnet run -- seed`/hosted seeder) for local dev.
 
-6) Optional: Introspection/opaque tokens
+5) Optional: Introspection/opaque tokens
    - Add opaque access token mode and `/introspect` for confidential clients; return RFC 7662-compliant responses.
