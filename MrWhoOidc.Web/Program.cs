@@ -15,12 +15,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// Increase diagnostic logging for auth/identity
-builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
-builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
-
-// Enable PII in IdentityModel logs (dev only)
-IdentityModelEventSource.ShowPII = true;
+// Reduce diagnostic logging and disable PII
+builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Information);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Information);
+IdentityModelEventSource.ShowPII = false;
 
 // Read Authority from configuration (required). Supports both 'Oidc' and 'OIDC'.
 string? authorityRaw = builder.Configuration["Oidc:Authority"] ?? builder.Configuration["OIDC:Authority"];
@@ -107,7 +105,7 @@ builder.Services.AddAuthentication(options =>
 
         options.TokenValidationParameters.ValidateIssuer = false; // dev only
 
-        // Extra diagnostics
+        // Keep error logging without PII
         options.Events = new OpenIdConnectEvents
         {
             OnAuthenticationFailed = ctx =>
