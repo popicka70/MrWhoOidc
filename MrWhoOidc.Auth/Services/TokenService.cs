@@ -40,11 +40,36 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
+        // Build access token first (include scopes claim)
+        var accessClaims = new List<System.Security.Claims.Claim>
+        {
+            new("sub", entity.UserId.ToString()),
+            new("scope", string.Join(' ', scopes))
+        };
+        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+
+        // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
+        var atHash = ComputeAtHash(accessToken);
+
+        // Prepare ID token claims, include profile/email if requested
         var idClaims = new List<System.Security.Claims.Claim>
         {
             new("sub", entity.UserId.ToString()),
             new("aud", clientId)
         };
+
+        // Load user once for optional claims
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct);
+        if (user is not null)
+        {
+            if (scopes.Contains("profile") && !string.IsNullOrEmpty(user.Name))
+                idClaims.Add(new("name", user.Name));
+            if (scopes.Contains("email") && !string.IsNullOrEmpty(user.Email))
+            {
+                idClaims.Add(new("email", user.Email));
+                idClaims.Add(new("email_verified", user.EmailVerified ? "true" : "false"));
+            }
+        }
 
         var idToken = jwt.CreateJwt(
             issuer,
@@ -52,14 +77,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             idClaims,
             DateTimeOffset.UtcNow.AddMinutes(5),
             nonce: entity.Nonce,
-            accessTokenHash: null,
-            authTime: DateTimeOffset.UtcNow // TODO: track real auth_time from login
+            accessTokenHash: atHash,
+            authTime: DateTimeOffset.UtcNow // TODO: load actual auth_time from session
         );
 
-        var accessClaims = new [] { new System.Security.Claims.Claim("sub", entity.UserId.ToString()) };
-        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
-
-        // Refresh token issuance & rotation baseline
         var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
 
         entity.Consumed = true;
@@ -87,7 +108,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
 
-        var accessToken = jwt.CreateJwt(issuer, "api", new [] { new System.Security.Claims.Claim("sub", tokenEntity.UserId.ToString()) }, DateTimeOffset.UtcNow.AddMinutes(15));
+        var accessClaims = new List<System.Security.Claims.Claim>
+        {
+            new("sub", tokenEntity.UserId.ToString()),
+            new("scope", string.Join(' ', scopes))
+        };
+        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Rotation: create new refresh token and revoke the old one
         var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
@@ -110,6 +136,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(verifier));
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    static string ComputeAtHash(string accessToken)
+    {
+        using var sha = SHA256.Create();
+        var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(accessToken));
+        var left = bytes.Take(16).ToArray();
+        return Convert.ToBase64String(left).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     static string Hash(string value)
