@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="MrWhoOidc.ApiService/MrWhoOidc.ApiService.csproj" />
+  <Project Path="MrWhoOidc.AppHost/MrWhoOidc.AppHost.csproj" />
+  <Project Path="MrWhoOidc.Auth/MrWhoOidc.Auth.csproj" />
+  <Project Path="MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj" />
+  <Project Path="MrWhoOidc.Web/MrWhoOidc.Web.csproj" />
+  <Project Path="MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" />
+</Solution>
