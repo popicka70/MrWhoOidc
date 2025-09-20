@@ -23,6 +23,15 @@
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
                         </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Admin
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="adminMenu">
+                                <li><a class="dropdown-item" asp-page="/Admin/Realms/Index">Realms</a></li>
+                                <li><a class="dropdown-item" asp-page="/Admin/Clients/Index">Clients</a></li>
+                            </ul>
+                        </li>
                     </ul>
                     <ul class="navbar-nav ms-auto">
                         @if (User?.Identity?.IsAuthenticated ?? false)

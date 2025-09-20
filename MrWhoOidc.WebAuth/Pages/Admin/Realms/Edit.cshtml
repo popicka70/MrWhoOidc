@@ -1,0 +1,27 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Realms.EditModel
+@{
+    ViewData["Title"] = "Edit realm";
+}
+
+<h1>Edit realm</h1>
+
+<form method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="Input.Name" class="form-label"></label>
+        <input asp-for="Input.Name" class="form-control" />
+        <span asp-validation-for="Input.Name" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.DisplayName" class="form-label"></label>
+        <input asp-for="Input.DisplayName" class="form-control" />
+        <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a asp-page="Index" class="btn btn-secondary">Back</a>
+</form>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

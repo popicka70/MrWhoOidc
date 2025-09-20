@@ -1,0 +1,133 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Clients.IndexModel
+@{
+    ViewData["Title"] = "Clients";
+}
+
+<h1>Clients</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <h4>Create client</h4>
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Input.ClientId" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="Input.ClientId" class="form-control" />
+                        <button type="button" id="btn-generate" class="btn btn-outline-secondary" title="Generate client ID">Generate</button>
+                    </div>
+                    <span asp-validation-for="Input.ClientId" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.ClientName" class="form-label"></label>
+                    <input asp-for="Input.ClientName" class="form-control" />
+                    <span asp-validation-for="Input.ClientName" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.RealmId" class="form-label"></label>
+                    <select asp-for="Input.RealmId" asp-items="Model.RealmOptions" class="form-select"></select>
+                    <span asp-validation-for="Input.RealmId" class="text-danger"></span>
+                </div>
+                <div class="col-md-3 form-check mt-4">
+                    <input asp-for="Input.RequirePkce" class="form-check-input" />
+                    <label asp-for="Input.RequirePkce" class="form-check-label"></label>
+                </div>
+                <div class="col-md-3 form-check mt-4">
+                    <input asp-for="Input.RequireConsent" class="form-check-input" />
+                    <label asp-for="Input.RequireConsent" class="form-check-label"></label>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.ClientSecret" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="Input.ClientSecret" class="form-control" />
+                        <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
+                    </div>
+                    <small class="form-text text-muted">Leave empty for public client</small>
+                    <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<hr />
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ClientId</th>
+            <th>Name</th>
+            <th>Realm</th>
+            <th>PKCE</th>
+            <th>Consent</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var c in Model.Clients)
+    {
+        <tr>
+            <td>@c.ClientId</td>
+            <td>@c.ClientName</td>
+            <td>@c.RealmName</td>
+            <td>@(c.RequirePkce ? "Yes" : "No")</td>
+            <td>@(c.RequireConsent ? "Yes" : "No")</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@c.Id">Edit</a>
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-id="@c.Id" onsubmit="return confirm('Delete this client?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+    <script>
+        (function(){
+            function toBase64Url(bytes) {
+                let binary = '';
+                const len = bytes.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                let base64 = btoa(binary);
+                base64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+                return base64;
+            }
+            const btnId = document.getElementById('btn-generate');
+            if(btnId){
+                btnId.addEventListener('click', function(){
+                    const input = document.getElementById('Input_ClientId');
+                    if(!input) return;
+                    const bytes = new Uint8Array(32);
+                    window.crypto.getRandomValues(bytes);
+                    const id = toBase64Url(bytes).substring(0, 24);
+                    input.value = id;
+                    const span = document.querySelector('span[data-valmsg-for="Input.ClientId"]');
+                    if (span) { span.textContent = ''; }
+                });
+            }
+            const btnSecret = document.getElementById('btn-generate-secret');
+            if(btnSecret){
+                btnSecret.addEventListener('click', function(){
+                    const input = document.getElementById('Input_ClientSecret');
+                    if(!input) return;
+                    const bytes = new Uint8Array(48); // ~64-char base64url
+                    window.crypto.getRandomValues(bytes);
+                    const secret = toBase64Url(bytes);
+                    input.value = secret;
+                    const span = document.querySelector('span[data-valmsg-for="Input.ClientSecret"]');
+                    if (span) { span.textContent = ''; }
+                });
+            }
+        })();
+    </script>
+}
