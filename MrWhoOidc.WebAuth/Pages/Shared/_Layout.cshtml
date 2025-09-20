@@ -30,6 +30,9 @@
                             <li class="nav-item">
                                 <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
+                            </li>
                         }
                         else
                         {

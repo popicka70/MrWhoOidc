@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.AddServiceDefaults();
 
 // Configure issuer from configuration (fallback to runtime URL)
 var configuredIssuer = builder.Configuration["Oidc:Issuer"];
+var allowedPostLogoutRedirectUris = builder.Configuration.GetSection("Oidc:AllowedPostLogoutRedirectUris").Get<string[]>() ?? Array.Empty<string>();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -79,6 +81,7 @@ app.MapGet("/.well-known/openid-configuration", (HttpContext ctx) =>
         token_endpoint = "/token",
         userinfo_endpoint = "/userinfo",
         jwks_uri = "/jwks",
+        end_session_endpoint = "/connect/endsession",
         response_types_supported = new[] { "code" },
         grant_types_supported = new[] { "authorization_code", "refresh_token" },
         code_challenge_methods_supported = new[] { "S256" },
@@ -161,23 +164,57 @@ app.MapGet("/authorize", async (
     return Results.Redirect(redirect);
 });
 
-app.MapPost("/consent", async (HttpContext http, IConsentService consents) =>
+app.MapGet("/logout", async (HttpContext http) =>
 {
-    if (!http.User.Identity?.IsAuthenticated ?? true)
-        return Results.Unauthorized();
+    await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    var returnUrl = http.Request.Query["returnUrl"].ToString();
+    if (!string.IsNullOrEmpty(returnUrl) && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative))
+    {
+        return Results.Redirect(returnUrl);
+    }
+    return Results.Redirect("/");
+});
 
-    var form = await http.Request.ReadFormAsync();
-    var clientId = form["ClientId"].ToString();
-    var returnUrl = form["ReturnUrl"].ToString();
-    var scopes = form["Scopes"].ToArray().Where(s => s is not null).Select(s => s!).ToArray();
+app.MapGet("/connect/endsession", async (HttpContext http) =>
+{
+    var postLogout = http.Request.Query["post_logout_redirect_uri"].ToString();
+    var state = http.Request.Query["state"].ToString();
 
-    var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
-    if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
-        return Results.Unauthorized();
+    await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-    await consents.GrantConsentAsync(userId, clientId, scopes);
+    if (!string.IsNullOrEmpty(postLogout) && IsAllowedPostLogoutUri(postLogout, allowedPostLogoutRedirectUris))
+    {
+        var uri = new UriBuilder(postLogout);
+        if (!string.IsNullOrEmpty(state))
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            query["state"] = state;
+            uri.Query = query.ToString();
+        }
+        return Results.Redirect(uri.ToString());
+    }
 
-    return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+    return Results.Redirect("/");
+
+    static bool IsAllowedPostLogoutUri(string uri, string[] allowed)
+    {
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return false;
+        foreach (var a in allowed)
+        {
+            if (Uri.TryCreate(a, UriKind.Absolute, out var au))
+            {
+                if (string.Equals(u.Scheme, au.Scheme, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(u.Host, au.Host, StringComparison.OrdinalIgnoreCase)
+                    && (au.Port == -1 || u.Port == au.Port))
+                {
+                    // If path specified in allow-list, require prefix match
+                    if (string.IsNullOrEmpty(au.AbsolutePath) || u.AbsolutePath.StartsWith(au.AbsolutePath, StringComparison.Ordinal))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
 });
 
 app.MapPost("/token", async (HttpContext http, ITokenService tokens) =>
