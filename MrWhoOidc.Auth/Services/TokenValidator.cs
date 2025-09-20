@@ -14,7 +14,10 @@ internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
 {
     public (bool ok, ClaimsPrincipal? principal, string? error) Validate(string token, string issuer)
     {
-        var handler = new JwtSecurityTokenHandler();
+        var handler = new JwtSecurityTokenHandler
+        {
+            MapInboundClaims = false
+        };
         var keys = GetSigningKeys();
         var parameters = new TokenValidationParameters
         {
@@ -24,7 +27,9 @@ internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
             IssuerSigningKeys = keys,
             ValidateAudience = false,
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(1)
+            ClockSkew = TimeSpan.FromMinutes(1),
+            NameClaimType = "sub",
+            RoleClaimType = "role"
         };
         try
         {
@@ -39,12 +44,11 @@ internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
 
     IEnumerable<SecurityKey> GetSigningKeys()
     {
-        // Include current and previous keys (public portion is sufficient)
+        // Include current and previous keys using JsonWebKey (public only) to avoid RSA disposal issues
         var jwks = keyStore.GetPublicJwksAsync().GetAwaiter().GetResult();
         foreach (var jwk in jwks)
         {
-            using var rsa = jwk.ToRSA();
-            yield return new RsaSecurityKey(rsa) { KeyId = jwk.Kid };
+            yield return new JsonWebKey(jwk.ToJson(includePrivate: false));
         }
     }
 }
