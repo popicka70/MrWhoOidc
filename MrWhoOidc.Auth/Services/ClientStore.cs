@@ -16,7 +16,7 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher) : IC
 
     public async Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
     {
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client is null) return false;
         if (string.IsNullOrEmpty(client.ClientSecretHash))
         {

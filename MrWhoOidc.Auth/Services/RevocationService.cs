@@ -15,14 +15,14 @@ internal sealed class RevocationService(AuthDbContext db) : IRevocationService
         var hash = Hash(token);
 
         // Idempotency: if already revoked or audit exists, return OK
-        var already = await db.Tokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt != null, ct);
+        var already = await db.Tokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt != null, ct).ConfigureAwait(false);
         if (!already)
         {
-            var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct);
+            var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct).ConfigureAwait(false);
             if (rt is not null && string.Equals(rt.ClientId, clientId, StringComparison.Ordinal))
             {
                 rt.RevokedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
             }
         }
 
@@ -35,7 +35,7 @@ internal sealed class RevocationService(AuthDbContext db) : IRevocationService
             IpAddress = ipAddress,
             CreatedAt = DateTimeOffset.UtcNow
         });
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     static string Hash(string value)

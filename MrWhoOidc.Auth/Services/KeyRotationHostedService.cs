@@ -23,14 +23,14 @@ internal sealed class KeyRotationHostedService(
         }
 
         // Initial run on startup
-        await RunOnceAsync(stoppingToken);
+        await RunOnceAsync(stoppingToken).ConfigureAwait(false);
 
         // Periodic checks
         var period = opts.CheckPeriod <= TimeSpan.Zero ? TimeSpan.FromHours(1) : opts.CheckPeriod;
         using var timer = new PeriodicTimer(period);
-        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
-            await RunOnceAsync(stoppingToken);
+            await RunOnceAsync(stoppingToken).ConfigureAwait(false);
         }
     }
 
@@ -40,7 +40,7 @@ internal sealed class KeyRotationHostedService(
         {
             using var scope = services.CreateScope();
             var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
-            await rotation.EnsureInitializedAsync(ct);
+            await rotation.EnsureInitializedAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

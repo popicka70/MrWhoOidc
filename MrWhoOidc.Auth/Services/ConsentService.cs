@@ -13,7 +13,7 @@ internal sealed class ConsentService(AuthDbContext db) : IConsentService
 {
     public async Task<bool> HasConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
     {
-        var consent = await db.Consents.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId && c.RevokedAt == null, ct);
+        var consent = await db.Consents.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId && c.RevokedAt == null, ct).ConfigureAwait(false);
         if (consent is null) return false;
 
         // If no scopes requested beyond openid, treat as consented
@@ -28,7 +28,7 @@ internal sealed class ConsentService(AuthDbContext db) : IConsentService
 
     public async Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
     {
-        var existing = await db.Consents.FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId, ct);
+        var existing = await db.Consents.FirstOrDefaultAsync(c => c.UserId == userId && c.ClientId == clientId, ct).ConfigureAwait(false);
         var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase));
         if (existing is null)
         {
@@ -48,6 +48,6 @@ internal sealed class ConsentService(AuthDbContext db) : IConsentService
             existing.ScopesJson = System.Text.Json.JsonSerializer.Serialize(merged);
             existing.RevokedAt = null;
         }
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

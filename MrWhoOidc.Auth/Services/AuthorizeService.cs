@@ -19,7 +19,7 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
         if (string.IsNullOrWhiteSpace(request.client_id))
             return Error("invalid_request", "Missing client_id");
 
-        var client = await clients.FindByClientIdAsync(request.client_id, ct);
+        var client = await clients.FindByClientIdAsync(request.client_id, ct).ConfigureAwait(false);
         if (client is null)
             return Error("unauthorized_client", "Unknown client_id");
 

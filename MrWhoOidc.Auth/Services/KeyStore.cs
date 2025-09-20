@@ -15,7 +15,7 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
 {
     public async Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
-        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct);
+        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (current is null)
         {
             // Generate a new RSA keypair and persist it
@@ -29,7 +29,7 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
                 Alg = jwk.Alg,
                 JwkJson = jwk.ToJson(includePrivate: true)
             });
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return jwk;
         }
 
@@ -44,7 +44,8 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
         var keys = await db.SigningKeys
             .Where(k => k.RetiredAt == null)
             .OrderByDescending(k => k.CreatedAt)
-            .ToListAsync(ct);
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
 
         return keys
             .Select(k => System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(k.JwkJson)!)

@@ -35,7 +35,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
         };
 
         db.AuthorizationCodes.Add(entity);
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         var uri = new UriBuilder(valid.RedirectUri!);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);

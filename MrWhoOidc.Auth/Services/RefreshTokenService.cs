@@ -26,7 +26,7 @@ internal sealed class RefreshTokenService(AuthDbContext db) : IRefreshTokenServi
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
         });
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);
     }
 

@@ -13,7 +13,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
 {
     public async Task SeedAsync(CancellationToken ct = default)
     {
-        if (!await db.Users.AnyAsync(ct))
+        if (!await db.Users.AnyAsync(ct).ConfigureAwait(false))
         {
             db.Users.Add(new User
             {
@@ -26,7 +26,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             });
         }
 
-        if (!await db.Clients.AnyAsync(c => c.ClientId == "blazor-web", ct))
+        if (!await db.Clients.AnyAsync(c => c.ClientId == "blazor-web", ct).ConfigureAwait(false))
         {
             db.Clients.Add(new Client
             {
@@ -38,6 +38,6 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             });
         }
 
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

@@ -23,7 +23,7 @@ internal sealed class KeyRotationService(
         if (!opts.Enabled) return;
 
         // Find the current active key
-        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct);
+        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (current is null)
         {
             // No key yet, KeyStore will create on demand; nothing else to do
@@ -45,20 +45,20 @@ internal sealed class KeyRotationService(
                 CreatedAt = DateTimeOffset.UtcNow
             });
 
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
             logger.LogInformation("Rotated signing key. New kid={Kid}", kid);
         }
 
         // Retire keys older than RotationInterval + Overlap so they are no longer served
         var retireBefore = DateTimeOffset.UtcNow - (opts.RotationInterval + opts.Overlap);
-        var oldKeys = await db.SigningKeys.Where(k => k.RetiredAt == null && k.CreatedAt < retireBefore).ToListAsync(ct);
+        var oldKeys = await db.SigningKeys.Where(k => k.RetiredAt == null && k.CreatedAt < retireBefore).ToListAsync(ct).ConfigureAwait(false);
         if (oldKeys.Count > 0)
         {
             foreach (var k in oldKeys)
             {
                 k.RetiredAt = DateTimeOffset.UtcNow;
             }
-            await db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
             logger.LogInformation("Retired {Count} old signing keys", oldKeys.Count);
         }
     }

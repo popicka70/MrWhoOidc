@@ -21,7 +21,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default)
     {
-        var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct);
+        var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
         if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
 
@@ -70,7 +70,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         };
 
         // Load user once for optional claims
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct);
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
         if (user is not null)
         {
             if (scopes.Contains("profile") && !string.IsNullOrEmpty(user.Name))
@@ -96,10 +96,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             authTime: authTime
         );
 
-        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
+        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct).ConfigureAwait(false);
 
         entity.Consumed = true;
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Cleanup
         meta.Remove(code);
@@ -120,7 +120,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         string refreshToken, string clientId, string issuer, CancellationToken ct = default)
     {
         var hash = Hash(refreshToken);
-        var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct);
+        var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct).ConfigureAwait(false);
         if (tokenEntity is null || tokenEntity.ExpiresAt < DateTimeOffset.UtcNow || !string.Equals(tokenEntity.ClientId, clientId, StringComparison.Ordinal))
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
 
@@ -135,9 +135,9 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Rotation: create new refresh token and revoke the old one
-        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
+        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct).ConfigureAwait(false);
         tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         var payload = new
         {
