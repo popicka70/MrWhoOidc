@@ -14,6 +14,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Token> Tokens => Set<Token>();
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
     public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
+    public DbSet<Realm> Realms => Set<Realm>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -30,12 +31,27 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.Email);
         });
 
+        modelBuilder.Entity<Realm>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Property(x => x.DisplayName).HasMaxLength(200);
+        });
+
         modelBuilder.Entity<Client>(b =>
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.ClientId).IsUnique();
             b.Property(x => x.ClientSecretHash).HasMaxLength(500);
+            // optional at first to allow backfill without manual migration
+            b.Property(x => x.RealmId);
+            b.HasIndex(x => x.RealmId);
+            b.HasOne<Realm>()
+                .WithMany()
+                .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SigningKey>(b =>
@@ -122,6 +138,16 @@ public class User
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public class Realm
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty; // slug, e.g., "admin"
+    [MaxLength(200)]
+    public string? DisplayName { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public class Client
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -132,6 +158,7 @@ public class Client
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]
     public string? ClientSecretHash { get; set; } // null => public client
+    public Guid? RealmId { get; set; } // parent realm (optional for initial migration)
 }
 
 public class SigningKey
