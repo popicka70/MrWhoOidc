@@ -57,7 +57,9 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // Register custom meters from services
+                    .AddMeter("MrWhoOidc.WebAuth");
             })
             .WithTracing(tracing =>
             {

@@ -2,6 +2,7 @@ using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -15,12 +16,14 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
     public IResult Handle(HttpContext http)
     {
         var sw = Stopwatch.StartNew();
-        metrics.UserInfoRequests.Add(1);
+        string outcome = "success";
         try
         {
+            metrics.UserInfoRequests.Add(1);
             var auth = http.Request.Headers.Authorization.ToString();
             if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
             {
+                outcome = "failure";
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
             }
@@ -31,6 +34,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             var (ok, principal, _) = validator.Validate(token, issuer);
             if (!ok || principal is null)
             {
+                outcome = "failure";
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
             }
@@ -66,7 +70,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         finally
         {
             sw.Stop();
-            metrics.UserInfoDurationMs.Record(sw.Elapsed.TotalMilliseconds);
+            metrics.UserInfoDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { new("outcome", outcome) });
         }
     }
 
