@@ -92,11 +92,20 @@ public sealed class IntrospectionHandler(
             return Results.BadRequest(new { error = "unauthorized_client" });
         }
 
+        var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+
+        // If the caller explicitly hints refresh_token, handle it first
+        if (string.Equals(hint, "refresh_token", StringComparison.Ordinal))
+        {
+            var result = await HandleRefreshTokenIntrospectionAsync(token, clientId, issuer, tags, http);
+            if (result is not null) return result;
+            // fall through to access token logic if not found
+        }
+
         // Introspection policy: check allowed audiences for this client, if configured
         string? requestedAud = null;
 
         // Try JWT first
-        var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
         var (ok, principal, _) = tokenValidator.Validate(token, issuer);
         if (ok && principal is not null)
         {
@@ -123,17 +132,14 @@ public sealed class IntrospectionHandler(
             var cnfRaw = principal.FindFirst("cnf")?.Value;
             if (!string.IsNullOrEmpty(cnfRaw))
             {
-                try
-                {
-                    cnf = JsonDocument.Parse(cnfRaw).RootElement;
-                }
-                catch
-                {
-                    // ignore if invalid JSON
-                }
+                try { cnf = JsonDocument.Parse(cnfRaw).RootElement; } catch { }
             }
 
             long? ToLong(string? s) => long.TryParse(s, out var v) ? v : null;
+
+            // Support aud as array if multiple present
+            var audClaims = principal.Claims.Where(c => c.Type == "aud").Select(c => c.Value).Distinct().ToArray();
+            object? audValue = audClaims.Length switch { > 1 => audClaims, 1 => audClaims[0], _ => requestedAud };
 
             var response = new Dictionary<string, object?>
             {
@@ -142,7 +148,7 @@ public sealed class IntrospectionHandler(
                 ["scope"] = scope,
                 ["sub"] = sub,
                 ["username"] = sub,
-                ["aud"] = requestedAud,
+                ["aud"] = audValue,
                 ["iss"] = iss,
                 ["iat"] = ToLong(iatStr),
                 ["nbf"] = ToLong(nbfStr),
@@ -161,11 +167,18 @@ public sealed class IntrospectionHandler(
             return Results.Json(response);
         }
 
-        // Opaque token path: look up by hash in DB
+        // Opaque access token path: look up by hash in DB
         var hash = Hash(token);
         var entity = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.Type == "access" && t.TokenHash == hash, http.RequestAborted);
         if (entity is null)
         {
+            // If hint was access_token and we failed, try refresh_token as a fallback
+            if (string.Equals(hint, "access_token", StringComparison.Ordinal))
+            {
+                var r = await HandleRefreshTokenIntrospectionAsync(token, clientId, issuer, tags, http);
+                if (r is not null) return r;
+            }
+
             metrics.IntrospectionActiveFalse.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: null);
             metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
@@ -208,6 +221,52 @@ public sealed class IntrospectionHandler(
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);
         metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
         return Results.Json(responseOpaque);
+    }
+
+    // Refresh token introspection (owner-only)
+    private async Task<IResult?> HandleRefreshTokenIntrospectionAsync(string token, string clientId, string issuer, KeyValuePair<string, object?>[] tags, HttpContext http)
+    {
+        var hash = Hash(token);
+        var rt = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.Type == "refresh" && t.TokenHash == hash, http.RequestAborted);
+        if (rt is null)
+        {
+            return null; // not a known refresh token
+        }
+        // Only the issuing client can introspect its refresh token
+        if (!string.Equals(rt.ClientId, clientId, StringComparison.Ordinal))
+        {
+            metrics.IntrospectionActiveFalse.Add(1, tags);
+            LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "forbidden", aud: null);
+            metrics.IntrospectionDurationMs.Record(0, tags);
+            return Results.Json(new { active = false });
+        }
+
+        var active = rt.RevokedAt is null && rt.ExpiresAt > DateTimeOffset.UtcNow;
+        if (!active)
+        {
+            metrics.IntrospectionActiveFalse.Add(1, tags);
+            LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: null);
+            metrics.IntrospectionDurationMs.Record(0, tags);
+            return Results.Json(new { active = false });
+        }
+
+        var scopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(rt.ScopesJson) ?? Array.Empty<string>();
+        var response = new Dictionary<string, object?>
+        {
+            ["active"] = true,
+            ["token_type"] = "refresh_token",
+            ["scope"] = string.Join(' ', scopes),
+            ["sub"] = rt.UserId.ToString(),
+            ["username"] = rt.UserId.ToString(),
+            ["iss"] = issuer,
+            ["exp"] = rt.ExpiresAt.ToUnixTimeSeconds(),
+            ["client_id"] = clientId
+        };
+
+        metrics.IntrospectionActiveTrue.Add(1, tags);
+        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: null);
+        metrics.IntrospectionDurationMs.Record(0, tags);
+        return Results.Json(response);
     }
 
     static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
