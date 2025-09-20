@@ -50,7 +50,8 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
             Scopes = scopes,
             Nonce = request.nonce,
             CodeChallenge = request.code_challenge,
-            CodeChallengeMethod = request.code_challenge_method
+            CodeChallengeMethod = request.code_challenge_method,
+            RequireConsent = client.RequireConsent
         };
     }
 

@@ -25,6 +25,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
     });
+
 // Wire up Auth persistence (PostgreSQL via Aspire connection)
 builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
@@ -120,6 +121,8 @@ app.MapGet("/authorize", async (
         var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
         return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
     }
+
+    // TODO: check consent here; if required and not granted, redirect to /consent with ReturnUrl
 
     // Issue auth code
     var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -24,4 +24,5 @@ public class AuthorizeValidationResult
     public string? Nonce { get; set; }
     public string? CodeChallenge { get; set; }
     public string? CodeChallengeMethod { get; set; }
+    public bool RequireConsent { get; set; }
 }

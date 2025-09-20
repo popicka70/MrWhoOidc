@@ -8,6 +8,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
+    public DbSet<Consent> Consents => Set<Consent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +42,13 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.RedirectUri).IsRequired();
             b.Property(x => x.ScopesJson).IsRequired();
             b.Property(x => x.CodeChallengeMethod).HasMaxLength(10);
+        });
+
+        modelBuilder.Entity<Consent>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ClientId).IsRequired();
+            b.HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
         });
     }
 }
@@ -87,4 +95,14 @@ public class AuthorizationCode
     public string? CodeChallengeMethod { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
+}
+
+public class Consent
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public string ClientId { get; set; } = string.Empty;
+    public string ScopesJson { get; set; } = "[]";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? RevokedAt { get; set; }
 }

@@ -1,0 +1,20 @@
+@page "/consent"
+@model MrWhoOidc.WebAuth.Pages.ConsentModel
+@{
+    ViewData["Title"] = "Consent";
+}
+
+<h2>Consent</h2>
+<p>Application <strong>@Model.ClientId</strong> is requesting access to:</p>
+<ul>
+@foreach (var scope in Model.Scopes)
+{
+    <li>@scope</li>
+}
+</ul>
+
+<form method="post">
+    <input type="hidden" asp-for="ReturnUrl" />
+    <button type="submit" class="btn btn-primary">Allow</button>
+    <a class="btn btn-secondary" href="@Model.CancelUrl">Deny</a>
+</form>
