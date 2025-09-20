@@ -1,0 +1,66 @@
+using System.Text.RegularExpressions;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
+
+namespace MrWhoOidc.Auth.Services;
+
+public interface IAuthorizeService
+{
+    Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
+}
+
+internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
+{
+    public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
+    {
+        if (!string.Equals(request.response_type, "code", StringComparison.Ordinal))
+            return Error("unsupported_response_type", "Only response_type=code is supported");
+
+        if (string.IsNullOrWhiteSpace(request.client_id))
+            return Error("invalid_request", "Missing client_id");
+
+        var client = await clients.FindByClientIdAsync(request.client_id, ct);
+        if (client is null)
+            return Error("unauthorized_client", "Unknown client_id");
+
+        if (string.IsNullOrWhiteSpace(request.redirect_uri))
+            return Error("invalid_request", "Missing redirect_uri");
+
+        if (!IsValidAbsoluteUri(request.redirect_uri))
+            return Error("invalid_request", "redirect_uri must be absolute");
+
+        if (client.RequirePkce)
+        {
+            if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, "S256", StringComparison.Ordinal))
+                return Error("invalid_request", "PKCE S256 is required for this client");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.nonce))
+            return Error("invalid_request", "Missing nonce");
+
+        var scopes = (request.scope ?? "openid").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!scopes.Contains("openid"))
+            return Error("invalid_scope", "scope must include 'openid'");
+
+        return new AuthorizeValidationResult
+        {
+            IsValid = true,
+            ClientId = client.ClientId,
+            RedirectUri = request.redirect_uri,
+            Scopes = scopes,
+            Nonce = request.nonce,
+            CodeChallenge = request.code_challenge,
+            CodeChallengeMethod = request.code_challenge_method
+        };
+    }
+
+    static bool IsValidAbsoluteUri(string uri)
+        => Uri.TryCreate(uri, UriKind.Absolute, out _);
+
+    static AuthorizeValidationResult Error(string code, string description) => new()
+    {
+        IsValid = false,
+        Error = code,
+        ErrorDescription = description
+    };
+}

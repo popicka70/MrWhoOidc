@@ -1,0 +1,19 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
+
+namespace MrWhoOidc.Auth;
+
+public static class AuthServiceCollectionExtensions
+{
+    public static IServiceCollection AddMrWhoOidcAuthCore(this IServiceCollection services)
+    {
+        services.AddScoped<IKeyStore, KeyStore>();
+        services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IClientStore, ClientStore>();
+        services.AddScoped<IAuthorizeService, AuthorizeService>();
+        return services;
+    }
+}
