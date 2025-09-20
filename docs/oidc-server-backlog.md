@@ -6,7 +6,7 @@ Status summary (MVP scope)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation)
 - [x] M5 UserInfo + Logout (basic sub-only userinfo, local + RP-initiated logout)
-- [ ] M6 Introspection & Revocation
+- [ ] M6 Introspection & Revocation (revocation implemented)
 - [ ] M7 Key rotation & hardening
 - [ ] M8 Observability, DX & Docs
 
@@ -59,7 +59,7 @@ M5 – UserInfo, Logout/End Session
 
 M6 – Introspection & Revocation (optional for MVP)
 - [ ] `/introspect` for confidential clients (when opaque access tokens are enabled).
-- [ ] `/revoke` for refresh/access tokens.
+- [x] `/revoke` for refresh/access tokens (refresh implemented).
 
 M7 – Key Rotation & Hardening
 - [ ] Automated signing key rotation + JWKS publishing overlap.
@@ -76,20 +76,18 @@ M8 – Observability, DX & Docs
 - [ ] Documentation in `/docs` (setup, endpoints, examples, ADRs).
 
 Next steps (proposed)
-1) Claims and tokens
-   - Add `auth_time`, `at_hash` (and optional `c_hash`) to ID token.
-   - Map profile/email claims by scopes in `/userinfo` and ID token.
-   - Configure API audience; include `aud` properly in access token.
-2) Security and UX
-   - Add anti-forgery validation and lockout/backoff on login; success auditing.
-   - Add rate limiting to `/authorize`, `/token`, `/userinfo`.
-   - Harden error responses per RFC 6749/6750/8414 and add cache headers consistently.
-3) Rotation and revocation
-   - Implement key rotation service and retention window.
-   - Implement `/revoke` and (optionally) `/introspect`; add refresh token blacklisting checks.
+1) Security & hardening
+   - Add anti-forgery tokens to login/consent and implement lockout/backoff.
+   - Add rate limiting on `/authorize`, `/token`, `/userinfo`.
+   - RFC-aligned error bodies + consistent cache headers.
+2) Rotation and revocation
+   - Implement key rotation with overlap; publish previous keys.
+   - Add `/revoke` client authentication (basic/private_key_jwt stub) and audit.
+3) Claims and tokens
+   - Map profile/email claims in access/ID tokens strictly by requested scopes.
+   - Add `c_hash` if returning code in front-channel in future flows.
 4) Observability and docs
-   - Wire OpenTelemetry and basic metrics.
-   - Author ADRs for token format and password hashing; add setup and endpoint docs.
-5) Data model enhancements
-   - Introduce `ClientSecret`, `RedirectUri`, `Scope`, per-client grant/scope config.
-   - Strengthen consent to record granted scopes per client and honor deltas.
+   - Wire OpenTelemetry and metrics.
+   - Add ADRs for token format and hashing; update docs and sample requests.
+5) Introspection (optional)
+   - Add opaque access token mode + `/introspect` for confidential clients.

@@ -20,6 +20,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IConsentService, ConsentService>();
         services.AddScoped<ITokenValidator, TokenValidator>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IRevocationService, RevocationService>();
         return services;
     }
 }

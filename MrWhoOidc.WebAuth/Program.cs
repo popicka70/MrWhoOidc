@@ -43,6 +43,7 @@ builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
 builder.Services.AddSingleton<ILogoutHandler, LogoutHandler>();
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
+builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
 
 var app = builder.Build();
 
@@ -90,6 +91,7 @@ app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync
 app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
 app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx));
 
 app.MapStaticAssets();
