@@ -23,9 +23,10 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IRevocationService, RevocationService>();
 
-        // Key rotation options and service
+        // Key rotation options and services
         services.AddOptions<KeyRotationOptions>();
         services.AddScoped<IKeyRotationService, KeyRotationService>();
+        services.AddHostedService<KeyRotationHostedService>();
 
         return services;
     }
