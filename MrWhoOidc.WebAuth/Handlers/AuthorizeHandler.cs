@@ -38,7 +38,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 uri.Query = query.ToString();
                 return Results.Redirect(uri.ToString());
             }
-            return Results.BadRequest(new { error = validation.Error, error_description = validation.ErrorDescription });
+            return ErrorResults.InvalidRequest(validation.ErrorDescription);
         }
 
         if (!http.User.Identity?.IsAuthenticated ?? true)
@@ -59,7 +59,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
         }
 
         var (ok, _, redirect) = await codes.IssueAsync(validation, userId);
-        if (!ok || redirect is null) return Results.Problem("Failed to issue code");
+        if (!ok || redirect is null) return Results.Json(new { error = "server_error" }, statusCode: 500);
 
         if (!string.IsNullOrEmpty(req.state))
         {

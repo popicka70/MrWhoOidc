@@ -14,13 +14,13 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
     {
         var auth = http.Request.Headers.Authorization.ToString();
         if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
-            return Results.Unauthorized();
+            return Results.Json(new { error = "invalid_token" }, statusCode: 401);
 
         var token = auth.Substring("Bearer ".Length).Trim();
         var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
         var (ok, principal, _) = validator.Validate(token, issuer);
-        if (!ok || principal is null) return Results.Unauthorized();
+        if (!ok || principal is null) return Results.Json(new { error = "invalid_token" }, statusCode: 401);
 
         var sub = principal.FindFirstValue("sub");
         var name = principal.FindFirstValue("name");
@@ -32,6 +32,17 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         if (!string.IsNullOrEmpty(email)) payload["email"] = email;
         if (!string.IsNullOrEmpty(emailVerified)) payload["email_verified"] = bool.TryParse(emailVerified, out var b) ? b : null;
 
-        return Results.Json(payload);
+        var result = Results.Json(payload);
+        // Set short private cache control header
+        return new CacheHeaderResult(result, "private, max-age=60");
+    }
+}
+
+internal sealed class CacheHeaderResult(IResult inner, string cacheControl) : IResult
+{
+    public Task ExecuteAsync(HttpContext httpContext)
+    {
+        httpContext.Response.Headers["Cache-Control"] = cacheControl;
+        return inner.ExecuteAsync(httpContext);
     }
 }

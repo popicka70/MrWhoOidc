@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -12,7 +13,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens) : IT
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         if (!http.Request.HasFormContentType)
-            return Results.BadRequest(new { error = "invalid_request" });
+            return ErrorResults.InvalidRequest();
 
         var form = await http.Request.ReadFormAsync();
         var grantType = form["grant_type"].ToString();
@@ -24,7 +25,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens) : IT
             var clientId = form["client_id"].ToString();
             var codeVerifier = form["code_verifier"].ToString();
             if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri) || string.IsNullOrWhiteSpace(clientId))
-                return Results.BadRequest(new { error = "invalid_request" });
+                return ErrorResults.InvalidRequest();
 
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
             var (ok, payload, _, status) = await tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, clientId, codeVerifier, issuer);
@@ -36,13 +37,13 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens) : IT
             var refresh = form["refresh_token"].ToString();
             var clientId = form["client_id"].ToString();
             if (string.IsNullOrWhiteSpace(refresh) || string.IsNullOrWhiteSpace(clientId))
-                return Results.BadRequest(new { error = "invalid_request" });
+                return ErrorResults.InvalidRequest();
 
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
             var (ok, payload, _, status) = await tokens.ExchangeRefreshTokenAsync(refresh, clientId, issuer);
             return Results.Json(payload!, statusCode: status);
         }
 
-        return Results.BadRequest(new { error = "unsupported_grant_type" });
+        return ErrorResults.UnsupportedGrant();
     }
 }

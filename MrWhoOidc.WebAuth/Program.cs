@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +44,48 @@ builder.Services.AddMrWhoOidcAuthCore();
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();
 
+// Rate limiting policies
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("rl-authorize", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("rl-token", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("rl-userinfo", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
+
 // Register handlers
 builder.Services.AddSingleton<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
@@ -66,6 +110,7 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Delay DB migration and seeding until after the host is fully started
 app.Lifetime.ApplicationStarted.Register(() =>
@@ -92,12 +137,15 @@ app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct
     ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
     return Results.Json(new { keys = jwks });
 });
-app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+   .RequireRateLimiting("rl-authorize");
 app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
-app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+   .RequireRateLimiting("rl-token");
 app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
-app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx));
+app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
+   .RequireRateLimiting("rl-userinfo");
 
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
