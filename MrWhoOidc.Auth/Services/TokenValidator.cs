@@ -39,12 +39,11 @@ internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
 
     IEnumerable<SecurityKey> GetSigningKeys()
     {
-        // Include current and previous keys (public portion is sufficient)
+        // Include current and previous keys using JsonWebKey (public only) to avoid RSA disposal issues
         var jwks = keyStore.GetPublicJwksAsync().GetAwaiter().GetResult();
         foreach (var jwk in jwks)
         {
-            using var rsa = jwk.ToRSA();
-            yield return new RsaSecurityKey(rsa) { KeyId = jwk.Kid };
+            yield return new JsonWebKey(jwk.ToJson(includePrivate: false));
         }
     }
 }
