@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using System.Text.Json;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -22,7 +23,9 @@ public sealed class IntrospectionHandler(
     OidcMetrics metrics,
     ILogger<IntrospectionHandler> logger,
     AuthDbContext db,
-    IOptions<AuthOptions> authOptions
+    IOptions<AuthOptions> authOptions,
+    IDPoPValidator dpop,
+    IDPoPReplayCache replayCache
 ) : IIntrospectionHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -127,6 +130,51 @@ public sealed class IntrospectionHandler(
                 return Results.Json(new { active = false });
             }
 
+            // DPoP enforcement if token is bound
+            string? cnfJkt = null;
+            var cnfRaw = principal.FindFirst("cnf")?.Value;
+            if (!string.IsNullOrEmpty(cnfRaw))
+            {
+                try
+                {
+                    using var cnfDoc = JsonDocument.Parse(cnfRaw);
+                    if (cnfDoc.RootElement.TryGetProperty("jkt", out var jktProp))
+                    {
+                        cnfJkt = jktProp.GetString();
+                    }
+                }
+                catch { }
+
+                if (!string.IsNullOrEmpty(cnfJkt))
+                {
+                    var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
+                    if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
+                    {
+                        metrics.IntrospectionActiveFalse.Add(1, tags);
+                        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                        metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                        return Results.Json(new { active = false });
+                    }
+                    if (string.IsNullOrEmpty(validation.Jti) || validation.Iat is null)
+                    {
+                        metrics.IntrospectionActiveFalse.Add(1, tags);
+                        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                        metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                        return Results.Json(new { active = false });
+                    }
+                    // Replay check
+                    var key = $"{validation.Jkt}:{validation.Jti}";
+                    var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
+                    if (!replayCache.TryAdd(key, expires))
+                    {
+                        metrics.IntrospectionActiveFalse.Add(1, tags);
+                        LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                        metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                        return Results.Json(new { active = false });
+                    }
+                }
+            }
+
             var scope = principal.FindFirst("scope")?.Value;
             var sub = principal.FindFirst("sub")?.Value;
             var iss = principal.FindFirst("iss")?.Value ?? issuer;
@@ -137,7 +185,6 @@ public sealed class IntrospectionHandler(
 
             // cnf (DPoP/bound tokens) when present
             object? cnf = null;
-            var cnfRaw = principal.FindFirst("cnf")?.Value;
             if (!string.IsNullOrEmpty(cnfRaw))
             {
                 try { cnf = JsonDocument.Parse(cnfRaw).RootElement; } catch { }
@@ -202,13 +249,42 @@ public sealed class IntrospectionHandler(
             return Results.Json(new { active = false });
         }
 
-        var active = entity.RevokedAt is null && entity.ExpiresAt > DateTimeOffset.UtcNow;
-        if (!active)
+        var isActive = entity.RevokedAt is null && entity.ExpiresAt > DateTimeOffset.UtcNow;
+        if (!isActive)
         {
             metrics.IntrospectionActiveFalse.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
             metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
             return Results.Json(new { active = false });
+        }
+
+        // DPoP enforcement for opaque token if bound
+        if (!string.IsNullOrEmpty(entity.CnfJkt))
+        {
+            var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
+            if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, entity.CnfJkt, StringComparison.Ordinal))
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                return Results.Json(new { active = false });
+            }
+            if (string.IsNullOrEmpty(validation.Jti) || validation.Iat is null)
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                return Results.Json(new { active = false });
+            }
+            var key = $"{validation.Jkt}:{validation.Jti}";
+            var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
+            if (!replayCache.TryAdd(key, expires))
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "inactive", aud: requestedAud);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                return Results.Json(new { active = false });
+            }
         }
 
         var scopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
