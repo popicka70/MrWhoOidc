@@ -108,8 +108,8 @@ Backlog – Introspection (RFC 7662)
 
 - Phase 4 – Fidelity & extensions
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
+  - [x] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
   - [ ] Support `aud` as array in response when token carries multiple audiences.
-  - [ ] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
   - [ ] Optional mTLS client auth for introspection (future hardening).
   - [ ] Implement `token_type_hint` handling for refresh tokens (if introspection of RT is desired/allowed).
 
@@ -125,18 +125,16 @@ Backlog – Introspection (RFC 7662)
   - [ ] Integration tests with a sample API calling `/introspect`.
   - [ ] Docs and samples: endpoint usage, example responses, `private_key_jwt` configuration.
 
-Next steps (proposed)
-1) Observability & Metrics
-   - Add dashboards; refine metric dimensions (client_id bucketization, error types).
+New Backlog – DPoP / Bound Access Tokens (RFC 9449)
+- Phase 1 – Core support
+  - [ ] Token endpoint: accept `DPoP` proofs and issue DPoP-bound access tokens (include `cnf.jkt`).
+  - [ ] Validate DPoP at `/userinfo` and `/introspect` (verify htm/htu/iat/jti, `ath` matches token, replay cache).
+  - [ ] Add discovery metadata: `dpop_signing_alg_values_supported`, `dpop_bound_access_tokens: true`.
 
-2) Security hardening
-   - Replace coarse global limiter with a true distributed limiter per policy (Redis-backed) if scale-out required.
+- Phase 2 – Nonce and robustness
+  - [ ] Support DPoP nonce challenges (`WWW-Authenticate: DPoP nonce=...`) and optional nonce endpoint.
+  - [ ] Persist DPoP `jti` to prevent replays (bounded window) and handle clock skew.
 
-3) Protocol fidelity improvements
-   - Complete `private_key_jwt` by configuring per-client public JWKs (config or DB) and enabling validation.
-   - Consider RFC 8707 resource indicators for APIs; keep discovery metadata strictly standard.
-   - Refine opaque tokens (cleanup job, lifecycle), and finalize introspection field policy per caller.
-
-4) Dev experience & Docs
-   - Write full documentation in `/docs` (setup, flows, endpoints, examples) and export a Postman JSON.
-   - Scripted seeding for AppHost, or developer task wiring.
+- Phase 3 – Samples & docs
+  - [ ] Sample API validating DPoP; client sample using DPoP.
+  - [ ] Docs: how to configure and use DPoP; privacy and security considerations.
