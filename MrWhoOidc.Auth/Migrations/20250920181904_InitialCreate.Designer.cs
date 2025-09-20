@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace MrWhoOidc.Auth.Persistence.Migrations
+namespace MrWhoOidc.Auth.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    [Migration("20250920180124_UpdateParEntityIdBased")]
-    partial class UpdateParEntityIdBased
+    [Migration("20250920181904_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -114,6 +114,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid>("RealmId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("RequireConsent")
                         .HasColumnType("boolean");
 
@@ -124,6 +127,8 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.HasIndex("ClientId")
                         .IsUnique();
+
+                    b.HasIndex("RealmId");
 
                     b.ToTable("Clients");
                 });
@@ -191,6 +196,32 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.HasIndex("ExpiresAt");
 
                     b.ToTable("PushedAuthorizationRequests");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Realm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Realms");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.RevocationAudit", b =>
@@ -351,6 +382,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.Client", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Realm", null)
+                        .WithMany()
+                        .HasForeignKey("RealmId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -45,8 +45,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.ClientId).IsUnique();
             b.Property(x => x.ClientSecretHash).HasMaxLength(500);
-            // optional at first to allow backfill without manual migration
-            b.Property(x => x.RealmId);
+            b.Property(x => x.RealmId).IsRequired();
             b.HasIndex(x => x.RealmId);
             b.HasOne<Realm>()
                 .WithMany()
@@ -158,7 +157,7 @@ public class Client
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]
     public string? ClientSecretHash { get; set; } // null => public client
-    public Guid? RealmId { get; set; } // parent realm (optional for initial migration)
+    public Guid RealmId { get; set; } // parent realm (now required)
 }
 
 public class SigningKey
