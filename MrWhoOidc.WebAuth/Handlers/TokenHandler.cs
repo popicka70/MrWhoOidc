@@ -73,14 +73,14 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             var endpointUrl = authzUrl.TrimEnd('/') + "/token";
             if (http.Request.Headers.ContainsKey("DPoP"))
             {
-                var (ok, jkt, _) = await dpop.ValidateForEndpointAsync(http, endpointUrl);
-                if (!ok)
+                var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl);
+                if (!validation.Ok)
                 {
                     // Per RFC 9449, return 400 with WWW-Authenticate: DPoP error (simplified here)
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return Results.BadRequest(new { error = "invalid_dpop_proof" });
                 }
-                dpopJkt = jkt;
+                dpopJkt = validation.Jkt;
             }
 
             if (string.Equals(grantType, "authorization_code", StringComparison.Ordinal))

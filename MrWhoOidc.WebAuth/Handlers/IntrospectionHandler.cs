@@ -225,6 +225,11 @@ public sealed class IntrospectionHandler(
             ["jti"] = entity.Jti
         };
 
+        if (!string.IsNullOrEmpty(entity.CnfJkt))
+        {
+            responseOpaque["cnf"] = new { jkt = entity.CnfJkt };
+        }
+
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);
         metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);

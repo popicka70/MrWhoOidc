@@ -8,19 +8,21 @@ namespace MrWhoOidc.WebAuth.Infrastructure;
 
 public interface IDPoPValidator
 {
-    Task<(bool ok, string? jkt, string? error)> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default);
+    Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default);
 }
+
+public readonly record struct DPoPValidationResult(bool Ok, string? Jkt, string? Jti, long? Iat, string? Error);
 
 internal sealed class DPoPValidator : IDPoPValidator
 {
     private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
 
-    public Task<(bool ok, string? jkt, string? error)> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
+    public Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
     {
         var header = http.Request.Headers["DPoP"].ToString();
         if (string.IsNullOrWhiteSpace(header))
         {
-            return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "missing_dpop"));
+            return Task.FromResult(new DPoPValidationResult(false, null, null, null, "missing_dpop"));
         }
 
         try
@@ -30,7 +32,7 @@ internal sealed class DPoPValidator : IDPoPValidator
 
             if (!string.Equals(unsigned.Header.Typ, "dpop+jwt", StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "invalid_typ"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "invalid_typ"));
             }
 
             if (unsigned.Header["jwk"] is not JsonElement jwkElement)
@@ -47,14 +49,14 @@ internal sealed class DPoPValidator : IDPoPValidator
                     var headerBytes = Base64UrlEncoder.DecodeBytes(rawHeaderJson);
                     using var json = JsonDocument.Parse(headerBytes);
                     if (!json.RootElement.TryGetProperty("jwk", out jwkElement))
-                        return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "missing_jwk"));
+                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, "missing_jwk"));
                 }
             }
 
             var key = CreateSecurityKeyFromJwk(jwkElement);
             if (key is null)
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "unsupported_jwk"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "unsupported_jwk"));
             }
 
             var parameters = new TokenValidationParameters
@@ -79,12 +81,12 @@ internal sealed class DPoPValidator : IDPoPValidator
 
             if (string.IsNullOrEmpty(htm) || string.IsNullOrEmpty(htu) || string.IsNullOrEmpty(jti))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "missing_claims"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "missing_claims"));
             }
 
             if (!string.Equals(htm, http.Request.Method, StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "htm_mismatch"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "htm_mismatch"));
             }
 
             // Compare absolute URLs ignoring trailing slash differences
@@ -92,18 +94,18 @@ internal sealed class DPoPValidator : IDPoPValidator
             var provided = new Uri(htu).GetLeftPart(UriPartial.Path).TrimEnd('/');
             if (!string.Equals(expected, provided, StringComparison.Ordinal))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "htu_mismatch"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "htu_mismatch"));
             }
 
             if (iat is null || !long.TryParse(iat.ToString(), out var iatSec))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "invalid_iat"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "invalid_iat"));
             }
             var iatTime = DateTimeOffset.FromUnixTimeSeconds(iatSec);
             var now = DateTimeOffset.UtcNow;
             if (iatTime < now.AddMinutes(-5) || iatTime > now.AddMinutes(5))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "iat_out_of_range"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "iat_out_of_range"));
             }
 
             // Validate ath if access token provided
@@ -112,13 +114,13 @@ internal sealed class DPoPValidator : IDPoPValidator
                 var ath = jwt.Payload.TryGetValue("ath", out var athObj) ? athObj?.ToString() : null;
                 if (string.IsNullOrEmpty(ath))
                 {
-                    return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "missing_ath"));
+                    return Task.FromResult(new DPoPValidationResult(false, null, null, null, "missing_ath"));
                 }
                 var tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
                 var tokenHashB64Url = Base64UrlEncoder.Encode(tokenHash);
                 if (!string.Equals(ath, tokenHashB64Url, StringComparison.Ordinal))
                 {
-                    return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "ath_mismatch"));
+                    return Task.FromResult(new DPoPValidationResult(false, null, null, null, "ath_mismatch"));
                 }
             }
 
@@ -126,14 +128,14 @@ internal sealed class DPoPValidator : IDPoPValidator
             var jkt = ComputeJwkThumbprint(jwkElement);
             if (string.IsNullOrEmpty(jkt))
             {
-                return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, "thumbprint_error"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, "thumbprint_error"));
             }
 
-            return Task.FromResult<(bool ok, string? jkt, string? error)>((true, jkt, null));
+            return Task.FromResult(new DPoPValidationResult(true, jkt, jti, iatSec, null));
         }
         catch (Exception ex)
         {
-            return Task.FromResult<(bool ok, string? jkt, string? error)>((false, null, ex.Message));
+            return Task.FromResult(new DPoPValidationResult(false, null, null, null, ex.Message));
         }
     }
 

@@ -89,6 +89,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.ScopesJson).IsRequired();
             b.Property(x => x.Audience).HasMaxLength(200);
             b.Property(x => x.Jti).HasMaxLength(64);
+            b.Property(x => x.CnfJkt).HasMaxLength(200);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
 
@@ -216,6 +217,8 @@ public class Token
     public string? Audience { get; set; } // for opaque access tokens
     [MaxLength(64)]
     public string? Jti { get; set; }
+    [MaxLength(200)]
+    public string? CnfJkt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }

@@ -3,6 +3,8 @@ using System.Security.Claims;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using MrWhoOidc.WebAuth.Infrastructure;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -11,7 +13,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -32,11 +34,62 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
             var (ok, principal, _) = validator.Validate(token, issuer);
-            if (!ok || principal is null)
+            if (!ok || principal is not null == false)
             {
                 outcome = "failure";
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
+            }
+
+            // If token is DPoP-bound (has cnf.jkt), require and validate DPoP proof
+            string? cnfJkt = null;
+            var cnfRaw = principal!.FindFirst("cnf")?.Value;
+            if (!string.IsNullOrEmpty(cnfRaw))
+            {
+                try
+                {
+                    using var cnfDoc = JsonDocument.Parse(cnfRaw);
+                    if (cnfDoc.RootElement.TryGetProperty("jkt", out var jktProp))
+                    {
+                        cnfJkt = jktProp.GetString();
+                    }
+                }
+                catch { }
+
+                if (string.IsNullOrEmpty(cnfJkt))
+                {
+                    outcome = "failure";
+                    metrics.UserInfoFailures.Add(1);
+                    return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
+                }
+
+                var endpointUrl = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}")!.TrimEnd('/') + "/userinfo";
+                var result = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
+                if (!result.Ok || string.IsNullOrEmpty(result.Jkt) || !string.Equals(result.Jkt, cnfJkt, StringComparison.Ordinal))
+                {
+                    outcome = "failure";
+                    metrics.UserInfoFailures.Add(1);
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                }
+
+                // Replay protection: DPoP jti must not repeat within window
+                if (string.IsNullOrEmpty(result.Jti) || result.Iat is null)
+                {
+                    outcome = "failure";
+                    metrics.UserInfoFailures.Add(1);
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                }
+                var key = $"{result.Jkt}:{result.Jti}";
+                var expires = DateTimeOffset.FromUnixTimeSeconds(result.Iat.Value).AddMinutes(5);
+                if (!replayCache.TryAdd(key, expires))
+                {
+                    outcome = "failure";
+                    metrics.UserInfoFailures.Add(1);
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=replay";
+                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                }
             }
 
             var scopes = (principal.FindFirst("scope")?.Value ?? string.Empty)
@@ -64,8 +117,8 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             }
 
             metrics.UserInfoSuccess.Add(1);
-            var result = Results.Json(payload);
-            return new CacheHeaderResult(result, "private, max-age=60");
+            var resultJson = Results.Json(payload);
+            return new CacheHeaderResult(resultJson, "private, max-age=60");
         }
         finally
         {

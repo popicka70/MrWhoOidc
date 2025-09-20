@@ -62,7 +62,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         {
             // Create opaque token (random 256-bit), persist with hash
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -159,7 +159,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         if (opaqueEnabled)
         {
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -195,7 +195,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         return (true, payload, null, 200);
     }
 
-    async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, CancellationToken ct)
+    async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct)
     {
         var hash = Hash(rawToken);
         var entity = new Persistence.Token
@@ -207,6 +207,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             ScopesJson = JsonSerializer.Serialize(scopes),
             Audience = audience,
             Jti = jti,
+            CnfJkt = cnfJkt,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
         };
         db.Tokens.Add(entity);
