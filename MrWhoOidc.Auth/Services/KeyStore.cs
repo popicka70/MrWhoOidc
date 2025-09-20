@@ -40,7 +40,12 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
 
     public async Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default)
     {
-        var keys = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).ToListAsync(ct);
+        // Publish active and non-retired previous keys; hide retired keys
+        var keys = await db.SigningKeys
+            .Where(k => k.RetiredAt == null)
+            .OrderByDescending(k => k.CreatedAt)
+            .ToListAsync(ct);
+
         return keys
             .Select(k => System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(k.JwkJson)!)
             .Select(k => new RsaJwk

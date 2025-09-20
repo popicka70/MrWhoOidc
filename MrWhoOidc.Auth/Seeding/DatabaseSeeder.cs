@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.Auth.Seeding;
 
@@ -62,5 +63,9 @@ public static class DatabaseSeeder
         }
 
         await db.SaveChangesAsync(ct);
+
+        // Initialize key rotation on first run (ensures overlap/retirement policy is applied)
+        var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
+        await rotation.EnsureInitializedAsync(ct);
     }
 }

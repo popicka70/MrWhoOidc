@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.Auth;
 
@@ -21,6 +22,11 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ITokenValidator, TokenValidator>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IRevocationService, RevocationService>();
+
+        // Key rotation options and service
+        services.AddOptions<KeyRotationOptions>();
+        services.AddScoped<IKeyRotationService, KeyRotationService>();
+
         return services;
     }
 }
