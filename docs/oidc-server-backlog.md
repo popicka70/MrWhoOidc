@@ -109,9 +109,10 @@ Backlog – Introspection (RFC 7662)
 - Phase 4 – Fidelity & extensions
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
   - [x] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
-  - [ ] Support `aud` as array in response when token carries multiple audiences.
+  - [x] Support `aud` as array in response when token carries multiple audiences.
   - [ ] Optional mTLS client auth for introspection (future hardening).
-  - [ ] Implement `token_type_hint` handling for refresh tokens (if introspection of RT is desired/allowed).
+  - [x] Implement `token_type_hint` handling for refresh tokens (gated by `Auth:AllowRefreshTokenIntrospection`; owner-only RT).
+  - [x] Discovery: advertise `introspection_token_types_supported` (non-standard, DX).
 
 - Phase 5 – Security hardening
   - [ ] Constant-time validation and uniform responses to avoid oracle characteristics.
