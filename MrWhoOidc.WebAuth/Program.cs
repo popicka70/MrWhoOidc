@@ -159,6 +159,19 @@ builder.Services.AddRateLimiter(options =>
             AutoReplenishment = true
         });
     });
+
+    // Introspection is similar sensitivity to token; rate limit appropriately
+    options.AddPolicy("rl-introspect", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
 });
 
 // Register handlers
@@ -168,6 +181,8 @@ builder.Services.AddSingleton<ILogoutHandler, LogoutHandler>();
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
+// Introspection
+builder.Services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
 
 var app = builder.Build();
 
@@ -249,6 +264,10 @@ app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
    .RequireRateLimiting("rl-userinfo");
 app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
+
+// Introspection endpoint
+app.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+   .RequireRateLimiting("rl-introspect");
 
 // PAR endpoint
 app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))

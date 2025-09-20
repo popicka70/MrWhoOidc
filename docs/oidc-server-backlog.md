@@ -80,7 +80,50 @@ M8 – Observability, DX & Docs
 - [x] Logging & tracing via `MrWhoOidc.ServiceDefaults`/OpenTelemetry (base wiring).
 - [x] Metrics: custom meters for authorize/token/userinfo/revoke with tags (grant_type/outcome); meter registered for export.
 - [x] Dev UX: `dotnet run -- --seed` command; Postman collection; `.http` sample.
-- [~] Documentation in `/docs` (setup, endpoints, examples) – ADRs done; full docs pending.
+- [~] Documentation in `/docs` (setup, flows, endpoints, examples) – ADRs done; full docs pending.
+
+Backlog – Introspection (RFC 7662)
+- Phase 1 – Basic JWT introspection (current)
+  - [x] Endpoint: POST `/introspect` accepts `token`, optional `token_type_hint`.
+  - [x] Client auth: `client_secret_basic`, `client_secret_post`, `private_key_jwt` (aud = introspection endpoint).
+  - [x] Validate JWT access tokens against local keys; return `{ active:false }` on failures.
+  - [x] Respond with: `active`, `token_type`, `scope`, `sub`, `username`, `aud`, `iss`, `iat`, `nbf`, `exp`.
+  - [x] Rate limit policy `rl-introspect` (~60/min/IP).
+  - [ ] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
+  - [ ] Audit log minimal fields (client_id, outcome, ip, aud).
+
+- Phase 2 – Policy & authorization
+  - [ ] Restrict which clients may call introspection (allow-list per client).
+  - [ ] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
+  - [ ] Add `introspection permissions` model/table or config (client_id -> allowed audiences/resources).
+  - [ ] Return limited fields based on caller policy (privacy by default).
+  - [ ] Optionally include `client_id` claim in response when caller is authorized to see it.
+
+- Phase 3 – Opaque access tokens
+  - [ ] Add server config to toggle opaque access tokens for APIs (per audience or global).
+  - [ ] Persist access tokens (opaque): hash, `client_id`, `user_id`, `scope[]`, `aud`, `exp`, `jti`, `revoked_at`.
+  - [ ] Update `/token` to issue opaque tokens when configured; include `jti`.
+  - [ ] Update `/introspect` to resolve opaque tokens from DB and reflect `revoked_at`/`exp` in `active`.
+  - [ ] Background cleanup for expired tokens.
+
+- Phase 4 – Fidelity & extensions
+  - [ ] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
+  - [ ] Support `aud` as array in response when token carries multiple audiences.
+  - [ ] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
+  - [ ] Optional mTLS client auth for introspection (future hardening).
+  - [ ] Implement `token_type_hint` handling for refresh tokens (if introspection of RT is desired/allowed).
+
+- Phase 5 – Security hardening
+  - [ ] Constant-time validation and uniform responses to avoid oracle characteristics.
+  - [ ] Strict input size limits on form fields; reject overly large payloads.
+  - [ ] No CORS for `/introspect`; ensure HTTPS/HSTS, appropriate cache headers.
+  - [ ] Structured audit events with correlation id and user agent/IP.
+
+- Phase 6 – Observability & tests
+  - [ ] Tracing: span attributes (client_id bucket, outcome, token_type_hint).
+  - [ ] Unit tests: client auth (basic/post/pkjwt), JWT path (valid/expired/aud-mismatch), opaque path.
+  - [ ] Integration tests with a sample API calling `/introspect`.
+  - [ ] Docs and samples: endpoint usage, example responses, `private_key_jwt` configuration.
 
 Next steps (proposed)
 1) Observability & Metrics

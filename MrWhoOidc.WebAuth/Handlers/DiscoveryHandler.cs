@@ -27,6 +27,7 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandle
             token_endpoint = $"{baseUrl}/token",
             userinfo_endpoint = $"{baseUrl}/userinfo",
             revocation_endpoint = $"{baseUrl}/revoke",
+            introspection_endpoint = $"{baseUrl}/introspect",
             pushed_authorization_request_endpoint = $"{baseUrl}/par",
             require_pushed_authorization_requests = false,
             jwks_uri = $"{baseUrl}/jwks",
