@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 
@@ -15,7 +16,7 @@ public interface ITokenService
         string refreshToken, string clientId, string issuer, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default)
@@ -39,6 +40,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
+        var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
 
         // Build access token first (include scopes claim)
         var accessClaims = new List<System.Security.Claims.Claim>
@@ -46,7 +48,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             new("sub", entity.UserId.ToString()),
             new("scope", string.Join(' ', scopes))
         };
-        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+        var accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
         var atHash = ComputeAtHash(accessToken);
@@ -107,13 +109,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
+        var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
 
         var accessClaims = new List<System.Security.Claims.Claim>
         {
             new("sub", tokenEntity.UserId.ToString()),
             new("scope", string.Join(' ', scopes))
         };
-        var accessToken = jwt.CreateJwt(issuer, "api", accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+        var accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Rotation: create new refresh token and revoke the old one
         var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);

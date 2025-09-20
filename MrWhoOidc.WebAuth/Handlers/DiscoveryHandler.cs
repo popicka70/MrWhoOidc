@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -13,12 +14,13 @@ public interface IDiscoveryHandler
     IResult Handle(HttpContext ctx);
 }
 
-public sealed class DiscoveryHandler(OidcOptions options) : IDiscoveryHandler
+public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions) : IDiscoveryHandler
 {
     public IResult Handle(HttpContext ctx)
     {
-        var issuer = options.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+        var issuer = oidcOptions.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
         var baseUrl = issuer.TrimEnd('/');
+        var audiences = authOptions.Value.ApiAudiences ?? ["api"];
         var body = new
         {
             issuer,
@@ -33,7 +35,9 @@ public sealed class DiscoveryHandler(OidcOptions options) : IDiscoveryHandler
             token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post" },
             code_challenge_methods_supported = new[] { "S256" },
             id_token_signing_alg_values_supported = new[] { "RS256" },
-            scopes_supported = new[] { "openid", "profile", "email" }
+            scopes_supported = new[] { "openid", "profile", "email" },
+            // custom field to publish configured audiences (not standard OIDC metadata, but useful for clients)
+            audiences
         };
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(body);

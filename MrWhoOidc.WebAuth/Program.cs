@@ -19,6 +19,9 @@ var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ??
 
 builder.Services.AddSingleton(oidcOptions);
 
+// Bind AuthOptions (API audiences)
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+
 // Add services to the container.
 builder.Services.AddRazorPages();
 
