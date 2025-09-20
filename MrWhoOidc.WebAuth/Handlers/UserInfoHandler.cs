@@ -14,13 +14,14 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
     {
         var auth = http.Request.Headers.Authorization.ToString();
         if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
-            return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+            return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
 
         var token = auth.Substring("Bearer ".Length).Trim();
         var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
         var (ok, principal, _) = validator.Validate(token, issuer);
-        if (!ok || principal is null) return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+        if (!ok || principal is null)
+            return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
 
         var sub = principal.FindFirstValue("sub");
         var name = principal.FindFirstValue("name");
@@ -36,6 +37,9 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         // Set short private cache control header
         return new CacheHeaderResult(result, "private, max-age=60");
     }
+
+    static IResult WithWwwAuthenticate(IResult result)
+        => new WwwAuthenticateResult(result, "Bearer error=\"invalid_token\"");
 }
 
 internal sealed class CacheHeaderResult(IResult inner, string cacheControl) : IResult
@@ -43,6 +47,15 @@ internal sealed class CacheHeaderResult(IResult inner, string cacheControl) : IR
     public Task ExecuteAsync(HttpContext httpContext)
     {
         httpContext.Response.Headers["Cache-Control"] = cacheControl;
+        return inner.ExecuteAsync(httpContext);
+    }
+}
+
+internal sealed class WwwAuthenticateResult(IResult inner, string value) : IResult
+{
+    public Task ExecuteAsync(HttpContext httpContext)
+    {
+        httpContext.Response.Headers["WWW-Authenticate"] = value;
         return inner.ExecuteAsync(httpContext);
     }
 }

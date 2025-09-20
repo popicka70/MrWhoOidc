@@ -4,4 +4,5 @@ public sealed class OidcOptions
 {
     public string? Issuer { get; set; }
     public string[] AllowedPostLogoutRedirectUris { get; set; } = [];
+    public string[] AllowedCorsOrigins { get; set; } = [];
 }

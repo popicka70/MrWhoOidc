@@ -23,7 +23,7 @@ public static class DatabaseSeeder
             });
         }
 
-        // Ensure test-client exists
+        // Public clients
         if (!await db.Clients.AnyAsync(c => c.ClientId == "test-client", ct))
         {
             db.Clients.Add(new Client
@@ -31,11 +31,11 @@ public static class DatabaseSeeder
                 ClientId = "test-client",
                 ClientName = "Test Client",
                 RequireConsent = false,
-                RequirePkce = true
+                RequirePkce = true,
+                ClientSecretHash = null // public client
             });
         }
 
-        // Ensure blazor-web client exists for the Blazor app OIDC login
         if (!await db.Clients.AnyAsync(c => c.ClientId == "blazor-web", ct))
         {
             db.Clients.Add(new Client
@@ -43,7 +43,21 @@ public static class DatabaseSeeder
                 ClientId = "blazor-web",
                 ClientName = "Blazor Web Frontend",
                 RequireConsent = false,
-                RequirePkce = true
+                RequirePkce = true,
+                ClientSecretHash = null // public client
+            });
+        }
+
+        // Confidential client for token/revocation tests
+        if (!await db.Clients.AnyAsync(c => c.ClientId == "test-confidential", ct))
+        {
+            db.Clients.Add(new Client
+            {
+                ClientId = "test-confidential",
+                ClientName = "Test Confidential Client",
+                RequireConsent = false,
+                RequirePkce = true,
+                ClientSecretHash = hasher.Hash("secret123!")
             });
         }
 

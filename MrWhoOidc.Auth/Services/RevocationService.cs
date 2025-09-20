@@ -5,22 +5,37 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IRevocationService
 {
-    Task RevokeAsync(string token, string? tokenTypeHint, string clientId, CancellationToken ct = default);
+    Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default);
 }
 
 internal sealed class RevocationService(AuthDbContext db) : IRevocationService
 {
-    public async Task RevokeAsync(string token, string? tokenTypeHint, string clientId, CancellationToken ct = default)
+    public async Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default)
     {
-        // Only refresh tokens are revocable centrally (JWT access tokens are self-contained)
         var hash = Hash(token);
-        var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct);
-        if (rt is not null && string.Equals(rt.ClientId, clientId, StringComparison.Ordinal))
+
+        // Idempotency: if already revoked or audit exists, return OK
+        var already = await db.Tokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt != null, ct);
+        if (!already)
         {
-            rt.RevokedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
+            var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct);
+            if (rt is not null && string.Equals(rt.ClientId, clientId, StringComparison.Ordinal))
+            {
+                rt.RevokedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
         }
-        // RFC 7009 requires 200 OK even if token not found
+
+        // Audit (best effort)
+        db.RevocationAudits.Add(new RevocationAudit
+        {
+            ClientId = clientId,
+            TokenHash = hash,
+            TokenType = tokenTypeHint,
+            IpAddress = ipAddress,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     static string Hash(string value)

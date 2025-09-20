@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -11,6 +12,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
     public DbSet<Consent> Consents => Set<Consent>();
     public DbSet<Token> Tokens => Set<Token>();
+    public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -32,6 +34,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.ClientId).IsUnique();
+            b.Property(x => x.ClientSecretHash).HasMaxLength(500);
         });
 
         modelBuilder.Entity<SigningKey>(b =>
@@ -70,6 +73,16 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
 
+        modelBuilder.Entity<RevocationAudit>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.TokenHash).IsRequired().HasMaxLength(200);
+            b.Property(x => x.TokenType).HasMaxLength(20);
+            b.Property(x => x.IpAddress).HasMaxLength(100);
+            b.HasIndex(x => new { x.TokenHash, x.ClientId });
+        });
+
         // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
         modelBuilder.Entity<DataProtectionKey>(b =>
         {
@@ -83,12 +96,15 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 public class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(200)]
     public string Username { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty; // Argon2id
     public string? PasswordSalt { get; set; }
     public string HashAlgorithm { get; set; } = "argon2id";
+    [MaxLength(256)]
     public string? Email { get; set; }
     public bool EmailVerified { get; set; }
+    [MaxLength(200)]
     public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -96,10 +112,13 @@ public class User
 public class Client
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
     public bool RequirePkce { get; set; } = true;
     public bool RequireConsent { get; set; } = true;
+    [MaxLength(500)]
+    public string? ClientSecretHash { get; set; } // null => public client
 }
 
 public class SigningKey
@@ -115,6 +134,7 @@ public class SigningKey
 public class AuthorizationCode
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(200)]
     public string Code { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty; // public client id string
     public Guid UserId { get; set; }
@@ -122,6 +142,7 @@ public class AuthorizationCode
     public string ScopesJson { get; set; } = "[]";
     public string? Nonce { get; set; }
     public string? CodeChallenge { get; set; }
+    [MaxLength(10)]
     public string? CodeChallengeMethod { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
@@ -140,7 +161,9 @@ public class Consent
 public class Token
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(20)]
     public string Type { get; set; } = "refresh"; // refresh
+    [MaxLength(200)]
     public string TokenHash { get; set; } = string.Empty; // SHA-256 of token
     public Guid UserId { get; set; }
     public string ClientId { get; set; } = string.Empty;
@@ -149,4 +172,19 @@ public class Token
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public Guid? ReplacedById { get; set; }
+}
+
+[Microsoft.EntityFrameworkCore.Index(nameof(RevocationAudit.TokenHash), nameof(RevocationAudit.ClientId))]
+public class RevocationAudit
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [Required]
+    public string ClientId { get; set; } = string.Empty;
+    [MaxLength(200)]
+    public string TokenHash { get; set; } = string.Empty;
+    [MaxLength(20)]
+    public string? TokenType { get; set; }
+    [MaxLength(100)]
+    public string? IpAddress { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
