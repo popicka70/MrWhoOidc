@@ -13,7 +13,7 @@ public interface ITokenService
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default)
@@ -48,6 +48,9 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt) : ITokenSe
         var idToken = jwt.CreateJwt(issuer, clientId, claims, DateTimeOffset.UtcNow.AddMinutes(5));
         var accessToken = jwt.CreateJwt(issuer, "api", new [] { new System.Security.Claims.Claim("sub", entity.UserId.ToString()) }, DateTimeOffset.UtcNow.AddMinutes(15));
 
+        // Refresh token issuance & rotation baseline
+        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), ct);
+
         entity.Consumed = true;
         await db.SaveChangesAsync(ct);
 
@@ -55,6 +58,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt) : ITokenSe
         {
             access_token = accessToken,
             id_token = idToken,
+            refresh_token = refreshToken,
             token_type = "Bearer",
             expires_in = 900,
             scope = string.Join(' ', scopes)

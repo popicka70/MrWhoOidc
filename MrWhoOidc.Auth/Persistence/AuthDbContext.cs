@@ -9,6 +9,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
     public DbSet<Consent> Consents => Set<Consent>();
+    public DbSet<Token> Tokens => Set<Token>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +50,16 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.ClientId).IsRequired();
             b.HasIndex(x => new { x.UserId, x.ClientId }).IsUnique();
+        });
+
+        modelBuilder.Entity<Token>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Type).IsRequired().HasMaxLength(20);
+            b.Property(x => x.TokenHash).IsRequired().HasMaxLength(200);
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.Property(x => x.ClientId).IsRequired();
+            b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
     }
 }
@@ -105,4 +116,17 @@ public class Consent
     public string ScopesJson { get; set; } = "[]";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? RevokedAt { get; set; }
+}
+
+public class Token
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Type { get; set; } = "refresh"; // refresh
+    public string TokenHash { get; set; } = string.Empty; // SHA-256 of token
+    public Guid UserId { get; set; }
+    public string ClientId { get; set; } = string.Empty;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public Guid? ReplacedById { get; set; }
 }
