@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -94,14 +95,14 @@ public sealed class IntrospectionHandler(
         // Introspection policy: check allowed audiences for this client, if configured
         string? requestedAud = null;
 
-        // If token is JWT or opaque? Try JWT validation first.
+        // Try JWT first
         var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
         var (ok, principal, _) = tokenValidator.Validate(token, issuer);
         if (ok && principal is not null)
         {
             requestedAud = principal.FindFirst("aud")?.Value;
 
-            if (!IsClientAllowedForAudience(clientId, requestedAud))
+            if (!IsClientAllowedForAudience(client, requestedAud))
             {
                 metrics.IntrospectionActiveFalse.Add(1, tags);
                 metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
@@ -151,7 +152,7 @@ public sealed class IntrospectionHandler(
         }
 
         requestedAud = entity.Audience;
-        if (!IsClientAllowedForAudience(clientId, requestedAud))
+        if (!IsClientAllowedForAudience(client, requestedAud))
         {
             metrics.IntrospectionActiveFalse.Add(1, tags);
             metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
@@ -210,12 +211,25 @@ public sealed class IntrospectionHandler(
         }
     }
 
-    bool IsClientAllowedForAudience(string clientId, string? audience)
+    bool IsClientAllowedForAudience(MrWhoOidc.Auth.Persistence.Client client, string? audience)
     {
         if (string.IsNullOrEmpty(audience)) return true; // if not present, skip policy
+
+        // 1) Per-client allow-list if set
+        if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<string[]>(client.IntrospectionAudiencesJson) ?? Array.Empty<string>();
+                return list.Contains(audience, StringComparer.Ordinal);
+            }
+            catch { /* fall through to global */ }
+        }
+
+        // 2) Global config allow-list map
         var map = authOptions.Value.IntrospectionPermissions;
         if (map is null || map.Count == 0) return true; // no policy configured
-        if (!map.TryGetValue(clientId, out var audiences)) return false;
+        if (!map.TryGetValue(client.ClientId, out var audiences)) return false;
         return audiences.Contains(audience, StringComparer.Ordinal);
     }
 

@@ -47,6 +47,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.ClientSecretHash).HasMaxLength(500);
             b.Property(x => x.RealmId).IsRequired();
             b.HasIndex(x => x.RealmId);
+            b.Property(x => x.IntrospectionAudiencesJson).HasMaxLength(2000);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -160,6 +161,8 @@ public class Client
     [MaxLength(500)]
     public string? ClientSecretHash { get; set; } // null => public client
     public Guid RealmId { get; set; } // parent realm (now required)
+    [MaxLength(2000)]
+    public string? IntrospectionAudiencesJson { get; set; } // optional per-client allow-list
 }
 
 public class SigningKey

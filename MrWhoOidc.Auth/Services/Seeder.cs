@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using System.Text.Json;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -42,21 +43,31 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web", ct).ConfigureAwait(false);
         if (blazorWebClient is null)
         {
-            db.Clients.Add(new Client
+            blazorWebClient = new Client
             {
                 ClientId = "blazor-web",
                 ClientName = "Blazor Web Frontend",
                 RequireConsent = false,
                 RequirePkce = true,
                 ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
-                RealmId = adminRealm.Id
-            });
+                RealmId = adminRealm.Id,
+                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
+            };
+            db.Clients.Add(blazorWebClient);
         }
-        else if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
+        else
         {
-            // Backfill a secret if previously created as public client
-            blazorWebClient.ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret);
-            blazorWebClient.RequirePkce = true;
+            if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
+            {
+                // Backfill a secret if previously created as public client
+                blazorWebClient.ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret);
+                blazorWebClient.RequirePkce = true;
+            }
+            if (string.IsNullOrEmpty(blazorWebClient.IntrospectionAudiencesJson))
+            {
+                // Enable introspection against default API audience
+                blazorWebClient.IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+            }
         }
 
         // backfill RealmId for any existing client rows missing it

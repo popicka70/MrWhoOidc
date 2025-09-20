@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -28,13 +29,25 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
 
+        string introspectionAudiences = string.Empty;
+        if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<string[]>(client.IntrospectionAudiencesJson) ?? Array.Empty<string>();
+                introspectionAudiences = string.Join(", ", list);
+            }
+            catch { /* ignore */ }
+        }
+
         Input = new ClientInput
         {
             ClientId = client.ClientId,
             ClientName = client.ClientName,
             RealmId = client.RealmId,
             RequirePkce = client.RequirePkce,
-            RequireConsent = client.RequireConsent
+            RequireConsent = client.RequireConsent,
+            IntrospectionAudiences = introspectionAudiences
         };
 
         return Page();
@@ -75,6 +88,22 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
         }
 
+        // Introspection audiences: comma/space separated list -> json array
+        if (!string.IsNullOrWhiteSpace(Input.IntrospectionAudiences))
+        {
+            var list = Input.IntrospectionAudiences
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.IntrospectionAudiencesJson = JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.IntrospectionAudiencesJson = null; // unset
+        }
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
     }
@@ -91,5 +120,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         public bool RequireConsent { get; set; } = true;
         [DataType(DataType.Password)]
         public string? ClientSecret { get; set; }
+        [Display(Name = "Introspection audiences (comma-separated)")]
+        public string? IntrospectionAudiences { get; set; }
     }
 }
