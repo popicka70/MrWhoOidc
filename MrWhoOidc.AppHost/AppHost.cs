@@ -9,6 +9,12 @@ builder.AddProject<Projects.MrWhoOidc_Web>("webfrontend")
     .WithReference(apiService)
     .WaitFor(apiService);
 
-builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth");
+// Add a PostgreSQL server and a database for auth persistence
+var postgres = builder.AddPostgres("postgres");
+var authDb = postgres.AddDatabase("authdb");
+
+builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
+    .WithReference(authDb)
+    .WaitFor(authDb);
 
 builder.Build().Run();
