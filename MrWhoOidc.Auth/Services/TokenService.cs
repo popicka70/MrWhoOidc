@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
-using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -57,8 +56,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Prepare ID token claims, include profile/email if requested
         var idClaims = new List<System.Security.Claims.Claim>
         {
-            new("sub", entity.UserId.ToString()),
-            new("aud", clientId)
+            new("sub", entity.UserId.ToString())
         };
 
         // Load user once for optional claims
@@ -146,7 +144,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     {
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(verifier));
-        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        // PKCE S256 is full base64url-encoded SHA-256 without padding
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 
     static string ComputeAtHash(string accessToken)
