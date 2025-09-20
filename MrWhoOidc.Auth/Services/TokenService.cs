@@ -58,22 +58,22 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
              authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
 
         string accessToken;
-        string? jti = null;
         if (opaqueEnabled)
         {
             // Create opaque token (random 256-bit), persist with hash
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
             accessToken = raw;
-            jti = Guid.NewGuid().ToString("N");
-            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
         }
         else
         {
-            // Build JWT access token first (include scopes claim)
+            // Build JWT access token first (include scopes claim) and include jti
+            var jti = Guid.NewGuid().ToString("N");
             var accessClaims = new List<System.Security.Claims.Claim>
             {
                 new("sub", entity.UserId.ToString()),
-                new("scope", string.Join(' ', scopes))
+                new("scope", string.Join(' ', scopes)),
+                new("jti", jti)
             };
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
@@ -154,15 +154,17 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         if (opaqueEnabled)
         {
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            accessToken = raw;
             await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), ct).ConfigureAwait(false);
+            accessToken = raw;
         }
         else
         {
+            var jti = Guid.NewGuid().ToString("N");
             var accessClaims = new List<System.Security.Claims.Claim>
             {
                 new("sub", tokenEntity.UserId.ToString()),
-                new("scope", string.Join(' ', scopes))
+                new("scope", string.Join(' ', scopes)),
+                new("jti", jti)
             };
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }

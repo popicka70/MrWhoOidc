@@ -117,6 +117,7 @@ public sealed class IntrospectionHandler(
             var iatStr = principal.FindFirst("iat")?.Value;
             var nbfStr = principal.FindFirst("nbf")?.Value;
             var expStr = principal.FindFirst("exp")?.Value;
+            var jti = principal.FindFirst("jti")?.Value;
 
             long? ToLong(string? s) => long.TryParse(s, out var v) ? v : null;
 
@@ -131,7 +132,8 @@ public sealed class IntrospectionHandler(
                 ["iss"] = iss,
                 ["iat"] = ToLong(iatStr),
                 ["nbf"] = ToLong(nbfStr),
-                ["exp"] = ToLong(expStr)
+                ["exp"] = ToLong(expStr),
+                ["jti"] = jti
             };
 
             metrics.IntrospectionActiveTrue.Add(1, tags);
@@ -169,7 +171,6 @@ public sealed class IntrospectionHandler(
             return Results.Json(new { active = false });
         }
 
-        // Minimal opaque response fields (privacy by default)
         var scopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
         var responseOpaque = new Dictionary<string, object?>
         {
@@ -181,6 +182,7 @@ public sealed class IntrospectionHandler(
             ["aud"] = entity.Audience,
             ["iss"] = issuer,
             ["exp"] = entity.ExpiresAt.ToUnixTimeSeconds(),
+            ["jti"] = entity.Jti
         };
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
@@ -239,7 +241,6 @@ public sealed class IntrospectionHandler(
         return Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value)));
     }
 
-    // Simple privacy-preserving bucketization of client_id for logs/metrics
     static string BucketizeClientId(string clientId)
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(clientId));
