@@ -1,0 +1,95 @@
+@page "/auth-debug"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Auth Debug</PageTitle>
+
+<h1>Authentication Debug</h1>
+
+<AuthorizeView>
+    <Authorized>
+        @if (user is null)
+        {
+            <p><em>Loading…</em></p>
+        }
+        else
+        {
+            <h3>User</h3>
+            <ul>
+                <li>Name: @user.Identity?.Name</li>
+                <li>Authenticated: @user.Identity?.IsAuthenticated</li>
+                <li>Claims:</li>
+                <ul>
+                    @foreach (var c in user.Claims)
+                    {
+                        <li><code>@c.Type</code> = <code>@c.Value</code></li>
+                    }
+                </ul>
+            </ul>
+
+            <h3>Tokens</h3>
+            @if (tokens is null)
+            {
+                <p>No tokens available.</p>
+            }
+            else
+            {
+                <ul>
+                    @if (!string.IsNullOrEmpty(tokens.IdToken))
+                    {
+                        <li>ID Token: <details><summary>show</summary><pre>@tokens.IdToken</pre></details></li>
+                    }
+                    @if (!string.IsNullOrEmpty(tokens.AccessToken))
+                    {
+                        <li>Access Token: <details><summary>show</summary><pre>@tokens.AccessToken</pre></details></li>
+                    }
+                    @if (!string.IsNullOrEmpty(tokens.RefreshToken))
+                    {
+                        <li>Refresh Token: <details><summary>show</summary><pre>@tokens.RefreshToken</pre></details></li>
+                    }
+                </ul>
+            }
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>You are not signed in.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private ClaimsPrincipal? user;
+    private AuthenticationTokens? tokens;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        user = state.User;
+
+        var ctx = HttpContextAccessor.HttpContext;
+        if (ctx is not null)
+        {
+            // Retrieve tokens stored by OIDC handler
+            var authResult = await ctx.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            if (authResult.Succeeded)
+            {
+                tokens = new AuthenticationTokens
+                {
+                    IdToken = await ctx.GetTokenAsync("id_token"),
+                    AccessToken = await ctx.GetTokenAsync("access_token"),
+                    RefreshToken = await ctx.GetTokenAsync("refresh_token")
+                };
+            }
+        }
+    }
+
+    private sealed class AuthenticationTokens
+    {
+        public string? IdToken { get; set; }
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
+    }
+}

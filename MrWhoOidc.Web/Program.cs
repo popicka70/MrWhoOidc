@@ -26,8 +26,8 @@ string? authorityRaw = builder.Configuration["Oidc:Authority"] ?? builder.Config
 
 // Add services to the container.
 builder.Services.AddAuthorization();
-// Provide AuthenticationState to components
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddHttpContextAccessor();
 
 // Create a dedicated backchannel HttpClient to control TLS/version behavior
 static HttpClient CreateBackchannel()
