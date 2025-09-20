@@ -1,7 +1,9 @@
 ﻿@page "/weather"
 @attribute [StreamRendering(true)]
 @attribute [OutputCache(Duration = 5)]
+@attribute [Authorize]
 
+@using Microsoft.AspNetCore.Authorization
 @inject WeatherApiClient WeatherApi
 
 <PageTitle>Weather</PageTitle>
