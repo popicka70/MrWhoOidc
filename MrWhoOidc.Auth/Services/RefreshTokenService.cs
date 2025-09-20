@@ -7,12 +7,12 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IRefreshTokenService
 {
-    Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, CancellationToken ct = default);
+    Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default);
 }
 
 internal sealed class RefreshTokenService(AuthDbContext db) : IRefreshTokenService
 {
-    public async Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, CancellationToken ct = default)
+    public async Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default)
     {
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Hash(token);
@@ -22,6 +22,7 @@ internal sealed class RefreshTokenService(AuthDbContext db) : IRefreshTokenServi
             TokenHash = hash,
             UserId = userId,
             ClientId = clientId,
+            ScopesJson = System.Text.Json.JsonSerializer.Serialize(scopes),
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
         });

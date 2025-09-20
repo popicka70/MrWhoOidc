@@ -11,6 +11,8 @@ public interface ITokenService
 {
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default);
+    Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
+        string refreshToken, string clientId, string issuer, CancellationToken ct = default);
 }
 
 internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens) : ITokenService
@@ -49,7 +51,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var accessToken = jwt.CreateJwt(issuer, "api", new [] { new System.Security.Claims.Claim("sub", entity.UserId.ToString()) }, DateTimeOffset.UtcNow.AddMinutes(15));
 
         // Refresh token issuance & rotation baseline
-        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), ct);
+        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
 
         entity.Consumed = true;
         await db.SaveChangesAsync(ct);
@@ -66,10 +68,44 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         return (true, payload, null, 200);
     }
 
+    public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
+        string refreshToken, string clientId, string issuer, CancellationToken ct = default)
+    {
+        var hash = Hash(refreshToken);
+        var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct);
+        if (tokenEntity is null || tokenEntity.ExpiresAt < DateTimeOffset.UtcNow || !string.Equals(tokenEntity.ClientId, clientId, StringComparison.Ordinal))
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+
+        var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
+
+        var accessToken = jwt.CreateJwt(issuer, "api", new [] { new System.Security.Claims.Claim("sub", tokenEntity.UserId.ToString()) }, DateTimeOffset.UtcNow.AddMinutes(15));
+
+        // Rotation: create new refresh token and revoke the old one
+        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
+        tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var payload = new
+        {
+            access_token = accessToken,
+            refresh_token = newRefresh,
+            token_type = "Bearer",
+            expires_in = 900,
+            scope = string.Join(' ', scopes)
+        };
+        return (true, payload, null, 200);
+    }
+
     static string ComputeS256(string verifier)
     {
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(verifier));
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    static string Hash(string value)
+    {
+        using var sha = SHA256.Create();
+        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
     }
 }

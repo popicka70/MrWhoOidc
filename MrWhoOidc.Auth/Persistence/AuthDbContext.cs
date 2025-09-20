@@ -59,6 +59,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.TokenHash).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.TokenHash).IsUnique();
             b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.ScopesJson).IsRequired();
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
     }
@@ -125,6 +126,7 @@ public class Token
     public string TokenHash { get; set; } = string.Empty; // SHA-256 of token
     public Guid UserId { get; set; }
     public string ClientId { get; set; } = string.Empty;
+    public string ScopesJson { get; set; } = "[]";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
