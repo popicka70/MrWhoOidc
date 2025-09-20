@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Logging;
 using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
+using Microsoft.AspNetCore.Components.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,8 @@ string? authorityRaw = builder.Configuration["Oidc:Authority"] ?? builder.Config
 
 // Add services to the container.
 builder.Services.AddAuthorization();
+// Provide AuthenticationState to components
+builder.Services.AddCascadingAuthenticationState();
 
 // Create a dedicated backchannel HttpClient to control TLS/version behavior
 static HttpClient CreateBackchannel()
