@@ -78,6 +78,9 @@ builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>(
 // Register PAR handler
 builder.Services.AddScoped<IParHandler, ParHandler>();
 
+// DPoP validator
+builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
+
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();

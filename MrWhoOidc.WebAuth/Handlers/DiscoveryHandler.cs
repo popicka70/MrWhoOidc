@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -43,7 +44,10 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandle
             scopes_supported = new[] { "openid", "profile", "email" },
             resource_indicators_supported = true,
             // Non-standard hints to improve DX
-            introspection_token_types_supported = new[] { "access_token", "refresh_token" }
+            introspection_token_types_supported = new[] { "access_token", "refresh_token" },
+            // DPoP capability hints (experimental)
+            dpop_signing_alg_values_supported = new[] { "RS256", "ES256" },
+            dpop_bound_access_tokens = true
         };
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(body);

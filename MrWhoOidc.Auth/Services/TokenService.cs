@@ -11,15 +11,15 @@ namespace MrWhoOidc.Auth.Services;
 public interface ITokenService
 {
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default);
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default);
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, CancellationToken ct = default);
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }
 
 internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default)
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
         var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
         if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
@@ -75,6 +75,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', scopes)),
                 new("jti", jti)
             };
+            if (!string.IsNullOrEmpty(dpopJkt))
+            {
+                var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
+                accessClaims.Add(new("cnf", cnf));
+            }
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
 
@@ -135,7 +140,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, CancellationToken ct = default)
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
         var hash = Hash(refreshToken);
         var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct).ConfigureAwait(false);
@@ -166,6 +171,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', scopes)),
                 new("jti", jti)
             };
+            if (!string.IsNullOrEmpty(dpopJkt))
+            {
+                var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
+                accessClaims.Add(new("cnf", cnf));
+            }
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
 
