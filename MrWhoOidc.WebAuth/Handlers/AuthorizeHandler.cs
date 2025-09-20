@@ -39,11 +39,12 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
 
             // If request_uri is provided, try to resolve the pushed request and merge it
             string? requestUri = requestUriRaw;
-            bool isPar = !string.IsNullOrEmpty(requestUri);
+            string? parId = ExtractParId(requestUri);
+            bool isPar = !string.IsNullOrEmpty(parId);
             AuthorizeRequest effectiveReq;
             if (isPar)
             {
-                var entry = parStore.TryGet(requestUri!);
+                var entry = parStore.TryGetById(parId!);
                 if (entry is null)
                 {
                     outcome = "error";
@@ -112,7 +113,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             // Now that authorization succeeded, consume PAR if used
             if (isPar)
             {
-                parStore.MarkConsumed(requestUri!);
+                parStore.MarkConsumedById(parId!);
             }
 
             // Capture auth_time from login cookie claims
@@ -144,5 +145,31 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             sw.Stop();
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { new("outcome", outcome) });
         }
+    }
+
+    private static string? ExtractParId(string? requestUri)
+    {
+        if (string.IsNullOrEmpty(requestUri)) return null;
+
+        // Absolute URL like https://issuer/par/{id}
+        if (Uri.TryCreate(requestUri, UriKind.Absolute, out var uri))
+        {
+            var segments = uri.AbsolutePath.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            // Expect .../par/{id}
+            if (segments.Length >= 2 && string.Equals(segments[^2], "par", StringComparison.OrdinalIgnoreCase))
+            {
+                return segments[^1];
+            }
+        }
+
+        // URN form urn:ietf:params:oauth:request_uri:{id}
+        const string urnPrefix = "urn:ietf:params:oauth:request_uri:";
+        if (requestUri.StartsWith(urnPrefix, StringComparison.Ordinal))
+        {
+            return requestUri.Substring(urnPrefix.Length);
+        }
+
+        // Fallback: treat as id directly
+        return requestUri;
     }
 }

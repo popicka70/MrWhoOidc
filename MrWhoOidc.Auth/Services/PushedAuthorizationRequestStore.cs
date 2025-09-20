@@ -8,17 +8,14 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IPushedAuthorizationRequestStore
 {
-    // Creates and stores a PAR entry and returns the opaque request_uri and expiration
-    (string requestUri, DateTimeOffset expiresAt) Create(AuthorizeRequest request, string clientId, TimeSpan lifetime);
-
-    // Non-consuming read used during the authorize journey (login/consent redirects may re-hit /authorize)
-    PushedAuthorizationRequestEntry? TryGet(string requestUri);
-
-    // Mark the entry as consumed (single-use) once the code is successfully issued
-    void MarkConsumed(string requestUri);
-
-    // Back-compat helper: consume immediately
-    PushedAuthorizationRequestEntry? TryConsume(string requestUri);
+    // Persist a PAR entry using caller-provided opaque id. Optionally persist the absolute request_uri for auditing.
+    DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri);
+    // Non-consuming read by id
+    PushedAuthorizationRequestEntry? TryGetById(string id);
+    // Mark consumed by id
+    void MarkConsumedById(string id);
+    // Convenience helper
+    PushedAuthorizationRequestEntry? TryConsumeById(string id);
 }
 
 public sealed class PushedAuthorizationRequestEntry
@@ -30,13 +27,14 @@ public sealed class PushedAuthorizationRequestEntry
 
 internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db) : IPushedAuthorizationRequestStore
 {
-    public (string requestUri, DateTimeOffset expiresAt) Create(AuthorizeRequest request, string clientId, TimeSpan lifetime)
+    public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
     {
-        var id = $"urn:ietf:params:oauth:request_uri:{Guid.NewGuid():N}";
+        if (!TryToGuid(id, out var gid)) throw new ArgumentException("Invalid id format", nameof(id));
         var expiresAt = DateTimeOffset.UtcNow.Add(lifetime);
         var entity = new PushedAuthorizationRequest
         {
-            RequestUri = id,
+            Id = gid,
+            RequestUri = requestUri ?? string.Empty,
             ClientId = clientId,
             RequestJson = JsonSerializer.Serialize(request),
             CreatedAt = DateTimeOffset.UtcNow,
@@ -45,13 +43,14 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db) : IPus
         };
         db.PushedAuthorizationRequests.Add(entity);
         db.SaveChanges();
-        return (id, expiresAt);
+        return expiresAt;
     }
 
-    public PushedAuthorizationRequestEntry? TryGet(string requestUri)
+    public PushedAuthorizationRequestEntry? TryGetById(string id)
     {
+        if (!TryToGuid(id, out var gid)) return null;
         var now = DateTimeOffset.UtcNow;
-        var entity = db.PushedAuthorizationRequests.AsNoTracking().FirstOrDefault(e => e.RequestUri == requestUri);
+        var entity = db.PushedAuthorizationRequests.AsNoTracking().FirstOrDefault(e => e.Id == gid);
         if (entity is null || entity.Consumed || entity.ExpiresAt < now)
         {
             if (entity is { ExpiresAt: var exp } && exp < now)
@@ -71,9 +70,10 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db) : IPus
         return new PushedAuthorizationRequestEntry { ClientId = entity.ClientId, Request = req, ExpiresAt = entity.ExpiresAt };
     }
 
-    public void MarkConsumed(string requestUri)
+    public void MarkConsumedById(string id)
     {
-        var entity = db.PushedAuthorizationRequests.FirstOrDefault(e => e.RequestUri == requestUri);
+        if (!TryToGuid(id, out var gid)) return;
+        var entity = db.PushedAuthorizationRequests.FirstOrDefault(e => e.Id == gid);
         if (entity is null) return;
         if (!entity.Consumed)
         {
@@ -82,23 +82,51 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db) : IPus
         }
     }
 
-    public PushedAuthorizationRequestEntry? TryConsume(string requestUri)
+    public PushedAuthorizationRequestEntry? TryConsumeById(string id)
     {
-        var entry = TryGet(requestUri);
+        var entry = TryGetById(id);
         if (entry is null) return null;
-        MarkConsumed(requestUri);
+        MarkConsumedById(id);
         return entry;
+    }
+
+    private static bool TryToGuid(string id, out Guid gid)
+    {
+        // Guid formats
+        if (Guid.TryParse(id, out gid)) return true;
+
+        // base64url 128-bit (unpadded). Common lengths: 22 (unpadded), 24 (padded removed handling below)
+        try
+        {
+            var s = id.Replace('-', '+').Replace('_', '/');
+            switch (s.Length % 4)
+            {
+                case 2: s += "=="; break;
+                case 3: s += "="; break;
+            }
+            var bytes = Convert.FromBase64String(s);
+            if (bytes.Length == 16)
+            {
+                gid = new Guid(bytes);
+                return true;
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+        gid = default;
+        return false;
     }
 }
 
-// Optional future in-memory implementation kept for reference
+// Optional in-memory implementation for tests/future swap
 internal sealed class InMemoryPushedAuthorizationRequestStore : IPushedAuthorizationRequestStore
 {
-    private readonly ConcurrentDictionary<string, (PushedAuthorizationRequestEntry Entry, bool Consumed)> _store = new();
+    private readonly ConcurrentDictionary<string, (PushedAuthorizationRequestEntry Entry, bool Consumed, DateTimeOffset ExpiresAt)> _store = new();
 
-    public (string requestUri, DateTimeOffset expiresAt) Create(AuthorizeRequest request, string clientId, TimeSpan lifetime)
+    public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
     {
-        var id = $"urn:ietf:params:oauth:request_uri:{Guid.NewGuid():N}";
         var expiresAt = DateTimeOffset.UtcNow.Add(lifetime);
         var entry = new PushedAuthorizationRequestEntry
         {
@@ -106,39 +134,38 @@ internal sealed class InMemoryPushedAuthorizationRequestStore : IPushedAuthoriza
             Request = request,
             ExpiresAt = expiresAt
         };
-        _store[id] = (entry, false);
-        return (id, expiresAt);
+        _store[id] = (entry, false, expiresAt);
+        return expiresAt;
     }
 
-    public PushedAuthorizationRequestEntry? TryGet(string requestUri)
+    public PushedAuthorizationRequestEntry? TryGetById(string id)
     {
-        if (!_store.TryGetValue(requestUri, out var tuple))
+        if (!_store.TryGetValue(id, out var tuple))
             return null;
-
-        var (entry, consumed) = tuple;
+        var (entry, consumed, expiresAt) = tuple;
         if (consumed) return null;
-        if (DateTimeOffset.UtcNow > entry.ExpiresAt)
+        if (DateTimeOffset.UtcNow > expiresAt)
         {
-            _store.TryRemove(requestUri, out _);
+            _store.TryRemove(id, out _);
             return null;
         }
         return entry;
     }
 
-    public void MarkConsumed(string requestUri)
+    public void MarkConsumedById(string id)
     {
-        if (_store.TryGetValue(requestUri, out var tuple))
+        if (_store.TryGetValue(id, out var tuple))
         {
-            var (entry, _) = tuple;
-            _store[requestUri] = (entry, true);
+            var (entry, _, expiresAt) = tuple;
+            _store[id] = (entry, true, expiresAt);
         }
     }
 
-    public PushedAuthorizationRequestEntry? TryConsume(string requestUri)
+    public PushedAuthorizationRequestEntry? TryConsumeById(string id)
     {
-        var entry = TryGet(requestUri);
+        var entry = TryGetById(id);
         if (entry is null) return null;
-        MarkConsumed(requestUri);
+        MarkConsumedById(id);
         return entry;
     }
 }

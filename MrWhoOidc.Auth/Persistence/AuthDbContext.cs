@@ -87,13 +87,12 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         modelBuilder.Entity<PushedAuthorizationRequest>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.RequestUri).IsRequired().HasMaxLength(300);
+            b.Property(x => x.RequestUri).HasMaxLength(512);
             b.Property(x => x.ClientId).IsRequired();
             b.Property(x => x.RequestJson).IsRequired();
             b.Property(x => x.CreatedAt).IsRequired();
             b.Property(x => x.ExpiresAt).IsRequired();
             b.Property(x => x.Consumed).IsRequired();
-            b.HasIndex(x => x.RequestUri).IsUnique();
             b.HasIndex(x => x.ExpiresAt);
         });
 
@@ -205,9 +204,9 @@ public class RevocationAudit
 
 public class PushedAuthorizationRequest
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
-    [MaxLength(300)]
-    public string RequestUri { get; set; } = string.Empty; // urn:ietf:params:oauth:request_uri:{guid}
+    public Guid Id { get; set; } = Guid.NewGuid(); // opaque identifier
+    [MaxLength(512)]
+    public string? RequestUri { get; set; } // optional absolute request URI returned to client
     public string ClientId { get; set; } = string.Empty;
     public string RequestJson { get; set; } = string.Empty; // serialized AuthorizeRequest
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

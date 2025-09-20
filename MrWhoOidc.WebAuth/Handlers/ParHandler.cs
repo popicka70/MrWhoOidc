@@ -3,6 +3,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -64,8 +65,20 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription }, statusCode: 400);
         }
 
-        // Store it and return request_uri
-        var (requestUri, expiresAt) = parStore.Create(req, clientId!, TimeSpan.FromMinutes(5));
+        // Generate opaque id (128-bit base64url without padding)
+        string id;
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            Span<byte> bytes = stackalloc byte[16];
+            rng.GetBytes(bytes);
+            id = Convert.ToBase64String(bytes.ToArray()).TrimEnd('=')
+                    .Replace('+', '-').Replace('/', '_');
+        }
+
+        var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+        var requestUri = issuer.TrimEnd('/') + "/par/" + id;
+
+        var expiresAt = parStore.Create(id, req, clientId!, TimeSpan.FromMinutes(5), requestUri);
         var expiresIn = (int)Math.Max(0, (expiresAt - DateTimeOffset.UtcNow).TotalSeconds);
         return Results.Json(new { request_uri = requestUri, expires_in = expiresIn });
     }
