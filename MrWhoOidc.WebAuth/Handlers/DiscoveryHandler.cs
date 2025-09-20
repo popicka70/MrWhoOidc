@@ -18,14 +18,15 @@ public sealed class DiscoveryHandler(OidcOptions options) : IDiscoveryHandler
     public IResult Handle(HttpContext ctx)
     {
         var issuer = options.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+        var baseUrl = issuer.TrimEnd('/');
         var body = new
         {
             issuer,
-            authorization_endpoint = "/authorize",
-            token_endpoint = "/token",
-            userinfo_endpoint = "/userinfo",
-            jwks_uri = "/jwks",
-            end_session_endpoint = "/connect/endsession",
+            authorization_endpoint = $"{baseUrl}/authorize",
+            token_endpoint = $"{baseUrl}/token",
+            userinfo_endpoint = $"{baseUrl}/userinfo",
+            jwks_uri = $"{baseUrl}/jwks",
+            end_session_endpoint = $"{baseUrl}/connect/endsession",
             response_types_supported = new[] { "code" },
             grant_types_supported = new[] { "authorization_code", "refresh_token" },
             code_challenge_methods_supported = new[] { "S256" },

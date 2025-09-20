@@ -5,14 +5,53 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Logging;
+using System.Net;
+using System.Net.Http;
+using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// Read Authority from configuration (required). Set Oidc:Authority (or OIDC:Authority) in appsettings or environment.
-string? authority = builder.Configuration["Oidc:Authority"];
+// Increase diagnostic logging for auth/identity
+builder.Logging.AddFilter("Microsoft.IdentityModel", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication", LogLevel.Debug);
+
+// Enable PII in IdentityModel logs (dev only)
+IdentityModelEventSource.ShowPII = true;
+
+// Read Authority from configuration (required). Supports both 'Oidc' and 'OIDC'.
+string? authorityRaw = builder.Configuration["Oidc:Authority"] ?? builder.Configuration["OIDC:Authority"];
+
+// Add services to the container.
+builder.Services.AddAuthorization();
+
+// Create a dedicated backchannel HttpClient to control TLS/version behavior
+static HttpClient CreateBackchannel()
+{
+    var handler = new SocketsHttpHandler
+    {
+        // Force HTTP/1.1 to avoid potential HTTP/2 ALPN/TLS negotiation issues
+        AllowAutoRedirect = true,
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        SslOptions =
+        {
+            EnabledSslProtocols = SslProtocols.Tls12,
+            RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true // dev only
+        }
+    };
+
+    var client = new HttpClient(handler)
+    {
+        DefaultRequestVersion = HttpVersion.Version11,
+        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+    return client;
+}
 
 // AuthN/Z
 builder.Services.AddAuthentication(options =>
@@ -30,15 +69,18 @@ builder.Services.AddAuthentication(options =>
     })
     .AddOpenIdConnect(options =>
     {
-        if (string.IsNullOrWhiteSpace(authority))
-        {
-            throw new InvalidOperationException("Oidc:Authority must be configured to use OpenID Connect.");
-        }
+        if (string.IsNullOrWhiteSpace(authorityRaw))
+            throw new InvalidOperationException("Oidc:Authority (or OIDC:Authority) must be configured to use OpenID Connect.");
 
-        options.Authority = authority;
-        options.RequireHttpsMetadata = authority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-        options.ClientId = builder.Configuration["Oidc:ClientId"] ?? "blazor-web";
-        options.ClientSecret = builder.Configuration["Oidc:ClientSecret"]; // optional for public client
+        if (!Uri.TryCreate(authorityRaw, UriKind.Absolute, out var authorityUri))
+            throw new InvalidOperationException($"Invalid OIDC Authority URI: '{authorityRaw}'.");
+
+        var normalizedAuthority = authorityUri.GetLeftPart(UriPartial.Authority) + authorityUri.AbsolutePath.TrimEnd('/') + "/";
+
+        options.Authority = normalizedAuthority;
+        options.RequireHttpsMetadata = normalizedAuthority.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        options.ClientId = builder.Configuration["Oidc:ClientId"] ?? builder.Configuration["OIDC:ClientId"] ?? "blazor-web";
+        options.ClientSecret = builder.Configuration["Oidc:ClientSecret"] ?? builder.Configuration["OIDC:ClientSecret"]; // optional for public client
         options.ResponseType = OpenIdConnectResponseType.Code;
         options.UsePkce = true;
         options.SaveTokens = true;
@@ -48,23 +90,40 @@ builder.Services.AddAuthentication(options =>
         options.Scope.Add("profile");
         options.Scope.Add("email");
 
-        // Allow HTTP metadata in dev when Authority is http:// by using a custom ConfigurationManager
-        if (authority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        // Custom backchannel to control TLS/protocols
+        options.Backchannel = CreateBackchannel();
+
+        // If using http:// for dev metadata, configure ConfigurationManager with RequireHttps=false
+        if (normalizedAuthority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
         {
-            var metadataAddress = authority.TrimEnd('/') + "/.well-known/openid-configuration";
-            options.MetadataAddress = metadataAddress;
+            var metadataUri = new Uri(new Uri(normalizedAuthority), ".well-known/openid-configuration");
+            options.MetadataAddress = metadataUri.ToString();
             options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
-                metadataAddress,
+                options.MetadataAddress,
                 new OpenIdConnectConfigurationRetriever(),
                 new HttpDocumentRetriever { RequireHttps = false }
             );
         }
 
         options.TokenValidationParameters.ValidateIssuer = false; // dev only
-    });
 
-// Add services to the container.
-builder.Services.AddAuthorization();
+        // Extra diagnostics
+        options.Events = new OpenIdConnectEvents
+        {
+            OnAuthenticationFailed = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("OIDC").LogError(ctx.Exception, "OIDC authentication failed");
+                return Task.CompletedTask;
+            },
+            OnRemoteFailure = ctx =>
+            {
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("OIDC").LogError(ctx.Failure, "OIDC remote failure");
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -72,9 +131,9 @@ builder.Services.AddRazorComponents()
 builder.Services.AddOutputCache();
 
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
-    {
-        client.BaseAddress = new("https+http://apiservice");
-    });
+{
+    client.BaseAddress = new("https+http://apiservice");
+});
 
 var app = builder.Build();
 
@@ -85,11 +144,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAntiforgery();
-
 app.UseOutputCache();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
