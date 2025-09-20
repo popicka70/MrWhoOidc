@@ -107,7 +107,6 @@ public sealed class IntrospectionHandler(
                 metrics.IntrospectionActiveFalse.Add(1, tags);
                 metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
                 LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "forbidden", aud: requestedAud);
-                // For privacy, respond as inactive
                 return Results.Json(new { active = false });
             }
 
@@ -118,6 +117,21 @@ public sealed class IntrospectionHandler(
             var nbfStr = principal.FindFirst("nbf")?.Value;
             var expStr = principal.FindFirst("exp")?.Value;
             var jti = principal.FindFirst("jti")?.Value;
+
+            // cnf (DPoP/bound tokens) when present
+            object? cnf = null;
+            var cnfRaw = principal.FindFirst("cnf")?.Value;
+            if (!string.IsNullOrEmpty(cnfRaw))
+            {
+                try
+                {
+                    cnf = JsonDocument.Parse(cnfRaw).RootElement;
+                }
+                catch
+                {
+                    // ignore if invalid JSON
+                }
+            }
 
             long? ToLong(string? s) => long.TryParse(s, out var v) ? v : null;
 
@@ -135,6 +149,11 @@ public sealed class IntrospectionHandler(
                 ["exp"] = ToLong(expStr),
                 ["jti"] = jti
             };
+
+            if (cnf is not null)
+            {
+                response["cnf"] = cnf;
+            }
 
             metrics.IntrospectionActiveTrue.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: requestedAud);
