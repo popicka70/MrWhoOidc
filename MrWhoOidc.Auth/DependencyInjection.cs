@@ -24,8 +24,8 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IRevocationService, RevocationService>();
 
-        // PAR in-memory store
-        services.AddSingleton<IPushedAuthorizationRequestStore, InMemoryPushedAuthorizationRequestStore>();
+        // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
+        services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
 
         // Key rotation options and services
         services.AddOptions<KeyRotationOptions>();

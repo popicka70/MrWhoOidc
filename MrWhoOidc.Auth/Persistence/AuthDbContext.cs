@@ -13,6 +13,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Consent> Consents => Set<Consent>();
     public DbSet<Token> Tokens => Set<Token>();
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
+    public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -81,6 +82,19 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.TokenType).HasMaxLength(20);
             b.Property(x => x.IpAddress).HasMaxLength(100);
             b.HasIndex(x => new { x.TokenHash, x.ClientId });
+        });
+
+        modelBuilder.Entity<PushedAuthorizationRequest>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.RequestUri).IsRequired().HasMaxLength(300);
+            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.RequestJson).IsRequired();
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.Consumed).IsRequired();
+            b.HasIndex(x => x.RequestUri).IsUnique();
+            b.HasIndex(x => x.ExpiresAt);
         });
 
         // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
@@ -187,4 +201,16 @@ public class RevocationAudit
     [MaxLength(100)]
     public string? IpAddress { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class PushedAuthorizationRequest
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(300)]
+    public string RequestUri { get; set; } = string.Empty; // urn:ietf:params:oauth:request_uri:{guid}
+    public string ClientId { get; set; } = string.Empty;
+    public string RequestJson { get; set; } = string.Empty; // serialized AuthorizeRequest
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public bool Consumed { get; set; }
 }
