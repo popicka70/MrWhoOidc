@@ -114,27 +114,15 @@ Backlog – Introspection (RFC 7662)
   - [x] Implement `token_type_hint` handling for refresh tokens (gated by `Auth:AllowRefreshTokenIntrospection`; owner-only RT).
   - [x] Discovery: advertise `introspection_token_types_supported` (non-standard, DX).
 
-- Phase 5 – Security hardening
-  - [ ] Constant-time validation and uniform responses to avoid oracle characteristics.
-  - [ ] Strict input size limits on form fields; reject overly large payloads.
-  - [ ] No CORS for `/introspect`; ensure HTTPS/HSTS, appropriate cache headers.
-  - [ ] Structured audit events with correlation id and user agent/IP.
-
-- Phase 6 – Observability & tests
-  - [ ] Tracing: span attributes (client_id bucket, outcome, token_type_hint).
-  - [ ] Unit tests: client auth (basic/post/pkjwt), JWT path (valid/expired/aud-mismatch), opaque path.
-  - [ ] Integration tests with a sample API calling `/introspect`.
-  - [ ] Docs and samples: endpoint usage, example responses, `private_key_jwt` configuration.
-
 New Backlog – DPoP / Bound Access Tokens (RFC 9449)
 - Phase 1 – Core support
-  - [ ] Token endpoint: accept `DPoP` proofs and issue DPoP-bound access tokens (include `cnf.jkt`).
-  - [ ] Validate DPoP at `/userinfo` and `/introspect` (verify htm/htu/iat/jti, `ath` matches token, replay cache).
-  - [ ] Add discovery metadata: `dpop_signing_alg_values_supported`, `dpop_bound_access_tokens: true`.
+  - [x] Token endpoint: accept `DPoP` proofs and issue DPoP-bound access tokens (include `cnf.jkt`).
+  - [x] Validate DPoP at `/userinfo` and `/introspect` (verify `htm/htu/iat/jti`, `ath` matches token, replay cache).
+  - [x] Discovery: advertise `dpop_signing_alg_values_supported`, `dpop_bound_access_tokens: true`.
 
 - Phase 2 – Nonce and robustness
-  - [ ] Support DPoP nonce challenges (`WWW-Authenticate: DPoP nonce=...`) and optional nonce endpoint.
-  - [ ] Persist DPoP `jti` to prevent replays (bounded window) and handle clock skew.
+  - [~] Support DPoP nonce challenges (`WWW-Authenticate: DPoP ...` and `DPoP-Nonce` header); optional nonce endpoint (challenge implemented; endpoint TBD).
+  - [x] Persist DPoP replay IDs to prevent replays (bounded window via distributed replay cache; handles ±5m skew by `iat` window).
 
 - Phase 3 – Samples & docs
   - [ ] Sample API validating DPoP; client sample using DPoP.
