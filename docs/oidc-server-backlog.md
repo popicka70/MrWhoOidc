@@ -139,3 +139,19 @@ New Backlog – DPoP / Bound Access Tokens (RFC 9449)
 - Phase 3 – Samples & docs
   - [ ] Sample API validating DPoP; client sample using DPoP.
   - [ ] Docs: how to configure and use DPoP; privacy and security considerations.
+
+New Backlog – JAR & JARM
+- JAR (JWT-Secured Authorization Request)
+  - [ ] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf, size limits).
+  - [ ] Verify signatures using per-client public JWKs (config/DB), support `RS256`/`ES256` initially.
+  - [ ] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
+  - [ ] Support `request_uri` only via PAR; optionally require PAR (`require_pushed_authorization_requests`).
+  - [ ] Discovery: advertise `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
+  - [ ] Optional: support encrypted request objects (JWE) and advertise `request_object_encryption_alg/enc`.
+
+- JARM (JWT-secured authorization response mode)
+  - [ ] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
+  - [ ] Issue signed JARM JWT (iss/aud/iat/exp, `code`, `state`, `c_hash`, `s_hash` when applicable) with AS signing keys.
+  - [ ] Optional: encrypted JARM responses when client has encryption JWK.
+  - [ ] Discovery: add `response_modes_supported` with `*.jwt`, `authorization_response_iss_parameter_supported`, and advertise signing/encryption algs.
+  - [ ] Tests and samples for JAR/JARM paths; docs updates.
