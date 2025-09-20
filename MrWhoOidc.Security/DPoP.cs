@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 
-namespace MrWhoOidc.WebAuth.Infrastructure;
+namespace MrWhoOidc.Security;
 
 public interface IDPoPValidator
 {
@@ -23,7 +23,7 @@ public interface IDPoPNonceStore
     Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default);
 }
 
-internal sealed class DPoPValidator : IDPoPValidator
+public sealed class DPoPValidator : IDPoPValidator
 {
     private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
 
@@ -47,12 +47,14 @@ internal sealed class DPoPValidator : IDPoPValidator
 
             if (unsigned.Header["jwk"] is not JsonElement jwkElement)
             {
+                // sometimes handler deserializes to JsonElement; if not, try raw header data
                 if (unsigned.Header.TryGetValue("jwk", out var jwkObj) && jwkObj is string jwkString)
                 {
                     jwkElement = JsonDocument.Parse(jwkString).RootElement;
                 }
                 else
                 {
+                    // attempt to read from raw header
                     var rawHeaderJson = unsigned.EncodedHeader;
                     var headerBytes = Base64UrlEncoder.DecodeBytes(rawHeaderJson);
                     using var json = JsonDocument.Parse(headerBytes);
@@ -81,6 +83,7 @@ internal sealed class DPoPValidator : IDPoPValidator
             handler.ValidateToken(header, parameters, out var validatedToken);
             var jwt = (JwtSecurityToken)validatedToken;
 
+            // Validate required claims
             var htm = jwt.Payload.TryGetValue("htm", out var htmObj) ? htmObj?.ToString() : null;
             var htu = jwt.Payload.TryGetValue("htu", out var htuObj) ? htuObj?.ToString() : null;
             var iat = jwt.Payload.TryGetValue("iat", out var iatObj) ? iatObj : null;
@@ -97,6 +100,7 @@ internal sealed class DPoPValidator : IDPoPValidator
                 return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "htm_mismatch"));
             }
 
+            // Compare absolute URLs ignoring trailing slash differences
             var expected = new Uri(absoluteEndpointUrl).GetLeftPart(UriPartial.Path).TrimEnd('/');
             var provided = new Uri(htu).GetLeftPart(UriPartial.Path).TrimEnd('/');
             if (!string.Equals(expected, provided, StringComparison.Ordinal))
@@ -115,6 +119,7 @@ internal sealed class DPoPValidator : IDPoPValidator
                 return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "iat_out_of_range"));
             }
 
+            // Validate ath if access token provided
             if (!string.IsNullOrEmpty(accessToken))
             {
                 var ath = jwt.Payload.TryGetValue("ath", out var athObj) ? athObj?.ToString() : null;
@@ -130,6 +135,7 @@ internal sealed class DPoPValidator : IDPoPValidator
                 }
             }
 
+            // Compute JWK thumbprint (RFC 7638) to include as cnf.jkt
             var jkt = ComputeJwkThumbprint(jwkElement);
             if (string.IsNullOrEmpty(jkt))
             {
@@ -186,6 +192,7 @@ internal sealed class DPoPValidator : IDPoPValidator
         if (string.Equals(kty, "EC", StringComparison.Ordinal))
         {
             if (!jwk.TryGetProperty("crv", out var crvEl) || !jwk.TryGetProperty("x", out var xEl) || !jwk.TryGetProperty("y", out var yEl)) return string.Empty;
+            // Members MUST be ordered lexicographically by member name
             json = $"{{\"crv\":\"{crvEl.GetString()}\",\"kty\":\"EC\",\"x\":\"{xEl.GetString()}\",\"y\":\"{yEl.GetString()}\"}}";
         }
         else if (string.Equals(kty, "RSA", StringComparison.Ordinal))
@@ -198,5 +205,72 @@ internal sealed class DPoPValidator : IDPoPValidator
         var bytes = Encoding.UTF8.GetBytes(json);
         var hash = SHA256.HashData(bytes);
         return Base64UrlEncoder.Encode(hash);
+    }
+}
+
+public sealed class InMemoryDPoPReplayCache : IDPoPReplayCache
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> _store = new(StringComparer.Ordinal);
+    public bool TryAdd(string key, DateTimeOffset expiresAt)
+    {
+        Cleanup();
+        if (_store.TryGetValue(key, out var existing))
+        {
+            if (existing > DateTimeOffset.UtcNow) return false;
+            _store.TryRemove(key, out _);
+        }
+        return _store.TryAdd(key, expiresAt);
+    }
+    private void Cleanup()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kv in _store)
+        {
+            if (kv.Value <= now) _store.TryRemove(kv.Key, out _);
+        }
+    }
+}
+
+public sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
+{
+    private record Entry(string Nonce, DateTimeOffset ExpiresAt);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Entry> _store = new(StringComparer.Ordinal);
+    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(2);
+
+    public Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default)
+    {
+        Cleanup();
+        var key = Key(endpoint, clientIp, jkt);
+        if (!_store.TryGetValue(key, out var entry) || entry.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            var nonce = CreateNonce();
+            _store[key] = new Entry(nonce, DateTimeOffset.UtcNow.Add(Ttl));
+            return Task.FromResult((false, nonce));
+        }
+        if (string.IsNullOrEmpty(provided) || !string.Equals(provided, entry.Nonce, StringComparison.Ordinal))
+        {
+            var nonce = CreateNonce();
+            _store[key] = new Entry(nonce, DateTimeOffset.UtcNow.Add(Ttl));
+            return Task.FromResult((false, nonce));
+        }
+        return Task.FromResult((true, entry.Nonce));
+    }
+
+    static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{clientIp}:{(jkt ?? "no")}";
+
+    static string CreateNonce() => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=')
+        .Replace('+', '-')
+        .Replace('/', '_');
+
+    void Cleanup()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kv in _store)
+        {
+            if (kv.Value.ExpiresAt <= now)
+            {
+                _store.TryRemove(kv.Key, out _);
+            }
+        }
     }
 }

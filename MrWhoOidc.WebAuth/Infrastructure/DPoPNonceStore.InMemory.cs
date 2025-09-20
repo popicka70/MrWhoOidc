@@ -2,11 +2,6 @@ using System.Collections.Concurrent;
 
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
-public interface IDPoPNonceStore
-{
-    Task<(bool ok, string nonce)> ValidateOrIssueAsync(string endpoint, string clientIp, string? jkt, string? provided, CancellationToken ct = default);
-}
-
 internal sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
 {
     private record Entry(string Nonce, DateTimeOffset ExpiresAt);
@@ -34,7 +29,9 @@ internal sealed class InMemoryDPoPNonceStore : IDPoPNonceStore
 
     static string Key(string endpoint, string clientIp, string? jkt) => $"dpop:nonce:{endpoint}:{clientIp}:{(jkt ?? "no")}";
 
-    static string CreateNonce() => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    static string CreateNonce() => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=')
+        .Replace('+', '-')
+        .Replace('/', '_');
 
     void Cleanup()
     {

@@ -48,7 +48,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             {
                 try
                 {
-                    using var cnfDoc = JsonDocument.Parse(cnfRaw);
+                    using var cnfDoc = System.Text.Json.JsonDocument.Parse(cnfRaw);
                     if (cnfDoc.RootElement.TryGetProperty("jkt", out var jktProp))
                     {
                         cnfJkt = jktProp.GetString();
@@ -68,7 +68,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
 
                 // Nonce challenge support
                 var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                var (nonceOk, serverNonce) = nonceStore.ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce).GetAwaiter().GetResult();
+                (bool nonceOk, string serverNonce) = nonceStore.ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce).GetAwaiter().GetResult();
                 if (!nonceOk)
                 {
                     http.Response.Headers["DPoP-Nonce"] = serverNonce;
