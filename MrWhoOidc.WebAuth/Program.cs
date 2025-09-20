@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,7 +25,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
     });
-
 // Wire up Auth persistence (PostgreSQL via Aspire connection)
 builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
@@ -79,6 +79,69 @@ app.MapGet("/.well-known/openid-configuration", (HttpContext ctx) => Results.Jso
     scopes_supported = new[] { "openid", "profile", "email" }
 }));
 
+app.MapGet("/authorize", async (
+    HttpContext http,
+    IAuthorizeService authorize,
+    IAuthorizationCodeService codes
+) =>
+{
+    var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
+    {
+        response_type = http.Request.Query["response_type"],
+        client_id = http.Request.Query["client_id"],
+        redirect_uri = http.Request.Query["redirect_uri"],
+        scope = http.Request.Query["scope"],
+        state = http.Request.Query["state"],
+        nonce = http.Request.Query["nonce"],
+        code_challenge = http.Request.Query["code_challenge"],
+        code_challenge_method = http.Request.Query["code_challenge_method"],
+    };
+
+    var validation = await authorize.ValidateAsync(req);
+    if (!validation.IsValid)
+    {
+        // Redirect back with error to the provided redirect_uri if valid, else 400
+        if (!string.IsNullOrEmpty(req.redirect_uri))
+        {
+            var uri = new UriBuilder(req.redirect_uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            query["error"] = validation.Error;
+            query["error_description"] = validation.ErrorDescription;
+            if (!string.IsNullOrEmpty(req.state)) query["state"] = req.state;
+            uri.Query = query.ToString();
+            return Results.Redirect(uri.ToString());
+        }
+        return Results.BadRequest(new { error = validation.Error, error_description = validation.ErrorDescription });
+    }
+
+    // Require authenticated user
+    if (!http.User.Identity?.IsAuthenticated ?? true)
+    {
+        var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+        return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+    }
+
+    // Issue auth code
+    var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
+        return Results.Unauthorized();
+
+    var (ok, _, redirect) = await codes.IssueAsync(validation, userId);
+    if (!ok || redirect is null) return Results.Problem("Failed to issue code");
+
+    // Preserve state
+    if (!string.IsNullOrEmpty(req.state))
+    {
+        var uri = new UriBuilder(redirect);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        query["state"] = req.state;
+        uri.Query = query.ToString();
+        return Results.Redirect(uri.ToString());
+    }
+
+    return Results.Redirect(redirect);
+});
+
 app.MapGet("/jwks", async (IKeyStore keys, CancellationToken ct) =>
 {
     var jwks = await keys.GetPublicJwksAsync(ct);
@@ -86,7 +149,6 @@ app.MapGet("/jwks", async (IKeyStore keys, CancellationToken ct) =>
 });
 
 app.MapStaticAssets();
-app.MapRazorPages()
-   .WithStaticAssets();
+app.MapRazorPages().WithStaticAssets();
 
 app.Run();

@@ -7,4 +7,17 @@
 <div class="text-center">
     <h1 class="display-4">Welcome</h1>
     <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+
+    @if (User?.Identity?.IsAuthenticated ?? false)
+    {
+        <div class="alert alert-success mt-4" role="alert">
+            You are signed in as <strong>@User.Identity!.Name</strong>.
+        </div>
+    }
+    else
+    {
+        <div class="mt-4">
+            <a class="btn btn-primary" asp-page="/Login">Log in</a>
+        </div>
+    }
 </div>

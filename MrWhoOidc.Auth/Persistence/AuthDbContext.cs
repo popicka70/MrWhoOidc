@@ -7,6 +7,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
+    public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,6 +30,17 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.Kid).IsRequired();
             b.HasIndex(x => x.Kid).IsUnique();
+        });
+
+        modelBuilder.Entity<AuthorizationCode>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Code).IsRequired().HasMaxLength(200);
+            b.HasIndex(x => x.Code).IsUnique();
+            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.RedirectUri).IsRequired();
+            b.Property(x => x.ScopesJson).IsRequired();
+            b.Property(x => x.CodeChallengeMethod).HasMaxLength(10);
         });
     }
 }
@@ -60,4 +72,19 @@ public class SigningKey
     public string JwkJson { get; set; } = string.Empty; // private JWK material
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? RetiredAt { get; set; }
+}
+
+public class AuthorizationCode
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Code { get; set; } = string.Empty;
+    public string ClientId { get; set; } = string.Empty; // public client id string
+    public Guid UserId { get; set; }
+    public string RedirectUri { get; set; } = string.Empty;
+    public string ScopesJson { get; set; } = "[]";
+    public string? Nonce { get; set; }
+    public string? CodeChallenge { get; set; }
+    public string? CodeChallengeMethod { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public bool Consumed { get; set; }
 }

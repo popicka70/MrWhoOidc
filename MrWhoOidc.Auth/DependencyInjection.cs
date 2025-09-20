@@ -14,6 +14,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IAuthorizeService, AuthorizeService>();
+        services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         return services;
     }
 }
