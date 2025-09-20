@@ -11,6 +11,9 @@ public interface ISeeder
 
 public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
 {
+    // Initial constant secret for the blazor-web client (development only)
+    private const string InitialBlazorWebClientSecret = "blazor-web-initial-secret";
+
     public async Task SeedAsync(CancellationToken ct = default)
     {
         // Ensure admin realm exists
@@ -35,7 +38,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             });
         }
 
-        if (!await db.Clients.AnyAsync(c => c.ClientId == "blazor-web", ct).ConfigureAwait(false))
+        // Ensure blazor-web client exists as a confidential client with an initial constant secret
+        var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web", ct).ConfigureAwait(false);
+        if (blazorWebClient is null)
         {
             db.Clients.Add(new Client
             {
@@ -43,9 +48,15 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 ClientName = "Blazor Web Frontend",
                 RequireConsent = false,
                 RequirePkce = true,
-                ClientSecretHash = null,
+                ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
                 RealmId = adminRealm.Id
             });
+        }
+        else if (string.IsNullOrEmpty(blazorWebClient.ClientSecretHash))
+        {
+            // Backfill a secret if previously created as public client
+            blazorWebClient.ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret);
+            blazorWebClient.RequirePkce = true;
         }
 
         // backfill RealmId for any existing client rows missing it
