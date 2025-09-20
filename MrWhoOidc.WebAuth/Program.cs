@@ -69,6 +69,9 @@ builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
 builder.Services.AddMrWhoOidcAuthCore();
 
+// Add private_key_jwt validator
+builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
+
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();

@@ -12,7 +12,7 @@ public interface IAuthorizeHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics) : IAuthorizeHandler
+public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -70,11 +70,14 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 return Results.Redirect(consentUrl);
             }
 
-            var (ok, _, redirect) = await codes.IssueAsync(validation, userId);
-            if (!ok || redirect is null)
+            var (ok, _, redirect, code) = await codes.IssueAsync(validation, userId);
+            if (!ok || redirect is null) return Results.Json(new { error = "server_error" }, statusCode: 500);
+
+            // Capture auth_time from login cookie claims
+            var authTimeClaim = http.User.FindFirst("auth_time")?.Value;
+            if (!string.IsNullOrEmpty(code) && long.TryParse(authTimeClaim, out var seconds))
             {
-                outcome = "server_error";
-                return Results.Json(new { error = "server_error" }, statusCode: 500);
+                meta.SetAuthTime(code!, DateTimeOffset.FromUnixTimeSeconds(seconds));
             }
 
             if (!string.IsNullOrEmpty(req.state))

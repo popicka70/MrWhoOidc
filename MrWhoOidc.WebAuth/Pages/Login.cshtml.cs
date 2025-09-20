@@ -50,7 +50,8 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.Username)
+            new(ClaimTypes.Name, user.Username),
+            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

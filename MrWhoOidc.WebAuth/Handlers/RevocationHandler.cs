@@ -8,7 +8,7 @@ public interface IRevocationHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcMetrics metrics) : IRevocationHandler
+public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, OidcOptions options) : IRevocationHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -28,8 +28,22 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(clientId))
             return Results.BadRequest(new { error = "invalid_request" });
 
-        var validClient = await clients.ValidateClientSecretAsync(clientId, clientSecret);
-        if (!validClient)
+        // private_key_jwt support
+        var clientAssertionType = form["client_assertion_type"].ToString();
+        var clientAssertion = form["client_assertion"].ToString();
+        var revocationEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/revoke";
+
+        bool authenticated = false;
+        if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        {
+            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, revocationEndpoint);
+        }
+        else
+        {
+            authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+        }
+
+        if (!authenticated)
             return Results.BadRequest(new { error = "unauthorized_client" });
 
         var ip = http.Connection.RemoteIpAddress?.ToString();

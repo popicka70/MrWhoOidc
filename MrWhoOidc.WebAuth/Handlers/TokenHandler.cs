@@ -13,18 +13,18 @@ public interface ITokenHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics) : ITokenHandler
+public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions) : ITokenHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var sw = Stopwatch.StartNew();
         string grantType = string.Empty;
         string outcome = "failure";
-        metrics.TokenRequests.Add(1, new TagList { new("grant_type", "none"), new("outcome", "failure") });
         try
         {
             if (!http.Request.HasFormContentType)
             {
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", "none"), new("outcome", "failure") });
                 metrics.TokenFailures.Add(1, new TagList { new("grant_type", "none") });
                 return ErrorResults.InvalidRequest();
             }
@@ -32,22 +32,35 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             var form = await http.Request.ReadFormAsync();
             grantType = form["grant_type"].ToString();
 
-            // Client authentication: client_secret_basic or client_secret_post (optional)
+            // Client authentication: private_key_jwt, client_secret_basic, or client_secret_post
             var (clientId, clientSecret) = ReadClientCredentials(http);
-
-            // Allow client_id/secret from body if not provided via Authorization header
             if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
-            if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
 
             if (string.IsNullOrWhiteSpace(clientId))
             {
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                 metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                 return ErrorResults.InvalidRequest("Missing client_id");
             }
 
-            var validClient = await clients.ValidateClientSecretAsync(clientId, clientSecret);
-            if (!validClient)
+            var clientAssertionType = form["client_assertion_type"].ToString();
+            var clientAssertion = form["client_assertion"].ToString();
+            var tokenEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/token";
+
+            bool authenticated = false;
+            if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
+                authenticated = await assertions.ValidateAsync(clientId, clientAssertion, tokenEndpoint);
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
+                authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+            }
+
+            if (!authenticated)
+            {
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                 metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                 return ErrorResults.UnauthorizedClient();
             }
@@ -59,6 +72,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var codeVerifier = form["code_verifier"].ToString();
                 if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
                 {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
                 }
@@ -76,6 +90,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var refresh = form["refresh_token"].ToString();
                 if (string.IsNullOrWhiteSpace(refresh))
                 {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
                 }
@@ -88,6 +103,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 return Results.Json(payload!, statusCode: status);
             }
 
+            metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
             metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
             return ErrorResults.UnsupportedGrant();
         }

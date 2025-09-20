@@ -14,13 +14,12 @@ public interface IDiscoveryHandler
     IResult Handle(HttpContext ctx);
 }
 
-public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions) : IDiscoveryHandler
+public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandler
 {
     public IResult Handle(HttpContext ctx)
     {
         var issuer = oidcOptions.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
         var baseUrl = issuer.TrimEnd('/');
-        var audiences = authOptions.Value.ApiAudiences ?? ["api"];
         var body = new
         {
             issuer,
@@ -32,12 +31,10 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             end_session_endpoint = $"{baseUrl}/connect/endsession",
             response_types_supported = new[] { "code" },
             grant_types_supported = new[] { "authorization_code", "refresh_token" },
-            token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post" },
+            token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
             code_challenge_methods_supported = new[] { "S256" },
             id_token_signing_alg_values_supported = new[] { "RS256" },
-            scopes_supported = new[] { "openid", "profile", "email" },
-            // custom field to publish configured audiences (not standard OIDC metadata, but useful for clients)
-            audiences
+            scopes_supported = new[] { "openid", "profile", "email" }
         };
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(body);

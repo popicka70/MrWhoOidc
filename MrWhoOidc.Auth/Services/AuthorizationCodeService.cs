@@ -7,12 +7,12 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IAuthorizationCodeService
 {
-    Task<(bool ok, string? error, string? redirect)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
+    Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizationCodeService(AuthDbContext db) : IAuthorizationCodeService
+internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore meta) : IAuthorizationCodeService
 {
-    public async Task<(bool ok, string? error, string? redirect)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
+    public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
     {
         // Create a random code
         var code = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
@@ -41,7 +41,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db) : IAuthorizatio
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         query["code"] = code;
         if (!string.IsNullOrEmpty(valid.Error)) query["error"] = valid.Error; // should not happen here
-        return (true, null, BuildRedirect(uri, query, valid));
+        return (true, null, BuildRedirect(uri, query, valid), code);
     }
 
     static string BuildRedirect(UriBuilder uri, System.Collections.Specialized.NameValueCollection query, AuthorizeValidationResult valid)

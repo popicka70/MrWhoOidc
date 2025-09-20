@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -16,7 +17,7 @@ public interface ITokenService
         string refreshToken, string clientId, string issuer, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, CancellationToken ct = default)
@@ -73,6 +74,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             }
         }
 
+        // Pull auth_time from metadata store if available
+        DateTimeOffset? authTime = null;
+        if (meta.TryGetAuthTime(code, out var at)) authTime = at;
+
         var idToken = jwt.CreateJwt(
             issuer,
             clientId,
@@ -80,13 +85,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             DateTimeOffset.UtcNow.AddMinutes(5),
             nonce: entity.Nonce,
             accessTokenHash: atHash,
-            authTime: DateTimeOffset.UtcNow // TODO: load actual auth_time from session
+            authTime: authTime
         );
 
         var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct);
 
         entity.Consumed = true;
         await db.SaveChangesAsync(ct);
+
+        // Cleanup
+        meta.Remove(code);
 
         var payload = new
         {
