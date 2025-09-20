@@ -20,10 +20,10 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString()));
         if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
 
+        // Use JsonWebKey to avoid lifetime issues with RSA instances
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
-        using var rsa = jwk.ToRSA();
-        var key = new RsaSecurityKey(rsa) { KeyId = jwk.Kid };
-        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
+        var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
 
         var token = new JwtSecurityToken(
             issuer: issuer,

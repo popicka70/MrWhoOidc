@@ -23,12 +23,25 @@ public static class DatabaseSeeder
             });
         }
 
-        if (!await db.Clients.AnyAsync(ct))
+        // Ensure test-client exists
+        if (!await db.Clients.AnyAsync(c => c.ClientId == "test-client", ct))
         {
             db.Clients.Add(new Client
             {
                 ClientId = "test-client",
                 ClientName = "Test Client",
+                RequireConsent = false,
+                RequirePkce = true
+            });
+        }
+
+        // Ensure blazor-web client exists for the Blazor app OIDC login
+        if (!await db.Clients.AnyAsync(c => c.ClientId == "blazor-web", ct))
+        {
+            db.Clients.Add(new Client
+            {
+                ClientId = "blazor-web",
+                ClientName = "Blazor Web Frontend",
                 RequireConsent = false,
                 RequirePkce = true
             });
