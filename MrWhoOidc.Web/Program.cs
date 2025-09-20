@@ -4,13 +4,14 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.IdentityModel.Protocols;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();
 
-// Read Authority from configuration (required). Set Oidc:Authority in appsettings or environment.
+// Read Authority from configuration (required). Set Oidc:Authority (or OIDC:Authority) in appsettings or environment.
 string? authority = builder.Configuration["Oidc:Authority"];
 
 // AuthN/Z
@@ -47,6 +48,18 @@ builder.Services.AddAuthentication(options =>
         options.Scope.Add("profile");
         options.Scope.Add("email");
 
+        // Allow HTTP metadata in dev when Authority is http:// by using a custom ConfigurationManager
+        if (authority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            var metadataAddress = authority.TrimEnd('/') + "/.well-known/openid-configuration";
+            options.MetadataAddress = metadataAddress;
+            options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
+                metadataAddress,
+                new OpenIdConnectConfigurationRetriever(),
+                new HttpDocumentRetriever { RequireHttps = false }
+            );
+        }
+
         options.TokenValidationParameters.ValidateIssuer = false; // dev only
     });
 
@@ -60,8 +73,6 @@ builder.Services.AddOutputCache();
 
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
     {
-        // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
-        // Learn more about service discovery scheme resolution at https://aka.ms/dotnet/sdschemes.
         client.BaseAddress = new("https+http://apiservice");
     });
 
