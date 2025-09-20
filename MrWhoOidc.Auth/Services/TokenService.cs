@@ -40,7 +40,17 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
-        var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+
+        // RFC 8707: prefer resource indicator as access token audience when present
+        string audience;
+        if (meta.TryGetResource(code, out var resource) && !string.IsNullOrWhiteSpace(resource))
+        {
+            audience = resource;
+        }
+        else
+        {
+            audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+        }
 
         // Build access token first (include scopes claim)
         var accessClaims = new List<System.Security.Claims.Claim>

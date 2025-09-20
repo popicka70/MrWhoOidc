@@ -81,6 +81,12 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 meta.SetAuthTime(code!, DateTimeOffset.FromUnixTimeSeconds(seconds));
             }
 
+            // Persist RFC 8707 resource indicator with the code (if present)
+            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validation.Resource))
+            {
+                meta.SetResource(code!, validation.Resource!);
+            }
+
             if (!string.IsNullOrEmpty(req.state))
             {
                 var uri = new UriBuilder(redirect);
