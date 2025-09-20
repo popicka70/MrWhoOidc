@@ -1,0 +1,40 @@
+### MrWhoOidc Postman Collection (MVP)
+
+1. Discovery
+- GET {{authority}}/.well-known/openid-configuration
+
+2. JWKS
+- GET {{authority}}/jwks
+
+3. Authorize (Code+PKCE)
+- Open browser: {{authority}}/authorize?response_type=code&client_id={{client_id}}&redirect_uri={{redirect_uri}}&scope=openid%20profile%20email&code_challenge={{code_challenge}}&code_challenge_method=S256&state=xyz&nonce=abc
+
+4. Token (exchange code)
+- POST {{authority}}/token
+  - Headers: Content-Type: application/x-www-form-urlencoded
+  - Body (x-www-form-urlencoded):
+    grant_type=authorization_code
+    code={{code}}
+    redirect_uri={{redirect_uri}}
+    code_verifier={{code_verifier}}
+    client_id={{client_id}}
+
+5. UserInfo
+- GET {{authority}}/userinfo
+  - Headers: Authorization: Bearer {{access_token}}
+
+6. Refresh token
+- POST {{authority}}/token
+  - Headers: Content-Type: application/x-www-form-urlencoded
+  - Body:
+    grant_type=refresh_token
+    refresh_token={{refresh_token}}
+    client_id={{client_id}}
+
+7. Revoke refresh token
+- POST {{authority}}/revoke
+  - Headers: Content-Type: application/x-www-form-urlencoded
+  - Body:
+    token={{refresh_token}}
+    token_type_hint=refresh_token
+    client_id={{client_id}}

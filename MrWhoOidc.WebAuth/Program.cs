@@ -32,6 +32,9 @@ builder.Services.AddRazorPages();
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
 
+// Seed command support
+builder.Services.AddScoped<ISeeder, Seeder>();
+
 // CORS allow-list for OIDC endpoints (tighten to only required)
 builder.Services.AddCors(options =>
 {
@@ -152,6 +155,17 @@ builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
 
 var app = builder.Build();
+
+// Support: dotnet run -- --seed
+if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    await db.Database.MigrateAsync();
+    var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
+    await seeder.SeedAsync();
+    return; // exit after seeding
+}
 
 app.MapDefaultEndpoints();
 

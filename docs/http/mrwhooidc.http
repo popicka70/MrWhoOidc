@@ -1,0 +1,35 @@
+@authority = http://localhost:7288
+@client_id = blazor-web
+@redirect_uri = http://localhost:5283/signin-oidc
+
+### Discovery
+GET {{authority}}/.well-known/openid-configuration
+
+### JWKS
+GET {{authority}}/jwks
+
+### Authorize (manual step)
+# Open in browser and sign-in
+# {{authority}}/authorize?response_type=code&client_id={{client_id}}&redirect_uri={{redirect_uri}}&scope=openid%20profile%20email&code_challenge={{code_challenge}}&code_challenge_method=S256&state=xyz&nonce=abc
+
+### Token: exchange code
+POST {{authority}}/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code={{code}}&redirect_uri={{redirect_uri}}&code_verifier={{code_verifier}}&client_id={{client_id}}
+
+### UserInfo
+GET {{authority}}/userinfo
+Authorization: Bearer {{access_token}}
+
+### Refresh token
+POST {{authority}}/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&refresh_token={{refresh_token}}&client_id={{client_id}}
+
+### Revoke
+POST {{authority}}/revoke
+Content-Type: application/x-www-form-urlencoded
+
+token={{refresh_token}}&token_type_hint=refresh_token&client_id={{client_id}}
