@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using MrWhoOidc.WebAuth.Observability;
+using Microsoft.AspNetCore.HttpOverrides;
+using StackExchange.Redis;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +32,7 @@ builder.Services.AddRazorPages();
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
 
-// CORS allow-list for OIDC endpoints
+// CORS allow-list for OIDC endpoints (tighten to only required)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("oidc", policy =>
@@ -37,12 +40,12 @@ builder.Services.AddCors(options =>
         if (oidcOptions.AllowedCorsOrigins is { Length: > 0 })
         {
             policy.WithOrigins(oidcOptions.AllowedCorsOrigins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .WithMethods("POST", "OPTIONS")
+                  .WithHeaders("authorization", "content-type")
+                  .DisallowCredentials();
         }
         else
         {
-            // Deny all by default if not configured
             policy.SetIsOriginAllowed(_ => false);
         }
     });
@@ -70,10 +73,35 @@ builder.Services.AddMrWhoOidcAuthCore();
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();
 
-// Rate limiting policies
+// Rate limiting policies using distributed store (Redis)
+var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
+IConnectionMultiplexer? redisMux = null;
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
+    builder.Services.AddSingleton(redisMux);
+}
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    if (redisMux is not null)
+    {
+        var limiterOptions = new RedisFixedWindowRateLimiterOptions { PermitLimit = 1000, Window = TimeSpan.FromMinutes(1), Prefix = "rl" };
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+            {
+                TokenLimit = limiterOptions.PermitLimit,
+                QueueLimit = 0,
+                TokensPerPeriod = limiterOptions.PermitLimit,
+                ReplenishmentPeriod = limiterOptions.Window,
+                AutoReplenishment = true
+            });
+        });
+    }
 
     options.AddPolicy("rl-authorize", httpContext =>
     {
@@ -124,15 +152,25 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
+// Trust proxy forwarded headers
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+    app.UseHttpsRedirection();
+}
+else
+{
+    // Enable HTTPS redirection optionally for dev if desired
+    // app.UseHttpsRedirection();
 }
 
-//app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
