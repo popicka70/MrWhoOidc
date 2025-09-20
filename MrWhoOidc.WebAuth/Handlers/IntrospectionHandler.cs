@@ -97,6 +97,14 @@ public sealed class IntrospectionHandler(
         // If the caller explicitly hints refresh_token, handle it first
         if (string.Equals(hint, "refresh_token", StringComparison.Ordinal))
         {
+            if (!authOptions.Value.AllowRefreshTokenIntrospection)
+            {
+                // Not allowed => return inactive regardless
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                return Results.Json(new { active = false });
+            }
+
             var result = await HandleRefreshTokenIntrospectionAsync(token, clientId, issuer, tags, http);
             if (result is not null) return result;
             // fall through to access token logic if not found
@@ -173,7 +181,7 @@ public sealed class IntrospectionHandler(
         if (entity is null)
         {
             // If hint was access_token and we failed, try refresh_token as a fallback
-            if (string.Equals(hint, "access_token", StringComparison.Ordinal))
+            if (string.Equals(hint, "access_token", StringComparison.Ordinal) && authOptions.Value.AllowRefreshTokenIntrospection)
             {
                 var r = await HandleRefreshTokenIntrospectionAsync(token, clientId, issuer, tags, http);
                 if (r is not null) return r;

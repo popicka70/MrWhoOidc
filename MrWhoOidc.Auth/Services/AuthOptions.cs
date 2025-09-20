@@ -10,6 +10,9 @@ public sealed class AuthOptions
     // Introspection policy: which clients can introspect which audiences
     // Key: client_id, Value: allowed audience(s) for introspection
     public Dictionary<string, string[]> IntrospectionPermissions { get; set; } = new();
+
+   // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
+   public bool AllowRefreshTokenIntrospection { get; set; } = false;
 }
 
 public sealed class OpaqueAccessTokenOptions
