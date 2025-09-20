@@ -13,7 +13,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -34,7 +34,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
             var (ok, principal, _) = validator.Validate(token, issuer);
-            if (!ok || principal is not null == false)
+            if (!ok || principal is not { })
             {
                 outcome = "failure";
                 metrics.UserInfoFailures.Add(1);
@@ -64,8 +64,19 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 }
 
                 var endpointUrl = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}")!.TrimEnd('/') + "/userinfo";
-                var result = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
-                if (!result.Ok || string.IsNullOrEmpty(result.Jkt) || !string.Equals(result.Jkt, cnfJkt, StringComparison.Ordinal))
+                var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
+
+                // Nonce challenge support
+                var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var (nonceOk, serverNonce) = nonceStore.ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce).GetAwaiter().GetResult();
+                if (!nonceOk)
+                {
+                    http.Response.Headers["DPoP-Nonce"] = serverNonce;
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=use_dpop_nonce";
+                    return Results.Unauthorized();
+                }
+
+                if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
                 {
                     outcome = "failure";
                     metrics.UserInfoFailures.Add(1);
@@ -74,15 +85,15 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 }
 
                 // Replay protection: DPoP jti must not repeat within window
-                if (string.IsNullOrEmpty(result.Jti) || result.Iat is null)
+                if (string.IsNullOrEmpty(validation.Jti) || validation.Iat is null)
                 {
                     outcome = "failure";
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return Results.Json(new { error = "invalid_token" }, statusCode: 401);
                 }
-                var key = $"{result.Jkt}:{result.Jti}";
-                var expires = DateTimeOffset.FromUnixTimeSeconds(result.Iat.Value).AddMinutes(5);
+                var key = $"{validation.Jkt}:{validation.Jti}";
+                var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
                 if (!replayCache.TryAdd(key, expires))
                 {
                     outcome = "failure";

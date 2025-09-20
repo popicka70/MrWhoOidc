@@ -14,6 +14,15 @@ internal sealed class InMemoryDPoPReplayCache : IDPoPReplayCache
     public bool TryAdd(string key, DateTimeOffset expiresAt)
     {
         Cleanup();
+        // Remove if expired or past
+        if (_store.TryGetValue(key, out var existing))
+        {
+            if (existing > DateTimeOffset.UtcNow)
+            {
+                return false; // replay
+            }
+            _store.TryRemove(key, out _);
+        }
         return _store.TryAdd(key, expiresAt);
     }
 

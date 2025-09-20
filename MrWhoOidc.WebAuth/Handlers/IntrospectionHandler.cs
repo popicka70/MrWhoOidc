@@ -25,7 +25,8 @@ public sealed class IntrospectionHandler(
     AuthDbContext db,
     IOptions<AuthOptions> authOptions,
     IDPoPValidator dpop,
-    IDPoPReplayCache replayCache
+    IDPoPReplayCache replayCache,
+    IDPoPNonceStore nonceStore
 ) : IIntrospectionHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -148,6 +149,16 @@ public sealed class IntrospectionHandler(
                 if (!string.IsNullOrEmpty(cnfJkt))
                 {
                     var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
+
+                    // Nonce challenge
+                    var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                    var (nonceOk, serverNonce) = await nonceStore.ValidateOrIssueAsync(endpoint, clientIp, validation.Jkt, validation.Nonce);
+                    if (!nonceOk)
+                    {
+                        http.Response.Headers["DPoP-Nonce"] = serverNonce;
+                        return Results.Unauthorized();
+                    }
+
                     if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
                     {
                         metrics.IntrospectionActiveFalse.Add(1, tags);
@@ -262,6 +273,14 @@ public sealed class IntrospectionHandler(
         if (!string.IsNullOrEmpty(entity.CnfJkt))
         {
             var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
+            var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var (nonceOk, serverNonce) = await nonceStore.ValidateOrIssueAsync(endpoint, clientIp, validation.Jkt, validation.Nonce);
+            if (!nonceOk)
+            {
+                http.Response.Headers["DPoP-Nonce"] = serverNonce;
+                return Results.Unauthorized();
+            }
+
             if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, entity.CnfJkt, StringComparison.Ordinal))
             {
                 metrics.IntrospectionActiveFalse.Add(1, tags);

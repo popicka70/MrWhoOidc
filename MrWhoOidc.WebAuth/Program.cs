@@ -80,21 +80,26 @@ builder.Services.AddScoped<IParHandler, ParHandler>();
 
 // DPoP services
 builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
-builder.Services.AddSingleton<IDPoPReplayCache, InMemoryDPoPReplayCache>();
-
-// Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
-builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AuthDbContext>();
-
-// Rate limiting policies using distributed store (Redis)
 var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
 IConnectionMultiplexer? redisMux = null;
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
     builder.Services.AddSingleton(redisMux);
+    builder.Services.AddSingleton<IDPoPReplayCache, RedisDPoPReplayCache>();
+    builder.Services.AddSingleton<IDPoPNonceStore, RedisDPoPNonceStore>();
+}
+else
+{
+    builder.Services.AddSingleton<IDPoPReplayCache, InMemoryDPoPReplayCache>();
+    builder.Services.AddSingleton<IDPoPNonceStore, InMemoryDPoPNonceStore>();
 }
 
+// Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AuthDbContext>();
+
+// Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -246,7 +251,8 @@ app.Lifetime.ApplicationStarted.Register(() =>
     });
 });
 
-app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx));
+app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
+   .RequireRateLimiting("rl-authorize");
 app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
 {
     var jwks = await keys.GetPublicJwksAsync(ct);
