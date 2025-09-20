@@ -169,7 +169,7 @@ app.MapPost("/consent", async (HttpContext http, IConsentService consents) =>
     var form = await http.Request.ReadFormAsync();
     var clientId = form["ClientId"].ToString();
     var returnUrl = form["ReturnUrl"].ToString();
-    var scopes = form["Scopes"].ToArray();
+    var scopes = form["Scopes"].ToArray().Where(s => s is not null).Select(s => s!).ToArray();
 
     var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
     if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
