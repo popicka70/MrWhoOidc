@@ -22,7 +22,8 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
         await LoadRealmsAsync();
     }
 
-    public async Task<IActionResult> OnPostAsync()
+    // Explicit create handler to avoid any ambiguity with other submit buttons
+    public async Task<IActionResult> OnPostCreateAsync()
     {
         await LoadRealmsAsync();
         if (!ModelState.IsValid)

@@ -6,7 +6,7 @@
 
 <h1>Edit client</h1>
 
-<form method="post">
+<form method="post" autocomplete="off">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     <ul class="nav nav-tabs" id="clientTab" role="tablist">
@@ -37,12 +37,12 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label asp-for="Input.ClientId" class="form-label"></label>
-                    <input asp-for="Input.ClientId" class="form-control" />
+                    <input asp-for="Input.ClientId" class="form-control" autocomplete="off" />
                     <span asp-validation-for="Input.ClientId" class="text-danger"></span>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Input.ClientName" class="form-label"></label>
-                    <input asp-for="Input.ClientName" class="form-control" />
+                    <input asp-for="Input.ClientName" class="form-control" autocomplete="off" />
                     <span asp-validation-for="Input.ClientName" class="text-danger"></span>
                 </div>
                 <div class="col-md-6">
@@ -65,7 +65,7 @@
                 <div class="col-12">
                     <label asp-for="Input.ClientSecret" class="form-label"></label>
                     <div class="input-group">
-                        <input asp-for="Input.ClientSecret" class="form-control" />
+                        <input asp-for="Input.ClientSecret" class="form-control" autocomplete="new-password" />
                         <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
                     </div>
                     <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
