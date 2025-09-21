@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Options;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -25,7 +26,8 @@ public sealed class AuthorizeHandler(
     IRequestObjectValidator requestObjects,
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeHandler> logger,
-    IJwtService jwt
+    IJwtService jwt,
+    IClientStore clients
 ) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -201,10 +203,11 @@ public sealed class AuthorizeHandler(
                 logger.LogWarning("/authorize 400: validation failed corr={Corr} client={Client} error={Error}", corr, clientBucket, validationResult.Error);
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
-                    // If JARM requested, return a signed error JWT instead of parameters
+                    // If JARM requested, return a signed/encrypted error JWT instead of parameters
                     if (string.Equals(effectiveReq.response_mode, "query.jwt", StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, "form_post.jwt", StringComparison.Ordinal))
                     {
-                        var jarm = CreateJarmErrorJwt(http, jwt, effectiveReq.client_id!, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state);
+                        EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(effectiveReq.client_id);
+                        var jarm = CreateJarmErrorJwt(http, jwt, effectiveReq.client_id!, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state, enc);
                         return JarmRedirect(effectiveReq.redirect_uri!, effectiveReq.response_mode!, jarm);
                     }
 
@@ -264,7 +267,8 @@ public sealed class AuthorizeHandler(
             // JARM response if requested
             if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == "query.jwt" || validationResult.ResponseMode == "form_post.jwt"))
             {
-                var jarm = CreateJarmSuccessJwt(http, jwt, validationResult.ClientId!, code!, validationResult.ResponseMode!, effectiveReq.state);
+                EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(validationResult.ClientId);
+                var jarm = CreateJarmSuccessJwt(http, jwt, validationResult.ClientId!, code!, validationResult.ResponseMode!, effectiveReq.state, enc);
                 return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarm);
             }
 
@@ -284,6 +288,29 @@ public sealed class AuthorizeHandler(
             sw.Stop();
             var tags = new TagList { new("client", clientBucket), new("mode", mode), new("outcome", outcome) };
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+        }
+    }
+
+    private async Task<EncryptingCredentials?> TryGetJarmEncryptingCredentialsAsync(string? clientId)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(clientId)) return null;
+            var client = await clients.FindByClientIdAsync(clientId);
+            if (client is null) return null;
+            var jwks = client.PublicJwksJson;
+            if (string.IsNullOrWhiteSpace(jwks)) return null;
+            var set = new JsonWebKeySet(jwks);
+            // Prefer keys with use=enc and RSA
+            var key = set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase) && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
+                   ?? set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase));
+            if (key is null) return null;
+            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256Gcm);
+            return encCreds;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -353,7 +380,7 @@ public sealed class AuthorizeHandler(
         return Results.Redirect(uri2.ToString());
     }
 
-    private static string CreateJarmSuccessJwt(HttpContext http, IJwtService jwt, string clientId, string code, string responseMode, string? state)
+    private static string CreateJarmSuccessJwt(HttpContext http, IJwtService jwt, string clientId, string code, string responseMode, string? state, EncryptingCredentials? enc)
     {
         var issuer = GetIssuer(http);
         var claims = new List<System.Security.Claims.Claim>
@@ -370,10 +397,14 @@ public sealed class AuthorizeHandler(
             claims.Add(new("s_hash", sHash));
         }
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
+        if (enc is not null)
+        {
+            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+        }
         return jwt.CreateJwt(issuer, clientId, claims, exp);
     }
 
-    private static string CreateJarmErrorJwt(HttpContext http, IJwtService jwt, string clientId, string error, string errorDescription, string? state)
+    private static string CreateJarmErrorJwt(HttpContext http, IJwtService jwt, string clientId, string error, string errorDescription, string? state, EncryptingCredentials? enc)
     {
         var issuer = GetIssuer(http);
         var claims = new List<System.Security.Claims.Claim>
@@ -388,6 +419,10 @@ public sealed class AuthorizeHandler(
             claims.Add(new("s_hash", sHash));
         }
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
+        if (enc is not null)
+        {
+            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+        }
         return jwt.CreateJwt(issuer, clientId, claims, exp);
     }
 }

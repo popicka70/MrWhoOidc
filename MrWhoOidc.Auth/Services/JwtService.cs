@@ -10,6 +10,7 @@ namespace MrWhoOidc.Auth.Services;
 public interface IJwtService
 {
     string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null);
+    string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null);
 }
 
 internal sealed class JwtService(IKeyStore keyStore) : IJwtService
@@ -40,6 +41,37 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         );
 
         var handler = new JwtSecurityTokenHandler();
+        return handler.WriteToken(token);
+    }
+
+    public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null)
+    {
+        var list = new List<Claim>(claims);
+        if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
+        if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
+
+        // Required by OIDC: iat (issued at)
+        var now = DateTimeOffset.UtcNow;
+        list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
+
+        var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
+        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
+        var signingCreds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = issuer,
+            Audience = audience,
+            NotBefore = DateTime.UtcNow,
+            Expires = expires.UtcDateTime,
+            Claims = list.ToDictionary(c => c.Type, c => (object)c.Value),
+            SigningCredentials = signingCreds,
+            EncryptingCredentials = encryptingCredentials
+        };
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.CreateToken(descriptor);
         return handler.WriteToken(token);
     }
 }
