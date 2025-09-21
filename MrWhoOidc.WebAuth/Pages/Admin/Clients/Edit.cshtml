@@ -46,9 +46,16 @@
             <div class="input-group">
                 <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
                 <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks">Fetch</button>
-                <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks">Generate RSA JWKS</button>
+                <select asp-for="GenerateAlg" class="form-select" style="max-width: 180px;">
+                    <option value="RS256">RS256</option>
+                    <option value="ES256">ES256</option>
+                    <option value="ES384">ES384</option>
+                    <option value="ES512">ES512</option>
+                </select>
+                <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks">Generate JWKS</button>
+                <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey">Add Key</button>
             </div>
-            <small class="form-text text-muted">Optional URI for client's JWKS. Click Fetch to load into JSON field or Generate to create a new RSA keypair.</small>
+            <small class="form-text text-muted">Fetch from URI or manage JWKS below. Use Add Key to append another key.</small>
             <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
         </div>
         <div class="col-12">
@@ -57,19 +64,10 @@
             <small class="form-text text-muted">Public JWKS used for private_key_jwt and JAR.</small>
             <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
         </div>
-        @if (!string.IsNullOrEmpty(Model.GeneratedPrivateJwk))
-        {
-            <div class="col-12">
-                <div class="alert alert-warning">
-                    <strong>Private JWK generated.</strong> Copy and store it securely. It will not be persisted on the server.
-                </div>
-                <textarea class="form-control" rows="6" readonly>@Model.GeneratedPrivateJwk</textarea>
-            </div>
-        }
         @if (Model.KeyPreviews?.Count > 0)
         {
             <div class="col-12">
-                <div class="card mb-3">
+                <div class="card mb-2">
                     <div class="card-header">JWKS preview</div>
                     <div class="card-body">
                         <ul class="list-unstyled">
@@ -80,8 +78,21 @@
                                 </li>
                             }
                         </ul>
+                        <div class="input-group mt-2">
+                            <input asp-for="RemoveKid" class="form-control" placeholder="kid to remove" />
+                            <button type="submit" class="btn btn-outline-danger" asp-page-handler="RemoveKey">Remove Key</button>
+                        </div>
                     </div>
                 </div>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(Model.GeneratedPrivateJwk))
+        {
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <strong>Private JWK generated.</strong> Copy and store it securely. It will not be persisted on the server.
+                </div>
+                <textarea class="form-control" rows="6" readonly>@Model.GeneratedPrivateJwk</textarea>
             </div>
         }
         <div class="col-12">

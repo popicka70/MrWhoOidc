@@ -31,6 +31,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
     [BindProperty]
     public ClientInput Input { get; set; } = new();
 
+    [BindProperty]
+    public string? GenerateAlg { get; set; }
+
+    [BindProperty]
+    public string? RemoveKid { get; set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
@@ -70,27 +76,165 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
     {
         await LoadRealmsAsync();
 
-        using var rsa = RSA.Create(2048);
-        var kid = Guid.NewGuid().ToString("N");
-        var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
-
-        // Expose private JWK to the admin for download/export (do not store)
-        GeneratedPrivateJwk = jwk.ToJson(includePrivate: true);
-
-        // Store public JWKS JSON into the form (not saved yet until Save is pressed)
-        var publicJwk = new RsaJwk
+        var alg = string.IsNullOrWhiteSpace(GenerateAlg) ? "RS256" : GenerateAlg!.ToUpperInvariant();
+        if (alg.StartsWith("ES"))
         {
-            Kty = jwk.Kty,
-            Kid = jwk.Kid,
-            Alg = jwk.Alg,
-            Use = jwk.Use,
-            N = jwk.N,
-            E = jwk.E,
-            D = null, P = null, Q = null, DP = null, DQ = null, QI = null
-        };
-        var jwks = new { keys = new[] { publicJwk } };
-        Input.PublicJwksJson = JsonSerializer.Serialize(jwks, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+            EcJwk ecJwk;
+            switch (alg)
+            {
+                case "ES384":
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP384))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES384", includePrivate: true);
+                    }
+                    break;
+                case "ES512":
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP521))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES512", includePrivate: true);
+                    }
+                    break;
+                default:
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES256", includePrivate: true);
+                    }
+                    break;
+            }
 
+            GeneratedPrivateJwk = ecJwk.ToJson(includePrivate: true);
+            var publicJwk = new EcJwk
+            {
+                Kty = ecJwk.Kty,
+                Kid = ecJwk.Kid,
+                Alg = ecJwk.Alg,
+                Use = ecJwk.Use,
+                Crv = ecJwk.Crv,
+                X = ecJwk.X,
+                Y = ecJwk.Y,
+                D = null
+            };
+            var jwks = new { keys = new[] { publicJwk } };
+            Input.PublicJwksJson = JsonSerializer.Serialize(jwks, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+        }
+        else
+        {
+            using var rsa = RSA.Create(2048);
+            var kid = Guid.NewGuid().ToString("N");
+            var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+            GeneratedPrivateJwk = jwk.ToJson(includePrivate: true);
+            var publicJwk = new RsaJwk
+            {
+                Kty = jwk.Kty,
+                Kid = jwk.Kid,
+                Alg = jwk.Alg,
+                Use = jwk.Use,
+                N = jwk.N,
+                E = jwk.E,
+                D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+            };
+            var jwks = new { keys = new[] { publicJwk } };
+            Input.PublicJwksJson = JsonSerializer.Serialize(jwks, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+        }
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostAddKeyAsync()
+    {
+        await LoadRealmsAsync();
+        var alg = string.IsNullOrWhiteSpace(GenerateAlg) ? "RS256" : GenerateAlg!.ToUpperInvariant();
+
+        // Ensure we have a JWKS container
+        var keysRaw = ExtractKeysRaw(Input.PublicJwksJson);
+
+        string newPublicJwkJson;
+        if (alg.StartsWith("ES"))
+        {
+            EcJwk ecJwk;
+            switch (alg)
+            {
+                case "ES384":
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP384))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES384", includePrivate: true);
+                    }
+                    break;
+                case "ES512":
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP521))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES512", includePrivate: true);
+                    }
+                    break;
+                default:
+                    using (var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256))
+                    {
+                        var kid = Guid.NewGuid().ToString("N");
+                        ecJwk = EcJwk.FromECDsa(ec, kid, alg: "ES256", includePrivate: true);
+                    }
+                    break;
+            }
+            GeneratedPrivateJwk = ecJwk.ToJson(includePrivate: true);
+            newPublicJwkJson = new EcJwk
+            {
+                Kty = ecJwk.Kty,
+                Kid = ecJwk.Kid,
+                Alg = ecJwk.Alg,
+                Use = ecJwk.Use,
+                Crv = ecJwk.Crv,
+                X = ecJwk.X,
+                Y = ecJwk.Y,
+                D = null
+            }.ToJson(includePrivate: false);
+        }
+        else
+        {
+            using var rsa = RSA.Create(2048);
+            var kid = Guid.NewGuid().ToString("N");
+            var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+            GeneratedPrivateJwk = jwk.ToJson(includePrivate: true);
+            newPublicJwkJson = new RsaJwk
+            {
+                Kty = jwk.Kty,
+                Kid = jwk.Kid,
+                Alg = jwk.Alg,
+                Use = jwk.Use,
+                N = jwk.N,
+                E = jwk.E,
+                D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+            }.ToJson(includePrivate: false);
+        }
+
+        keysRaw.Insert(0, newPublicJwkJson); // prepend newest
+        Input.PublicJwksJson = ComposeJwks(keysRaw);
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostRemoveKeyAsync()
+    {
+        await LoadRealmsAsync();
+        var keysRaw = ExtractKeysRaw(Input.PublicJwksJson);
+        if (!string.IsNullOrWhiteSpace(RemoveKid))
+        {
+            keysRaw = keysRaw.Where(raw =>
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(raw);
+                    var kid = doc.RootElement.TryGetProperty("kid", out var kidProp) ? kidProp.GetString() : null;
+                    return !string.Equals(kid, RemoveKid, StringComparison.Ordinal);
+                }
+                catch { return true; }
+            }).ToList();
+        }
+        Input.PublicJwksJson = ComposeJwks(keysRaw);
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
         return Page();
     }
@@ -332,6 +476,29 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             // ignore parsing error here; validation happens elsewhere
         }
         return list;
+    }
+
+    private static string ComposeJwks(List<string> keysRaw)
+        => "{\"keys\":[" + string.Join(",", keysRaw) + "]}";
+
+    private static List<string> ExtractKeysRaw(string? jwksOrJwk)
+    {
+        var keys = new List<string>();
+        if (string.IsNullOrWhiteSpace(jwksOrJwk)) return keys;
+        try
+        {
+            using var doc = JsonDocument.Parse(jwksOrJwk);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var k in keysArr.EnumerateArray()) keys.Add(k.GetRawText());
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                keys.Add(doc.RootElement.GetRawText());
+            }
+        }
+        catch { }
+        return keys;
     }
 
     private static KeyPreview ParseKey(JsonElement key)
