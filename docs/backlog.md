@@ -8,6 +8,8 @@ Status legend
 Scope
 Implement user management with primary/alternative emails, per-client user assignment, realms and roles, role exposure in userinfo/tokens, and client-assigned scopes with enforcement. Target runtime: .NET 9.
 
+Note: Admin management UI now lives in `MrWhoOidc.WebAuth` (the OIDC server). Previous references to `MrWhoOidc.Web` for admin UI have been moved to `MrWhoOidc.WebAuth`.
+
 Milestones (suggested order)
 0 ? 1 ? 5/3/4 ? 6 ? 7 ? 8/9 ? 10/11 ? 12 ? 13/14
 
@@ -29,6 +31,7 @@ Epic 1 – Data model and migrations
     - UserAlternativeEmail(Id, UserId, Email, IsVerified, VerifiedAt)
     - UserClientAssignment(UserId, ClientId, RealmId, IsActive)
     - UserRoleAssignment(UserId, RoleId, ClientId, RealmId, IsActive)
+    - Split role assignments: UserRealmRoleAssignment(UserId, RoleId, RealmId, IsActive), UserClientRoleAssignment(UserId, RoleId, ClientId, IsActive)
   - AC:
     - [x] EF Core entities created with navigation props and constraints
     - [x] Migrations added and applied
@@ -56,13 +59,13 @@ Epic 3 – Client and scope management
   - AC:
     - [x] Create/update/delete/list scopes
     - [x] Validation; cannot delete in-use scope
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+  - Target: `MrWhoOidc.WebAuth`
 - Story 3.2: Assign scopes to clients
   - AC:
     - [x] Persist `ClientScope`
     - [x] List effective scopes per client
     - [x] Prevent duplicates
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+  - Target: `MrWhoOidc.WebAuth`
 - Story 3.3: Enforce requested scopes ? assigned client scopes
   - AC:
     - [x] Authorization requests fail with invalid_scope when requesting disallowed scopes
@@ -72,25 +75,25 @@ Epic 3 – Client and scope management
 Epic 4 – Role and realm management
 - Story 4.1: CRUD roles per realm
   - AC:
-    - [~] Create/update/delete/list roles scoped to realm
-    - [ ] Cannot delete role in use
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+    - [~] Create/update/delete/list roles scoped to realm (UI in WebAuth)
+    - [ ] Cannot delete role in use (update guard to consider both realm and client assignments)
+  - Target: `MrWhoOidc.WebAuth`
 - Story 4.2: CRUD realms
   - AC:
     - [~] Create/update/delete/list realms; toggle IsActive
     - [ ] Cannot delete realm in use
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+  - Target: `MrWhoOidc.WebAuth`
 
 Epic 5 – Assignments and enforcement
 - Story 5.1: Assign users to clients (optionally per realm)
   - AC:
-    - [~] API/UI to add/remove user-client (+realm) assignments
-    - [~] Validation and deduplication
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
-- Story 5.2: Assign roles to users per client+realm
+    - [x] UI to add/remove user-client (+realm) assignments
+    - [x] Validation and deduplication
+  - Target: `MrWhoOidc.WebAuth`
+- Story 5.2: Assign roles to users
   - AC:
-    - [~] API/UI for `UserRoleAssignment`; bulk operations supported
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+    - [~] UI for assigning roles separately as realm-role and client-role (bulk ops TBD)
+  - Target: `MrWhoOidc.WebAuth`
 - Story 5.3: Enforce “user can only log into assigned clients”
   - AC:
     - [x] During auth flow, requests for unassigned client (and realm, if applicable) are rejected consistently (pre-consent)
@@ -110,8 +113,8 @@ Epic 6 – Claims, tokens, and userinfo
   - Target: `MrWhoOidc.Auth`
 - Story 6.2: Add roles to ID/access token and userinfo when `roles` scope granted
   - AC:
-    - [x] Roles limited to current client+realm
-    - [x] Claim `roles` issued only when scope granted
+    - [~] Roles limited to current client+realm
+    - [~] Claim `roles` issued only when scope granted (update TokenService to union realm-role and client-role assignments)
     - [ ] Unit tests
   - Target: `MrWhoOidc.Auth`
 - Story 6.3: Add emails to userinfo
@@ -124,18 +127,18 @@ Epic 6 – Claims, tokens, and userinfo
     - [x] `realm` claim added to tokens/userinfo reflecting active realm
   - Target: `MrWhoOidc.Auth`
 
-Epic 7 – Admin API
+Epic 7 – Admin API / backend
 - Story 7.1: Users CRUD + email management
 - Story 7.2: Clients CRUD + scope assignments
 - Story 7.3: Roles CRUD (per realm)
 - Story 7.4: Realms CRUD
 - Story 7.5: User-client assignments
-- Story 7.6: User-role assignments per client+realm
+- Story 7.6: User-role assignments (realm-role and client-role)
   - AC for all:
-    - [~] OpenAPI documented
+    - [~] OpenAPI documented (if/when APIs are exposed)
     - [~] Validation with consistent error contracts
-    - [ ] RBAC-protected endpoints
-  - Target: `MrWhoOidc.ApiService`
+    - [x] RBAC-protected admin UI (WebAuth `"admin"` policy)
+  - Target: `MrWhoOidc.WebAuth` (UI-first; APIs optional)
 
 Epic 8 – Admin UI
 - Story 8.1: Users pages (primary/alternate emails, verification, assignments)
@@ -146,7 +149,7 @@ Epic 8 – Admin UI
   - AC for all:
     - [ ] Paging, filtering, search
     - [ ] Success/error toasts; guards against losing unsaved changes
-  - Target: `MrWhoOidc.Web`
+  - Target: `MrWhoOidc.WebAuth`
 
 Epic 9 – Auth UI updates
 - Story 9.1: Optional realm selection or display
@@ -158,15 +161,16 @@ Epic 10 – Security, auditing, and policies
 - Story 10.1: Audit log
   - AC:
     - [ ] Persist who changed what (users, roles, assignments, scopes) with timestamps
-  - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Auth`
+  - Target: `MrWhoOidc.Auth`
 - Story 10.2: Input validation and normalization
   - AC:
     - [ ] Email normalization/canonicalization; role/scope naming rules; consistent errors
   - Target: All server projects
-- Story 10.3: Permissions for Admin API
+- Story 10.3: Permissions for Admin API/UI
   - AC:
-    - [ ] Only admins (per realm/global) can manage entities; bootstrap admin flow
-  - Target: `MrWhoOidc.ApiService`
+    - [x] Admin UI: Only admins (per realm/global) can manage entities; bootstrap admin flow
+    - [ ] Admin API endpoints (if exposed) protected by RBAC
+  - Target: `MrWhoOidc.WebAuth`, `MrWhoOidc.ApiService`
 
 Epic 11 – Tests
 - Story 11.1: Unit tests for handlers and claim issuance
@@ -198,9 +202,10 @@ Epic 14 – Documentation
 - Story 14.2: OIDC integration guide for clients
   - AC:
     - [ ] Required scopes; interpreting `roles` and `realm` claims
-  - Target: `MrWhoOidc.Auth`, `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
+  - Target: `MrWhoOidc.Auth`, `MrWhoOidc.ApiService`, `MrWhoOidc.WebAuth`
 
 Cross-cutting decisions and notes
+- Role assignments are split: realm-level (UserRealmRoleAssignment) and client-level (UserClientRoleAssignment).
 - Claim names: use `roles` (custom), `realm` (custom), standard `email`/`email_verified`.
 - Scope gating: only include custom claims when corresponding scopes are granted.
 - Enforcement points: request validation handlers and consent handling in the OIDC pipeline.
