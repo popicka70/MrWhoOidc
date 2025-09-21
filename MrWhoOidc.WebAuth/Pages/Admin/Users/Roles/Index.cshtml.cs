@@ -39,18 +39,28 @@ public class IndexModel(AuthDbContext db) : PageModel
         if (!exists) return RedirectToPage("/Admin/Users/Index");
 
         Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-        Clients = await db.Clients.AsNoTracking()
-            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new ClientVm(c.Id, c.ClientId, r.Name))
-            .OrderBy(c => c.ClientId).ToListAsync();
-        Roles = await db.Roles.AsNoTracking()
-            .Join(db.Realms, r => r.RealmId, rl => rl.Id, (r, rl) => new RoleVm(r.Id, r.Name, rl.Name))
-            .OrderBy(r => r.Name).ToListAsync();
 
+        // Order on raw fields, then project to record to keep EF translation
+        Clients = await db.Clients.AsNoTracking()
+            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new { c.Id, c.ClientId, RealmName = r.Name })
+            .OrderBy(x => x.ClientId)
+            .Select(x => new ClientVm(x.Id, x.ClientId, x.RealmName))
+            .ToListAsync();
+
+        Roles = await db.Roles.AsNoTracking()
+            .Join(db.Realms, r => r.RealmId, rl => rl.Id, (r, rl) => new { r.Id, r.Name, RealmName = rl.Name })
+            .OrderBy(x => x.Name)
+            .Select(x => new RoleVm(x.Id, x.Name, x.RealmName))
+            .ToListAsync();
+
+        // Same approach for assignments: order before projecting to record type
         Assignments = await db.UserRoleAssignments.AsNoTracking().Where(a => a.UserId == UserId)
             .Join(db.Clients, a => a.ClientId, c => c.Id, (a, c) => new { a, c })
             .Join(db.Realms, ac => ac.a.RealmId, r => r.Id, (ac, r) => new { ac, r })
-            .Join(db.Roles, acr => acr.ac.a.RoleId, ro => ro.Id, (acr, ro) => new AssignmentVm(ro.Id, acr.ac.c.Id, acr.ac.c.ClientId, acr.ac.c.ClientName, acr.r.Id, acr.r.Name, ro.Name, acr.ac.a.IsActive))
-            .OrderBy(a => a.ClientId).ThenBy(a => a.RoleName).ToListAsync();
+            .Join(db.Roles, acr => acr.ac.a.RoleId, ro => ro.Id, (acr, ro) => new { acr, ro })
+            .OrderBy(x => x.acr.ac.c.ClientId).ThenBy(x => x.ro.Name)
+            .Select(x => new AssignmentVm(x.ro.Id, x.acr.ac.c.Id, x.acr.ac.c.ClientId, x.acr.ac.c.ClientName, x.acr.r.Id, x.acr.r.Name, x.ro.Name, x.acr.ac.a.IsActive))
+            .ToListAsync();
 
         return Page();
     }

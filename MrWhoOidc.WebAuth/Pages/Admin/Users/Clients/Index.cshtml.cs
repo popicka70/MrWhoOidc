@@ -34,14 +34,21 @@ public class IndexModel(AuthDbContext db) : PageModel
         if (!exists) return RedirectToPage("/Admin/Users/Index");
 
         Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-        Clients = await db.Clients.AsNoTracking()
-            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new ClientVm(c.Id, c.ClientId, r.Name))
-            .OrderBy(c => c.ClientId).ToListAsync();
 
+        // Avoid projecting to record type before OrderBy to keep query translatable by EF
+        Clients = await db.Clients.AsNoTracking()
+            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new { c.Id, c.ClientId, RealmName = r.Name })
+            .OrderBy(x => x.ClientId)
+            .Select(x => new ClientVm(x.Id, x.ClientId, x.RealmName))
+            .ToListAsync();
+
+        // Same approach for assignments: order before projecting to record type
         Assignments = await db.UserClientAssignments.AsNoTracking().Where(a => a.UserId == UserId)
             .Join(db.Clients, a => a.ClientId, c => c.Id, (a, c) => new { a, c })
-            .Join(db.Realms, ac => ac.a.RealmId, r => r.Id, (ac, r) => new AssignmentVm(ac.c.Id, ac.c.ClientId, ac.c.ClientName, r.Id, r.Name, ac.a.IsActive))
-            .OrderBy(a => a.ClientId).ToListAsync();
+            .Join(db.Realms, ac => ac.a.RealmId, r => r.Id, (ac, r) => new { ac, r })
+            .OrderBy(x => x.ac.c.ClientId)
+            .Select(x => new AssignmentVm(x.ac.c.Id, x.ac.c.ClientId, x.ac.c.ClientName, x.r.Id, x.r.Name, x.ac.a.IsActive))
+            .ToListAsync();
 
         return Page();
     }
