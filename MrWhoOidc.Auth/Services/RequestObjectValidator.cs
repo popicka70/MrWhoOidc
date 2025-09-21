@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
@@ -23,7 +24,7 @@ public sealed class RequestObjectValidationResult
     public AuthorizeRequest? Request { get; init; }
 }
 
-internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config) : IRequestObjectValidator
+internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger) : IRequestObjectValidator
 {
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
@@ -36,8 +37,9 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             var handler = new JwtSecurityTokenHandler();
             unsigned = handler.ReadJwtToken(requestJwt);
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "JAR: malformed request object");
             return Invalid("invalid_request_object", "Malformed request object");
         }
 
@@ -47,12 +49,18 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
                      ?? unsigned.Issuer;
 
         if (string.IsNullOrWhiteSpace(clientId))
+        {
+            logger.LogWarning("JAR: missing client_id in request object");
             return Invalid("invalid_request_object", "Missing client_id in request object");
+        }
 
         // Ensure the client exists
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client is null)
+        {
+            logger.LogWarning("JAR: unknown client_id {ClientId}", clientId);
             return Invalid("unauthorized_client", "Unknown client_id in request object");
+        }
 
         // Build signing keys from DB-stored JWKS/JWK first, then fall back to configuration.
         string? jwkOrJwksJson = client.PublicJwksJson;
@@ -67,7 +75,10 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             config[$"Auth:ClientAssertions:{clientId}:jwk"];
 
         if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
+        {
+            logger.LogWarning("JAR: no JWK/JWKS configured for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "No JWK/JWKS configured for client");
+        }
 
         IReadOnlyCollection<SecurityKey> signingKeys;
         try
@@ -83,8 +94,9 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
                 signingKeys = new[] { (SecurityKey)jwk };
             }
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "JAR: invalid JWK/JWKS configuration for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "Invalid JWK/JWKS configuration for client");
         }
 
@@ -113,8 +125,9 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             var handler = new JwtSecurityTokenHandler();
             principal = handler.ValidateToken(requestJwt, parameters, out _);
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogWarning(ex, "JAR: signature or lifetime validation failed for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "Signature or lifetime validation failed");
         }
 
@@ -122,7 +135,10 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
         var iss = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Iss)?.Value ?? unsigned.Issuer;
         var sub = principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value;
         if (!string.Equals(iss, clientId, StringComparison.Ordinal) || (sub != null && !string.Equals(sub, clientId, StringComparison.Ordinal)))
+        {
+            logger.LogWarning("JAR: iss/sub mismatch for client {ClientId} (iss={Iss}, sub={Sub})", clientId, iss, sub);
             return Invalid("invalid_request_object", "iss/sub mismatch");
+        }
 
         // Extract OpenID parameters from payload
         var payload = unsigned.Payload;

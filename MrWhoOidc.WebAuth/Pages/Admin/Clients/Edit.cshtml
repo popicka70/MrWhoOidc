@@ -45,15 +45,15 @@
             <label asp-for="Input.PublicJwksUri" class="form-label"></label>
             <div class="input-group">
                 <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
-                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks">Fetch</button>
+                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks" formnovalidate>Fetch</button>
                 <select asp-for="GenerateAlg" class="form-select" style="max-width: 180px;">
                     <option value="RS256">RS256</option>
                     <option value="ES256">ES256</option>
                     <option value="ES384">ES384</option>
                     <option value="ES512">ES512</option>
                 </select>
-                <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks">Generate JWKS</button>
-                <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey">Add Key</button>
+                <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks" formnovalidate>Generate JWKS</button>
+                <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey" formnovalidate>Add Key</button>
             </div>
             <small class="form-text text-muted">Fetch from URI or manage JWKS below. Use Add Key to append another key.</small>
             <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
@@ -63,6 +63,15 @@
             <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="8" placeholder='{"keys":[{...}]}'></textarea>
             <small class="form-text text-muted">Public JWKS used for private_key_jwt and JAR.</small>
             <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
+        </div>
+        <div class="col-12">
+            <label asp-for="Input.PrivateJwk" class="form-label"></label>
+            <textarea asp-for="Input.PrivateJwk" class="form-control" rows="6" placeholder='Paste private JWK or JWKS; only public parts will be extracted'></textarea>
+            <div class="mt-2">
+                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="ExtractPublicJwk" formnovalidate>Extract public JWKS</button>
+                <small class="form-text text-muted ms-2">The private key is not saved; we only derive public fields and populate the JWKS field above.</small>
+            </div>
+            <span asp-validation-for="Input.PrivateJwk" class="text-danger"></span>
         </div>
         @if (Model.KeyPreviews?.Count > 0)
         {
@@ -80,7 +89,7 @@
                         </ul>
                         <div class="input-group mt-2">
                             <input asp-for="RemoveKid" class="form-control" placeholder="kid to remove" />
-                            <button type="submit" class="btn btn-outline-danger" asp-page-handler="RemoveKey">Remove Key</button>
+                            <button type="submit" class="btn btn-outline-danger" asp-page-handler="RemoveKey" formnovalidate>Remove Key</button>
                         </div>
                     </div>
                 </div>
@@ -104,8 +113,9 @@
         <div class="col-12">
             <label asp-for="Input.TestJwt" class="form-label"></label>
             <textarea asp-for="Input.TestJwt" class="form-control" rows="4" placeholder="Paste a signed JWT to validate its signature against the JWKS"></textarea>
-            <div class="mt-2">
-                <button type="submit" class="btn btn-outline-primary" asp-page-handler="ValidateJwt">Validate JWT Signature</button>
+            <div class="mt-2 d-flex gap-2">
+                <button type="submit" class="btn btn-outline-primary" asp-page-handler="ValidateJwt" formnovalidate>Validate JWT Signature</button>
+                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="SignTestJwt" formnovalidate>Sign Test JWT from private JWK</button>
             </div>
             @if (Model.JwtTest is not null)
             {
@@ -119,7 +129,7 @@
         </div>
     </div>
     <div class="mt-3">
-        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="submit" class="btn btn-primary" asp-page-handler="Save">Save</button>
         <a asp-page="Index" class="btn btn-secondary">Back</a>
     </div>
 </form>

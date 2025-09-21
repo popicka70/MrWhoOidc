@@ -11,6 +11,8 @@ using System.Net.Http;
 using System.Security.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using MrWhoOidc.Web.DPoP;
+using MrWhoOidc.Web.JAR;
+using System.Security.Cryptography;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +60,9 @@ builder.Services.AddOptions<OpenIdConnectOptions>(OpenIdConnectDefaults.Authenti
     {
         options.Backchannel = factory.CreateClient("OidcBackchannel");
     });
+
+// JAR/PAR service
+builder.Services.AddSingleton<JarParService>();
 
 // AuthN/Z
 builder.Services.AddAuthentication(options =>
@@ -171,6 +176,32 @@ app.MapGet("/logout", async ctx =>
         RedirectUri = ctx.Request.Query["returnUrl"].FirstOrDefault() ?? "/"
     });
 }).ExcludeFromDescription();
+
+// JAR + PAR helper endpoint: builds request_uri and redirects to /authorize
+app.MapPost("/auth/jar", async (HttpContext ctx, JarParService jar) =>
+{
+    var authority = ctx.RequestServices.GetRequiredService<IConfiguration>()["Oidc:Authority"] ?? ctx.RequestServices.GetRequiredService<IConfiguration>()["OIDC:Authority"];
+    if (string.IsNullOrWhiteSpace(authority)) return Results.BadRequest("Missing OIDC authority");
+
+    var clientId = ctx.RequestServices.GetRequiredService<IConfiguration>()["Oidc:ClientId"] ?? ctx.RequestServices.GetRequiredService<IConfiguration>()["OIDC:ClientId"] ?? "blazor-web";
+
+    // inputs from form or defaults
+    var redirectUri = ctx.Request.Form["redirect_uri"].FirstOrDefault() ?? (ctx.Request.Scheme + "://" + ctx.Request.Host + "/signin-oidc");
+    var scope = ctx.Request.Form["scope"].FirstOrDefault() ?? "openid profile email";
+    var resource = ctx.Request.Form["resource"].FirstOrDefault();
+    var state = Guid.NewGuid().ToString("N");
+    var nonce = Guid.NewGuid().ToString("N");
+
+    // PKCE
+    var codeVerifierBytes = RandomNumberGenerator.GetBytes(32);
+    string ToB64Url(byte[] data) => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    var codeVerifier = ToB64Url(codeVerifierBytes);
+    var codeChallenge = ToB64Url(SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(codeVerifier)));
+
+    var requestUri = await jar.CreateParAsync(authority!, clientId!, redirectUri, scope, state, nonce, codeChallenge, "S256", resource);
+    var authorizeUrl = authority!.TrimEnd('/') + "/authorize?request_uri=" + Uri.EscapeDataString(requestUri) + "&state=" + Uri.EscapeDataString(state);
+    return Results.Redirect(authorizeUrl);
+}).DisableAntiforgery().ExcludeFromDescription();
 
 app.MapStaticAssets();
 

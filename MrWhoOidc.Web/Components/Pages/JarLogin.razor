@@ -1,0 +1,24 @@
+@page "/jar-login"
+@inject NavigationManager Nav
+
+<PageTitle>JAR Login</PageTitle>
+
+<h3>Login with JAR</h3>
+
+<p>This posts to the server to create a signed request object via PAR and then redirects to the authorization endpoint.</p>
+
+<form method="post" action="/auth/jar">
+    <div class="mb-3">
+        <label class="form-label">Scope</label>
+        <input class="form-control" name="scope" value="openid profile email" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Resource (optional)</label>
+        <input class="form-control" name="resource" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Redirect URI</label>
+        <input class="form-control" name="redirect_uri" value="@(Nav.BaseUri.TrimEnd('/') + "/signin-oidc")" />
+    </div>
+    <button class="btn btn-primary" type="submit">Sign in with JAR</button>
+</form>
