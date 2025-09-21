@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +17,20 @@ builder.Services.AddOpenApi();
 // Wire up Auth persistence to reuse the same database
 builder.Services.AddAuthPersistence(builder.Configuration);
 
+// AuthN/Z for Admin API
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateAudience = false,
+            ValidateIssuer = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = false // TODO: wire to JWKS
+        };
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -25,17 +41,23 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Helper: Admin-only policy (placeholder)
+static RouteHandlerBuilder RequireAdmin(RouteHandlerBuilder builder) => builder.RequireAuthorization();
+
 // === Admin API: Scopes ===
-app.MapGet("/admin/scopes", async (AuthDbContext db, int? skip, int? take) =>
+RequireAdmin(app.MapGet("/admin/scopes", async (AuthDbContext db, int? skip, int? take) =>
 {
     IQueryable<Scope> q = db.Scopes.AsNoTracking().OrderBy(s => s.Name);
     if (skip is > 0) q = q.Skip(skip.Value);
     if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
     var list = await q.ToListAsync();
     return Results.Ok(list);
-});
+}));
 
-app.MapPost("/admin/scopes", async (AuthDbContext db, Scope input) =>
+RequireAdmin(app.MapPost("/admin/scopes", async (AuthDbContext db, Scope input) =>
 {
     input.Name = input.Name?.Trim() ?? string.Empty;
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
@@ -44,9 +66,9 @@ app.MapPost("/admin/scopes", async (AuthDbContext db, Scope input) =>
     db.Scopes.Add(new Scope { Name = input.Name, Description = input.Description, IsExposed = input.IsExposed });
     await db.SaveChangesAsync();
     return Results.Created($"/admin/scopes/{input.Name}", input);
-});
+}));
 
-app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string name, Scope input) =>
+RequireAdmin(app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string name, Scope input) =>
 {
     var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
     if (entity is null) return Results.NotFound();
@@ -58,9 +80,9 @@ app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string name, Scope i
     entity.IsExposed = input.IsExposed;
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, string name) =>
+RequireAdmin(app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, string name) =>
 {
     var inUse = await db.ClientScopes.AnyAsync(cs => cs.ScopeName == name);
     if (inUse) return Results.Conflict(new { error = "scope_in_use" });
@@ -69,16 +91,16 @@ app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, string name) =>
     db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 // === Admin API: Client scopes ===
-app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId) =>
+RequireAdmin(app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId) =>
 {
     var scopes = await db.ClientScopes.AsNoTracking().Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).OrderBy(n => n).ToListAsync();
     return Results.Ok(scopes);
-});
+}));
 
-app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId, string[] scopes) =>
+RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId, string[] scopes) =>
 {
     var existing = await db.ClientScopes.Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).ToListAsync();
     var toAdd = scopes.Distinct(StringComparer.Ordinal).Except(existing, StringComparer.Ordinal).ToArray();
@@ -89,22 +111,22 @@ app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid cl
     }
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (AuthDbContext db, Guid clientId, string scope) =>
+RequireAdmin(app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (AuthDbContext db, Guid clientId, string scope) =>
 {
     var entity = await db.ClientScopes.FirstOrDefaultAsync(cs => cs.ClientId == clientId && cs.ScopeName == scope);
     if (entity is null) return Results.NotFound();
     db.ClientScopes.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 // === Admin API: Realms ===
-app.MapGet("/admin/realms", async (AuthDbContext db) =>
-    Results.Ok(await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync()));
+RequireAdmin(app.MapGet("/admin/realms", async (AuthDbContext db) =>
+    Results.Ok(await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync())));
 
-app.MapPost("/admin/realms", async (AuthDbContext db, Realm input) =>
+RequireAdmin(app.MapPost("/admin/realms", async (AuthDbContext db, Realm input) =>
 {
     input.Name = input.Name?.Trim() ?? string.Empty;
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
@@ -114,9 +136,9 @@ app.MapPost("/admin/realms", async (AuthDbContext db, Realm input) =>
     db.Realms.Add(realm);
     await db.SaveChangesAsync();
     return Results.Created($"/admin/realms/{realm.Id}", realm);
-});
+}));
 
-app.MapPut("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id, Realm input) =>
+RequireAdmin(app.MapPut("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id, Realm input) =>
 {
     var entity = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
     if (entity is null) return Results.NotFound();
@@ -131,9 +153,9 @@ app.MapPut("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id, Realm in
     entity.DisplayName = input.DisplayName;
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id) =>
 {
     // prevent delete if in use by clients or assignments
     var used = await db.Clients.AnyAsync(c => c.RealmId == id)
@@ -146,16 +168,16 @@ app.MapDelete("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id) =>
     db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 // === Admin API: Roles (per realm) ===
-app.MapGet("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId) =>
+RequireAdmin(app.MapGet("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId) =>
 {
     var items = await db.Roles.AsNoTracking().Where(r => r.RealmId == realmId).OrderBy(r => r.Name).ToListAsync();
     return Results.Ok(items);
-});
+}));
 
-app.MapPost("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId, Role input) =>
+RequireAdmin(app.MapPost("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId, Role input) =>
 {
     input.Name = input.Name?.Trim() ?? string.Empty;
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
@@ -165,9 +187,9 @@ app.MapPost("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid 
     db.Roles.Add(role);
     await db.SaveChangesAsync();
     return Results.Created($"/admin/realms/{realmId}/roles/{role.Id}", role);
-});
+}));
 
-app.MapPut("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id, Role input) =>
+RequireAdmin(app.MapPut("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id, Role input) =>
 {
     var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.RealmId == realmId);
     if (entity is null) return Results.NotFound();
@@ -181,9 +203,9 @@ app.MapPut("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext 
     entity.IsActive = input.IsActive;
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id) =>
 {
     var used = await db.UserRoleAssignments.AnyAsync(a => a.RoleId == id);
     if (used) return Results.Conflict(new { error = "role_in_use" });
@@ -192,18 +214,18 @@ app.MapDelete("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbConte
     db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 // === Admin API: User-client assignments ===
-app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId) =>
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId) =>
 {
     var items = await db.UserClientAssignments.AsNoTracking().Where(a => a.UserId == userId)
         .Select(a => new { a.UserId, a.ClientId, a.RealmId, a.IsActive })
         .ToListAsync();
     return Results.Ok(items);
-});
+}));
 
-app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, UserClientAssignment input) =>
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, UserClientAssignment input) =>
 {
     if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
     if (input.ClientId == Guid.Empty || input.RealmId == Guid.Empty) return Results.BadRequest(new { error = "invalid_ids" });
@@ -214,27 +236,27 @@ app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid 
         await db.SaveChangesAsync();
     }
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid clientId, Guid realmId) =>
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid clientId, Guid realmId) =>
 {
     var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.ClientId == clientId && a.RealmId == realmId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 // === Admin API: User-role assignments (per client+realm) ===
-app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId) =>
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId) =>
 {
     var items = await db.UserRoleAssignments.AsNoTracking().Where(a => a.UserId == userId)
         .Select(a => new { a.UserId, a.RoleId, a.ClientId, a.RealmId, a.IsActive })
         .ToListAsync();
     return Results.Ok(items);
-});
+}));
 
-app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, UserRoleAssignment input) =>
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, UserRoleAssignment input) =>
 {
     if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
     if (input.RoleId == Guid.Empty || input.ClientId == Guid.Empty || input.RealmId == Guid.Empty)
@@ -246,16 +268,16 @@ app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid us
         await db.SaveChangesAsync();
     }
     return Results.NoContent();
-});
+}));
 
-app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid roleId, Guid clientId, Guid realmId) =>
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid roleId, Guid clientId, Guid realmId) =>
 {
     var entity = await db.UserRoleAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.RoleId == roleId && a.ClientId == clientId && a.RealmId == realmId);
     if (entity is null) return Results.NotFound();
     db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+}));
 
 app.MapDefaultEndpoints();
 
