@@ -80,6 +80,7 @@ M8 – Observability, DX & Docs
 - [x] Logging & tracing via `MrWhoOidc.ServiceDefaults`/OpenTelemetry (base wiring).
 - [x] Metrics: custom meters for authorize/token/userinfo/revoke with tags (grant_type/outcome); meter registered for export.
 - [x] Dev UX: `dotnet run -- --seed` command; Postman collection; `.http` sample.
+- [x] Added detailed 401 reason logging to `/token` and `/userinfo` (DPoP/validation failures).
 - [~] Documentation in `/docs` (setup, flows, endpoints, examples) – ADRs done; full docs pending.
 
 Backlog – Introspection (RFC 7662)
@@ -121,11 +122,12 @@ New Backlog – DPoP / Bound Access Tokens (RFC 9449)
   - [x] Discovery: advertise `dpop_signing_alg_values_supported`, `dpop_bound_access_tokens: true`.
 
 - Phase 2 – Nonce and robustness
-  - [~] Support DPoP nonce challenges (`WWW-Authenticate: DPoP ...` and `DPoP-Nonce` header); optional nonce endpoint (challenge implemented; endpoint TBD).
+  - [x] Support DPoP nonce challenges (`WWW-Authenticate: DPoP ...` and `DPoP-Nonce` header); Blazor backchannel retries with nonce.
   - [x] Persist DPoP replay IDs to prevent replays (bounded window via distributed replay cache; handles ±5m skew by `iat` window).
 
 - Phase 3 – Samples & docs
-  - [ ] Sample API validating DPoP; client sample using DPoP.
+  - [x] Sample API validating DPoP (MrWhoOidc.ApiService).
+  - [x] Blazor client using DPoP (attaches proofs to token and userinfo; handles nonce).
   - [ ] Docs: how to configure and use DPoP; privacy and security considerations.
 
 New Backlog – JAR & JARM
