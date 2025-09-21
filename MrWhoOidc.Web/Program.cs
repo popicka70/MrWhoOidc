@@ -33,30 +33,24 @@ builder.Services.AddHttpContextAccessor();
 // DPoP key store for OIDC backchannel
 builder.Services.AddSingleton<DPoPKeyStore>();
 
-// Create a dedicated backchannel HttpClient with DPoP and TLS control
-static HttpClient CreateBackchannel(IServiceProvider sp)
-{
-    var sockets = new SocketsHttpHandler
+// Register a typed DPoP-enabled backchannel HttpClient via DI to avoid BuildServiceProvider
+builder.Services.AddHttpClient("OidcBackchannel")
+    .ConfigurePrimaryHttpMessageHandler(sp =>
     {
-        AllowAutoRedirect = true,
-        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-        SslOptions =
+        var sockets = new SocketsHttpHandler
         {
-            EnabledSslProtocols = SslProtocols.Tls12,
-            RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true // dev only
-        }
-    };
-
-    var dpopHandler = new DPoPBackchannelHandler(sp.GetRequiredService<DPoPKeyStore>(), sockets);
-    var client = new HttpClient(dpopHandler)
-    {
-        DefaultRequestVersion = HttpVersion.Version11,
-        DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
-        Timeout = TimeSpan.FromSeconds(30)
-    };
-    return client;
-}
+            AllowAutoRedirect = true,
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            SslOptions =
+            {
+                EnabledSslProtocols = SslProtocols.Tls12,
+                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true // dev only
+            }
+        };
+        return new DPoPBackchannelHandler(sp.GetRequiredService<DPoPKeyStore>(), sockets);
+    })
+    .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 // AuthN/Z
 builder.Services.AddAuthentication(options =>
@@ -98,9 +92,8 @@ builder.Services.AddAuthentication(options =>
         // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
         options.TokenValidationParameters.NameClaimType = "name";
 
-        // Backchannel with DPoP and TLS settings
-        var sp = builder.Services.BuildServiceProvider();
-        options.Backchannel = CreateBackchannel(sp);
+        // Backchannel with DPoP and TLS settings using DI-registered client
+        options.Backchannel = builder.Services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient("OidcBackchannel");
 
         // If using http:// for dev metadata, configure ConfigurationManager with RequireHttps=false
         if (normalizedAuthority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
