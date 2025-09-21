@@ -24,6 +24,20 @@ public sealed class AuthOptions
     // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints
     // Thumbprints should be provided as hex without spaces and are case-insensitive.
     public Dictionary<string, string[]> IntrospectionMtlsCertificates { get; set; } = new();
+
+    // === JAR/PAR policy ===
+    // Require PAR globally (request_uri must be used; direct 'request' not accepted). Useful for large request objects or privacy.
+    public bool RequirePar { get; set; } = false;
+    // Per-client override to require PAR (in addition to global flag). If empty, only global flag applies.
+    public string[] RequireParClients { get; set; } = Array.Empty<string>();
+    // Maximum size in bytes for a request object (JWT) accepted via /authorize?request= or /par form 'request'. 0 or negative disables the limit.
+    public int RequestObjectMaxBytes { get; set; } = 4096;
+    // Max lifetime (exp - (iat or nbf)) allowed for a request object. 0 disables the limit.
+    public int RequestObjectMaxLifetimeSeconds { get; set; } = 300; // 5 minutes
+    // Clock skew applied when validating request object lifetime (seconds). If <=0, defaults to 120s.
+    public int RequestObjectClockSkewSeconds { get; set; } = 120;
+    // Limit number of outstanding, unconsumed PAR entries per client to avoid storage abuse.
+    public int ParClientPendingLimit { get; set; } = 100;
 }
 
 public sealed class OpaqueAccessTokenOptions

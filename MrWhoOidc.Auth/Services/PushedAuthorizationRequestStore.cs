@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -25,11 +26,21 @@ public sealed class PushedAuthorizationRequestEntry
     public required DateTimeOffset ExpiresAt { get; init; }
 }
 
-internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db) : IPushedAuthorizationRequestStore
+internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptions<AuthOptions> authOptions) : IPushedAuthorizationRequestStore
 {
     public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
     {
         if (!TryToGuid(id, out var gid)) throw new ArgumentException("Invalid id format", nameof(id));
+
+        // Enforce per-client pending limit (not yet consumed and not expired)
+        var now = DateTimeOffset.UtcNow;
+        var limit = Math.Max(1, authOptions.Value.ParClientPendingLimit);
+        var pending = db.PushedAuthorizationRequests.AsNoTracking().Count(e => e.ClientId == clientId && !e.Consumed && e.ExpiresAt > now);
+        if (pending >= limit)
+        {
+            throw new InvalidOperationException("PAR pending limit reached");
+        }
+
         var expiresAt = DateTimeOffset.UtcNow.Add(lifetime);
         var entity = new PushedAuthorizationRequest
         {

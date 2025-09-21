@@ -4,6 +4,9 @@ using System.Diagnostics.Metrics;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Options;
+using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -12,16 +15,36 @@ public interface IAuthorizeHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects) : IAuthorizeHandler
+public sealed class AuthorizeHandler(
+    IAuthorizeService authorize,
+    IAuthorizationCodeService codes,
+    IConsentService consents,
+    OidcMetrics metrics,
+    IAuthorizationCodeMetadataStore meta,
+    IPushedAuthorizationRequestStore parStore,
+    IRequestObjectValidator requestObjects,
+    IOptions<AuthOptions> authOptions,
+    ILogger<AuthorizeHandler> logger
+) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         string outcome = "redirect";
+
+        // Compute initial client bucket from query (may be refined later for JAR/PAR)
+        string rawClientId = http.Request.Query["client_id"].ToString();
+        string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : BucketizeClientId(rawClientId);
+        string mode = "query";
+
+        // Record approximate request size (encoded query string length)
+        var qs = http.Request.QueryString.Value ?? string.Empty;
+        metrics.AuthorizeRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(qs), new TagList { new("client", clientBucket), new("mode", mode) });
+        metrics.AuthorizeRequests.Add(1, new TagList { new("client", clientBucket), new("mode", mode) });
+
         try
         {
-            metrics.AuthorizeRequests.Add(1);
-
             // If request_uri is provided, sanitize the address bar by keeping only request_uri and optional state
             string? requestUriRaw = http.Request.Query["request_uri"];
             if (!string.IsNullOrEmpty(requestUriRaw))
@@ -32,32 +55,66 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (keys.Except(new[] { "request_uri", "state" }, StringComparer.OrdinalIgnoreCase).Any())
                 {
                     var baseUrl = http.Request.Path;
-                    var qs = $"?request_uri={Uri.EscapeDataString(requestUriRaw)}" + (string.IsNullOrEmpty(stateRaw) ? string.Empty : $"&state={Uri.EscapeDataString(stateRaw)}");
-                    return Results.Redirect(baseUrl + qs);
+                    var qs2 = $"?request_uri={Uri.EscapeDataString(requestUriRaw)}" + (string.IsNullOrEmpty(stateRaw) ? string.Empty : $"&state={Uri.EscapeDataString(stateRaw)}");
+                    return Results.Redirect(baseUrl + qs2);
                 }
+            }
+
+            // Optional: max request object size for query param 'request'
+            var roJwtFromQuery = http.Request.Query["request"].ToString();
+            var maxBytes = authOptions.Value.RequestObjectMaxBytes;
+            if (!string.IsNullOrEmpty(roJwtFromQuery))
+            {
+                if (maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
+                {
+                    outcome = "error";
+                    logger.LogWarning("/authorize 400: JAR size too large corr={Corr} client={Client}", corr, clientBucket);
+                    return ErrorResults.InvalidRequest($"request object too large (corr={corr})");
+                }
+                metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery), new TagList { new("client", clientBucket) });
             }
 
             // If request_uri is provided, try to resolve the pushed request and merge it
             string? requestUri = requestUriRaw;
             string? parId = ExtractParId(requestUri);
             bool isPar = !string.IsNullOrEmpty(parId);
+            if (isPar)
+            {
+                mode = "par";
+            }
 
             // JAR: if a signed request object is provided, validate it and use its parameters
-            string? requestJwt = http.Request.Query["request"];
+            string? requestJwt = roJwtFromQuery;
             AuthorizeRequest? jarRequest = null;
             string? jarClientId = null;
             if (!string.IsNullOrEmpty(requestJwt))
             {
+                mode = isPar ? "par" : "jar";
                 var issuer = GetIssuer(http);
                 var aud = issuer.TrimEnd('/') + "/authorize";
                 var validation = await requestObjects.ValidateAsync(requestJwt, aud);
                 if (!validation.IsValid)
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest(validation.ErrorDescription ?? "Invalid request object");
+                    metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
+                    logger.LogWarning("/authorize 400: invalid request object corr={Corr} client={Client} reason={Reason}", corr, clientBucket, validation.Error ?? "invalid_request_object");
+                    return ErrorResults.InvalidRequest($"{validation.ErrorDescription ?? "Invalid request object"} (corr={corr})");
                 }
                 jarRequest = validation.Request;
                 jarClientId = validation.ClientId;
+
+                // Update client bucket from JAR if available
+                if (!string.IsNullOrEmpty(jarClientId)) clientBucket = BucketizeClientId(jarClientId);
+                metrics.JarValid.Add(1, new TagList { new("client", clientBucket) });
+
+                // If RequirePar is enabled globally or for this client, reject direct request objects
+                var requirePar = authOptions.Value.RequirePar || (jarClientId is not null && authOptions.Value.RequireParClients.Contains(jarClientId, StringComparer.Ordinal));
+                if (requirePar && !isPar)
+                {
+                    outcome = "error";
+                    logger.LogWarning("/authorize 400: PAR required corr={Corr} client={Client}", corr, clientBucket);
+                    return ErrorResults.InvalidRequest($"PAR required for this client (corr={corr})");
+                }
             }
 
             AuthorizeRequest effectiveReq;
@@ -67,8 +124,10 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (entry is null)
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("Invalid or expired request_uri");
+                    logger.LogWarning("/authorize 400: invalid or expired request_uri corr={Corr} client={Client}", corr, clientBucket);
+                    return ErrorResults.InvalidRequest($"Invalid or expired request_uri (corr={corr})");
                 }
+                if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = BucketizeClientId(entry.ClientId);
                 effectiveReq = entry.Request;
                 var stateFromQuery = http.Request.Query["state"].ToString();
                 if (!string.IsNullOrEmpty(stateFromQuery)) effectiveReq.state = stateFromQuery;
@@ -93,7 +152,8 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (!string.IsNullOrEmpty(qp.client_id) && !string.Equals(qp.client_id, jarClientId, StringComparison.Ordinal))
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("client_id in query does not match request object");
+                    logger.LogWarning("/authorize 400: client_id mismatch corr={Corr} client={Client}", corr, clientBucket);
+                    return ErrorResults.InvalidRequest($"client_id in query does not match request object (corr={corr})");
                 }
 
                 // For each param, if query has value and it's different from request object, fail immutability
@@ -106,7 +166,8 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                     !IsSameOrEmpty(qp.resource, jarRequest.resource))
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("Query parameter conflicts with immutable request object");
+                    logger.LogWarning("/authorize 400: immutable conflict corr={Corr} client={Client}", corr, clientBucket);
+                    return ErrorResults.InvalidRequest($"Query parameter conflicts with immutable request object (corr={corr})");
                 }
 
                 effectiveReq = jarRequest;
@@ -133,17 +194,18 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             if (!validationResult.IsValid)
             {
                 outcome = "error";
+                logger.LogWarning("/authorize 400: validation failed corr={Corr} client={Client} error={Error}", corr, clientBucket, validationResult.Error);
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
                     var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
                     query["error"] = validationResult.Error;
-                    query["error_description"] = validationResult.ErrorDescription;
+                    query["error_description"] = $"{validationResult.ErrorDescription} (corr={corr})";
                     if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
                     uri.Query = query.ToString();
                     return Results.Redirect(uri.ToString());
                 }
-                return ErrorResults.InvalidRequest(validationResult.ErrorDescription);
+                return ErrorResults.InvalidRequest($"{validationResult.ErrorDescription} (corr={corr})");
             }
 
             if (!http.User.Identity?.IsAuthenticated ?? true)
@@ -172,6 +234,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             if (isPar)
             {
                 parStore.MarkConsumedById(parId!);
+                metrics.ParConsumed.Add(1);
             }
 
             // Capture auth_time from login cookie claims
@@ -201,7 +264,8 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
         finally
         {
             sw.Stop();
-            metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { new("outcome", outcome) });
+            var tags = new TagList { new("client", clientBucket), new("mode", mode), new("outcome", outcome) };
+            metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
         }
     }
 
@@ -238,5 +302,11 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
 
         // Fallback: treat as id directly
         return requestUri;
+    }
+
+    private static string BucketizeClientId(string clientId)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
+        return Convert.ToHexString(bytes.AsSpan(0, 8));
     }
 }

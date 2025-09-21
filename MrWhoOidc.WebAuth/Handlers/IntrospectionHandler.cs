@@ -67,10 +67,19 @@ public sealed class IntrospectionHandler(
             return Results.BadRequest(new { error = "unauthorized_client" });
         }
 
-        // mTLS authentication (optional): if configured for this client, require a matching cert
-        if (authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 } &&
-            authOptions.Value.IntrospectionMtlsCertificates.TryGetValue(clientId, out var allowedThumbprints) &&
-            allowedThumbprints is { Length: > 0 })
+        // mTLS authentication (optional): prefer per-client DB config, fallback to global config
+        string[]? allowedThumbprints = null;
+        if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
+        {
+            try { allowedThumbprints = System.Text.Json.JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson); } catch { }
+        }
+        if ((allowedThumbprints is null || allowedThumbprints.Length == 0) && authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 })
+        {
+            if (authOptions.Value.IntrospectionMtlsCertificates.TryGetValue(clientId, out var tmp))
+                allowedThumbprints = tmp;
+        }
+
+        if (allowedThumbprints is { Length: > 0 })
         {
             var cert = http.Connection.ClientCertificate;
             if (cert is null)
@@ -90,7 +99,6 @@ public sealed class IntrospectionHandler(
                 logger.LogWarning("/introspect mtls: certificate thumbprint mismatch for client {Client}", clientBucket);
                 return Results.BadRequest(new { error = "unauthorized_client" });
             }
-
             // Authenticated via mTLS, skip client secret/private_key_jwt validation
         }
         else

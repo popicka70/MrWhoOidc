@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 [Authorize]
 public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
 {
-    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, bool RequirePkce, bool RequireConsent);
+    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 
     public IReadOnlyList<ClientRow> Clients { get; private set; } = Array.Empty<ClientRow>();
 
@@ -33,7 +33,16 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
 
         Clients = await db.Clients.AsNoTracking()
             .OrderBy(c => c.ClientId)
-            .Select(c => new ClientRow(c.Id, c.ClientId, c.ClientName!, db.Realms.Where(r => r.Id == c.RealmId).Select(r => r.Name).First(), c.RequirePkce, c.RequireConsent))
+            .Select(c => new ClientRow(
+                c.Id,
+                c.ClientId,
+                c.ClientName!,
+                db.Realms.Where(r => r.Id == c.RealmId).Select(r => r.Name).First(),
+                c.RequirePkce,
+                c.RequireConsent,
+                !string.IsNullOrEmpty(c.PublicJwksJson) || !string.IsNullOrEmpty(c.PublicJwksUri),
+                c.RequirePar
+            ))
             .ToListAsync();
     }
 

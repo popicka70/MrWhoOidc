@@ -15,7 +15,7 @@ public interface IDiscoveryHandler
     IResult Handle(HttpContext ctx);
 }
 
-public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandler
+public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions) : IDiscoveryHandler
 {
     public IResult Handle(HttpContext ctx)
     {
@@ -32,7 +32,7 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandle
             introspection_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
             introspection_endpoint_auth_signing_alg_values_supported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512" },
             pushed_authorization_request_endpoint = $"{baseUrl}/par",
-            require_pushed_authorization_requests = false,
+            require_pushed_authorization_requests = authOptions.Value.RequirePar,
             jwks_uri = $"{baseUrl}/jwks",
             end_session_endpoint = $"{baseUrl}/connect/endsession",
             response_types_supported = new[] { "code" },
