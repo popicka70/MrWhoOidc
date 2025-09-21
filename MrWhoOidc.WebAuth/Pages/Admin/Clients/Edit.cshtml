@@ -7,147 +7,188 @@
 <h1>Edit client</h1>
 
 <form method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-    <div class="row g-3">
-        <div class="col-md-6">
-            <label asp-for="Input.ClientId" class="form-label"></label>
-            <input asp-for="Input.ClientId" class="form-control" />
-            <span asp-validation-for="Input.ClientId" class="text-danger"></span>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="Input.ClientName" class="form-label"></label>
-            <input asp-for="Input.ClientName" class="form-control" />
-            <span asp-validation-for="Input.ClientName" class="text-danger"></span>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="Input.RealmId" class="form-label"></label>
-            <select asp-for="Input.RealmId" asp-items="Model.RealmOptions" class="form-select"></select>
-            <span asp-validation-for="Input.RealmId" class="text-danger"></span>
-        </div>
-        <div class="col-md-3 form-check mt-4">
-            <input asp-for="Input.RequirePkce" class="form-check-input" />
-            <label asp-for="Input.RequirePkce" class="form-check-label"></label>
-        </div>
-        <div class="col-md-3 form-check mt-4">
-            <input asp-for="Input.RequireConsent" class="form-check-input" />
-            <label asp-for="Input.RequireConsent" class="form-check-label"></label>
-        </div>
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-        <div class="col-md-3 form-check mt-2">
-            <input asp-for="Input.RequirePar" class="form-check-input" />
-            <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
-        </div>
+    <ul class="nav nav-tabs" id="clientTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab" aria-controls="tab-general" aria-selected="true">
+                <i class="bi bi-gear me-1"></i> General
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="keys-tab" data-bs-toggle="tab" data-bs-target="#tab-keys" type="button" role="tab" aria-controls="tab-keys" aria-selected="false">
+                <i class="bi bi-key me-1"></i> Keys
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="introspection-tab" data-bs-toggle="tab" data-bs-target="#tab-introspection" type="button" role="tab" aria-controls="tab-introspection" aria-selected="false">
+                <i class="bi bi-search me-1"></i> Introspection
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tab-tools" type="button" role="tab" aria-controls="tab-tools" aria-selected="false">
+                <i class="bi bi-tools me-1"></i> Tools
+            </button>
+        </li>
+    </ul>
 
-        <div class="col-12">
-            <label asp-for="Input.ClientSecret" class="form-label"></label>
-            <div class="input-group">
-                <input asp-for="Input.ClientSecret" class="form-control" />
-                <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
+    <div class="tab-content border-start border-end border-bottom p-3" id="clientTabContent">
+        <div class="tab-pane fade show active" id="tab-general" role="tabpanel" aria-labelledby="general-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Input.ClientId" class="form-label"></label>
+                    <input asp-for="Input.ClientId" class="form-control" />
+                    <span asp-validation-for="Input.ClientId" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.ClientName" class="form-label"></label>
+                    <input asp-for="Input.ClientName" class="form-control" />
+                    <span asp-validation-for="Input.ClientName" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.RealmId" class="form-label"></label>
+                    <select asp-for="Input.RealmId" asp-items="Model.RealmOptions" class="form-select"></select>
+                    <span asp-validation-for="Input.RealmId" class="text-danger"></span>
+                </div>
+                <div class="col-md-3 form-check mt-4">
+                    <input asp-for="Input.RequirePkce" class="form-check-input" />
+                    <label asp-for="Input.RequirePkce" class="form-check-label"></label>
+                </div>
+                <div class="col-md-3 form-check mt-4">
+                    <input asp-for="Input.RequireConsent" class="form-check-input" />
+                    <label asp-for="Input.RequireConsent" class="form-check-label"></label>
+                </div>
+                <div class="col-md-3 form-check mt-2">
+                    <input asp-for="Input.RequirePar" class="form-check-input" />
+                    <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.ClientSecret" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="Input.ClientSecret" class="form-control" />
+                        <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
+                    </div>
+                    <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
+                    <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
+                </div>
             </div>
-            <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
-            <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
         </div>
 
-        <div class="col-12">
-            <label class="form-label">Introspection custom response fields (comma-separated)</label>
-            <input asp-for="Input.IntrospectionResponseFields" class="form-control" placeholder="active, token_type, scope, sub, aud, iss, exp" />
-            <small class="form-text text-muted">Overrides server default allow-list for this client; leave blank to use defaults.</small>
-        </div>
-
-        <div class="col-12">
-            <label class="form-label">Introspection mTLS certificate thumbprints (SHA-256, comma-separated)</label>
-            <input asp-for="Input.IntrospectionMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
-            <small class="form-text text-muted">When set, /introspect will require a matching client certificate. Values are case-insensitive.</small>
-        </div>
-
-        <div class="col-12">
-            <label asp-for="Input.PublicJwksUri" class="form-label"></label>
-            <div class="input-group">
-                <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
-                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks" formnovalidate>Fetch</button>
-                <select asp-for="GenerateAlg" class="form-select" style="max-width: 180px;">
-                    <option value="RS256">RS256</option>
-                    <option value="ES256">ES256</option>
-                    <option value="ES384">ES384</option>
-                    <option value="ES512">ES512</option>
-                </select>
-                <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks" formnovalidate>Generate JWKS</button>
-                <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey" formnovalidate>Add Key</button>
-            </div>
-            <small class="form-text text-muted">Fetch from URI or manage JWKS below. Use Add Key to append another key.</small>
-            <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
-        </div>
-        <div class="col-12">
-            <label asp-for="Input.PublicJwksJson" class="form-label"></label>
-            <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="8" placeholder='{"keys":[{...}]}'></textarea>
-            <small class="form-text text-muted">Public JWKS used for private_key_jwt and JAR.</small>
-            <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
-        </div>
-        <div class="col-12">
-            <label asp-for="Input.PrivateJwk" class="form-label"></label>
-            <textarea asp-for="Input.PrivateJwk" class="form-control" rows="6" placeholder='Paste private JWK or JWKS; only public parts will be extracted'></textarea>
-            <div class="mt-2">
-                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="ExtractPublicJwk" formnovalidate>Extract public JWKS</button>
-                <small class="form-text text-muted ms-2">The private key is not saved; we only derive public fields and populate the JWKS field above.</small>
-            </div>
-            <span asp-validation-for="Input.PrivateJwk" class="text-danger"></span>
-        </div>
-        @if (Model.KeyPreviews?.Count > 0)
-        {
-            <div class="col-12">
-                <div class="card mb-2">
-                    <div class="card-header">JWKS preview</div>
-                    <div class="card-body">
-                        <ul class="list-unstyled">
-                            @foreach (var k in Model.KeyPreviews)
-                            {
-                                <li>
-                                    <code>@k.Kid</code> — @k.Kty @k.Alg @(" ") @k.Details
-                                </li>
-                            }
-                        </ul>
-                        <div class="input-group mt-2">
-                            <input asp-for="RemoveKid" class="form-control" placeholder="kid to remove" />
-                            <button type="submit" class="btn btn-outline-danger" asp-page-handler="RemoveKey" formnovalidate>Remove Key</button>
+        <div class="tab-pane fade" id="tab-keys" role="tabpanel" aria-labelledby="keys-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Input.PublicJwksUri" class="form-label"></label>
+                    <div class="input-group">
+                        <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
+                        <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks" formnovalidate>Fetch</button>
+                        <select asp-for="GenerateAlg" class="form-select" style="max-width: 180px;">
+                            <option value="RS256">RS256</option>
+                            <option value="ES256">ES256</option>
+                            <option value="ES384">ES384</option>
+                            <option value="ES512">ES512</option>
+                        </select>
+                        <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks" formnovalidate>Generate JWKS</button>
+                        <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey" formnovalidate>Add Key</button>
+                    </div>
+                    <small class="form-text text-muted">Fetch from URI or manage JWKS below. Use Add Key to append another key.</small>
+                    <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.PublicJwksJson" class="form-label"></label>
+                    <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="8" placeholder='{"keys":[{...}]}'></textarea>
+                    <small class="form-text text-muted">Public JWKS used for private_key_jwt and JAR.</small>
+                    <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.PrivateJwk" class="form-label"></label>
+                    <textarea asp-for="Input.PrivateJwk" class="form-control" rows="6" placeholder='Paste private JWK or JWKS; only public parts will be extracted'></textarea>
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-outline-secondary" asp-page-handler="ExtractPublicJwk" formnovalidate>Extract public JWKS</button>
+                        <small class="form-text text-muted ms-2">The private key is not saved; we only derive public fields and populate the JWKS field above.</small>
+                    </div>
+                    <span asp-validation-for="Input.PrivateJwk" class="text-danger"></span>
+                </div>
+                @if (Model.KeyPreviews?.Count > 0)
+                {
+                    <div class="col-12">
+                        <div class="card mb-2">
+                            <div class="card-header">JWKS preview</div>
+                            <div class="card-body">
+                                <ul class="list-unstyled">
+                                    @foreach (var k in Model.KeyPreviews)
+                                    {
+                                        <li>
+                                            <code>@k.Kid</code> – @k.Kty @k.Alg @(" ") @k.Details
+                                        </li>
+                                    }
+                                </ul>
+                                <div class="input-group mt-2">
+                                    <input asp-for="RemoveKid" class="form-control" placeholder="kid to remove" />
+                                    <button type="submit" class="btn btn-outline-danger" asp-page-handler="RemoveKey" formnovalidate>Remove Key</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        }
-        @if (!string.IsNullOrEmpty(Model.GeneratedPrivateJwk))
-        {
-            <div class="col-12">
-                <div class="alert alert-warning">
-                    <strong>Private JWK generated.</strong> Copy and store it securely. It will not be persisted on the server.
-                </div>
-                <textarea class="form-control" rows="6" readonly>@Model.GeneratedPrivateJwk</textarea>
-            </div>
-        }
-        <div class="col-12">
-            <label asp-for="Input.IntrospectionAudiences" class="form-label"></label>
-            <input asp-for="Input.IntrospectionAudiences" class="form-control" placeholder="api1, https://api.example.com" />
-            <small class="form-text text-muted">Comma-separated audience allow-list for this client's introspection calls. Leave empty to use global config.</small>
-            <span asp-validation-for="Input.IntrospectionAudiences" class="text-danger"></span>
-        </div>
-        <div class="col-12">
-            <label asp-for="Input.TestJwt" class="form-label"></label>
-            <textarea asp-for="Input.TestJwt" class="form-control" rows="4" placeholder="Paste a signed JWT to validate its signature against the JWKS"></textarea>
-            <div class="mt-2 d-flex gap-2">
-                <button type="submit" class="btn btn-outline-primary" asp-page-handler="ValidateJwt" formnovalidate>Validate JWT Signature</button>
-                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="SignTestJwt" formnovalidate>Sign Test JWT from private JWK</button>
-            </div>
-            @if (Model.JwtTest is not null)
-            {
-                <div class="alert @(Model.JwtTest.Ok ? "alert-success" : "alert-danger") mt-2">
-                    <strong>@Model.JwtTest.Message</strong>
-                    <div class="small text-muted">
-                        alg: @Model.JwtTest.HeaderAlg; kid: @Model.JwtTest.HeaderKid; iss: @Model.JwtTest.Iss; sub: @Model.JwtTest.Sub
+                }
+                @if (!string.IsNullOrEmpty(Model.GeneratedPrivateJwk))
+                {
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <strong>Private JWK generated.</strong> Copy and store it securely. It will not be persisted on the server.
+                        </div>
+                        <textarea class="form-control" rows="6" readonly>@Model.GeneratedPrivateJwk</textarea>
                     </div>
+                }
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-introspection" role="tabpanel" aria-labelledby="introspection-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Input.IntrospectionAudiences" class="form-label"></label>
+                    <input asp-for="Input.IntrospectionAudiences" class="form-control" placeholder="api1, https://api.example.com" />
+                    <small class="form-text text-muted">Comma-separated audience allow-list for this client's introspection calls. Leave empty to use global config.</small>
+                    <span asp-validation-for="Input.IntrospectionAudiences" class="text-danger"></span>
                 </div>
-            }
+                <div class="col-12">
+                    <label asp-for="Input.IntrospectionResponseFields" class="form-label"></label>
+                    <input asp-for="Input.IntrospectionResponseFields" class="form-control" placeholder="active, token_type, scope, sub, aud, iss, exp" />
+                    <small class="form-text text-muted">Overrides server default allow-list for this client; leave blank to use defaults.</small>
+                    <span asp-validation-for="Input.IntrospectionResponseFields" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.IntrospectionMtlsThumbprints" class="form-label"></label>
+                    <input asp-for="Input.IntrospectionMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
+                    <small class="form-text text-muted">When set, /introspect will require a matching client certificate. Values are case-insensitive.</small>
+                    <span asp-validation-for="Input.IntrospectionMtlsThumbprints" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-tools" role="tabpanel" aria-labelledby="tools-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Input.TestJwt" class="form-label"></label>
+                    <textarea asp-for="Input.TestJwt" class="form-control" rows="4" placeholder="Paste a signed JWT to validate its signature against the JWKS"></textarea>
+                    <div class="mt-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-outline-primary" asp-page-handler="ValidateJwt" formnovalidate>Validate JWT Signature</button>
+                        <button type="submit" class="btn btn-outline-secondary" asp-page-handler="SignTestJwt" formnovalidate>Sign Test JWT from private JWK</button>
+                    </div>
+                    @if (Model.JwtTest is not null)
+                    {
+                        <div class="alert @(Model.JwtTest.Ok ? "alert-success" : "alert-danger") mt-2">
+                            <strong>@Model.JwtTest.Message</strong>
+                            <div class="small text-muted">
+                                alg: @Model.JwtTest.HeaderAlg; kid: @Model.JwtTest.HeaderKid; iss: @Model.JwtTest.Iss; sub: @Model.JwtTest.Sub
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
         </div>
     </div>
-    <div class="mt-3">
+
+    <div class="mt-3 d-flex gap-2">
         <button type="submit" class="btn btn-primary" asp-page-handler="Save">Save</button>
         <a asp-page="Index" class="btn btn-secondary">Back</a>
     </div>
