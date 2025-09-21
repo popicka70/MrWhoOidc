@@ -32,6 +32,12 @@ public sealed class AuthOptions
     public string[] RequireParClients { get; set; } = Array.Empty<string>();
     // Maximum size in bytes for a request object (JWT) accepted via /authorize?request= or /par form 'request'. 0 or negative disables the limit.
     public int RequestObjectMaxBytes { get; set; } = 4096;
+    // Max lifetime (exp - (iat or nbf)) allowed for a request object. 0 disables the limit.
+    public int RequestObjectMaxLifetimeSeconds { get; set; } = 300; // 5 minutes
+    // Clock skew applied when validating request object lifetime (seconds). If <=0, defaults to 120s.
+    public int RequestObjectClockSkewSeconds { get; set; } = 120;
+    // Limit number of outstanding, unconsumed PAR entries per client to avoid storage abuse.
+    public int ParClientPendingLimit { get; set; } = 100;
 }
 
 public sealed class OpaqueAccessTokenOptions

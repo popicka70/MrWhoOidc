@@ -6,6 +6,7 @@ using System.Text;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Observability;
+using System.Diagnostics;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -18,11 +19,12 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         metrics.ParRequests.Add(1);
         if (!http.Request.HasFormContentType)
         {
             metrics.ParFailures.Add(1);
-            return ErrorResults.InvalidRequest("Form content expected");
+            return Results.Json(new { error = "invalid_request", error_description = "Form content expected", correlation_id = corr }, statusCode: 400);
         }
 
         var form = await http.Request.ReadFormAsync();
@@ -37,7 +39,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         // Client authentication: private_key_jwt, basic, or post
         var (clientId, clientSecret) = ReadClientCredentials(http);
         if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
-        if (string.IsNullOrWhiteSpace(clientId)) { metrics.ParFailures.Add(1); return ErrorResults.InvalidRequest("Missing client_id"); }
+        if (string.IsNullOrWhiteSpace(clientId)) { metrics.ParFailures.Add(1); return Results.Json(new { error = "invalid_request", error_description = "Missing client_id", correlation_id = corr }, statusCode: 400); }
 
         var clientAssertionType = form["client_assertion_type"].ToString();
         var clientAssertion = form["client_assertion"].ToString();
@@ -54,17 +56,17 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
         }
 
-        if (!authenticated) { metrics.ParFailures.Add(1); return ErrorResults.UnauthorizedClient(); }
+        if (!authenticated) { metrics.ParFailures.Add(1); return Results.Json(new { error = "unauthorized_client", correlation_id = corr }, statusCode: 400); }
 
         // Optional: object size limit
         var maxBytes = authOptions.Value.RequestObjectMaxBytes;
         if (maxBytes > 0 && !string.IsNullOrEmpty(roJwtRaw) && Encoding.UTF8.GetByteCount(roJwtRaw) > maxBytes)
         {
             metrics.ParFailures.Add(1);
-            return Results.Json(new { error = "invalid_request_object", error_description = "request object too large" }, statusCode: 400);
+            return Results.Json(new { error = "invalid_request_object", error_description = "request object too large", correlation_id = corr }, statusCode: 400);
         }
 
-        // If a request object is provided, validate and extract fields; otherwise, build from form parameters
+        // Build/validate request
         AuthorizeRequest req;
         if (!string.IsNullOrEmpty(roJwtRaw))
         {
@@ -74,31 +76,26 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             if (!validation.IsValid)
             {
                 metrics.ParFailures.Add(1);
-                return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription }, statusCode: 400);
+                return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription, correlation_id = corr }, statusCode: 400);
             }
-
-            // client_id in JWT must match the authenticated client_id
             if (!string.Equals(validation.ClientId, clientId, StringComparison.Ordinal))
             {
                 metrics.ParFailures.Add(1);
-                return Results.Json(new { error = "invalid_request", error_description = "client_id mismatch between auth and request object" }, statusCode: 400);
+                return Results.Json(new { error = "invalid_request", error_description = "client_id mismatch between auth and request object", correlation_id = corr }, statusCode: 400);
             }
-
             req = validation.Request!;
-            // Allow state from form to override state in request object
             var stateOverride = form["state"].ToString();
             if (!string.IsNullOrEmpty(stateOverride)) req.state = stateOverride;
         }
         else
         {
-            // Build an authorization request from form parameters
             req = new AuthorizeRequest
             {
                 response_type = form["response_type"],
                 client_id = clientId,
                 redirect_uri = form["redirect_uri"],
                 scope = form["scope"],
-                state = form["state"], // not used by PAR but harmless
+                state = form["state"],
                 nonce = form["nonce"],
                 code_challenge = form["code_challenge"],
                 code_challenge_method = form["code_challenge_method"],
@@ -110,7 +107,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (!result.IsValid)
         {
             metrics.ParFailures.Add(1);
-            return Results.Json(new { error = result.Error, error_description = result.ErrorDescription }, statusCode: 400);
+            return Results.Json(new { error = result.Error, error_description = result.ErrorDescription, correlation_id = corr }, statusCode: 400);
         }
 
         // Generate opaque id (128-bit base64url without padding)
@@ -126,10 +123,20 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         var issuer2 = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
         var requestUri = issuer2.TrimEnd('/') + "/par/" + id;
 
-        var expiresAt = parStore.Create(id, req, clientId!, TimeSpan.FromMinutes(5), requestUri);
-        var expiresIn = (int)Math.Max(0, (expiresAt - DateTimeOffset.UtcNow).TotalSeconds);
-        metrics.ParSuccess.Add(1);
-        return Results.Json(new { request_uri = requestUri, expires_in = expiresIn });
+        try
+        {
+            var expiresAt = parStore.Create(id, req, clientId!, TimeSpan.FromMinutes(5), requestUri);
+            var expiresIn = (int)Math.Max(0, (expiresAt - DateTimeOffset.UtcNow).TotalSeconds);
+            metrics.ParSuccess.Add(1);
+            var tags = new[] { new KeyValuePair<string, object?>("client", BucketizeClientId(clientId!)) };
+            return Results.Json(new { request_uri = requestUri, expires_in = expiresIn, correlation_id = corr });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("pending limit", StringComparison.OrdinalIgnoreCase))
+        {
+            metrics.ParFailures.Add(1);
+            logger.LogWarning(ex, "/par 429: pending limit for client {Client}", BucketizeClientId(clientId!));
+            return Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many pending requests", correlation_id = corr }, statusCode: 429);
+        }
     }
 
     static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
@@ -152,5 +159,11 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         {
             return (null, null);
         }
+    }
+
+    static string BucketizeClientId(string clientId)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(clientId));
+        return Convert.ToHexString(bytes.AsSpan(0, 8));
     }
 }
