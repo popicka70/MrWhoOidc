@@ -18,7 +18,7 @@ public sealed class ClientAssertionValidator(AuthDbContext db, IConfiguration co
     public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
     {
         // Ensure client exists
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client == null) return false;
 
         // Load public JWK/JWKS for this client from configuration. Example configuration:

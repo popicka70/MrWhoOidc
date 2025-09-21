@@ -5,7 +5,7 @@ public interface IAuthorizationCodeMetadataStore
     void SetAuthTime(string code, DateTimeOffset authTime);
     bool TryGetAuthTime(string code, out DateTimeOffset authTime);
     void SetResource(string code, string resource);
-    bool TryGetResource(string code, out string resource);
+    bool TryGetResource(string code, out string? resource);
     void Remove(string code);
 }
 
@@ -18,7 +18,7 @@ internal sealed class InMemoryAuthorizationCodeMetadataStore : IAuthorizationCod
     public bool TryGetAuthTime(string code, out DateTimeOffset authTime) => _authTimes.TryGetValue(code, out authTime);
 
     public void SetResource(string code, string resource) => _resources[code] = resource;
-    public bool TryGetResource(string code, out string resource) => _resources.TryGetValue(code, out resource);
+    public bool TryGetResource(string code, out string? resource) => _resources.TryGetValue(code, out resource);
 
     public void Remove(string code)
     {

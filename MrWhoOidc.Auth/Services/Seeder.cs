@@ -71,7 +71,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // backfill RealmId for any existing client rows missing it
-        var clientsWithoutRealm = await db.Clients.Where(c => c.RealmId == null).ToListAsync(ct).ConfigureAwait(false);
+        var clientsWithoutRealm = await db.Clients.Where(c => c.RealmId == Guid.Empty).ToListAsync(ct).ConfigureAwait(false);
         foreach (var c in clientsWithoutRealm)
         {
             c.RealmId = adminRealm.Id;

@@ -10,7 +10,7 @@ public interface IAuthorizationCodeService
     Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore meta) : IAuthorizationCodeService
+internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta) : IAuthorizationCodeService
 {
     public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
     {
@@ -36,6 +36,13 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
 
         db.AuthorizationCodes.Add(entity);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // Store transient metadata for this code
+        if (valid.Resource is not null)
+        {
+            _meta.SetResource(code, valid.Resource);
+        }
+        _meta.SetAuthTime(code, DateTimeOffset.UtcNow);
 
         var uri = new UriBuilder(valid.RedirectUri!);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
