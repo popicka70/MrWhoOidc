@@ -154,7 +154,10 @@ internal sealed class DPoPValidator : IDPoPValidator
             var crv = crvEl.GetString();
             var x = Base64UrlEncoder.DecodeBytes(xEl.GetString());
             var y = Base64UrlEncoder.DecodeBytes(yEl.GetString());
-            var ecParams = new ECParameters { Q = new ECPoint { X = x, Y = y }, Curve = crv switch
+            var ecParams = new ECParameters
+            {
+                Q = new ECPoint { X = x, Y = y },
+                Curve = crv switch
                 {
                     "P-256" => ECCurve.NamedCurves.nistP256,
                     "P-384" => ECCurve.NamedCurves.nistP384,

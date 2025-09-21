@@ -64,13 +64,23 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         string[] roleNames = Array.Empty<string>();
         if (client is not null)
         {
-            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             if (scopes.Contains("roles"))
             {
-                var roleIds = db.UserRoleAssignments.AsNoTracking()
-                    .Where(a => a.UserId == entity.UserId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
-                    .Select(a => a.RoleId);
-                roleNames = await db.Roles.AsNoTracking().Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToArrayAsync(ct);
+                // Roles limited to this client and its realm
+                var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == entity.UserId && a.RealmId == client.RealmId && a.IsActive)
+                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                    .Where(x => x.r.IsActive)
+                    .Select(x => x.r.Name);
+
+                var clientRoleNamesQuery = db.UserClientRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == entity.UserId && a.ClientId == client.Id && a.IsActive)
+                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                    .Where(x => x.r.IsActive)
+                    .Select(x => x.r.Name);
+
+                roleNames = await realmRoleNamesQuery.Union(clientRoleNamesQuery).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
             }
         }
 
@@ -193,13 +203,22 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         string[] roleNames = Array.Empty<string>();
         if (client is not null)
         {
-            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             if (scopes.Contains("roles"))
             {
-                var roleIds = db.UserRoleAssignments.AsNoTracking()
-                    .Where(a => a.UserId == tokenEntity.UserId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
-                    .Select(a => a.RoleId);
-                roleNames = await db.Roles.AsNoTracking().Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToArrayAsync(ct);
+                var realmRoleNamesQuery = db.UserRealmRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == tokenEntity.UserId && a.RealmId == client.RealmId && a.IsActive)
+                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                    .Where(x => x.r.IsActive)
+                    .Select(x => x.r.Name);
+
+                var clientRoleNamesQuery = db.UserClientRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == tokenEntity.UserId && a.ClientId == client.Id && a.IsActive)
+                    .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                    .Where(x => x.r.IsActive)
+                    .Select(x => x.r.Name);
+
+                roleNames = await realmRoleNamesQuery.Union(clientRoleNamesQuery).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
             }
         }
 

@@ -272,7 +272,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
                 Use = jwk.Use,
                 N = jwk.N,
                 E = jwk.E,
-                D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+                D = null,
+                P = null,
+                Q = null,
+                DP = null,
+                DQ = null,
+                QI = null
             };
             var jwks = new { keys = new[] { publicJwk } };
             Input.PublicJwksJson = JsonSerializer.Serialize(jwks, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
@@ -349,7 +354,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
                 Use = jwk.Use,
                 N = jwk.N,
                 E = jwk.E,
-                D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+                D = null,
+                P = null,
+                Q = null,
+                DP = null,
+                DQ = null,
+                QI = null
             }.ToJson(includePrivate: false);
         }
 

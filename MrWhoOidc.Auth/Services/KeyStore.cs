@@ -57,7 +57,12 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
                 Use = k.Use,
                 N = k.N,
                 E = k.E,
-                D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+                D = null,
+                P = null,
+                Q = null,
+                DP = null,
+                DQ = null,
+                QI = null
             })
             .ToList();
     }

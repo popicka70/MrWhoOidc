@@ -101,6 +101,7 @@ builder.Services.AddAuthentication(options =>
         options.Scope.Add("openid");
         options.Scope.Add("profile");
         options.Scope.Add("email");
+        options.Scope.Add("roles");
 
         // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
         options.TokenValidationParameters.NameClaimType = "name";

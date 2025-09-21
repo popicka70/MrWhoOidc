@@ -123,7 +123,7 @@ public sealed class JarParService(IConfiguration config, IHttpClientFactory http
                 if (!string.IsNullOrEmpty(err) || !string.IsNullOrEmpty(ed))
                     detail = $"{err}: {ed}";
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 logger.LogDebug(ex, "PAR: error parsing error response JSON");
             }

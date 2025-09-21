@@ -30,14 +30,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles"];
         foreach (var s in defaultScopes)
         {
-            if (!await db.Scopes.AnyAsync(x => x.Name == s, ct))
+            if (!await db.Scopes.AnyAsync(x => x.Name == s, ct).ConfigureAwait(false))
             {
                 db.Scopes.Add(new Scope { Name = s, Description = $"Standard scope {s}", IsExposed = true });
             }
         }
 
         // Seed an admin role in admin realm
-        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct))
+        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct).ConfigureAwait(false))
         {
             db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true });
         }
@@ -97,7 +97,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Assign default standard scopes to blazor-web client if none exist
-        var existingClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == blazorWebClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct);
+        var existingClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == blazorWebClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
         if (existingClientScopes.Count == 0)
         {
             foreach (var s in defaultScopes)
@@ -108,18 +108,18 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // Optionally assign alice to blazor-web client in admin realm
-        var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice", ct);
+        var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice", ct).ConfigureAwait(false);
         if (alice is not null)
         {
-            var hasAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct);
+            var hasAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAssignment)
             {
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = alice.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
             // Assign admin role to alice for blazor-web in admin realm
-            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct);
-            var hasRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == alice.Id && a.RoleId == adminRole.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct);
+            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct).ConfigureAwait(false);
+            var hasRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == alice.Id && a.RoleId == adminRole.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasRole)
             {
                 db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = alice.Id, RoleId = adminRole.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
