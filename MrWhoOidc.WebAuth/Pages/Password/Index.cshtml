@@ -1,0 +1,41 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Password.IndexModel
+@{
+    ViewData["Title"] = "Change password";
+    Layout = "_AuthLayout";
+}
+
+<h2 class="mb-4 text-center">Change password</h2>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="alert alert-success">@Model.SuccessMessage</div>
+}
+
+<form method="post" class="row g-3" asp-antiforgery="true">
+    @if (Model.RequireCurrent)
+    {
+        <div class="col-12">
+            <label asp-for="Input.CurrentPassword" class="form-label">Current password</label>
+            <input asp-for="Input.CurrentPassword" class="form-control" type="password" autocomplete="current-password" />
+            <span asp-validation-for="Input.CurrentPassword" class="text-danger"></span>
+        </div>
+    }
+    <div class="col-12">
+        <label asp-for="Input.NewPassword" class="form-label">New password</label>
+        <input asp-for="Input.NewPassword" class="form-control" type="password" autocomplete="new-password" />
+        <span asp-validation-for="Input.NewPassword" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="Input.ConfirmPassword" class="form-label">Confirm new password</label>
+        <input asp-for="Input.ConfirmPassword" class="form-control" type="password" autocomplete="new-password" />
+        <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <button class="btn btn-primary w-100" type="submit">Save password</button>
+    </div>
+</form>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

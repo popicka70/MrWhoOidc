@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
 
 [AllowAnonymous]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
 {
     public List<SelectListItem> ClientOptions { get; private set; } = new();
 
@@ -50,12 +51,19 @@ public class IndexModel(AuthDbContext db) : PageModel
             return Page();
         }
 
+        string? passwordHash = null;
+        if (!string.IsNullOrWhiteSpace(Input.Password))
+        {
+            passwordHash = hasher.Hash(Input.Password);
+        }
+
         var entity = new Registration
         {
             Email = email,
             FirstName = string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
             LastName = string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
             ClientId = Input.ClientId,
+            PasswordHash = passwordHash,
             State = "pending",
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -84,5 +92,8 @@ public class IndexModel(AuthDbContext db) : PageModel
         [StringLength(100)]
         public string? LastName { get; set; }
         public Guid? ClientId { get; set; }
+        [StringLength(200)]
+        [DataType(DataType.Password)]
+        public string? Password { get; set; }
     }
 }

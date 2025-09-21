@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Registrations;
 
 [Authorize(Policy = "admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
 {
     public IReadOnlyList<ItemVm> Items { get; private set; } = Array.Empty<ItemVm>();
 
@@ -62,7 +63,9 @@ public class IndexModel(AuthDbContext db) : PageModel
             Username = email,
             Email = email,
             EmailVerified = false,
-            Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
+            Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
+            HashAlgorithm = "argon2id",
+            PasswordHash = string.IsNullOrEmpty(reg.PasswordHash) ? string.Empty : reg.PasswordHash
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

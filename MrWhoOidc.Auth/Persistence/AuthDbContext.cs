@@ -202,6 +202,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Email).IsRequired().HasMaxLength(256);
             b.Property(x => x.FirstName).HasMaxLength(100);
             b.Property(x => x.LastName).HasMaxLength(100);
+            b.Property(x => x.PasswordHash).HasMaxLength(500);
             b.Property(x => x.State).IsRequired().HasMaxLength(20);
             b.Property(x => x.CreatedAt).IsRequired();
             b.HasIndex(x => x.Email);
@@ -503,6 +504,8 @@ public class Registration
     [MaxLength(100)]
     public string? LastName { get; set; }
     public Guid? ClientId { get; set; }
+    [MaxLength(500)]
+    public string? PasswordHash { get; set; }
     // pending | approved | rejected
     [MaxLength(20)]
     public string State { get; set; } = "pending";

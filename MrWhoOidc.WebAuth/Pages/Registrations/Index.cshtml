@@ -42,6 +42,11 @@
         </select>
         <span asp-validation-for="Input.ClientId" class="text-danger"></span>
     </div>
+    <div class="col-md-6">
+        <label asp-for="Input.Password" class="form-label">Password (optional)</label>
+        <input asp-for="Input.Password" class="form-control" type="password" autocomplete="new-password" />
+        <span asp-validation-for="Input.Password" class="text-danger"></span>
+    </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary">Submit registration</button>
     </div>

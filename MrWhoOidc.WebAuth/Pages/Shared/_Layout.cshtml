@@ -19,6 +19,7 @@
                     <a class="nav-link" asp-page="/Registrations/Index">Register</a>
                     @if (User?.Identity?.IsAuthenticated ?? false)
                     {
+                        <a class="nav-link" asp-page="/Password/Index">Change password</a>
                         <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
                         <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
                     }
