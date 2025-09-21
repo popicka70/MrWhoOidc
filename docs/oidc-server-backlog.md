@@ -6,7 +6,7 @@ Status summary (MVP scope)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation; configurable API audiences)
 - [x] M5 UserInfo + Logout (sub-based userinfo, local + RP-initiated logout)
-- [~] M6 Introspection & Revocation (revocation done; basic introspection implemented incl. JWT/opaque; policy & hardening pending)
+- [~] M6 Introspection & Revocation (revocation done; introspection enforces client policy + audience match, supports JWT/opaque, DPoP nonce + replay checks, optional mTLS; privacy-based response shaping still pending)
 - [x] M7 Key rotation & hardening (automated key rotation + JWKS overlap, rate limiting, antiforgery, login backoff, WWW-Authenticate, CORS allow-list, HTTPS/HSTS/forwarded headers)
 - [~] M8 Observability, DX & Docs (OpenTelemetry wired; custom meters + tags; ADRs + samples; docs pending)
 
@@ -94,18 +94,17 @@ Backlog – Introspection (RFC 7662)
   - [x] Audit log minimal fields (client_id, outcome, ip, aud).
 
 - Phase 2 – Policy & authorization
-  - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions`.
+  - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions` and per-client DB allow-list.
   - [x] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
-  - [x] Add `introspection permissions` config (client_id -> allowed audiences/resources).
   - [ ] Return limited fields based on caller policy (privacy by default).
-  - [ ] Optionally include `client_id` claim in response when caller is authorized to see it.
+  - [~] Optionally include `client_id` claim in response when caller is authorized to see it (implemented for `refresh_token`; access token responses pending policy wiring).
 
 - Phase 3 – Opaque access tokens
   - [x] Add server config to toggle opaque access tokens for APIs (per audience or global).
   - [x] Persist access tokens (opaque): hash, `client_id`, `user_id`, `scope[]`, `aud`, `exp`, `jti`, `revoked_at`.
   - [x] Update `/token` to issue opaque tokens when configured; include `jti`.
   - [x] Update `/introspect` to resolve opaque tokens from DB and reflect `revoked_at`/`exp` in `active`.
-  - [ ] Background cleanup for expired tokens.
+  - [ ] Background cleanup for expired tokens (hosted cleanup; opportunistic cleanup currently only applied to PAR entries).
 
 - Phase 4 – Fidelity & extensions
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
@@ -123,7 +122,7 @@ New Backlog – DPoP / Bound Access Tokens (RFC 9449)
 
 - Phase 2 – Nonce and robustness
   - [x] Support DPoP nonce challenges (`WWW-Authenticate: DPoP ...` and `DPoP-Nonce` header); Blazor backchannel retries with nonce.
-  - [x] Persist DPoP replay IDs to prevent replays (bounded window via distributed replay cache; handles ±5m skew by `iat` window).
+  - [~] Persist DPoP replay IDs to prevent replays (bounded window via distributed replay cache; in-memory cache implemented; distributed store pending).
 
 - Phase 3 – Samples & docs
   - [x] Sample API validating DPoP (MrWhoOidc.ApiService).
@@ -136,6 +135,8 @@ New Backlog – JAR & JARM
   - [ ] Verify signatures using per-client public JWKs (config/DB), support `RS256`/`ES256` initially.
   - [ ] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
   - [ ] Support `request_uri` only via PAR; optionally require PAR (`require_pushed_authorization_requests`).
+  - [x] `/authorize`: resolve `request_uri` created via PAR and sanitize address bar to minimal `request_uri` + optional `state`.
+  - [x] PAR persistence: EF-backed `IPushedAuthorizationRequestStore` with non-consuming read, consume-on-use, and opportunistic cleanup of expired entries.
   - [ ] Discovery: advertise `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
   - [ ] Optional: support encrypted request objects (JWE) and advertise `request_object_encryption_alg/enc`.
 
