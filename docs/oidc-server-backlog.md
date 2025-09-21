@@ -6,7 +6,7 @@ Status summary (MVP scope)
 - [x] M3 User auth & Authorization (login, consent, /authorize with Code + PKCE)
 - [x] M4 Token endpoint (authorization_code, ID/Access, Refresh with rotation; configurable API audiences)
 - [x] M5 UserInfo + Logout (sub-based userinfo, local + RP-initiated logout)
-- [~] M6 Introspection & Revocation (revocation done; introspection enforces client policy + audience match, supports JWT/opaque, DPoP nonce + replay checks, optional mTLS; privacy-based response shaping still pending)
+- [x] M6 Introspection & Revocation (introspection enforces client policy + audience match, supports JWT/opaque, DPoP nonce + replay checks, optional mTLS; privacy-based response shaping implemented)
 - [x] M7 Key rotation & hardening (automated key rotation + JWKS overlap, rate limiting, antiforgery, login backoff, WWW-Authenticate, CORS allow-list, HTTPS/HSTS/forwarded headers)
 - [~] M8 Observability, DX & Docs (OpenTelemetry wired; custom meters + tags; ADRs + samples; docs pending)
 
@@ -96,8 +96,8 @@ Backlog – Introspection (RFC 7662)
 - Phase 2 – Policy & authorization
   - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions` and per-client DB allow-list.
   - [x] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
-  - [ ] Return limited fields based on caller policy (privacy by default).
-  - [~] Optionally include `client_id` claim in response when caller is authorized to see it (implemented for `refresh_token`; access token responses pending policy wiring).
+  - [x] Return limited fields based on caller policy (privacy by default) via `Auth:IntrospectionDefaultResponseFields` and per-client `Auth:IntrospectionResponseFields`.
+  - [x] Optionally include `client_id` in response when authorized by policy (included when available for opaque/refresh tokens; JWT access tokens typically don't carry `client_id`).
 
 - Phase 3 – Opaque access tokens
   - [x] Add server config to toggle opaque access tokens for APIs (per audience or global).
