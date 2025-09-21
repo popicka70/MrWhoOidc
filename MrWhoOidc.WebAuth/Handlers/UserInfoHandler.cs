@@ -13,7 +13,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -26,6 +26,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
             {
                 outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing or invalid Authorization header from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
             }
@@ -37,6 +38,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             if (!ok || principal is not { })
             {
                 outcome = "failure";
+                logger.LogWarning("/userinfo 401: token validation failed from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
             }
@@ -54,11 +56,15 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                         cnfJkt = jktProp.GetString();
                     }
                 }
-                catch { }
+                catch
+                {
+                    // ignore parse errors, will be treated as missing jkt below
+                }
 
                 if (string.IsNullOrEmpty(cnfJkt))
                 {
                     outcome = "failure";
+                    logger.LogWarning("/userinfo 401: cnf claim present without jkt from {IP}", http.Connection.RemoteIpAddress?.ToString());
                     metrics.UserInfoFailures.Add(1);
                     return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
                 }
@@ -73,12 +79,23 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 {
                     http.Response.Headers["DPoP-Nonce"] = serverNonce;
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=use_dpop_nonce";
+                    logger.LogInformation("/userinfo nonce challenge issued to {IP}", clientIp);
                     return Results.Unauthorized();
                 }
 
-                if (!validation.Ok || string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
+                if (!validation.Ok)
                 {
                     outcome = "failure";
+                    logger.LogWarning("/userinfo 401: invalid DPoP proof reason={Reason} from {IP}", validation.Error ?? "unknown", clientIp);
+                    metrics.UserInfoFailures.Add(1);
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                }
+
+                if (string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
+                {
+                    outcome = "failure";
+                    logger.LogWarning("/userinfo 401: cnf.jkt mismatch from {IP}", clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return Results.Json(new { error = "invalid_token" }, statusCode: 401);
@@ -88,6 +105,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 if (string.IsNullOrEmpty(validation.Jti) || validation.Iat is null)
                 {
                     outcome = "failure";
+                    logger.LogWarning("/userinfo 401: DPoP missing jti/iat from {IP}", clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return Results.Json(new { error = "invalid_token" }, statusCode: 401);
@@ -97,6 +115,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 if (!replayCache.TryAdd(key, expires))
                 {
                     outcome = "failure";
+                    logger.LogWarning("/userinfo 401: DPoP replay detected for {Key} from {IP}", key, clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=replay";
                     return Results.Json(new { error = "invalid_token" }, statusCode: 401);
@@ -127,6 +146,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     payload["email_verified"] = b;
             }
 
+            logger.LogInformation("/userinfo 200 for {Sub}", payload["sub"]);
             metrics.UserInfoSuccess.Add(1);
             var resultJson = Results.Json(payload);
             return new CacheHeaderResult(resultJson, "private, max-age=60");

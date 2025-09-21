@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
+using MrWhoOidc.Web.DPoP;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,12 +30,14 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
 
-// Create a dedicated backchannel HttpClient to control TLS/version behavior
-static HttpClient CreateBackchannel()
+// DPoP key store for OIDC backchannel
+builder.Services.AddSingleton<DPoPKeyStore>();
+
+// Create a dedicated backchannel HttpClient with DPoP and TLS control
+static HttpClient CreateBackchannel(IServiceProvider sp)
 {
-    var handler = new SocketsHttpHandler
+    var sockets = new SocketsHttpHandler
     {
-        // Force HTTP/1.1 to avoid potential HTTP/2 ALPN/TLS negotiation issues
         AllowAutoRedirect = true,
         AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
@@ -45,7 +48,8 @@ static HttpClient CreateBackchannel()
         }
     };
 
-    var client = new HttpClient(handler)
+    var dpopHandler = new DPoPBackchannelHandler(sp.GetRequiredService<DPoPKeyStore>(), sockets);
+    var client = new HttpClient(dpopHandler)
     {
         DefaultRequestVersion = HttpVersion.Version11,
         DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
@@ -94,8 +98,9 @@ builder.Services.AddAuthentication(options =>
         // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
         options.TokenValidationParameters.NameClaimType = "name";
 
-        // Custom backchannel to control TLS/protocols
-        options.Backchannel = CreateBackchannel();
+        // Backchannel with DPoP and TLS settings
+        var sp = builder.Services.BuildServiceProvider();
+        options.Backchannel = CreateBackchannel(sp);
 
         // If using http:// for dev metadata, configure ConfigurationManager with RequireHttps=false
         if (normalizedAuthority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
@@ -111,7 +116,6 @@ builder.Services.AddAuthentication(options =>
 
         options.TokenValidationParameters.ValidateIssuer = false; // dev only
 
-        // Keep error logging without PII
         options.Events = new OpenIdConnectEvents
         {
             OnAuthenticationFailed = ctx =>

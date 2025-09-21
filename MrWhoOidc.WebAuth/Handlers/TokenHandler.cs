@@ -15,7 +15,7 @@ public interface ITokenHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, IDPoPValidator dpop) : ITokenHandler
+public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, IDPoPValidator dpop, ILogger<TokenHandler> logger) : ITokenHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -26,6 +26,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
         {
             if (!http.Request.HasFormContentType)
             {
+                logger.LogWarning("/token invalid_request: missing form content type from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", "none"), new("outcome", "failure") });
                 metrics.TokenFailures.Add(1, new TagList { new("grant_type", "none") });
                 return ErrorResults.InvalidRequest();
@@ -34,12 +35,12 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             var form = await http.Request.ReadFormAsync();
             grantType = form["grant_type"].ToString();
 
-            // Client authentication: private_key_jwt, client_secret_basic, or client_secret_post
             var (clientId, clientSecret) = ReadClientCredentials(http);
             if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
 
             if (string.IsNullOrWhiteSpace(clientId))
             {
+                logger.LogWarning("/token invalid_request: missing client_id from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                 metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                 return ErrorResults.InvalidRequest("Missing client_id");
@@ -53,11 +54,15 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
                 authenticated = await assertions.ValidateAsync(clientId, clientAssertion, tokenEndpoint);
+                if (!authenticated)
+                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucket(clientId));
             }
             else
             {
                 if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
                 authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+                if (!authenticated)
+                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucket(clientId));
             }
 
             if (!authenticated)
@@ -76,11 +81,12 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl);
                 if (!validation.Ok)
                 {
-                    // Per RFC 9449, return 400 with WWW-Authenticate: DPoP error (simplified here)
+                    logger.LogWarning("/token invalid_dpop_proof: reason={Reason} ip={IP}", validation.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return Results.BadRequest(new { error = "invalid_dpop_proof" });
                 }
                 dpopJkt = validation.Jkt;
+                logger.LogInformation("/token DPoP accepted: jkt={Jkt} ip={IP}", dpopJkt, http.Connection.RemoteIpAddress?.ToString());
             }
 
             if (string.Equals(grantType, "authorization_code", StringComparison.Ordinal))
@@ -90,6 +96,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var codeVerifier = form["code_verifier"].ToString();
                 if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
                 {
+                    logger.LogWarning("/token invalid_request: missing code or redirect_uri for client {ClientIdHash}", Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
@@ -97,6 +104,10 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
                 var (ok, payload, _, status) = await tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, clientId!, codeVerifier, issuer, dpopJkt);
+                if (!ok)
+                {
+                    logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucket(clientId!));
+                }
 
                 outcome = ok ? "success" : "failure";
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
@@ -109,6 +120,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var refresh = form["refresh_token"].ToString();
                 if (string.IsNullOrWhiteSpace(refresh))
                 {
+                    logger.LogWarning("/token invalid_request: missing refresh_token for client {ClientIdHash}", Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
@@ -116,6 +128,10 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
                 var (ok, payload, _, status) = await tokens.ExchangeRefreshTokenAsync(refresh, clientId!, issuer, dpopJkt);
+                if (!ok)
+                {
+                    logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucket(clientId!));
+                }
 
                 outcome = ok ? "success" : "failure";
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
@@ -123,6 +139,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 return Results.Json(payload!, statusCode: status);
             }
 
+            logger.LogWarning("/token unsupported_grant: {GrantType}", grantType);
             metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
             metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
             return ErrorResults.UnsupportedGrant();
@@ -154,5 +171,11 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
         {
             return (null, null);
         }
+    }
+
+    static string Bucket(string clientId)
+    {
+        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
+        return Convert.ToHexString(bytes.AsSpan(0, 8));
     }
 }
