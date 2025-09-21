@@ -257,6 +257,9 @@ public sealed class IntrospectionHandler(
                 response["cnf"] = cnf;
             }
 
+            // Privacy shaping
+            response = ShapeResponseForClient(response, clientId);
+
             metrics.IntrospectionActiveTrue.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: requestedAud);
             metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
@@ -348,13 +351,18 @@ public sealed class IntrospectionHandler(
             ["aud"] = entity.Audience,
             ["iss"] = issuer,
             ["exp"] = entity.ExpiresAt.ToUnixTimeSeconds(),
-            ["jti"] = entity.Jti
+            ["jti"] = entity.Jti,
+            // Include issuing client_id for opaque tokens; will be filtered by policy if not allowed
+            ["client_id"] = entity.ClientId
         };
 
         if (!string.IsNullOrEmpty(entity.CnfJkt))
         {
             responseOpaque["cnf"] = new { jkt = entity.CnfJkt };
         }
+
+        // Privacy shaping
+        responseOpaque = ShapeResponseForClient(responseOpaque, clientId);
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);
@@ -401,6 +409,9 @@ public sealed class IntrospectionHandler(
             ["exp"] = rt.ExpiresAt.ToUnixTimeSeconds(),
             ["client_id"] = clientId
         };
+
+        // Privacy shaping
+        response = ShapeResponseForClient(response, clientId);
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: null);
@@ -450,6 +461,34 @@ public sealed class IntrospectionHandler(
         if (map is null || map.Count == 0) return true; // no policy configured
         if (!map.TryGetValue(client.ClientId, out var audiences)) return false;
         return audiences.Contains(audience, StringComparer.Ordinal);
+    }
+
+    // Remove keys not allowed for this caller based on per-client or default allow-list
+    Dictionary<string, object?> ShapeResponseForClient(Dictionary<string, object?> response, string clientId)
+    {
+        var config = authOptions.Value;
+        string[] allow;
+        if (config.IntrospectionResponseFields is { Count: > 0 } && config.IntrospectionResponseFields.TryGetValue(clientId, out var perClient))
+            allow = perClient;
+        else
+            allow = config.IntrospectionDefaultResponseFields ?? Array.Empty<string>();
+
+        if (allow is null || allow.Length == 0) return new Dictionary<string, object?> { ["active"] = response.TryGetValue("active", out var v) ? v : true };
+
+        var shaped = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var key in allow)
+        {
+            if (response.TryGetValue(key, out var value))
+            {
+                shaped[key] = value;
+            }
+        }
+        // Ensure active is preserved even if not explicitly in list
+        if (!shaped.ContainsKey("active") && response.TryGetValue("active", out var active))
+        {
+            shaped["active"] = active;
+        }
+        return shaped;
     }
 
     static string Hash(string value)

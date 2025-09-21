@@ -11,6 +11,13 @@ public sealed class AuthOptions
     // Key: client_id, Value: allowed audience(s) for introspection
     public Dictionary<string, string[]> IntrospectionPermissions { get; set; } = new();
 
+    // Introspection response shaping (privacy by default):
+    // - Default set of fields included in introspection responses when no per-client override is specified.
+    // - Per-client allow-list of response fields to include. Keys not in the allow-list are removed.
+    //   Example fields: active, token_type, scope, sub, username, aud, iss, iat, nbf, exp, jti, cnf, client_id
+    public string[] IntrospectionDefaultResponseFields { get; set; } = ["active", "token_type", "scope", "sub", "aud", "iss", "exp"]; // privacy-friendly baseline
+    public Dictionary<string, string[]> IntrospectionResponseFields { get; set; } = new();
+
     // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
     public bool AllowRefreshTokenIntrospection { get; set; } = false;
 
