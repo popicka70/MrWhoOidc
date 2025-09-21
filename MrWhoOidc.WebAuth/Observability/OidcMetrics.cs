@@ -9,6 +9,7 @@ public sealed class OidcMetrics
 
     public Counter<long> AuthorizeRequests { get; } = Meter.CreateCounter<long>("oidc.authorize.requests");
     public Histogram<double> AuthorizeDurationMs { get; } = Meter.CreateHistogram<double>("oidc.authorize.duration.ms");
+    public Histogram<long> AuthorizeRequestSizeBytes { get; } = Meter.CreateHistogram<long>("oidc.authorize.request.size.bytes");
 
     public Counter<long> TokenRequests { get; } = Meter.CreateCounter<long>("oidc.token.requests");
     public Counter<long> TokenSuccess { get; } = Meter.CreateCounter<long>("oidc.token.success");
