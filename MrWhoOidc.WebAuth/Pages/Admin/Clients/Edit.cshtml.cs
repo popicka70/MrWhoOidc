@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Crypto;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -24,6 +25,8 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
     public List<KeyPreview> KeyPreviews { get; private set; } = new();
 
     public JwtValidationOutput? JwtTest { get; private set; }
+
+    public string? GeneratedPrivateJwk { get; private set; }
 
     [BindProperty]
     public ClientInput Input { get; set; } = new();
@@ -60,6 +63,35 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
 
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostGenerateJwksAsync()
+    {
+        await LoadRealmsAsync();
+
+        using var rsa = RSA.Create(2048);
+        var kid = Guid.NewGuid().ToString("N");
+        var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+
+        // Expose private JWK to the admin for download/export (do not store)
+        GeneratedPrivateJwk = jwk.ToJson(includePrivate: true);
+
+        // Store public JWKS JSON into the form (not saved yet until Save is pressed)
+        var publicJwk = new RsaJwk
+        {
+            Kty = jwk.Kty,
+            Kid = jwk.Kid,
+            Alg = jwk.Alg,
+            Use = jwk.Use,
+            N = jwk.N,
+            E = jwk.E,
+            D = null, P = null, Q = null, DP = null, DQ = null, QI = null
+        };
+        var jwks = new { keys = new[] { publicJwk } };
+        Input.PublicJwksJson = JsonSerializer.Serialize(jwks, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
         return Page();
     }
 
