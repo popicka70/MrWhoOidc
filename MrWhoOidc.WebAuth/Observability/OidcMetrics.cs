@@ -27,4 +27,15 @@ public sealed class OidcMetrics
     public Counter<long> IntrospectionActiveTrue { get; } = Meter.CreateCounter<long>("oidc.introspection.active_true");
     public Counter<long> IntrospectionActiveFalse { get; } = Meter.CreateCounter<long>("oidc.introspection.active_false");
     public Histogram<double> IntrospectionDurationMs { get; } = Meter.CreateHistogram<double>("oidc.introspection.duration.ms");
+
+    // PAR/JAR metrics
+    public Counter<long> ParRequests { get; } = Meter.CreateCounter<long>("oidc.par.requests");
+    public Counter<long> ParSuccess { get; } = Meter.CreateCounter<long>("oidc.par.success");
+    public Counter<long> ParFailures { get; } = Meter.CreateCounter<long>("oidc.par.failures");
+    public Counter<long> ParConsumed { get; } = Meter.CreateCounter<long>("oidc.par.consumed");
+    public Histogram<long> ParRequestSizeBytes { get; } = Meter.CreateHistogram<long>("oidc.par.request.size.bytes");
+
+    public Counter<long> JarValid { get; } = Meter.CreateCounter<long>("oidc.jar.valid");
+    public Counter<long> JarInvalid { get; } = Meter.CreateCounter<long>("oidc.jar.invalid");
+    public Histogram<long> JarRequestSizeBytes { get; } = Meter.CreateHistogram<long>("oidc.jar.request.size.bytes");
 }

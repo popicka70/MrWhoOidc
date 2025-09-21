@@ -42,9 +42,13 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             // Optional: max request object size for query param 'request'
             var roJwtFromQuery = http.Request.Query["request"].ToString();
             var maxBytes = authOptions.Value.RequestObjectMaxBytes;
-            if (!string.IsNullOrEmpty(roJwtFromQuery) && maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
+            if (!string.IsNullOrEmpty(roJwtFromQuery))
             {
-                return ErrorResults.InvalidRequest("request object too large");
+                if (maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
+                {
+                    return ErrorResults.InvalidRequest("request object too large");
+                }
+                metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery));
             }
 
             // If request_uri is provided, try to resolve the pushed request and merge it
@@ -64,8 +68,10 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (!validation.IsValid)
                 {
                     outcome = "error";
+                    metrics.JarInvalid.Add(1);
                     return ErrorResults.InvalidRequest(validation.ErrorDescription ?? "Invalid request object");
                 }
+                metrics.JarValid.Add(1);
                 jarRequest = validation.Request;
                 jarClientId = validation.ClientId;
 
@@ -190,6 +196,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             if (isPar)
             {
                 parStore.MarkConsumedById(parId!);
+                metrics.ParConsumed.Add(1);
             }
 
             // Capture auth_time from login cookie claims

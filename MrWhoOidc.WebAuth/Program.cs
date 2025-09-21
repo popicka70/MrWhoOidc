@@ -110,6 +110,8 @@ builder.Services.AddDataProtection()
 
 // Background cleanup for expired tokens (opaque + refresh)
 builder.Services.AddHostedService<ExpiredTokenCleanupService>();
+// PAR cleanup
+builder.Services.AddHostedService<ParCleanupHostedService>();
 
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
