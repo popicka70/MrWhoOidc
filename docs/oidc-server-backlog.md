@@ -131,13 +131,13 @@ New Backlog – DPoP / Bound Access Tokens (RFC 9449)
 
 New Backlog – JAR & JARM
 - JAR (JWT-Secured Authorization Request)
-  - [ ] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf, size limits).
-  - [ ] Verify signatures using per-client public JWKs (config/DB), support `RS256`/`ES256` initially.
-  - [ ] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
-  - [ ] Support `request_uri` only via PAR; optionally require PAR (`require_pushed_authorization_requests`).
+  - [x] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf; size limits pending).
+  - [x] Verify signatures using per-client public JWKs (DB first, config fallback); support `RS256`/`ES256`.
+  - [x] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
+  - [~] Support `request_uri` only via PAR; optionally require PAR (`require_pushed_authorization_requests`).
   - [x] `/authorize`: resolve `request_uri` created via PAR and sanitize address bar to minimal `request_uri` + optional `state`.
   - [x] PAR persistence: EF-backed `IPushedAuthorizationRequestStore` with non-consuming read, consume-on-use, and opportunistic cleanup of expired entries.
-  - [ ] Discovery: advertise `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
+  - [x] Discovery: advertise `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
   - [ ] Optional: support encrypted request objects (JWE) and advertise `request_object_encryption_alg/enc`.
 
 - JARM (JWT-secured authorization response mode)
