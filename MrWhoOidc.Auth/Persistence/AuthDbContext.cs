@@ -15,6 +15,13 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
     public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
     public DbSet<Realm> Realms => Set<Realm>();
+    // New: roles/scopes and assignments
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Scope> Scopes => Set<Scope>();
+    public DbSet<ClientScope> ClientScopes => Set<ClientScope>();
+    public DbSet<UserAlternativeEmail> UserAlternativeEmails => Set<UserAlternativeEmail>();
+    public DbSet<UserClientAssignment> UserClientAssignments => Set<UserClientAssignment>();
+    public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -28,7 +35,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.Name).HasMaxLength(200);
             b.HasIndex(x => x.Username).IsUnique();
-            b.HasIndex(x => x.Email);
+            b.HasIndex(x => x.Email).IsUnique();
+            b.HasMany(x => x.AlternativeEmails)
+                .WithOne()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Realm>(b =>
@@ -37,6 +48,26 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Name).IsRequired().HasMaxLength(100);
             b.HasIndex(x => x.Name).IsUnique();
             b.Property(x => x.DisplayName).HasMaxLength(200);
+        });
+
+        // New: Role per realm
+        modelBuilder.Entity<Role>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            b.HasIndex(x => new { x.RealmId, x.Name }).IsUnique();
+            b.HasOne<Realm>()
+                .WithMany()
+                .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: Scope catalog
+        modelBuilder.Entity<Scope>(b =>
+        {
+            b.HasKey(x => x.Name);
+            b.Property(x => x.Name).HasMaxLength(100);
+            b.Property(x => x.Description).HasMaxLength(200);
         });
 
         modelBuilder.Entity<Client>(b =>
@@ -55,6 +86,68 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.RequirePar).HasDefaultValue(false);
             b.Property(x => x.IntrospectionResponseFieldsJson).HasMaxLength(2000);
             b.Property(x => x.IntrospectionMtlsThumbprintsJson).HasMaxLength(2000);
+            b.HasOne<Realm>()
+                .WithMany()
+                .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: ClientScopes mapping (ClientId -> ScopeName)
+        modelBuilder.Entity<ClientScope>(b =>
+        {
+            b.HasKey(x => new { x.ClientId, x.ScopeName });
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Scope>()
+                .WithMany()
+                .HasForeignKey(x => x.ScopeName)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: Alternative emails
+        modelBuilder.Entity<UserAlternativeEmail>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Email).IsRequired().HasMaxLength(256);
+            b.HasIndex(x => new { x.UserId, x.Email }).IsUnique();
+        });
+
+        // New: User-client assignment (optionally realm-bound)
+        modelBuilder.Entity<UserClientAssignment>(b =>
+        {
+            b.HasKey(x => new { x.UserId, x.ClientId, x.RealmId });
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Realm>()
+                .WithMany()
+                .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: User-role assignment per client + realm
+        modelBuilder.Entity<UserRoleAssignment>(b =>
+        {
+            b.HasKey(x => new { x.UserId, x.RoleId, x.ClientId, x.RealmId });
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Role>()
+                .WithMany()
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -143,9 +236,12 @@ public class User
     [MaxLength(256)]
     public string? Email { get; set; }
     public bool EmailVerified { get; set; }
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
     [MaxLength(200)]
     public string? Name { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    // New: alternative emails
+    public ICollection<UserAlternativeEmail> AlternativeEmails { get; set; } = new List<UserAlternativeEmail>();
 }
 
 public class Realm
@@ -156,6 +252,25 @@ public class Realm
     [MaxLength(200)]
     public string? DisplayName { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class Role
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+    public Guid RealmId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class Scope
+{
+    [Key]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty; // e.g., openid, profile, email, offline_access, roles
+    [MaxLength(200)]
+    public string? Description { get; set; }
+    public bool IsExposed { get; set; } = true;
 }
 
 public class Client
@@ -183,6 +298,40 @@ public class Client
     public string? IntrospectionResponseFieldsJson { get; set; }
     [MaxLength(2000)]
     public string? IntrospectionMtlsThumbprintsJson { get; set; }
+}
+
+public class ClientScope
+{
+    public Guid ClientId { get; set; }
+    [MaxLength(100)]
+    public string ScopeName { get; set; } = string.Empty;
+}
+
+public class UserAlternativeEmail
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    [MaxLength(256)]
+    public string Email { get; set; } = string.Empty;
+    public bool IsVerified { get; set; }
+    public DateTimeOffset? VerifiedAt { get; set; }
+}
+
+public class UserClientAssignment
+{
+    public Guid UserId { get; set; }
+    public Guid ClientId { get; set; }
+    public Guid RealmId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class UserRoleAssignment
+{
+    public Guid UserId { get; set; }
+    public Guid RoleId { get; set; }
+    public Guid ClientId { get; set; }
+    public Guid RealmId { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class SigningKey

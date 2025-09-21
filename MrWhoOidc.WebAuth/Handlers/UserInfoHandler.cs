@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.WebAuth.Infrastructure;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -13,7 +15,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -144,6 +146,53 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 var emailVerified = principal.FindFirst("email_verified")?.Value;
                 if (!string.IsNullOrEmpty(emailVerified) && bool.TryParse(emailVerified, out var b))
                     payload["email_verified"] = b;
+
+                // Optional: include array of all emails (primary + verified alternates)
+                var sub = principal.FindFirstValue("sub");
+                if (Guid.TryParse(sub, out var userId))
+                {
+                    var verifiedOnly = true; // configurable later
+                    var alt = db.UserAlternativeEmails.AsNoTracking()
+                        .Where(a => a.UserId == userId && (!verifiedOnly || a.IsVerified))
+                        .Select(a => a.Email)
+                        .ToArray();
+                    if (!string.IsNullOrEmpty(email) || alt.Length > 0)
+                    {
+                        payload["emails"] = string.IsNullOrEmpty(email) ? alt : new[] { email }.Concat(alt).ToArray();
+                    }
+                }
+            }
+
+            // Roles exposure when roles scope is granted
+            if (scopes.Contains("roles"))
+            {
+                // Roles are contextual to the client; infer from azp or aud (prefer azp when present)
+                var clientId = principal.FindFirst("azp")?.Value ?? principal.FindFirst("aud")?.Value;
+                if (!string.IsNullOrEmpty(clientId))
+                {
+                    var userSub = principal.FindFirstValue("sub");
+                    if (Guid.TryParse(userSub, out var userId))
+                    {
+                        // Find client record to resolve RealmId and ClientId (Guid)
+                        var client = db.Clients.AsNoTracking().FirstOrDefault(c => c.ClientId == clientId);
+                        if (client is not null)
+                        {
+                            var roleIds = db.UserRoleAssignments.AsNoTracking()
+                                .Where(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
+                                .Select(a => a.RoleId);
+                            var roles = db.Roles.AsNoTracking()
+                                .Where(r => roleIds.Contains(r.Id))
+                                .Select(r => r.Name)
+                                .ToArray();
+                            if (roles.Length > 0)
+                            {
+                                payload["roles"] = roles;
+                            }
+                            // Include realm claim
+                            payload["realm"] = db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefault();
+                        }
+                    }
+                }
             }
 
             logger.LogInformation("/userinfo 200 for {Sub}", payload["sub"]);

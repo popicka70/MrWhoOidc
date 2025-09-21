@@ -1,6 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,10 +12,8 @@ builder.Services.AddProblemDetails();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// DPoP services
-builder.Services.AddSingleton<MrWhoOidc.ApiService.IDPoPValidator, MrWhoOidc.ApiService.DPoPValidator>();
-builder.Services.AddSingleton<MrWhoOidc.ApiService.IDPoPReplayCache, MrWhoOidc.ApiService.InMemoryDPoPReplayCache>();
-builder.Services.AddSingleton<MrWhoOidc.ApiService.IDPoPNonceStore, MrWhoOidc.ApiService.InMemoryDPoPNonceStore>();
+// Wire up Auth persistence to reuse the same database
+builder.Services.AddAuthPersistence(builder.Configuration);
 
 var app = builder.Build();
 
@@ -28,100 +25,81 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-bool TryValidateJwt(string token, out System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwt, out ClaimsPrincipal principal)
+// === Admin API: Scopes ===
+app.MapGet("/admin/scopes", async (AuthDbContext db, int? skip, int? take) =>
 {
-    jwt = null!;
-    principal = new ClaimsPrincipal();
-    try
-    {
-        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
-        jwt = handler.ReadJwtToken(token);
-        var identity = new ClaimsIdentity(jwt.Claims, "jwt");
-        principal = new ClaimsPrincipal(identity);
-        return true;
-    }
-    catch
-    {
-        return false;
-    }
-}
+    IQueryable<Scope> q = db.Scopes.AsNoTracking().OrderBy(s => s.Name);
+    if (skip is > 0) q = q.Skip(skip.Value);
+    if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
+    var list = await q.ToListAsync();
+    return Results.Ok(list);
+});
 
-async Task<IResult> RequireDPoP(HttpContext http, string absoluteUrl, string accessToken, string? cnfJkt, MrWhoOidc.ApiService.IDPoPValidator validator, MrWhoOidc.ApiService.IDPoPReplayCache replayCache, MrWhoOidc.ApiService.IDPoPNonceStore nonceStore)
+app.MapPost("/admin/scopes", async (AuthDbContext db, Scope input) =>
 {
-    if (string.IsNullOrEmpty(cnfJkt)) return Results.Unauthorized();
+    input.Name = input.Name?.Trim() ?? string.Empty;
+    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
+    var exists = await db.Scopes.AnyAsync(s => s.Name == input.Name);
+    if (exists) return Results.Conflict(new { error = "scope_exists" });
+    db.Scopes.Add(new Scope { Name = input.Name, Description = input.Description, IsExposed = input.IsExposed });
+    await db.SaveChangesAsync();
+    return Results.Created($"/admin/scopes/{input.Name}", input);
+});
 
-    var result = await validator.ValidateForEndpointAsync(http, absoluteUrl, accessToken);
-
-    var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    (bool nonceOk, string nonce) = await nonceStore.ValidateOrIssueAsync(absoluteUrl, clientIp, result.Jkt, result.Nonce);
-    if (!nonceOk)
-    {
-        http.Response.Headers["DPoP-Nonce"] = nonce;
-        return Results.Unauthorized();
-    }
-
-    if (!result.Ok || string.IsNullOrEmpty(result.Jkt) || !string.Equals(result.Jkt, cnfJkt, StringComparison.Ordinal))
-        return Results.Unauthorized();
-
-    if (string.IsNullOrEmpty(result.Jti) || result.Iat is null)
-        return Results.Unauthorized();
-
-    var key = $"{result.Jkt}:{result.Jti}";
-    var exp = DateTimeOffset.FromUnixTimeSeconds(result.Iat.Value).AddMinutes(5);
-    if (!replayCache.TryAdd(key, exp)) return Results.Unauthorized();
-
-    return Results.Ok();
-}
-
-string[] summaries = ["Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"];
-
-app.MapGet("/weatherforecast", async (HttpContext http, MrWhoOidc.ApiService.IDPoPValidator validator, MrWhoOidc.ApiService.IDPoPReplayCache replay, MrWhoOidc.ApiService.IDPoPNonceStore nonce) =>
+app.MapPut("/admin/scopes/{name}", async (AuthDbContext db, string name, Scope input) =>
 {
-    var auth = http.Request.Headers["Authorization"].ToString();
-    if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
-        return Results.Unauthorized();
-
-    var token = auth["Bearer ".Length..].Trim();
-
-    if (!TryValidateJwt(token, out var jwt, out var principal))
-        return Results.Unauthorized();
-
-    var cnfClaim = principal.FindFirst("cnf")?.Value;
-    string? jkt = null;
-    if (!string.IsNullOrEmpty(cnfClaim))
+    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
+    if (entity is null) return Results.NotFound();
+    if (!string.Equals(name, input.Name, StringComparison.Ordinal))
     {
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(cnfClaim);
-            if (doc.RootElement.TryGetProperty("jkt", out var j)) jkt = j.GetString();
-        }
-        catch { }
+        return Results.BadRequest(new { error = "name_immutable" });
     }
+    entity.Description = input.Description;
+    entity.IsExposed = input.IsExposed;
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
 
-    if (!string.IsNullOrEmpty(jkt))
+app.MapDelete("/admin/scopes/{name}", async (AuthDbContext db, string name) =>
+{
+    var inUse = await db.ClientScopes.AnyAsync(cs => cs.ScopeName == name);
+    if (inUse) return Results.Conflict(new { error = "scope_in_use" });
+    var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
+    if (entity is null) return Results.NotFound();
+    db.Remove(entity);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+// === Admin API: Client scopes ===
+app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId) =>
+{
+    var scopes = await db.ClientScopes.AsNoTracking().Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).OrderBy(n => n).ToListAsync();
+    return Results.Ok(scopes);
+});
+
+app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId, string[] scopes) =>
+{
+    var existing = await db.ClientScopes.Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).ToListAsync();
+    var toAdd = scopes.Distinct(StringComparer.Ordinal).Except(existing, StringComparer.Ordinal).ToArray();
+    foreach (var s in toAdd)
     {
-        var absolute = ($"{http.Request.Scheme}://{http.Request.Host}")!.TrimEnd('/') + "/weatherforecast";
-        var ok = await RequireDPoP(http, absolute, token, jkt, validator, replay, nonce);
-        if (ok is not IStatusCodeHttpResult { StatusCode: 200 }) return ok;
+        if (!await db.Scopes.AnyAsync(x => x.Name == s)) return Results.BadRequest(new { error = "unknown_scope", scope = s });
+        db.ClientScopes.Add(new ClientScope { ClientId = clientId, ScopeName = s });
     }
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
 
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return Results.Json(forecast);
-})
-.WithName("GetWeatherForecast");
+app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (AuthDbContext db, Guid clientId, string scope) =>
+{
+    var entity = await db.ClientScopes.FirstOrDefaultAsync(cs => cs.ClientId == clientId && cs.ScopeName == scope);
+    if (entity is null) return Results.NotFound();
+    db.ClientScopes.Remove(entity);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
 
 app.MapDefaultEndpoints();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

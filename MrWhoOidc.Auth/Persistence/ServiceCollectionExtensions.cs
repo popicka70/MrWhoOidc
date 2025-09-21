@@ -11,7 +11,9 @@ public static class PersistenceServiceCollectionExtensions
     {
         var cs = configuration.GetConnectionString("authdb")
                  ?? configuration.GetConnectionString("AuthDb")
-                 ?? configuration["ConnectionStrings:authdb"]; // fallback
+                 ?? configuration["ConnectionStrings:authdb"]
+                 ?? Environment.GetEnvironmentVariable("AUTHDB__CONNECTIONSTRING")
+                 ?? Environment.GetEnvironmentVariable("AUTHDB_CONNECTIONSTRING");
 
         if (string.IsNullOrWhiteSpace(cs))
         {

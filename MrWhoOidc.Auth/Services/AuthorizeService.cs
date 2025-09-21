@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using Microsoft.EntityFrameworkCore;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -9,7 +10,7 @@ public interface IAuthorizeService
     Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
+internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) : IAuthorizeService
 {
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
@@ -41,6 +42,22 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
         var scopes = (request.scope ?? "openid").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (!scopes.Contains("openid"))
             return Error("invalid_scope", "scope must include 'openid'");
+
+        // Enforce requested scopes ? assigned client scopes (if any assigned)
+        var allowedScopes = await db.ClientScopes
+            .AsNoTracking()
+            .Where(cs => cs.ClientId == client.Id)
+            .Select(cs => cs.ScopeName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (allowedScopes.Count > 0)
+        {
+            var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
+            if (invalid.Length > 0)
+            {
+                return Error("invalid_scope", $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
+            }
+        }
 
         // RFC 8707 resource (optional): must be absolute URI when present
         if (!string.IsNullOrEmpty(request.resource) && !IsValidAbsoluteUri(request.resource))

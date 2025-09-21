@@ -57,12 +57,30 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
              authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
 
+        // Lookup user and client to compute role claims and realm
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        string? realmName = null;
+        string[] roleNames = Array.Empty<string>();
+        if (client is not null)
+        {
+            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            if (scopes.Contains("roles"))
+            {
+                var roleIds = db.UserRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == entity.UserId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
+                    .Select(a => a.RoleId);
+                roleNames = await db.Roles.AsNoTracking().Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToArrayAsync(ct);
+            }
+        }
+
         string accessToken;
         if (opaqueEnabled)
         {
             // Create opaque token (random 256-bit), persist with hash
+            var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -80,6 +98,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
                 accessClaims.Add(new("cnf", cnf));
             }
+            if (scopes.Contains("roles") && roleNames.Length > 0)
+            {
+                foreach (var r in roleNames) accessClaims.Add(new("roles", r));
+            }
+            if (!string.IsNullOrEmpty(realmName))
+            {
+                accessClaims.Add(new("realm", realmName));
+            }
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
 
@@ -92,8 +118,6 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             new("sub", entity.UserId.ToString())
         };
 
-        // Load user once for optional claims
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
         if (user is not null)
         {
             if (scopes.Contains("profile") && !string.IsNullOrEmpty(user.Name))
@@ -102,6 +126,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 idClaims.Add(new("email", user.Email));
                 idClaims.Add(new("email_verified", user.EmailVerified ? "true" : "false"));
+            }
+            if (scopes.Contains("roles") && roleNames.Length > 0)
+            {
+                foreach (var r in roleNames) idClaims.Add(new("roles", r));
+            }
+            if (!string.IsNullOrEmpty(realmName))
+            {
+                idClaims.Add(new("realm", realmName));
             }
         }
 
@@ -155,11 +187,28 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
              authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
 
+        // Client and realm for roles
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        string? realmName = null;
+        string[] roleNames = Array.Empty<string>();
+        if (client is not null)
+        {
+            realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct);
+            if (scopes.Contains("roles"))
+            {
+                var roleIds = db.UserRoleAssignments.AsNoTracking()
+                    .Where(a => a.UserId == tokenEntity.UserId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
+                    .Select(a => a.RoleId);
+                roleNames = await db.Roles.AsNoTracking().Where(r => roleIds.Contains(r.Id)).Select(r => r.Name).ToArrayAsync(ct);
+            }
+        }
+
         string accessToken;
         if (opaqueEnabled)
         {
+            var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, Guid.NewGuid().ToString("N"), raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -175,6 +224,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
                 accessClaims.Add(new("cnf", cnf));
+            }
+            if (scopes.Contains("roles") && roleNames.Length > 0)
+            {
+                foreach (var r in roleNames) accessClaims.Add(new("roles", r));
+            }
+            if (!string.IsNullOrEmpty(realmName))
+            {
+                accessClaims.Add(new("realm", realmName));
             }
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }

@@ -15,12 +15,20 @@ public interface IDiscoveryHandler
     IResult Handle(HttpContext ctx);
 }
 
-public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions) : IDiscoveryHandler
+public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions, AuthDbContext db) : IDiscoveryHandler
 {
     public IResult Handle(HttpContext ctx)
     {
         var issuer = oidcOptions.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
         var baseUrl = issuer.TrimEnd('/');
+
+        // Pull scopes from DB (exposed only)
+        var scopes = db.Scopes.AsNoTracking().Where(s => s.IsExposed).Select(s => s.Name).ToArray();
+        if (scopes.Length == 0)
+        {
+            scopes = new[] { "openid", "profile", "email", "offline_access", "roles" };
+        }
+
         var body = new
         {
             issuer,
@@ -41,7 +49,7 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             token_endpoint_auth_signing_alg_values_supported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512" },
             code_challenge_methods_supported = new[] { "S256" },
             id_token_signing_alg_values_supported = new[] { "RS256" },
-            scopes_supported = new[] { "openid", "profile", "email" },
+            scopes_supported = scopes,
             resource_indicators_supported = true,
             // JAR support
             request_parameter_supported = true,

@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -27,7 +29,8 @@ public sealed class AuthorizeHandler(
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeHandler> logger,
     IJwtService jwt,
-    IClientStore clients
+    IClientStore clients,
+    AuthDbContext db
 ) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -232,6 +235,31 @@ public sealed class AuthorizeHandler(
             var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
                 return Results.Unauthorized();
+
+            // Enforce user must be assigned to this client (and realm)
+            var client = await clients.FindByClientIdAsync(validationResult.ClientId!);
+            if (client is null)
+            {
+                outcome = "error";
+                return ErrorResults.InvalidRequest($"Unknown client (corr={corr})");
+            }
+            var assigned = await db.UserClientAssignments.AsNoTracking()
+                .AnyAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive);
+            if (!assigned)
+            {
+                outcome = "not_assigned";
+                if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
+                {
+                    var uri = new UriBuilder(effectiveReq.redirect_uri);
+                    var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                    query["error"] = "access_denied";
+                    query["error_description"] = $"User is not assigned to this client (corr={corr})";
+                    if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
+                    uri.Query = query.ToString();
+                    return Results.Redirect(uri.ToString());
+                }
+                return Results.Json(new { error = "access_denied" }, statusCode: 403);
+            }
 
             if (validationResult.RequireConsent && !await consents.HasConsentAsync(userId, validationResult.ClientId!, validationResult.Scopes))
             {

@@ -1,19 +1,20 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+var postgres = builder.AddPostgres("postgres")
+    .WithDataVolume()
+    .WithLifetime(ContainerLifetime.Persistent);
+var authDb = postgres.AddDatabase("authdb");
+
 var apiService = builder.AddProject<Projects.MrWhoOidc_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health");
+    .WithReference(authDb)
+    .WithHttpHealthCheck("/health")
+    .WaitFor(authDb);
 
 builder.AddProject<Projects.MrWhoOidc_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
     .WithReference(apiService)
     .WaitFor(apiService);
-
-// Add a PostgreSQL server and a database for auth persistence
-var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()
-    .WithLifetime(ContainerLifetime.Persistent);
-var authDb = postgres.AddDatabase("authdb");
 
 builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
