@@ -26,6 +26,7 @@ IdentityModelEventSource.ShowPII = false;
 
 // Read Authority from configuration (required). Supports both 'Oidc' and 'OIDC'.
 string? authorityRaw = builder.Configuration["Oidc:Authority"] ?? builder.Configuration["OIDC:Authority"];
+string responseMode = (builder.Configuration["Oidc:ResponseMode"] ?? "query.jwt").ToLowerInvariant(); // query.jwt | form_post.jwt
 
 // Add services to the container.
 builder.Services.AddAuthorization();
@@ -138,6 +139,9 @@ builder.Services.AddAuthentication(options =>
                     var resource = ctx.ProtocolMessage.Resource;
 
                     var requestUri = await jar.CreateParAsync(authority, clientId, redirectUri, scope!, state!, nonce!, codeChal!, codeChalMethod ?? "S256", resource);
+
+                    // JARM: record the response mode so server knows to return JWT response
+                    ctx.ProtocolMessage.Parameters["response_mode"] = responseMode;
 
                     // Add request_uri; keep other params so state/correlation remains intact (server sanitizes URL)
                     ctx.ProtocolMessage.Parameters["request_uri"] = requestUri;
