@@ -16,6 +16,7 @@
             <div class="container-fluid">
                 <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
                 <div class="d-flex align-items-center">
+                    <a class="nav-link" asp-page="/Registrations/Index">Register</a>
                     @if (User?.Identity?.IsAuthenticated ?? false)
                     {
                         <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
@@ -43,6 +44,7 @@
                         <a class="list-group-item list-group-item-action" asp-page="/Admin/Scopes/Index"><i class="bi bi-tags me-2"></i>Scopes</a>
                         <a class="list-group-item list-group-item-action" asp-page="/Admin/Roles/Index"><i class="bi bi-person-badge me-2"></i>Roles</a>
                         <a class="list-group-item list-group-item-action" asp-page="/Admin/Users/Index"><i class="bi bi-people-fill me-2"></i>Users</a>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Registrations/Index"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
                     </div>
                 </aside>
             }

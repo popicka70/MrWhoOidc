@@ -1,0 +1,45 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Registrations.IndexModel
+@{
+    ViewData["Title"] = "Registrations";
+}
+
+<h1>Registrations</h1>
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Client</th>
+            <th>State</th>
+            <th>Created</th>
+            <th>Approved/Rejected</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var r in Model.Items)
+    {
+        <tr>
+            <td>@r.Email</td>
+            <td>@(string.Join(' ', new[]{r.FirstName, r.LastName}.Where(s => !string.IsNullOrWhiteSpace(s))))</td>
+            <td>@r.ClientDisplay</td>
+            <td>@r.State</td>
+            <td>@r.CreatedAtLocal</td>
+            <td>@r.Decision</td>
+            <td class="text-end">
+                @if (string.Equals(r.State, "pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    <form method="post" class="d-inline" asp-page-handler="Approve" asp-route-id="@r.Id">
+                        <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                    </form>
+                    <form method="post" class="d-inline" asp-page-handler="Reject" asp-route-id="@r.Id">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

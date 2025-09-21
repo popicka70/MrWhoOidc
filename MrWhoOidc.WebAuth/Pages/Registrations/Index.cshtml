@@ -1,0 +1,52 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Registrations.IndexModel
+@{
+    ViewData["Title"] = "User registration";
+}
+
+<h1>User registration</h1>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="alert alert-success">@Model.SuccessMessage</div>
+}
+@if (!string.IsNullOrEmpty(Model.InfoMessage))
+{
+    <div class="alert alert-info">@Model.InfoMessage</div>
+}
+
+<form method="post" asp-page-handler="Create" class="row g-3">
+    <div class="col-md-6">
+        <label asp-for="Input.Email" class="form-label"></label>
+        <input asp-for="Input.Email" class="form-control" />
+        <span asp-validation-for="Input.Email" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Input.FirstName" class="form-label"></label>
+        <input asp-for="Input.FirstName" class="form-control" />
+        <span asp-validation-for="Input.FirstName" class="text-danger"></span>
+    </div>
+    <div class="col-md-3">
+        <label asp-for="Input.LastName" class="form-label"></label>
+        <input asp-for="Input.LastName" class="form-control" />
+        <span asp-validation-for="Input.LastName" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="Input.ClientId" class="form-label">Client (optional)</label>
+        <select asp-for="Input.ClientId" class="form-select">
+            <option value="">-- none --</option>
+            @foreach (var c in Model.ClientOptions)
+            {
+                <option value="@c.Value">@c.Text</option>
+            }
+        </select>
+        <span asp-validation-for="Input.ClientId" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Submit registration</button>
+    </div>
+</form>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

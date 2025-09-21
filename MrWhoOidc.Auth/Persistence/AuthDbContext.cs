@@ -25,6 +25,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     // New: split role assignments
     public DbSet<UserRealmRoleAssignment> UserRealmRoleAssignments => Set<UserRealmRoleAssignment>();
     public DbSet<UserClientRoleAssignment> UserClientRoleAssignments => Set<UserClientRoleAssignment>();
+    // New: registrations
+    public DbSet<Registration> Registrations => Set<Registration>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -191,6 +193,22 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .WithMany()
                 .HasForeignKey(x => x.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: Registrations
+        modelBuilder.Entity<Registration>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Email).IsRequired().HasMaxLength(256);
+            b.Property(x => x.FirstName).HasMaxLength(100);
+            b.Property(x => x.LastName).HasMaxLength(100);
+            b.Property(x => x.State).IsRequired().HasMaxLength(20);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.HasIndex(x => x.Email);
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<SigningKey>(b =>
@@ -473,4 +491,24 @@ public class PushedAuthorizationRequest
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
+}
+
+public class Registration
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(256)]
+    public string Email { get; set; } = string.Empty; // mandatory
+    [MaxLength(100)]
+    public string? FirstName { get; set; }
+    [MaxLength(100)]
+    public string? LastName { get; set; }
+    public Guid? ClientId { get; set; }
+    // pending | approved | rejected
+    [MaxLength(20)]
+    public string State { get; set; } = "pending";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public Guid? ApprovedByUserId { get; set; }
+    public DateTimeOffset? RejectedAt { get; set; }
+    public Guid? RejectedByUserId { get; set; }
 }
