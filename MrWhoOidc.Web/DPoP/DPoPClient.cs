@@ -7,8 +7,9 @@ namespace MrWhoOidc.Web.DPoP;
 
 public sealed class DPoPKeyStore
 {
-    private ECDsa? _ecdsa;
-    private JsonWebKey? _jwk;
+    // Make the key process-wide so multiple DI containers (e.g., OIDC backchannel vs. app) share the same key
+    private static ECDsa? _ecdsa;
+    private static JsonWebKey? _jwk;
 
     public (ECDsa PrivateKey, JsonWebKey PublicJwk) GetOrCreateKey()
     {
