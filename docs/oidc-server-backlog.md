@@ -122,10 +122,10 @@ New Backlog – JAR & JARM
   - [x] Authorize: correlation id + structured logging across all error paths; metrics include request size and client bucket/mode tags.
 
 - JARM (JWT-secured authorization response mode)
-  - [ ] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
-  - [ ] Issue signed JARM JWT (iss/aud/iat/exp, `code`, `state`, `c_hash`, `s_hash` when applicable) with AS signing keys.
-  - [ ] Optional: encrypted JARM responses when client has encryption JWK.
-  - [ ] Discovery: add `response_modes_supported` with `*.jwt`, `authorization_response_iss_parameter_supported`, and advertise signing/encryption algs.
+  - [x] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
+  - [x] Issue signed JARM JWT (iss/aud/iat/exp, `code`, `state`, `c_hash`, `s_hash` when applicable) with AS signing keys.
+  - [x] Optional: encrypted JARM responses when client has encryption JWK.
+  - [x] Discovery: add `response_modes_supported` with `*.jwt`, `authorization_response_iss_parameter_supported`, and advertise signing/encryption algs.
   - [ ] Tests and samples for JAR/JARM paths; docs updates.
 
 Next steps (proposal)

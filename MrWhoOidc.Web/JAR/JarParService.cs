@@ -24,6 +24,7 @@ public sealed class JarParService(IConfiguration config, IHttpClientFactory http
         var privateJwk = config["Oidc:PrivateJwk"] ?? config["OIDC:PrivateJwk"];
         var clientSecret = config["Oidc:ClientSecret"] ?? config["OIDC:ClientSecret"];
         var authMode = (config["Oidc:JarAuthMode"] ?? "private_key_jwt").ToLowerInvariant();
+        var responseMode = (config["Oidc:ResponseMode"] ?? "query.jwt").ToLowerInvariant(); // query.jwt | form_post.jwt
 
         var usePrivateKeyJwt = authMode == "private_key_jwt" && !string.IsNullOrWhiteSpace(privateJwk);
         var useClientSecretPost = authMode == "client_secret_post";
@@ -37,6 +38,7 @@ public sealed class JarParService(IConfiguration config, IHttpClientFactory http
         // Discover exact endpoints to avoid audience mismatches
         var (authorizationEndpoint, parEndpoint) = await FetchEndpointsAsync(authority, ct);
         logger.LogInformation("Using endpoints: authorization={AuthorizationEndpoint}, par={ParEndpoint}", authorizationEndpoint, parEndpoint);
+        logger.LogInformation("Requested response_mode: {ResponseMode}", responseMode);
 
         var now = DateTimeOffset.UtcNow;
 
@@ -57,7 +59,8 @@ public sealed class JarParService(IConfiguration config, IHttpClientFactory http
             ["nonce"] = nonce,
             ["code_challenge"] = codeChallenge,
             ["code_challenge_method"] = codeChallengeMethod,
-            ["resource"] = resource
+            ["resource"] = resource,
+            ["response_mode"] = responseMode
         };
 
         // Always send signed request object for JAR

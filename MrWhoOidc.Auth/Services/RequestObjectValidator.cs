@@ -187,7 +187,8 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             nonce = payload2.TryGetValue("nonce", out var no) ? no?.ToString() : null,
             code_challenge = payload2.TryGetValue("code_challenge", out var cc) ? cc?.ToString() : null,
             code_challenge_method = payload2.TryGetValue("code_challenge_method", out var ccm) ? ccm?.ToString() : null,
-            resource = payload2.TryGetValue("resource", out var res) ? res?.ToString() : null
+            resource = payload2.TryGetValue("resource", out var res) ? res?.ToString() : null,
+            response_mode = payload2.TryGetValue("response_mode", out var rm) ? rm?.ToString() : null
         };
 
         return new RequestObjectValidationResult
