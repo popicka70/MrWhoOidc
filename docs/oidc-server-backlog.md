@@ -44,6 +44,7 @@ M2 – Crypto & Discovery
 - [x] RSA key management with persisted JWKs, `kid`, `alg`.
 - [x] JWKS endpoint with cache headers.
 - [x] Discovery endpoint with configurable issuer; advertises token/revocation endpoints and `private_key_jwt` support.
+- [x] Discovery advertises `require_pushed_authorization_requests` when server requires PAR.
 
 M3 – User auth & Authorization Endpoint (Code Flow + PKCE)
 - [x] Razor Pages: `Login` (with antiforgery + basic lockout/backoff) and `Consent`.
@@ -66,11 +67,12 @@ M6 – Introspection & Revocation (optional for MVP)
 - [x] Rate limit policy `rl-introspect` (~60/min/IP).
 - [x] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
 - [x] Audit log minimal fields (client_id, outcome, ip, aud).
+- [x] Per-client policy knobs persisted in DB: introspection audiences allow-list, response fields allow-list, optional mTLS thumbprints.
 
 - Phase 2 – Policy & authorization
-  - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions` and per-client DB allow-list.
+  - [x] Restrict which clients may call introspection (allow-list per client) – via DB and global config fallback.
   - [x] Enforce audience match: only allow introspection if caller is authorized for the token `aud` (resource).
-  - [x] Return limited fields based on caller policy (privacy by default) via `Auth:IntrospectionDefaultResponseFields` and per-client `Auth:IntrospectionResponseFields`.
+  - [x] Return limited fields based on caller policy (privacy by default) via default allow-list and per-client DB allow-list.
   - [x] Optionally include `client_id` in response when authorized by policy (included when available for opaque/refresh tokens; JWT access tokens typically don't carry `client_id`).
 
 - Phase 3 – Opaque access tokens
@@ -84,7 +86,7 @@ M6 – Introspection & Revocation (optional for MVP)
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
   - [x] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
   - [x] Support `aud` as array in response when token carries multiple audiences.
-  - [x] Optional mTLS client auth for introspection (config: `Auth:IntrospectionMtlsCertificates`).
+  - [x] Optional mTLS client auth for introspection (config + per-client DB override).
   - [x] Implement `token_type_hint` handling for refresh tokens (gated by `Auth:AllowRefreshTokenIntrospection`; owner-only RT).
   - [x] Discovery: advertise `introspection_token_types_supported` (non-standard, DX).
 
@@ -105,15 +107,18 @@ New Backlog – DPoP / Bound Access Tokens (RFC 9449)
 
 New Backlog – JAR & JARM
 - JAR (JWT-Secured Authorization Request)
-  - [x] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf; size limits pending).
+  - [x] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf).
   - [x] Verify signatures using per-client public JWKs (DB first, config fallback); support `RS256`/`ES256`.
   - [x] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
   - [x] PAR support: `/par` endpoint (EF-backed store), returns `request_uri`; sanitize address bar during `/authorize`.
   - [x] Blazor integration: OIDC `OnRedirectToIdentityProvider` builds PAR (`request_uri`) with the framework-issued `state/nonce/PKCE`.
   - [x] Admin UX: extract public JWKS from private JWK, sign a test JWT, validate against saved JWKS; explicit Save handler.
-  - [~] Optionally require PAR for clients (policy switch) and reject plain `request` (configurable).
-  - [ ] Enforce request object size limits (payload and header), and max lifetime skew.
-  - [ ] PAR hardening: per-client rate limit, storage quotas, and scheduled cleanup; richer error details with correlation id.
+  - [x] Require PAR policy: global (server setting) + per-client (DB); discovery advertises global requirement.
+  - [x] Enforce request object max size (server setting) for both `/par` and `/authorize?request=`; record request sizes in metrics.
+  - [x] PAR cleanup hosted service (consumed/expired rows).
+  - [x] Metrics: counters for JAR valid/invalid and PAR requests/success/fail/consumed + histograms for request size.
+  - [ ] PAR hardening: per-client rate limit and storage quotas; richer error details with correlation id.
+  - [ ] JAR: enforce max lifetime skew and clock skew limits.
 
 - JARM (JWT-secured authorization response mode)
   - [ ] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
@@ -124,16 +129,13 @@ New Backlog – JAR & JARM
 
 Next steps (proposal)
 - Server hardening
-  - [ ] Add server setting `Auth:RequirePar` and per-client override to require `request_uri` (PAR) and disable plain `request`.
-  - [ ] Implement max request object size (e.g., 4096 bytes) and reject larger payloads early (both `/par` and `/authorize?request=`).
-  - [ ] Rate limit `/par` (e.g., 60/min/IP) and add per-client throttle bucket.
-  - [ ] Add scheduled cleanup for consumed/expired PAR entries (current opportunistic cleanup exists).
-  - [ ] Enhance logs/metrics: counters for JAR/PAR outcomes (valid/invalid/expired/unknown-client), histogram for request size.
+  - [ ] Rate limit `/par` per client_id (bucket by client) and add storage quotas.
+  - [ ] Add correlation id to PAR/JAR failures; log structured fields (client bucket, reason, size).
+  - [ ] JAR: enforce max lifetime skew and clock skew limits.
 
 - Admin UX
-  - [ ] Surface whether JWKS is present on the clients list (badge), link to Edit.
+  - [x] Surface JWKS/Require PAR badges in clients list; link to Edit.
   - [ ] Allow uploading a JWKS file; pretty-print/compact toggles; kid uniqueness validation.
-  - [ ] Add a one-click “Require PAR” toggle per client and allowed signing algs selector.
 
 - Client/Blazor
   - [ ] Optional: feature flag to turn JAR/PAR on/off per environment.
