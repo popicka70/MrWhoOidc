@@ -117,7 +117,7 @@
 
             var resp = await http.PostAsync(introspectUrl!, new FormUrlEncodedContent(form!));
             var body = await resp.Content.ReadAsStringAsync();
-            resultJson = body;
+            resultJson = PrettyPrintJson(body);
         }
         catch (Exception ex)
         {
@@ -127,6 +127,19 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private static string PrettyPrintJson(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
         }
     }
 }
