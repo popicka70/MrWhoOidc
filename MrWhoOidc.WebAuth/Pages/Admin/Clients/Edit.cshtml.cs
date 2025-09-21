@@ -1,10 +1,13 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
@@ -18,6 +21,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
 
     public List<SelectListItem> RealmOptions { get; private set; } = new();
 
+    public List<KeyPreview> KeyPreviews { get; private set; } = new();
+
+    public JwtValidationOutput? JwtTest { get; private set; }
+
     [BindProperty]
     public ClientInput Input { get; set; } = new();
 
@@ -26,8 +33,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
         if (client is null) return NotFound();
 
-        var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-        RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
+        await LoadRealmsAsync();
 
         string introspectionAudiences = string.Empty;
         if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
@@ -47,8 +53,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             RealmId = client.RealmId,
             RequirePkce = client.RequirePkce,
             RequireConsent = client.RequireConsent,
-            IntrospectionAudiences = introspectionAudiences
+            IntrospectionAudiences = introspectionAudiences,
+            PublicJwksJson = client.PublicJwksJson,
+            PublicJwksUri = client.PublicJwksUri
         };
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
 
         return Page();
     }
@@ -57,9 +67,25 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
     {
         if (!ModelState.IsValid)
         {
-            var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-            RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
+            await LoadRealmsAsync();
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
             return Page();
+        }
+
+        // Validate JWKS JSON if provided
+        if (!string.IsNullOrWhiteSpace(Input.PublicJwksJson))
+        {
+            try
+            {
+                using var _ = JsonDocument.Parse(Input.PublicJwksJson);
+            }
+            catch
+            {
+                await LoadRealmsAsync();
+                ModelState.AddModelError("Input.PublicJwksJson", "Invalid JSON.");
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                return Page();
+            }
         }
 
         var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
@@ -71,9 +97,9 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             var exists = await db.Clients.AnyAsync(c => c.ClientId == Input.ClientId);
             if (exists)
             {
-                var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-                RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
+                await LoadRealmsAsync();
                 ModelState.AddModelError("Input.ClientId", "Client ID already exists");
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
                 return Page();
             }
         }
@@ -104,9 +130,221 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             client.IntrospectionAudiencesJson = null; // unset
         }
 
+        client.PublicJwksJson = string.IsNullOrWhiteSpace(Input.PublicJwksJson) ? null : Input.PublicJwksJson;
+        client.PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri;
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
     }
+
+    public async Task<IActionResult> OnPostFetchJwksAsync()
+    {
+        await LoadRealmsAsync();
+        if (string.IsNullOrWhiteSpace(Input.PublicJwksUri))
+        {
+            ModelState.AddModelError("Input.PublicJwksUri", "Enter a JWKS URI to fetch.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            return Page();
+        }
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var content = await http.GetStringAsync(Input.PublicJwksUri);
+            // Column limit guard
+            if (content.Length > 8000)
+            {
+                ModelState.AddModelError("Input.PublicJwksUri", "JWKS content too large (over 8000 characters).");
+            }
+            else
+            {
+                // Validate JSON
+                using var _ = JsonDocument.Parse(content);
+                Input.PublicJwksJson = content;
+            }
+        }
+        catch
+        {
+            ModelState.AddModelError("Input.PublicJwksUri", "Failed to fetch JWKS from URI.");
+        }
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostValidateJwtAsync()
+    {
+        await LoadRealmsAsync();
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwtTest = new JwtValidationOutput();
+
+        if (string.IsNullOrWhiteSpace(Input.TestJwt))
+        {
+            ModelState.AddModelError("Input.TestJwt", "Paste a JWT to validate.");
+            return Page();
+        }
+
+        // Determine JWKS source: prefer posted JSON, else current DB value
+        string? jwksJson = Input.PublicJwksJson;
+        if (string.IsNullOrWhiteSpace(jwksJson))
+        {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
+            jwksJson = client?.PublicJwksJson;
+        }
+
+        if (string.IsNullOrWhiteSpace(jwksJson))
+        {
+            ModelState.AddModelError("Input.PublicJwksJson", "Provide JWKS JSON to validate signature.");
+            return Page();
+        }
+
+        IReadOnlyCollection<SecurityKey> keys;
+        try
+        {
+            if (jwksJson.Contains("\"keys\"", StringComparison.Ordinal))
+            {
+                var set = new JsonWebKeySet(jwksJson);
+                keys = set.Keys.Select(k => (SecurityKey)k).ToArray();
+            }
+            else
+            {
+                var jwk = new JsonWebKey(jwksJson);
+                keys = new[] { (SecurityKey)jwk };
+            }
+        }
+        catch
+        {
+            ModelState.AddModelError("Input.PublicJwksJson", "Invalid JWKS/JWK JSON.");
+            return Page();
+        }
+
+        var handler = new JwtSecurityTokenHandler();
+        JwtSecurityToken parsed;
+        try
+        {
+            parsed = handler.ReadJwtToken(Input.TestJwt);
+        }
+        catch
+        {
+            JwtTest = new JwtValidationOutput { Ok = false, Message = "Malformed JWT." };
+            return Page();
+        }
+
+        var tvp = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeys = keys,
+            RequireSignedTokens = true,
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = false,
+            ValidAlgorithms = new[] { SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512, SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384, SecurityAlgorithms.EcdsaSha512 }
+        };
+
+        try
+        {
+            var principal = handler.ValidateToken(Input.TestJwt, tvp, out var validated);
+            JwtTest = new JwtValidationOutput
+            {
+                Ok = true,
+                Message = "Signature valid.",
+                HeaderAlg = parsed.Header.Alg,
+                HeaderKid = parsed.Header.TryGetValue("kid", out var kidObj) ? kidObj?.ToString() : null,
+                Iss = principal.FindFirst("iss")?.Value ?? parsed.Issuer,
+                Sub = principal.FindFirst("sub")?.Value,
+                Aud = string.Join(" ", principal.FindAll("aud").Select(c => c.Value)),
+                Iat = principal.FindFirst("iat")?.Value,
+                Nbf = principal.FindFirst("nbf")?.Value,
+                Exp = principal.FindFirst("exp")?.Value
+            };
+        }
+        catch (Exception ex)
+        {
+            JwtTest = new JwtValidationOutput
+            {
+                Ok = false,
+                Message = "Signature validation failed: " + ex.GetType().Name
+            };
+        }
+
+        return Page();
+    }
+
+    private async Task LoadRealmsAsync()
+    {
+        var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
+        RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
+    }
+
+    private static List<KeyPreview> BuildPreviews(string? jwksJson)
+    {
+        var list = new List<KeyPreview>();
+        if (string.IsNullOrWhiteSpace(jwksJson)) return list;
+        try
+        {
+            using var doc = JsonDocument.Parse(jwksJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var k in keys.EnumerateArray())
+                {
+                    list.Add(ParseKey(k));
+                }
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                list.Add(ParseKey(doc.RootElement));
+            }
+        }
+        catch
+        {
+            // ignore parsing error here; validation happens elsewhere
+        }
+        return list;
+    }
+
+    private static KeyPreview ParseKey(JsonElement key)
+    {
+        string Get(JsonElement e, string name) => e.TryGetProperty(name, out var v) ? v.GetString() ?? string.Empty : string.Empty;
+        var kty = Get(key, "kty");
+        var kid = Get(key, "kid");
+        var alg = Get(key, "alg");
+        string details = string.Empty;
+        if (string.Equals(kty, "RSA", StringComparison.OrdinalIgnoreCase))
+        {
+            var n = Get(key, "n");
+            try
+            {
+                if (!string.IsNullOrEmpty(n))
+                {
+                    var nb = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.DecodeBytes(n);
+                    details = $"modulus {nb.Length * 8} bits";
+                }
+            }
+            catch { }
+        }
+        else if (string.Equals(kty, "EC", StringComparison.OrdinalIgnoreCase))
+        {
+            var crv = Get(key, "crv");
+            details = string.IsNullOrEmpty(crv) ? "EC" : crv;
+        }
+        return new KeyPreview(kid, kty, alg, details);
+    }
+
+    public sealed record KeyPreview(string Kid, string Kty, string Alg, string Details);
+
+    public sealed record JwtValidationOutput
+    {
+        public bool Ok { get; init; }
+        public string? Message { get; init; }
+        public string? HeaderAlg { get; init; }
+        public string? HeaderKid { get; init; }
+        public string? Iss { get; init; }
+        public string? Sub { get; init; }
+        public string? Aud { get; init; }
+        public string? Iat { get; init; }
+        public string? Nbf { get; init; }
+        public string? Exp { get; init; }
+    };
 
     public sealed class ClientInput
     {
@@ -122,5 +360,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         public string? ClientSecret { get; set; }
         [Display(Name = "Introspection audiences (comma-separated)")]
         public string? IntrospectionAudiences { get; set; }
+        [Display(Name = "Public JWKS JSON")]
+        public string? PublicJwksJson { get; set; }
+        [Display(Name = "Public JWKS URI")]
+        [Url]
+        public string? PublicJwksUri { get; set; }
+        [Display(Name = "Test signed JWT")]
+        public string? TestJwt { get; set; }
     }
 }

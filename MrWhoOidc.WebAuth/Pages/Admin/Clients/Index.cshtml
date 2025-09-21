@@ -16,7 +16,7 @@
                     <label asp-for="Input.ClientId" class="form-label"></label>
                     <div class="input-group">
                         <input asp-for="Input.ClientId" class="form-control" />
-                        <button type="button" id="btn-generate" class="btn btn-outline-secondary" title="Generate client ID">Generate</button>
+                        <button type="submit" asp-page-handler="Generate" class="btn btn-outline-secondary" title="Generate client ID">Generate</button>
                     </div>
                     <span asp-validation-for="Input.ClientId" class="text-danger"></span>
                 </div>
@@ -40,10 +40,7 @@
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.ClientSecret" class="form-label"></label>
-                    <div class="input-group">
-                        <input asp-for="Input.ClientSecret" class="form-control" />
-                        <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
-                    </div>
+                    <input asp-for="Input.ClientSecret" class="form-control" />
                     <small class="form-text text-muted">Leave empty for public client</small>
                     <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
                 </div>
@@ -90,44 +87,4 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
-    <script>
-        (function(){
-            function toBase64Url(bytes) {
-                let binary = '';
-                const len = bytes.byteLength;
-                for (let i = 0; i < len; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                let base64 = btoa(binary);
-                base64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-                return base64;
-            }
-            const btnId = document.getElementById('btn-generate');
-            if(btnId){
-                btnId.addEventListener('click', function(){
-                    const input = document.getElementById('Input_ClientId');
-                    if(!input) return;
-                    const bytes = new Uint8Array(32);
-                    window.crypto.getRandomValues(bytes);
-                    const id = toBase64Url(bytes).substring(0, 24);
-                    input.value = id;
-                    const span = document.querySelector('span[data-valmsg-for="Input.ClientId"]');
-                    if (span) { span.textContent = ''; }
-                });
-            }
-            const btnSecret = document.getElementById('btn-generate-secret');
-            if(btnSecret){
-                btnSecret.addEventListener('click', function(){
-                    const input = document.getElementById('Input_ClientSecret');
-                    if(!input) return;
-                    const bytes = new Uint8Array(48); // ~64-char base64url
-                    window.crypto.getRandomValues(bytes);
-                    const secret = toBase64Url(bytes);
-                    input.value = secret;
-                    const span = document.querySelector('span[data-valmsg-for="Input.ClientSecret"]');
-                    if (span) { span.textContent = ''; }
-                });
-            }
-        })();
-    </script>
 }

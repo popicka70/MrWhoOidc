@@ -42,10 +42,59 @@
             <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
         </div>
         <div class="col-12">
+            <label asp-for="Input.PublicJwksUri" class="form-label"></label>
+            <div class="input-group">
+                <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
+                <button type="submit" class="btn btn-outline-secondary" asp-page-handler="FetchJwks">Fetch</button>
+            </div>
+            <small class="form-text text-muted">Optional URI for client's JWKS. Click Fetch to load into JSON field.</small>
+            <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
+        </div>
+        <div class="col-12">
+            <label asp-for="Input.PublicJwksJson" class="form-label"></label>
+            <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="8" placeholder='{"keys":[{...}]}'></textarea>
+            <small class="form-text text-muted">Paste a public JWK (single) or JWKS (keys array) used for private_key_jwt and JAR.</small>
+            <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
+        </div>
+        @if (Model.KeyPreviews?.Count > 0)
+        {
+            <div class="col-12">
+                <div class="card mb-3">
+                    <div class="card-header">JWKS preview</div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            @foreach (var k in Model.KeyPreviews)
+                            {
+                                <li>
+                                    <code>@k.Kid</code> — @k.Kty @k.Alg @(" ") @k.Details
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="col-12">
             <label asp-for="Input.IntrospectionAudiences" class="form-label"></label>
             <input asp-for="Input.IntrospectionAudiences" class="form-control" placeholder="api1, https://api.example.com" />
             <small class="form-text text-muted">Comma-separated audience allow-list for this client's introspection calls. Leave empty to use global config.</small>
             <span asp-validation-for="Input.IntrospectionAudiences" class="text-danger"></span>
+        </div>
+        <div class="col-12">
+            <label asp-for="Input.TestJwt" class="form-label"></label>
+            <textarea asp-for="Input.TestJwt" class="form-control" rows="4" placeholder="Paste a signed JWT to validate its signature against the JWKS"></textarea>
+            <div class="mt-2">
+                <button type="submit" class="btn btn-outline-primary" asp-page-handler="ValidateJwt">Validate JWT Signature</button>
+            </div>
+            @if (Model.JwtTest is not null)
+            {
+                <div class="alert @(Model.JwtTest.Ok ? "alert-success" : "alert-danger") mt-2">
+                    <strong>@Model.JwtTest.Message</strong>
+                    <div class="small text-muted">
+                        alg: @Model.JwtTest.HeaderAlg; kid: @Model.JwtTest.HeaderKid; iss: @Model.JwtTest.Iss; sub: @Model.JwtTest.Sub
+                    </div>
+                </div>
+            }
         </div>
     </div>
     <div class="mt-3">
