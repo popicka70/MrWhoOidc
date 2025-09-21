@@ -104,7 +104,7 @@ Backlog – Introspection (RFC 7662)
   - [x] Persist access tokens (opaque): hash, `client_id`, `user_id`, `scope[]`, `aud`, `exp`, `jti`, `revoked_at`.
   - [x] Update `/token` to issue opaque tokens when configured; include `jti`.
   - [x] Update `/introspect` to resolve opaque tokens from DB and reflect `revoked_at`/`exp` in `active`.
-  - [ ] Background cleanup for expired tokens (hosted cleanup; opportunistic cleanup currently only applied to PAR entries).
+  - [x] Background cleanup for expired tokens (hourly hosted service; complements opportunistic cleanup).
 
 - Phase 4 – Fidelity & extensions
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.

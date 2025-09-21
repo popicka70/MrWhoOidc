@@ -108,6 +108,9 @@ else
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();
 
+// Background cleanup for expired tokens (opaque + refresh)
+builder.Services.AddHostedService<ExpiredTokenCleanupService>();
+
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
 {
