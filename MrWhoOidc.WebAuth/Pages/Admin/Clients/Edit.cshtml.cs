@@ -89,6 +89,17 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             catch { }
         }
 
+        // Parse redirect allow-lists
+        string? loginUris = null, logoutUris = null;
+        if (!string.IsNullOrEmpty(client.AllowedLoginRedirectUrisJson))
+        {
+            try { loginUris = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
+        }
+        if (!string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
+        {
+            try { logoutUris = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
+        }
+
         Input = new ClientInput
         {
             ClientId = client.ClientId,
@@ -101,7 +112,9 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             IntrospectionResponseFields = fields,
             IntrospectionMtlsThumbprints = mtls,
             PublicJwksJson = client.PublicJwksJson,
-            PublicJwksUri = client.PublicJwksUri
+            PublicJwksUri = client.PublicJwksUri,
+            AllowedLoginRedirectUris = loginUris,
+            AllowedLogoutRedirectUris = logoutUris
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
@@ -705,8 +718,25 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.PublicJwksJson = string.IsNullOrWhiteSpace(Input.PublicJwksJson) ? null : Input.PublicJwksJson;
         client.PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri;
 
+        // Persist redirect allow-lists
+        client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
+        client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
+    }
+
+    private static string? NormalizeUrlsToJson(string? csv)
+    {
+        if (string.IsNullOrWhiteSpace(csv)) return null;
+        var list = csv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.Ordinal)
+            .Select(s => s.Trim())
+            .ToArray();
+        return list.Length == 0 ? null : JsonSerializer.Serialize(list);
     }
 
     private async Task LoadRealmsAsync()
@@ -844,5 +874,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? TestJwt { get; set; }
         [Display(Name = "Private JWK or JWKS (one-time)")]
         public string? PrivateJwk { get; set; }
+
+        [Display(Name = "Allowed login redirect URIs (comma-separated)")]
+        public string? AllowedLoginRedirectUris { get; set; }
+        [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
+        public string? AllowedLogoutRedirectUris { get; set; }
     }
 }

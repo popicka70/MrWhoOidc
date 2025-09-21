@@ -91,6 +91,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.RequirePar).HasDefaultValue(false);
             b.Property(x => x.IntrospectionResponseFieldsJson).HasMaxLength(2000);
             b.Property(x => x.IntrospectionMtlsThumbprintsJson).HasMaxLength(2000);
+            // New: per-client allowed redirect URIs
+            b.Property(x => x.AllowedLoginRedirectUrisJson).HasMaxLength(4000);
+            b.Property(x => x.AllowedLogoutRedirectUrisJson).HasMaxLength(4000);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -356,6 +359,12 @@ public class Client
     public string? IntrospectionResponseFieldsJson { get; set; }
     [MaxLength(2000)]
     public string? IntrospectionMtlsThumbprintsJson { get; set; }
+
+    // New: per-client redirect URI allow-lists
+    [MaxLength(4000)]
+    public string? AllowedLoginRedirectUrisJson { get; set; }
+    [MaxLength(4000)]
+    public string? AllowedLogoutRedirectUrisJson { get; set; }
 }
 
 public class ClientScope

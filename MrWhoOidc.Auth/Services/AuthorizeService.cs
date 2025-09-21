@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -29,6 +30,23 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
 
         if (!IsValidAbsoluteUri(request.redirect_uri))
             return Error("invalid_request", "redirect_uri must be absolute");
+
+        // Enforce per-client login redirect allow-list when configured
+        if (!string.IsNullOrWhiteSpace(client.AllowedLoginRedirectUrisJson))
+        {
+            try
+            {
+                var allowed = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
+                if (allowed.Length > 0 && !allowed.Contains(request.redirect_uri, StringComparer.Ordinal))
+                {
+                    return Error("invalid_request", "redirect_uri is not allowed for this client");
+                }
+            }
+            catch
+            {
+                // If parsing fails, behave as if no allow-list was set to avoid blocking all clients unintentionally
+            }
+        }
 
         if (client.RequirePkce)
         {

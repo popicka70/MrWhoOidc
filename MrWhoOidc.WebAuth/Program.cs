@@ -216,7 +216,7 @@ builder.Services.AddRateLimiter(options =>
 // Register handlers
 builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
-builder.Services.AddSingleton<ILogoutHandler, LogoutHandler>();
+builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();

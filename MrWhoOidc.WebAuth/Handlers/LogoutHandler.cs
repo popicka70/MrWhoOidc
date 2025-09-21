@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.Auth.Persistence;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -10,7 +12,7 @@ public interface ILogoutHandler
     Task<IResult> EndSessionAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env) : ILogoutHandler
+public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env, AuthDbContext db) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
@@ -30,7 +32,7 @@ public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env) 
 
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-        if (!string.IsNullOrEmpty(postLogout) && IsAllowedPostLogoutUri(postLogout, options.AllowedPostLogoutRedirectUris, env))
+        if (!string.IsNullOrEmpty(postLogout) && IsAllowedPostLogoutUri(postLogout, options.AllowedPostLogoutRedirectUris, env, db))
         {
             var uri = new UriBuilder(postLogout);
             if (!string.IsNullOrEmpty(state))
@@ -45,12 +47,31 @@ public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env) 
         return Results.Redirect("/");
     }
 
-    static bool IsAllowedPostLogoutUri(string uri, string[] allowed, IWebHostEnvironment env)
+    static bool IsAllowedPostLogoutUri(string uri, string[] allowedGlobal, IWebHostEnvironment env, AuthDbContext db)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return false;
 
-        // Explicit allow-list first
-        foreach (var a in allowed)
+        // 1) Check per-client allow-lists
+        try
+        {
+            var lists = db.Clients
+                .Where(c => c.AllowedLogoutRedirectUrisJson != null)
+                .Select(c => c.AllowedLogoutRedirectUrisJson!)
+                .ToArray();
+            foreach (var json in lists)
+            {
+                try
+                {
+                    var arr = JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+                    if (arr.Contains(uri, StringComparer.Ordinal)) return true;
+                }
+                catch { }
+            }
+        }
+        catch { }
+
+        // 2) Fallback: global allow-list
+        foreach (var a in allowedGlobal)
         {
             if (Uri.TryCreate(a, UriKind.Absolute, out var au))
             {
@@ -64,10 +85,12 @@ public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env) 
             }
         }
 
-        // Dev convenience: if no allow-list configured, allow loopback targets
-        if (env.IsDevelopment() && (allowed is null || allowed.Length == 0))
+        // 3) Dev convenience: allow loopback when nothing configured
+        if (env.IsDevelopment())
         {
-            if (u.IsLoopback || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            var noGlobal = allowedGlobal is null || allowedGlobal.Length == 0;
+            var anyClientList = db.Clients.Any(c => c.AllowedLogoutRedirectUrisJson != null);
+            if (noGlobal && !anyClientList && (u.IsLoopback || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase)))
                 return true;
         }
 

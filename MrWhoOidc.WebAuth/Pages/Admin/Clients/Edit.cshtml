@@ -68,6 +68,18 @@
                     <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
                 </div>
                 <div class="col-12">
+                    <label asp-for="Input.AllowedLoginRedirectUris" class="form-label"></label>
+                    <input asp-for="Input.AllowedLoginRedirectUris" class="form-control" placeholder="https://app.example.com/signin-oidc, https://app2.example.com/callback" />
+                    <small class="form-text text-muted">Comma-separated absolute URLs accepted as redirect_uri during login.</small>
+                    <span asp-validation-for="Input.AllowedLoginRedirectUris" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.AllowedLogoutRedirectUris" class="form-label"></label>
+                    <input asp-for="Input.AllowedLogoutRedirectUris" class="form-control" placeholder="https://app.example.com/signout-callback-oidc" />
+                    <small class="form-text text-muted">Comma-separated absolute URLs accepted as post_logout_redirect_uri during logout.</small>
+                    <span asp-validation-for="Input.AllowedLogoutRedirectUris" class="text-danger"></span>
+                </div>
+                <div class="col-12">
                     <label asp-for="Input.ClientSecret" class="form-label"></label>
                     <div class="input-group">
                         <input asp-for="Input.ClientSecret" class="form-control" autocomplete="new-password" />
@@ -159,7 +171,7 @@
                                     @foreach (var k in Model.KeyPreviews)
                                     {
                                         <li>
-                                            <code>@k.Kid</code> – @k.Kty @k.Alg @(" ") @k.Details
+                                            <code>@k.Kid</code> ? @k.Kty @k.Alg @(" ") @k.Details
                                         </li>
                                     }
                                 </ul>
