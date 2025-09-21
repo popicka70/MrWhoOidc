@@ -47,6 +47,10 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             request_parameter_supported = true,
             request_uri_parameter_supported = true,
             request_object_signing_alg_values_supported = new[] { "RS256", "ES256" },
+            // JARM support
+            response_modes_supported = new[] { "query", "fragment", "form_post", "query.jwt", "form_post.jwt" },
+            authorization_response_iss_parameter_supported = true,
+            authorization_response_signing_alg_values_supported = new[] { "RS256" },
             // Non-standard hints to improve DX
             introspection_token_types_supported = new[] { "access_token", "refresh_token" },
             // DPoP capability hints (experimental)

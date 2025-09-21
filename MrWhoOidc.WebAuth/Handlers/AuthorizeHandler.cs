@@ -24,7 +24,8 @@ public sealed class AuthorizeHandler(
     IPushedAuthorizationRequestStore parStore,
     IRequestObjectValidator requestObjects,
     IOptions<AuthOptions> authOptions,
-    ILogger<AuthorizeHandler> logger
+    ILogger<AuthorizeHandler> logger,
+    IJwtService jwt
 ) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -146,6 +147,7 @@ public sealed class AuthorizeHandler(
                     code_challenge = http.Request.Query["code_challenge"],
                     code_challenge_method = http.Request.Query["code_challenge_method"],
                     resource = http.Request.Query["resource"],
+                    response_mode = http.Request.Query["response_mode"]
                 };
 
                 // client_id must match
@@ -163,7 +165,8 @@ public sealed class AuthorizeHandler(
                     !IsSameOrEmpty(qp.nonce, jarRequest.nonce) ||
                     !IsSameOrEmpty(qp.code_challenge, jarRequest.code_challenge) ||
                     !IsSameOrEmpty(qp.code_challenge_method, jarRequest.code_challenge_method) ||
-                    !IsSameOrEmpty(qp.resource, jarRequest.resource))
+                    !IsSameOrEmpty(qp.resource, jarRequest.resource) ||
+                    !IsSameOrEmpty(qp.response_mode, jarRequest.response_mode))
                 {
                     outcome = "error";
                     logger.LogWarning("/authorize 400: immutable conflict corr={Corr} client={Client}", corr, clientBucket);
@@ -187,6 +190,7 @@ public sealed class AuthorizeHandler(
                     code_challenge = http.Request.Query["code_challenge"],
                     code_challenge_method = http.Request.Query["code_challenge_method"],
                     resource = http.Request.Query["resource"],
+                    response_mode = http.Request.Query["response_mode"]
                 };
             }
 
@@ -197,6 +201,13 @@ public sealed class AuthorizeHandler(
                 logger.LogWarning("/authorize 400: validation failed corr={Corr} client={Client} error={Error}", corr, clientBucket, validationResult.Error);
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
+                    // If JARM requested, return a signed error JWT instead of parameters
+                    if (string.Equals(effectiveReq.response_mode, "query.jwt", StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, "form_post.jwt", StringComparison.Ordinal))
+                    {
+                        var jarm = CreateJarmErrorJwt(http, jwt, effectiveReq.client_id!, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state);
+                        return JarmRedirect(effectiveReq.redirect_uri!, effectiveReq.response_mode!, jarm);
+                    }
+
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
                     var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
                     query["error"] = validationResult.Error;
@@ -248,6 +259,13 @@ public sealed class AuthorizeHandler(
             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validationResult.Resource))
             {
                 meta.SetResource(code!, validationResult.Resource!);
+            }
+
+            // JARM response if requested
+            if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == "query.jwt" || validationResult.ResponseMode == "form_post.jwt"))
+            {
+                var jarm = CreateJarmSuccessJwt(http, jwt, validationResult.ClientId!, code!, validationResult.ResponseMode!, effectiveReq.state);
+                return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarm);
             }
 
             if (!string.IsNullOrEmpty(effectiveReq.state))
@@ -308,5 +326,68 @@ public sealed class AuthorizeHandler(
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         return Convert.ToHexString(bytes.AsSpan(0, 8));
+    }
+
+    private static IResult JarmRedirect(string redirectUri, string responseMode, string jarmJwt)
+    {
+        if (string.Equals(responseMode, "query.jwt", StringComparison.Ordinal))
+        {
+            var uri = new UriBuilder(redirectUri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            query.Remove("code");
+            query.Remove("state");
+            query["response"] = jarmJwt;
+            uri.Query = query.ToString();
+            return Results.Redirect(uri.ToString());
+        }
+        if (string.Equals(responseMode, "form_post.jwt", StringComparison.Ordinal))
+        {
+            var html = $"<html><body onload=\"document.forms[0].submit()\"><form method=\"post\" action=\"{System.Web.HttpUtility.HtmlAttributeEncode(redirectUri)}\"><input type=\"hidden\" name=\"response\" value=\"{System.Web.HttpUtility.HtmlAttributeEncode(jarmJwt)}\" /></form></body></html>";
+            return Results.Content(html, "text/html; charset=utf-8");
+        }
+        // Fallback: shouldn't happen
+        var uri2 = new UriBuilder(redirectUri);
+        var query2 = System.Web.HttpUtility.ParseQueryString(uri2.Query);
+        query2["response"] = jarmJwt;
+        uri2.Query = query2.ToString();
+        return Results.Redirect(uri2.ToString());
+    }
+
+    private static string CreateJarmSuccessJwt(HttpContext http, IJwtService jwt, string clientId, string code, string responseMode, string? state)
+    {
+        var issuer = GetIssuer(http);
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("code", code)
+        };
+        // c_hash per JARM
+        var cHash = TokenHashing.ComputeLeftHalfBase64Url(code);
+        claims.Add(new("c_hash", cHash));
+        if (!string.IsNullOrEmpty(state))
+        {
+            claims.Add(new("state", state));
+            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            claims.Add(new("s_hash", sHash));
+        }
+        var exp = DateTimeOffset.UtcNow.AddMinutes(5);
+        return jwt.CreateJwt(issuer, clientId, claims, exp);
+    }
+
+    private static string CreateJarmErrorJwt(HttpContext http, IJwtService jwt, string clientId, string error, string errorDescription, string? state)
+    {
+        var issuer = GetIssuer(http);
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("error", error),
+            new("error_description", errorDescription)
+        };
+        if (!string.IsNullOrEmpty(state))
+        {
+            claims.Add(new("state", state));
+            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            claims.Add(new("s_hash", sHash));
+        }
+        var exp = DateTimeOffset.UtcNow.AddMinutes(5);
+        return jwt.CreateJwt(issuer, clientId, claims, exp);
     }
 }

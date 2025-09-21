@@ -12,6 +12,8 @@ public class AuthorizeRequest
     public string? code_challenge_method { get; set; }
     // RFC 8707 resource indicator (single resource supported for now)
     public string? resource { get; set; }
+    // JARM/JARM-less response mode
+    public string? response_mode { get; set; }
 }
 
 public class AuthorizeValidationResult
@@ -28,4 +30,5 @@ public class AuthorizeValidationResult
     public string? CodeChallengeMethod { get; set; }
     public bool RequireConsent { get; set; }
     public string? Resource { get; set; }
+    public string? ResponseMode { get; set; }
 }

@@ -46,6 +46,17 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
         if (!string.IsNullOrEmpty(request.resource) && !IsValidAbsoluteUri(request.resource))
             return Error("invalid_target", "resource must be an absolute URI");
 
+        // response_mode (optional): support default (null), query.jwt, form_post.jwt
+        string? responseMode = request.response_mode;
+        if (!string.IsNullOrEmpty(responseMode))
+        {
+            if (!string.Equals(responseMode, "query.jwt", StringComparison.Ordinal) &&
+                !string.Equals(responseMode, "form_post.jwt", StringComparison.Ordinal))
+            {
+                return Error("unsupported_response_mode", "Only response_mode=query.jwt or form_post.jwt is supported");
+            }
+        }
+
         return new AuthorizeValidationResult
         {
             IsValid = true,
@@ -56,7 +67,8 @@ internal sealed class AuthorizeService(IClientStore clients) : IAuthorizeService
             CodeChallenge = request.code_challenge,
             CodeChallengeMethod = request.code_challenge_method,
             RequireConsent = client.RequireConsent,
-            Resource = request.resource
+            Resource = request.resource,
+            ResponseMode = responseMode
         };
     }
 
