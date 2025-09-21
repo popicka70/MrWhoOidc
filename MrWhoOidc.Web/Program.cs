@@ -52,6 +52,13 @@ builder.Services.AddHttpClient("OidcBackchannel")
     })
     .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
+// Configure OIDC Backchannel via options and IHttpClientFactory to avoid BuildServiceProvider
+builder.Services.AddOptions<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme)
+    .Configure<IHttpClientFactory>((options, factory) =>
+    {
+        options.Backchannel = factory.CreateClient("OidcBackchannel");
+    });
+
 // AuthN/Z
 builder.Services.AddAuthentication(options =>
     {
@@ -91,9 +98,6 @@ builder.Services.AddAuthentication(options =>
 
         // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
         options.TokenValidationParameters.NameClaimType = "name";
-
-        // Backchannel with DPoP and TLS settings using DI-registered client
-        options.Backchannel = builder.Services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient("OidcBackchannel");
 
         // If using http:// for dev metadata, configure ConfigurationManager with RequireHttps=false
         if (normalizedAuthority.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
