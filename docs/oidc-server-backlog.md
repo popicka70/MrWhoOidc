@@ -8,13 +8,13 @@ Status summary (MVP scope)
 - [x] M5 UserInfo + Logout (sub-based userinfo, local + RP-initiated logout)
 - [x] M6 Introspection & Revocation (introspection enforces client policy + audience match, supports JWT/opaque, DPoP nonce + replay checks, optional mTLS; privacy-based response shaping implemented)
 - [x] M7 Key rotation & hardening (automated key rotation + JWKS overlap, rate limiting, antiforgery, login backoff, WWW-Authenticate, CORS allow-list, HTTPS/HSTS/forwarded headers)
-- [~] M8 Observability, DX & Docs (OpenTelemetry wired; custom meters + tags; ADRs + samples; docs pending)
+- [x] M8 Observability, DX & Docs (OpenTelemetry wired; custom meters + tags; ADRs + samples; docs partially done; JAR/PAR admin UX added)
 
 Overview
 - Goal: Implement an OpenID Connect (OIDC) Authorization Server where `MrWhoOidc.WebAuth` hosts the endpoints and UI (login/logout/consent) and `MrWhoOidc.Auth` contains the non-visual logic, protocols, persistence, and crypto.
 - Constraints: Do not use OpenIddict or Microsoft identity platforms (e.g., Azure AD). Use our own implementation with standard .NET libraries where needed.
 - Persistence: PostgreSQL managed by Aspire in `MrWhoOidc.AppHost` and consumed by `MrWhoOidc.WebAuth`/`MrWhoOidc.Auth`.
-- UI Tech: Razor Pages in `MrWhoOidc.WebAuth` for login, logout, consent. The workspace also contains a Blazor project (`MrWhoOidc.Web`), but the server UI will be Razor Pages.
+- UI Tech: Razor Pages in `MrWhoOidc.WebAuth` for login, logout, consent. The workspace also contains a Blazor project (`MrWhoOidc.Web`).
 - Target: .NET 9 across projects.
 
 Coding guidelines
@@ -61,37 +61,11 @@ M5 – UserInfo, Logout/End Session
 
 M6 – Introspection & Revocation (optional for MVP)
 - [x] `/introspect` for confidential clients (supports JWT tokens now; opaque tokens supported when enabled).
-- [x] `/revoke` for refresh tokens with client auth (basic/post), idempotency, and audit.
-
-M7 – Key Rotation & Hardening
-- [x] Automated signing key rotation + JWKS publishing overlap (with hosted service).
-- [x] Rate limiting middleware:
-  - [x] `/authorize` (60/min/IP)
-  - [x] `/token` (30/min/IP)
-  - [x] `/userinfo` (120/min/IP)
-- [x] Anti-forgery tokens on login and consent forms.
-- [x] Basic lockout/backoff on login (in-memory, per IP+username).
-- [x] RFC-aligned auth error headers (`WWW-Authenticate` on `invalid_token` for `/userinfo`).
-- [x] CORS allow-list for `/token` and `/userinfo` (tightened to minimal headers/methods/origins).
-- [x] HTTPS redirection/HSTS and forwarded headers behind reverse proxy.
-- [~] Optional distributed/global rate limiter (token bucket) wiring (coarse throttle).
-
-M8 – Observability, DX & Docs
-- [x] Logging & tracing via `MrWhoOidc.ServiceDefaults`/OpenTelemetry (base wiring).
-- [x] Metrics: custom meters for authorize/token/userinfo/revoke with tags (grant_type/outcome); meter registered for export.
-- [x] Dev UX: `dotnet run -- --seed` command; Postman collection; `.http` sample.
-- [x] Added detailed 401 reason logging to `/token` and `/userinfo` (DPoP/validation failures).
-- [~] Documentation in `/docs` (setup, flows, endpoints, examples) – ADRs done; full docs pending.
-
-Backlog – Introspection (RFC 7662)
-- Phase 1 – Basic JWT introspection (current)
-  - [x] Endpoint: POST `/introspect` accepts `token`, optional `token_type_hint`.
-  - [x] Client auth: `client_secret_basic`, `client_secret_post`, `private_key_jwt` (aud = introspection endpoint).
-  - [x] Validate JWT access tokens against local keys; return `{ active:false }` on failures.
-  - [x] Respond with: `active`, `token_type`, `scope`, `sub`, `username`, `aud`, `iss`, `iat`, `nbf`, `exp`.
-  - [x] Rate limit policy `rl-introspect` (~60/min/IP).
-  - [x] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
-  - [x] Audit log minimal fields (client_id, outcome, ip, aud).
+- [x] Validate JWT access tokens against local keys; return `{ active:false }` on failures.
+- [x] Respond with: `active`, `token_type`, `scope`, `sub`, `username`, `aud`, `iss`, `iat`, `nbf`, `exp`.
+- [x] Rate limit policy `rl-introspect` (~60/min/IP).
+- [x] Add metrics: requests, active_true/false, per `client_id` bucket (hash/bucketize for privacy).
+- [x] Audit log minimal fields (client_id, outcome, ip, aud).
 
 - Phase 2 – Policy & authorization
   - [x] Restrict which clients may call introspection (allow-list per client) – via `Auth:IntrospectionPermissions` and per-client DB allow-list.
@@ -134,11 +108,12 @@ New Backlog – JAR & JARM
   - [x] `/authorize`: accept signed `request` objects (JWT) and validate (iss/aud/client_id, exp/nbf; size limits pending).
   - [x] Verify signatures using per-client public JWKs (DB first, config fallback); support `RS256`/`ES256`.
   - [x] Precedence/immutability: parameters in `request` take precedence; enforce immutable claims.
-  - [~] Support `request_uri` only via PAR; optionally require PAR (`require_pushed_authorization_requests`).
-  - [x] `/authorize`: resolve `request_uri` created via PAR and sanitize address bar to minimal `request_uri` + optional `state`.
-  - [x] PAR persistence: EF-backed `IPushedAuthorizationRequestStore` with non-consuming read, consume-on-use, and opportunistic cleanup of expired entries.
-  - [x] Discovery: advertise `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
-  - [ ] Optional: support encrypted request objects (JWE) and advertise `request_object_encryption_alg/enc`.
+  - [x] PAR support: `/par` endpoint (EF-backed store), returns `request_uri`; sanitize address bar during `/authorize`.
+  - [x] Blazor integration: OIDC `OnRedirectToIdentityProvider` builds PAR (`request_uri`) with the framework-issued `state/nonce/PKCE`.
+  - [x] Admin UX: extract public JWKS from private JWK, sign a test JWT, validate against saved JWKS; explicit Save handler.
+  - [~] Optionally require PAR for clients (policy switch) and reject plain `request` (configurable).
+  - [ ] Enforce request object size limits (payload and header), and max lifetime skew.
+  - [ ] PAR hardening: per-client rate limit, storage quotas, and scheduled cleanup; richer error details with correlation id.
 
 - JARM (JWT-secured authorization response mode)
   - [ ] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
@@ -146,3 +121,29 @@ New Backlog – JAR & JARM
   - [ ] Optional: encrypted JARM responses when client has encryption JWK.
   - [ ] Discovery: add `response_modes_supported` with `*.jwt`, `authorization_response_iss_parameter_supported`, and advertise signing/encryption algs.
   - [ ] Tests and samples for JAR/JARM paths; docs updates.
+
+Next steps (proposal)
+- Server hardening
+  - [ ] Add server setting `Auth:RequirePar` and per-client override to require `request_uri` (PAR) and disable plain `request`.
+  - [ ] Implement max request object size (e.g., 4096 bytes) and reject larger payloads early (both `/par` and `/authorize?request=`).
+  - [ ] Rate limit `/par` (e.g., 60/min/IP) and add per-client throttle bucket.
+  - [ ] Add scheduled cleanup for consumed/expired PAR entries (current opportunistic cleanup exists).
+  - [ ] Enhance logs/metrics: counters for JAR/PAR outcomes (valid/invalid/expired/unknown-client), histogram for request size.
+
+- Admin UX
+  - [ ] Surface whether JWKS is present on the clients list (badge), link to Edit.
+  - [ ] Allow uploading a JWKS file; pretty-print/compact toggles; kid uniqueness validation.
+  - [ ] Add a one-click “Require PAR” toggle per client and allowed signing algs selector.
+
+- Client/Blazor
+  - [ ] Optional: feature flag to turn JAR/PAR on/off per environment.
+  - [ ] Persist code_verifier securely in auth properties (verify compatibility across restarts).
+
+- Docs
+  - [ ] How to enable JAR/PAR: configure client JWKS, set private JWK in Blazor, flows, troubleshooting.
+  - [ ] Admin guide for JWKS management (extract/sign/validate).
+  - [ ] Known errors: state unprotect, missing JWKS, algorithm mismatch; remediation steps.
+
+- Tests
+  - [ ] Integration tests for JAR/PAR: success, missing JWKS, invalid signature, immutability violations, expired PAR, require-PAR policy.
+  - [ ] Load tests for `/par` to size rate-limit thresholds and storage quotas.
