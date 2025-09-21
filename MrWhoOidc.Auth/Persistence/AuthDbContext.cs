@@ -22,6 +22,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<UserAlternativeEmail> UserAlternativeEmails => Set<UserAlternativeEmail>();
     public DbSet<UserClientAssignment> UserClientAssignments => Set<UserClientAssignment>();
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
+    // New: split role assignments
+    public DbSet<UserRealmRoleAssignment> UserRealmRoleAssignments => Set<UserRealmRoleAssignment>();
+    public DbSet<UserClientRoleAssignment> UserClientRoleAssignments => Set<UserClientRoleAssignment>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -132,7 +135,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // New: User-role assignment per client + realm
+        // Legacy: User-role assignment per client + realm
         modelBuilder.Entity<UserRoleAssignment>(b =>
         {
             b.HasKey(x => new { x.UserId, x.RoleId, x.ClientId, x.RealmId });
@@ -151,6 +154,42 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: User realm-role assignment (role granted directly in a realm)
+        modelBuilder.Entity<UserRealmRoleAssignment>(b =>
+        {
+            b.HasKey(x => new { x.UserId, x.RoleId, x.RealmId });
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Role>()
+                .WithMany()
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Realm>()
+                .WithMany()
+                .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: User client-role assignment (role granted for a specific client)
+        modelBuilder.Entity<UserClientRoleAssignment>(b =>
+        {
+            b.HasKey(x => new { x.UserId, x.RoleId, x.ClientId });
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Role>()
+                .WithMany()
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -331,6 +370,22 @@ public class UserRoleAssignment
     public Guid RoleId { get; set; }
     public Guid ClientId { get; set; }
     public Guid RealmId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class UserRealmRoleAssignment
+{
+    public Guid UserId { get; set; }
+    public Guid RoleId { get; set; }
+    public Guid RealmId { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public class UserClientRoleAssignment
+{
+    public Guid UserId { get; set; }
+    public Guid RoleId { get; set; }
+    public Guid ClientId { get; set; }
     public bool IsActive { get; set; } = true;
 }
 

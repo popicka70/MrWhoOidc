@@ -10,70 +10,131 @@
     <a class="btn btn-secondary" asp-page="/Admin/Users/Edit" asp-route-id="@Model.UserId">Back to user</a>
 </div>
 
-<form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="Add">
-    <div class="col-auto">
-        <label class="form-label">Client</label>
-        <select class="form-select" asp-for="ClientId">
-            @foreach (var c in Model.Clients)
-            {
-                <option value="@c.Id">@c.ClientId (@c.RealmName)</option>
-            }
-        </select>
-    </div>
-    <div class="col-auto">
-        <label class="form-label">Realm</label>
-        <select class="form-select" asp-for="RealmId">
-            @foreach (var r in Model.Realms)
-            {
-                <option value="@r.Id">@r.Name</option>
-            }
-        </select>
-    </div>
-    <div class="col-auto">
-        <label class="form-label">Role</label>
-        <select class="form-select" asp-for="RoleId">
-            @foreach (var r in Model.Roles)
-            {
-                <option value="@r.Id">@r.Name (@r.RealmName)</option>
-            }
-        </select>
-    </div>
-    <div class="col-auto form-check mb-3">
-        <input class="form-check-input" asp-for="IsActive" />
-        <label class="form-check-label" asp-for="IsActive">Active</label>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-primary" type="submit">Add</button>
-    </div>
-</form>
-
-<table class="table table-striped align-middle">
-    <thead>
-        <tr>
-            <th>Client</th>
-            <th>Realm</th>
-            <th>Role</th>
-            <th>Active</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    @foreach (var a in Model.Assignments)
-    {
-        <tr>
-            <td>@a.ClientId (@a.ClientName)</td>
-            <td>@a.RealmName</td>
-            <td>@a.RoleName</td>
-            <td>@(a.IsActive ? "Yes" : "No")</td>
-            <td class="text-end">
-                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-roleId="@a.RoleId" asp-route-clientId="@a.ClientGuid" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this role assignment?');">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Realm roles</div>
+            <div class="card-body">
+                <form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="AddRealm">
+                    <div class="col-auto">
+                        <label class="form-label">Realm</label>
+                        <select class="form-select" asp-for="RealmAddRealmId">
+                            @foreach (var r in Model.Realms)
+                            {
+                                <option value="@r.Id">@r.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" asp-for="RealmAddRoleId">
+                            @foreach (var r in Model.Roles)
+                            {
+                                <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-auto form-check mb-3">
+                        <input class="form-check-input" asp-for="RealmIsActive" />
+                        <label class="form-check-label" asp-for="RealmIsActive">Active</label>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-primary" type="submit">Add</button>
+                    </div>
                 </form>
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
+
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Realm</th>
+                            <th>Role</th>
+                            <th>Active</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var a in Model.RealmAssignments)
+                    {
+                        <tr>
+                            <td>@a.RealmName</td>
+                            <td>@a.RoleName</td>
+                            <td>@(a.IsActive ? "Yes" : "No")</td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline" asp-page-handler="DeleteRealm" asp-route-roleId="@a.RoleId" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this role?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Client roles</div>
+            <div class="card-body">
+                <form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="AddClient">
+                    <div class="col-auto">
+                        <label class="form-label">Client</label>
+                        <select class="form-select" asp-for="ClientAddClientId">
+                            @foreach (var c in Model.Clients)
+                            {
+                                <option value="@c.Id">@c.ClientId (@c.RealmName)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label">Role</label>
+                        <select class="form-select" asp-for="ClientAddRoleId">
+                            @foreach (var r in Model.Roles)
+                            {
+                                <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-auto form-check mb-3">
+                        <input class="form-check-input" asp-for="ClientIsActive" />
+                        <label class="form-check-label" asp-for="ClientIsActive">Active</label>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-primary" type="submit">Add</button>
+                    </div>
+                </form>
+
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Realm</th>
+                            <th>Role</th>
+                            <th>Active</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var a in Model.ClientAssignments)
+                    {
+                        <tr>
+                            <td>@a.ClientId (@a.ClientName)</td>
+                            <td>@a.RealmName</td>
+                            <td>@a.RoleName</td>
+                            <td>@(a.IsActive ? "Yes" : "No")</td>
+                            <td class="text-end">
+                                <form method="post" class="d-inline" asp-page-handler="DeleteClient" asp-route-roleId="@a.RoleId" asp-route-clientId="@a.ClientGuid" onsubmit="return confirm('Remove this role?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
