@@ -117,8 +117,8 @@ New Backlog – JAR & JARM
   - [x] Enforce request object max size (server setting) for both `/par` and `/authorize?request=`; record request sizes in metrics.
   - [x] PAR cleanup hosted service (consumed/expired rows).
   - [x] Metrics: counters for JAR valid/invalid and PAR requests/success/fail/consumed + histograms for request size.
-  - [ ] PAR hardening: per-client rate limit and storage quotas; richer error details with correlation id.
-  - [ ] JAR: enforce max lifetime skew and clock skew limits.
+  - [x] PAR hardening: per-client rate limit (in-memory) and pending storage quota per client; error responses include correlation id; logs include client bucket and corr.
+  - [x] JAR: enforce max request lifetime and clock skew limits.
 
 - JARM (JWT-secured authorization response mode)
   - [ ] Support `response_mode` values `form_post.jwt` and `query.jwt` for code flow.
@@ -129,9 +129,9 @@ New Backlog – JAR & JARM
 
 Next steps (proposal)
 - Server hardening
-  - [ ] Rate limit `/par` per client_id (bucket by client) and add storage quotas.
-  - [ ] Add correlation id to PAR/JAR failures; log structured fields (client bucket, reason, size).
-  - [ ] JAR: enforce max lifetime skew and clock skew limits.
+  - [ ] Move per-client `/par` limiter to distributed store (Redis) and make limits configurable per environment.
+  - [ ] Add per-client persistent storage quotas and admin-configurable limits; surface utilization in Admin UI.
+  - [ ] Add correlation id and structured logging to all `/authorize` error paths (not only JAR); include request size and client bucket tags in metrics.
 
 - Admin UX
   - [x] Surface JWKS/Require PAR badges in clients list; link to Edit.
