@@ -205,9 +205,27 @@ app.MapGet("/login", async ctx =>
 app.MapGet("/logout", async ctx =>
 {
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+    // Accept both redirectUri and returnUrl; default to '/'
+    var requested = ctx.Request.Query["redirectUri"].FirstOrDefault()
+                   ?? ctx.Request.Query["returnUrl"].FirstOrDefault()
+                   ?? "/";
+
+    // Build absolute URI for post_logout_redirect_uri
+    string absoluteRedirectUri;
+    if (Uri.IsWellFormedUriString(requested, UriKind.Absolute))
+    {
+        absoluteRedirectUri = requested;
+    }
+    else
+    {
+        var path = requested.StartsWith('/') ? requested : "/" + requested;
+        absoluteRedirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}{path}";
+    }
+
     await ctx.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme, new AuthenticationProperties
     {
-        RedirectUri = ctx.Request.Query["returnUrl"].FirstOrDefault() ?? "/"
+        RedirectUri = absoluteRedirectUri
     });
 }).ExcludeFromDescription();
 

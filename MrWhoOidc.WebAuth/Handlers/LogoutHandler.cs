@@ -10,7 +10,7 @@ public interface ILogoutHandler
     Task<IResult> EndSessionAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(OidcOptions options) : ILogoutHandler
+public sealed class LogoutHandler(OidcOptions options, IWebHostEnvironment env) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
@@ -30,7 +30,7 @@ public sealed class LogoutHandler(OidcOptions options) : ILogoutHandler
 
         await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-        if (!string.IsNullOrEmpty(postLogout) && IsAllowedPostLogoutUri(postLogout, options.AllowedPostLogoutRedirectUris))
+        if (!string.IsNullOrEmpty(postLogout) && IsAllowedPostLogoutUri(postLogout, options.AllowedPostLogoutRedirectUris, env))
         {
             var uri = new UriBuilder(postLogout);
             if (!string.IsNullOrEmpty(state))
@@ -45,9 +45,11 @@ public sealed class LogoutHandler(OidcOptions options) : ILogoutHandler
         return Results.Redirect("/");
     }
 
-    static bool IsAllowedPostLogoutUri(string uri, string[] allowed)
+    static bool IsAllowedPostLogoutUri(string uri, string[] allowed, IWebHostEnvironment env)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return false;
+
+        // Explicit allow-list first
         foreach (var a in allowed)
         {
             if (Uri.TryCreate(a, UriKind.Absolute, out var au))
@@ -61,6 +63,14 @@ public sealed class LogoutHandler(OidcOptions options) : ILogoutHandler
                 }
             }
         }
+
+        // Dev convenience: if no allow-list configured, allow loopback targets
+        if (env.IsDevelopment() && (allowed is null || allowed.Length == 0))
+        {
+            if (u.IsLoopback || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
         return false;
     }
 }
