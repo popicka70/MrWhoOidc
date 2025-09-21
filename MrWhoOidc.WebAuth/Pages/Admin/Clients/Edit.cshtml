@@ -32,6 +32,12 @@
             <input asp-for="Input.RequireConsent" class="form-check-input" />
             <label asp-for="Input.RequireConsent" class="form-check-label"></label>
         </div>
+
+        <div class="col-md-3 form-check mt-2">
+            <input asp-for="Input.RequirePar" class="form-check-input" />
+            <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
+        </div>
+
         <div class="col-12">
             <label asp-for="Input.ClientSecret" class="form-label"></label>
             <div class="input-group">
@@ -41,6 +47,19 @@
             <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
             <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
         </div>
+
+        <div class="col-12">
+            <label class="form-label">Introspection custom response fields (comma-separated)</label>
+            <input asp-for="Input.IntrospectionResponseFields" class="form-control" placeholder="active, token_type, scope, sub, aud, iss, exp" />
+            <small class="form-text text-muted">Overrides server default allow-list for this client; leave blank to use defaults.</small>
+        </div>
+
+        <div class="col-12">
+            <label class="form-label">Introspection mTLS certificate thumbprints (SHA-256, comma-separated)</label>
+            <input asp-for="Input.IntrospectionMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
+            <small class="form-text text-muted">When set, /introspect will require a matching client certificate. Values are case-insensitive.</small>
+        </div>
+
         <div class="col-12">
             <label asp-for="Input.PublicJwksUri" class="form-label"></label>
             <div class="input-group">

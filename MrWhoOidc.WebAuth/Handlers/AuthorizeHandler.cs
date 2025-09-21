@@ -4,6 +4,8 @@ using System.Diagnostics.Metrics;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Options;
+using System.Text;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -12,7 +14,7 @@ public interface IAuthorizeHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects) : IAuthorizeHandler
+public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -37,13 +39,21 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 }
             }
 
+            // Optional: max request object size for query param 'request'
+            var roJwtFromQuery = http.Request.Query["request"].ToString();
+            var maxBytes = authOptions.Value.RequestObjectMaxBytes;
+            if (!string.IsNullOrEmpty(roJwtFromQuery) && maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
+            {
+                return ErrorResults.InvalidRequest("request object too large");
+            }
+
             // If request_uri is provided, try to resolve the pushed request and merge it
             string? requestUri = requestUriRaw;
             string? parId = ExtractParId(requestUri);
             bool isPar = !string.IsNullOrEmpty(parId);
 
             // JAR: if a signed request object is provided, validate it and use its parameters
-            string? requestJwt = http.Request.Query["request"];
+            string? requestJwt = roJwtFromQuery;
             AuthorizeRequest? jarRequest = null;
             string? jarClientId = null;
             if (!string.IsNullOrEmpty(requestJwt))
@@ -58,6 +68,14 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 }
                 jarRequest = validation.Request;
                 jarClientId = validation.ClientId;
+
+                // If RequirePar is enabled globally or for this client, reject direct request objects
+                var requirePar = authOptions.Value.RequirePar || (jarClientId is not null && authOptions.Value.RequireParClients.Contains(jarClientId, StringComparer.Ordinal));
+                if (requirePar && !isPar)
+                {
+                    outcome = "error";
+                    return ErrorResults.InvalidRequest("PAR required for this client");
+                }
             }
 
             AuthorizeRequest effectiveReq;

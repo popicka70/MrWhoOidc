@@ -4,6 +4,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -12,7 +13,7 @@ public interface IParHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects) : IParHandler
+public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions) : IParHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -45,14 +46,21 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
 
         if (!authenticated) return ErrorResults.UnauthorizedClient();
 
+        // Optional: object size limit
+        var roJwt = form["request"].ToString();
+        var maxBytes = authOptions.Value.RequestObjectMaxBytes;
+        if (maxBytes > 0 && !string.IsNullOrEmpty(roJwt) && Encoding.UTF8.GetByteCount(roJwt) > maxBytes)
+        {
+            return Results.Json(new { error = "invalid_request_object", error_description = "request object too large" }, statusCode: 400);
+        }
+
         // If a request object is provided, validate and extract fields; otherwise, build from form parameters
         AuthorizeRequest req;
-        var requestJwt = form["request"].ToString();
-        if (!string.IsNullOrEmpty(requestJwt))
+        if (!string.IsNullOrEmpty(roJwt))
         {
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
             var aud = issuer.TrimEnd('/') + "/authorize";
-            var validation = await requestObjects.ValidateAsync(requestJwt, aud);
+            var validation = await requestObjects.ValidateAsync(roJwt, aud);
             if (!validation.IsValid)
             {
                 return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription }, statusCode: 400);

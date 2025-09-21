@@ -59,6 +59,28 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             catch { /* ignore */ }
         }
 
+        string? fields = null;
+        if (!string.IsNullOrEmpty(client.IntrospectionResponseFieldsJson))
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<string[]>(client.IntrospectionResponseFieldsJson) ?? Array.Empty<string>();
+                fields = string.Join(", ", list);
+            }
+            catch { }
+        }
+
+        string? mtls = null;
+        if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
+        {
+            try
+            {
+                var list = JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson) ?? Array.Empty<string>();
+                mtls = string.Join(", ", list);
+            }
+            catch { }
+        }
+
         Input = new ClientInput
         {
             ClientId = client.ClientId,
@@ -66,7 +88,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             RealmId = client.RealmId,
             RequirePkce = client.RequirePkce,
             RequireConsent = client.RequireConsent,
+            RequirePar = client.RequirePar,
             IntrospectionAudiences = introspectionAudiences,
+            IntrospectionResponseFields = fields,
+            IntrospectionMtlsThumbprints = mtls,
             PublicJwksJson = client.PublicJwksJson,
             PublicJwksUri = client.PublicJwksUri
         };
@@ -563,6 +588,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.RealmId = Input.RealmId;
         client.RequirePkce = Input.RequirePkce;
         client.RequireConsent = Input.RequireConsent;
+        client.RequirePar = Input.RequirePar;
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
@@ -582,6 +608,38 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         else
         {
             client.IntrospectionAudiencesJson = null; // unset
+        }
+
+        // Introspection response fields allow-list
+        if (!string.IsNullOrWhiteSpace(Input.IntrospectionResponseFields))
+        {
+            var list = Input.IntrospectionResponseFields
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.IntrospectionResponseFieldsJson = JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.IntrospectionResponseFieldsJson = null;
+        }
+
+        // Introspection mTLS thumbprints
+        if (!string.IsNullOrWhiteSpace(Input.IntrospectionMtlsThumbprints))
+        {
+            var list = Input.IntrospectionMtlsThumbprints
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            client.IntrospectionMtlsThumbprintsJson = JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.IntrospectionMtlsThumbprintsJson = null;
         }
 
         // Persist JWKS/JWKS URI
@@ -701,10 +759,15 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public Guid RealmId { get; set; }
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;
+        public bool RequirePar { get; set; } = false;
         [DataType(DataType.Password)]
         public string? ClientSecret { get; set; }
         [Display(Name = "Introspection audiences (comma-separated)")]
         public string? IntrospectionAudiences { get; set; }
+        [Display(Name = "Introspection response fields (comma-separated)")]
+        public string? IntrospectionResponseFields { get; set; }
+        [Display(Name = "Introspection mTLS thumbprints (comma-separated)")]
+        public string? IntrospectionMtlsThumbprints { get; set; }
         [Display(Name = "Public JWKS JSON")]
         public string? PublicJwksJson { get; set; }
         [Display(Name = "Public JWKS URI")]

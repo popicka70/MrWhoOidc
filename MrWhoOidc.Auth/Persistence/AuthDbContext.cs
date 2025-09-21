@@ -51,6 +51,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             // New: per-client public keys (for private_key_jwt and JAR)
             b.Property(x => x.PublicJwksJson).HasMaxLength(8000);
             b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
+            // New: per-client PAR requirement and introspection shaping/mTLS
+            b.Property(x => x.RequirePar).HasDefaultValue(false);
+            b.Property(x => x.IntrospectionResponseFieldsJson).HasMaxLength(2000);
+            b.Property(x => x.IntrospectionMtlsThumbprintsJson).HasMaxLength(2000);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -172,6 +176,13 @@ public class Client
     public string? PublicJwksJson { get; set; }
     [MaxLength(2000)]
     public string? PublicJwksUri { get; set; }
+
+    // New: policy knobs moved from appsettings to per-client storage
+    public bool RequirePar { get; set; } = false;
+    [MaxLength(2000)]
+    public string? IntrospectionResponseFieldsJson { get; set; }
+    [MaxLength(2000)]
+    public string? IntrospectionMtlsThumbprintsJson { get; set; }
 }
 
 public class SigningKey
