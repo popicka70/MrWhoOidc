@@ -30,19 +30,19 @@ Epic 1 – Data model and migrations
     - UserClientAssignment(UserId, ClientId, RealmId, IsActive)
     - UserRoleAssignment(UserId, RoleId, ClientId, RealmId, IsActive)
   - AC:
-    - [ ] EF Core entities created with navigation props and constraints
-    - [ ] Migrations added and applied
-    - [ ] Unique indexes (email per user, role name per realm, scope name global, client+scope unique)
-    - [ ] Seeds: default realm, admin role, common scopes (openid, profile, email, offline_access, roles)
+    - [x] EF Core entities created with navigation props and constraints
+    - [x] Migrations added and applied
+    - [x] Unique indexes (email per user, role name per realm, scope name global, client+scope unique)
+    - [x] Seeds: default realm, admin role, common scopes (openid, profile, email, offline_access, roles)
   - Target: `MrWhoOidc.Auth`
 
 Epic 2 – Identity model extensions
 - Story 2.1: Extend user model with primary/alternative emails
   - AC:
-    - [ ] `ApplicationUser` has `PrimaryEmail`, `EmailVerifiedAt`
-    - [ ] Navigation and CRUD for alternative emails
-    - [ ] Email normalization/validation in place
-    - [ ] Migration applied
+    - [x] `ApplicationUser` has `PrimaryEmail`, `EmailVerifiedAt`
+    - [x] Navigation and CRUD for alternative emails
+    - [~] Email normalization/validation in place
+    - [x] Migration applied
   - Target: `MrWhoOidc.Auth`
 - Story 2.2: Email verification for all emails
   - AC:
@@ -54,74 +54,74 @@ Epic 2 – Identity model extensions
 Epic 3 – Client and scope management
 - Story 3.1: CRUD for scopes
   - AC:
-    - [ ] Create/update/delete/list scopes
-    - [ ] Validation; cannot delete in-use scope
+    - [x] Create/update/delete/list scopes
+    - [x] Validation; cannot delete in-use scope
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 - Story 3.2: Assign scopes to clients
   - AC:
-    - [ ] Persist `ClientScope`
-    - [ ] List effective scopes per client
-    - [ ] Prevent duplicates
+    - [x] Persist `ClientScope`
+    - [x] List effective scopes per client
+    - [x] Prevent duplicates
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 - Story 3.3: Enforce requested scopes ? assigned client scopes
   - AC:
-    - [ ] Authorization requests fail with invalid_scope when requesting disallowed scopes
+    - [x] Authorization requests fail with invalid_scope when requesting disallowed scopes
     - [ ] Unit tests for scope enforcement
   - Target: `MrWhoOidc.Auth`
 
 Epic 4 – Role and realm management
 - Story 4.1: CRUD roles per realm
   - AC:
-    - [ ] Create/update/delete/list roles scoped to realm
+    - [~] Create/update/delete/list roles scoped to realm
     - [ ] Cannot delete role in use
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 - Story 4.2: CRUD realms
   - AC:
-    - [ ] Create/update/delete/list realms; toggle IsActive
+    - [~] Create/update/delete/list realms; toggle IsActive
     - [ ] Cannot delete realm in use
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 
 Epic 5 – Assignments and enforcement
 - Story 5.1: Assign users to clients (optionally per realm)
   - AC:
-    - [ ] API/UI to add/remove user-client (+realm) assignments
-    - [ ] Validation and deduplication
+    - [~] API/UI to add/remove user-client (+realm) assignments
+    - [~] Validation and deduplication
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 - Story 5.2: Assign roles to users per client+realm
   - AC:
-    - [ ] API/UI for `UserRoleAssignment`; bulk operations supported
+    - [~] API/UI for `UserRoleAssignment`; bulk operations supported
   - Target: `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 - Story 5.3: Enforce “user can only log into assigned clients”
   - AC:
-    - [ ] During auth flow, requests for unassigned client (and realm, if applicable) are rejected consistently (pre-consent)
+    - [x] During auth flow, requests for unassigned client (and realm, if applicable) are rejected consistently (pre-consent)
     - [ ] Tests for allowed vs disallowed login
   - Target: `MrWhoOidc.Auth`
 - Story 5.4: Realm awareness in auth flow
   - AC:
-    - [ ] Realm inferred from client or explicit parameter; validated; stored in ticket
-    - [ ] Error states handled (realm inactive/unknown)
+    - [~] Realm inferred from client or explicit parameter; validated; stored in ticket
+    - [~] Error states handled (realm inactive/unknown)
   - Target: `MrWhoOidc.Auth`, `MrWhoOidc.WebAuth`
 
 Epic 6 – Claims, tokens, and userinfo
 - Story 6.1: Define supported scopes and claims
   - AC:
-    - [ ] Discovery document advertises `openid profile email offline_access roles`
-    - [ ] Custom claim docs: `roles`, `realm`
+    - [x] Discovery document advertises `openid profile email offline_access roles`
+    - [x] Custom claim docs: `roles`, `realm`
   - Target: `MrWhoOidc.Auth`
 - Story 6.2: Add roles to ID/access token and userinfo when `roles` scope granted
   - AC:
-    - [ ] Roles limited to current client+realm
-    - [ ] Claim `roles` issued only when scope granted
+    - [x] Roles limited to current client+realm
+    - [x] Claim `roles` issued only when scope granted
     - [ ] Unit tests
   - Target: `MrWhoOidc.Auth`
 - Story 6.3: Add emails to userinfo
   - AC:
-    - [ ] `email` and `email_verified` per OIDC
-    - [ ] `emails` array (custom) when `email` scope granted; configurable to include only verified
+    - [x] `email` and `email_verified` per OIDC
+    - [x] `emails` array (custom) when `email` scope granted; configurable to include only verified
   - Target: `MrWhoOidc.Auth`
 - Story 6.4: Include realm claim
   - AC:
-    - [ ] `realm` claim added to tokens/userinfo reflecting active realm
+    - [x] `realm` claim added to tokens/userinfo reflecting active realm
   - Target: `MrWhoOidc.Auth`
 
 Epic 7 – Admin API
@@ -132,8 +132,8 @@ Epic 7 – Admin API
 - Story 7.5: User-client assignments
 - Story 7.6: User-role assignments per client+realm
   - AC for all:
-    - [ ] OpenAPI documented
-    - [ ] Validation with consistent error contracts
+    - [~] OpenAPI documented
+    - [~] Validation with consistent error contracts
     - [ ] RBAC-protected endpoints
   - Target: `MrWhoOidc.ApiService`
 
@@ -178,10 +178,10 @@ Epic 11 – Tests
 Epic 12 – Migrations, seeding, and data upgrade
 - Story 12.1: Seed defaults
   - AC:
-    - [ ] Default realm, scopes, admin role, admin user; sample client with scopes
+    - [x] Default realm, scopes, admin role, admin user; sample client with scopes
 - Story 12.2: Data migration/backfill
   - AC:
-    - [ ] Attach existing users/clients to default realm; safe rollout plan
+    - [x] Attach existing users/clients to default realm; safe rollout plan
   - Target: `MrWhoOidc.Auth`
 
 Epic 13 – Observability and ops
