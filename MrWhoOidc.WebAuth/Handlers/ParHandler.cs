@@ -12,7 +12,7 @@ public interface IParHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore) : IParHandler
+public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects) : IParHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -45,24 +45,51 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
 
         if (!authenticated) return ErrorResults.UnauthorizedClient();
 
-        // Build an authorization request from form parameters
-        var req = new AuthorizeRequest
+        // If a request object is provided, validate and extract fields; otherwise, build from form parameters
+        AuthorizeRequest req;
+        var requestJwt = form["request"].ToString();
+        if (!string.IsNullOrEmpty(requestJwt))
         {
-            response_type = form["response_type"],
-            client_id = clientId,
-            redirect_uri = form["redirect_uri"],
-            scope = form["scope"],
-            state = form["state"], // not used by PAR but harmless
-            nonce = form["nonce"],
-            code_challenge = form["code_challenge"],
-            code_challenge_method = form["code_challenge_method"],
-            resource = form["resource"],
-        };
+            var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+            var aud = issuer.TrimEnd('/') + "/authorize";
+            var validation = await requestObjects.ValidateAsync(requestJwt, aud);
+            if (!validation.IsValid)
+            {
+                return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription }, statusCode: 400);
+            }
 
-        var validation = await authorize.ValidateAsync(req);
-        if (!validation.IsValid)
+            // client_id in JWT must match the authenticated client_id
+            if (!string.Equals(validation.ClientId, clientId, StringComparison.Ordinal))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "client_id mismatch between auth and request object" }, statusCode: 400);
+            }
+
+            req = validation.Request!;
+            // Allow state from form to override state in request object
+            var stateOverride = form["state"].ToString();
+            if (!string.IsNullOrEmpty(stateOverride)) req.state = stateOverride;
+        }
+        else
         {
-            return Results.Json(new { error = validation.Error, error_description = validation.ErrorDescription }, statusCode: 400);
+            // Build an authorization request from form parameters
+            req = new AuthorizeRequest
+            {
+                response_type = form["response_type"],
+                client_id = clientId,
+                redirect_uri = form["redirect_uri"],
+                scope = form["scope"],
+                state = form["state"], // not used by PAR but harmless
+                nonce = form["nonce"],
+                code_challenge = form["code_challenge"],
+                code_challenge_method = form["code_challenge_method"],
+                resource = form["resource"],
+            };
+        }
+
+        var result = await authorize.ValidateAsync(req);
+        if (!result.IsValid)
+        {
+            return Results.Json(new { error = result.Error, error_description = result.ErrorDescription }, statusCode: 400);
         }
 
         // Generate opaque id (128-bit base64url without padding)
@@ -75,8 +102,8 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
                     .Replace('+', '-').Replace('/', '_');
         }
 
-        var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
-        var requestUri = issuer.TrimEnd('/') + "/par/" + id;
+        var issuer2 = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+        var requestUri = issuer2.TrimEnd('/') + "/par/" + id;
 
         var expiresAt = parStore.Create(id, req, clientId!, TimeSpan.FromMinutes(5), requestUri);
         var expiresIn = (int)Math.Max(0, (expiresAt - DateTimeOffset.UtcNow).TotalSeconds);

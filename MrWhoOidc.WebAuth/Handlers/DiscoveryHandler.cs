@@ -43,6 +43,10 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions) : IDiscoveryHandle
             id_token_signing_alg_values_supported = new[] { "RS256" },
             scopes_supported = new[] { "openid", "profile", "email" },
             resource_indicators_supported = true,
+            // JAR support
+            request_parameter_supported = true,
+            request_uri_parameter_supported = true,
+            request_object_signing_alg_values_supported = new[] { "RS256", "ES256" },
             // Non-standard hints to improve DX
             introspection_token_types_supported = new[] { "access_token", "refresh_token" },
             // DPoP capability hints (experimental)

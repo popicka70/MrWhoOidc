@@ -12,7 +12,7 @@ public interface IAuthorizeHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta, IPushedAuthorizationRequestStore parStore) : IAuthorizeHandler
+public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorizationCodeService codes, IConsentService consents, OidcMetrics metrics, IAuthorizationCodeMetadataStore meta, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects) : IAuthorizeHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -41,6 +41,25 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             string? requestUri = requestUriRaw;
             string? parId = ExtractParId(requestUri);
             bool isPar = !string.IsNullOrEmpty(parId);
+
+            // JAR: if a signed request object is provided, validate it and use its parameters
+            string? requestJwt = http.Request.Query["request"];
+            AuthorizeRequest? jarRequest = null;
+            string? jarClientId = null;
+            if (!string.IsNullOrEmpty(requestJwt))
+            {
+                var issuer = GetIssuer(http);
+                var aud = issuer.TrimEnd('/') + "/authorize";
+                var validation = await requestObjects.ValidateAsync(requestJwt, aud);
+                if (!validation.IsValid)
+                {
+                    outcome = "error";
+                    return ErrorResults.InvalidRequest(validation.ErrorDescription ?? "Invalid request object");
+                }
+                jarRequest = validation.Request;
+                jarClientId = validation.ClientId;
+            }
+
             AuthorizeRequest effectiveReq;
             if (isPar)
             {
@@ -50,10 +69,49 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                     outcome = "error";
                     return ErrorResults.InvalidRequest("Invalid or expired request_uri");
                 }
-                // Build from stored request, but allow state to be provided at request time (optional per spec)
                 effectiveReq = entry.Request;
                 var stateFromQuery = http.Request.Query["state"].ToString();
                 if (!string.IsNullOrEmpty(stateFromQuery)) effectiveReq.state = stateFromQuery;
+            }
+            else if (jarRequest is not null)
+            {
+                // Merge query params into jarRequest, enforcing immutability (query cannot conflict with values inside request object)
+                var qp = new AuthorizeRequest
+                {
+                    response_type = http.Request.Query["response_type"],
+                    client_id = http.Request.Query["client_id"],
+                    redirect_uri = http.Request.Query["redirect_uri"],
+                    scope = http.Request.Query["scope"],
+                    state = http.Request.Query["state"],
+                    nonce = http.Request.Query["nonce"],
+                    code_challenge = http.Request.Query["code_challenge"],
+                    code_challenge_method = http.Request.Query["code_challenge_method"],
+                    resource = http.Request.Query["resource"],
+                };
+
+                // client_id must match
+                if (!string.IsNullOrEmpty(qp.client_id) && !string.Equals(qp.client_id, jarClientId, StringComparison.Ordinal))
+                {
+                    outcome = "error";
+                    return ErrorResults.InvalidRequest("client_id in query does not match request object");
+                }
+
+                // For each param, if query has value and it's different from request object, fail immutability
+                if (!IsSameOrEmpty(qp.response_type, jarRequest.response_type) ||
+                    !IsSameOrEmpty(qp.redirect_uri, jarRequest.redirect_uri) ||
+                    !IsSameOrEmpty(qp.scope, jarRequest.scope) ||
+                    !IsSameOrEmpty(qp.nonce, jarRequest.nonce) ||
+                    !IsSameOrEmpty(qp.code_challenge, jarRequest.code_challenge) ||
+                    !IsSameOrEmpty(qp.code_challenge_method, jarRequest.code_challenge_method) ||
+                    !IsSameOrEmpty(qp.resource, jarRequest.resource))
+                {
+                    outcome = "error";
+                    return ErrorResults.InvalidRequest("Query parameter conflicts with immutable request object");
+                }
+
+                effectiveReq = jarRequest;
+                // state can be supplied outside and should override if provided
+                if (!string.IsNullOrEmpty(qp.state)) effectiveReq.state = qp.state;
             }
             else
             {
@@ -71,21 +129,21 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 };
             }
 
-            var validation = await authorize.ValidateAsync(effectiveReq);
-            if (!validation.IsValid)
+            var validationResult = await authorize.ValidateAsync(effectiveReq);
+            if (!validationResult.IsValid)
             {
                 outcome = "error";
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
                     var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                    query["error"] = validation.Error;
-                    query["error_description"] = validation.ErrorDescription;
+                    query["error"] = validationResult.Error;
+                    query["error_description"] = validationResult.ErrorDescription;
                     if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
                     uri.Query = query.ToString();
                     return Results.Redirect(uri.ToString());
                 }
-                return ErrorResults.InvalidRequest(validation.ErrorDescription);
+                return ErrorResults.InvalidRequest(validationResult.ErrorDescription);
             }
 
             if (!http.User.Identity?.IsAuthenticated ?? true)
@@ -99,15 +157,15 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
                 return Results.Unauthorized();
 
-            if (validation.RequireConsent && !await consents.HasConsentAsync(userId, validation.ClientId!, validation.Scopes))
+            if (validationResult.RequireConsent && !await consents.HasConsentAsync(userId, validationResult.ClientId!, validationResult.Scopes))
             {
                 outcome = "consent";
                 var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                var consentUrl = $"/consent?ClientId={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&" + string.Join("&", validation.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
+                var consentUrl = $"/consent?ClientId={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&" + string.Join("&", validationResult.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
                 return Results.Redirect(consentUrl);
             }
 
-            var (ok, _, redirect, code) = await codes.IssueAsync(validation, userId);
+            var (ok, _, redirect, code) = await codes.IssueAsync(validationResult, userId);
             if (!ok || redirect is null) return Results.Json(new { error = "server_error" }, statusCode: 500);
 
             // Now that authorization succeeded, consume PAR if used
@@ -124,9 +182,9 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             }
 
             // Persist RFC 8707 resource indicator with the code (if present)
-            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validation.Resource))
+            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validationResult.Resource))
             {
-                meta.SetResource(code!, validation.Resource!);
+                meta.SetResource(code!, validationResult.Resource!);
             }
 
             if (!string.IsNullOrEmpty(effectiveReq.state))
@@ -146,6 +204,15 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, new TagList { new("outcome", outcome) });
         }
     }
+
+    private static bool IsSameOrEmpty(string? queryValue, string? roValue)
+    {
+        if (string.IsNullOrEmpty(queryValue)) return true; // empty query is fine
+        return string.Equals(queryValue, roValue, StringComparison.Ordinal);
+    }
+
+    private static string GetIssuer(HttpContext http)
+        => (http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions)?.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
     private static string? ExtractParId(string? requestUri)
     {

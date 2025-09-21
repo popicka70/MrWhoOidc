@@ -29,6 +29,9 @@ public static class AuthServiceCollectionExtensions
         // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
 
+        // Request object (JAR) validator
+        services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
+
         // Key rotation options and services
         services.AddOptions<KeyRotationOptions>();
         services.AddScoped<IKeyRotationService, KeyRotationService>();
