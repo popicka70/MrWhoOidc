@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Options;
 using System.Text;
+using System.Diagnostics;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -18,6 +19,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         string outcome = "redirect";
         try
@@ -46,7 +48,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
             {
                 if (maxBytes > 0 && Encoding.UTF8.GetByteCount(roJwtFromQuery) > maxBytes)
                 {
-                    return ErrorResults.InvalidRequest("request object too large");
+                    return ErrorResults.InvalidRequest($"request object too large (corr={corr})");
                 }
                 metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery));
             }
@@ -69,7 +71,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 {
                     outcome = "error";
                     metrics.JarInvalid.Add(1);
-                    return ErrorResults.InvalidRequest(validation.ErrorDescription ?? "Invalid request object");
+                    return ErrorResults.InvalidRequest($"{validation.ErrorDescription ?? "Invalid request object"} (corr={corr})");
                 }
                 metrics.JarValid.Add(1);
                 jarRequest = validation.Request;
@@ -80,7 +82,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (requirePar && !isPar)
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("PAR required for this client");
+                    return ErrorResults.InvalidRequest($"PAR required for this client (corr={corr})");
                 }
             }
 
@@ -91,7 +93,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (entry is null)
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("Invalid or expired request_uri");
+                    return ErrorResults.InvalidRequest($"Invalid or expired request_uri (corr={corr})");
                 }
                 effectiveReq = entry.Request;
                 var stateFromQuery = http.Request.Query["state"].ToString();
@@ -117,7 +119,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                 if (!string.IsNullOrEmpty(qp.client_id) && !string.Equals(qp.client_id, jarClientId, StringComparison.Ordinal))
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("client_id in query does not match request object");
+                    return ErrorResults.InvalidRequest($"client_id in query does not match request object (corr={corr})");
                 }
 
                 // For each param, if query has value and it's different from request object, fail immutability
@@ -130,7 +132,7 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                     !IsSameOrEmpty(qp.resource, jarRequest.resource))
                 {
                     outcome = "error";
-                    return ErrorResults.InvalidRequest("Query parameter conflicts with immutable request object");
+                    return ErrorResults.InvalidRequest($"Query parameter conflicts with immutable request object (corr={corr})");
                 }
 
                 effectiveReq = jarRequest;
@@ -162,12 +164,12 @@ public sealed class AuthorizeHandler(IAuthorizeService authorize, IAuthorization
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
                     var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
                     query["error"] = validationResult.Error;
-                    query["error_description"] = validationResult.ErrorDescription;
+                    query["error_description"] = $"{validationResult.ErrorDescription} (corr={corr})";
                     if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
                     uri.Query = query.ToString();
                     return Results.Redirect(uri.ToString());
                 }
-                return ErrorResults.InvalidRequest(validationResult.ErrorDescription);
+                return ErrorResults.InvalidRequest($"{validationResult.ErrorDescription} (corr={corr})");
             }
 
             if (!http.User.Identity?.IsAuthenticated ?? true)
