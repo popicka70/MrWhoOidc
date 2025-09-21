@@ -11,8 +11,12 @@ public sealed class AuthOptions
     // Key: client_id, Value: allowed audience(s) for introspection
     public Dictionary<string, string[]> IntrospectionPermissions { get; set; } = new();
 
-   // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
-   public bool AllowRefreshTokenIntrospection { get; set; } = false;
+    // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
+    public bool AllowRefreshTokenIntrospection { get; set; } = false;
+
+    // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints
+    // Thumbprints should be provided as hex without spaces and are case-insensitive.
+    public Dictionary<string, string[]> IntrospectionMtlsCertificates { get; set; } = new();
 }
 
 public sealed class OpaqueAccessTokenOptions

@@ -16,6 +16,9 @@ using MrWhoOidc.WebAuth.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// NOTE: don't request client certificates at TLS layer to avoid browser cert prompts.
+// For mTLS on machine-to-machine callers, prefer certificate forwarding via a reverse proxy.
+
 builder.AddServiceDefaults();
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
@@ -25,6 +28,12 @@ builder.Services.AddSingleton(oidcOptions);
 
 // Bind AuthOptions (API audiences)
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+
+// Client certificate forwarding (when behind proxy sending base64 cert header)
+builder.Services.AddCertificateForwarding(options =>
+{
+    options.CertificateHeader = "X-Client-Cert";
+});
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -213,6 +222,9 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
+
+// Forward client certificates from proxy header if present
+app.UseCertificateForwarding();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

@@ -3,11 +3,14 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Authentication
 @using System.Net
-@using System.Text.Json
+@using System.Net.Http
+@using System.Net.Http.Headers
 @using System.Net.Http.Json
+@using System.Text.Json
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IHttpContextAccessor HttpContextAccessor
 @inject ILogger<Introspection> Logger
+@inject MrWhoOidc.Web.DPoP.DPoPKeyStore DPoPKeyStore
 
 <PageTitle>Introspection</PageTitle>
 
@@ -79,9 +82,9 @@
             var authorityUri = new Uri(authority);
             var discoveryUri = new Uri(authorityUri, ".well-known/openid-configuration");
 
-            using var http = new HttpClient();
-            http.DefaultRequestVersion = HttpVersion.Version11;
-            var metadata = await http.GetFromJsonAsync<JsonElement>(discoveryUri);
+            using var metaClient = new HttpClient();
+            metaClient.DefaultRequestVersion = HttpVersion.Version11;
+            var metadata = await metaClient.GetFromJsonAsync<JsonElement>(discoveryUri);
             var introspectUrl = metadata.GetProperty("introspection_endpoint").GetString();
             if (string.IsNullOrEmpty(introspectUrl))
             {
@@ -96,11 +99,23 @@
             var form = new Dictionary<string, string?>
             {
                 ["token"] = accessToken,
-                ["client_id"] = clientId,
-                ["client_secret"] = clientSecret
+                ["client_id"] = clientId
             };
+            if (!string.IsNullOrEmpty(clientSecret))
+            {
+                form["client_secret"] = clientSecret;
+            }
 
-            var resp = await http.PostAsync(introspectUrl, new FormUrlEncodedContent(form!));
+            // Create a DPoP-enabled client and set Authorization: Bearer so 'ath' can be computed
+            using var http = new HttpClient(new MrWhoOidc.Web.DPoPBackchannelHandler(DPoPKeyStore, new SocketsHttpHandler()))
+            {
+                DefaultRequestVersion = HttpVersion.Version11,
+                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var resp = await http.PostAsync(introspectUrl!, new FormUrlEncodedContent(form!));
             var body = await resp.Content.ReadAsStringAsync();
             resultJson = body;
         }

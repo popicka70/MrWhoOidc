@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using System.Text.Json;
 using MrWhoOidc.WebAuth.Infrastructure;
+using System.Security.Cryptography.X509Certificates;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -58,7 +59,6 @@ public sealed class IntrospectionHandler(
             return Results.BadRequest(new { error = "invalid_request" });
         }
 
-        // Require confidential client for introspection unless using private_key_jwt
         var client = await clients.FindByClientIdAsync(clientId);
         if (client is null)
         {
@@ -67,33 +67,62 @@ public sealed class IntrospectionHandler(
             return Results.BadRequest(new { error = "unauthorized_client" });
         }
 
-        // private_key_jwt support
-        var clientAssertionType = form["client_assertion_type"].ToString();
-        var clientAssertion = form["client_assertion"].ToString();
-        var endpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/introspect";
-
-        bool authenticated;
-        if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        // mTLS authentication (optional): if configured for this client, require a matching cert
+        if (authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 } &&
+            authOptions.Value.IntrospectionMtlsCertificates.TryGetValue(clientId, out var allowedThumbprints) &&
+            allowedThumbprints is { Length: > 0 })
         {
-            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, endpoint);
+            var cert = http.Connection.ClientCertificate;
+            if (cert is null)
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                logger.LogWarning("/introspect mtls: no client certificate provided for client {Client}", clientBucket);
+                return Results.BadRequest(new { error = "unauthorized_client" });
+            }
+
+            string presented = cert.GetCertHashString(HashAlgorithmName.SHA256);
+            bool match = allowedThumbprints.Any(t => string.Equals(t, presented, StringComparison.OrdinalIgnoreCase));
+            if (!match)
+            {
+                metrics.IntrospectionActiveFalse.Add(1, tags);
+                metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                logger.LogWarning("/introspect mtls: certificate thumbprint mismatch for client {Client}", clientBucket);
+                return Results.BadRequest(new { error = "unauthorized_client" });
+            }
+
+            // Authenticated via mTLS, skip client secret/private_key_jwt validation
         }
         else
         {
-            // Enforce confidential clients for secret-based auth
-            if (string.IsNullOrEmpty(client.ClientSecretHash))
+            // private_key_jwt or client_secret based authentication
+            var clientAssertionType = form["client_assertion_type"].ToString();
+            var clientAssertion = form["client_assertion"].ToString();
+            var endpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/introspect";
+
+            bool authenticated;
+            if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+            {
+                authenticated = await assertions.ValidateAsync(clientId, clientAssertion, endpoint);
+            }
+            else
+            {
+                // Enforce confidential clients for secret-based auth
+                if (string.IsNullOrEmpty(client.ClientSecretHash))
+                {
+                    metrics.IntrospectionActiveFalse.Add(1, tags);
+                    metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
+                    return Results.BadRequest(new { error = "unauthorized_client" });
+                }
+                authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+            }
+
+            if (!authenticated)
             {
                 metrics.IntrospectionActiveFalse.Add(1, tags);
                 metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
                 return Results.BadRequest(new { error = "unauthorized_client" });
             }
-            authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
-        }
-
-        if (!authenticated)
-        {
-            metrics.IntrospectionActiveFalse.Add(1, tags);
-            metrics.IntrospectionDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
-            return Results.BadRequest(new { error = "unauthorized_client" });
         }
 
         var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
@@ -148,6 +177,7 @@ public sealed class IntrospectionHandler(
 
                 if (!string.IsNullOrEmpty(cnfJkt))
                 {
+                    var endpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/introspect";
                     var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
 
                     // Nonce challenge
@@ -272,6 +302,7 @@ public sealed class IntrospectionHandler(
         // DPoP enforcement for opaque token if bound
         if (!string.IsNullOrEmpty(entity.CnfJkt))
         {
+            var endpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/introspect";
             var validation = await dpop.ValidateForEndpointAsync(http, endpoint, token);
             var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
             var (nonceOk, serverNonce) = await nonceStore.ValidateOrIssueAsync(endpoint, clientIp, validation.Jkt, validation.Nonce);

@@ -111,7 +111,7 @@ Backlog – Introspection (RFC 7662)
   - [x] Discovery: advertise `introspection_endpoint_auth_methods_supported` and signing algs.
   - [x] Include `jti`, `cnf` (for DPoP/bound tokens) when available.
   - [x] Support `aud` as array in response when token carries multiple audiences.
-  - [ ] Optional mTLS client auth for introspection (future hardening).
+  - [x] Optional mTLS client auth for introspection (config: `Auth:IntrospectionMtlsCertificates`).
   - [x] Implement `token_type_hint` handling for refresh tokens (gated by `Auth:AllowRefreshTokenIntrospection`; owner-only RT).
   - [x] Discovery: advertise `introspection_token_types_supported` (non-standard, DX).
 
