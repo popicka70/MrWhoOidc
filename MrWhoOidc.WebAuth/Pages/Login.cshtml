@@ -2,9 +2,10 @@
 @model MrWhoOidc.WebAuth.Pages.LoginModel
 @{
     ViewData["Title"] = "Login";
+    Layout = "_AuthLayout";
 }
 
-<h2>Login</h2>
+<h2 class="mb-4 text-center">Sign in</h2>
 
 <form method="post" asp-antiforgery="true">
     <input type="hidden" asp-for="ReturnUrl" />
@@ -18,5 +19,5 @@
         <input asp-for="Password" class="form-control" type="password" autocomplete="current-password" />
         <span asp-validation-for="Password" class="text-danger"></span>
     </div>
-    <button type="submit" class="btn btn-primary">Sign in</button>
+    <button type="submit" class="btn btn-primary w-100">Sign in</button>
 </form>

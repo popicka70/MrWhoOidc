@@ -11,57 +11,48 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
+        <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-0">
+            <div class="container-fluid">
                 <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                Admin
-                            </a>
-                            <ul class="dropdown-menu" aria-labelledby="adminMenu">
-                                <li><a class="dropdown-item" asp-page="/Admin/Realms/Index">Realms</a></li>
-                                <li><a class="dropdown-item" asp-page="/Admin/Clients/Index">Clients</a></li>
-                            </ul>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav ms-auto">
-                        @if (User?.Identity?.IsAuthenticated ?? false)
-                        {
-                            <li class="nav-item">
-                                <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link" asp-page="/Login">Log in</a>
-                            </li>
-                        }
-                    </ul>
+                <div class="d-flex align-items-center">
+                    @if (User?.Identity?.IsAuthenticated ?? false)
+                    {
+                        <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
+                        <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
+                    }
+                    else
+                    {
+                        <a class="nav-link" asp-page="/Login">Log in</a>
+                    }
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
+
+    <div class="container-fluid">
+        <div class="row">
+            @if (User?.Identity?.IsAuthenticated ?? false)
+            {
+                <aside class="col-12 col-md-3 col-lg-2 border-end min-vh-100 p-0" id="sidebar">
+                    <div class="list-group list-group-flush rounded-0">
+                        <a class="list-group-item list-group-item-action" asp-page="/Index">Home</a>
+                        <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index">Realms</a>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index">Clients</a>
+                    </div>
+                </aside>
+            }
+
+            <main role="main" class="col">
+                <div class="container py-3">
+                    @RenderBody()
+                </div>
+            </main>
+        </div>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
+    <footer class="border-top footer text-muted mt-auto">
+        <div class="container py-2">
             &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
         </div>
     </footer>

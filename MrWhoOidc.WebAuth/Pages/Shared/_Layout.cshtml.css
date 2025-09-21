@@ -46,3 +46,11 @@ button.accept-policy {
   white-space: nowrap;
   line-height: 60px;
 }
+
+/* Sidebar styling */
+#sidebar .list-group-item {
+  border-radius: 0;
+}
+#sidebar {
+  background-color: #f8f9fa;
+}
