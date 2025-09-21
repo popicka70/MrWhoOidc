@@ -48,6 +48,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.RealmId).IsRequired();
             b.HasIndex(x => x.RealmId);
             b.Property(x => x.IntrospectionAudiencesJson).HasMaxLength(2000);
+            // New: per-client public keys (for private_key_jwt and JAR)
+            b.Property(x => x.PublicJwksJson).HasMaxLength(8000);
+            b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -164,6 +167,11 @@ public class Client
     public Guid RealmId { get; set; } // parent realm (now required)
     [MaxLength(2000)]
     public string? IntrospectionAudiencesJson { get; set; } // optional per-client allow-list
+    // New: public keys for validating signed client artifacts (private_key_jwt, JAR)
+    [MaxLength(8000)]
+    public string? PublicJwksJson { get; set; }
+    [MaxLength(2000)]
+    public string? PublicJwksUri { get; set; }
 }
 
 public class SigningKey

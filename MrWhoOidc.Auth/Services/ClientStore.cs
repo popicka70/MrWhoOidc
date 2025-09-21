@@ -7,6 +7,7 @@ public interface IClientStore
 {
     Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default);
     Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default);
+    IQueryable<Client> QueryClients(CancellationToken ct = default);
 }
 
 internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher) : IClientStore
@@ -26,4 +27,7 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher) : IC
         if (string.IsNullOrEmpty(clientSecret)) return false;
         return hasher.Verify(clientSecret, client.ClientSecretHash);
     }
+
+    public IQueryable<Client> QueryClients(CancellationToken ct = default)
+        => db.Clients.AsQueryable();
 }

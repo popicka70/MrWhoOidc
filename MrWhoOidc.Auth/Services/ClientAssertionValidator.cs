@@ -21,9 +21,11 @@ public sealed class ClientAssertionValidator(AuthDbContext db, IConfiguration co
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client == null) return false;
 
-        // Load public JWK/JWKS for this client from configuration. Example configuration:
-        // "Oidc": { "ClientAssertions": { "my-client": { "jwks": "{...}" } } }
-        var jwkOrJwksJson =
+        // Try DB-stored public keys first
+        string? jwkOrJwksJson = client.PublicJwksJson;
+        // Optionally support fetching from a JWKS URI later (not implemented here to avoid HTTP call in core lib)
+        // Fall back to configuration if not present
+        jwkOrJwksJson ??=
             config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
             config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
             config[$"Auth:ClientAssertions:{clientId}:jwks"] ??

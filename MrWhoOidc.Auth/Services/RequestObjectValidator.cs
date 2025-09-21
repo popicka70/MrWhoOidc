@@ -50,13 +50,13 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             return Invalid("invalid_request_object", "Missing client_id in request object");
 
         // Ensure the client exists
-        var clientExists = await db.Clients.AsNoTracking().AnyAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
-        if (!clientExists)
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        if (client is null)
             return Invalid("unauthorized_client", "Unknown client_id in request object");
 
-        // Load public JWK/JWKS for this client from configuration.
-        // Allow both RequestObjects and ClientAssertions sections for convenience.
-        var jwkOrJwksJson =
+        // Build signing keys from DB-stored JWKS/JWK first, then fall back to configuration.
+        string? jwkOrJwksJson = client.PublicJwksJson;
+        jwkOrJwksJson ??=
             config[$"Oidc:RequestObjects:{clientId}:jwks"] ??
             config[$"Oidc:RequestObjects:{clientId}:jwk"] ??
             config[$"Auth:RequestObjects:{clientId}:jwks"] ??
