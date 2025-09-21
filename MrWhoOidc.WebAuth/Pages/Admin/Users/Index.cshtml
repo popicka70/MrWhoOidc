@@ -1,0 +1,52 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Users.IndexModel
+@{
+    ViewData["Title"] = "Users";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="m-0">Users</h1>
+    <a class="btn btn-primary" asp-page="Add">Add user</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search username/email/name" />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="submit">Filter</button>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Created</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var u in Model.Users)
+    {
+        <tr>
+            <td>@u.Username</td>
+            <td>@u.Email</td>
+            <td>@u.Name</td>
+            <td>@u.CreatedAt.ToLocalTime().ToString("g")</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@u.Id">Edit</a>
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-id="@u.Id" onsubmit="return confirm('Delete this user?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

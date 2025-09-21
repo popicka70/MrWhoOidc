@@ -1,0 +1,29 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Scopes.AddModel
+@{
+    ViewData["Title"] = "Add scope";
+}
+
+<h1>Add scope</h1>
+
+<form method="post" class="mt-3">
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input asp-for="Input.Name" class="form-control" />
+        <span asp-validation-for="Input.Name" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <input asp-for="Input.Description" class="form-control" />
+    </div>
+    <div class="form-check mb-3">
+        <input asp-for="Input.IsExposed" class="form-check-input" />
+        <label class="form-check-label" asp-for="Input.IsExposed">Exposed</label>
+    </div>
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+</form>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

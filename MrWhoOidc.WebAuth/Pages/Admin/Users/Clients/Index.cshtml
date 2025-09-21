@@ -1,0 +1,69 @@
+@page "{userId:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Users.Clients.IndexModel
+@{
+    ViewData["Title"] = "Client assignments";
+}
+
+<h1>Client assignments</h1>
+
+<div class="mb-3">
+    <a class="btn btn-secondary" asp-page="/Admin/Users/Edit" asp-route-id="@Model.UserId">Back to user</a>
+</div>
+
+<form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="Add">
+    <div class="col-auto">
+        <label class="form-label">Client</label>
+        <select class="form-select" asp-for="ClientId">
+            @foreach (var c in Model.Clients)
+            {
+                <option value="@c.Id">@c.ClientId (@c.RealmName)</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Realm</label>
+        <select class="form-select" asp-for="RealmId">
+            @foreach (var r in Model.Realms)
+            {
+                <option value="@r.Id">@r.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto form-check mb-3">
+        <input class="form-check-input" asp-for="IsActive" />
+        <label class="form-check-label" asp-for="IsActive">Active</label>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" type="submit">Add</button>
+    </div>
+</form>
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Client</th>
+            <th>Realm</th>
+            <th>Active</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var a in Model.Assignments)
+    {
+        <tr>
+            <td>@a.ClientId (@a.ClientName)</td>
+            <td>@a.RealmName</td>
+            <td>@(a.IsActive ? "Yes" : "No")</td>
+            <td class="text-end">
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-clientId="@a.ClientGuid" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this assignment?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

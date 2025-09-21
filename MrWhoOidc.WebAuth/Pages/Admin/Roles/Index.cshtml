@@ -1,0 +1,59 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Roles.IndexModel
+@{
+    ViewData["Title"] = "Roles";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="m-0">Roles</h1>
+    <a class="btn btn-primary" asp-page="Add">Add role</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select class="form-select" name="realmId" onchange="this.form.submit()">
+            <option value="">All realms</option>
+            @foreach (var r in Model.Realms)
+            {
+                <option value="@r.Id" selected="@(Model.SelectedRealmId == r.Id)">@r.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search roles" />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" type="submit">Filter</button>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Realm</th>
+            <th>Active</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var r in Model.Roles)
+    {
+        <tr>
+            <td>@r.Name</td>
+            <td>@Model.RealmNameById(r.RealmId)</td>
+            <td>@(r.IsActive ? "Yes" : "No")</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@r.Id">Edit</a>
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-id="@r.Id" onsubmit="return confirm('Delete this role?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

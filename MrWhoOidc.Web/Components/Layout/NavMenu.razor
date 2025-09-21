@@ -47,6 +47,16 @@
         <div class="nav-item px-3">
             <AuthorizeView>
                 <Authorized>
+                    <div class="nav-item px-3 fw-bold mt-3">Admin</div>
+                    <NavLink class="nav-link" href="admin/scopes">
+                        <span class="bi bi-tags" aria-hidden="true"></span> Scopes
+                    </NavLink>
+                    <NavLink class="nav-link" href="admin/realms">
+                        <span class="bi bi-diagram-3" aria-hidden="true"></span> Realms
+                    </NavLink>
+                    <NavLink class="nav-link" href="admin/users">
+                        <span class="bi bi-people" aria-hidden="true"></span> Users
+                    </NavLink>
                     <a class="nav-link" href="/MicrosoftIdentity/Account/SignOut">Log out</a>
                 </Authorized>
                 <NotAuthorized>

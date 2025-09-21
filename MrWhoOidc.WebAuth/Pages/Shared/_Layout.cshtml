@@ -40,12 +40,19 @@
                         <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
                         <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
                         <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index"><i class="bi bi-people me-2"></i>Clients</a>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Scopes/Index"><i class="bi bi-tags me-2"></i>Scopes</a>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Roles/Index"><i class="bi bi-person-badge me-2"></i>Roles</a>
+                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Users/Index"><i class="bi bi-people-fill me-2"></i>Users</a>
                     </div>
                 </aside>
             }
 
             <main role="main" class="col">
                 <div class="container py-3">
+                    @if (TempData.ContainsKey("Error"))
+                    {
+                        <div class="alert alert-danger">@TempData["Error"]</div>
+                    }
                     @RenderBody()
                 </div>
             </main>

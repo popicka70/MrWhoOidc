@@ -1,0 +1,53 @@
+@page "{userId:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Users.Emails.IndexModel
+@{
+    ViewData["Title"] = "Alternative emails";
+}
+
+<h1>Alternative emails</h1>
+
+<div class="mb-3">
+    <a class="btn btn-secondary" asp-page="/Admin/Users/Edit" asp-route-id="@Model.UserId">Back to user</a>
+</div>
+
+<form method="post" class="row g-2 mb-3" asp-page-handler="Add">
+    <div class="col-auto">
+        <input class="form-control" type="email" name="email" placeholder="name@example.com" required />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" type="submit">Add email</button>
+    </div>
+</form>
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Verified</th>
+            <th>Verified at</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var e in Model.Items)
+    {
+        <tr>
+            <td>@e.Email</td>
+            <td>@(e.IsVerified ? "Yes" : "No")</td>
+            <td>@(e.VerifiedAt?.ToLocalTime().ToString("g"))</td>
+            <td class="text-end">
+                <form method="post" class="d-inline" asp-page-handler="Toggle" asp-route-emailId="@e.Id">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">@(e.IsVerified ? "Mark unverified" : "Mark verified")</button>
+                </form>
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-emailId="@e.Id" onsubmit="return confirm('Delete this email?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

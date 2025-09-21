@@ -1,0 +1,41 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Scopes.IndexModel
+@{
+    ViewData["Title"] = "Scopes";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="m-0">Scopes</h1>
+    <a class="btn btn-primary" asp-page="Add">Add scope</a>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Exposed</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var s in Model.Scopes)
+    {
+        <tr>
+            <td>@s.Name</td>
+            <td>@s.Description</td>
+            <td>@(s.IsExposed ? "Yes" : "No")</td>
+            <td class="text-end">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-name="@s.Name">Edit</a>
+                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-name="@s.Name" onsubmit="return confirm('Delete this scope?');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

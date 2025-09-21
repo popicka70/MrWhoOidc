@@ -16,6 +16,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="scopes-tab" data-bs-toggle="tab" data-bs-target="#tab-scopes" type="button" role="tab" aria-controls="tab-scopes" aria-selected="false">
+                <i class="bi bi-tag me-1"></i> Scopes
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="keys-tab" data-bs-toggle="tab" data-bs-target="#tab-keys" type="button" role="tab" aria-controls="tab-keys" aria-selected="false">
                 <i class="bi bi-key me-1"></i> Keys
             </button>
@@ -70,6 +75,42 @@
                     </div>
                     <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
                     <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-scopes" role="tabpanel" aria-labelledby="scopes-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h5>Assigned scopes</h5>
+                    <table class="table table-sm align-middle">
+                        <tbody>
+                        @foreach (var s in Model.AssignedScopes)
+                        {
+                            <tr>
+                                <td>@s</td>
+                                <td class="text-end">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="RemoveScope" name="scopeName" value="@s" formnovalidate>Remove</button>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h5>Add scope</h5>
+                    <div class="input-group">
+                        <select asp-for="NewScope" class="form-select">
+                            <option value="">-- select scope --</option>
+                            @foreach (var s in Model.AvailableScopes)
+                            {
+                                <option value="@s.Name">@s.Name</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-outline-primary" asp-page-handler="AddScope" formnovalidate>Add</button>
+                    </div>
+                    <small class="form-text text-muted">Only scopes from the catalog can be assigned.</small>
+                    <span asp-validation-for="NewScope" class="text-danger"></span>
                 </div>
             </div>
         </div>

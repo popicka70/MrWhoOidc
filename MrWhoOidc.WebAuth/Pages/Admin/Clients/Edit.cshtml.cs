@@ -32,6 +32,13 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public string? GeneratedPrivateJwk { get; private set; }
 
+    // Scopes tab model
+    public List<Scope> AvailableScopes { get; private set; } = new();
+    public List<string> AssignedScopes { get; private set; } = new();
+
+    [BindProperty]
+    public string? NewScope { get; set; }
+
     [BindProperty]
     public ClientInput Input { get; set; } = new();
 
@@ -47,6 +54,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         if (client is null) return NotFound();
 
         await LoadRealmsAsync();
+        await LoadScopesAsync(client.Id);
 
         string introspectionAudiences = string.Empty;
         if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
@@ -101,9 +109,47 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         return Page();
     }
 
+    public async Task<IActionResult> OnPostAddScopeAsync()
+    {
+        await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
+        if (string.IsNullOrWhiteSpace(NewScope))
+        {
+            ModelState.AddModelError("NewScope", "Select a scope to add.");
+            return Page();
+        }
+        var exists = await db.Scopes.AnyAsync(s => s.Name == NewScope);
+        if (!exists)
+        {
+            ModelState.AddModelError("NewScope", "Unknown scope.");
+            return Page();
+        }
+        var already = await db.ClientScopes.AnyAsync(cs => cs.ClientId == Id && cs.ScopeName == NewScope);
+        if (!already)
+        {
+            db.ClientScopes.Add(new ClientScope { ClientId = Id, ScopeName = NewScope });
+            await db.SaveChangesAsync();
+        }
+        return RedirectToPage(new { id = Id });
+    }
+
+    public async Task<IActionResult> OnPostRemoveScopeAsync(string scopeName)
+    {
+        await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
+        var entity = await db.ClientScopes.FirstOrDefaultAsync(cs => cs.ClientId == Id && cs.ScopeName == scopeName);
+        if (entity is not null)
+        {
+            db.ClientScopes.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+        return RedirectToPage(new { id = Id });
+    }
+
     public async Task<IActionResult> OnPostExtractPublicJwkAsync()
     {
         await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
         if (string.IsNullOrWhiteSpace(Input.PrivateJwk))
         {
             ModelState.AddModelError("Input.PrivateJwk", "Paste a private JWK or JWKS JSON.");
@@ -547,6 +593,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         if (!ModelState.IsValid)
         {
             await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
             return Page();
         }
@@ -561,6 +608,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             catch
             {
                 await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
                 ModelState.AddModelError("Input.PublicJwksJson", "Invalid JSON.");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
                 return Page();
@@ -577,6 +625,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             if (exists)
             {
                 await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
                 ModelState.AddModelError("Input.ClientId", "Client ID already exists");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
                 return Page();
@@ -654,6 +703,14 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
     {
         var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
+    }
+
+    private async Task LoadScopesAsync(Guid clientId)
+    {
+        AvailableScopes = await db.Scopes.AsNoTracking().OrderBy(s => s.Name).ToListAsync();
+        AssignedScopes = await db.ClientScopes.AsNoTracking().Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).OrderBy(n => n).ToListAsync();
+        // Filter available list to those not yet assigned
+        AvailableScopes = AvailableScopes.Where(s => !AssignedScopes.Contains(s.Name, StringComparer.Ordinal)).ToList();
     }
 
     private static List<KeyPreview> BuildPreviews(string? jwksJson)

@@ -13,6 +13,8 @@ using MrWhoOidc.WebAuth.Observability;
 using Microsoft.AspNetCore.HttpOverrides;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using Microsoft.AspNetCore.Authorization;
+using MrWhoOidc.WebAuth.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +31,9 @@ builder.Services.AddSingleton(oidcOptions);
 // Bind AuthOptions (API audiences)
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
 
+// Admin policy options
+builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
+
 // Client certificate forwarding (when behind proxy sending base64 cert header)
 builder.Services.AddCertificateForwarding(options =>
 {
@@ -36,7 +41,11 @@ builder.Services.AddCertificateForwarding(options =>
 });
 
 // Add services to the container.
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(options =>
+{
+    // Authorize entire Admin folder with the 'admin' policy
+    options.Conventions.AuthorizeFolder("/Admin", "admin");
+});
 
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
@@ -75,6 +84,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
     });
+
+// Authorization + admin policy
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("admin", policy => policy.Requirements.Add(new AdminRequirement()));
+});
+builder.Services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
 
 // Wire up Auth persistence (PostgreSQL via Aspire connection)
 builder.Services.AddAuthPersistence(builder.Configuration);
@@ -250,6 +266,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
+app.MapRazorPages().WithStaticAssets();
+
 // Delay DB migration and seeding until after the host is fully started
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -291,11 +309,9 @@ app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
    .RequireRateLimiting("rl-userinfo");
 app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
-
 // Introspection endpoint
 app.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireRateLimiting("rl-introspect");
-
 // PAR endpoint
 app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireCors("oidc")
@@ -304,6 +320,39 @@ app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
 
 app.MapStaticAssets();
-app.MapRazorPages().WithStaticAssets();
 
 app.Run();
+
+namespace MrWhoOidc.WebAuth.Security
+{
+    public sealed class AdminAuthOptions
+    {
+        public string RealmName { get; set; } = "admin";
+        public string AdminRoleName { get; set; } = "admin";
+    }
+
+    public sealed class AdminRequirement : IAuthorizationRequirement { }
+
+    public sealed class AdminAuthorizationHandler(AuthDbContext db, Microsoft.Extensions.Options.IOptions<AdminAuthOptions> options) : AuthorizationHandler<AdminRequirement>
+    {
+        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, AdminRequirement requirement)
+        {
+            var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(sub, out var userId))
+                return;
+
+            var realmName = options.Value.RealmName;
+            var roleName = options.Value.AdminRoleName;
+
+            // Check active assignment of the admin role in the configured realm
+            var hasAdmin = await db.UserRoleAssignments.AsNoTracking()
+                .Join(db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                .Join(db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+                .AnyAsync(x => x.a.UserId == userId && x.a.IsActive && x.r.IsActive
+                               && x.r.Name == roleName && x.rl.Name == realmName);
+
+            if (hasAdmin)
+                context.Succeed(requirement);
+        }
+    }
+}

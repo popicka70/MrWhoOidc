@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Isopoh.Cryptography.Argon2;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -154,94 +155,99 @@ RequireAdmin(app.MapDelete("/admin/clients/{clientId}/scopes/{scope}", async (Au
     return Results.NoContent();
 }));
 
-// === Admin API: Realms ===
-RequireAdmin(app.MapGet("/admin/realms", async (AuthDbContext db) =>
-    Results.Ok(await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync())));
-
-RequireAdmin(app.MapPost("/admin/realms", async (AuthDbContext db, Realm input) =>
+// === Admin API: Clients (basic CRUD) ===
+RequireAdmin(app.MapGet("/admin/clients", async (AuthDbContext db, string? search, int? skip, int? take) =>
 {
-    input.Name = input.Name?.Trim() ?? string.Empty;
-    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
-    var exists = await db.Realms.AnyAsync(r => r.Name == input.Name);
-    if (exists) return Results.Conflict(new { error = "realm_exists" });
-    var realm = new Realm { Name = input.Name, DisplayName = input.DisplayName };
-    db.Realms.Add(realm);
-    await db.SaveChangesAsync();
-    return Results.Created($"/admin/realms/{realm.Id}", realm);
-}));
-
-RequireAdmin(app.MapPut("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id, Realm input) =>
-{
-    var entity = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
-    if (entity is null) return Results.NotFound();
-    if (!string.Equals(entity.Name, input.Name, StringComparison.Ordinal))
+    var q = db.Clients.AsNoTracking();
+    if (!string.IsNullOrWhiteSpace(search))
     {
-        if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
-        var exists = await db.Realms.AnyAsync(r => r.Name == input.Name && r.Id != id);
-        if (exists) return Results.Conflict(new { error = "realm_exists" });
-        entity.Name = input.Name;
+        var s = search.Trim();
+        q = q.Where(c => c.ClientId.Contains(s) || (c.ClientName != null && c.ClientName.Contains(s)));
     }
-    entity.DisplayName = input.DisplayName;
-    await db.SaveChangesAsync();
-    return Results.NoContent();
+    q = q.OrderBy(c => c.ClientId);
+    if (skip is > 0) q = q.Skip(skip.Value);
+    if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
+    var list = await q.ToListAsync();
+    return Results.Ok(list);
 }));
 
-RequireAdmin(app.MapDelete("/admin/realms/{id:guid}", async (AuthDbContext db, Guid id) =>
+RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, Client input) =>
 {
-    var used = await db.Clients.AnyAsync(c => c.RealmId == id)
-        || await db.UserClientAssignments.AnyAsync(a => a.RealmId == id)
-        || await db.UserRoleAssignments.AnyAsync(a => a.RealmId == id)
-        || await db.Roles.AnyAsync(r => r.RealmId == id);
-    if (used) return Results.Conflict(new { error = "realm_in_use" });
-    var entity = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
-    if (entity is null) return Results.NotFound();
-    db.Remove(entity);
-    await db.SaveChangesAsync();
-    return Results.NoContent();
-}));
+    var clientId = (input.ClientId ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(clientId)) return Results.BadRequest(new { error = "client_id_required" });
+    var exists = await db.Clients.AnyAsync(c => c.ClientId == clientId);
+    if (exists) return Results.Conflict(new { error = "client_id_exists" });
 
-// === Admin API: Roles (per realm) ===
-RequireAdmin(app.MapGet("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId) =>
-{
-    var items = await db.Roles.AsNoTracking().Where(r => r.RealmId == realmId).OrderBy(r => r.Name).ToListAsync();
-    return Results.Ok(items);
-}));
-
-RequireAdmin(app.MapPost("/admin/realms/{realmId:guid}/roles", async (AuthDbContext db, Guid realmId, Role input) =>
-{
-    input.Name = input.Name?.Trim() ?? string.Empty;
-    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
-    var exists = await db.Roles.AnyAsync(r => r.RealmId == realmId && r.Name == input.Name);
-    if (exists) return Results.Conflict(new { error = "role_exists" });
-    var role = new Role { Name = input.Name, RealmId = realmId, IsActive = input.IsActive };
-    db.Roles.Add(role);
-    await db.SaveChangesAsync();
-    return Results.Created($"/admin/realms/{realmId}/roles/{role.Id}", role);
-}));
-
-RequireAdmin(app.MapPut("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id, Role input) =>
-{
-    var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.RealmId == realmId);
-    if (entity is null) return Results.NotFound();
-    if (!string.Equals(entity.Name, input.Name, StringComparison.Ordinal))
+    var entity = new Client
     {
-        if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "name_required" });
-        var exists = await db.Roles.AnyAsync(r => r.RealmId == realmId && r.Name == input.Name && r.Id != id);
-        if (exists) return Results.Conflict(new { error = "role_exists" });
-        entity.Name = input.Name;
+        ClientId = clientId,
+        ClientName = input.ClientName,
+        RequirePkce = input.RequirePkce,
+        RequireConsent = input.RequireConsent,
+        RealmId = input.RealmId,
+        PublicJwksJson = input.PublicJwksJson,
+        PublicJwksUri = input.PublicJwksUri,
+        RequirePar = input.RequirePar
+    };
+
+    // If a raw secret is provided, hash with Argon2
+    var secret = (input.ClientSecretHash ?? string.Empty).Trim();
+    if (!string.IsNullOrEmpty(secret))
+    {
+        entity.ClientSecretHash = Argon2.Hash(secret);
     }
-    entity.IsActive = input.IsActive;
+
+    db.Clients.Add(entity);
+    await db.SaveChangesAsync();
+    return Results.Created($"/admin/clients/{entity.Id}", entity);
+}));
+
+RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, Guid id, Client input) =>
+{
+    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+    if (entity is null) return Results.NotFound();
+
+    var newClientId = (input.ClientId ?? string.Empty).Trim();
+    if (string.IsNullOrWhiteSpace(newClientId)) return Results.BadRequest(new { error = "client_id_required" });
+    if (!string.Equals(entity.ClientId, newClientId, StringComparison.Ordinal))
+    {
+        var exists = await db.Clients.AnyAsync(c => c.ClientId == newClientId);
+        if (exists) return Results.Conflict(new { error = "client_id_exists" });
+        entity.ClientId = newClientId;
+    }
+
+    entity.ClientName = input.ClientName;
+    entity.RequirePkce = input.RequirePkce;
+    entity.RequireConsent = input.RequireConsent;
+    entity.RealmId = input.RealmId;
+    entity.PublicJwksJson = input.PublicJwksJson;
+    entity.PublicJwksUri = input.PublicJwksUri;
+    entity.RequirePar = input.RequirePar;
+
+    // If a new raw secret is provided, hash and replace
+    var secret = (input.ClientSecretHash ?? string.Empty).Trim();
+    if (!string.IsNullOrEmpty(secret))
+    {
+        entity.ClientSecretHash = Argon2.Hash(secret);
+    }
+
     await db.SaveChangesAsync();
     return Results.NoContent();
 }));
 
-RequireAdmin(app.MapDelete("/admin/realms/{realmId:guid}/roles/{id:guid}", async (AuthDbContext db, Guid realmId, Guid id) =>
+RequireAdmin(app.MapDelete("/admin/clients/{id:guid}", async (AuthDbContext db, Guid id) =>
 {
-    var used = await db.UserRoleAssignments.AnyAsync(a => a.RoleId == id);
-    if (used) return Results.Conflict(new { error = "role_in_use" });
-    var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.RealmId == realmId);
+    // Prevent delete when in use
+    var inUse = await db.AuthorizationCodes.AnyAsync(c => c.ClientId == id.ToString())
+        || await db.Consents.AnyAsync(c => c.ClientId == id.ToString())
+        || await db.Tokens.AnyAsync(t => t.ClientId == id.ToString())
+        || await db.UserClientAssignments.AnyAsync(a => a.ClientId == id)
+        || await db.UserRoleAssignments.AnyAsync(a => a.ClientId == id);
+    if (inUse) return Results.Conflict(new { error = "client_in_use" });
+
+    var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
     if (entity is null) return Results.NotFound();
-    db.Remove(entity);
+    db.Clients.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
 }));
@@ -356,7 +362,6 @@ RequireAdmin(app.MapPut("/admin/users/{userId:guid}/emails/{emailId:guid}", asyn
 {
     var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == userId);
     if (entity is null) return Results.NotFound();
-    // Allow toggling verification status
     entity.IsVerified = input.IsVerified;
     entity.VerifiedAt = input.IsVerified ? (entity.VerifiedAt ?? DateTimeOffset.UtcNow) : null;
     await db.SaveChangesAsync();
@@ -368,6 +373,71 @@ RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/emails/{emailId:guid}", a
     var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == userId);
     if (entity is null) return Results.NotFound();
     db.UserAlternativeEmails.Remove(entity);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+}));
+
+// === Admin API: User-client assignments ===
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, int? skip, int? take) =>
+{
+    IQueryable<UserClientAssignment> q = db.UserClientAssignments.AsNoTracking().Where(a => a.UserId == userId).OrderBy(a => a.ClientId);
+    if (skip is > 0) q = q.Skip(skip.Value);
+    if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
+    var items = await q.Select(a => new { a.UserId, a.ClientId, a.RealmId, a.IsActive }).ToListAsync();
+    return Results.Ok(items);
+}));
+
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/clients", async (AuthDbContext db, Guid userId, UserClientAssignment input) =>
+{
+    if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
+    if (input.ClientId == Guid.Empty || input.RealmId == Guid.Empty) return Results.BadRequest(new { error = "invalid_ids" });
+    var exists = await db.UserClientAssignments.AnyAsync(a => a.UserId == userId && a.ClientId == input.ClientId && a.RealmId == input.RealmId);
+    if (!exists)
+    {
+        db.UserClientAssignments.Add(new UserClientAssignment { UserId = userId, ClientId = input.ClientId, RealmId = input.RealmId, IsActive = input.IsActive });
+        await db.SaveChangesAsync();
+    }
+    return Results.NoContent();
+}));
+
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid clientId, Guid realmId) =>
+{
+    var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.ClientId == clientId && a.RealmId == realmId);
+    if (entity is null) return Results.NotFound();
+    db.Remove(entity);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+}));
+
+// === Admin API: User-role assignments (per client+realm) ===
+RequireAdmin(app.MapGet("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, int? skip, int? take) =>
+{
+    IQueryable<UserRoleAssignment> q = db.UserRoleAssignments.AsNoTracking().Where(a => a.UserId == userId).OrderBy(a => a.ClientId);
+    if (skip is > 0) q = q.Skip(skip.Value);
+    if (take is > 0 && take.Value <= 200) q = q.Take(take.Value);
+    var items = await q.Select(a => new { a.UserId, a.RoleId, a.ClientId, a.RealmId, a.IsActive }).ToListAsync();
+    return Results.Ok(items);
+}));
+
+RequireAdmin(app.MapPost("/admin/users/{userId:guid}/roles", async (AuthDbContext db, Guid userId, UserRoleAssignment input) =>
+{
+    if (input.UserId != Guid.Empty && input.UserId != userId) return Results.BadRequest(new { error = "user_mismatch" });
+    if (input.RoleId == Guid.Empty || input.ClientId == Guid.Empty || input.RealmId == Guid.Empty)
+        return Results.BadRequest(new { error = "invalid_ids" });
+    var exists = await db.UserRoleAssignments.AnyAsync(a => a.UserId == userId && a.RoleId == input.RoleId && a.ClientId == input.ClientId && a.RealmId == input.RealmId);
+    if (!exists)
+    {
+        db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = userId, RoleId = input.RoleId, ClientId = input.ClientId, RealmId = input.RealmId, IsActive = input.IsActive });
+        await db.SaveChangesAsync();
+    }
+    return Results.NoContent();
+}));
+
+RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clients/{clientId:guid}/realms/{realmId:guid}", async (AuthDbContext db, Guid userId, Guid roleId, Guid clientId, Guid realmId) =>
+{
+    var entity = await db.UserRoleAssignments.FirstOrDefaultAsync(a => a.UserId == userId && a.RoleId == roleId && a.ClientId == clientId && a.RealmId == realmId);
+    if (entity is null) return Results.NotFound();
+    db.Remove(entity);
     await db.SaveChangesAsync();
     return Results.NoContent();
 }));
