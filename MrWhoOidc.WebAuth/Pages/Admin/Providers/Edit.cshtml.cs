@@ -50,6 +50,13 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
         if (!ModelState.IsValid || Input is null)
             return Page();
 
+        // guard: route id must match posted entity id
+        if (Input.Id != id)
+        {
+            ModelState.AddModelError(string.Empty, "Mismatched id.");
+            return Page();
+        }
+
         // Basic JSON validation
         if (!string.IsNullOrWhiteSpace(Input.ConfigJson))
         {
@@ -82,7 +89,17 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
             return Page();
         }
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            ModelState.AddModelError(string.Empty, "Conflict: entity was changed by another user. Reload and try again.");
+            return Page();
+        }
+
+        TempData["Success"] = "Provider updated.";
         return RedirectToPage("Index");
     }
 

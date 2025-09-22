@@ -27,7 +27,15 @@
 }
 else
 {
-<form method="post">
+<form method="post" asp-page="">
+    @* Preserve both the route id and the bound model id so model binding hydrates Input.Id *@
+    <input type="hidden" name="id" value="@Model.Input.Id" />
+    <input asp-for="Input.Id" type="hidden" />
+
+    <div class="mb-3">
+        <div asp-validation-summary="All" class="text-danger"></div>
+    </div>
+
     <div class="mb-3">
         <label asp-for="Input.Name" class="form-label"></label>
         <input asp-for="Input.Name" class="form-control" />
