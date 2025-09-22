@@ -1,0 +1,96 @@
+@page "{providerId:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys.IndexModel
+@{
+    ViewData["Title"] = "Provider Keys";
+}
+
+<h2>Keys for @Model.ProviderDisplay</h2>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+
+<form method="post" asp-page-handler="Add" class="mb-4">
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label asp-for="Input.Purpose" class="form-label">Purpose</label>
+            <select asp-for="Input.Purpose" class="form-select">
+                <option value="Signing">Signing</option>
+                <option value="Encryption">Encryption</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.Alg" class="form-label">Alg</label>
+            <input asp-for="Input.Alg" class="form-control" placeholder="RS256, PS256, ES256..." />
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.Kid" class="form-label">Key ID (kid)</label>
+            <input asp-for="Input.Kid" class="form-control" placeholder="auto if blank" />
+        </div>
+        <div class="col-md-3 form-check mt-4">
+            <input asp-for="Input.Active" class="form-check-input" />
+            <label asp-for="Input.Active" class="form-check-label">Set active</label>
+        </div>
+        <div class="col-12">
+            <label asp-for="Input.JwkJson" class="form-label">Private JWK JSON</label>
+            <textarea asp-for="Input.JwkJson" class="form-control" rows="6" placeholder='{"kty":"RSA",...}'></textarea>
+            <span class="form-text">Paste a private JWK (JSON). PEM import not yet supported.</span>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary">Import key</button>
+            <a asp-page="/Admin/Providers/Index" class="btn btn-secondary">Back</a>
+        </div>
+    </div>
+</form>
+
+@if (Model.Rows.Count == 0)
+{
+    <p>No keys.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Purpose</th>
+                <th>Alg</th>
+                <th>KID</th>
+                <th>Active</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model.Rows)
+        {
+            <tr>
+                <td>@r.Purpose</td>
+                <td>@r.Alg</td>
+                <td>@r.Kid</td>
+                <td>@(r.Active ? "Yes" : "No")</td>
+                <td>@r.CreatedAt.ToString("u")</td>
+                <td>@(r.ExpiresAt?.ToString("u"))</td>
+                <td class="text-end">
+                    @if (!r.Active)
+                    {
+                        <form method="post" asp-page-handler="Activate" class="d-inline">
+                            <input type="hidden" name="id" value="@r.Id" />
+                            <button class="btn btn-sm btn-success">Activate</button>
+                        </form>
+                    }
+                    <form method="post" asp-page-handler="Delete" class="d-inline" onsubmit="return confirm('Delete this key?');">
+                        <input type="hidden" name="id" value="@r.Id" />
+                        <button class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

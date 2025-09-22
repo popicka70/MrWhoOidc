@@ -1,0 +1,20 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.DeleteModel
+@{
+    ViewData["Title"] = "Delete Provider";
+}
+
+<h2>Delete Provider</h2>
+
+@if (Model.Provider is null)
+{
+    <p>Provider not found.</p>
+}
+else
+{
+    <p>Are you sure you want to delete provider <strong>@Model.Provider.Name</strong>?</p>
+    <form method="post">
+        <button type="submit" class="btn btn-danger">Delete</button>
+        <a asp-page="Index" class="btn btn-secondary">Cancel</a>
+    </form>
+}

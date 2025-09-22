@@ -1,0 +1,80 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.EditModel
+@{
+    ViewData["Title"] = "Edit Identity Provider";
+}
+
+<h2>Edit Identity Provider</h2>
+
+@if (!string.IsNullOrEmpty(Model.DiscoverySummary))
+{
+    <div class="alert @(Model.DiscoveryOk ? "alert-success" : "alert-danger")">
+        <strong>@Model.DiscoverySummary</strong>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.DiscoveryJson))
+{
+    <div class="card mb-3">
+        <div class="card-header">Discovery excerpt</div>
+        <pre class="m-0 p-3"><code>@Model.DiscoveryJson</code></pre>
+    </div>
+}
+
+@if (Model.Input is null)
+{
+    <p>Provider not found.</p>
+}
+else
+{
+<form method="post" asp-page="">
+    @* Preserve both the route id and the bound model id so model binding hydrates Input.Id *@
+    <input type="hidden" name="id" value="@Model.Input.Id" />
+    <input asp-for="Input.Id" type="hidden" />
+
+    <div class="mb-3">
+        <div asp-validation-summary="All" class="text-danger"></div>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.Name" class="form-label"></label>
+        <input asp-for="Input.Name" class="form-control" />
+        <span asp-validation-for="Input.Name" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.DisplayName" class="form-label"></label>
+        <input asp-for="Input.DisplayName" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Type" class="form-label"></label>
+        <select asp-for="Input.Type" class="form-select" asp-items="Model.TypeOptions"></select>
+    </div>
+    <div class="form-check mb-3">
+        <input asp-for="Input.Enabled" class="form-check-input" />
+        <label asp-for="Input.Enabled" class="form-check-label"></label>
+    </div>
+    <div class="form-check mb-3">
+        <input asp-for="Input.IsDefault" class="form-check-input" />
+        <label asp-for="Input.IsDefault" class="form-check-label"></label>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.SortOrder" class="form-label"></label>
+        <input asp-for="Input.SortOrder" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.LogoUrl" class="form-label"></label>
+        <input asp-for="Input.LogoUrl" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Config JSON (OIDC)</label>
+        <textarea asp-for="Input.ConfigJson" class="form-control" rows="10"></textarea>
+        <div class="mt-2 d-flex gap-2">
+            <button type="submit" class="btn btn-outline-primary" asp-page-handler="Test" formnovalidate>Test connection</button>
+            <span class="form-text">Tests discovery endpoint reachability and shows a brief summary.</span>
+        </div>
+        <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a asp-page="Index" class="btn btn-secondary">Cancel</a>
+</form>
+}

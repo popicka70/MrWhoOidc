@@ -97,11 +97,21 @@ builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
 builder.Services.AddMrWhoOidcAuthCore();
 
+// HttpClient + IdP validator
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IIdentityProviderValidator, IdentityProviderValidator>();
+
 // Add private_key_jwt validator
 builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 
 // Register PAR handler
 builder.Services.AddScoped<IParHandler, ParHandler>();
+
+// External OIDC chaining
+builder.Services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
+builder.Services.AddSingleton<IJwksCache, JwksCache>();
+// Claim mapping service
+builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
 
 // DPoP services
 builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
@@ -318,6 +328,10 @@ app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireRateLimiting("rl-par");
 app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
+
+// External OIDC chaining endpoints
+app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
+app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
 
 app.MapStaticAssets();
 

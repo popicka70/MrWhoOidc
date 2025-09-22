@@ -1,18 +1,18 @@
-using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
-using System.Security.Cryptography;
+using MrWhoOidc.Auth.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-using MrWhoOidc.Auth.Crypto;
+using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
+using Microsoft.IdentityModel.Tokens;
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.Crypto;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -36,6 +36,8 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
     public List<Scope> AvailableScopes { get; private set; } = new();
     public List<string> AssignedScopes { get; private set; } = new();
 
+    public List<ProviderRow> ProviderMappings { get; private set; } = new();
+
     [BindProperty]
     public string? NewScope { get; set; }
 
@@ -43,10 +45,17 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
     public ClientInput Input { get; set; } = new();
 
     [BindProperty]
+    public ProviderInputModel ProviderInput { get; set; } = new();
+
+    public List<SelectListItem> ProviderOptions { get; private set; } = new();
+
+    [BindProperty]
     public string? GenerateAlg { get; set; }
 
     [BindProperty]
     public string? RemoveKid { get; set; }
+
+    public JwksValidationStatus? JwksStatus { get; private set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -55,6 +64,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
         await LoadRealmsAsync();
         await LoadScopesAsync(client.Id);
+        await LoadProviderMappingsAsync(client.Id);
 
         string introspectionAudiences = string.Empty;
         if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
@@ -118,6 +128,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
 
         return Page();
     }
@@ -167,6 +178,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         {
             ModelState.AddModelError("Input.PrivateJwk", "Paste a private JWK or JWKS JSON.");
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
             return Page();
         }
 
@@ -204,6 +216,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             {
                 ModelState.AddModelError("Input.PrivateJwk", "Invalid JWK/JWKS JSON.");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
                 return Page();
             }
 
@@ -214,6 +227,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             ModelState.Remove("Input.PublicJwksJson");
 
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         }
         catch
         {
@@ -301,6 +315,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         ModelState.Remove("GeneratedPrivateJwk");
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         return Page();
     }
 
@@ -384,6 +399,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         ModelState.Remove("GeneratedPrivateJwk");
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         return Page();
     }
 
@@ -394,6 +410,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         {
             ModelState.AddModelError("Input.PublicJwksUri", "Enter a JWKS URI to fetch.");
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
             return Page();
         }
 
@@ -420,6 +437,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         }
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         return Page();
     }
 
@@ -427,6 +445,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
     {
         await LoadRealmsAsync();
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         JwtTest = new JwtValidationOutput();
 
         if (string.IsNullOrWhiteSpace(Input.TestJwt))
@@ -546,6 +565,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         {
             ModelState.AddModelError("Input.PrivateJwk", "Paste a private JWK or JWKS JSON to sign a test JWT.");
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
             return Page();
         }
 
@@ -570,6 +590,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
                 _logger.LogWarning("SignTestJwt: Invalid JWK/JWKS JSON for client {ClientId}", Input.ClientId);
                 ModelState.AddModelError("Input.PrivateJwk", "Invalid JWK/JWKS JSON.");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
                 return Page();
             }
 
@@ -607,6 +628,39 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         }
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostRemoveKeyAsync()
+    {
+        await LoadRealmsAsync();
+        if (string.IsNullOrWhiteSpace(Input.PublicJwksJson) || string.IsNullOrWhiteSpace(RemoveKid))
+        {
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+        try
+        {
+            using var doc = JsonDocument.Parse(Input.PublicJwksJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
+            {
+                var filtered = new List<string>();
+                foreach (var k in keys.EnumerateArray())
+                {
+                    var kid = k.TryGetProperty("kid", out var kidEl) ? kidEl.GetString() : null;
+                    if (!string.Equals(kid, RemoveKid, StringComparison.Ordinal))
+                        filtered.Add(k.GetRawText());
+                }
+                Input.PublicJwksJson = ComposeJwks(filtered);
+                ModelState.Remove("Input.PublicJwksJson");
+            }
+        }
+        catch { }
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
         return Page();
     }
 
@@ -618,15 +672,26 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             await LoadRealmsAsync();
             await LoadScopesAsync(Id);
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
             return Page();
         }
 
-        // Validate JWKS JSON if provided
+        // Validate JWKS JSON if provided and check kid uniqueness
         if (!string.IsNullOrWhiteSpace(Input.PublicJwksJson))
         {
             try
             {
-                using var _ = JsonDocument.Parse(Input.PublicJwksJson);
+                using var doc = JsonDocument.Parse(Input.PublicJwksJson);
+                var status = ComputeJwksStatus(Input.PublicJwksJson);
+                if (status is { Ok: false })
+                {
+                    await LoadRealmsAsync();
+                    await LoadScopesAsync(Id);
+                    JwksStatus = status;
+                    ModelState.AddModelError("Input.PublicJwksJson", status.Message ?? "Invalid JWKS");
+                    KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                    return Page();
+                }
             }
             catch
             {
@@ -634,6 +699,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
                 await LoadScopesAsync(Id);
                 ModelState.AddModelError("Input.PublicJwksJson", "Invalid JSON.");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
                 return Page();
             }
         }
@@ -651,6 +717,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
                 await LoadScopesAsync(Id);
                 ModelState.AddModelError("Input.ClientId", "Client ID already exists");
                 KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
                 return Page();
             }
         }
@@ -753,6 +820,75 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         AvailableScopes = AvailableScopes.Where(s => !AssignedScopes.Contains(s.Name, StringComparer.Ordinal)).ToList();
     }
 
+    private async Task LoadProviderMappingsAsync(Guid clientId)
+    {
+        ProviderOptions = await db.IdentityProviders.AsNoTracking()
+            .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
+            .Select(p => new SelectListItem(p.DisplayName ?? p.Name, p.Id.ToString()))
+            .ToListAsync();
+
+        ProviderMappings = await db.ClientIdentityProviders.AsNoTracking()
+            .Where(m => m.ClientId == clientId)
+            .Join(db.IdentityProviders.AsNoTracking(), m => m.IdentityProviderId, p => p.Id, (m, p) => new ProviderRow
+            {
+                IdentityProviderId = p.Id,
+                ProviderName = p.Name,
+                ProviderDisplay = p.DisplayName ?? p.Name,
+                Enabled = m.Enabled,
+                IsDefaultForClient = m.IsDefaultForClient,
+                AutoRedirectIfSingle = m.AutoRedirectIfSingle,
+                RequiredAcr = m.RequiredAcr,
+                Order = m.Order
+            })
+            .OrderBy(r => r.Order)
+            .ToListAsync();
+    }
+
+    public async Task<IActionResult> OnPostAddProviderAsync()
+    {
+        await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
+        await LoadProviderMappingsAsync(Id);
+        if (!ModelState.IsValid)
+            return Page();
+
+        if (ProviderInput.IdentityProviderId == Guid.Empty)
+        {
+            ModelState.AddModelError("ProviderInput.IdentityProviderId", "Select a provider.");
+            return Page();
+        }
+
+        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == Id && m.IdentityProviderId == ProviderInput.IdentityProviderId);
+        if (entity is null)
+        {
+            entity = new ClientIdentityProvider { ClientId = Id, IdentityProviderId = ProviderInput.IdentityProviderId };
+            db.ClientIdentityProviders.Add(entity);
+        }
+        entity.Enabled = ProviderInput.Enabled;
+        entity.IsDefaultForClient = ProviderInput.IsDefaultForClient;
+        entity.AutoRedirectIfSingle = ProviderInput.AutoRedirectIfSingle;
+        entity.RequiredAcr = string.IsNullOrWhiteSpace(ProviderInput.RequiredAcr) ? null : ProviderInput.RequiredAcr.Trim();
+        entity.Order = ProviderInput.Order;
+
+        await db.SaveChangesAsync();
+        return RedirectToPage(new { id = Id });
+    }
+
+    public async Task<IActionResult> OnPostDeleteProviderAsync(Guid providerId)
+    {
+        await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
+        await LoadProviderMappingsAsync(Id);
+
+        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == Id && m.IdentityProviderId == providerId);
+        if (entity is not null)
+        {
+            db.ClientIdentityProviders.Remove(entity);
+            await db.SaveChangesAsync();
+        }
+        return RedirectToPage(new { id = Id });
+    }
+
     private static List<KeyPreview> BuildPreviews(string? jwksJson)
     {
         var list = new List<KeyPreview>();
@@ -846,6 +982,48 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? Exp { get; init; }
     };
 
+    public sealed record JwksValidationStatus(bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids);
+
+    private static JwksValidationStatus? ComputeJwksStatus(string? jwksJson)
+    {
+        if (string.IsNullOrWhiteSpace(jwksJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(jwksJson);
+            var keys = new List<JsonElement>();
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
+            {
+                keys = keysArr.EnumerateArray().ToList();
+            }
+            else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                keys.Add(doc.RootElement);
+            }
+            else
+            {
+                return new JwksValidationStatus(false, "Invalid", "JWKS must be an object with 'keys' array or a single JWK object.", 0, 0, []);
+            }
+
+            var count = keys.Count;
+            var kids = keys.Select(k => k.TryGetProperty("kid", out var kid) ? kid.GetString() : null).ToList();
+            var nonNullKids = kids.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+            var dup = nonNullKids
+                .GroupBy(k => k, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key!)
+                .ToList();
+
+            var ok = dup.Count == 0;
+            var summary = ok ? "Valid JWKS" : "Duplicates";
+            var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : $"Duplicate kid(s): {string.Join(", ", dup)}";
+            return new JwksValidationStatus(ok, summary, msg, count, nonNullKids.Distinct(StringComparer.Ordinal).Count(), dup);
+        }
+        catch (Exception ex)
+        {
+            return new JwksValidationStatus(false, "Invalid", ex.Message, 0, 0, []);
+        }
+    }
+
     public sealed class ClientInput
     {
         [Required, StringLength(200, MinimumLength = 2)]
@@ -879,5 +1057,29 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? AllowedLoginRedirectUris { get; set; }
         [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
         public string? AllowedLogoutRedirectUris { get; set; }
+    }
+
+    public sealed class ProviderRow
+    {
+        public Guid IdentityProviderId { get; set; }
+        public string ProviderName { get; set; } = string.Empty;
+        public string ProviderDisplay { get; set; } = string.Empty;
+        public bool Enabled { get; set; }
+        public bool IsDefaultForClient { get; set; }
+        public bool AutoRedirectIfSingle { get; set; }
+        public string? RequiredAcr { get; set; }
+        public int Order { get; set; }
+    }
+
+    public sealed class ProviderInputModel
+    {
+        [Required]
+        public Guid IdentityProviderId { get; set; }
+        public bool Enabled { get; set; } = true;
+        public bool IsDefaultForClient { get; set; } = false;
+        public bool AutoRedirectIfSingle { get; set; } = false;
+        [StringLength(100)]
+        public string? RequiredAcr { get; set; }
+        public int Order { get; set; } = 0;
     }
 }

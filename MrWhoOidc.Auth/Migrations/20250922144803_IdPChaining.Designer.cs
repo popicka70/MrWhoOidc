@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MrWhoOidc.Auth.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MrWhoOidc.Auth.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    partial class AuthDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250922144803_IdPChaining")]
+    partial class IdPChaining
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -202,38 +205,6 @@ namespace MrWhoOidc.Auth.Migrations
                     b.ToTable("ClientIdentityProviders");
                 });
 
-            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ClientJwksHistory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ClientId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Hash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("JwksJson")
-                        .IsRequired()
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClientId", "CreatedAt");
-
-                    b.ToTable("ClientJwksHistories");
-                });
-
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ClientScope", b =>
                 {
                     b.Property<Guid>("ClientId")
@@ -279,49 +250,6 @@ namespace MrWhoOidc.Auth.Migrations
                         .IsUnique();
 
                     b.ToTable("Consents");
-                });
-
-            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ExternalIdentity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ClaimsJson")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Issuer")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTimeOffset>("LastSeenAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ProviderName")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(400)
-                        .HasColumnType("character varying(400)");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Issuer", "Subject")
-                        .IsUnique();
-
-                    b.ToTable("ExternalIdentities");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.IdentityProvider", b =>
@@ -941,15 +869,6 @@ namespace MrWhoOidc.Auth.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ClientJwksHistory", b =>
-                {
-                    b.HasOne("MrWhoOidc.Auth.Persistence.Client", null)
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ClientScope", b =>
                 {
                     b.HasOne("MrWhoOidc.Auth.Persistence.Client", null)
@@ -961,15 +880,6 @@ namespace MrWhoOidc.Auth.Migrations
                     b.HasOne("MrWhoOidc.Auth.Persistence.Scope", null)
                         .WithMany()
                         .HasForeignKey("ScopeName")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.ExternalIdentity", b =>
-                {
-                    b.HasOne("MrWhoOidc.Auth.Persistence.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

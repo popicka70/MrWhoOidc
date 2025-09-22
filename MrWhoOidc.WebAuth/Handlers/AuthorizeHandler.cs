@@ -51,18 +51,43 @@ public sealed class AuthorizeHandler(
 
         try
         {
-            // If request_uri is provided, sanitize the address bar by keeping only request_uri and optional state
+            // If request_uri is provided, sanitize the address bar by keeping only request_uri and selected safe hints
             string? requestUriRaw = http.Request.Query["request_uri"];
             if (!string.IsNullOrEmpty(requestUriRaw))
             {
-                var stateRaw = http.Request.Query["state"].ToString();
-                // If there are extra params beyond request_uri/state, issue a redirect to a minimal URL
-                var keys = http.Request.Query.Keys.Select(k => k.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                if (keys.Except(new[] { "request_uri", "state" }, StringComparer.OrdinalIgnoreCase).Any())
+                var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "request_uri", // required for PAR
+                    "state",       // allowed by RFC 9101
+                    "idp",         // our custom provider selector
+                    "idp_hint",    // our custom hint
+                    "login_hint",  // standard hints we want to preserve visually
+                    "acr_values",
+                    "prompt",
+                    "ui_locales",
+                    "max_age"
+                };
+
+                var keys = http.Request.Query.Keys.Select(k => k.ToString());
+                if (keys.Except(allowed, StringComparer.OrdinalIgnoreCase).Any())
                 {
                     var baseUrl = http.Request.Path;
-                    var qs2 = $"?request_uri={Uri.EscapeDataString(requestUriRaw)}" + (string.IsNullOrEmpty(stateRaw) ? string.Empty : $"&state={Uri.EscapeDataString(stateRaw)}");
-                    return Results.Redirect(baseUrl + qs2);
+                    var builder = new System.Text.StringBuilder("?request_uri=");
+                    builder.Append(Uri.EscapeDataString(requestUriRaw));
+
+                    foreach (var name in allowed.Where(n => !string.Equals(n, "request_uri", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var val = http.Request.Query[name].ToString();
+                        if (!string.IsNullOrEmpty(val))
+                        {
+                            builder.Append('&');
+                            builder.Append(name);
+                            builder.Append('=');
+                            builder.Append(Uri.EscapeDataString(val));
+                        }
+                    }
+
+                    return Results.Redirect(baseUrl + builder.ToString());
                 }
             }
 
@@ -199,6 +224,10 @@ public sealed class AuthorizeHandler(
                 };
             }
 
+            // Parameter: idp and idp_hint
+            var idpParam = http.Request.Query["idp"].ToString();
+            var idpHint = http.Request.Query["idp_hint"].ToString();
+
             var validationResult = await authorize.ValidateAsync(effectiveReq);
             if (!validationResult.IsValid)
             {
@@ -225,13 +254,54 @@ public sealed class AuthorizeHandler(
                 return ErrorResults.InvalidRequest($"{validationResult.ErrorDescription} (corr={corr})");
             }
 
+            // Provider resolution for unauthenticated users
             if (!http.User.Identity?.IsAuthenticated ?? true)
             {
+                // If an explicit idp is present, go directly to external start
+                if (!string.IsNullOrEmpty(idpParam))
+                {
+                    var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                    return Results.Redirect(url);
+                }
+
+                // Otherwise, evaluate client mappings
+                Guid? clientGuid = null;
+                if (!string.IsNullOrEmpty(validationResult.ClientId))
+                {
+                    clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
+                }
+                if (clientGuid is Guid cg)
+                {
+                    var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
+                        .Where(m => m.ClientId == cg && m.Enabled)
+                        .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
+                        .OrderBy(x => x.m.Order)
+                        .Select(x => new { x.p.Name, Display = x.p.DisplayName ?? x.p.Name, x.m.IsDefaultForClient, x.m.AutoRedirectIfSingle })
+                        .ToListAsync();
+
+                    if (providerLinks.Count > 0)
+                    {
+                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle)
+                        {
+                            var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                            return Results.Redirect(url);
+                        }
+                        var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+                        if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
+                        return Results.Redirect(url2);
+                    }
+                }
+
+                // Fallback: local login
                 outcome = "login";
-                var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+                var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
             }
 
+            // From here: authenticated user -> issue code
             var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
                 return Results.Unauthorized();

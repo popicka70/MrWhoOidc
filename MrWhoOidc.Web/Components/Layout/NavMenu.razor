@@ -51,10 +51,10 @@
                     <NavLink class="nav-link" href="admin/users">
                         <span class="bi bi-people" aria-hidden="true"></span> Users
                     </NavLink>
-                    <a class="nav-link" href="/MicrosoftIdentity/Account/SignOut">Log out</a>
+                    <a class="nav-link" href="/logout?returnUrl=/" target="_top" rel="external">Log out</a>
                 </Authorized>
                 <NotAuthorized>
-                    <a class="nav-link" href="/signin-oidc">Log in</a>
+                    <a class="nav-link" href="/login" target="_top" rel="external">Log in</a>
                 </NotAuthorized>
             </AuthorizeView>
         </div>

@@ -1,0 +1,86 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.ProviderMappings.IndexModel
+@{
+    ViewData["Title"] = "Client ? Provider Mappings";
+}
+
+<h2>Client ? Provider Mappings</h2>
+
+<form method="post">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label asp-for="Input.ClientId" class="form-label">Client</label>
+            <select asp-for="Input.ClientId" class="form-select" asp-items="Model.ClientOptions"></select>
+        </div>
+        <div class="col-md-4">
+            <label asp-for="Input.IdentityProviderId" class="form-label">Identity Provider</label>
+            <select asp-for="Input.IdentityProviderId" class="form-select" asp-items="Model.ProviderOptions"></select>
+        </div>
+        <div class="col-md-2">
+            <label asp-for="Input.Order" class="form-label">Order</label>
+            <input asp-for="Input.Order" class="form-control" />
+        </div>
+        <div class="col-md-2 form-check">
+            <input asp-for="Input.Enabled" class="form-check-input" />
+            <label asp-for="Input.Enabled" class="form-check-label">Enabled</label>
+        </div>
+        <div class="col-md-2 form-check">
+            <input asp-for="Input.IsDefaultForClient" class="form-check-input" />
+            <label asp-for="Input.IsDefaultForClient" class="form-check-label">Default</label>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.RequiredAcr" class="form-label">Required ACR</label>
+            <input asp-for="Input.RequiredAcr" class="form-control" />
+        </div>
+        <div class="col-md-3 form-check">
+            <input asp-for="Input.AutoRedirectIfSingle" class="form-check-input" />
+            <label asp-for="Input.AutoRedirectIfSingle" class="form-check-label">Auto-redirect if single</label>
+        </div>
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-primary">Add / Update</button>
+        </div>
+    </div>
+</form>
+
+@if (Model.Rows.Count == 0)
+{
+    <p class="mt-3">No mappings.</p>
+}
+else
+{
+    <table class="table table-striped mt-3">
+        <thead>
+            <tr>
+                <th>Client</th>
+                <th>Provider</th>
+                <th>Enabled</th>
+                <th>Default</th>
+                <th>Auto</th>
+                <th>ACR</th>
+                <th>Order</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model.Rows)
+        {
+            <tr>
+                <td>@r.ClientIdVal (@r.ClientName)</td>
+                <td>@r.ProviderName</td>
+                <td>@(r.Enabled ? "Yes" : "No")</td>
+                <td>@(r.IsDefaultForClient ? "Yes" : "No")</td>
+                <td>@(r.AutoRedirectIfSingle ? "Yes" : "No")</td>
+                <td>@r.RequiredAcr</td>
+                <td>@r.Order</td>
+                <td>
+                    <form method="post" asp-page-handler="Delete">
+                        <input type="hidden" name="clientId" value="@r.ClientId" />
+                        <input type="hidden" name="identityProviderId" value="@r.IdentityProviderId" />
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
