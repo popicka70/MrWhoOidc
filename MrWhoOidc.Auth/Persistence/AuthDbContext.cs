@@ -27,6 +27,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<UserClientRoleAssignment> UserClientRoleAssignments => Set<UserClientRoleAssignment>();
     // New: registrations
     public DbSet<Registration> Registrations => Set<Registration>();
+    // New: IdP chaining
+    public DbSet<IdentityProvider> IdentityProviders => Set<IdentityProvider>();
+    public DbSet<ClientIdentityProvider> ClientIdentityProviders => Set<ClientIdentityProvider>();
+    public DbSet<IdentityProviderClaimMapping> IdentityProviderClaimMappings => Set<IdentityProviderClaimMapping>();
+    public DbSet<IdentityProviderKey> IdentityProviderKeys => Set<IdentityProviderKey>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -276,6 +281,72 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.ExpiresAt);
         });
 
+        // New: IdentityProvider
+        modelBuilder.Entity<IdentityProvider>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(150);
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Property(x => x.DisplayName).HasMaxLength(200);
+            b.Property(x => x.Type).IsRequired();
+            b.Property(x => x.Enabled).HasDefaultValue(true);
+            b.Property(x => x.IsDefault).HasDefaultValue(false);
+            b.Property(x => x.LogoUrl).HasMaxLength(2000);
+            b.Property(x => x.SortOrder).HasDefaultValue(0);
+            b.Property(x => x.ConfigJson).HasMaxLength(8000);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.UpdatedAt).IsRequired();
+        });
+
+        // New: ClientIdentityProvider mapping
+        modelBuilder.Entity<ClientIdentityProvider>(b =>
+        {
+            b.HasKey(x => new { x.ClientId, x.IdentityProviderId });
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<IdentityProvider>()
+                .WithMany()
+                .HasForeignKey(x => x.IdentityProviderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.Enabled).HasDefaultValue(true);
+            b.Property(x => x.IsDefaultForClient).HasDefaultValue(false);
+            b.Property(x => x.AutoRedirectIfSingle).HasDefaultValue(false);
+            b.Property(x => x.RequiredAcr).HasMaxLength(100);
+            b.Property(x => x.Order).HasDefaultValue(0);
+        });
+
+        // New: IdentityProviderClaimMapping
+        modelBuilder.Entity<IdentityProviderClaimMapping>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<IdentityProvider>()
+                .WithMany()
+                .HasForeignKey(x => x.IdentityProviderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.ExternalClaim).IsRequired().HasMaxLength(200);
+            b.Property(x => x.LocalClaim).IsRequired().HasMaxLength(200);
+            b.Property(x => x.Transform).HasMaxLength(200);
+            b.Property(x => x.Order).HasDefaultValue(0);
+        });
+
+        // New: IdentityProviderKey
+        modelBuilder.Entity<IdentityProviderKey>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.HasOne<IdentityProvider>()
+                .WithMany()
+                .HasForeignKey(x => x.IdentityProviderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.Purpose).IsRequired();
+            b.Property(x => x.Jwk).IsRequired().HasMaxLength(8000);
+            b.Property(x => x.Alg).IsRequired().HasMaxLength(20);
+            b.Property(x => x.Active).HasDefaultValue(true);
+            b.Property(x => x.Kid).HasMaxLength(200);
+            b.Property(x => x.CreatedAt).IsRequired();
+        });
+
         // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
         modelBuilder.Entity<DataProtectionKey>(b =>
         {
@@ -523,4 +594,77 @@ public class Registration
     public Guid? ApprovedByUserId { get; set; }
     public DateTimeOffset? RejectedAt { get; set; }
     public Guid? RejectedByUserId { get; set; }
+}
+
+// New: IdP chaining entities
+public enum IdentityProviderType
+{
+    Oidc = 0,
+    Saml = 1
+}
+
+public class IdentityProvider
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(150)]
+    public string Name { get; set; } = string.Empty; // unique key
+    [MaxLength(200)]
+    public string? DisplayName { get; set; }
+    public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
+    public bool Enabled { get; set; } = true;
+    public bool IsDefault { get; set; } = false;
+    [MaxLength(2000)]
+    public string? LogoUrl { get; set; }
+    public int SortOrder { get; set; } = 0;
+    [MaxLength(8000)]
+    public string? ConfigJson { get; set; } // provider-specific config (OIDC now)
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class ClientIdentityProvider
+{
+    public Guid ClientId { get; set; }
+    public Guid IdentityProviderId { get; set; }
+    public bool Enabled { get; set; } = true;
+    public bool IsDefaultForClient { get; set; } = false;
+    public bool AutoRedirectIfSingle { get; set; } = false;
+    [MaxLength(100)]
+    public string? RequiredAcr { get; set; }
+    public int Order { get; set; } = 0;
+}
+
+public class IdentityProviderClaimMapping
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid IdentityProviderId { get; set; }
+    [MaxLength(200)]
+    public string ExternalClaim { get; set; } = string.Empty;
+    [MaxLength(200)]
+    public string LocalClaim { get; set; } = string.Empty;
+    [MaxLength(200)]
+    public string? Transform { get; set; }
+    public int Order { get; set; } = 0;
+}
+
+public enum IdentityProviderKeyPurpose
+{
+    Signing = 0,
+    Encryption = 1
+}
+
+public class IdentityProviderKey
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid IdentityProviderId { get; set; }
+    public IdentityProviderKeyPurpose Purpose { get; set; } = IdentityProviderKeyPurpose.Signing;
+    [MaxLength(8000)]
+    public string Jwk { get; set; } = string.Empty;
+    [MaxLength(20)]
+    public string Alg { get; set; } = "RS256";
+    public bool Active { get; set; } = true;
+    [MaxLength(200)]
+    public string? Kid { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ExpiresAt { get; set; }
 }

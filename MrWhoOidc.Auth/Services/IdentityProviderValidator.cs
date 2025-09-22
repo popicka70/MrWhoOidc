@@ -1,0 +1,62 @@
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.IdentityProviders;
+using MrWhoOidc.Auth.Persistence;
+using System.ComponentModel.DataAnnotations;
+
+namespace MrWhoOidc.Auth.Services;
+
+public interface IIdentityProviderValidator
+{
+    Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default);
+}
+
+public sealed class IdentityProviderValidator(AuthDbContext db, IHttpClientFactory httpClientFactory) : IIdentityProviderValidator
+{
+    public async Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(provider.Name)) return (false, "Name is required");
+        if (provider.Name.Length > 150) return (false, "Name too long");
+
+        // Unique name
+        var exists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Name == provider.Name && p.Id != provider.Id, ct).ConfigureAwait(false);
+        if (exists) return (false, "Name already exists");
+
+        if (provider.Type == IdentityProviderType.Oidc && !string.IsNullOrWhiteSpace(provider.ConfigJson))
+        {
+            var (ok, error) = OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg);
+            if (!ok) return (false, $"Config invalid: {error}");
+
+            // DataAnnotation-based validation for stricter checks
+            var context = new ValidationContext(cfg!);
+            var results = new List<ValidationResult>();
+            if (!Validator.TryValidateObject(cfg!, context, results, validateAllProperties: true))
+            {
+                var msg = string.Join("; ", results.Select(r => r.ErrorMessage));
+                return (false, msg);
+            }
+
+            // Try discovery if reachable
+            var metadataUrl = string.IsNullOrWhiteSpace(cfg!.DiscoveryUrl) ? CombineWellKnown(cfg.Authority) : cfg.DiscoveryUrl!;
+            try
+            {
+                var client = httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(5);
+                using var resp = await client.GetAsync(metadataUrl, ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                    return (false, $"Discovery failed: HTTP {(int)resp.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Discovery error: {ex.Message}");
+            }
+        }
+
+        return (true, null);
+    }
+
+    private static string CombineWellKnown(string authority)
+    {
+        authority = authority.TrimEnd('/');
+        return authority + "/.well-known/openid-configuration";
+    }
+}

@@ -1,4 +1,10 @@
 <Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/backlog.md" />
+    <File Path="docs/copilot-instructions.md" />
+    <File Path="docs/idp-chaining-backlog.md" />
+    <File Path="docs/oidc-server-backlog.md" />
+  </Folder>
   <Project Path="MrWhoOidc.ApiService/MrWhoOidc.ApiService.csproj" />
   <Project Path="MrWhoOidc.AppHost/MrWhoOidc.AppHost.csproj" />
   <Project Path="MrWhoOidc.Auth/MrWhoOidc.Auth.csproj" />
