@@ -22,7 +22,7 @@ Epics and stories
 1) Data model, storage, migrations
 - [x] Story: Introduce provider abstraction
   - Add table `IdentityProviders`
-    - `Id` (PK), `Name` (unique, machine-safe), `DisplayName`, `Type` (enum: OIDC, SAML), `Enabled` (bool), `IsDefault` (bool), `LogoUrl` (nullable), `SortOrder` (int), `ConfigJson` (nvarchar(max) / jsonb), `CreatedAt`, `UpdatedAt`.
+    - `Id` (PK), `Name` (unique, machine-safe), `DisplayName`, `Type` (enum: OIDC, SAML), `Enabled` (bool), `IsDefault` (bool), `LogoUrl` (nullable), `SortOrder` (int), `ConfigJson` (nvarchar(max) / jsonb), `CreatedAt`, `UpdatedAt`).
   - Add table `ClientIdentityProviders` (many-to-many)
     - `ClientId` (FK to existing Clients), `IdentityProviderId` (FK), composite PK (`ClientId`, `IdentityProviderId`), `Enabled`, `IsDefaultForClient`, `AutoRedirectIfSingle` (bool), `RequiredAcr` (nullable), `Order` (int).
   - Add table `IdentityProviderClaimMappings`
@@ -46,9 +46,9 @@ Epics and stories
   - Done:
     - Providers list/detail/create/edit/delete; config JSON validation with discovery on save.
     - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
-    - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed; sidebar navigation added.
+    - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed.
+    - Claim mapping editor (CRUD) at `/Admin/Providers/ClaimMappings` with transforms help.
   - Pending:
-    - Claim mapping editor (CRUD); templates for `sub`, `email`, `name`, `preferred_username`, `roles`.
     - Keys page: provider keys (outbound JAR) and client public keys (inbound JAR) with JWK/PEM import, active flag.
     - Logo upload/select; drag/drop ordering polish.
   - Acceptance: Full CRUD works, validation visible, audit notes recorded.
@@ -62,8 +62,8 @@ Epics and stories
   - Acceptance: Routing logic tested across combinations.
 
 - [~] Story: External OIDC sign-in flow
-  - Implemented: Custom external OIDC start/callback with PKCE, protected `state`, discovery, token exchange, user provisioning, local cookie sign-in, and return to `/authorize`.
-  - Pending: Upstream ID token signature validation via JWKS (issuer/audience/nonce checks), error/cancel handling polish, re-selection flow, claim normalization, and persistent `iss+sub` linkage.
+  - Implemented: Custom external OIDC start/callback with PKCE, protected `state` (+ `nonce`), discovery, token exchange, ID token validation via JWKS (issuer/audience/lifetime/nonce), local user provisioning, persistent `iss+sub` linkage (`ExternalIdentities`), claim mapping application, local cookie sign-in, and return to `/authorize`.
+  - Pending: Error/cancel handling polish, re-selection flow after upstream cancel, correlation metrics and logs.
   - Acceptance: Round-trip works with at least two OIDC providers.
 
 4) Inbound JAR (clients ? WebAuth)
@@ -88,14 +88,14 @@ Epics and stories
   - Acceptance: Verified with an IdP enforcing PAR.
 
 6) Token issuance and claims
-- [ ] Story: Subject resolution and auto-provision
-  - Link external user by `issuer+sub` pair.
-  - Optional email-based linking with confirmation. Auto-provision toggle per client.
+- [~] Story: Subject resolution and auto-provision
+  - Implemented: Link external user by `issuer+sub`; basic auto-provision on first sign-in.
+  - Pending: Optional email-based linking with confirmation; per-client auto-provision toggle.
   - Acceptance: New and returning users handled without duplicates.
 
-- [ ] Story: Claim mapping and propagation
-  - Apply `IdentityProviderClaimMappings` to normalize claims; support transforms (copy, rename, regex, concat, case).
-  - Add upstream info in our tokens: `idp`, `amr`, `acr`; propagate `auth_time`.
+- [~] Story: Claim mapping and propagation
+  - Implemented: `IdentityProviderClaimMappings` CRUD UI and `ClaimMappingService` with transforms (copy, trim, case, prefix/suffix, regex, concat); applied during external provisioning.
+  - Pending: Add upstream info in our tokens (`idp`, `amr`, `acr`); propagate `auth_time` (partially present) and mapped claims as needed.
   - Acceptance: Downstream clients can consume upstream metadata.
 
 7) Login UI changes (Razor Pages end-user flow)
@@ -143,7 +143,7 @@ Epics and stories
 
 Rollout plan
 - [x] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
-- [~] Phase 2: Admin CRUD + single upstream OIDC provider live (basic external flow working; validation/polish pending).
+- [~] Phase 2: Admin CRUD + single upstream OIDC provider live (external flow working; validation/mappings wired; polish pending).
 - [ ] Phase 3: Multiple providers + picker UI + claim mapping.
 - [x] Phase 4: Inbound JAR.
 - [ ] Phase 5: Optional outbound JAR/PAR.

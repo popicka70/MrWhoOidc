@@ -34,4 +34,9 @@ else
         <dt class="col-sm-2">Config</dt>
         <dd class="col-sm-10"><pre><code>@Model.ConfigPretty</code></pre></dd>
     </dl>
+
+    <p>
+        <a asp-page="ClaimMappings" asp-route-id="@Model.Provider.Id" class="btn btn-outline-primary">Manage claim mappings</a>
+        <a asp-page="Edit" asp-route-id="@Model.Provider.Id" class="btn btn-primary">Edit</a>
+    </p>
 }
