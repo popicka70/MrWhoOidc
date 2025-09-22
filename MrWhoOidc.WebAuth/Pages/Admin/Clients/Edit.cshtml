@@ -16,6 +16,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="providers-tab" data-bs-toggle="tab" data-bs-target="#tab-providers" type="button" role="tab" aria-controls="tab-providers" aria-selected="false">
+                <i class="bi bi-people me-1"></i> Providers
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="scopes-tab" data-bs-toggle="tab" data-bs-target="#tab-scopes" type="button" role="tab" aria-controls="tab-scopes" aria-selected="false">
                 <i class="bi bi-tag me-1"></i> Scopes
             </button>
@@ -91,6 +96,83 @@
             </div>
         </div>
 
+        <div class="tab-pane fade" id="tab-providers" role="tabpanel" aria-labelledby="providers-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <h5>Add or update mapping</h5>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label asp-for="ProviderInput.IdentityProviderId" class="form-label">Provider</label>
+                            <select asp-for="ProviderInput.IdentityProviderId" class="form-select" asp-items="Model.ProviderOptions"></select>
+                        </div>
+                        <div class="col-md-2">
+                            <label asp-for="ProviderInput.Order" class="form-label">Order</label>
+                            <input asp-for="ProviderInput.Order" class="form-control" />
+                        </div>
+                        <div class="col-md-2 form-check">
+                            <input asp-for="ProviderInput.Enabled" class="form-check-input" />
+                            <label asp-for="ProviderInput.Enabled" class="form-check-label">Enabled</label>
+                        </div>
+                        <div class="col-md-2 form-check">
+                            <input asp-for="ProviderInput.IsDefaultForClient" class="form-check-input" />
+                            <label asp-for="ProviderInput.IsDefaultForClient" class="form-check-label">Default</label>
+                        </div>
+                        <div class="col-md-2 form-check">
+                            <input asp-for="ProviderInput.AutoRedirectIfSingle" class="form-check-input" />
+                            <label asp-for="ProviderInput.AutoRedirectIfSingle" class="form-check-label">Auto</label>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="ProviderInput.RequiredAcr" class="form-label">Required ACR</label>
+                            <input asp-for="ProviderInput.RequiredAcr" class="form-control" />
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-outline-primary" asp-page-handler="AddProvider" formnovalidate>Add / Update</button>
+                            <a asp-page="/Admin/ProviderMappings/Index" class="btn btn-link">Open full mapping page</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <h5 class="mt-3">Current mappings</h5>
+                    @if (Model.ProviderMappings.Count == 0)
+                    {
+                        <p>No mappings.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>Enabled</th>
+                                    <th>Default</th>
+                                    <th>Auto</th>
+                                    <th>ACR</th>
+                                    <th>Order</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var r in Model.ProviderMappings)
+                            {
+                                <tr>
+                                    <td>@r.ProviderDisplay (@r.ProviderName)</td>
+                                    <td>@(r.Enabled ? "Yes" : "No")</td>
+                                    <td>@(r.IsDefaultForClient ? "Yes" : "No")</td>
+                                    <td>@(r.AutoRedirectIfSingle ? "Yes" : "No")</td>
+                                    <td>@r.RequiredAcr</td>
+                                    <td>@r.Order</td>
+                                    <td class="text-end">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="DeleteProvider" name="providerId" value="@r.IdentityProviderId" formnovalidate>Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+        </div>
+
         <div class="tab-pane fade" id="tab-scopes" role="tabpanel" aria-labelledby="scopes-tab" tabindex="0">
             <div class="row g-3">
                 <div class="col-md-6">
@@ -128,7 +210,13 @@
         </div>
 
         <div class="tab-pane fade" id="tab-keys" role="tabpanel" aria-labelledby="keys-tab" tabindex="0">
-            <div class="row g-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div></div>
+                <div>
+                    <a asp-page="/Admin/ClientKeys/Index" asp-route-clientId="@Model.Id" class="btn btn-sm btn-outline-secondary">Open dedicated keys page</a>
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
                 <div class="col-12">
                     <label asp-for="Input.PublicJwksUri" class="form-label"></label>
                     <div class="input-group">
@@ -143,11 +231,31 @@
                         <button type="submit" class="btn btn-outline-success" asp-page-handler="GenerateJwks" formnovalidate>Generate JWKS</button>
                         <button type="submit" class="btn btn-outline-success" asp-page-handler="AddKey" formnovalidate>Add Key</button>
                     </div>
+                    @if (Model.JwksStatus is not null)
+                    {
+                        <div class="mt-1 small">
+                            <span class="badge @(Model.JwksStatus.Ok ? "bg-success" : "bg-danger")">@Model.JwksStatus.Message</span>
+                            @if (Model.JwksStatus.Ok)
+                            {
+                                <span class="text-muted ms-2">keys: @Model.JwksStatus.KeyCount; unique kid: @Model.JwksStatus.UniqueKidCount</span>
+                            }
+                            @if (Model.JwksStatus.DuplicateKids?.Count > 0)
+                            {
+                                <span class="text-danger ms-2">duplicates: @string.Join(", ", Model.JwksStatus.DuplicateKids)</span>
+                            }
+                        </div>
+                    }
                     <small class="form-text text-muted">Fetch from URI or manage JWKS below. Use Add Key to append another key.</small>
                     <span asp-validation-for="Input.PublicJwksUri" class="text-danger"></span>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Input.PublicJwksJson" class="form-label"></label>
+                    <label asp-for="Input.PublicJwksJson" class="form-label">
+                        Public JWKS JSON
+                        @if (Model.JwksStatus is not null)
+                        {
+                            <span class="badge @(Model.JwksStatus.Ok ? "bg-success" : "bg-danger") ms-2">@Model.JwksStatus.Summary</span>
+                        }
+                    </label>
                     <textarea asp-for="Input.PublicJwksJson" class="form-control" rows="8" placeholder='{"keys":[{...}]}'></textarea>
                     <small class="form-text text-muted">Public JWKS used for private_key_jwt and JAR.</small>
                     <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
@@ -171,7 +279,7 @@
                                     @foreach (var k in Model.KeyPreviews)
                                     {
                                         <li>
-                                            <code>@k.Kid</code> ? @k.Kty @k.Alg @(" ") @k.Details
+                                            <code>@k.Kid</code> – @k.Kty @k.Alg @(" ") @k.Details
                                         </li>
                                     }
                                 </ul>

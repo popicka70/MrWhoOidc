@@ -11,21 +11,20 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "admin")]
-public class EditModel(AuthDbContext db, IIdentityProviderValidator validator) : PageModel
+public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory) : PageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
 
     public List<SelectListItem> TypeOptions { get; private set; } = new();
 
+    public bool DiscoveryOk { get; private set; }
+    public string? DiscoverySummary { get; private set; }
+    public string? DiscoveryJson { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
-        TypeOptions = new()
-        {
-            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
-            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
-        };
-
+        await LoadTypesAsync();
         var entity = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null)
             return NotFound();
@@ -47,13 +46,7 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator) :
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
-        // ensure TypeOptions for redisplay
-        TypeOptions = new()
-        {
-            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
-            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
-        };
-
+        await LoadTypesAsync();
         if (!ModelState.IsValid || Input is null)
             return Page();
 
@@ -91,6 +84,72 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator) :
 
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
+    }
+
+    public async Task<IActionResult> OnPostTestAsync(Guid id)
+    {
+        await LoadTypesAsync();
+        if (Input is null)
+            return Page();
+
+        if (Input.Type != IdentityProviderType.Oidc || string.IsNullOrWhiteSpace(Input.ConfigJson))
+        {
+            DiscoveryOk = false;
+            DiscoverySummary = "Only OIDC providers with a config can be tested.";
+            return Page();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(Input.ConfigJson);
+            var el = doc.RootElement;
+            string? authority = el.TryGetProperty("Authority", out var au) ? au.GetString() : null;
+            string? discovery = el.TryGetProperty("DiscoveryUrl", out var du) ? du.GetString() : null;
+            if (string.IsNullOrWhiteSpace(authority))
+            {
+                DiscoveryOk = false;
+                DiscoverySummary = "Authority missing in config.";
+                return Page();
+            }
+            var url = string.IsNullOrWhiteSpace(discovery) ? authority.TrimEnd('/') + "/.well-known/openid-configuration" : discovery!;
+
+            var http = httpClientFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(5);
+            var json = await http.GetStringAsync(url);
+
+            // Pretty-print subset
+            using var meta = JsonDocument.Parse(json);
+            var root = meta.RootElement;
+            var excerpt = new
+            {
+                issuer = root.TryGetProperty("issuer", out var iss) ? iss.GetString() : null,
+                authorization_endpoint = root.TryGetProperty("authorization_endpoint", out var a) ? a.GetString() : null,
+                token_endpoint = root.TryGetProperty("token_endpoint", out var t) ? t.GetString() : null,
+                jwks_uri = root.TryGetProperty("jwks_uri", out var j) ? j.GetString() : null,
+                response_types_supported = root.TryGetProperty("response_types_supported", out var rts) ? rts : default,
+                id_token_signing_alg_values_supported = root.TryGetProperty("id_token_signing_alg_values_supported", out var idalgs) ? idalgs : default
+            };
+            DiscoveryJson = JsonSerializer.Serialize(excerpt, new JsonSerializerOptions { WriteIndented = true });
+            DiscoveryOk = true;
+            DiscoverySummary = $"Discovery OK: {url}";
+        }
+        catch (Exception ex)
+        {
+            DiscoveryOk = false;
+            DiscoverySummary = "Discovery failed: " + ex.Message;
+        }
+
+        return Page();
+    }
+
+    private Task LoadTypesAsync()
+    {
+        TypeOptions = new()
+        {
+            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
+            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
+        };
+        return Task.CompletedTask;
     }
 
     public sealed class InputModel

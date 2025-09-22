@@ -5,6 +5,10 @@
 }
 <h2>Identity Providers</h2>
 
+<p>
+    <a asp-page="Add" class="btn btn-primary">Add Provider</a>
+</p>
+
 @if (Model.Providers.Count == 0)
 {
     <p>No identity providers found.</p>
@@ -34,7 +38,11 @@ else
                 <td>@(p.IsDefault ? "Yes" : "No")</td>
                 <td>@p.SortOrder</td>
                 <td>
-                    <a asp-page="Details" asp-route-id="@p.Id">View</a>
+                    <a asp-page="Details" asp-route-id="@p.Id">View</a> |
+                    <a asp-page="Edit" asp-route-id="@p.Id">Edit</a> |
+                    <a asp-page="/Admin/ProviderClaimMappings/Index" asp-route-providerId="@p.Id">Claim mappings</a> |
+                    <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@p.Id">Keys</a> |
+                    <a asp-page="Delete" asp-route-id="@p.Id">Delete</a>
                 </td>
             </tr>
         }

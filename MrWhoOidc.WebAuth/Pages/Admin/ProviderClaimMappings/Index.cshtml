@@ -1,0 +1,79 @@
+@page "{providerId:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings.IndexModel
+@{
+    ViewData["Title"] = "Claim Mappings";
+}
+
+<h2>Claim mappings for @Model.ProviderDisplay</h2>
+
+@if (!string.IsNullOrEmpty(Model.Error))
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success">@Model.Message</div>
+}
+
+<form method="post" class="mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label asp-for="Input.ExternalClaim" class="form-label">External claim</label>
+            <input asp-for="Input.ExternalClaim" class="form-control" />
+            <span asp-validation-for="Input.ExternalClaim" class="text-danger"></span>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.LocalClaim" class="form-label">Local claim</label>
+            <input asp-for="Input.LocalClaim" class="form-control" />
+            <span asp-validation-for="Input.LocalClaim" class="text-danger"></span>
+        </div>
+        <div class="col-md-3">
+            <label asp-for="Input.Transform" class="form-label">Transform</label>
+            <input asp-for="Input.Transform" class="form-control" placeholder="copy|rename|lower|upper|regex:...|concat:..." />
+        </div>
+        <div class="col-md-2">
+            <label asp-for="Input.Order" class="form-label">Order</label>
+            <input asp-for="Input.Order" class="form-control" />
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+    </div>
+</form>
+
+@if (Model.Rows.Count == 0)
+{
+    <p>No mappings found.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>External</th>
+                <th>Local</th>
+                <th>Transform</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model.Rows)
+        {
+            <tr>
+                <td>@r.Order</td>
+                <td>@r.ExternalClaim</td>
+                <td>@r.LocalClaim</td>
+                <td>@r.Transform</td>
+                <td class="text-end">
+                    <a class="btn btn-sm btn-secondary" asp-page="Edit" asp-route-id="@r.Id">Edit</a>
+                    <form method="post" asp-page-handler="Delete" class="d-inline">
+                        <input type="hidden" name="id" value="@r.Id" />
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete mapping?');">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}

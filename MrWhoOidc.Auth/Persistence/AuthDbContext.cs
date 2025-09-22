@@ -32,6 +32,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<ClientIdentityProvider> ClientIdentityProviders => Set<ClientIdentityProvider>();
     public DbSet<IdentityProviderClaimMapping> IdentityProviderClaimMappings => Set<IdentityProviderClaimMapping>();
     public DbSet<IdentityProviderKey> IdentityProviderKeys => Set<IdentityProviderKey>();
+    // New: Client JWKS history (for admin diagnostics)
+    public DbSet<ClientJwksHistory> ClientJwksHistories => Set<ClientJwksHistory>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -102,6 +104,21 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: Client JWKS history
+        modelBuilder.Entity<ClientJwksHistory>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.JwksJson).IsRequired().HasMaxLength(8000);
+            b.Property(x => x.Source).HasMaxLength(50);
+            b.Property(x => x.Hash).HasMaxLength(64);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.HasIndex(x => new { x.ClientId, x.CreatedAt });
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -667,4 +684,17 @@ public class IdentityProviderKey
     public string? Kid { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ExpiresAt { get; set; }
+}
+
+public class ClientJwksHistory
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ClientId { get; set; }
+    [MaxLength(8000)]
+    public string JwksJson { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string? Source { get; set; } // e.g., fetch|manual|restore
+    [MaxLength(64)]
+    public string? Hash { get; set; } // SHA-256 hex of compacted JSON
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

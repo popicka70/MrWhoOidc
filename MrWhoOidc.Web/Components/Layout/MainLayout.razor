@@ -13,10 +13,10 @@
                 <AuthorizeView>
                     <Authorized>
                         <span class="me-3">Hello, @context.User.Identity?.Name</span>
-                        <a href="/logout">Log out</a>
+                        <a href="/logout?returnUrl=/" target="_top" rel="external">Log out</a>
                     </Authorized>
                     <NotAuthorized>
-                        <a href="/login">Log in</a>
+                        <a href="/login" target="_top" rel="external">Log in</a>
                     </NotAuthorized>
                 </AuthorizeView>
             </div>
