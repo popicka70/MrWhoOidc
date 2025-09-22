@@ -254,28 +254,23 @@ public sealed class AuthorizeHandler(
                 return ErrorResults.InvalidRequest($"{validationResult.ErrorDescription} (corr={corr})");
             }
 
-            // Lookup client + its configured providers
-            Guid? clientGuid = null;
-            if (!string.IsNullOrEmpty(validationResult.ClientId))
-            {
-                clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
-            }
-
-            // If the caller explicitly chose a provider, remember it
-            if (!string.IsNullOrEmpty(idpParam) && clientGuid is Guid cg1)
-            {
-                http.Response.Cookies.Append($"idp-{cg1:N}", idpParam, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Lax,
-                    Expires = DateTimeOffset.UtcNow.AddDays(30)
-                });
-            }
-
+            // Provider resolution for unauthenticated users
             if (!http.User.Identity?.IsAuthenticated ?? true)
             {
-                // Provider resolution for unauthenticated users
+                // If an explicit idp is present, go directly to external start
+                if (!string.IsNullOrEmpty(idpParam))
+                {
+                    var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                    return Results.Redirect(url);
+                }
+
+                // Otherwise, evaluate client mappings
+                Guid? clientGuid = null;
+                if (!string.IsNullOrEmpty(validationResult.ClientId))
+                {
+                    clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
+                }
                 if (clientGuid is Guid cg)
                 {
                     var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
@@ -287,30 +282,26 @@ public sealed class AuthorizeHandler(
 
                     if (providerLinks.Count > 0)
                     {
-                        // If single and auto-redirect, jump to picker which will immediately choose
-                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && string.IsNullOrEmpty(idpParam))
+                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle)
                         {
                             var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            var url = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&auto=1";
+                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                             return Results.Redirect(url);
                         }
-
-                        // If no idp chosen yet, redirect to provider picker
-                        if (string.IsNullOrEmpty(idpParam))
-                        {
-                            var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            var url = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
-                            if (!string.IsNullOrEmpty(idpHint)) url += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
-                            return Results.Redirect(url);
-                        }
+                        var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+                        if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
+                        return Results.Redirect(url2);
                     }
                 }
 
+                // Fallback: local login
                 outcome = "login";
                 var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
                 return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
             }
 
+            // From here: authenticated user -> issue code
             var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
                 return Results.Unauthorized();

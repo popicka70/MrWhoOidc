@@ -8,22 +8,22 @@ namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
 public class SelectModel(AuthDbContext db) : PageModel
 {
-    public sealed record Item(string Name, string Display, bool IsDefault);
+    public sealed record Item(string Name, string Display, string? LogoUrl);
 
     [BindProperty(SupportsGet = true)]
     public string? Client_Id { get; set; }
 
     [BindProperty(SupportsGet = true)]
-    public string? ReturnUrl { get; set; }
+    public string ReturnUrl { get; set; } = "/";
 
     [BindProperty(SupportsGet = true)]
     public string? Idp_Hint { get; set; }
 
+    public List<Item> Providers { get; private set; } = new();
+
     public string ReturnUrlEncoded => Uri.EscapeDataString(ReturnUrl ?? "/");
 
     public string? Error { get; private set; }
-
-    public List<Item> Items { get; private set; } = new();
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -44,15 +44,15 @@ public class SelectModel(AuthDbContext db) : PageModel
             .Where(m => m.ClientId == client.Id && m.Enabled)
             .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
             .OrderBy(x => x.m.Order)
-            .Select(x => new Item(x.p.Name, x.p.DisplayName ?? x.p.Name, x.m.IsDefaultForClient))
+            .Select(x => new Item(x.p.Name, x.p.DisplayName ?? x.p.Name, x.p.LogoUrl))
             .ToListAsync();
 
-        Items = providerLinks;
+        Providers = providerLinks;
 
         // If auto=1 and single provider, immediately choose it
-        if (Request.Query.TryGetValue("auto", out var autoVal) && autoVal == "1" && Items.Count == 1)
+        if (Request.Query.TryGetValue("auto", out var autoVal) && autoVal == "1" && Providers.Count == 1)
         {
-            return await ChooseAsync(Items[0].Name);
+            return await ChooseAsync(Providers[0].Name);
         }
 
         return Page();
