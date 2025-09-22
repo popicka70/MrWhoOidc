@@ -46,26 +46,24 @@ Epics and stories
   - Done:
     - Providers list/detail/create/edit/delete; config JSON validation with discovery on save.
     - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
+    - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed; sidebar navigation added.
   - Pending:
-    - View discovery metadata UI and explicit "Test connection" button.
     - Claim mapping editor (CRUD); templates for `sub`, `email`, `name`, `preferred_username`, `roles`.
     - Keys page: provider keys (outbound JAR) and client public keys (inbound JAR) with JWK/PEM import, active flag.
     - Logo upload/select; drag/drop ordering polish.
   - Acceptance: Full CRUD works, validation visible, audit notes recorded.
 
 3) Authorization pipeline updates (IdP chaining)
-- [ ] Story: Authorize endpoint parameterization
+- [~] Story: Authorize endpoint parameterization
   - Accept custom `idp` and `idp_hint`; standard `login_hint`, `acr_values`.
   - Resolve client ? available providers. If 0: use local login (existing behavior). If 1 and `AutoRedirectIfSingle`: redirect. If >1 and no forced selection: render provider picker page.
-  - Remember last used provider per client (cookie) if allowed by client config.
-  - Respect `prompt=login`, `max_age`, `ui_locales` and propagate to upstream when applicable.
+  - Preserve `idp`/`idp_hint` and hints with PAR (`request_uri`) to avoid redirect loops.
+  - Pending: remember last used provider per client (cookie) and propagate `prompt/max_age/ui_locales` consistently.
   - Acceptance: Routing logic tested across combinations.
 
-- [ ] Story: External OIDC sign-in flow
-  - Dynamically register external OIDC schemes per provider (cache discovery, refresh periodically; no app restart).
-  - PKCE, nonce/state, correlation protections.
-  - Callback handler: normalize/map claims, link/provision local subject, store upstream `iss+sub` linkage, then complete local authorization flow.
-  - Handle error/cancel on upstream and allow re-selection.
+- [~] Story: External OIDC sign-in flow
+  - Implemented: Custom external OIDC start/callback with PKCE, protected `state`, discovery, token exchange, user provisioning, local cookie sign-in, and return to `/authorize`.
+  - Pending: Upstream ID token signature validation via JWKS (issuer/audience/nonce checks), error/cancel handling polish, re-selection flow, claim normalization, and persistent `iss+sub` linkage.
   - Acceptance: Round-trip works with at least two OIDC providers.
 
 4) Inbound JAR (clients ? WebAuth)
@@ -101,9 +99,9 @@ Epics and stories
   - Acceptance: Downstream clients can consume upstream metadata.
 
 7) Login UI changes (Razor Pages end-user flow)
-- [ ] Story: Provider picker page
-  - Display configured providers with logo, display name, description; keyboard/a11y friendly; mobile-friendly.
-  - Respect default provider and auto-redirect-if-single; show “More options” if an IdP is hinted/remembered.
+- [~] Story: Provider picker page
+  - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider.
+  - Pending: a11y/design polish, remembered provider hint, mobile improvements.
   - Acceptance: Works across themes/branding.
 
 - [ ] Story: Error/edge cases
@@ -127,8 +125,8 @@ Epics and stories
   - Redact secrets; PII handling policy.
   - Acceptance: Logs useful for troubleshooting and pass security review.
 
-- [~] Story: Rate limiting & protections
-  - Apply rate limits to authorize, callback, and JAR paths; CSRF protections on local UI; strict referrer policy.
+- [x] Story: Rate limiting & protections
+  - Apply rate limits to authorize, callback, token, userinfo, introspection, and PAR paths; CSRF protections on local UI; strict referrer policy.
   - Acceptance: Basic DoS protections in place.
 
 10) Testing and documentation
@@ -145,7 +143,7 @@ Epics and stories
 
 Rollout plan
 - [x] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
-- [~] Phase 2: Admin CRUD + single upstream OIDC provider live.
+- [~] Phase 2: Admin CRUD + single upstream OIDC provider live (basic external flow working; validation/polish pending).
 - [ ] Phase 3: Multiple providers + picker UI + claim mapping.
 - [x] Phase 4: Inbound JAR.
 - [ ] Phase 5: Optional outbound JAR/PAR.
