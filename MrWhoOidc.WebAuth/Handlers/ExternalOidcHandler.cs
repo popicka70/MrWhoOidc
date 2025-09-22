@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -16,7 +18,7 @@ public interface IExternalOidcHandler
     Task<IResult> CallbackAsync(HttpContext http);
 }
 
-public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp) : IExternalOidcHandler
+public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, MrWhoOidc.Auth.Services.IJwksCache jwksCache) : IExternalOidcHandler
 {
     private readonly IDataProtector _protector = dp.CreateProtector("ext-oidc-state");
 
@@ -48,17 +50,19 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
         var cb = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
 
-        // State
-        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl });
+        // State (nonce included for ID token nonce check)
+        var nonce = Guid.NewGuid().ToString("N");
+        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce });
         var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
 
         var query = new Dictionary<string, string?>
         {
-            ["response_type"] = cfg.ResponseType ?? "code",
+            ["response_type"] = "code id_token", // hybrid to get id_token for nonce check when supported
             ["client_id"] = cfg.ClientId,
             ["redirect_uri"] = cb,
             ["scope"] = string.Join(' ', cfg.Scopes ?? new[] { "openid", "profile", "email" }),
             ["state"] = state,
+            ["nonce"] = nonce,
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256"
         };
@@ -91,6 +95,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
     public async Task<IResult> CallbackAsync(HttpContext http)
     {
         var code = http.Request.Query["code"].ToString();
+        var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
         if (!string.IsNullOrEmpty(error)) return Results.Content($"Upstream error: {error}", "text/plain", statusCode: 400);
@@ -117,7 +122,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var root = doc.RootElement;
         var tokenEndpoint = root.GetProperty("token_endpoint").GetString()!;
         var userinfoEndpoint = root.TryGetProperty("userinfo_endpoint", out var ue) ? ue.GetString() : null;
+        var jwksUri = root.GetProperty("jwks_uri").GetString()!;
 
+        // Token exchange
         var form = new Dictionary<string, string?>
         {
             ["grant_type"] = "authorization_code",
@@ -134,19 +141,48 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (!tokResp.IsSuccessStatusCode) return Results.Content($"Token exchange failed: {(int)tokResp.StatusCode} {body}", "text/plain", statusCode: 400);
 
         using var tokDoc = JsonDocument.Parse(body);
-        var idToken = tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
-        string? email = null, name = null, sub = null;
+        var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
+
+        string? email = null, name = null, sub = null, issuer = null, nonce = state.Nonce;
+
         if (!string.IsNullOrEmpty(idToken))
         {
-            var parts = idToken.Split('.');
-            if (parts.Length >= 2)
+            // Validate ID token
+            var set = await jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), httpFactory, http.RequestAborted);
+            if (set is null) return Results.Content("JWKS fetch failed", "text/plain", statusCode: 400);
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var parms = new TokenValidationParameters
             {
-                var payload = JsonDocument.Parse(Base64UrlDecodeToString(parts[1]));
-                sub = payload.RootElement.TryGetProperty("sub", out var s) ? s.GetString() : null;
-                email = payload.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
-                name = payload.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+                ValidateIssuer = true,
+                ValidIssuer = root.GetProperty("issuer").GetString(),
+                ValidateAudience = true,
+                ValidAudience = cfg.ClientId,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromMinutes(2),
+                RequireSignedTokens = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKeys = set.Keys
+            };
+
+            try
+            {
+                var principal = tokenHandler.ValidateToken(idToken!, parms, out var _);
+                issuer = principal.FindFirst("iss")?.Value ?? parms.ValidIssuer;
+                sub = principal.FindFirst("sub")?.Value;
+                name = principal.FindFirst("name")?.Value;
+                email = principal.FindFirst("email")?.Value;
+                var nonceClaim = principal.FindFirst("nonce")?.Value;
+                if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
+                    return Results.Content("Nonce mismatch", "text/plain", statusCode: 400);
+            }
+            catch (Exception ex)
+            {
+                return Results.Content("ID token validation failed: " + ex.Message, "text/plain", statusCode: 400);
             }
         }
+
+        // Fallback to userinfo for profile/email
         if (userinfoEndpoint is not null && string.IsNullOrEmpty(email))
         {
             try
@@ -170,33 +206,61 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             catch { }
         }
 
-        if (string.IsNullOrEmpty(sub)) return Results.Content("Missing subject from upstream IdP", "text/plain", statusCode: 400);
+        if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(issuer))
+            return Results.Content("Missing subject/issuer from upstream IdP", "text/plain", statusCode: 400);
 
-        var username = !string.IsNullOrEmpty(email) ? email : $"{state.Provider}:{sub}";
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(email) && u.Email == email));
-        if (user is null)
+        // Link/provision local user using ExternalIdentities
+        var ext = await db.ExternalIdentities.FirstOrDefaultAsync(x => x.Issuer == issuer && x.Subject == sub, http.RequestAborted);
+        Guid userId;
+        if (ext is null)
         {
-            user = new User { Username = username, Email = email, Name = name ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
-            db.Users.Add(user);
-            await db.SaveChangesAsync(http.RequestAborted);
-        }
+            // Basic provisioning
+            var username = !string.IsNullOrEmpty(email) ? email : $"{state.Provider}:{sub}";
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(email) && u.Email == email), http.RequestAborted);
+            if (user is null)
+            {
+                user = new User { Username = username, Email = email, Name = name ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
+                db.Users.Add(user);
+                await db.SaveChangesAsync(http.RequestAborted);
+            }
+            userId = user.Id;
 
+            ext = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(email, name), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
+            db.ExternalIdentities.Add(ext);
+        }
+        else
+        {
+            userId = ext.UserId;
+            ext.LastSeenAt = DateTimeOffset.UtcNow;
+            ext.ClaimsJson = BuildClaimsJson(email, name);
+        }
+        await db.SaveChangesAsync(http.RequestAborted);
+
+        // Issue local cookie
         var claims = new List<System.Security.Claims.Claim>
         {
-            new(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(System.Security.Claims.ClaimTypes.Name, user.Name ?? user.Username),
+            new(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString()),
+            new(System.Security.Claims.ClaimTypes.Name, name ?? email ?? $"{state.Provider}:{sub}") ,
             new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
         var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new System.Security.Claims.ClaimsPrincipal(id);
-        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+        var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
+        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
 
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
     }
 
+    private static string? BuildClaimsJson(string? email, string? name)
+    {
+        if (email is null && name is null) return null;
+        return JsonSerializer.Serialize(new { email, name });
+    }
+
     private static string Base64Url(byte[] data)
-        => Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        => Convert.ToBase64String(data).TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
 
     private static byte[] Base64UrlDecode(string s)
     {
@@ -217,5 +281,6 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         public string Provider { get; set; } = string.Empty;
         public string CodeVerifier { get; set; } = string.Empty;
         public string? ReturnUrl { get; set; }
+        public string? Nonce { get; set; }
     }
 }

@@ -34,6 +34,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<IdentityProviderKey> IdentityProviderKeys => Set<IdentityProviderKey>();
     // New: Client JWKS history (for admin diagnostics)
     public DbSet<ClientJwksHistory> ClientJwksHistories => Set<ClientJwksHistory>();
+    // New: External identities (issuer+sub linkage)
+    public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -362,6 +364,21 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Active).HasDefaultValue(true);
             b.Property(x => x.Kid).HasMaxLength(200);
             b.Property(x => x.CreatedAt).IsRequired();
+        });
+
+        // New: ExternalIdentity linkage
+        modelBuilder.Entity<ExternalIdentity>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Issuer).IsRequired().HasMaxLength(2000);
+            b.Property(x => x.Subject).IsRequired().HasMaxLength(400);
+            b.Property(x => x.ProviderName).HasMaxLength(150);
+            b.Property(x => x.ClaimsJson).HasMaxLength(4000);
+            b.HasIndex(x => new { x.Issuer, x.Subject }).IsUnique();
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
@@ -697,4 +714,16 @@ public class ClientJwksHistory
     [MaxLength(64)]
     public string? Hash { get; set; } // SHA-256 hex of compacted JSON
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public class ExternalIdentity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(2000)] public string Issuer { get; set; } = string.Empty; // upstream iss
+    [MaxLength(400)] public string Subject { get; set; } = string.Empty; // upstream sub
+    public Guid UserId { get; set; }
+    [MaxLength(150)] public string? ProviderName { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
+    [MaxLength(4000)] public string? ClaimsJson { get; set; }
 }
