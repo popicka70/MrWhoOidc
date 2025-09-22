@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "admin")]
-public class AddModel(AuthDbContext db) : PageModel
+public class AddModel(AuthDbContext db, IIdentityProviderValidator validator) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -58,6 +59,13 @@ public class AddModel(AuthDbContext db) : PageModel
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
+
+        var (ok, error) = await validator.ValidateAsync(entity);
+        if (!ok)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Invalid configuration");
+            return Page();
+        }
 
         db.IdentityProviders.Add(entity);
         await db.SaveChangesAsync();

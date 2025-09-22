@@ -6,11 +6,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "admin")]
-public class EditModel(AuthDbContext db) : PageModel
+public class EditModel(AuthDbContext db, IIdentityProviderValidator validator) : PageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -46,7 +47,13 @@ public class EditModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
-        OnGetAsync(id).GetAwaiter().GetResult(); // ensure TypeOptions
+        // ensure TypeOptions for redisplay
+        TypeOptions = new()
+        {
+            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
+            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
+        };
+
         if (!ModelState.IsValid || Input is null)
             return Page();
 
@@ -74,6 +81,13 @@ public class EditModel(AuthDbContext db) : PageModel
         entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
         entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim();
         entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var (ok, error) = await validator.ValidateAsync(entity);
+        if (!ok)
+        {
+            ModelState.AddModelError(string.Empty, error ?? "Invalid configuration");
+            return Page();
+        }
 
         await db.SaveChangesAsync();
         return RedirectToPage("Index");

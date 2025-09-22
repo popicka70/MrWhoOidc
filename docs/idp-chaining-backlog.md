@@ -20,7 +20,7 @@ Key principles
 Epics and stories
 
 1) Data model, storage, migrations
-- [~] Story: Introduce provider abstraction
+- [x] Story: Introduce provider abstraction
   - Add table `IdentityProviders`
     - `Id` (PK), `Name` (unique, machine-safe), `DisplayName`, `Type` (enum: OIDC, SAML), `Enabled` (bool), `IsDefault` (bool), `LogoUrl` (nullable), `SortOrder` (int), `ConfigJson` (nvarchar(max) / jsonb), `CreatedAt`, `UpdatedAt`.
   - Add table `ClientIdentityProviders` (many-to-many)
@@ -32,7 +32,7 @@ Epics and stories
   - Optional: `ClientKeys` for inbound JAR verification (public keys/JWKS per client).
   - Acceptance: Migrations generated and applied on empty and existing DB; rollback supported.
 
-- [ ] Story: OIDC provider config schema
+- [x] Story: OIDC provider config schema
   - Store in `IdentityProviders.ConfigJson` with validation:
     - `Authority`, `DiscoveryUrl` (optional override), `ClientId`, `ClientSecret` (or client assertion key ref), `ResponseType`, `Scopes` (list), `UsePKCE` (bool), `UseJAR` (bool, outbound), `UsePAR` (bool), `RequestedAcrValues` (string), `Prompt`, `ResponseMode`, `ClockSkewSeconds`, `TokenValidation` options (issuer/audience/expiry), `BackChannelLogout` (bool), `ExtraAuthParams` (kvp).
   - Acceptance: Invalid configurations rejected with actionable messages; `Authority` discovery validated on save if reachable.
@@ -42,11 +42,15 @@ Epics and stories
   - CRUD for `IdentityProvider`, `ClientIdentityProvider`, `IdentityProviderClaimMappings`, `IdentityProviderKeys`, and optional `ClientKeys`.
   - ProblemDetails for errors; model validation; RBAC policy.
 
-- [ ] Story: Admin UI pages (Razor Pages)
-  - Providers list/detail: create/edit OIDC provider, toggle enabled, upload/select logo, order, view discovery metadata, test connection.
-  - Client ? Providers mapping: assign providers to client, set default, set order, toggle auto-redirect-if-single, set required ACR.
-  - Claim mapping editor: map external ? local claims; built-in templates: `sub`, `email`, `name`, `preferred_username`, `roles`.
-  - Keys page: view/import/rotate provider keys (for outbound JAR), manage client public keys (for inbound JAR). Support JWK/PEM import, mark active.
+- [~] Story: Admin UI pages (Razor Pages)
+  - Done:
+    - Providers list/detail/create/edit/delete; config JSON validation with discovery on save.
+    - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
+  - Pending:
+    - View discovery metadata UI and explicit "Test connection" button.
+    - Claim mapping editor (CRUD); templates for `sub`, `email`, `name`, `preferred_username`, `roles`.
+    - Keys page: provider keys (outbound JAR) and client public keys (inbound JAR) with JWK/PEM import, active flag.
+    - Logo upload/select; drag/drop ordering polish.
   - Acceptance: Full CRUD works, validation visible, audit notes recorded.
 
 3) Authorization pipeline updates (IdP chaining)
@@ -140,8 +144,8 @@ Epics and stories
   - Acceptance: New client onboarding without code changes.
 
 Rollout plan
-- [~] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
-- [ ] Phase 2: Admin CRUD + single upstream OIDC provider live.
+- [x] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
+- [~] Phase 2: Admin CRUD + single upstream OIDC provider live.
 - [ ] Phase 3: Multiple providers + picker UI + claim mapping.
 - [x] Phase 4: Inbound JAR.
 - [ ] Phase 5: Optional outbound JAR/PAR.

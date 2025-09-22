@@ -97,6 +97,10 @@ builder.Services.AddAuthPersistence(builder.Configuration);
 // Register Auth core services
 builder.Services.AddMrWhoOidcAuthCore();
 
+// HttpClient + IdP validator
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IIdentityProviderValidator, IdentityProviderValidator>();
+
 // Add private_key_jwt validator
 builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 
