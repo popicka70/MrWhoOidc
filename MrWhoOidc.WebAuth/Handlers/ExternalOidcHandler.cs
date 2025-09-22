@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -18,7 +19,7 @@ public interface IExternalOidcHandler
     Task<IResult> CallbackAsync(HttpContext http);
 }
 
-public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, MrWhoOidc.Auth.Services.IJwksCache jwksCache) : IExternalOidcHandler
+public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, IJwksCache jwksCache, IClaimMappingService mapper) : IExternalOidcHandler
 {
     private readonly IDataProtector _protector = dp.CreateProtector("ext-oidc-state");
 
@@ -214,18 +215,29 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         Guid userId;
         if (ext is null)
         {
-            // Basic provisioning
-            var username = !string.IsNullOrEmpty(email) ? email : $"{state.Provider}:{sub}";
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(email) && u.Email == email), http.RequestAborted);
+            // Map claims using provider-specific mappings
+            var sourceClaims = new Dictionary<string, string?>
+            {
+                ["sub"] = sub,
+                ["iss"] = issuer,
+                ["email"] = email,
+                ["name"] = name
+            };
+            var mapped = await mapper.ApplyAsync(provider.Id, sourceClaims!, http.RequestAborted);
+            var userEmail = mapped.TryGetValue("email", out var me) ? me : email;
+            var userName = mapped.TryGetValue("name", out var mn) ? mn : name;
+
+            var username = !string.IsNullOrEmpty(userEmail) ? userEmail : $"{state.Provider}:{sub}";
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(userEmail) && u.Email == userEmail), http.RequestAborted);
             if (user is null)
             {
-                user = new User { Username = username, Email = email, Name = name ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
+                user = new User { Username = username, Email = userEmail, Name = userName ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
                 db.Users.Add(user);
                 await db.SaveChangesAsync(http.RequestAborted);
             }
             userId = user.Id;
 
-            ext = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(email, name), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
+            ext = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
             db.ExternalIdentities.Add(ext);
         }
         else

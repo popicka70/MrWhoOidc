@@ -1,0 +1,62 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.ClaimMappingsModel
+@{
+    ViewData["Title"] = "Claim mappings";
+}
+
+<h2>Claim mappings</h2>
+
+<form method="post" asp-page-handler="Add" class="card p-3 mb-3">
+    <input type="hidden" asp-for="Id" />
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">External claim</label>
+            <input asp-for="Input.ExternalClaim" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Local claim</label>
+            <input asp-for="Input.LocalClaim" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Transform</label>
+            <input asp-for="Input.Transform" class="form-control" placeholder="copy | trim | case:lower | case:upper | prefix:Mr | suffix:Inc | regex:/p/r/i | concat:given_name,family_name|sep= " />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Order</label>
+            <input asp-for="Input.Order" class="form-control" type="number" />
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+    </div>
+</form>
+
+<table class="table table-sm table-striped">
+    <thead>
+        <tr>
+            <th>Order</th>
+            <th>External</th>
+            <th>Local</th>
+            <th>Transform</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var m in Model.Mappings)
+        {
+            <tr>
+                <td>@m.Order</td>
+                <td>@m.External</td>
+                <td>@m.Local</td>
+                <td>@m.Transform</td>
+                <td class="text-end">
+                    <form method="post" asp-page-handler="Delete" class="d-inline">
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <input type="hidden" name="mappingId" value="@m.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

@@ -110,6 +110,8 @@ builder.Services.AddScoped<IParHandler, ParHandler>();
 // External OIDC chaining
 builder.Services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
 builder.Services.AddSingleton<IJwksCache, JwksCache>();
+// Claim mapping service
+builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
 
 // DPoP services
 builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
