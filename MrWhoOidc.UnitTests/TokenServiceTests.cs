@@ -1,0 +1,126 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
+using System.Text.Json;
+
+namespace MrWhoOidc.UnitTests;
+
+[TestClass]
+public sealed class TokenServiceTests
+{
+    private static AuthDbContext CreateDb()
+    {
+        var opts = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new AuthDbContext(opts);
+    }
+
+    private static IOptions<AuthOptions> Options(bool opaque = false)
+        => Microsoft.Extensions.Options.Options.Create(new AuthOptions
+        {
+            ApiAudiences = new[] { "api" },
+            OpaqueAccessTokens = new OpaqueAccessTokenOptions { Enabled = opaque }
+        });
+
+    [TestMethod]
+    public async Task ExchangeAuthorizationCode_Fails_ForInvalidCode()
+    {
+        using var db = CreateDb();
+        var svc = new TokenService(db, new JwtService(new KeyStore(db)), new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore());
+        var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "verifier", "https://issuer");
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAuthorizationCode_Succeeds_JwtAccess_IncludesAtHash()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u", PasswordHash = "x" };
+        var client = new Client { ClientId = "c1" };
+        db.Users.Add(user);
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var code = new AuthorizationCode
+        {
+            Code = "code",
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            CodeChallenge = null,
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            UserId = user.Id,
+            Nonce = "n",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        db.AuthorizationCodes.Add(code);
+        await db.SaveChangesAsync();
+
+        var jwtSvc = new JwtService(new KeyStore(db));
+        var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore());
+        var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("code", "https://cb", "c1", "", "https://issuer");
+        Assert.IsTrue(ok);
+        var anon = (dynamic)payload!;
+        string idToken = anon.id_token;
+        Assert.IsFalse(string.IsNullOrEmpty(idToken));
+        // Should mark code as consumed
+        Assert.IsTrue(db.AuthorizationCodes.Single(a => a.Code == "code").Consumed);
+        // Refresh token persisted
+        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "refresh"));
+    }
+
+    [TestMethod]
+    public async Task ExchangeAuthorizationCode_Succeeds_OpaqueAccessToken_Persisted()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u", PasswordHash = "x" };
+        var client = new Client { ClientId = "c1" };
+        db.Users.Add(user);
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var code = new AuthorizationCode
+        {
+            Code = "code2",
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            CodeChallenge = null,
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            UserId = user.Id,
+            Nonce = "n",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+        };
+        db.AuthorizationCodes.Add(code);
+        await db.SaveChangesAsync();
+
+        var svc = new TokenService(db, new JwtService(new KeyStore(db)), new RefreshTokenService(db), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore());
+        var (ok, payload, _, status) = await svc.ExchangeAuthorizationCodeAsync("code2", "https://cb", "c1", "", "https://issuer");
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        // Access token persisted as opaque
+        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "access"));
+    }
+
+    [TestMethod]
+    public async Task ExchangeRefreshToken_Rotates_AndRevokesOld()
+    {
+        using var db = CreateDb();
+        var user = new User { Username = "u", PasswordHash = "x" };
+        var client = new Client { ClientId = "c1" };
+        db.Users.Add(user);
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        // Create RT directly via service
+        var rtSvc = new RefreshTokenService(db);
+        var (rt, hash) = await rtSvc.CreateRefreshTokenAsync(user.Id, "c1", TimeSpan.FromDays(1), new[] { "openid" });
+        var svc = new TokenService(db, new JwtService(new KeyStore(db)), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore());
+        var (ok, payload, _, status) = await svc.ExchangeRefreshTokenAsync(rt, "c1", "https://issuer");
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        // Old RT should be revoked
+        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "refresh" && t.RevokedAt != null));
+    }
+}
