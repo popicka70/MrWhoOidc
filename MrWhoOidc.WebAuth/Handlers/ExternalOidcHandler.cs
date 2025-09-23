@@ -143,6 +143,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var tokenEndpoint = root.GetProperty("token_endpoint").GetString()!;
         var userinfoEndpoint = root.TryGetProperty("userinfo_endpoint", out var ue) ? ue.GetString() : null;
         var jwksUri = root.GetProperty("jwks_uri").GetString()!;
+        var issuerFromDiscovery = root.GetProperty("issuer").GetString();
 
         // Token exchange
         var form = new Dictionary<string, string?>
@@ -175,7 +176,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             var parms = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = root.GetProperty("issuer").GetString(),
+                ValidIssuer = issuerFromDiscovery,
                 ValidateAudience = true,
                 ValidAudience = cfg.ClientId,
                 ValidateLifetime = true,
@@ -202,8 +203,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             }
         }
 
-        // Fallback to userinfo for profile/email
-        if (userinfoEndpoint is not null && string.IsNullOrEmpty(email))
+        // Fallbacks: when id_token missing or lacks claims
+        if (userinfoEndpoint is not null && (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(name)))
         {
             try
             {
@@ -220,11 +221,14 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                         sub ??= uiDoc.RootElement.TryGetProperty("sub", out var s) ? s.GetString() : null;
                         email ??= uiDoc.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
                         name ??= uiDoc.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+                        issuer ??= issuerFromDiscovery; // set issuer from discovery if no id_token
                     }
                 }
             }
             catch { }
         }
+
+        issuer ??= issuerFromDiscovery; // last resort: issuer from discovery
 
         if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(issuer))
             return Results.Content("Missing subject/issuer from upstream IdP", "text/plain", statusCode: 400);
