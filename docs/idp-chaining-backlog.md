@@ -149,6 +149,71 @@ Epics and stories
   - Developer guide: using `idp`, `acr_values`, inbound JAR; discovery examples.
   - Acceptance: New client onboarding without code changes.
 
+11) On-Behalf-Of (OBO) / Token Exchange (RFC 8693)
+- [ ] Story: Token Exchange grant at `/token`
+  - Accept `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` with `subject_token` (+ type), optional `actor_token`, optional `requested_token_type` (default: access token).
+  - Validate `subject_token` (JWT/opaque supported per server config), audience and lifetime; enforce scope/audience narrowing; replay protection for exchanged tokens.
+  - Issue delegated access token carrying `act` (actor) claim; limit to single-hop delegation for MVP; preserve `sub` of original user.
+  - DPoP: policy for DPoP-bound tokens (either require proof and bind the new token to same key via `cnf.jkt`, or reject when proof missing).
+  - Consent: enforce existing grants or trigger consent policy; apply max lifetime for exchanged tokens.
+  - Acceptance: End-to-end exchange succeeds for allowed clients/audiences; rejected when policy disallows or validations fail.
+
+- [ ] Story: Delegation policy model + Admin UI
+  - Per-client policy: which callers may exchange, allowed source audiences and target audiences, scope translation/narrowing, DPoP bridging mode, max delegation depth.
+  - Admin UI to configure and audit OBO policies; ProblemDetails on violations; audit who changed what.
+  - Acceptance: Policies persisted and enforced; UI CRUD complete.
+
+- [ ] Story: Discovery metadata updates (OAuth 2.0 AS Metadata)
+  - Advertise `grant_types_supported` including `urn:ietf:params:oauth:grant-type:token-exchange`.
+  - Document any non-standard metadata we expose (if any) and keep defaults minimal.
+  - Acceptance: Well-known validates with external tools; clients can discover support.
+
+- [ ] Story: Introspection/UserInfo shaping for delegation
+  - Introspection: include `act` (and narrow fields per privacy policy); support `aud` array.
+  - UserInfo: no change for OBO by default; optionally surface `act` in a namespaced claim for trusted clients.
+  - Acceptance: Responses reflect delegation appropriately without leaking PII.
+
+- [ ] Story: Telemetry, rate limits, and auditing
+  - Add structured logs for token exchanges with correlation IDs; per-client rate limits; metrics for success/denied/error with audience/scope tags (bucketized for privacy).
+  - Acceptance: Useful for troubleshooting; DoS protections in place.
+
+- [ ] Story: Tests and samples
+  - Unit: grant validation, scope/audience narrowing, DPoP bridging.
+  - Integration: happy path (access_token?access_token audience change), unauthorized client, disallowed audience, missing proof for DPoP-bound.
+  - Samples/docs for client usage.
+  - Acceptance: CI green on .NET 9; coverage for critical OBO paths.
+
+12) Machine-to-Machine (M2M) / Client Credentials
+- [ ] Story: Client Credentials grant at `/token`
+  - Accept `grant_type=client_credentials`.
+  - Client authentication: support `private_key_jwt` and client secret (basic/post); optional mTLS per client.
+  - Audience selection: require `audience` (or `resource`) parameter or use per-client default; validate against allowed audiences; restrict to single `aud` for MVP.
+  - Scope enforcement: issue only admin-allowed scopes for the client; return granted scopes in response.
+  - Token format/lifetime: JWT or opaque based on audience/server config; per-client configurable lifetime; include `cnf.jkt` when DPoP proof is presented.
+  - Claims: subject is the client (e.g., `sub` = client_id); include `client_id`, optional `azp`; no end-user claims.
+  - Response: `access_token`, `token_type`, `expires_in`, `scope`.
+  - Acceptance: End-to-end issuance succeeds for allowed scopes/audiences; rejected for unauthorized scope/audience or failed client auth.
+
+- [ ] Story: M2M policy model + Admin UI
+  - Per-client settings: allowed scopes, default/allowed audiences, token lifetime/format, required client auth methods, optional mTLS thumbprints, DPoP required toggle, per-client rate limits.
+  - Admin UI to configure and audit; ProblemDetails on violations.
+  - Acceptance: Policies persisted and enforced; UI CRUD complete.
+
+- [ ] Story: Discovery metadata updates
+  - Advertise `grant_types_supported` including `client_credentials`.
+  - Advertise `token_endpoint_auth_methods_supported` and `token_endpoint_auth_signing_alg_values_supported`; DPoP metadata when enabled.
+  - Acceptance: Well-known validates; clients can discover M2M.
+
+- [ ] Story: Telemetry, rate limits, and auditing for M2M
+  - Metrics for success/denied/error; per-client rate limits; correlation IDs; minimal logs (no secrets/PII).
+  - Acceptance: Useful for troubleshooting; DoS protections in place.
+
+- [ ] Story: Tests and samples (M2M)
+  - Unit: scope/audience validation, auth method checks, JWT vs opaque issuance.
+  - Integration: success with `private_key_jwt`, secret-based, mTLS-restricted client, disallowed scope/audience, DPoP accepted/rejected.
+  - Samples/docs: minimal curl examples and client library snippets.
+  - Acceptance: CI green on .NET 9; critical M2M paths covered.
+
 Rollout plan
 - [x] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
 - [x] Phase 2: Admin CRUD + single upstream OIDC provider live (external flow working; validation/mappings wired; polish pending).
@@ -178,11 +243,15 @@ Next steps (proposed)
   - [ ] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
   - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
+  - [ ] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; limit to single-hop and bearer-only (no DPoP bridging) initially.
+  - [ ] M2M/Client Credentials MVP: implement grant, per-client scopes/audiences allow-list, JWT issuance, discovery update; optional DPoP; tests and samples.
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
 - Confirm acceptable `alg` set for inbound JAR (e.g., RS256/PS256/ES256) and enforce (per-client allow-list supported).
 - Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
+- OBO: Decide on DPoP bridging semantics (deny vs require proof and carry `cnf`), max delegation depth, and whether ID tokens are accepted as `subject_token`.
+- M2M: Decide on `audience` vs `resource` param, single vs multiple audiences, `sub` value (client_id vs URN), required auth methods (secret vs `private_key_jwt`), and mTLS policy.
 
 Test matrix (Phase 3)
 - Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.
@@ -190,6 +259,8 @@ Test matrix (Phase 3)
 - With and without inbound JAR; with and without PAR request_uri; propagation of hints/params.
 - Rotation of client/provider keys with `kid` changes.
 - JARM response modes (`query.jwt`, `form_post.jwt`) success and error paths.
+- OBO: token exchange success (audience narrowing), disallowed audience/client, DPoP-bound subject token behavior.
+- M2M: client_credentials to allowed API audience, invalid scope/audience, DPoP/mTLS variations.
 
 Appendix: Minimal OIDC ConfigJson example
 ```json
