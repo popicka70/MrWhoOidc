@@ -42,7 +42,11 @@ public sealed class ClaimMappingService(AuthDbContext db) : IClaimMappingService
             if (parts.Length > 1 && parts[1].StartsWith("sep=", StringComparison.OrdinalIgnoreCase))
                 sep = parts[1].Substring(4);
             var names = parts[0].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var values = names.Select(n => TryGet(source, n)).Where(v => !string.IsNullOrEmpty(v)).ToArray();
+            // Trim each input before joining to prevent double spaces when upstream sends padded values
+            var values = names
+                .Select(n => TryGet(source, n)?.Trim())
+                .Where(v => !string.IsNullOrEmpty(v))
+                .ToArray();
             return string.Join(sep, values!);
         }
 
