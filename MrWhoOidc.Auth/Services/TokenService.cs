@@ -14,6 +14,9 @@ public interface ITokenService
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default);
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
         string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+    // New: client credentials (M2M)
+    Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
+        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }
 
 internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta) : ITokenService
@@ -267,6 +270,85 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             token_type = "Bearer",
             expires_in = 900,
             scope = string.Join(' ', scopes)
+        };
+        return (true, payload, null, 200);
+    }
+
+    public async Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
+        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+    {
+        // Validate audience against server-known audiences
+        var knownAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+        if (knownAudiences.Length > 0 && !knownAudiences.Contains(audience, StringComparer.Ordinal))
+        {
+            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
+        }
+
+        // Resolve client and its allowed scopes from mapping table
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        if (client is null)
+        {
+            return (false, new { error = "unauthorized_client" }, "unauthorized_client", 400);
+        }
+
+        var allowedScopeNames = await db.ClientScopes.AsNoTracking()
+            .Where(cs => cs.ClientId == client.Id)
+            .Select(cs => cs.ScopeName)
+            .ToArrayAsync(ct)
+            .ConfigureAwait(false);
+
+        // Default: if no mapping configured, allow none (empty)
+        var granted = new List<string>();
+        if (requestedScopes is { Length: > 0 })
+        {
+            foreach (var s in requestedScopes)
+            {
+                if (string.IsNullOrWhiteSpace(s)) continue;
+                // Exclude OIDC user scopes from M2M
+                if (string.Equals(s, "openid", StringComparison.Ordinal) || string.Equals(s, "offline_access", StringComparison.Ordinal))
+                    continue;
+                if (allowedScopeNames.Contains(s, StringComparer.Ordinal))
+                    granted.Add(s);
+            }
+        }
+        else
+        {
+            // If no scopes requested, grant nothing by default
+        }
+
+        var jti = Guid.NewGuid().ToString("N");
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("sub", clientId),
+            new("client_id", clientId),
+            new("jti", jti)
+        };
+        if (granted.Count > 0)
+        {
+            claims.Add(new("scope", string.Join(' ', granted)));
+        }
+        if (!string.IsNullOrEmpty(dpopJkt))
+        {
+            var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
+            claims.Add(new("cnf", cnf));
+        }
+
+        // Optional realm claim
+        var realmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(realmName))
+        {
+            claims.Add(new("realm", realmName));
+        }
+
+        // Issue JWT access token (opaque not supported for M2M yet)
+        var accessToken = jwt.CreateJwt(issuer, audience, claims, DateTimeOffset.UtcNow.AddMinutes(15));
+
+        var payload = new
+        {
+            access_token = accessToken,
+            token_type = "Bearer",
+            expires_in = 900,
+            scope = granted.Count > 0 ? string.Join(' ', granted) : null
         };
         return (true, payload, null, 200);
     }
