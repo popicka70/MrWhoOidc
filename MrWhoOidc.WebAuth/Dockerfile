@@ -15,7 +15,7 @@ COPY MrWhoOidc.Auth/MrWhoOidc.Auth.csproj MrWhoOidc.Auth/MrWhoOidc.Auth.csproj
 COPY MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj
 
 # Restore dependencies for the app and migration projects that were staged
-RUN dotnet restore "MrWhoOidc/MrWhoOidc.csproj"
+RUN dotnet restore "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj"
 
 # Copy the rest of the source and publish
 COPY . .
