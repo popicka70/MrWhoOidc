@@ -1,5 +1,7 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
+Updated: 2025-09-23
+
 Status legend
 - [x] Done
 - [~] Pending / In progress
@@ -38,9 +40,9 @@ Epics and stories
   - Acceptance: Invalid configurations rejected with actionable messages; `Authority` discovery validated on save if reachable.
 
 2) Admin APIs and UI (Razor Pages in MrWhoOidc.WebAuth)
-- [ ] Story: Management APIs (admin-only)
-  - CRUD for `IdentityProvider`, `ClientIdentityProvider`, `IdentityProviderClaimMappings`, `IdentityProviderKeys`, and optional `ClientKeys`.
-  - ProblemDetails for errors; model validation; RBAC policy.
+- [x] Story: Management APIs (admin-only)
+  - CRUD for `IdentityProvider`, `ClientIdentityProvider`, `IdentityProviderClaimMappings`, `IdentityProviderKeys`, and `ClientKeys` implemented under `/admin/api` with RBAC policy and rate limits.
+  - ProblemDetails on errors; model validation; kid uniqueness checks; JWKS basic validation and history hashing.
 
 - [~] Story: Admin UI pages (Razor Pages)
   - Done:
@@ -48,22 +50,25 @@ Epics and stories
     - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
     - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed.
     - Claim mapping editor (CRUD) at `/Admin/Providers/ClaimMappings` with transforms help.
+    - Provider keys page: import private JWK JSON, `kid`/`alg`, `Active` toggle, activate/deactivate and delete.
+    - Client keys page: JWKS URI fetch + save, manual JWKS JSON edit, history with hash, duplicates check, basic summary (key count).
   - Pending:
-    - Keys page: provider keys (outbound JAR) and client public keys (inbound JAR) with JWK/PEM import, active flag.
+    - Keys: PEM import (convert to JWK), nicer pretty-print/compact toggles, richer JWKS preview.
     - Logo upload/select; drag/drop ordering polish.
   - Acceptance: Full CRUD works, validation visible, audit notes recorded.
 
 3) Authorization pipeline updates (IdP chaining)
-- [~] Story: Authorize endpoint parameterization
-  - Accept custom `idp` and `idp_hint`; standard `login_hint`, `acr_values`.
-  - Resolve client ? available providers. If 0: use local login (existing behavior). If 1 and `AutoRedirectIfSingle`: redirect. If >1 and no forced selection: render provider picker page.
-  - Preserve `idp`/`idp_hint` and hints with PAR (`request_uri`) to avoid redirect loops.
-  - Pending: remember last used provider per client (cookie) and propagate `prompt/max_age/ui_locales` consistently.
+- [x] Story: Authorize endpoint parameterization
+  - Accept custom `idp` and `idp_hint`; standard `login_hint`, `acr_values`, `prompt`, `max_age`, `ui_locales`.
+  - Resolve client ? available providers. If 0: use local login (existing). If 1 and `AutoRedirectIfSingle`: redirect. If >1 and no forced selection: render provider picker.
+  - Preserve/round-trip hints across PAR (`request_uri`) and JAR; sanitize address bar when using PAR.
+  - Remember last used provider per client via cookie and prefer it when not forcing `select_account`.
   - Acceptance: Routing logic tested across combinations.
 
 - [~] Story: External OIDC sign-in flow
   - Implemented: Custom external OIDC start/callback with PKCE, protected `state` (+ `nonce`), discovery, token exchange, ID token validation via JWKS (issuer/audience/lifetime/nonce), local user provisioning, persistent `iss+sub` linkage (`ExternalIdentities`), claim mapping application, local cookie sign-in, and return to `/authorize`.
-  - Pending: Error/cancel handling polish, re-selection flow after upstream cancel, correlation metrics and logs.
+  - Implemented: Friendly error/cancel handling page with correlation ID and "Choose a different provider" link back to picker.
+  - Pending: Correlation metrics/logs and upstream cancel telemetry; re-selection after upstream cancel is supported but needs UX polish.
   - Acceptance: Round-trip works with at least two OIDC providers.
 
 4) Inbound JAR (clients ? WebAuth)
@@ -71,6 +76,7 @@ Epics and stories
   - Support `request` and `request_uri` in authorize requests.
   - Validate JWT signature against client registered keys (`ClientKeys` or client JWKS), allowed `alg` set; enforce `aud`, `iss`, `exp`, `nbf` checks and replay protection (nonce/jti store, TTL).
   - Merge parameters per RFC 9101 precedence; reject conflicting parameters.
+  - Replay: in-memory `jti/nonce` replay cache implemented with TTL; distributed store pending for HA.
   - Acceptance: Conformance tests for valid/invalid signatures and claims.
 
 - [x] Story: Discovery metadata updates
@@ -100,12 +106,12 @@ Epics and stories
 
 7) Login UI changes (Razor Pages end-user flow)
 - [~] Story: Provider picker page
-  - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider.
-  - Pending: a11y/design polish, remembered provider hint, mobile improvements.
+  - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider; honors `idp_hint` and remembers last provider per client.
+  - Pending: a11y/design polish, mobile improvements.
   - Acceptance: Works across themes/branding.
 
-- [ ] Story: Error/edge cases
-  - Friendly errors for upstream `access_denied`, `interaction_required`, `invalid_scope`, timeouts.
+- [~] Story: Error/edge cases
+  - Friendly errors for upstream `access_denied`, `interaction_required`, `invalid_scope`, timeouts (basic page implemented with correlation id and reselect link).
   - Allow re-selection upon cancel; preserve original authorize request state.
   - Acceptance: Tested with simulated failures.
 
@@ -113,6 +119,7 @@ Epics and stories
 - [~] Story: Key storage and rotation
   - Store provider keys (for outbound JAR) and client public keys (for inbound JAR). Support rotation and `kid`.
   - Background task to detect upcoming expiry; admin UI to activate/deactivate keys.
+  - Status: Storage + admin UI are present; expiry detection/alerts pending.
   - Acceptance: Rollover without downtime.
 
 - [ ] Story: JWKS endpoints (if needed)
@@ -123,6 +130,7 @@ Epics and stories
 - [~] Story: Auditing & logging
   - Structured logs for provider selection, upstream start/finish, errors, claim mappings applied; correlation IDs.
   - Redact secrets; PII handling policy.
+  - Status: Metrics and correlation IDs used in `/authorize`; expand across external flow and admin APIs.
   - Acceptance: Logs useful for troubleshooting and pass security review.
 
 - [x] Story: Rate limiting & protections
@@ -130,10 +138,10 @@ Epics and stories
   - Acceptance: Basic DoS protections in place.
 
 10) Testing and documentation
-- [ ] Story: Automated tests
-  - Unit: config validation, claim mapping transforms, JAR parsing/validation.
-  - Integration: multi-provider flow, picker UI, error recovery, discovery doc.
-  - E2E: two upstream OIDC test providers (e.g., Azure AD, Auth0/Okta dev tenants).
+- [~] Story: Automated tests
+  - Unit present: config validation, claim mapping transforms, JAR parsing/validation, client assertion, PAR store, auth code, key rotation, token service, admin providers API, realm/role assignments.
+  - Integration: multi-provider mapping logic tests; PAR stress tests exist; add two OIDC providers E2E when feasible.
+  - E2E: TODO for two upstream OIDC test providers (e.g., Azure AD, Auth0/Okta dev tenants).
   - Acceptance: CI green on .NET 9; critical paths covered.
 
 - [ ] Story: Documentation
@@ -143,8 +151,8 @@ Epics and stories
 
 Rollout plan
 - [x] Phase 1: DB schema + read-only APIs + discovery updates (feature flags off).
-- [~] Phase 2: Admin CRUD + single upstream OIDC provider live (external flow working; validation/mappings wired; polish pending).
-- [ ] Phase 3: Multiple providers + picker UI + claim mapping.
+- [x] Phase 2: Admin CRUD + single upstream OIDC provider live (external flow working; validation/mappings wired; polish pending).
+- [~] Phase 3: Multiple providers + picker UI + claim mapping (functional; UX polish/tests pending).
 - [x] Phase 4: Inbound JAR.
 - [ ] Phase 5: Optional outbound JAR/PAR.
 - [ ] Phase 6: Hardening, audits, perf, docs.
@@ -154,6 +162,34 @@ Non-functional requirements
 - Secrets safety (Key Vault/DPAPI), no plaintext secrets at rest.
 - Caching of discovery docs and keys; reasonable timeouts/retries.
 - Observability and correlation across upstream/downstream requests.
+
+Next steps (proposed)
+- Target milestone: Phase 3 (Multi-provider GA)
+- P0 (2 weeks)
+  - [ ] Keys UI: PEM import (convert to JWK), pretty-print/compact toggle; strengthen JWKS validation (alg/kty/use checks).
+  - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
+  - [ ] JAR hardening: move jti/nonce replay cache to distributed store (Redis); configurable TTL per environment.
+  - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
+  - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
+  - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
+- P1 (next 2–4 weeks)
+  - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
+  - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
+  - [ ] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
+  - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
+  - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
+
+Risks and decisions
+- Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
+- Confirm acceptable `alg` set for inbound JAR (e.g., RS256/PS256/ES256) and enforce (per-client allow-list supported).
+- Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
+
+Test matrix (Phase 3)
+- Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.
+- Single-provider auto-redirect on and off.
+- With and without inbound JAR; with and without PAR request_uri; propagation of hints/params.
+- Rotation of client/provider keys with `kid` changes.
+- JARM response modes (`query.jwt`, `form_post.jwt`) success and error paths.
 
 Appendix: Minimal OIDC ConfigJson example
 ```json

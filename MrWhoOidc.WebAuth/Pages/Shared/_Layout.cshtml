@@ -11,26 +11,30 @@
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-0">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
-                <div class="d-flex align-items-center">
-                    <a class="nav-link" asp-page="/Registrations/Index">Register</a>
-                    @if (User?.Identity?.IsAuthenticated ?? false)
-                    {
-                        <a class="nav-link" asp-page="/Password/Index">Change password</a>
-                        <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
-                        <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
-                    }
-                    else
-                    {
-                        <a class="nav-link" asp-page="/Login">Log in</a>
-                    }
+    @{ var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false; }
+    @if (!hideNavbar)
+    {
+        <header>
+            <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-0">
+                <div class="container-fluid">
+                    <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
+                    <div class="d-flex align-items-center">
+                        <a class="nav-link" asp-page="/Registrations/Index">Register</a>
+                        @if (User?.Identity?.IsAuthenticated ?? false)
+                        {
+                            <a class="nav-link" asp-page="/Password/Index">Change password</a>
+                            <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
+                            <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
+                        }
+                        else
+                        {
+                            <a class="nav-link" asp-page="/Login">Log in</a>
+                        }
+                    </div>
                 </div>
-            </div>
-        </nav>
-    </header>
+            </nav>
+        </header>
+    }
 
     <div class="container-fluid">
         <div class="row">

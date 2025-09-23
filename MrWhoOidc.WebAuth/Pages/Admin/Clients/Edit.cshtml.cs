@@ -127,7 +127,8 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             AllowedLogoutRedirectUris = logoutUris,
             AllowLocalLogin = client.AllowLocalLogin,
             AllowExternalIdp = client.AllowExternalIdp,
-            AllowQrLogin = client.AllowQrLogin
+            AllowQrLogin = client.AllowQrLogin,
+            LoginStyleKey = client.LoginStyleKey
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
@@ -734,6 +735,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.AllowLocalLogin = Input.AllowLocalLogin;
         client.AllowExternalIdp = Input.AllowExternalIdp;
         client.AllowQrLogin = Input.AllowQrLogin;
+        client.LoginStyleKey = string.IsNullOrWhiteSpace(Input.LoginStyleKey) ? null : Input.LoginStyleKey.Trim();
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
@@ -1071,6 +1073,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public bool AllowExternalIdp { get; set; } = true;
         [Display(Name = "Allow QR code login")]
         public bool AllowQrLogin { get; set; } = false;
+
+        // New: login UI style scheme
+        [StringLength(50)]
+        public string? LoginStyleKey { get; set; }
     }
 
     public sealed class ProviderRow

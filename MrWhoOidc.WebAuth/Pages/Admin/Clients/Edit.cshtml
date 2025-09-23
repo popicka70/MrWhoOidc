@@ -72,6 +72,18 @@
                     <input asp-for="Input.RequirePar" class="form-check-input" />
                     <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="Input_LoginStyleKey">Login style scheme</label>
+                    <select class="form-select" id="Input_LoginStyleKey" name="Input.LoginStyleKey">
+                        <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Input.LoginStyleKey) ? "selected" : null)">Default</option>
+                        <option value="classic" selected="@((Model.Input.LoginStyleKey?.Equals("classic", StringComparison.OrdinalIgnoreCase) ?? false) ? "selected" : null)">Classic</option>
+                        <option value="ocean" selected="@((Model.Input.LoginStyleKey?.Equals("ocean", StringComparison.OrdinalIgnoreCase) ?? false) ? "selected" : null)">Ocean (info)</option>
+                        <option value="forest" selected="@((Model.Input.LoginStyleKey?.Equals("forest", StringComparison.OrdinalIgnoreCase) ?? false) ? "selected" : null)">Forest (success)</option>
+                        <option value="plum" selected="@((Model.Input.LoginStyleKey?.Equals("plum", StringComparison.OrdinalIgnoreCase) ?? false) ? "selected" : null)">Plum</option>
+                        <option value="contrast" selected="@((Model.Input.LoginStyleKey?.Equals("contrast", StringComparison.OrdinalIgnoreCase) ?? false) ? "selected" : null)">High contrast</option>
+                    </select>
+                    <small class="form-text text-muted">Overrides page style for login/provider selection screens.</small>
+                </div>
                 <div class="col-12">
                     <label asp-for="Input.AllowedLoginRedirectUris" class="form-label"></label>
                     <input asp-for="Input.AllowedLoginRedirectUris" class="form-control" placeholder="https://app.example.com/signin-oidc, https://app2.example.com/callback" />

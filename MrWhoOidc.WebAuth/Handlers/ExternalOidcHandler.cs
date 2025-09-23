@@ -28,6 +28,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
     {
         var providerName = http.Request.Query["provider"].ToString();
         var returnUrl = http.Request.Query["returnUrl"].ToString(); // original /authorize URL
+        var clientId = http.Request.Query["clientId"].ToString(); // for last-used cookie
         if (string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(returnUrl))
             return Results.BadRequest("provider and returnUrl are required");
 
@@ -52,9 +53,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
         var cb = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
 
-        // State (nonce included for ID token nonce check)
+        // State (include clientId to set cookie on callback)
         var nonce = Guid.NewGuid().ToString("N");
-        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce });
+        var corr = Guid.NewGuid().ToString("N");
+        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce, ClientId = clientId, CorrelationId = corr });
         var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
 
         // Use provider-configured response_type; default to "code"
@@ -115,12 +117,11 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
     public async Task<IResult> CallbackAsync(HttpContext http)
     {
-        var code = http.Request.Query["code"].ToString();
         var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
-        if (!string.IsNullOrEmpty(error)) return Results.Content($"Upstream error: {error}", "text/plain", statusCode: 400);
-        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(stateRaw)) return Results.BadRequest("Missing code/state");
+        var errorDescription = http.Request.Query["error_description"].ToString();
+        if (string.IsNullOrEmpty(stateRaw)) return Results.BadRequest("Missing state");
 
         StateModel state;
         try
@@ -130,15 +131,32 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         }
         catch { return Results.BadRequest("Invalid state"); }
 
+        // Upstream error/cancel handling -> friendly page with correlation id and reselect link
+        if (!string.IsNullOrEmpty(error))
+        {
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Upstream error: {error}{(string.IsNullOrEmpty(errorDescription) ? string.Empty : " - " + errorDescription)}");
+        }
+
+        var code = http.Request.Query["code"].ToString();
+        if (string.IsNullOrEmpty(code))
+        {
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing authorization code from upstream IdP.");
+        }
+
         var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == state.Provider && p.Enabled);
-        if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson)) return Results.BadRequest("Unknown provider");
-        if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null) return Results.BadRequest("Invalid provider configuration");
+        if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Unknown or disabled provider.");
+        if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Invalid provider configuration.");
 
         // Discovery
         var httpc = httpFactory.CreateClient();
         var discoUrl = string.IsNullOrWhiteSpace(cfg.DiscoveryUrl) ? cfg.Authority.TrimEnd('/') + "/.well-known/openid-configuration" : cfg.DiscoveryUrl!;
         using var resp = await httpc.GetAsync(discoUrl, http.RequestAborted);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Discovery failed: {(int)resp.StatusCode}");
+        }
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         var root = doc.RootElement;
         var tokenEndpoint = root.GetProperty("token_endpoint").GetString()!;
@@ -160,40 +178,42 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         using var msg = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint) { Content = new FormUrlEncodedContent(form) };
         using var tokResp = await httpc.SendAsync(msg, http.RequestAborted);
         var body = await tokResp.Content.ReadAsStringAsync(http.RequestAborted);
-        if (!tokResp.IsSuccessStatusCode) return Results.Content($"Token exchange failed: {(int)tokResp.StatusCode} {body}", "text/plain", statusCode: 400);
+        if (!tokResp.IsSuccessStatusCode)
+        {
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Token exchange failed: {(int)tokResp.StatusCode} {body}");
+        }
 
         using var tokDoc = JsonDocument.Parse(body);
         var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
 
         string? email = null, name = null, sub = null, issuer = null, nonce = state.Nonce;
 
-        if (!string.IsNullOrEmpty(idToken))
+        try
         {
-            // Validate ID token
-            var set = await jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), httpFactory, http.RequestAborted);
-            if (set is null) return Results.Content("JWKS fetch failed", "text/plain", statusCode: 400);
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            // Keep JWT claim names as-is (avoid mapping 'sub' -> NameIdentifier)
-            tokenHandler.InboundClaimTypeMap.Clear();
-
-            var parms = new TokenValidationParameters
+            if (!string.IsNullOrEmpty(idToken))
             {
-                ValidateIssuer = true,
-                ValidIssuer = issuerFromDiscovery,
-                ValidateAudience = true,
-                ValidAudience = cfg.ClientId,
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(2),
-                RequireSignedTokens = true,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKeys = set.Keys,
-                NameClaimType = "name",
-                RoleClaimType = "roles"
-            };
+                // Validate ID token
+                var set = await jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), httpFactory, http.RequestAborted);
+                if (set is null) return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "JWKS fetch failed");
 
-            try
-            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                tokenHandler.InboundClaimTypeMap.Clear();
+
+                var parms = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = issuerFromDiscovery,
+                    ValidateAudience = true,
+                    ValidAudience = cfg.ClientId,
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromMinutes(2),
+                    RequireSignedTokens = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKeys = set.Keys,
+                    NameClaimType = "name",
+                    RoleClaimType = "roles"
+                };
+
                 var principal = tokenHandler.ValidateToken(idToken!, parms, out var _);
                 issuer = principal.FindFirst("iss")?.Value ?? parms.ValidIssuer;
                 sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -201,12 +221,12 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 email = principal.FindFirst("email")?.Value ?? principal.FindFirst(ClaimTypes.Email)?.Value;
                 var nonceClaim = principal.FindFirst("nonce")?.Value;
                 if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
-                    return Results.Content("Nonce mismatch", "text/plain", statusCode: 400);
+                    return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Nonce mismatch");
             }
-            catch (Exception ex)
-            {
-                return Results.Content("ID token validation failed: " + ex.Message, "text/plain", statusCode: 400);
-            }
+        }
+        catch (Exception ex)
+        {
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "ID token validation failed: " + ex.Message);
         }
 
         // Fallbacks: when id_token missing or lacks claims
@@ -232,7 +252,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                     }
                 }
             }
-            catch { }
+            catch { /* ignore, will fail later if still missing */ }
         }
 
         // Last-resort: extract sub from access token if it's a JWT
@@ -258,7 +278,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         issuer ??= issuerFromDiscovery; // last resort: issuer from discovery
 
         if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(issuer))
-            return Results.Content("Missing subject/issuer from upstream IdP", "text/plain", statusCode: 400);
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing subject/issuer from upstream IdP");
 
         // Link/provision local user using ExternalIdentities
         var ext = await db.ExternalIdentities.FirstOrDefaultAsync(x => x.Issuer == issuer && x.Subject == sub, http.RequestAborted);
@@ -309,8 +329,48 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
 
+        // Remember last provider for this client if present in state
+        if (!string.IsNullOrEmpty(state.ClientId))
+        {
+            var cookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(state.ClientId))).Substring(0, 16);
+            http.Response.Cookies.Append(cookieName, state.Provider, new Microsoft.AspNetCore.Http.CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddDays(90),
+                SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                Secure = true,
+                HttpOnly = true,
+                IsEssential = true,
+                Path = "/"
+            });
+        }
+
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
+    }
+
+    private static IResult FriendlyError(string? returnUrl, string? clientId, string? correlationId, string message)
+    {
+        var corr = correlationId ?? Guid.NewGuid().ToString("N");
+        var builder = new StringBuilder();
+        builder.Append("<html><head><title>Sign-in error</title>");
+        builder.Append("<link rel=\"stylesheet\" href=\"/lib/bootstrap/dist/css/bootstrap.min.css\" />");
+        builder.Append("</head><body class=\"container py-4\">");
+        builder.Append("<div class=\"alert alert-danger\"><strong>Sign-in failed.</strong> ");
+        builder.Append(System.Web.HttpUtility.HtmlEncode(message));
+        builder.Append("</div>");
+        builder.Append("<div class=\"small text-muted\">Correlation ID: <code>");
+        builder.Append(System.Web.HttpUtility.HtmlEncode(corr));
+        builder.Append("</code></div>");
+        if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(clientId))
+        {
+            var sep = returnUrl.Contains("?", StringComparison.Ordinal) ? "&" : "?";
+            var picker = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(clientId)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
+            builder.Append("<div class=\"mt-3\"><a class=\"btn btn-outline-primary\" href=\"");
+            builder.Append(picker);
+            builder.Append("\">Choose a different provider</a></div>");
+        }
+        builder.Append("</body></html>");
+        return Results.Content(builder.ToString(), "text/html; charset=utf-8", statusCode: 400);
     }
 
     private static string? TryGetAny(JsonElement root, params string[] names)
@@ -354,5 +414,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         public string CodeVerifier { get; set; } = string.Empty;
         public string? ReturnUrl { get; set; }
         public string? Nonce { get; set; }
+        public string? ClientId { get; set; }
+        public string? CorrelationId { get; set; }
     }
 }
