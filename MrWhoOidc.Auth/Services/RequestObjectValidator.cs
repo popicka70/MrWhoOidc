@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -27,6 +28,9 @@ public sealed class RequestObjectValidationResult
 
 internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions) : IRequestObjectValidator
 {
+    // Simple in-memory replay store for jti and nonce (per process). Can be replaced by distributed cache later.
+    private static readonly ConcurrentDictionary<string, DateTimeOffset> ReplayStore = new(StringComparer.Ordinal);
+
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(requestJwt))
@@ -135,7 +139,24 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             return Invalid("invalid_request_object", "Invalid JWK/JWKS configuration for client");
         }
 
-        // Validate signature, audience, lifetime, issuer/subject (iss and sub == client_id)
+        // Determine allowed alg set (global allow-list + per-client override)
+        var allowedAlgs = opts.RequestObjectAllowedAlgorithmsPerClient.TryGetValue(clientId, out var perClient)
+            ? perClient
+            : opts.RequestObjectAllowedAlgorithms;
+
+        // Map to IdentityModel algs for TokenValidationParameters.ValidAlgorithms
+        static string MapAlg(string alg) => alg switch
+        {
+            "RS256" => SecurityAlgorithms.RsaSha256,
+            "PS256" => SecurityAlgorithms.RsaSsaPssSha256,
+            "ES256" => SecurityAlgorithms.EcdsaSha256,
+            "ES384" => SecurityAlgorithms.EcdsaSha384,
+            "ES512" => SecurityAlgorithms.EcdsaSha512,
+            _ => alg
+        };
+        var validAlgs = allowedAlgs.Select(MapAlg).ToArray();
+
+        // Validate signature, audience, lifetime, issuer/subject (iss and sub == client_id) with allowed algs
         var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -147,11 +168,7 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKeys = signingKeys,
-            ValidAlgorithms = new[]
-            {
-                SecurityAlgorithms.RsaSha256,
-                SecurityAlgorithms.EcdsaSha256
-            }
+            ValidAlgorithms = validAlgs
         };
 
         ClaimsPrincipal principal;
@@ -173,6 +190,45 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
         {
             logger.LogWarning("JAR: iss/sub mismatch for client {ClientId} (iss={Iss}, sub={Sub})", clientId, iss, sub);
             return Invalid("invalid_request_object", "iss/sub mismatch");
+        }
+
+        // Replay protection: jti (preferred) or nonce, with TTL derived from exp or configured default
+        var jti = unsigned.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
+        if (string.IsNullOrEmpty(jti) && unsigned.Payload.TryGetValue("jti", out var jtiObjRaw))
+        {
+            jti = jtiObjRaw?.ToString();
+        }
+        var nonce = unsigned.Claims.FirstOrDefault(c => c.Type == "nonce")?.Value;
+        if (string.IsNullOrEmpty(nonce) && unsigned.Payload.TryGetValue("nonce", out var nonceObjRaw))
+        {
+            nonce = nonceObjRaw?.ToString();
+        }
+        var keyId = !string.IsNullOrEmpty(jti) ? jti : (!string.IsNullOrEmpty(nonce) ? $"nonce:{nonce}" : null);
+        if (!string.IsNullOrEmpty(keyId))
+        {
+            // Compute TTL
+            long? ReadLong2(object? o)
+                => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));
+            unsigned.Payload.TryGetValue("exp", out var expObj2);
+            var exp2 = ReadLong2(expObj2);
+            var now = DateTimeOffset.UtcNow;
+            var ttl = exp2 is not null ? DateTimeOffset.FromUnixTimeSeconds(exp2.Value + (opts.RequestObjectClockSkewSeconds > 0 ? opts.RequestObjectClockSkewSeconds : 120)) - now
+                                       : TimeSpan.FromSeconds(Math.Max(60, opts.RequestObjectReplayTtlSeconds));
+            if (ttl <= TimeSpan.Zero) ttl = TimeSpan.FromSeconds(60);
+            var expiresAt = now.Add(ttl);
+            var replayKey = $"jar:{clientId}:{keyId}";
+            CleanupReplayStore();
+            if (!ReplayStore.TryAdd(replayKey, expiresAt))
+            {
+                if (ReplayStore.TryGetValue(replayKey, out var existing) && existing > now)
+                {
+                    logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
+                    return Invalid("invalid_request_object", "Replay detected (jti/nonce) ");
+                }
+                // expired entry is present; replace it
+                ReplayStore.TryRemove(replayKey, out _);
+                ReplayStore.TryAdd(replayKey, expiresAt);
+            }
         }
 
         // Extract OpenID parameters from payload
@@ -197,6 +253,18 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             ClientId = clientId,
             Request = req
         };
+    }
+
+    private static void CleanupReplayStore()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kv in ReplayStore)
+        {
+            if (kv.Value <= now)
+            {
+                ReplayStore.TryRemove(kv.Key, out _);
+            }
+        }
     }
 
     static RequestObjectValidationResult Invalid(string code, string description) => new()

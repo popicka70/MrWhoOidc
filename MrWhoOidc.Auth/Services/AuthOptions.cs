@@ -36,15 +36,24 @@ public sealed class AuthOptions
     public int RequestObjectMaxLifetimeSeconds { get; set; } = 300; // 5 minutes
     // Clock skew applied when validating request object lifetime (seconds). If <=0, defaults to 120s.
     public int RequestObjectClockSkewSeconds { get; set; } = 120;
-    // Limit number of outstanding, unconsumed PAR entries per client to avoid storage abuse.
-    public int ParClientPendingLimit { get; set; } = 100;
+
+    // Allowed JAR signing algorithms (global allow-list). Examples: RS256, PS256, ES256, ES384, ES512
+    public string[] RequestObjectAllowedAlgorithms { get; set; } = ["RS256", "PS256", "ES256", "ES384", "ES512"];
+    // Optional per-client allow-list for JAR signing algorithms. Key: client_id
+    public Dictionary<string, string[]> RequestObjectAllowedAlgorithmsPerClient { get; set; } = new();
+    // Replay protection TTL (seconds) used when 'exp' is missing; otherwise, expiry uses 'exp' (+skew)
+    public int RequestObjectReplayTtlSeconds { get; set; } = 300;
+
+    // PAR per-client pending entries cap (in-memory enforcement)
+    public int ParClientPendingLimit { get; set; } = 50;
 }
 
 public sealed class OpaqueAccessTokenOptions
 {
-    // If true, issue opaque access tokens instead of JWTs.
-    public bool Enabled { get; set; }
-
-    // Optional audience allow-list for which opaque tokens are issued. If null/empty and Enabled=true, applies globally.
-    public string[]? Audiences { get; set; }
+    // Whether to issue opaque tokens for all API audiences (JWT otherwise). Per-audience overrides may apply.
+    public bool Enabled { get; set; } = false;
+    // Legacy audience allow-list used by TokenService; if empty, all audiences are eligible when Enabled=true.
+    public string[]? Audiences { get; set; } = Array.Empty<string>();
+    // Per-audience enablement (overrides global). Key = audience string.
+    public Dictionary<string, bool> PerAudience { get; set; } = new();
 }
