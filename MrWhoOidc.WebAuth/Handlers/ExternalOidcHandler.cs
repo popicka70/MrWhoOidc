@@ -56,9 +56,12 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce });
         var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
 
+        // Use provider-configured response_type; default to "code"
+        var responseType = string.IsNullOrWhiteSpace(cfg.ResponseType) ? "code" : cfg.ResponseType.Trim();
+
         var query = new Dictionary<string, string?>
         {
-            ["response_type"] = "code id_token", // hybrid to get id_token for nonce check when supported
+            ["response_type"] = responseType,
             ["client_id"] = cfg.ClientId,
             ["redirect_uri"] = cb,
             ["scope"] = string.Join(' ', cfg.Scopes ?? new[] { "openid", "profile", "email" }),
@@ -67,6 +70,22 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256"
         };
+
+        // Optional: response_mode and extra params from config
+        if (!string.IsNullOrWhiteSpace(cfg.ResponseMode))
+        {
+            query["response_mode"] = cfg.ResponseMode;
+        }
+        if (cfg.ExtraAuthParams is { Count: > 0 })
+        {
+            foreach (var kvp in cfg.ExtraAuthParams)
+            {
+                if (!string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
+                {
+                    query[kvp.Key] = kvp.Value;
+                }
+            }
+        }
 
         // Copy hints from returnUrl
         try
