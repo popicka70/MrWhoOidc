@@ -33,6 +33,8 @@ public sealed class AuthorizeHandler(
     AuthDbContext db
 ) : IAuthorizeHandler
 {
+    private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
+
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
@@ -227,6 +229,8 @@ public sealed class AuthorizeHandler(
             // Parameter: idp and idp_hint
             var idpParam = http.Request.Query["idp"].ToString();
             var idpHint = http.Request.Query["idp_hint"].ToString();
+            var prompt = http.Request.Query["prompt"].ToString();
+            bool forceAccountSelection = !string.IsNullOrEmpty(prompt) && prompt.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Any(p => string.Equals(p, "select_account", StringComparison.OrdinalIgnoreCase));
 
             var validationResult = await authorize.ValidateAsync(effectiveReq);
             if (!validationResult.IsValid)
@@ -273,7 +277,9 @@ public sealed class AuthorizeHandler(
                         return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
                     }
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                    // Remember last provider for this client
+                    SetLastProviderCookie(http, validationResult.ClientId!, idpParam);
+                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                     return Results.Redirect(url);
                 }
 
@@ -294,12 +300,34 @@ public sealed class AuthorizeHandler(
 
                     if (providerLinks.Count > 0)
                     {
-                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && !allowLocal)
+                        // If idp_hint matches an available provider and account selection not forced, use it
+                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
+                        {
+                            var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                            SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
+                            var hintUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpHint)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retUrlHint)}";
+                            return Results.Redirect(hintUrl);
+                        }
+
+                        // If single provider and local not allowed, auto-redirect
+                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && !allowLocal && !forceAccountSelection)
                         {
                             var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                            SetLastProviderCookie(http, validationResult.ClientId!, providerLinks[0].Name);
+                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                             return Results.Redirect(url);
                         }
+
+                        // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
+                        var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
+                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection)
+                        {
+                            var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
+                            return Results.Redirect(url);
+                        }
+
+                        // Otherwise render provider picker
                         var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
                         var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
                         if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
@@ -486,6 +514,32 @@ public sealed class AuthorizeHandler(
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         return Convert.ToHexString(bytes.AsSpan(0, 8));
+    }
+
+    private static string BuildLastProviderCookieName(string clientId)
+        => LastIdpCookiePrefix + BucketizeClientId(clientId);
+
+    private static void SetLastProviderCookie(HttpContext http, string clientId, string provider)
+    {
+        var name = BuildLastProviderCookieName(clientId);
+        var opts = new Microsoft.AspNetCore.Http.CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddDays(90),
+            SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+            Secure = true,
+            HttpOnly = true,
+            IsEssential = true,
+            Path = "/"
+        };
+        http.Response.Cookies.Append(name, provider, opts);
+    }
+
+    private static string? TryGetLastProviderCookie(HttpContext http, string clientId)
+    {
+        var name = BuildLastProviderCookieName(clientId);
+        if (http.Request.Cookies.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value))
+            return value;
+        return null;
     }
 
     private static IResult JarmRedirect(string redirectUri, string responseMode, string jarmJwt)

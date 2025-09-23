@@ -28,6 +28,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
     {
         var providerName = http.Request.Query["provider"].ToString();
         var returnUrl = http.Request.Query["returnUrl"].ToString(); // original /authorize URL
+        var clientId = http.Request.Query["clientId"].ToString(); // for last-used cookie
         if (string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(returnUrl))
             return Results.BadRequest("provider and returnUrl are required");
 
@@ -52,9 +53,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
         var cb = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
 
-        // State (nonce included for ID token nonce check)
+        // State (include clientId to set cookie on callback)
         var nonce = Guid.NewGuid().ToString("N");
-        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce });
+        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce, ClientId = clientId });
         var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
 
         // Use provider-configured response_type; default to "code"
@@ -309,6 +310,21 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
 
+        // Remember last provider for this client if present in state
+        if (!string.IsNullOrEmpty(state.ClientId))
+        {
+            var cookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(state.ClientId))).Substring(0, 16);
+            http.Response.Cookies.Append(cookieName, state.Provider, new Microsoft.AspNetCore.Http.CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddDays(90),
+                SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                Secure = true,
+                HttpOnly = true,
+                IsEssential = true,
+                Path = "/"
+            });
+        }
+
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
     }
@@ -354,5 +370,6 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         public string CodeVerifier { get; set; } = string.Empty;
         public string? ReturnUrl { get; set; }
         public string? Nonce { get; set; }
+        public string? ClientId { get; set; }
     }
 }
