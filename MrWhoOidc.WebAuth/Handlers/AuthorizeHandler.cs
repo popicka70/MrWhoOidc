@@ -294,7 +294,7 @@ public sealed class AuthorizeHandler(
 
                     if (providerLinks.Count > 0)
                     {
-                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle)
+                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && !allowLocal)
                         {
                             var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
                             var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&returnUrl={Uri.EscapeDataString(returnUrl)}";

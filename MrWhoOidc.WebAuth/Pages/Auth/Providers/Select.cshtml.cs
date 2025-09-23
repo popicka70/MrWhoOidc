@@ -25,6 +25,9 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     public string? Error { get; private set; }
 
+    public bool AllowLocalLogin { get; private set; }
+    public bool AllowQrLogin { get; private set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         if (string.IsNullOrWhiteSpace(Client_Id))
@@ -40,6 +43,9 @@ public class SelectModel(AuthDbContext db) : PageModel
             return Page();
         }
 
+        AllowLocalLogin = client.AllowLocalLogin;
+        AllowQrLogin = client.AllowQrLogin;
+
         var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
             .Where(m => m.ClientId == client.Id && m.Enabled)
             .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
@@ -49,8 +55,8 @@ public class SelectModel(AuthDbContext db) : PageModel
 
         Providers = providerLinks;
 
-        // If auto=1 and single provider, immediately choose it
-        if (Request.Query.TryGetValue("auto", out var autoVal) && autoVal == "1" && Providers.Count == 1)
+        // If auto=1 and single provider, immediately choose it but only when local login is not allowed
+        if (Request.Query.TryGetValue("auto", out var autoVal) && autoVal == "1" && Providers.Count == 1 && !AllowLocalLogin)
         {
             return await ChooseAsync(Providers[0].Name);
         }
