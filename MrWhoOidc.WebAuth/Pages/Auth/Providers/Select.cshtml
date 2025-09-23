@@ -1,11 +1,13 @@
 @page
 @model MrWhoOidc.WebAuth.Pages.Auth.Providers.SelectModel
+@using MrWhoOidc.WebAuth.Services
 @{
     ViewData["Title"] = "Select provider";
     ViewData["HideNavbar"] = true;
+    var scheme = StyleSchemes.Resolve(string.IsNullOrWhiteSpace(Model.StyleKey) ? Model.ClientStyleKey : Model.StyleKey);
 }
 
-<div class="mx-auto" style="max-width: 600px;">
+<div class="mx-auto @scheme.CssClass" style="max-width: 600px;">
     <h2 class="text-center">Select your identity provider</h2>
 
     @if (!Model.AllowLocalLogin && Model.Providers.Count == 0)
@@ -14,7 +16,7 @@
     }
     else
     {
-        <div class="card mt-3">
+        <div class="card mt-3 shadow-sm">
             <div class="list-group list-group-flush">
                 @foreach (var p in Model.Providers)
                 {

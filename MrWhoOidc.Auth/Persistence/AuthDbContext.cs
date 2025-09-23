@@ -107,6 +107,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.AllowLocalLogin).HasDefaultValue(true);
             b.Property(x => x.AllowExternalIdp).HasDefaultValue(true);
             b.Property(x => x.AllowQrLogin).HasDefaultValue(false);
+            // New: UI login style scheme key
+            b.Property(x => x.LoginStyleKey).HasMaxLength(50);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -479,6 +481,10 @@ public class Client
     public bool AllowLocalLogin { get; set; } = true;
     public bool AllowExternalIdp { get; set; } = true;
     public bool AllowQrLogin { get; set; } = false;
+
+    // New: UI style scheme key for login pages (null => default)
+    [MaxLength(50)]
+    public string? LoginStyleKey { get; set; }
 }
 
 public class ClientScope

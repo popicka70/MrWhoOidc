@@ -29,3 +29,18 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* Style schemes for Auth/Providers/Select */
+.scheme-classic {}
+
+.scheme-ocean .card { border-color: #0dcaf0; }
+.scheme-ocean .list-group-item-action:hover { background-color: rgba(13, 202, 240, 0.08); }
+
+.scheme-forest .card { border-color: #198754; }
+.scheme-forest .list-group-item-action:hover { background-color: rgba(25, 135, 84, 0.08); }
+
+.scheme-plum .card { border-color: #6f42c1; }
+.scheme-plum .list-group-item-action:hover { background-color: rgba(111, 66, 193, 0.08); }
+
+.scheme-contrast .card { border-color: #212529; }
+.scheme-contrast .list-group-item-action:hover { background-color: rgba(33, 37, 41, 0.08); }

@@ -19,6 +19,13 @@ public class SelectModel(AuthDbContext db) : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Idp_Hint { get; set; }
 
+    // Optional style override via query: style=classic|ocean|forest|plum|contrast
+    [BindProperty(SupportsGet = true, Name = "style")]
+    public string? StyleKey { get; set; }
+
+    // Client default style from DB
+    public string? ClientStyleKey { get; private set; }
+
     public List<Item> Providers { get; private set; } = new();
 
     public string ReturnUrlEncoded => Uri.EscapeDataString(ReturnUrl ?? "/");
@@ -45,6 +52,7 @@ public class SelectModel(AuthDbContext db) : PageModel
 
         AllowLocalLogin = client.AllowLocalLogin;
         AllowQrLogin = client.AllowQrLogin;
+        ClientStyleKey = client.LoginStyleKey; // may be null
 
         var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
             .Where(m => m.ClientId == client.Id && m.Enabled)
