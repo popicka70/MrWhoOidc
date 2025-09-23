@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Persistence;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Services;
+using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -173,6 +174,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             if (set is null) return Results.Content("JWKS fetch failed", "text/plain", statusCode: 400);
 
             var tokenHandler = new JwtSecurityTokenHandler();
+            // Keep JWT claim names as-is (avoid mapping 'sub' -> NameIdentifier)
+            tokenHandler.InboundClaimTypeMap.Clear();
+
             var parms = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -183,16 +187,18 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 ClockSkew = TimeSpan.FromMinutes(2),
                 RequireSignedTokens = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKeys = set.Keys
+                IssuerSigningKeys = set.Keys,
+                NameClaimType = "name",
+                RoleClaimType = "roles"
             };
 
             try
             {
                 var principal = tokenHandler.ValidateToken(idToken!, parms, out var _);
                 issuer = principal.FindFirst("iss")?.Value ?? parms.ValidIssuer;
-                sub = principal.FindFirst("sub")?.Value;
-                name = principal.FindFirst("name")?.Value;
-                email = principal.FindFirst("email")?.Value;
+                sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                name = principal.FindFirst("name")?.Value ?? principal.FindFirst(ClaimTypes.Name)?.Value;
+                email = principal.FindFirst("email")?.Value ?? principal.FindFirst(ClaimTypes.Email)?.Value;
                 var nonceClaim = principal.FindFirst("nonce")?.Value;
                 if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
                     return Results.Content("Nonce mismatch", "text/plain", statusCode: 400);
@@ -218,14 +224,35 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                     if (uiResp.IsSuccessStatusCode)
                     {
                         using var uiDoc = JsonDocument.Parse(uiBody);
-                        sub ??= uiDoc.RootElement.TryGetProperty("sub", out var s) ? s.GetString() : null;
-                        email ??= uiDoc.RootElement.TryGetProperty("email", out var e) ? e.GetString() : null;
-                        name ??= uiDoc.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+                        var rootUi = uiDoc.RootElement;
+                        sub ??= TryGetAny(rootUi, "sub", "subject", "id", "user_id", "uid", "oid", "sid");
+                        email ??= TryGetAny(rootUi, "email", "mail", "upn");
+                        name ??= TryGetAny(rootUi, "name", "given_name", "preferred_username", "displayName");
                         issuer ??= issuerFromDiscovery; // set issuer from discovery if no id_token
                     }
                 }
             }
             catch { }
+        }
+
+        // Last-resort: extract sub from access token if it's a JWT
+        if (string.IsNullOrEmpty(sub))
+        {
+            var at = tokDoc.RootElement.TryGetProperty("access_token", out var atEl2) ? atEl2.GetString() : null;
+            if (!string.IsNullOrEmpty(at) && at.Count(c => c == '.') == 2)
+            {
+                try
+                {
+                    var handler = new JwtSecurityTokenHandler();
+                    var jwtAt = handler.ReadJwtToken(at);
+                    sub = jwtAt.Claims.FirstOrDefault(c => c.Type == "sub")?.Value
+                        ?? jwtAt.Claims.FirstOrDefault(c => c.Type == "oid")?.Value
+                        ?? jwtAt.Claims.FirstOrDefault(c => c.Type == "uid")?.Value
+                        ?? jwtAt.Claims.FirstOrDefault(c => c.Type == "id")?.Value
+                        ?? jwtAt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                }
+                catch { }
+            }
         }
 
         issuer ??= issuerFromDiscovery; // last resort: issuer from discovery
@@ -284,6 +311,16 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
+    }
+
+    private static string? TryGetAny(JsonElement root, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (root.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString();
+        }
+        return null;
     }
 
     private static string? BuildClaimsJson(string? email, string? name)
