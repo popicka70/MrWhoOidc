@@ -15,7 +15,7 @@
     <div class="alert alert-success">@Model.Message</div>
 }
 
-<form method="post" asp-page-handler="Add" class="mb-4">
+<form method="post" class="mb-4">
     <div class="row g-3">
         <div class="col-md-3">
             <label asp-for="Input.Purpose" class="form-label">Purpose</label>
@@ -26,7 +26,7 @@
         </div>
         <div class="col-md-3">
             <label asp-for="Input.Alg" class="form-label">Alg</label>
-            <input asp-for="Input.Alg" class="form-control" placeholder="RS256, PS256, ES256..." />
+            <input asp-for="Input.Alg" class="form-control" placeholder="RS256, PS256, ES256, RSA-OAEP, ECDH-ES..." />
         </div>
         <div class="col-md-3">
             <label asp-for="Input.Kid" class="form-label">Key ID (kid)</label>
@@ -37,13 +37,15 @@
             <label asp-for="Input.Active" class="form-check-label">Set active</label>
         </div>
         <div class="col-12">
-            <label asp-for="Input.JwkJson" class="form-label">Private JWK JSON</label>
-            <textarea asp-for="Input.JwkJson" class="form-control" rows="6" placeholder='{"kty":"RSA",...}'></textarea>
-            <span class="form-text">Paste a private JWK (JSON). PEM import not yet supported.</span>
+            <label asp-for="Input.JwkJson" class="form-label">Private JWK JSON or PEM</label>
+            <textarea asp-for="Input.JwkJson" class="form-control" rows="6" placeholder='{"kty":"RSA",...} or -----BEGIN PRIVATE KEY-----'></textarea>
+            <span class="form-text">Paste a private JWK (JSON) or a PEM (RSA/EC private key). We'll convert PEM to JWK.</span>
         </div>
-        <div class="col-12">
-            <button type="submit" class="btn btn-primary">Import key</button>
-            <a asp-page="/Admin/Providers/Index" class="btn btn-secondary">Back</a>
+        <div class="col-12 d-flex gap-2">
+            <button type="submit" asp-page-handler="Add" class="btn btn-primary">Import key</button>
+            <button type="submit" asp-page-handler="Pretty" class="btn btn-outline-secondary">Pretty</button>
+            <button type="submit" asp-page-handler="Compact" class="btn btn-outline-secondary">Compact</button>
+            <a asp-page="/Admin/Providers/Index" class="btn btn-secondary ms-auto">Back</a>
         </div>
     </div>
 </form>

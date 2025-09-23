@@ -38,5 +38,6 @@ else
     <p>
         <a asp-page="ClaimMappings" asp-route-id="@Model.Provider.Id" class="btn btn-outline-primary">Manage claim mappings</a>
         <a asp-page="Edit" asp-route-id="@Model.Provider.Id" class="btn btn-primary">Edit</a>
+        <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@Model.Provider.Id" class="btn btn-outline-secondary">Manage keys</a>
     </p>
 }

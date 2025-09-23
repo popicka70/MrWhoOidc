@@ -219,9 +219,35 @@ public class IndexModel(AuthDbContext db) : PageModel
                 .Select(g => g.Key!)
                 .ToList();
 
-            var ok = dup.Count == 0;
-            var summary = ok ? "Valid JWKS" : "Duplicates";
-            var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : $"Duplicate kid(s): {string.Join(", ", dup)}";
+            // Strengthen validation: check kty/use/alg are coherent
+            var keyErrors = new List<string>();
+            foreach (var key in keys)
+            {
+                if (!key.TryGetProperty("kty", out var ktyEl)) { keyErrors.Add("missing kty"); continue; }
+                var kty = ktyEl.GetString();
+                if (kty is not ("RSA" or "EC")) { keyErrors.Add("unsupported kty"); continue; }
+                if (!key.TryGetProperty("alg", out var algEl)) { keyErrors.Add("missing alg"); continue; }
+                var alg = algEl.GetString();
+                if (string.IsNullOrWhiteSpace(alg)) { keyErrors.Add("empty alg"); continue; }
+                if (!key.TryGetProperty("use", out var useEl)) { keyErrors.Add("missing use"); continue; }
+                var use = useEl.GetString();
+                if (use is not ("sig" or "enc")) { keyErrors.Add("invalid use"); }
+
+                if (kty == "RSA" && use == "sig" && !alg.StartsWith("RS", StringComparison.Ordinal) && !alg.StartsWith("PS", StringComparison.Ordinal))
+                    keyErrors.Add("RSA sig alg must be RS* or PS*");
+                if (kty == "EC" && use == "sig" && !alg.StartsWith("ES", StringComparison.Ordinal))
+                    keyErrors.Add("EC sig alg must be ES*");
+                if (use == "enc")
+                {
+                    // accept RS256/PS256/ES256 as signing only; for encryption expect RSA-OAEP* or ECDH-ES*
+                    if (!(alg.StartsWith("RSA-OAEP", StringComparison.Ordinal) || alg.StartsWith("ECDH-ES", StringComparison.Ordinal)))
+                        keyErrors.Add("enc alg must be RSA-OAEP* or ECDH-ES*");
+                }
+            }
+
+            var ok = dup.Count == 0 && keyErrors.Count == 0;
+            var summary = ok ? "Valid JWKS" : "Issues";
+            var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : string.Join("; ", (dup.Count > 0 ? new[] { $"Duplicate kid(s): {string.Join(", ", dup)}" } : Array.Empty<string>()).Concat(keyErrors));
             return new JwksValidationStatus(ok, summary, msg, count, nonNullKids.Distinct(StringComparer.Ordinal).Count(), dup);
         }
         catch (Exception ex)
