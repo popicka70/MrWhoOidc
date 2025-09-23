@@ -30,17 +30,109 @@ body {
   text-align: start;
 }
 
+/* Shared auth layout helpers */
+.auth-card { overflow: hidden; background-clip: padding-box; }
+.auth-card .list-group-flush .auth-option:first-child { border-top-left-radius: 14px; border-top-right-radius: 14px; }
+.auth-card .list-group-flush .auth-option:last-child { border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
+
 /* Style schemes for Auth/Providers/Select */
 .scheme-classic {}
 
-.scheme-ocean .card { border-color: #0dcaf0; }
-.scheme-ocean .list-group-item-action:hover { background-color: rgba(13, 202, 240, 0.08); }
+.scheme-ocean {
+  --accent: #0dcaf0;
+  --accent-soft: rgba(13, 202, 240, 0.08);
+  --bg-grad-from: #f0fbff;
+  --bg-grad-to: #ffffff;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji", "Segoe UI Emoji";
+}
+.scheme-forest {
+  --accent: #198754;
+  --accent-soft: rgba(25, 135, 84, 0.08);
+  --bg-grad-from: #f6fff8;
+  --bg-grad-to: #ffffff;
+  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial;
+}
+.scheme-plum {
+  --accent: #6f42c1;
+  --accent-soft: rgba(111, 66, 193, 0.08);
+  --bg-grad-from: #faf5ff;
+  --bg-grad-to: #ffffff;
+  --heading-font: "Poppins", "Segoe UI", system-ui, Arial;
+}
+.scheme-contrast {
+  --accent: #212529;
+  --accent-soft: rgba(33, 37, 41, 0.06);
+  --bg-grad-from: #f8f9fa;
+  --bg-grad-to: #ffffff;
+  --heading-font: "Segoe UI", system-ui, Arial;
+}
 
-.scheme-forest .card { border-color: #198754; }
-.scheme-forest .list-group-item-action:hover { background-color: rgba(25, 135, 84, 0.08); }
+/* Shared auth page styling using CSS variables */
+.scheme-ocean .auth-card,
+.scheme-forest .auth-card,
+.scheme-plum .auth-card,
+.scheme-contrast .auth-card {
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
+  background: linear-gradient(180deg, var(--bg-grad-from), var(--bg-grad-to));
+}
 
-.scheme-plum .card { border-color: #6f42c1; }
-.scheme-plum .list-group-item-action:hover { background-color: rgba(111, 66, 193, 0.08); }
+.scheme-ocean .auth-heading,
+.scheme-forest .auth-heading,
+.scheme-plum .auth-heading,
+.scheme-contrast .auth-heading {
+  font-family: var(--heading-font);
+  font-weight: 700;
+  letter-spacing: .2px;
+}
 
-.scheme-contrast .card { border-color: #212529; }
-.scheme-contrast .list-group-item-action:hover { background-color: rgba(33, 37, 41, 0.08); }
+.scheme-ocean .auth-option:hover,
+.scheme-forest .auth-option:hover,
+.scheme-plum .auth-option:hover,
+.scheme-contrast .auth-option:hover {
+  background-color: var(--accent-soft);
+}
+
+.scheme-ocean .auth-option,
+.scheme-forest .auth-option,
+.scheme-plum .auth-option,
+.scheme-contrast .auth-option {
+  transition: background-color .15s ease, transform .05s ease;
+}
+
+.scheme-ocean .auth-option:active,
+.scheme-forest .auth-option:active,
+.scheme-plum .auth-option:active,
+.scheme-contrast .auth-option:active {
+  transform: scale(0.997);
+}
+
+.scheme-ocean .auth-cta,
+.scheme-forest .auth-cta,
+.scheme-plum .auth-cta,
+.scheme-contrast .auth-cta {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scheme-ocean .auth-cta:hover,
+.scheme-forest .auth-cta:hover,
+.scheme-plum .auth-cta:hover,
+.scheme-contrast .auth-cta:hover {
+  background-color: var(--accent-soft);
+}
+
+/* Subtle page background under the centered container */
+.scheme-ocean,
+.scheme-forest,
+.scheme-plum,
+.scheme-contrast {
+  padding: 4px 8px;
+}
+
+/* Classic (default) gets gentle rounding/shadow too */
+.scheme-classic .auth-card {
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.04);
+}
