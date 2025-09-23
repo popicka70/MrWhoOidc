@@ -16,6 +16,11 @@
 
     <h2 class="text-center auth-heading">Select your identity provider</h2>
 
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="alert alert-danger mt-3">@Model.Error</div>
+    }
+
     @if (!Model.AllowLocalLogin && Model.Providers.Count == 0)
     {
         <div class="alert alert-warning mt-3">No providers available for this client.</div>
@@ -26,7 +31,7 @@
             <div class="list-group list-group-flush">
                 @foreach (var p in Model.Providers)
                 {
-                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
+                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                     <a class="list-group-item list-group-item-action d-flex align-items-center auth-option" href="@url">
                         @if (!string.IsNullOrEmpty(p.LogoUrl))
                         {
