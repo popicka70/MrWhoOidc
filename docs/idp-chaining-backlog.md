@@ -1,5 +1,7 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
+Updated: 2025-09-23
+
 Status legend
 - [x] Done
 - [~] Pending / In progress
@@ -154,6 +156,34 @@ Non-functional requirements
 - Secrets safety (Key Vault/DPAPI), no plaintext secrets at rest.
 - Caching of discovery docs and keys; reasonable timeouts/retries.
 - Observability and correlation across upstream/downstream requests.
+
+Next steps (proposed)
+- Target milestone: Phase 3 (Multi-provider GA)
+- P0 (2 weeks)
+  - [ ] Management APIs (admin-only): CRUD for `IdentityProvider`, `ClientIdentityProvider`, `IdentityProviderClaimMappings`, `IdentityProviderKeys`, `ClientKeys`; RBAC policy; ProblemDetails.
+  - [ ] Keys UI pages: import JWK/PEM, validate `kid`/`alg`, set `Active`, rotate/activate flows; basic JWKS preview.
+  - [ ] Authorize pipeline: remember last provider per client (cookie); propagate `prompt`, `max_age`, `ui_locales`; preserve `idp`/hints across PAR/request_uri.
+  - [ ] External OIDC error/cancel handling: friendly errors, retry/return to picker, correlation IDs in logs.
+  - [ ] Provider picker polish: remembered provider hint, a11y fixes, mobile layout.
+  - [ ] Tests: unit (claim transforms, JAR merge rules, idp selection), integration (two OIDC providers happy path, cancel), discovery doc verification; wire into CI.
+  - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR).
+- P1 (next 2–4 weeks)
+  - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
+  - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations); redact PII.
+  - [ ] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
+  - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
+  - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
+
+Risks and decisions
+- Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
+- Confirm acceptable `alg` set for inbound JAR (e.g., RS256/PS256/ES256) and enforce.
+- Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
+
+Test matrix (Phase 3)
+- Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.
+- Single-provider auto-redirect on and off.
+- With and without inbound JAR; with and without PAR request_uri; propagation of hints/params.
+- Rotation of client/provider keys with `kid` changes.
 
 Appendix: Minimal OIDC ConfigJson example
 ```json
