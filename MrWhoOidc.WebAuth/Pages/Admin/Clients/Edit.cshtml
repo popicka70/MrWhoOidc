@@ -85,6 +85,26 @@
                     <span asp-validation-for="Input.AllowedLogoutRedirectUris" class="text-danger"></span>
                 </div>
                 <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">Login methods</div>
+                        <div class="card-body row g-3">
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowLocalLogin" class="form-check-input" />
+                                <label asp-for="Input.AllowLocalLogin" class="form-check-label"></label>
+                            </div>
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowExternalIdp" class="form-check-input" />
+                                <label asp-for="Input.AllowExternalIdp" class="form-check-label"></label>
+                            </div>
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowQrLogin" class="form-check-input" />
+                                <label asp-for="Input.AllowQrLogin" class="form-check-label"></label>
+                            </div>
+                            <div class="col-12 small text-muted">Use these toggles to control which login options are shown/enforced for this client.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
                     <label asp-for="Input.ClientSecret" class="form-label"></label>
                     <div class="input-group">
                         <input asp-for="Input.ClientSecret" class="form-control" autocomplete="new-password" />

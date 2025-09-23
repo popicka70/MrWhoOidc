@@ -124,7 +124,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             PublicJwksJson = client.PublicJwksJson,
             PublicJwksUri = client.PublicJwksUri,
             AllowedLoginRedirectUris = loginUris,
-            AllowedLogoutRedirectUris = logoutUris
+            AllowedLogoutRedirectUris = logoutUris,
+            AllowLocalLogin = client.AllowLocalLogin,
+            AllowExternalIdp = client.AllowExternalIdp,
+            AllowQrLogin = client.AllowQrLogin
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
@@ -728,6 +731,9 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.RequirePkce = Input.RequirePkce;
         client.RequireConsent = Input.RequireConsent;
         client.RequirePar = Input.RequirePar;
+        client.AllowLocalLogin = Input.AllowLocalLogin;
+        client.AllowExternalIdp = Input.AllowExternalIdp;
+        client.AllowQrLogin = Input.AllowQrLogin;
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
@@ -1057,6 +1063,14 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? AllowedLoginRedirectUris { get; set; }
         [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
         public string? AllowedLogoutRedirectUris { get; set; }
+
+        // New: login method toggles
+        [Display(Name = "Allow local username/password login")]
+        public bool AllowLocalLogin { get; set; } = true;
+        [Display(Name = "Allow external identity providers")]
+        public bool AllowExternalIdp { get; set; } = true;
+        [Display(Name = "Allow QR code login")]
+        public bool AllowQrLogin { get; set; } = false;
     }
 
     public sealed class ProviderRow

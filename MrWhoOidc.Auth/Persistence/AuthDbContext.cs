@@ -103,6 +103,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             // New: per-client allowed redirect URIs
             b.Property(x => x.AllowedLoginRedirectUrisJson).HasMaxLength(4000);
             b.Property(x => x.AllowedLogoutRedirectUrisJson).HasMaxLength(4000);
+            // New: login methods toggles
+            b.Property(x => x.AllowLocalLogin).HasDefaultValue(true);
+            b.Property(x => x.AllowExternalIdp).HasDefaultValue(true);
+            b.Property(x => x.AllowQrLogin).HasDefaultValue(false);
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -470,6 +474,11 @@ public class Client
     public string? AllowedLoginRedirectUrisJson { get; set; }
     [MaxLength(4000)]
     public string? AllowedLogoutRedirectUrisJson { get; set; }
+
+    // New: login methods configuration
+    public bool AllowLocalLogin { get; set; } = true;
+    public bool AllowExternalIdp { get; set; } = true;
+    public bool AllowQrLogin { get; set; } = false;
 }
 
 public class ClientScope

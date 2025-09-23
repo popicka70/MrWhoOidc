@@ -254,24 +254,36 @@ public sealed class AuthorizeHandler(
                 return ErrorResults.InvalidRequest($"{validationResult.ErrorDescription} (corr={corr})");
             }
 
+            // Enforce per-client login method policy
+            var clientEntity = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == validationResult.ClientId);
+            bool allowLocal = clientEntity?.AllowLocalLogin ?? true;
+            bool allowExternal = clientEntity?.AllowExternalIdp ?? true;
+            bool allowQr = clientEntity?.AllowQrLogin ?? false;
+
             // Provider resolution for unauthenticated users
             if (!http.User.Identity?.IsAuthenticated ?? true)
             {
-                // If an explicit idp is present, go directly to external start
+                // If explicit idp and external logins are allowed, go to external
                 if (!string.IsNullOrEmpty(idpParam))
                 {
+                    if (!allowExternal)
+                    {
+                        outcome = "login";
+                        var returnUrlDenied = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
+                    }
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
                     var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                     return Results.Redirect(url);
                 }
 
-                // Otherwise, evaluate client mappings
+                // Otherwise, evaluate client mappings if external allowed
                 Guid? clientGuid = null;
-                if (!string.IsNullOrEmpty(validationResult.ClientId))
+                if (!string.IsNullOrEmpty(validationResult.ClientId) && allowExternal)
                 {
                     clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
                 }
-                if (clientGuid is Guid cg)
+                if (allowExternal && clientGuid is Guid cg)
                 {
                     var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
                         .Where(m => m.ClientId == cg && m.Enabled)
@@ -295,10 +307,33 @@ public sealed class AuthorizeHandler(
                     }
                 }
 
-                // Fallback: local login
+                // QR login placeholder: if allowed and hint present, route to QR page (to be implemented)
+                if (allowQr && http.Request.Query.ContainsKey("qr"))
+                {
+                    var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                    return Results.Redirect($"/Auth/Qr?ReturnUrl={Uri.EscapeDataString(ret)}");
+                }
+
+                // Fallback: local login if allowed
                 outcome = "login";
                 var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                if (allowLocal)
+                {
+                    return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                }
+
+                // If local login not allowed and no external/QR path chosen, return access_denied
+                if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
+                {
+                    var uri = new UriBuilder(effectiveReq.redirect_uri);
+                    var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                    query["error"] = "access_denied";
+                    query["error_description"] = $"No permitted login methods for this client (corr={corr})";
+                    if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
+                    uri.Query = query.ToString();
+                    return Results.Redirect(uri.ToString());
+                }
+                return Results.Json(new { error = "access_denied" }, statusCode: 403);
             }
 
             // From here: authenticated user -> issue code
