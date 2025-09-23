@@ -10,7 +10,7 @@ WORKDIR /src
 
 # Copy solution and project files first for better caching
 COPY MrWhoOidc.slnx ./
-COPY MrWhoOidc.WebAuth/MrWhoOidc.csproj MrWhoOidc.WebAuth/MrWhoOidc.csproj
+COPY MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj
 COPY MrWhoOidc.Auth/MrWhoOidc.Auth.csproj MrWhoOidc.Auth/MrWhoOidc.Auth.csproj
 COPY MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj
 
