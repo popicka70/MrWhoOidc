@@ -15,6 +15,9 @@ using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
 using MrWhoOidc.WebAuth.Security;
+using System.Text.Json;
+using System.Linq;
+using System.Collections.Generic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -221,6 +224,19 @@ builder.Services.AddRateLimiter(options =>
             AutoReplenishment = true
         });
     });
+
+    // Admin endpoints policy (more restrictive by default)
+    options.AddPolicy("rl-admin", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20, // adjust per environment
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
 });
 
 // Register handlers
@@ -333,6 +349,352 @@ app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
 app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
 app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
 
+// Admin Management APIs (admin-only, ProblemDetails on errors)
+var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
+
+// Providers CRUD
+admin.MapGet("/providers", async (AuthDbContext db, CancellationToken ct) =>
+{
+    var list = await db.IdentityProviders.AsNoTracking()
+        .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
+        .Select(p => new
+        {
+            p.Id, p.Name, p.DisplayName, p.Type, p.Enabled, p.IsDefault, p.LogoUrl, p.SortOrder, p.CreatedAt, p.UpdatedAt
+        }).ToListAsync(ct);
+    return Results.Ok(list);
+});
+
+admin.MapGet("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+{
+    var p = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+    return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
+});
+
+admin.MapPost("/providers", async (AuthDbContext db, IIdentityProviderValidator validator, MrWhoOidc.Auth.Persistence.IdentityProvider input, CancellationToken ct) =>
+{
+    input.Id = Guid.NewGuid();
+    input.CreatedAt = DateTimeOffset.UtcNow;
+    input.UpdatedAt = DateTimeOffset.UtcNow;
+    var (ok, error) = await validator.ValidateAsync(input, ct);
+    if (!ok) return Results.Problem(statusCode: 400, title: "Validation failed", detail: error);
+
+    db.IdentityProviders.Add(input);
+    await db.SaveChangesAsync(ct);
+    return Results.Created($"/admin/api/providers/{input.Id}", new { input.Id });
+});
+
+admin.MapPut("/providers/{id:guid}", async (Guid id, AuthDbContext db, IIdentityProviderValidator validator, MrWhoOidc.Auth.Persistence.IdentityProvider input, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+    // Update fields
+    entity.Name = input.Name;
+    entity.DisplayName = input.DisplayName;
+    entity.Type = input.Type;
+    entity.Enabled = input.Enabled;
+    entity.IsDefault = input.IsDefault;
+    entity.LogoUrl = input.LogoUrl;
+    entity.SortOrder = input.SortOrder;
+    entity.ConfigJson = input.ConfigJson;
+    entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+    var (ok, error) = await validator.ValidateAsync(entity, ct);
+    if (!ok) return Results.Problem(statusCode: 400, title: "Validation failed", detail: error);
+
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    db.IdentityProviders.Remove(entity);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+// Client ? Providers mapping CRUD
+admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
+{
+    var list = await db.ClientIdentityProviders.AsNoTracking()
+        .Where(m => m.ClientId == clientId)
+        .Join(db.IdentityProviders.AsNoTracking(), m => m.IdentityProviderId, p => p.Id, (m, p) => new
+        {
+            m.ClientId, m.IdentityProviderId, p.Name, p.DisplayName, m.Enabled, m.IsDefaultForClient, m.AutoRedirectIfSingle, m.RequiredAcr, m.Order
+        })
+        .OrderBy(x => x.Order).ToListAsync(ct);
+    return Results.Ok(list);
+});
+
+admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+{
+    if (input is null || input.IdentityProviderId == Guid.Empty)
+        return Results.Problem(statusCode: 400, title: "Invalid input");
+
+    // Ensure client and provider exist
+    var clientExists = await db.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId, ct);
+    var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId, ct);
+    if (!clientExists || !providerExists)
+        return Results.Problem(statusCode: 404, title: "Client or Provider not found");
+
+    var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, input.IdentityProviderId }, ct);
+    if (entity is null)
+    {
+        entity = new ClientIdentityProvider
+        {
+            ClientId = clientId,
+            IdentityProviderId = input.IdentityProviderId,
+            Enabled = input.Enabled,
+            IsDefaultForClient = input.IsDefaultForClient,
+            AutoRedirectIfSingle = input.AutoRedirectIfSingle,
+            RequiredAcr = input.RequiredAcr,
+            Order = input.Order
+        };
+        db.ClientIdentityProviders.Add(entity);
+    }
+    else
+    {
+        entity.Enabled = input.Enabled;
+        entity.IsDefaultForClient = input.IsDefaultForClient;
+        entity.AutoRedirectIfSingle = input.AutoRedirectIfSingle;
+        entity.RequiredAcr = input.RequiredAcr;
+        entity.Order = input.Order;
+    }
+
+    if (input.IsDefaultForClient)
+    {
+        var others = await db.ClientIdentityProviders.Where(m => m.ClientId == clientId && m.IdentityProviderId != input.IdentityProviderId).ToListAsync(ct);
+        foreach (var o in others) o.IsDefaultForClient = false;
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.Ok();
+});
+
+admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+{
+    var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+
+    entity.Enabled = input.Enabled;
+    entity.IsDefaultForClient = input.IsDefaultForClient;
+    entity.AutoRedirectIfSingle = input.AutoRedirectIfSingle;
+    entity.RequiredAcr = input.RequiredAcr;
+    entity.Order = input.Order;
+
+    if (input.IsDefaultForClient)
+    {
+        var others = await db.ClientIdentityProviders.Where(m => m.ClientId == clientId && m.IdentityProviderId != identityProviderId).ToListAsync(ct);
+        foreach (var o in others) o.IsDefaultForClient = false;
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, CancellationToken ct) =>
+{
+    var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    db.ClientIdentityProviders.Remove(entity);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+// Claim mappings CRUD
+admin.MapGet("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, CancellationToken ct) =>
+{
+    var list = await db.IdentityProviderClaimMappings.AsNoTracking()
+        .Where(m => m.IdentityProviderId == providerId)
+        .OrderBy(m => m.Order)
+        .Select(m => new { m.Id, m.IdentityProviderId, m.ExternalClaim, m.LocalClaim, m.Transform, m.Order })
+        .ToListAsync(ct);
+    return Results.Ok(list);
+});
+
+admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+{
+    if (input is null || string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
+        return Results.Problem(statusCode: 400, title: "Invalid input");
+    var exists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == providerId, ct);
+    if (!exists) return Results.Problem(statusCode: 404, title: "Provider not found");
+
+    var entity = new IdentityProviderClaimMapping
+    {
+        IdentityProviderId = providerId,
+        ExternalClaim = input.ExternalClaim!,
+        LocalClaim = input.LocalClaim!,
+        Transform = input.Transform,
+        Order = input.Order
+    };
+    db.IdentityProviderClaimMappings.Add(entity);
+    await db.SaveChangesAsync(ct);
+    return Results.Created($"/admin/api/providers/{providerId}/claim-mappings/{entity.Id}", new { entity.Id });
+});
+
+admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    if (string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
+        return Results.Problem(statusCode: 400, title: "Invalid input");
+
+    entity.ExternalClaim = input.ExternalClaim!;
+    entity.LocalClaim = input.LocalClaim!;
+    entity.Transform = input.Transform;
+    entity.Order = input.Order;
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapDelete("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    db.IdentityProviderClaimMappings.Remove(entity);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+// Provider keys CRUD
+admin.MapGet("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, CancellationToken ct) =>
+{
+    var list = await db.IdentityProviderKeys.AsNoTracking()
+        .Where(k => k.IdentityProviderId == providerId)
+        .OrderByDescending(k => k.CreatedAt)
+        .Select(k => new { k.Id, k.Purpose, k.Alg, k.Kid, k.Active, k.CreatedAt, k.ExpiresAt })
+        .ToListAsync(ct);
+    return Results.Ok(list);
+});
+
+admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+{
+    if (input is null || string.IsNullOrWhiteSpace(input.JwkJson) || string.IsNullOrWhiteSpace(input.Alg))
+        return Results.Problem(statusCode: 400, title: "Invalid input");
+
+    // Validate JSON shape
+    try { using var _ = JsonDocument.Parse(input.JwkJson!); }
+    catch (Exception ex) { return Results.Problem(statusCode: 400, title: "Invalid JWK JSON", detail: ex.Message); }
+
+    // kid uniqueness per provider
+    if (!string.IsNullOrWhiteSpace(input.Kid))
+    {
+        var kidExists = await db.IdentityProviderKeys.AnyAsync(k => k.IdentityProviderId == providerId && k.Kid == input.Kid, ct);
+        if (kidExists) return Results.Problem(statusCode: 409, title: "Duplicate kid", detail: "Key ID already exists for this provider.");
+    }
+
+    var entity = new IdentityProviderKey
+    {
+        IdentityProviderId = providerId,
+        Purpose = input.Purpose,
+        Jwk = input.JwkJson!,
+        Alg = input.Alg!,
+        Active = input.Active,
+        Kid = string.IsNullOrWhiteSpace(input.Kid) ? Guid.NewGuid().ToString("N") : input.Kid,
+        CreatedAt = DateTimeOffset.UtcNow,
+        ExpiresAt = input.ExpiresAt
+    };
+    db.IdentityProviderKeys.Add(entity);
+
+    if (entity.Active)
+    {
+        var others = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId && k.Purpose == entity.Purpose && k.Id != entity.Id).ToListAsync(ct);
+        foreach (var o in others) o.Active = false;
+    }
+    await db.SaveChangesAsync(ct);
+    return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
+});
+
+admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    if (input is null || string.IsNullOrWhiteSpace(input.Alg)) return Results.Problem(statusCode: 400, title: "Invalid input");
+
+    if (!string.IsNullOrWhiteSpace(input.JwkJson))
+    {
+        try { using var _ = JsonDocument.Parse(input.JwkJson!); }
+        catch (Exception ex) { return Results.Problem(statusCode: 400, title: "Invalid JWK JSON", detail: ex.Message); }
+        entity.Jwk = input.JwkJson!;
+    }
+
+    if (!string.IsNullOrWhiteSpace(input.Kid) && !string.Equals(input.Kid, entity.Kid, StringComparison.Ordinal))
+    {
+        var kidExists = await db.IdentityProviderKeys.AnyAsync(k => k.IdentityProviderId == providerId && k.Kid == input.Kid, ct);
+        if (kidExists) return Results.Problem(statusCode: 409, title: "Duplicate kid", detail: "Key ID already exists for this provider.");
+        entity.Kid = input.Kid;
+    }
+
+    entity.Purpose = input.Purpose;
+    entity.Alg = input.Alg!;
+    entity.Active = input.Active;
+    entity.ExpiresAt = input.ExpiresAt;
+
+    if (entity.Active)
+    {
+        var others = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId && k.Purpose == entity.Purpose && k.Id != entity.Id).ToListAsync(ct);
+        foreach (var o in others) o.Active = false;
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, CancellationToken ct) =>
+{
+    var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
+    if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    db.IdentityProviderKeys.Remove(entity);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+// Client keys (JWKS) read/update
+admin.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
+{
+    var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+    if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
+
+    var history = await db.ClientJwksHistories.AsNoTracking()
+        .Where(h => h.ClientId == clientId)
+        .OrderByDescending(h => h.CreatedAt)
+        .Select(h => new { h.Id, h.CreatedAt, h.Source, h.Hash })
+        .ToListAsync(ct);
+
+    return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
+});
+
+admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClientKeysInput input, CancellationToken ct) =>
+{
+    var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
+    if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
+
+    if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
+    {
+        var status = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
+        if (status is { Ok: false })
+            return Results.Problem(statusCode: 400, title: "Invalid JWKS", detail: status!.Value.Message);
+        client.PublicJwksJson = input.PublicJwksJson;
+        db.ClientJwksHistories.Add(new ClientJwksHistory
+        {
+            ClientId = client.Id,
+            JwksJson = client.PublicJwksJson!,
+            Source = "manual",
+            Hash = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeSha256Hex(MrWhoOidc.WebAuth.Security.AdminApiHelpers.CompactJson(client.PublicJwksJson!))
+        });
+    }
+    else
+    {
+        client.PublicJwksJson = null;
+    }
+    client.PublicJwksUri = string.IsNullOrWhiteSpace(input.PublicJwksUri) ? null : input.PublicJwksUri;
+
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
 app.MapStaticAssets();
 
 app.Run();
@@ -367,6 +729,64 @@ namespace MrWhoOidc.WebAuth.Security
 
             if (hasAdmin)
                 context.Succeed(requirement);
+        }
+    }
+
+    // Input DTOs and helper methods for admin APIs
+    public sealed record MappingInput(Guid IdentityProviderId, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);
+    public sealed record ClaimMappingInput(string ExternalClaim, string LocalClaim, string? Transform, int Order);
+    public sealed record ProviderKeyInput(MrWhoOidc.Auth.Persistence.IdentityProviderKeyPurpose Purpose, string Alg, string? Kid, bool Active, string JwkJson, DateTimeOffset? ExpiresAt);
+    public sealed record ClientKeysInput(string? PublicJwksJson, string? PublicJwksUri);
+
+    internal static class AdminApiHelpers
+    {
+        public static string CompactJson(string json)
+        {
+            using var doc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = false });
+        }
+
+        public static string ComputeSha256Hex(string input)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        public static (bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids)? ComputeJwksStatus(string? jwksJson)
+        {
+            if (string.IsNullOrWhiteSpace(jwksJson)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(jwksJson);
+                var keys = new List<JsonElement>();
+                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
+                {
+                    keys = keysArr.EnumerateArray().ToList();
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    keys.Add(doc.RootElement);
+                }
+                else
+                {
+                    return (false, "Invalid", "JWKS must be an object with 'keys' array or a single JWK object.", 0, 0, new());
+                }
+
+                var count = keys.Count;
+                var kids = keys.Select(k => k.TryGetProperty("kid", out var kid) ? kid.GetString() : null).ToList();
+                var nonNullKids = kids.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
+                var dup = nonNullKids.GroupBy(k => k, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key!).ToList();
+
+                var ok = dup.Count == 0;
+                var summary = ok ? "Valid JWKS" : "Duplicates";
+                var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : $"Duplicate kid(s): {string.Join(", ", dup)}";
+                return (ok, summary, msg, count, nonNullKids.Distinct(StringComparer.Ordinal).Count(), dup);
+            }
+            catch (Exception ex)
+            {
+                return (false, "Invalid", ex.Message, 0, 0, new());
+            }
         }
     }
 }
