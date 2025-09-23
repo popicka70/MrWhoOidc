@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.4
+
 # Na https://aka.ms/customizecontainer se dozvíte, jak si přizpůsobit kontejner ladění a jak Visual Studio používá tento dokument Dockerfile k sestavení vašich imagí pro rychlejší ladění.
 
 # Tato fáze se používá při spuštění z VS v rychlém režimu (výchozí pro konfiguraci ladění).
@@ -12,11 +14,18 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj", "MrWhoOidc.WebAuth/"]
-COPY ["MrWhoOidc.Auth/MrWhoOidc.Auth.csproj", "MrWhoOidc.Auth/"]
-COPY ["MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj", "MrWhoOidc.ServiceDefaults/"]
+
+# Kopírování jen .csproj pro lepší cache restore při kontextu nastaveném na MrWhoOidc.WebAuth
+COPY ["MrWhoOidc.WebAuth.csproj", "MrWhoOidc.WebAuth/"]
+COPY --from=auth ["MrWhoOidc.Auth.csproj", "MrWhoOidc.Auth/"]
+COPY --from=servicedefaults ["MrWhoOidc.ServiceDefaults.csproj", "MrWhoOidc.ServiceDefaults/"]
 RUN dotnet restore "./MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj"
-COPY . .
+
+# Zbytek zdrojů
+COPY . ./MrWhoOidc.WebAuth
+COPY --from=auth . ./MrWhoOidc.Auth
+COPY --from=servicedefaults . ./MrWhoOidc.ServiceDefaults
+
 WORKDIR "/src/MrWhoOidc.WebAuth"
 RUN dotnet build "./MrWhoOidc.WebAuth.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
