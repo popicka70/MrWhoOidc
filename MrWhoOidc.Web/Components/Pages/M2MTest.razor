@@ -1,0 +1,101 @@
+@page "/m2m-test"
+@rendermode InteractiveServer
+
+<PageTitle>M2M Test</PageTitle>
+
+<h1>M2M Test</h1>
+<p>This page requests a token via client_credentials and calls the protected API endpoint.</p>
+
+<button class="btn btn-primary" disabled="@_busy" @onclick="CallApiAsync">@(_busy ? "Calling..." : "Call protected API (M2M)")</button>
+
+@if (!string.IsNullOrWhiteSpace(_result))
+{
+    <div class="mt-3">
+        <h5>Result</h5>
+        <pre>@_result</pre>
+    </div>
+}
+
+@code {
+    [Microsoft.AspNetCore.Components.Inject]
+    private IHttpClientFactory HttpClientFactory { get; set; } = default!;
+
+    [Microsoft.AspNetCore.Components.Inject]
+    private IConfiguration Configuration { get; set; } = default!;
+
+    [Microsoft.AspNetCore.Components.Inject]
+    private ILogger<M2MTest> Logger { get; set; } = default!;
+
+    private bool _busy;
+    private string? _result;
+
+    // PoC-only: hard-coded client credentials must match the seeder
+    private const string ClientId = "m2m-test-client";
+    private const string ClientSecret = "m2m-test-secret";
+
+    private async Task CallApiAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _result = null;
+        try
+        {
+            var authority = Configuration["Oidc:Authority"] ?? Configuration["OIDC:Authority"];
+            if (string.IsNullOrWhiteSpace(authority))
+            {
+                _result = "Missing Oidc:Authority configuration.";
+                return;
+            }
+            var tokenEndpoint = authority.TrimEnd('/') + "/token";
+
+            // Acquire access token via client_credentials
+            var back = HttpClientFactory.CreateClient();
+            using var tokenReq = new HttpRequestMessage(HttpMethod.Post, tokenEndpoint);
+            tokenReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            var basic = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{ClientId}:{ClientSecret}"));
+            tokenReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basic);
+
+            tokenReq.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials",
+                ["audience"] = "api"
+                // optional: ["scope"] = ""
+            });
+
+            using var tokenResp = await back.SendAsync(tokenReq);
+            var tokenBody = await tokenResp.Content.ReadAsStringAsync();
+            if (!tokenResp.IsSuccessStatusCode)
+            {
+                _result = $"Token error ({(int)tokenResp.StatusCode}):\n{tokenBody}";
+                return;
+            }
+
+            using var tokenDoc = System.Text.Json.JsonDocument.Parse(tokenBody);
+            if (!tokenDoc.RootElement.TryGetProperty("access_token", out var atEl))
+            {
+                _result = "Token response missing access_token.";
+                return;
+            }
+            var accessToken = atEl.GetString();
+
+            // Call API
+            var api = HttpClientFactory.CreateClient();
+            api.BaseAddress = new Uri("https+http://apiservice");
+            var apiReq = new HttpRequestMessage(HttpMethod.Get, "/test/protected");
+            apiReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            using var apiResp = await api.SendAsync(apiReq);
+            var apiBody = await apiResp.Content.ReadAsStringAsync();
+            _result = $"API status {(int)apiResp.StatusCode}:\n{apiBody}";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "M2M call failed");
+            _result = ex.ToString();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
