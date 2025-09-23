@@ -26,6 +26,10 @@ public class SelectModel(AuthDbContext db) : PageModel
     // Client default style from DB
     public string? ClientStyleKey { get; private set; }
 
+    // Client info for the view
+    public string? ClientName { get; private set; }
+    public string? RealmName { get; private set; }
+
     public List<Item> Providers { get; private set; } = new();
 
     public string ReturnUrlEncoded => Uri.EscapeDataString(ReturnUrl ?? "/");
@@ -53,6 +57,8 @@ public class SelectModel(AuthDbContext db) : PageModel
         AllowLocalLogin = client.AllowLocalLogin;
         AllowQrLogin = client.AllowQrLogin;
         ClientStyleKey = client.LoginStyleKey; // may be null
+        ClientName = string.IsNullOrWhiteSpace(client.ClientName) ? client.ClientId : client.ClientName;
+        RealmName = await db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefaultAsync();
 
         var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
             .Where(m => m.ClientId == client.Id && m.Enabled)
