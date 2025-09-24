@@ -51,7 +51,11 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            // Indicate local password-based authentication for downstream amr propagation
+            new("amr", "pwd"),
+            // Optional: mark IdP as local for downstream idp propagation
+            new("idp", "local")
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
