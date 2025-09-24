@@ -95,7 +95,7 @@ Epics and stories
   - Acceptance: Works against an upstream IdP requiring JAR.
 
 - [x] Story: Outbound PAR
-  - If provider `UsePAR`, push request to upstream PAR endpoint, receive `request_uri`, then redirect using it.
+  - If provider `UsePAR`, push to upstream PAR endpoint, receive `request_uri`, then redirect using it.
   - Acceptance: Verified with an IdP enforcing PAR.
 
 6) Token issuance and claims
@@ -158,38 +158,96 @@ Epics and stories
   - Acceptance: New client onboarding without code changes.
 
 11) On-Behalf-Of (OBO) / Token Exchange (RFC 8693)
+- [ ] MVP scope and constraints
+  - Single-hop delegation only (subject token must not itself contain `act`).
+  - Bearer-only for MVP: if subject token is DPoP-bound (`cnf.jkt`), deny exchange (no bridging) and return `invalid_request` with description.
+  - Supported subject token types: local access tokens issued by this AS (JWT or opaque).
+  - Supported requested token type: access token (default). Other token types rejected.
+  - Feature flag: `Auth:Features:EnableTokenExchange` controls exposure and discovery advertisement.
+
 - [ ] Story: Token Exchange grant at `/token`
-  - Accept `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` with `subject_token` (+ type), optional `actor_token`, optional `requested_token_type` (default: access token).
-  - Validate `subject_token` (JWT/opaque supported per server config), audience and lifetime; enforce scope/audience narrowing; replay protection for exchanged tokens.
-  - Issue delegated access token carrying `act` (actor) claim; limit to single-hop delegation for MVP; preserve `sub` of original user.
-  - DPoP: policy for DPoP-bound tokens (either require proof and bind the new token to same key via `cnf.jkt`, or reject when proof missing).
-  - Consent: enforce existing grants or trigger consent policy; apply max lifetime for exchanged tokens.
-  - Acceptance: End-to-end exchange succeeds for allowed clients/audiences; rejected when policy disallows or validations fail.
+  - Endpoint behavior
+    - Parse and validate: `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token`, `subject_token_type` (optional; infer when missing), `requested_token_type` (optional; default access token), optional `audience`/`resource`, optional `scope`.
+    - Authenticate client (existing client auth methods). Require confidential clients unless `private_key_jwt` policy allows otherwise.
+    - Rate limit: apply `rl-token-exchange` policy (per client_id) and global burst control.
+  - Subject token validation
+    - If JWT: validate signature (local JWKS), `iss`, `exp/nbf`, and audience; reject if `act` claim present (single-hop) or if revoked (when we implement JWT revocation/blacklist, else rely on `exp`).
+    - If opaque: look up in DB; must be active (not expired/revoked). Use stored `audience`, `scope`, `cnf` for policy.
+    - If DPoP-bound (has `cnf.jkt`): for MVP return error `invalid_request` (`dpop_bridging_not_supported`). Phase 2: add bridging policy (see below).
+  - Policy enforcement (delegation)
+    - Resolve caller’s OBO policy (per-target client or global default) to ensure:
+      - Caller is allow-listed to perform exchanges.
+      - Subject audience is allowed as source.
+      - Requested target audience/resource is allowed (or default). If both `audience` and `resource` provided and differ, reject.
+      - Scope narrowing: resulting scopes = intersection(subject_scopes, caller_allowed_scopes_for_target, requested_scopes). If empty, return `insufficient_scope`.
+      - Max lifetime: cap new token lifetime to min(policy_max, subject_remaining_lifetime, global default).
+  - Issuance
+    - Preserve end-user identity: new access token `sub` = subject token `sub`.
+    - Add `act` claim with actor info (at minimum `{ "sub": <caller_client_id> }`).
+    - Include `aud` = requested or policy default; include `scope` as narrowed set.
+    - If opaque tokens are enabled for that audience, persist opaque access token with `ActJson`, `DelegationDepth=1`. For JWT, include `act` claim.
+  - Error handling
+    - RFC-compliant errors: `invalid_request`, `invalid_grant`, `unauthorized_client`, `insufficient_scope`, `invalid_target`, `unsupported_token_type`.
+    - For DPoP bridging denied: `invalid_request` with `error_description="dpop_bridging_not_supported"`.
+  - Acceptance
+    - Exchange succeeds for allowed caller/source_aud/target_aud; new access token contains `act` and narrowed scopes.
+    - Exchange rejected with correct error when policy disallows or validations fail.
 
 - [ ] Story: Delegation policy model + Admin UI
-  - Per-client policy: which callers may exchange, allowed source audiences and target audiences, scope translation/narrowing, DPoP bridging mode, max delegation depth.
-  - Admin UI to configure and audit OBO policies; ProblemDetails on violations; audit who changed what.
-  - Acceptance: Policies persisted and enforced; UI CRUD complete.
+  - Data model (EF migration)
+    - Add columns to `Clients` (simple MVP; can be moved to dedicated tables later):
+      - `OboEnabled` (bool), `OboAllowedCallersJson` (string[] of caller client_ids),
+      - `OboAllowedSourceAudiencesJson` (string[]), `OboAllowedTargetAudiencesJson` (string[]),
+      - `OboAllowedScopesJson` (string[]), `OboMaxDelegationDepth` (int, default 1),
+      - `OboMaxLifetimeMinutes` (int, default 15), `OboDpopMode` (enum: `Deny`, `RequireSameJkt`, `AllowSameJktOnly`).
+    - Token persistence (opaque): extend `Tokens` with `ActJson` (json), `DelegationDepth` (int, default 0). Ensure indexes on `Type`, `Audience`, `RevokedAt` remain performant.
+  - Service layer
+    - `IOboPolicyService` to load/validate policy for a caller and target audience.
+    - `ITokenService.CreateDelegatedAccessTokenAsync(...)` to issue delegated tokens with `act` and narrowing.
+  - Admin API/UI
+    - Admin API endpoints under `/admin/api/obo-policies` or reuse Clients API with OBO subresource.
+    - Razor Pages: per-client OBO settings editor (enable, callers allow-list, source/target audiences, allowed scopes, lifetime, DPoP mode). Include help and validation hints.
+  - Acceptance
+    - Policies persisted and enforced by `/token` exchange path. UI prevents invalid combinations and shows validation messages.
 
 - [ ] Story: Discovery metadata updates (OAuth 2.0 AS Metadata)
-  - Advertise `grant_types_supported` including `urn:ietf:params:oauth:grant-type:token-exchange`.
-  - Document any non-standard metadata we expose (if any) and keep defaults minimal.
-  - Acceptance: Well-known validates with external tools; clients can discover support.
+  - Add `urn:ietf:params:oauth:grant-type:token-exchange` to `grant_types_supported` when feature flag enabled.
+  - Document any non-standard metadata separately; keep discovery minimal.
+  - Acceptance: External tools accept well-known; clients can discover token-exchange support.
 
 - [ ] Story: Introspection/UserInfo shaping for delegation
-  - Introspection: include `act` (and narrow fields per privacy policy); support `aud` array.
-  - UserInfo: no change for OBO by default; optionally surface `act` in a namespaced claim for trusted clients.
+  - Introspection: include `act` claim when present (for both JWT and opaque). Ensure privacy shaping policy does not leak actor details to unauthorized callers.
+  - UserInfo: unchanged by default; optionally include actor info only for trusted clients (future).
   - Acceptance: Responses reflect delegation appropriately without leaking PII.
 
 - [ ] Story: Telemetry, rate limits, and auditing
-  - Add structured logs for token exchanges with correlation IDs; per-client rate limits; metrics for success/denied/error with audience/scope tags (bucketized for privacy).
-  - Acceptance: Useful for troubleshooting; DoS protections in place.
+  - Metrics: `token_exchange_requests`, `token_exchange_success`, `token_exchange_failures` counters with tags: `outcome`, `source_token_type` (jwt/opaque), `dpop_mode`, `target_aud` (bucketized), `client_bucket`.
+  - Histogram: `token_exchange_duration_ms`.
+  - Logs: structured audit entries including correlation id, hashed/bucketized `client_id`, source/target aud, outcome.
+  - Rate limiting: policy `rl-token-exchange` per client; denial returns appropriate `Retry-After` when applicable.
+  - Acceptance: Metrics visible in dashboards; rate limits applied; audit logs usable for investigations.
 
 - [ ] Story: Tests and samples
-  - Unit: grant validation, scope/audience narrowing, DPoP bridging.
-  - Integration: happy path (access_token?access_token audience change), unauthorized client, disallowed audience, missing proof for DPoP-bound.
-  - Samples/docs for client usage.
-  - Acceptance: CI green on .NET 9; coverage for critical OBO paths.
+  - Unit tests
+    - Subject token validation (jwt/opaque), single-hop rejection when `act` present.
+    - Scope/audience narrowing logic and empty-scope rejection.
+    - OBO policy allow/deny matrix; lifetime capping.
+    - DPoP bridging denied in MVP.
+  - Integration tests
+    - Happy path: API A issued token -> exchange to API B by allowed client -> new token works for B.
+    - Unauthorized client, disallowed source/target audience, `insufficient_scope`.
+    - Opaque and JWT subject token variants.
+  - Samples/docs
+    - Minimal "service calls API on behalf of user" sample with Blazor front-end + API-to-API call path.
+  - Acceptance: CI green on .NET 9; core OBO paths covered.
+
+- [ ] Story: Phase 2 – DPoP bridging and fidelity
+  - DPoP bridging policy
+    - `RequireSameJkt`: require DPoP proof and bind new token to same `jkt` as subject token; verify proof on `/token` with `ath` hashed over `subject_token`.
+    - `AllowSameJktOnly`: allow bridging only when proof is present and matches; otherwise reject.
+  - Optional: accept ID tokens as `subject_token` when policy allows (constrained audiences, short lifetimes).
+  - Optional: consent integration for exchange (reuse existing consent model with exchanged scopes).
+  - Acceptance: Bridging mode works end-to-end; discovery unchanged; security review done.
 
 12) Machine-to-Machine (M2M) / Client Credentials
 - [x] Story: Client Credentials grant at `/token`
