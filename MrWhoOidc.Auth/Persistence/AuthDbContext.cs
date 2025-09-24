@@ -122,6 +122,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(true);
             b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(true);
             b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
+            // New: Front-channel logout
+            b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
+            b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -522,6 +525,11 @@ public class Client
     public bool AllowExternalAutoProvision { get; set; } = true; // if false, external users must pre-exist or be linked
     public bool AllowExternalEmailLinking { get; set; } = true;   // allow linking by email when ExternalIdentity missing
     public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
+
+    // New: Front-channel logout configuration
+    [MaxLength(2000)]
+    public string? FrontChannelLogoutUri { get; set; }
+    public bool FrontChannelLogoutSessionRequired { get; set; } = true;
 }
 
 public class ClientScope

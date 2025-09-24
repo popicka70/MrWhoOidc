@@ -442,6 +442,10 @@ public sealed class AuthorizeHandler(
                 {
                     meta.SetMappedClaims(code!, mapped);
                 }
+
+                // Front-channel logout: generate sid and store with the code for ID token issuance
+                var sid = http.User.FindFirst("sid")?.Value ?? Guid.NewGuid().ToString("N");
+                meta.SetSid(code!, sid);
             }
 
             // JARM response if requested

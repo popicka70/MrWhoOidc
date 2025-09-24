@@ -221,6 +221,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             }
         }
 
+        // Include sid for front-channel logout if available
+        if (meta.TryGetSid(code, out var sid) && !string.IsNullOrWhiteSpace(sid))
+        {
+            idClaims.Add(new("sid", sid!));
+        }
+
         var idToken = jwt.CreateJwt(
             issuer,
             clientId,
