@@ -54,6 +54,9 @@ public sealed class AuthOptions
     // Allow-list of mapped claim names we may propagate into ID/access tokens when present and policy allows.
     public string[] PropagateMappedClaimsToIdToken { get; set; } = Array.Empty<string>();
     public string[] PropagateMappedClaimsToAccessToken { get; set; } = Array.Empty<string>();
+
+    // Default claim mappings applied when a provider has no explicit mappings in the database.
+    public ClaimMappingRule[] DefaultClaimMappings { get; set; } = Array.Empty<ClaimMappingRule>();
 }
 
 public sealed class OpaqueAccessTokenOptions
@@ -64,4 +67,12 @@ public sealed class OpaqueAccessTokenOptions
     public string[]? Audiences { get; set; } = Array.Empty<string>();
     // Per-audience enablement (overrides global). Key = audience string.
     public Dictionary<string, bool> PerAudience { get; set; } = new();
+}
+
+public sealed class ClaimMappingRule
+{
+    public string ExternalClaim { get; set; } = string.Empty;
+    public string LocalClaim { get; set; } = string.Empty;
+    public string? Transform { get; set; }
+    public int Order { get; set; } = 0;
 }

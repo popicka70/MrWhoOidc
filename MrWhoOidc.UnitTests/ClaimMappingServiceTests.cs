@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -31,7 +32,7 @@ public sealed class ClaimMappingServiceTests
         );
         await db.SaveChangesAsync();
 
-        var svc = new ClaimMappingService(db);
+        var svc = new ClaimMappingService(db, Options.Create(new AuthOptions()));
         var src = new Dictionary<string, string?>
         {
             ["given_name"] = "Alice",

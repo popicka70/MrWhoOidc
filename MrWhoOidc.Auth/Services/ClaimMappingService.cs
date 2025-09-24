@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -9,8 +10,10 @@ public interface IClaimMappingService
     Task<Dictionary<string, string>> ApplyAsync(Guid providerId, IReadOnlyDictionary<string, string?> source, CancellationToken ct = default);
 }
 
-public sealed class ClaimMappingService(AuthDbContext db) : IClaimMappingService
+public sealed class ClaimMappingService(AuthDbContext db, IOptions<AuthOptions> options) : IClaimMappingService
 {
+    private readonly AuthOptions _options = options.Value;
+
     public async Task<Dictionary<string, string>> ApplyAsync(Guid providerId, IReadOnlyDictionary<string, string?> source, CancellationToken ct = default)
     {
         var mappings = await db.IdentityProviderClaimMappings.AsNoTracking()
@@ -18,6 +21,22 @@ public sealed class ClaimMappingService(AuthDbContext db) : IClaimMappingService
             .OrderBy(m => m.Order)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+
+        // Fallback to defaults from configuration when no explicit mappings are defined for this provider
+        if (mappings.Count == 0 && _options.DefaultClaimMappings is { Length: > 0 })
+        {
+            mappings = _options.DefaultClaimMappings
+                .OrderBy(r => r.Order)
+                .Select(r => new IdentityProviderClaimMapping
+                {
+                    IdentityProviderId = providerId,
+                    ExternalClaim = r.ExternalClaim,
+                    LocalClaim = r.LocalClaim,
+                    Transform = string.IsNullOrWhiteSpace(r.Transform) ? null : r.Transform,
+                    Order = r.Order
+                })
+                .ToList();
+        }
 
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var m in mappings)
