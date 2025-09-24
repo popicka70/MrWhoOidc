@@ -18,12 +18,12 @@
             <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-0">
                 <div class="container-fluid">
                     <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
-                    <div class="d-flex align-items-center">
+                    <div class="d-flex align-items-center gap-3">
                         <a class="nav-link" asp-page="/Registrations/Index">Register</a>
                         @if (User?.Identity?.IsAuthenticated ?? false)
                         {
                             <a class="nav-link" asp-page="/Password/Index">Change password</a>
-                            <span class="navbar-text me-3">Hello, @User.Identity!.Name</span>
+                            <span class="navbar-text">Hello, @User.Identity!.Name</span>
                             <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
                         }
                         else
