@@ -293,6 +293,12 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var requestedTokenType = form["requested_token_type"].ToString();
                 var audience = form["audience"].ToString();
                 var resource = form["resource"].ToString();
+                if (string.IsNullOrWhiteSpace(subjectToken))
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.InvalidRequest("Missing subject_token");
+                }
                 if (!string.IsNullOrEmpty(audience) && !string.IsNullOrEmpty(resource) && !string.Equals(audience, resource, StringComparison.Ordinal))
                 {
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
@@ -303,6 +309,20 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 // Optional scopes requested
                 var scopeParam = form["scope"].ToString();
                 var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? Array.Empty<string>() : scopeParam.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                // Phase 2: When DPoP header is present for token-exchange, enforce ath bound to the subject_token
+                if (http.Request.Headers.ContainsKey("DPoP"))
+                {
+                    var validationWithAth = await dpop.ValidateForEndpointAsync(http, endpointUrl, subjectToken);
+                    if (!validationWithAth.Ok)
+                    {
+                        logger.LogWarning("/token invalid_dpop_proof (ath): reason={Reason} ip={IP}", validationWithAth.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
+                        http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                        return Results.BadRequest(new { error = "invalid_dpop_proof" });
+                    }
+                    // Overwrite dpopJkt with validated value (should be same as earlier validation)
+                    dpopJkt = validationWithAth.Jkt;
+                }
 
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
                 var result = await tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId!, issuer, dpopJkt);

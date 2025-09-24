@@ -178,7 +178,7 @@ Epics and stories
       - `Deny` (default): reject exchanges when subject is DPoP-bound (returns `invalid_request` with `dpop_bridging_not_supported`).
       - `RequireSameJkt`: require DPoP proof and same `jkt` as subject; outgoing token is bound (`cnf.jkt`) to that key.
       - `AllowSameJktOnly`: only allow when subject is DPoP-bound and same `jkt` proof is presented; outgoing token is bound to that key.
-      - Note: endpoint DPoP proof is validated, but `ath` binding to the `subject_token` is not yet enforced (see Phase 2).
+  - Endpoint DPoP proof is validated and `ath` binding to the `subject_token` is enforced (Phase 2 complete).
   - Policy enforcement (delegation)
     - Implemented via `IOboPolicyService` and per-client fields:
       - Enable switch: `OboEnabled` (null or true => enabled; false => disabled).
@@ -255,10 +255,10 @@ Epics and stories
     - Minimal "service calls API on behalf of user" sample with Blazor front-end + API-to-API call path.
   - Acceptance: CI green on .NET 9; core OBO paths covered.
 
-- [~] Story: Phase 2 – DPoP bridging and fidelity
+- [x] Story: Phase 2 – DPoP bridging and fidelity
   - DPoP bridging policy
-    - Implemented baseline: bridging modes (`Deny`/`RequireSameJkt`/`AllowSameJktOnly`) with outgoing `cnf.jkt` binding when applicable.
-    - Pending: verify DPoP proof on `/token` with `ath` bound to the `subject_token`.
+    - Implemented: bridging modes (`Deny`/`RequireSameJkt`/`AllowSameJktOnly`) with outgoing `cnf.jkt` binding when applicable.
+    - Implemented: verify DPoP proof on `/token` with `ath` bound to the `subject_token`.
   - Optional: accept ID tokens as `subject_token` when policy allows (constrained audiences, short lifetimes).
   - Optional: consent integration for exchange (reuse existing consent model with exchanged scopes).
   - Acceptance: Bridging mode works end-to-end; discovery unchanged; security review done.

@@ -4,7 +4,7 @@ This document walks through an end-to-end Token Exchange where the subject token
 
 Status
 - Implemented: same-key check and outgoing `cnf.jkt` binding.
-- Pending: verify `/token` DPoP proof with `ath` bound to the `subject_token` (Phase 2).
+- Implemented (Phase 2): `/token` DPoP proof must include `ath` bound to the `subject_token`.
 
 ## Pre-requisites
 - Feature flag enabled: `Auth:Features:EnableTokenExchange`.
@@ -29,10 +29,10 @@ Status
    - `subject_token_type = urn:ietf:params:oauth:token-type:access_token`
    - `audience` or `resource` = `api-b`
    - optional `scope` subset of subject scopes
-3) Caller includes a `DPoP` header on the `/token` request using the same key pair (thus same `jkt = K`).
+3) Caller includes a `DPoP` header on the `/token` request using the same key pair (thus same `jkt = K`) and with `ath = base64url(SHA-256(subject_token))`.
 4) Server behavior:
    - Validates client authentication (confidential or allowed `private_key_jwt`).
-   - Validates DPoP proof for `/token` endpoint.
+  - Validates DPoP proof for `/token` endpoint, including `ath` hashing the `subject_token`.
    - Validates subject token (signature/iss/exp/nbf, `aud` vs `ApiAudiences`, single-hop by rejecting `act`).
    - Enforces OBO policy (`IOboPolicyService`) for caller: caller allow-list, source/target audiences, scopes, lifetime.
    - Enforces `RequireSameJkt`: `jkt` from DPoP must match subject `cnf.jkt`; binds outgoing token `cnf.jkt = K`.
@@ -51,7 +51,8 @@ Status
 
 ```powershell
 # Construct DPoP proof JWT for POST https://as.example.com/token using key K
-$proof = New-DPoPProof -Hts 'POST' -Htu 'https://as.example.com/token' -Jwk $K
+$ath = [MrWhoOidc.DPoPProof]::ComputeAth('<SUBJECT_TOKEN>')
+$proof = New-DPoPProof -Hts 'POST' -Htu 'https://as.example.com/token' -Jwk $K -Ath $ath
 
 $body = @{
   grant_type = 'urn:ietf:params:oauth:grant-type:token-exchange'
@@ -74,8 +75,8 @@ Validate:
 - `insufficient_scope`: Requested scopes not included in subject or not allowed per policy.
 - `invalid_target`: Target audience not allowed per policy/server audiences.
 
-## Next steps (Phase 2)
-- Enforce `ath` binding where the DPoP proof's `ath` must match the hash of the `subject_token` to prevent token substitution during exchange.
+## Notes
+- The `/token` DPoP proof’s `ath` must match the `subject_token` to prevent substitution during exchange.
 
 ---
 
