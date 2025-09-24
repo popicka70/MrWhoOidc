@@ -1,4 +1,4 @@
-# MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
+# MrWhoOidc.WebAuth ï¿½ IdP Chaining and JAR Support Backlog
 
 Updated: 2025-09-24
 
@@ -158,34 +158,36 @@ Epics and stories
   - Acceptance: New client onboarding without code changes.
 
 11) On-Behalf-Of (OBO) / Token Exchange (RFC 8693)
-- [ ] MVP scope and constraints
+- [x] MVP scope and constraints
   - Single-hop delegation only (subject token must not itself contain `act`).
   - Bearer-only for MVP: if subject token is DPoP-bound (`cnf.jkt`), deny exchange (no bridging) and return `invalid_request` with description.
   - Supported subject token types: local access tokens issued by this AS (JWT or opaque).
   - Supported requested token type: access token (default). Other token types rejected.
   - Feature flag: `Auth:Features:EnableTokenExchange` controls exposure and discovery advertisement.
+  - Implemented: Feature flag added; discovery advertises grant when enabled; token service enforces single-hop and denies DPoP bridging; supports local JWT/opaque subject tokens and only issues access tokens.
 
-- [ ] Story: Token Exchange grant at `/token`
+- [~] Story: Token Exchange grant at `/token`
   - Endpoint behavior
-    - Parse and validate: `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token`, `subject_token_type` (optional; infer when missing), `requested_token_type` (optional; default access token), optional `audience`/`resource`, optional `scope`.
-    - Authenticate client (existing client auth methods). Require confidential clients unless `private_key_jwt` policy allows otherwise.
-    - Rate limit: apply `rl-token-exchange` policy (per client_id) and global burst control.
+    - Parse and validate: Implemented (grant_type, subject_token, optional types, optional `audience`/`resource` with conflict check, optional `scope`).
+    - Authenticate client (existing client auth methods). Require confidential clients unless `private_key_jwt` policy allows otherwise. Pending stricter enforcement.
+    - Rate limit: apply `rl-token-exchange` policy (per client_id) and global burst control. Pending.
   - Subject token validation
-    - If JWT: validate signature (local JWKS), `iss`, `exp/nbf`, and audience; reject if `act` claim present (single-hop) or if revoked (when we implement JWT revocation/blacklist, else rely on `exp`).
+    - If JWT: validate signature (local JWKS), `iss`, `exp/nbf`; audience validation pending; reject if `act` claim present (single-hop).
     - If opaque: look up in DB; must be active (not expired/revoked). Use stored `audience`, `scope`, `cnf` for policy.
     - If DPoP-bound (has `cnf.jkt`): for MVP return error `invalid_request` (`dpop_bridging_not_supported`). Phase 2: add bridging policy (see below).
   - Policy enforcement (delegation)
-    - Resolve caller’s OBO policy (per-target client or global default) to ensure:
+    - Resolve callerï¿½s OBO policy (per-target client or global default) to ensure:
       - Caller is allow-listed to perform exchanges.
       - Subject audience is allowed as source.
       - Requested target audience/resource is allowed (or default). If both `audience` and `resource` provided and differ, reject.
       - Scope narrowing: resulting scopes = intersection(subject_scopes, caller_allowed_scopes_for_target, requested_scopes). If empty, return `insufficient_scope`.
       - Max lifetime: cap new token lifetime to min(policy_max, subject_remaining_lifetime, global default).
+    - Pending: Policy model and enforcement not yet implemented (current narrowing = subject âˆ© requested; simple audience allow-list via server `ApiAudiences`).
   - Issuance
     - Preserve end-user identity: new access token `sub` = subject token `sub`.
     - Add `act` claim with actor info (at minimum `{ "sub": <caller_client_id> }`).
     - Include `aud` = requested or policy default; include `scope` as narrowed set.
-    - If opaque tokens are enabled for that audience, persist opaque access token with `ActJson`, `DelegationDepth=1`. For JWT, include `act` claim.
+    - If opaque tokens are enabled for that audience, persist opaque access token. Pending: persist `ActJson`/`DelegationDepth` fields when policy schema lands. For JWT, `act` claim included.
   - Error handling
     - RFC-compliant errors: `invalid_request`, `invalid_grant`, `unauthorized_client`, `insufficient_scope`, `invalid_target`, `unsupported_token_type`.
     - For DPoP bridging denied: `invalid_request` with `error_description="dpop_bridging_not_supported"`.
@@ -210,7 +212,7 @@ Epics and stories
   - Acceptance
     - Policies persisted and enforced by `/token` exchange path. UI prevents invalid combinations and shows validation messages.
 
-- [ ] Story: Discovery metadata updates (OAuth 2.0 AS Metadata)
+- [x] Story: Discovery metadata updates (OAuth 2.0 AS Metadata)
   - Add `urn:ietf:params:oauth:grant-type:token-exchange` to `grant_types_supported` when feature flag enabled.
   - Document any non-standard metadata separately; keep discovery minimal.
   - Acceptance: External tools accept well-known; clients can discover token-exchange support.
@@ -227,12 +229,10 @@ Epics and stories
   - Rate limiting: policy `rl-token-exchange` per client; denial returns appropriate `Retry-After` when applicable.
   - Acceptance: Metrics visible in dashboards; rate limits applied; audit logs usable for investigations.
 
-- [ ] Story: Tests and samples
+- [~] Story: Tests and samples
   - Unit tests
-    - Subject token validation (jwt/opaque), single-hop rejection when `act` present.
-    - Scope/audience narrowing logic and empty-scope rejection.
-    - OBO policy allow/deny matrix; lifetime capping.
-    - DPoP bridging denied in MVP.
+    - Added: Happy path (JWT subject) with scope narrowing and `act` claim; DPoP bridging denied when `cnf.jkt` present.
+    - Pending: Opaque subject variant; single-hop rejection when `act` present; audience narrowing failures; lifetime cap; policy matrix.
   - Integration tests
     - Happy path: API A issued token -> exchange to API B by allowed client -> new token works for B.
     - Unauthorized client, disallowed source/target audience, `insufficient_scope`.
@@ -241,7 +241,7 @@ Epics and stories
     - Minimal "service calls API on behalf of user" sample with Blazor front-end + API-to-API call path.
   - Acceptance: CI green on .NET 9; core OBO paths covered.
 
-- [ ] Story: Phase 2 – DPoP bridging and fidelity
+- [ ] Story: Phase 2 ï¿½ DPoP bridging and fidelity
   - DPoP bridging policy
     - `RequireSameJkt`: require DPoP proof and bind new token to same `jkt` as subject token; verify proof on `/token` with `ath` hashed over `subject_token`.
     - `AllowSameJktOnly`: allow bridging only when proof is present and matches; otherwise reject.
@@ -298,7 +298,7 @@ Next steps (proposed)
   - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
   - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
-- P1 (next 2–4 weeks)
+- P1 (next 2ï¿½4 weeks)
   - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
   - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
   - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
