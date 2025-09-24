@@ -203,6 +203,9 @@ Epics and stories
   - Acceptance
     - Exchange succeeds for allowed caller/source_aud/target_aud; new access token contains `act`, narrowed scopes, and `cnf` when bridging with same `jkt`.
     - Exchange rejected with correct error when policy disallows or validations fail.
+  - Docs
+    - E2E walkthrough (RequireSameJkt): `docs/obo-dpop-requiresamejkt-e2e.md`
+    - Client policy reference: `docs/obo-client-policy.md`
 
 - [~] Story: Delegation policy model + Admin UI
   - Data model (EF migration)
@@ -259,6 +262,8 @@ Epics and stories
   - Optional: accept ID tokens as `subject_token` when policy allows (constrained audiences, short lifetimes).
   - Optional: consent integration for exchange (reuse existing consent model with exchanged scopes).
   - Acceptance: Bridging mode works end-to-end; discovery unchanged; security review done.
+
+Reference: See `docs/obo-dpop-requiresamejkt-e2e.md` for the RequireSameJkt end-to-end walkthrough and validation steps.
 
 Examples: OBO client policy configs
 
