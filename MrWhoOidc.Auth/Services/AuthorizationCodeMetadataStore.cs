@@ -12,6 +12,9 @@ public interface IAuthorizationCodeMetadataStore
     // New: mapped claim propagation
     void SetMappedClaims(string code, IReadOnlyDictionary<string, string> claims);
     bool TryGetMappedClaims(string code, out IReadOnlyDictionary<string, string> claims);
+    // New: front-channel logout session id (sid)
+    void SetSid(string code, string sid);
+    bool TryGetSid(string code, out string? sid);
     void Remove(string code);
 }
 
@@ -21,6 +24,7 @@ internal sealed class InMemoryAuthorizationCodeMetadataStore : IAuthorizationCod
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _resources = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string? idp, string? acr, string? amr)> _upstream = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Generic.Dictionary<string, string>> _mapped = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _sids = new();
 
     public void SetAuthTime(string code, DateTimeOffset authTime) => _authTimes[code] = authTime;
     public bool TryGetAuthTime(string code, out DateTimeOffset authTime) => _authTimes.TryGetValue(code, out authTime);
@@ -53,11 +57,20 @@ internal sealed class InMemoryAuthorizationCodeMetadataStore : IAuthorizationCod
         return false;
     }
 
+    public void SetSid(string code, string sid) => _sids[code] = sid;
+
+    public bool TryGetSid(string code, out string? sid)
+    {
+        if (_sids.TryGetValue(code, out var v)) { sid = v; return true; }
+        sid = null; return false;
+    }
+
     public void Remove(string code)
     {
         _authTimes.TryRemove(code, out _);
         _resources.TryRemove(code, out _);
         _upstream.TryRemove(code, out _);
         _mapped.TryRemove(code, out _);
+        _sids.TryRemove(code, out _);
     }
 }

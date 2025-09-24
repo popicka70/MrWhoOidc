@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MrWhoOidc.Auth.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MrWhoOidc.Auth.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    partial class AuthDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250924190553_FrontChannelLogout")]
+    partial class FrontChannelLogout
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -194,34 +197,6 @@ namespace MrWhoOidc.Auth.Migrations
                     b.Property<string>("M2MMtlsThumbprintsJson")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("OboAllowedCallersJson")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("OboAllowedScopesJson")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("OboAllowedSourceAudiencesJson")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("OboAllowedTargetAudiencesJson")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<int?>("OboDpopMode")
-                        .HasColumnType("integer");
-
-                    b.Property<bool?>("OboEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("OboMaxDelegationDepth")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("OboMaxLifetimeMinutes")
-                        .HasColumnType("integer");
 
                     b.Property<string>("PublicJwksJson")
                         .HasMaxLength(8000)
@@ -784,9 +759,6 @@ namespace MrWhoOidc.Auth.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ActJson")
-                        .HasColumnType("text");
-
                     b.Property<string>("Audience")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -801,11 +773,6 @@ namespace MrWhoOidc.Auth.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("DelegationDepth")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");

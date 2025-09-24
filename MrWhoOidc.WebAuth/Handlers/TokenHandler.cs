@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.WebAuth.Infrastructure;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -17,6 +19,10 @@ public interface ITokenHandler
 
 public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, IDPoPValidator dpop, ILogger<TokenHandler> logger) : ITokenHandler
 {
+    // Simple in-memory per-client limiter for token exchange; replace with distributed limiter in multi-node deployments.
+    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _teWindows = new();
+    private const int TokenExchangeRateLimitPerMinute = 60; // TODO: make configurable
+
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var sw = Stopwatch.StartNew();
@@ -90,8 +96,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 }
             }
 
-            bool usedPrivateKeyJwt = false;
             bool authenticated = false;
+            bool usedPrivateKeyJwt = false;
             if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
                 // Enforce per-client policy for private_key_jwt
@@ -241,6 +247,85 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
                 var result = await tokens.CreateClientCredentialsTokenAsync(clientId!, audience, requestedScopes, issuer, dpopJkt);
 
+                outcome = result.ok ? "success" : "failure";
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
+                if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                return Results.Json(result.payload!, statusCode: result.status);
+            }
+
+            if (string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
+            {
+                // Feature flag gate
+                var authOpts = http.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>().Value;
+                if (!authOpts.EnableTokenExchange)
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.UnsupportedGrant();
+                }
+
+                // Enforce confidential client unless using private_key_jwt
+                if (!usedPrivateKeyJwt && string.IsNullOrEmpty(clientEntity.ClientSecretHash))
+                {
+                    logger.LogWarning("/token unauthorized_client: public client not allowed for token-exchange {ClientIdHash}", Bucket(clientId!));
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.UnauthorizedClient();
+                }
+
+                // Per-client simple rate limit for token-exchange
+                var clientBucket = Bucket(clientId!);
+                var now = DateTimeOffset.UtcNow;
+                _teWindows.AddOrUpdate(clientBucket, _ => (1, now), (_, cur) =>
+                {
+                    if (now - cur.WindowStart >= TimeSpan.FromMinutes(1)) return (1, now);
+                    return (cur.Count + 1, cur.WindowStart);
+                });
+                var snapshot = _teWindows[clientBucket];
+                if (snapshot.Count > TokenExchangeRateLimitPerMinute && now - snapshot.WindowStart < TimeSpan.FromMinutes(1))
+                {
+                    logger.LogWarning("/token 429: token-exchange per-client limit exceeded client={Client}", clientBucket);
+                    return Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many token_exchange requests" }, statusCode: 429);
+                }
+
+                var subjectToken = form["subject_token"].ToString();
+                var subjectTokenType = form["subject_token_type"].ToString();
+                var requestedTokenType = form["requested_token_type"].ToString();
+                var audience = form["audience"].ToString();
+                var resource = form["resource"].ToString();
+                if (string.IsNullOrWhiteSpace(subjectToken))
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.InvalidRequest("Missing subject_token");
+                }
+                if (!string.IsNullOrEmpty(audience) && !string.IsNullOrEmpty(resource) && !string.Equals(audience, resource, StringComparison.Ordinal))
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.InvalidRequest("audience and resource conflict");
+                }
+                var target = !string.IsNullOrEmpty(resource) ? resource : audience;
+                // Optional scopes requested
+                var scopeParam = form["scope"].ToString();
+                var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? Array.Empty<string>() : scopeParam.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                // Phase 2: When DPoP header is present for token-exchange, enforce ath bound to the subject_token
+                if (http.Request.Headers.ContainsKey("DPoP"))
+                {
+                    var validationWithAth = await dpop.ValidateForEndpointAsync(http, endpointUrl, subjectToken);
+                    if (!validationWithAth.Ok)
+                    {
+                        logger.LogWarning("/token invalid_dpop_proof (ath): reason={Reason} ip={IP}", validationWithAth.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
+                        http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                        return Results.BadRequest(new { error = "invalid_dpop_proof" });
+                    }
+                    // Overwrite dpopJkt with validated value (should be same as earlier validation)
+                    dpopJkt = validationWithAth.Jkt;
+                }
+
+                var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+                var result = await tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId!, issuer, dpopJkt);
                 outcome = result.ok ? "success" : "failure";
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
                 if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });

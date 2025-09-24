@@ -10,6 +10,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using System.Text;
 using MrWhoOidc.WebAuth.Observability;
 using Microsoft.AspNetCore.HttpOverrides;
 using StackExchange.Redis;
@@ -201,6 +202,48 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
+    // Dedicated policy for Token Exchange requests (can be tuned separately)
+    options.AddPolicy("rl-token-exchange", httpContext =>
+    {
+        // Partition by client_id when present to avoid penalizing all clients by IP
+        string key = "unknown";
+        if (httpContext.Request.HasFormContentType)
+        {
+            try
+            {
+                var form = httpContext.Request.ReadFormAsync().GetAwaiter().GetResult();
+                string? cidFromHeader = null;
+                var header = httpContext.Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrEmpty(header) && header.StartsWith("Basic ", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        var raw = header.Substring("Basic ".Length).Trim();
+                        var bytes = Convert.FromBase64String(raw);
+                        var pair = Encoding.UTF8.GetString(bytes);
+                        var idx = pair.IndexOf(':');
+                        if (idx >= 0) cidFromHeader = pair[..idx];
+                    }
+                    catch { }
+                }
+                var cid = !string.IsNullOrEmpty(cidFromHeader) ? cidFromHeader : form["client_id"].ToString();
+                key = !string.IsNullOrEmpty(cid) ? cid : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+            }
+            catch { key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"; }
+        }
+        else
+        {
+            key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        }
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
     options.AddPolicy("rl-userinfo", httpContext =>
     {
         var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -303,6 +346,11 @@ app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+// Distributed limiter (Redis-backed) to add Retry-After and shared limits
+if (redisMux is not null)
+{
+    app.UseMiddleware<DistributedRateLimiterMiddleware>();
+}
 app.UseRateLimiter();
 
 app.MapRazorPages().WithStaticAssets();
@@ -339,7 +387,8 @@ app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireCors("oidc")
-   .RequireRateLimiting("rl-token");
+    .RequireRateLimiting("rl-token")
+    .RequireRateLimiting("rl-token-exchange");
 app.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
    .RequireCors("oidc");
 app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));

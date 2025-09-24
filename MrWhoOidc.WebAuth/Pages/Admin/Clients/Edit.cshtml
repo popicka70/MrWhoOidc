@@ -41,6 +41,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="obo-tab" data-bs-toggle="tab" data-bs-target="#tab-obo" type="button" role="tab" aria-controls="tab-obo" aria-selected="false">
+                <i class="bi bi-person-gear me-1"></i> OBO
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tab-tools" type="button" role="tab" aria-controls="tab-tools" aria-selected="false">
                 <i class="bi bi-tools me-1"></i> Tools
             </button>
@@ -401,6 +406,60 @@
                     <input asp-for="Input.M2MMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
                     <small class="form-text text-muted">When set, client_credentials will require a matching client certificate. Values are case-insensitive.</small>
                     <span asp-validation-for="Input.M2MMtlsThumbprints" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-obo" role="tabpanel" aria-labelledby="obo-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12 form-check">
+                    <input asp-for="Input.OboEnabled" class="form-check-input" />
+                    <label asp-for="Input.OboEnabled" class="form-check-label"></label>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.OboAllowedCallers" class="form-label"></label>
+                    <input asp-for="Input.OboAllowedCallers" class="form-control" placeholder="caller-app, api-gateway" />
+                    <small class="form-text text-muted">Only these clients may call token exchange for this client when acting as the caller (actor).</small>
+                    <span asp-validation-for="Input.OboAllowedCallers" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.OboAllowedSourceAudiences" class="form-label"></label>
+                    <input asp-for="Input.OboAllowedSourceAudiences" class="form-control" placeholder="api-a, https://api-a.example.com" />
+                    <small class="form-text text-muted">Subject token must target one of these audiences.</small>
+                    <span asp-validation-for="Input.OboAllowedSourceAudiences" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.OboAllowedTargetAudiences" class="form-label"></label>
+                    <input asp-for="Input.OboAllowedTargetAudiences" class="form-control" placeholder="api-b, https://api-b.example.com" />
+                    <small class="form-text text-muted">Outgoing token audience must be one of these. Leave empty to fall back to server API audiences.</small>
+                    <span asp-validation-for="Input.OboAllowedTargetAudiences" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.OboAllowedScopes" class="form-label"></label>
+                    <input asp-for="Input.OboAllowedScopes" class="form-control" placeholder="read, write, email" />
+                    <small class="form-text text-muted">Scopes are narrowed to intersection of requested, subject token, and this allow-list.</small>
+                    <span asp-validation-for="Input.OboAllowedScopes" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.OboMaxDelegationDepth" class="form-label"></label>
+                    <input asp-for="Input.OboMaxDelegationDepth" class="form-control" />
+                    <small class="form-text text-muted">For opaque subject tokens, max number of exchanges allowed. 1 allows single-hop only.</small>
+                    <span asp-validation-for="Input.OboMaxDelegationDepth" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.OboMaxLifetimeMinutes" class="form-label"></label>
+                    <input asp-for="Input.OboMaxLifetimeMinutes" class="form-control" />
+                    <small class="form-text text-muted">Cap on outgoing token lifetime in minutes. Final lifetime is the min of subject remaining, this cap, and defaults.</small>
+                    <span asp-validation-for="Input.OboMaxLifetimeMinutes" class="text-danger"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.OboDpopMode" class="form-label"></label>
+                    <select asp-for="Input.OboDpopMode" class="form-select">
+                        <option value="Deny">Deny</option>
+                        <option value="RequireSameJkt">RequireSameJkt</option>
+                        <option value="AllowSameJktOnly">AllowSameJktOnly</option>
+                    </select>
+                    <small class="form-text text-muted">Controls DPoP bridging behavior for Token Exchange. See docs for details.</small>
                 </div>
             </div>
         </div>
