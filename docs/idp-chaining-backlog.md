@@ -106,7 +106,8 @@ Epics and stories
 
 - [~] Story: Claim mapping and propagation
   - Implemented: `IdentityProviderClaimMappings` CRUD UI and `ClaimMappingService` with transforms (copy, trim, case, prefix/suffix, regex, concat); applied during external provisioning.
-  - Pending: Add upstream info in our tokens (`idp`, `amr`, `acr`); propagate `auth_time` (partially present) and mapped claims as needed.
+  - Implemented: Include `idp` and `acr` from the upstream provider in issued tokens; propagate `auth_time` from the upstream sign-in when available.
+  - Pending: Emit `amr` consistently (and map where applicable); extend mapped claim propagation into issued tokens where policy allows.
   - Acceptance: Downstream clients can consume upstream metadata.
 
 7) Login UI changes (Razor Pages end-user flow)
@@ -218,7 +219,7 @@ Rollout plan
 - [x] Phase 2: Admin CRUD + single upstream OIDC provider live (external flow working; validation/mappings wired; polish pending).
 - [~] Phase 3: Multiple providers + picker UI + claim mapping (functional; UX polish/tests pending).
 - [x] Phase 4: Inbound JAR.
-- [ ] Phase 5: Optional outbound JAR/PAR.
+- [x] Phase 5: Optional outbound JAR/PAR.
 - [ ] Phase 6: Hardening, audits, perf, docs.
 
 Non-functional requirements
