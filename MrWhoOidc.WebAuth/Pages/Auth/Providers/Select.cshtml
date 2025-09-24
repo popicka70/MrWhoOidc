@@ -28,38 +28,41 @@
     else
     {
         <div class="card auth-card mt-3 shadow-sm">
-            <div class="list-group list-group-flush">
-                @foreach (var p in Model.Providers)
-                {
-                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
-                    <a class="list-group-item list-group-item-action d-flex align-items-center auth-option" href="@url">
-                        @if (!string.IsNullOrEmpty(p.LogoUrl))
-                        {
-                            <img src="@p.LogoUrl" alt="@p.Display" class="me-2" style="height:24px;width:24px;object-fit:contain" />
-                        }
-                        else
-                        {
-                            <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
-                        }
-                        <span>@p.Display</span>
-                    </a>
-                }
-                @if (Model.AllowLocalLogin)
-                {
-                    var loginUrl = "/login?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                    <a class="list-group-item list-group-item-action d-flex align-items-center auth-option" href="@loginUrl">
-                        <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
-                    </a>
-                }
-                @if (Model.AllowQrLogin)
-                {
-                    var qrUrl = "/Auth/Qr?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                    <a class="list-group-item list-group-item-action d-flex align-items-center auth-option" href="@qrUrl">
-                        <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
-                    </a>
-                }
-            </div>
             <div class="card-body">
+                <div class="d-grid gap-2">
+                    @foreach (var p in Model.Providers)
+                    {
+                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@url">
+                            @if (!string.IsNullOrEmpty(p.LogoUrl))
+                            {
+                                <img src="@p.LogoUrl" alt="@p.Display" class="me-2" style="height:24px;width:24px;object-fit:contain" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
+                            }
+                            <span>@p.Display</span>
+                        </a>
+                    }
+                    @if (Model.AllowLocalLogin)
+                    {
+                        var loginUrl = "/login?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@loginUrl">
+                            <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
+                        </a>
+                    }
+                    @if (Model.AllowQrLogin)
+                    {
+                        var qrUrl = "/Auth/Qr?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@qrUrl">
+                            <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
+                        </a>
+                    }
+                </div>
+
+                <hr class="my-3" />
+
                 <a class="btn btn-outline-primary w-100 auth-cta" asp-page="/Registrations/Index">
                     <i class="bi bi-person-plus me-2"></i>
                     Register a new account
