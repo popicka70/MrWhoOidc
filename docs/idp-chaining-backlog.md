@@ -158,6 +158,7 @@ Epics and stories
   - Acceptance: New client onboarding without code changes.
 
 11) On-Behalf-Of (OBO) / Token Exchange (RFC 8693)
+Status: Token Exchange grant and DPoP Phase 2 (ath binding) — DONE
 - [x] MVP scope and constraints
   - Single-hop delegation only (subject token must not itself contain `act`).
   - DPoP: Bridging policy enforced per client via `OboDpopMode` (see below); defaults to `Deny`.
@@ -352,7 +353,7 @@ Next steps (proposed)
   - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
   - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
-  - [ ] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; limit to single-hop and bearer-only (no DPoP bridging) initially.
+  - [x] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; single-hop only. (Done; extended with DPoP bridging modes and `ath` enforcement.)
   - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
 
 Risks and decisions

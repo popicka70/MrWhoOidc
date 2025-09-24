@@ -519,10 +519,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             return (false, new { error = "invalid_request", error_description = "missing subject_token" }, "invalid_request", 400);
         }
 
-        // Determine subject token type if missing
-        var isLikelyJwt = subjectToken.Count(c => c == '.') == 2;
-        var isJwt = isLikelyJwt || string.Equals(subjectTokenType, "urn:ietf:params:oauth:token-type:access_token", StringComparison.Ordinal)
-                                   || string.Equals(subjectTokenType, "urn:ietf:params:oauth:token-type:jwt", StringComparison.Ordinal);
+    // Determine subject token type
+    // Treat as JWT only if it looks like one (3 segments) or the subject_token_type explicitly says JWT
+    var isLikelyJwt = subjectToken.Count(c => c == '.') == 2;
+    var isJwt = isLikelyJwt || string.Equals(subjectTokenType, "urn:ietf:params:oauth:token-type:jwt", StringComparison.Ordinal);
 
     Guid userId;
         string[] subjectScopes = Array.Empty<string>();

@@ -27,7 +27,7 @@ This page describes the per-client On-Behalf-Of (OBO) / Token Exchange policy kn
 Notes
 - JWT subjects are always limited to single-hop by refusing a subject with an `act` claim.
 - Opaque subjects track `DelegationDepth` in storage and are checked against `OboMaxDelegationDepth`.
-- Current implementation validates the endpoint DPoP proof and same-key requirement; `ath` binding to the `subject_token` is planned in Phase 2.
+- Current implementation validates the endpoint DPoP proof, enforces same-key requirement per policy, and enforces `ath` binding to the `subject_token` (Phase 2 complete).
 
 ## Examples
 
