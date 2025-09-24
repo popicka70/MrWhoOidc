@@ -76,8 +76,13 @@ Epics and stories
   - Support `request` and `request_uri` in authorize requests.
   - Validate JWT signature against client registered keys (`ClientKeys` or client JWKS), allowed `alg` set; enforce `aud`, `iss`, `exp`, `nbf` checks and replay protection (nonce/jti store, TTL).
   - Merge parameters per RFC 9101 precedence; reject conflicting parameters.
-  - Replay: in-memory `jti/nonce` replay cache implemented with TTL; distributed store pending for HA.
+  - Replay: In-memory `jti/nonce` replay cache implemented with TTL and optional Redis-backed distributed cache when configured; TTL configurable via `AuthOptions`.
   - Acceptance: Conformance tests for valid/invalid signatures and claims.
+
+- [x] Story: JARM authorization responses
+  - Support `response_mode` values `query.jwt` and `form_post.jwt` for success and error.
+  - Optional JWE encryption using client RSA key (`RSA-OAEP` + `A256GCM`) selected from client JWKS (prefers `use=enc`).
+  - Discovery advertises signing/encryption capabilities.
 
 - [x] Story: Discovery metadata updates
   - `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
@@ -130,7 +135,7 @@ Epics and stories
 - [~] Story: Auditing & logging
   - Structured logs for provider selection, upstream start/finish, errors, claim mappings applied; correlation IDs.
   - Redact secrets; PII handling policy.
-  - Status: Metrics and correlation IDs used in `/authorize`; expand across external flow and admin APIs.
+  - Status: Metrics and correlation IDs used in `/authorize` (duration, request/JAR sizes, mode buckets, PAR consumption). Expand across external flow and admin APIs.
   - Acceptance: Logs useful for troubleshooting and pass security review.
 
 - [x] Story: Rate limiting & protections
@@ -227,10 +232,11 @@ Next steps (proposed)
 - P0 (2 weeks)
   - [ ] Keys UI: PEM import (convert to JWK), pretty-print/compact toggle; strengthen JWKS validation (alg/kty/use checks).
   - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
-  - [ ] JAR hardening: move jti/nonce replay cache to distributed store (Redis); configurable TTL per environment.
+  - [ ] JAR hardening: enable Redis-backed replay cache in production (already supported via DI when Redis is configured); tune TTL/clock skew via `AuthOptions`.
   - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
   - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
+  - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
 - P1 (next 2–4 weeks)
   - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
   - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
