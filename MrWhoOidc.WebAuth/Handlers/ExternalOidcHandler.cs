@@ -11,6 +11,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
+using System.Net.Http.Headers;
+using System.Globalization;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -46,6 +48,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         var root = doc.RootElement;
         var authz = root.GetProperty("authorization_endpoint").GetString()!;
+        var parEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parel) ? parel.GetString() : null;
+        var issuerFromDiscovery = root.TryGetProperty("issuer", out var issuerEl) ? issuerEl.GetString() : null;
 
         // PKCE
         var verifier = Base64Url(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
@@ -105,12 +109,146 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             TryCopy("prompt");
             TryCopy("max_age");
             TryCopy("acr_values");
+            // Pass-through of resource/audience if present
+            TryCopy("resource");
+            TryCopy("audience");
         }
         catch { }
 
+        // Build outbound JAR (request object) if configured and signing key available
+        string? requestJwt = null;
+        if (cfg.UseJAR)
+        {
+            var key = await db.IdentityProviderKeys.AsNoTracking()
+                .Where(k => k.IdentityProviderId == provider.Id && k.Purpose == IdentityProviderKeyPurpose.Signing && k.Active)
+                .OrderByDescending(k => k.CreatedAt)
+                .FirstOrDefaultAsync(http.RequestAborted);
+            if (key is not null)
+            {
+                try
+                {
+                    var jsonWebKey = new JsonWebKey(key.Jwk);
+                    if (!string.IsNullOrEmpty(key.Kid) && string.IsNullOrEmpty(jsonWebKey.KeyId))
+                    {
+                        jsonWebKey.KeyId = key.Kid;
+                    }
+                    var alg = MapAlg(key.Alg);
+                    var creds = new SigningCredentials(jsonWebKey, alg);
+
+                    // Per RFC 9101: iss=client_id, aud=AS issuer/authorize endpoint
+                    var aud = ((issuerFromDiscovery ?? cfg.Authority).TrimEnd('/')) + "/authorize";
+
+                    var now = DateTimeOffset.UtcNow;
+                    var claims = new Dictionary<string, object?>
+                    {
+                        ["response_type"] = query.GetValueOrDefault("response_type"),
+                        ["client_id"] = cfg.ClientId,
+                        ["redirect_uri"] = query.GetValueOrDefault("redirect_uri"),
+                        ["scope"] = query.GetValueOrDefault("scope"),
+                        ["state"] = state,
+                        ["nonce"] = nonce,
+                        ["code_challenge"] = query.GetValueOrDefault("code_challenge"),
+                        ["code_challenge_method"] = query.GetValueOrDefault("code_challenge_method"),
+                        ["response_mode"] = query.GetValueOrDefault("response_mode"),
+                        ["login_hint"] = query.GetValueOrDefault("login_hint"),
+                        ["ui_locales"] = query.GetValueOrDefault("ui_locales"),
+                        ["prompt"] = query.GetValueOrDefault("prompt"),
+                        ["max_age"] = query.GetValueOrDefault("max_age"),
+                        ["acr_values"] = query.GetValueOrDefault("acr_values"),
+                        ["resource"] = query.GetValueOrDefault("resource")
+                    };
+
+                    // Remove nulls
+                    var clean = claims.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
+
+                    var descriptor = new SecurityTokenDescriptor
+                    {
+                        Issuer = cfg.ClientId,
+                        Audience = aud,
+                        Claims = clean,
+                        NotBefore = now.UtcDateTime.AddMinutes(-1),
+                        Expires = now.AddMinutes(5).UtcDateTime,
+                        SigningCredentials = creds
+                    };
+
+                    var handler = new JwtSecurityTokenHandler();
+                    var token = handler.CreateToken(descriptor);
+                    requestJwt = handler.WriteToken(token);
+                }
+                catch
+                {
+                    // If signing fails, fall back to non-JAR path
+                    requestJwt = null;
+                }
+            }
+        }
+
+        // If provider supports PAR, push and then redirect using request_uri.
+        if (cfg.UsePAR && !string.IsNullOrEmpty(parEndpoint))
+        {
+            try
+            {
+                Dictionary<string, string> body;
+                if (!string.IsNullOrEmpty(requestJwt))
+                {
+                    body = new Dictionary<string, string>
+                    {
+                        ["client_id"] = cfg.ClientId,
+                        ["request"] = requestJwt
+                    };
+                }
+                else
+                {
+                    body = query.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value!);
+                }
+
+                using var parReq = new HttpRequestMessage(HttpMethod.Post, parEndpoint)
+                {
+                    Content = new FormUrlEncodedContent(body)
+                };
+
+                // Client authentication at PAR: prefer client_secret_basic when secret is available
+                if (!string.IsNullOrEmpty(cfg.ClientSecret))
+                {
+                    var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.ClientId}:{cfg.ClientSecret}"));
+                    parReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+                }
+
+                using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
+                if (parResp.IsSuccessStatusCode)
+                {
+                    var parBody = await parResp.Content.ReadAsStringAsync(http.RequestAborted);
+                    using var parDoc = JsonDocument.Parse(parBody);
+                    var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl) ? ruriEl.GetString() : null;
+                    if (!string.IsNullOrEmpty(requestUri))
+                    {
+                        var ubPar = new UriBuilder(authz);
+                        var qPar = System.Web.HttpUtility.ParseQueryString(ubPar.Query);
+                        qPar["client_id"] = cfg.ClientId;
+                        qPar["request_uri"] = requestUri;
+                        ubPar.Query = qPar.ToString();
+                        return Results.Redirect(ubPar.ToString());
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to redirect path below
+            }
+        }
+
+        // Fallback: standard redirect
         var ub = new UriBuilder(authz);
         var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
-        foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
+        if (!string.IsNullOrEmpty(requestJwt))
+        {
+            q["client_id"] = cfg.ClientId;
+            q["request"] = requestJwt;
+        }
+        else
+        {
+            foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
+        }
         ub.Query = q.ToString();
         return Results.Redirect(ub.ToString());
     }
@@ -347,6 +485,17 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
     }
+
+    private static string MapAlg(string alg)
+        => alg switch
+        {
+            "RS256" => SecurityAlgorithms.RsaSha256,
+            "PS256" => SecurityAlgorithms.RsaSsaPssSha256,
+            "ES256" => SecurityAlgorithms.EcdsaSha256,
+            "ES384" => SecurityAlgorithms.EcdsaSha384,
+            "ES512" => SecurityAlgorithms.EcdsaSha512,
+            _ => SecurityAlgorithms.RsaSha256
+        };
 
     private static IResult FriendlyError(string? returnUrl, string? clientId, string? correlationId, string message)
     {

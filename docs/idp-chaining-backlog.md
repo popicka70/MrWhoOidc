@@ -90,11 +90,11 @@ Epics and stories
   - Acceptance: Well-known document validates with external tools.
 
 5) Optional: Outbound JAR and PAR to upstream IdPs
-- [ ] Story: Outbound JAR
+- [x] Story: Outbound JAR
   - If provider `UseJAR`, sign upstream auth request with a configured provider key; support at least `RS256`/`PS256` and `kid`.
   - Acceptance: Works against an upstream IdP requiring JAR.
 
-- [ ] Story: Outbound PAR
+- [x] Story: Outbound PAR
   - If provider `UsePAR`, push request to upstream PAR endpoint, receive `request_uri`, then redirect using it.
   - Acceptance: Verified with an IdP enforcing PAR.
 
@@ -240,8 +240,8 @@ Next steps (proposed)
 - P1 (next 2–4 weeks)
   - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
   - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
-  - [ ] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
-  - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
+  - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
+  - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
   - [ ] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; limit to single-hop and bearer-only (no DPoP bridging) initially.
   - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
