@@ -1,0 +1,18 @@
+@page "/LoginTotp"
+@model MrWhoOidc.WebAuth.Pages.LoginTotpModel
+@{
+    ViewData["Title"] = "Two-factor verification";
+    Layout = "_AuthLayout";
+}
+
+<h2 class="mb-4 text-center">Two-factor code</h2>
+
+<form method="post" asp-antiforgery="true">
+    <input type="hidden" asp-for="ReturnUrl" />
+    <div class="mb-3">
+        <label asp-for="Code" class="form-label"></label>
+        <input asp-for="Code" class="form-control" autocomplete="one-time-code" />
+        <span asp-validation-for="Code" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Verify</button>
+</form>

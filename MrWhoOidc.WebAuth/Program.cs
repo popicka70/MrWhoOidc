@@ -87,6 +87,16 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
+    })
+    .AddCookie("preauth", options =>
+    {
+        options.Cookie.Name = ".mrwhooidc.preauth";
+        options.LoginPath = "/login";
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
     });
 
 // Authorization + admin policy
@@ -363,7 +373,16 @@ admin.MapGet("/providers", async (AuthDbContext db, CancellationToken ct) =>
         .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
         .Select(p => new
         {
-            p.Id, p.Name, p.DisplayName, p.Type, p.Enabled, p.IsDefault, p.LogoUrl, p.SortOrder, p.CreatedAt, p.UpdatedAt
+            p.Id,
+            p.Name,
+            p.DisplayName,
+            p.Type,
+            p.Enabled,
+            p.IsDefault,
+            p.LogoUrl,
+            p.SortOrder,
+            p.CreatedAt,
+            p.UpdatedAt
         }).ToListAsync(ct);
     return Results.Ok(list);
 });
@@ -426,7 +445,15 @@ admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbC
         .Where(m => m.ClientId == clientId)
         .Join(db.IdentityProviders.AsNoTracking(), m => m.IdentityProviderId, p => p.Id, (m, p) => new
         {
-            m.ClientId, m.IdentityProviderId, p.Name, p.DisplayName, m.Enabled, m.IsDefaultForClient, m.AutoRedirectIfSingle, m.RequiredAcr, m.Order
+            m.ClientId,
+            m.IdentityProviderId,
+            p.Name,
+            p.DisplayName,
+            m.Enabled,
+            m.IsDefaultForClient,
+            m.AutoRedirectIfSingle,
+            m.RequiredAcr,
+            m.Order
         })
         .OrderBy(x => x.Order).ToListAsync(ct);
     return Results.Ok(list);

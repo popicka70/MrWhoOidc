@@ -38,6 +38,12 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     public string? Error { get; private set; }
 
+    [BindProperty(SupportsGet = true, Name = "info")]
+    public string? Info { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "cid")]
+    public string? CorrelationId { get; set; }
+
     public bool AllowLocalLogin { get; private set; }
     public bool AllowQrLogin { get; private set; }
 

@@ -25,6 +25,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IRevocationService, RevocationService>();
         services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
+        services.AddSingleton<ITotpService, TotpService>();
 
         // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();

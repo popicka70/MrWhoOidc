@@ -54,6 +54,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .WithOne()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // TOTP
+            b.Property(x => x.TotpSecret).HasMaxLength(200);
         });
 
         modelBuilder.Entity<Realm>(b =>
@@ -426,6 +428,10 @@ public class User
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     // New: alternative emails
     public ICollection<UserAlternativeEmail> AlternativeEmails { get; set; } = new List<UserAlternativeEmail>();
+    // MFA TOTP
+    [MaxLength(200)]
+    public string? TotpSecret { get; set; }
+    public bool TotpEnabled { get; set; }
 }
 
 public class Realm

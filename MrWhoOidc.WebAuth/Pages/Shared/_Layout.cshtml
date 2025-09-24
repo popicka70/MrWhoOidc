@@ -23,6 +23,7 @@
                         @if (User?.Identity?.IsAuthenticated ?? false)
                         {
                             <a class="nav-link" asp-page="/Password/Index">Change password</a>
+                            <a class="nav-link" asp-page="/Mfa/Index">Two-factor (TOTP)</a>
                             <span class="navbar-text">Hello, @User.Identity!.Name</span>
                             <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
                         }

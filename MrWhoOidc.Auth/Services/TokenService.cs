@@ -97,6 +97,19 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         meta.TryGetMappedClaims(code, out var mappedClaimsReadOnly);
         var mappedClaims = mappedClaimsReadOnly is null ? new Dictionary<string, string>() : new Dictionary<string, string>(mappedClaimsReadOnly);
 
+        // Precompute combined AMR set from upstream and mapped (if allow-listed)
+        var combinedAmr = new HashSet<string>(StringComparer.Ordinal);
+        if (authOptions.Value.EmitAmrInAccessToken || authOptions.Value.EmitAmrInIdToken)
+        {
+            foreach (var a in upstreamAmrs) combinedAmr.Add(a);
+            // If mapping contains an 'amr' claim and it's allow-listed for either token, merge values
+            if (mappedClaims.TryGetValue("amr", out var mappedAmr) && !string.IsNullOrWhiteSpace(mappedAmr))
+            {
+                foreach (var a in mappedAmr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    combinedAmr.Add(a);
+            }
+        }
+
         string accessToken;
         if (opaqueEnabled)
         {
@@ -134,15 +147,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             if (!string.IsNullOrWhiteSpace(upstreamAcr)) accessClaims.Add(new("acr", upstreamAcr!));
             if (authOptions.Value.EmitAmrInAccessToken)
             {
-                foreach (var amr in upstreamAmrs) accessClaims.Add(new("amr", amr));
+                foreach (var amr in combinedAmr) accessClaims.Add(new("amr", amr));
             }
 
-            // Propagate mapped claims into access token when allow-listed
+            // Propagate mapped claims into access token when allow-listed (skip amr to avoid conflicts)
             var allowAccess = authOptions.Value.PropagateMappedClaimsToAccessToken ?? Array.Empty<string>();
             if (allowAccess.Length > 0 && mappedClaims.Count > 0)
             {
                 foreach (var name in allowAccess)
                 {
+                    if (string.Equals(name, "amr", StringComparison.Ordinal)) continue; // handled above
                     if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                     {
                         accessClaims.Add(new(name, val));
@@ -190,15 +204,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new("acr", upstreamAcr!));
         if (authOptions.Value.EmitAmrInIdToken)
         {
-            foreach (var amr in upstreamAmrs) idClaims.Add(new("amr", amr));
+            foreach (var amr in combinedAmr) idClaims.Add(new("amr", amr));
         }
 
-        // Propagate mapped claims into ID token when allow-listed
+        // Propagate mapped claims into ID token when allow-listed (skip amr to avoid conflicts)
         var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();
         if (allowId.Length > 0 && mappedClaims.Count > 0)
         {
             foreach (var name in allowId)
             {
+                if (string.Equals(name, "amr", StringComparison.Ordinal)) continue; // handled above
                 if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                 {
                     idClaims.Add(new(name, val));

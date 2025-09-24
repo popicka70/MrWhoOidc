@@ -1,0 +1,40 @@
+@page "/Mfa"
+@model MrWhoOidc.WebAuth.Pages.Mfa.IndexModel
+@{
+    ViewData["Title"] = "Two-factor authentication";
+}
+
+<h2>Two-factor authentication (TOTP)</h2>
+
+@if (!string.IsNullOrEmpty(Model.QrPngBase64))
+{
+    <p>Scan this QR code with your authenticator app, then enter a code to confirm:</p>
+    <img src="data:image/png;base64,@Model.QrPngBase64" alt="QR Code" style="max-width: 20rem;"/>
+}
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+
+<form method="post">
+    <input type="hidden" asp-for="Action" />
+    @if (!Model.Enabled)
+    {
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary" onclick="document.getElementById('Action').value='enable'">Enable TOTP</button>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <label asp-for="VerificationCode" class="form-label">Verification code</label>
+            <input asp-for="VerificationCode" class="form-control" autocomplete="one-time-code" />
+            <span asp-validation-for="VerificationCode" class="text-danger"></span>
+        </div>
+        <div class="mb-3">
+            <button type="submit" class="btn btn-success" onclick="document.getElementById('Action').value='confirm'">Confirm</button>
+            <button type="submit" class="btn btn-danger" onclick="document.getElementById('Action').value='disable'">Disable TOTP</button>
+        </div>
+    }
+</form>
