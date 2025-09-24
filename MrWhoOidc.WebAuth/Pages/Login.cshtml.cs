@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
-public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageModel
+public class LoginModel(IUserService users, ILogger<LoginModel> logger, ITotpService totp, MrWhoOidc.Auth.Persistence.AuthDbContext db) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -47,19 +47,33 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
             return Page();
         }
 
-        var claims = new List<Claim>
+        // If TOTP enabled, issue short-lived preauth and redirect to TOTP page
+        if (user.TotpEnabled)
+        {
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Username),
+                new("amr", "pwd")
+            };
+            var identity = new ClaimsIdentity(claims, "preauth");
+            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
+            ClearAttempts(HttpContext, Username);
+            var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
+            return Redirect(url ?? "/LoginTotp");
+        }
+
+        var finalClaims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            // Indicate local password-based authentication for downstream amr propagation
             new("amr", "pwd"),
-            // Optional: mark IdP as local for downstream idp propagation
             new("idp", "local")
         };
 
-        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(identity);
+        var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(finalIdentity);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
         ClearAttempts(HttpContext, Username);
