@@ -346,6 +346,11 @@ app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+// Distributed limiter (Redis-backed) to add Retry-After and shared limits
+if (redisMux is not null)
+{
+    app.UseMiddleware<DistributedRateLimiterMiddleware>();
+}
 app.UseRateLimiter();
 
 app.MapRazorPages().WithStaticAssets();

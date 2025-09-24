@@ -239,7 +239,7 @@ Status: Token Exchange grant and DPoP Phase 2 (ath binding) — DONE
   - Metrics: `token_exchange_requests`, `token_exchange_success`, `token_exchange_failures` counters with tags: `outcome`, `source_token_type` (jwt/opaque), `dpop_mode`, `target_aud` (bucketized), `client_bucket`.
   - Histogram: `token_exchange_duration_ms`.
   - Logs: structured audit entries including correlation id, hashed/bucketized `client_id`, source/target aud, outcome. [partial]
-  - Rate limiting: Implemented route policy `rl-token-exchange` and in-handler per-client limiter; distributed limiter and `Retry-After` header pending.
+  - Rate limiting: Implemented route policy `rl-token-exchange` and in-handler per-client limiter; added Redis-backed distributed limiter and `Retry-After`/rate-limit headers for `/token` and `/introspect`.
   - Acceptance: Metrics visible in dashboards; rate limits applied; audit logs usable for investigations.
 
 - [~] Story: Tests and samples
