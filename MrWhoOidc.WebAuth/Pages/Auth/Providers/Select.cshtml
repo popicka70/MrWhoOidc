@@ -21,6 +21,17 @@
         <div class="alert alert-danger mt-3">@Model.Error</div>
     }
 
+    @if (!string.IsNullOrEmpty(Model.Info))
+    {
+        <div class="alert alert-info mt-3">
+            @Model.Info
+            @if (!string.IsNullOrEmpty(Model.CorrelationId))
+            {
+                <div class="small text-muted mt-1">Correlation ID: <code>@Model.CorrelationId</code></div>
+            }
+        </div>
+    }
+
     @if (!Model.AllowLocalLogin && Model.Providers.Count == 0)
     {
         <div class="alert alert-warning mt-3">No providers available for this client.</div>

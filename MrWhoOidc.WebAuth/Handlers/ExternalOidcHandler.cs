@@ -42,217 +42,234 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
             return Results.BadRequest("Invalid provider configuration");
 
+        // Pre-generate correlation id for observability and friendly errors
+        var corr = Guid.NewGuid().ToString("N");
+
         // Discovery
         var httpc = httpFactory.CreateClient();
         var discoUrl = string.IsNullOrWhiteSpace(cfg.DiscoveryUrl) ? cfg.Authority.TrimEnd('/') + "/.well-known/openid-configuration" : cfg.DiscoveryUrl!;
-        using var resp = await httpc.GetAsync(discoUrl, http.RequestAborted);
-        resp.EnsureSuccessStatusCode();
-        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
-        var root = doc.RootElement;
-        var authz = root.GetProperty("authorization_endpoint").GetString()!;
-        var parEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parel) ? parel.GetString() : null;
-        var issuerFromDiscovery = root.TryGetProperty("issuer", out var issuerEl) ? issuerEl.GetString() : null;
-
-        // PKCE
-        var verifier = Base64Url(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
-        var challenge = Base64Url(SHA256.HashData(Encoding.UTF8.GetBytes(verifier)));
-
-        var cb = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
-
-        // State (include clientId to set cookie on callback)
-        var nonce = Guid.NewGuid().ToString("N");
-        var corr = Guid.NewGuid().ToString("N");
-        var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce, ClientId = clientId, CorrelationId = corr });
-        var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
-
-        // Use provider-configured response_type; default to "code"
-        var responseType = string.IsNullOrWhiteSpace(cfg.ResponseType) ? "code" : cfg.ResponseType.Trim();
-
-        var query = new Dictionary<string, string?>
-        {
-            ["response_type"] = responseType,
-            ["client_id"] = cfg.ClientId,
-            ["redirect_uri"] = cb,
-            ["scope"] = string.Join(' ', cfg.Scopes ?? new[] { "openid", "profile", "email" }),
-            ["state"] = state,
-            ["nonce"] = nonce,
-            ["code_challenge"] = challenge,
-            ["code_challenge_method"] = "S256"
-        };
-
-        // Optional: response_mode and extra params from config
-        if (!string.IsNullOrWhiteSpace(cfg.ResponseMode))
-        {
-            query["response_mode"] = cfg.ResponseMode;
-        }
-        if (cfg.ExtraAuthParams is { Count: > 0 })
-        {
-            foreach (var kvp in cfg.ExtraAuthParams)
-            {
-                if (!string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
-                {
-                    query[kvp.Key] = kvp.Value;
-                }
-            }
-        }
-
-        // Copy hints from returnUrl
+        JsonDocument? doc = null;
         try
         {
-            var ru = new Uri(returnUrl, UriKind.RelativeOrAbsolute);
-            var qs = System.Web.HttpUtility.ParseQueryString(ru.IsAbsoluteUri ? ru.Query : new Uri("http://local" + returnUrl).Query);
-            void TryCopy(string name)
+            using var resp = await httpc.GetAsync(discoUrl, http.RequestAborted);
+            if (!resp.IsSuccessStatusCode)
             {
-                var val = qs[name];
-                if (!string.IsNullOrEmpty(val)) query[name] = val;
+                return FriendlyError(returnUrl, clientId, corr, $"Discovery failed: {(int)resp.StatusCode}");
             }
-            TryCopy("login_hint");
-            TryCopy("ui_locales");
-            TryCopy("prompt");
-            TryCopy("max_age");
-            TryCopy("acr_values");
-            // Pass-through of resource/audience if present
-            TryCopy("resource");
-            TryCopy("audience");
+            doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         }
-        catch { }
-
-        // Build outbound JAR (request object) if configured and signing key available
-        string? requestJwt = null;
-        if (cfg.UseJAR)
+        catch (Exception ex)
         {
-            var key = await db.IdentityProviderKeys.AsNoTracking()
-                .Where(k => k.IdentityProviderId == provider.Id && k.Purpose == IdentityProviderKeyPurpose.Signing && k.Active)
-                .OrderByDescending(k => k.CreatedAt)
-                .FirstOrDefaultAsync(http.RequestAborted);
-            if (key is not null)
+            return FriendlyError(returnUrl, clientId, corr, "Discovery error: " + ex.Message);
+        }
+
+        using (doc)
+        {
+            var root = doc!.RootElement;
+            var authz = root.GetProperty("authorization_endpoint").GetString()!;
+            var parEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parel) ? parel.GetString() : null;
+            var issuerFromDiscovery = root.TryGetProperty("issuer", out var issuerEl) ? issuerEl.GetString() : null;
+
+            // PKCE
+            var verifier = Base64Url(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
+            var challenge = Base64Url(SHA256.HashData(Encoding.UTF8.GetBytes(verifier)));
+
+            var cb = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
+
+            // State (include clientId to set cookie on callback)
+            var nonce = Guid.NewGuid().ToString("N");
+            var statePayload = JsonSerializer.Serialize(new StateModel { Provider = providerName, CodeVerifier = verifier, ReturnUrl = returnUrl, Nonce = nonce, ClientId = clientId, CorrelationId = corr });
+            var state = Base64Url(_protector.Protect(Encoding.UTF8.GetBytes(statePayload)));
+
+            // Use provider-configured response_type; default to "code"
+            var responseType = string.IsNullOrWhiteSpace(cfg.ResponseType) ? "code" : cfg.ResponseType.Trim();
+
+            var query = new Dictionary<string, string?>
+            {
+                ["response_type"] = responseType,
+                ["client_id"] = cfg.ClientId,
+                ["redirect_uri"] = cb,
+                ["scope"] = string.Join(' ', cfg.Scopes ?? new[] { "openid", "profile", "email" }),
+                ["state"] = state,
+                ["nonce"] = nonce,
+                ["code_challenge"] = challenge,
+                ["code_challenge_method"] = "S256"
+            };
+
+            // Optional: response_mode and extra params from config
+            if (!string.IsNullOrWhiteSpace(cfg.ResponseMode))
+            {
+                query["response_mode"] = cfg.ResponseMode;
+            }
+            if (cfg.ExtraAuthParams is { Count: > 0 })
+            {
+                foreach (var kvp in cfg.ExtraAuthParams)
+                {
+                    if (!string.IsNullOrWhiteSpace(kvp.Key) && !string.IsNullOrWhiteSpace(kvp.Value))
+                    {
+                        query[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+
+            // Copy hints from returnUrl
+            try
+            {
+                var ru = new Uri(returnUrl, UriKind.RelativeOrAbsolute);
+                var qs = System.Web.HttpUtility.ParseQueryString(ru.IsAbsoluteUri ? ru.Query : new Uri("http://local" + returnUrl).Query);
+                void TryCopy(string name)
+                {
+                    var val = qs[name];
+                    if (!string.IsNullOrEmpty(val)) query[name] = val;
+                }
+                TryCopy("login_hint");
+                TryCopy("ui_locales");
+                TryCopy("prompt");
+                TryCopy("max_age");
+                TryCopy("acr_values");
+                // Pass-through of resource/audience if present
+                TryCopy("resource");
+                TryCopy("audience");
+            }
+            catch { }
+
+            // Build outbound JAR (request object) if configured and signing key available
+            string? requestJwt = null;
+            if (cfg.UseJAR)
+            {
+                var key = await db.IdentityProviderKeys.AsNoTracking()
+                    .Where(k => k.IdentityProviderId == provider.Id && k.Purpose == IdentityProviderKeyPurpose.Signing && k.Active)
+                    .OrderByDescending(k => k.CreatedAt)
+                    .FirstOrDefaultAsync(http.RequestAborted);
+                if (key is not null)
+                {
+                    try
+                    {
+                        var jsonWebKey = new JsonWebKey(key.Jwk);
+                        if (!string.IsNullOrEmpty(key.Kid) && string.IsNullOrEmpty(jsonWebKey.KeyId))
+                        {
+                            jsonWebKey.KeyId = key.Kid;
+                        }
+                        var alg = MapAlg(key.Alg);
+                        var creds = new SigningCredentials(jsonWebKey, alg);
+
+                        // Per RFC 9101: iss=client_id, aud=AS issuer/authorize endpoint
+                        var aud = ((issuerFromDiscovery ?? cfg.Authority).TrimEnd('/')) + "/authorize";
+
+                        var now = DateTimeOffset.UtcNow;
+                        var claims = new Dictionary<string, object?>
+                        {
+                            ["response_type"] = query.GetValueOrDefault("response_type"),
+                            ["client_id"] = cfg.ClientId,
+                            ["redirect_uri"] = query.GetValueOrDefault("redirect_uri"),
+                            ["scope"] = query.GetValueOrDefault("scope"),
+                            ["state"] = state,
+                            ["nonce"] = nonce,
+                            ["code_challenge"] = query.GetValueOrDefault("code_challenge"),
+                            ["code_challenge_method"] = query.GetValueOrDefault("code_challenge_method"),
+                            ["response_mode"] = query.GetValueOrDefault("response_mode"),
+                            ["login_hint"] = query.GetValueOrDefault("login_hint"),
+                            ["ui_locales"] = query.GetValueOrDefault("ui_locales"),
+                            ["prompt"] = query.GetValueOrDefault("prompt"),
+                            ["max_age"] = query.GetValueOrDefault("max_age"),
+                            ["acr_values"] = query.GetValueOrDefault("acr_values"),
+                            ["resource"] = query.GetValueOrDefault("resource")
+                        };
+
+                        // Remove nulls
+                        var clean = claims.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
+
+                        var descriptor = new SecurityTokenDescriptor
+                        {
+                            Issuer = cfg.ClientId,
+                            Audience = aud,
+                            Claims = clean,
+                            NotBefore = now.UtcDateTime.AddMinutes(-1),
+                            Expires = now.AddMinutes(5).UtcDateTime,
+                            SigningCredentials = creds
+                        };
+
+                        var handler = new JwtSecurityTokenHandler();
+                        var token = handler.CreateToken(descriptor);
+                        requestJwt = handler.WriteToken(token);
+                    }
+                    catch
+                    {
+                        // If signing fails, fall back to non-JAR path
+                        requestJwt = null;
+                    }
+                }
+            }
+
+            // If provider supports PAR, push and then redirect using request_uri.
+            if (cfg.UsePAR && !string.IsNullOrEmpty(parEndpoint))
             {
                 try
                 {
-                    var jsonWebKey = new JsonWebKey(key.Jwk);
-                    if (!string.IsNullOrEmpty(key.Kid) && string.IsNullOrEmpty(jsonWebKey.KeyId))
+                    Dictionary<string, string> body;
+                    if (!string.IsNullOrEmpty(requestJwt))
                     {
-                        jsonWebKey.KeyId = key.Kid;
+                        body = new Dictionary<string, string>
+                        {
+                            ["client_id"] = cfg.ClientId,
+                            ["request"] = requestJwt
+                        };
                     }
-                    var alg = MapAlg(key.Alg);
-                    var creds = new SigningCredentials(jsonWebKey, alg);
-
-                    // Per RFC 9101: iss=client_id, aud=AS issuer/authorize endpoint
-                    var aud = ((issuerFromDiscovery ?? cfg.Authority).TrimEnd('/')) + "/authorize";
-
-                    var now = DateTimeOffset.UtcNow;
-                    var claims = new Dictionary<string, object?>
+                    else
                     {
-                        ["response_type"] = query.GetValueOrDefault("response_type"),
-                        ["client_id"] = cfg.ClientId,
-                        ["redirect_uri"] = query.GetValueOrDefault("redirect_uri"),
-                        ["scope"] = query.GetValueOrDefault("scope"),
-                        ["state"] = state,
-                        ["nonce"] = nonce,
-                        ["code_challenge"] = query.GetValueOrDefault("code_challenge"),
-                        ["code_challenge_method"] = query.GetValueOrDefault("code_challenge_method"),
-                        ["response_mode"] = query.GetValueOrDefault("response_mode"),
-                        ["login_hint"] = query.GetValueOrDefault("login_hint"),
-                        ["ui_locales"] = query.GetValueOrDefault("ui_locales"),
-                        ["prompt"] = query.GetValueOrDefault("prompt"),
-                        ["max_age"] = query.GetValueOrDefault("max_age"),
-                        ["acr_values"] = query.GetValueOrDefault("acr_values"),
-                        ["resource"] = query.GetValueOrDefault("resource")
+                        body = query.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value!);
+                    }
+
+                    using var parReq = new HttpRequestMessage(HttpMethod.Post, parEndpoint)
+                    {
+                        Content = new FormUrlEncodedContent(body)
                     };
 
-                    // Remove nulls
-                    var clean = claims.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
-
-                    var descriptor = new SecurityTokenDescriptor
+                    // Client authentication at PAR: prefer client_secret_basic when secret is available
+                    if (!string.IsNullOrEmpty(cfg.ClientSecret))
                     {
-                        Issuer = cfg.ClientId,
-                        Audience = aud,
-                        Claims = clean,
-                        NotBefore = now.UtcDateTime.AddMinutes(-1),
-                        Expires = now.AddMinutes(5).UtcDateTime,
-                        SigningCredentials = creds
-                    };
+                        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.ClientId}:{cfg.ClientSecret}"));
+                        parReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+                    }
 
-                    var handler = new JwtSecurityTokenHandler();
-                    var token = handler.CreateToken(descriptor);
-                    requestJwt = handler.WriteToken(token);
+                    using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
+                    if (parResp.IsSuccessStatusCode)
+                    {
+                        var parBody = await parResp.Content.ReadAsStringAsync(http.RequestAborted);
+                        using var parDoc = JsonDocument.Parse(parBody);
+                        var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl) ? ruriEl.GetString() : null;
+                        if (!string.IsNullOrEmpty(requestUri))
+                        {
+                            var ubPar = new UriBuilder(authz);
+                            var qPar = System.Web.HttpUtility.ParseQueryString(ubPar.Query);
+                            qPar["client_id"] = cfg.ClientId;
+                            qPar["request_uri"] = requestUri;
+                            ubPar.Query = qPar.ToString();
+                            return Results.Redirect(ubPar.ToString());
+                        }
+                    }
                 }
                 catch
                 {
-                    // If signing fails, fall back to non-JAR path
-                    requestJwt = null;
+                    // Fallback to redirect path below
                 }
             }
-        }
 
-        // If provider supports PAR, push and then redirect using request_uri.
-        if (cfg.UsePAR && !string.IsNullOrEmpty(parEndpoint))
-        {
-            try
+            // Fallback: standard redirect
+            var ub = new UriBuilder(authz);
+            var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
+            if (!string.IsNullOrEmpty(requestJwt))
             {
-                Dictionary<string, string> body;
-                if (!string.IsNullOrEmpty(requestJwt))
-                {
-                    body = new Dictionary<string, string>
-                    {
-                        ["client_id"] = cfg.ClientId,
-                        ["request"] = requestJwt
-                    };
-                }
-                else
-                {
-                    body = query.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value!);
-                }
-
-                using var parReq = new HttpRequestMessage(HttpMethod.Post, parEndpoint)
-                {
-                    Content = new FormUrlEncodedContent(body)
-                };
-
-                // Client authentication at PAR: prefer client_secret_basic when secret is available
-                if (!string.IsNullOrEmpty(cfg.ClientSecret))
-                {
-                    var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.ClientId}:{cfg.ClientSecret}"));
-                    parReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
-                }
-
-                using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
-                if (parResp.IsSuccessStatusCode)
-                {
-                    var parBody = await parResp.Content.ReadAsStringAsync(http.RequestAborted);
-                    using var parDoc = JsonDocument.Parse(parBody);
-                    var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl) ? ruriEl.GetString() : null;
-                    if (!string.IsNullOrEmpty(requestUri))
-                    {
-                        var ubPar = new UriBuilder(authz);
-                        var qPar = System.Web.HttpUtility.ParseQueryString(ubPar.Query);
-                        qPar["client_id"] = cfg.ClientId;
-                        qPar["request_uri"] = requestUri;
-                        ubPar.Query = qPar.ToString();
-                        return Results.Redirect(ubPar.ToString());
-                    }
-                }
+                q["client_id"] = cfg.ClientId;
+                q["request"] = requestJwt;
             }
-            catch
+            else
             {
-                // Fallback to redirect path below
+                foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
             }
+            ub.Query = q.ToString();
+            return Results.Redirect(ub.ToString());
         }
-
-        // Fallback: standard redirect
-        var ub = new UriBuilder(authz);
-        var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
-        if (!string.IsNullOrEmpty(requestJwt))
-        {
-            q["client_id"] = cfg.ClientId;
-            q["request"] = requestJwt;
-        }
-        else
-        {
-            foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
-        }
-        ub.Query = q.ToString();
-        return Results.Redirect(ub.ToString());
     }
 
     public async Task<IResult> CallbackAsync(HttpContext http)
@@ -525,12 +542,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
     {
         var t = http.Request.Query["t"].ToString();
         var cancel = http.Request.Query["cancel"].ToString();
-        if (!string.IsNullOrEmpty(cancel))
-        {
-            // Send back to provider picker if available
-            return FriendlyError(null, null, null, "Linking canceled by user.");
-        }
         if (string.IsNullOrEmpty(t)) return Results.BadRequest("Missing token");
+
         ConfirmModel model;
         try
         {
@@ -540,6 +553,13 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         catch
         {
             return Results.BadRequest("Invalid token");
+        }
+
+        if (!string.IsNullOrEmpty(cancel))
+        {
+            // Redirect back to provider picker preserving original authorize state
+            var picker = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(model.ReturnUrl ?? "/")}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
+            return Results.Redirect(picker);
         }
 
         // Ensure not already linked
@@ -671,7 +691,6 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         builder.Append("</code></div>");
         if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(clientId))
         {
-            var sep = returnUrl.Contains("?", StringComparison.Ordinal) ? "&" : "?";
             var picker = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(clientId)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
             builder.Append("<div class=\"mt-3\"><a class=\"btn btn-outline-primary\" href=\"");
             builder.Append(picker);
