@@ -301,7 +301,7 @@ public sealed class AuthorizeHandler(
                     if (providerLinks.Count > 0)
                     {
                         // If idp_hint matches an available provider and account selection not forced, use it
-                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
+                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && !allowLocal && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
                         {
                             var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
                             SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
@@ -320,7 +320,7 @@ public sealed class AuthorizeHandler(
 
                         // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
                         var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
-                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection)
+                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection && !allowLocal)
                         {
                             var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
                             var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
