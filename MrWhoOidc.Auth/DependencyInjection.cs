@@ -31,6 +31,8 @@ public static class AuthServiceCollectionExtensions
 
         // Request object (JAR) validator
         services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
+        // JAR replay cache (in-memory default). TODO: replace with distributed (e.g., Redis) when configured.
+        services.AddSingleton<IJarReplayCache, InMemoryJarReplayCache>();
 
         // Key rotation options and services
         services.AddOptions<KeyRotationOptions>();

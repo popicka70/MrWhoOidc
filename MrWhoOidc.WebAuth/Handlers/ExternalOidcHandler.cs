@@ -11,6 +11,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
+using System.Net.Http.Headers;
+using System.Globalization;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -18,11 +20,13 @@ public interface IExternalOidcHandler
 {
     Task<IResult> StartAsync(HttpContext http);
     Task<IResult> CallbackAsync(HttpContext http);
+    Task<IResult> ConfirmLinkAsync(HttpContext http);
 }
 
 public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, IJwksCache jwksCache, IClaimMappingService mapper) : IExternalOidcHandler
 {
     private readonly IDataProtector _protector = dp.CreateProtector("ext-oidc-state");
+    private readonly IDataProtector _confirmProtector = dp.CreateProtector("ext-oidc-confirm");
 
     public async Task<IResult> StartAsync(HttpContext http)
     {
@@ -46,6 +50,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         var root = doc.RootElement;
         var authz = root.GetProperty("authorization_endpoint").GetString()!;
+        var parEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parel) ? parel.GetString() : null;
+        var issuerFromDiscovery = root.TryGetProperty("issuer", out var issuerEl) ? issuerEl.GetString() : null;
 
         // PKCE
         var verifier = Base64Url(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
@@ -105,12 +111,146 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             TryCopy("prompt");
             TryCopy("max_age");
             TryCopy("acr_values");
+            // Pass-through of resource/audience if present
+            TryCopy("resource");
+            TryCopy("audience");
         }
         catch { }
 
+        // Build outbound JAR (request object) if configured and signing key available
+        string? requestJwt = null;
+        if (cfg.UseJAR)
+        {
+            var key = await db.IdentityProviderKeys.AsNoTracking()
+                .Where(k => k.IdentityProviderId == provider.Id && k.Purpose == IdentityProviderKeyPurpose.Signing && k.Active)
+                .OrderByDescending(k => k.CreatedAt)
+                .FirstOrDefaultAsync(http.RequestAborted);
+            if (key is not null)
+            {
+                try
+                {
+                    var jsonWebKey = new JsonWebKey(key.Jwk);
+                    if (!string.IsNullOrEmpty(key.Kid) && string.IsNullOrEmpty(jsonWebKey.KeyId))
+                    {
+                        jsonWebKey.KeyId = key.Kid;
+                    }
+                    var alg = MapAlg(key.Alg);
+                    var creds = new SigningCredentials(jsonWebKey, alg);
+
+                    // Per RFC 9101: iss=client_id, aud=AS issuer/authorize endpoint
+                    var aud = ((issuerFromDiscovery ?? cfg.Authority).TrimEnd('/')) + "/authorize";
+
+                    var now = DateTimeOffset.UtcNow;
+                    var claims = new Dictionary<string, object?>
+                    {
+                        ["response_type"] = query.GetValueOrDefault("response_type"),
+                        ["client_id"] = cfg.ClientId,
+                        ["redirect_uri"] = query.GetValueOrDefault("redirect_uri"),
+                        ["scope"] = query.GetValueOrDefault("scope"),
+                        ["state"] = state,
+                        ["nonce"] = nonce,
+                        ["code_challenge"] = query.GetValueOrDefault("code_challenge"),
+                        ["code_challenge_method"] = query.GetValueOrDefault("code_challenge_method"),
+                        ["response_mode"] = query.GetValueOrDefault("response_mode"),
+                        ["login_hint"] = query.GetValueOrDefault("login_hint"),
+                        ["ui_locales"] = query.GetValueOrDefault("ui_locales"),
+                        ["prompt"] = query.GetValueOrDefault("prompt"),
+                        ["max_age"] = query.GetValueOrDefault("max_age"),
+                        ["acr_values"] = query.GetValueOrDefault("acr_values"),
+                        ["resource"] = query.GetValueOrDefault("resource")
+                    };
+
+                    // Remove nulls
+                    var clean = claims.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
+
+                    var descriptor = new SecurityTokenDescriptor
+                    {
+                        Issuer = cfg.ClientId,
+                        Audience = aud,
+                        Claims = clean,
+                        NotBefore = now.UtcDateTime.AddMinutes(-1),
+                        Expires = now.AddMinutes(5).UtcDateTime,
+                        SigningCredentials = creds
+                    };
+
+                    var handler = new JwtSecurityTokenHandler();
+                    var token = handler.CreateToken(descriptor);
+                    requestJwt = handler.WriteToken(token);
+                }
+                catch
+                {
+                    // If signing fails, fall back to non-JAR path
+                    requestJwt = null;
+                }
+            }
+        }
+
+        // If provider supports PAR, push and then redirect using request_uri.
+        if (cfg.UsePAR && !string.IsNullOrEmpty(parEndpoint))
+        {
+            try
+            {
+                Dictionary<string, string> body;
+                if (!string.IsNullOrEmpty(requestJwt))
+                {
+                    body = new Dictionary<string, string>
+                    {
+                        ["client_id"] = cfg.ClientId,
+                        ["request"] = requestJwt
+                    };
+                }
+                else
+                {
+                    body = query.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value!);
+                }
+
+                using var parReq = new HttpRequestMessage(HttpMethod.Post, parEndpoint)
+                {
+                    Content = new FormUrlEncodedContent(body)
+                };
+
+                // Client authentication at PAR: prefer client_secret_basic when secret is available
+                if (!string.IsNullOrEmpty(cfg.ClientSecret))
+                {
+                    var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.ClientId}:{cfg.ClientSecret}"));
+                    parReq.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+                }
+
+                using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
+                if (parResp.IsSuccessStatusCode)
+                {
+                    var parBody = await parResp.Content.ReadAsStringAsync(http.RequestAborted);
+                    using var parDoc = JsonDocument.Parse(parBody);
+                    var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl) ? ruriEl.GetString() : null;
+                    if (!string.IsNullOrEmpty(requestUri))
+                    {
+                        var ubPar = new UriBuilder(authz);
+                        var qPar = System.Web.HttpUtility.ParseQueryString(ubPar.Query);
+                        qPar["client_id"] = cfg.ClientId;
+                        qPar["request_uri"] = requestUri;
+                        ubPar.Query = qPar.ToString();
+                        return Results.Redirect(ubPar.ToString());
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to redirect path below
+            }
+        }
+
+        // Fallback: standard redirect
         var ub = new UriBuilder(authz);
         var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
-        foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
+        if (!string.IsNullOrEmpty(requestJwt))
+        {
+            q["client_id"] = cfg.ClientId;
+            q["request"] = requestJwt;
+        }
+        else
+        {
+            foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
+        }
         ub.Query = q.ToString();
         return Results.Redirect(ub.ToString());
     }
@@ -187,6 +327,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
 
         string? email = null, name = null, sub = null, issuer = null, nonce = state.Nonce;
+        string? acr = null; string[] amrs = Array.Empty<string>();
 
         try
         {
@@ -219,6 +360,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 name = principal.FindFirst("name")?.Value ?? principal.FindFirst(ClaimTypes.Name)?.Value;
                 email = principal.FindFirst("email")?.Value ?? principal.FindFirst(ClaimTypes.Email)?.Value;
+                acr = principal.FindFirst("acr")?.Value;
+                amrs = principal.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
                 var nonceClaim = principal.FindFirst("nonce")?.Value;
                 if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
                     return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Nonce mismatch");
@@ -280,6 +423,15 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(issuer))
             return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing subject/issuer from upstream IdP");
 
+        // Determine client policy from the original returnUrl (client_id)
+        var clientPublicId = TryGetClientIdFromReturnUrl(state.ReturnUrl);
+        var clientEntity = await (string.IsNullOrWhiteSpace(clientPublicId)
+            ? Task.FromResult<Client?>(null)
+            : db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientPublicId, http.RequestAborted));
+        var allowAutoProvision = clientEntity?.AllowExternalAutoProvision ?? true; // back-compat default: true
+        var allowEmailLinking = clientEntity?.AllowExternalEmailLinking ?? true;  // default: true
+        var requireEmailConfirm = clientEntity?.RequireEmailLinkConfirmation ?? true; // default: true
+
         // Link/provision local user using ExternalIdentities
         var ext = await db.ExternalIdentities.FirstOrDefaultAsync(x => x.Issuer == issuer && x.Subject == sub, http.RequestAborted);
         Guid userId;
@@ -297,34 +449,138 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             var userEmail = mapped.TryGetValue("email", out var me) ? me : email;
             var userName = mapped.TryGetValue("name", out var mn) ? mn : name;
 
-            var username = !string.IsNullOrEmpty(userEmail) ? userEmail : $"{state.Provider}:{sub}";
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(userEmail) && u.Email == userEmail), http.RequestAborted);
-            if (user is null)
+            // Try email-based linking when allowed
+            if (allowEmailLinking && !string.IsNullOrWhiteSpace(userEmail))
             {
-                user = new User { Username = username, Email = userEmail, Name = userName ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
-                db.Users.Add(user);
-                await db.SaveChangesAsync(http.RequestAborted);
+                var existingUser = await FindUserByEmailAsync(userEmail!, http.RequestAborted);
+                if (existingUser is not null)
+                {
+                    if (requireEmailConfirm)
+                    {
+                        // Render confirmation page
+                        var token = ProtectConfirm(new ConfirmModel
+                        {
+                            Provider = state.Provider,
+                            Issuer = issuer!,
+                            Subject = sub!,
+                            TargetUserId = existingUser.Id,
+                            ReturnUrl = state.ReturnUrl,
+                            ClientId = state.ClientId,
+                            CorrelationId = state.CorrelationId,
+                            Email = userEmail,
+                            Name = userName
+                        });
+                        return RenderConfirmPage(token, state.ReturnUrl, state.ClientId, state.CorrelationId, userEmail!, existingUser.Name ?? existingUser.Username);
+                    }
+                    else
+                    {
+                        // Link immediately
+                        userId = existingUser.Id;
+                        var newExt = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
+                        db.ExternalIdentities.Add(newExt);
+                        await db.SaveChangesAsync(http.RequestAborted);
+                        return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
+                    }
+                }
             }
-            userId = user.Id;
 
-            ext = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
-            db.ExternalIdentities.Add(ext);
+            // Auto-provision new user when allowed
+            if (allowAutoProvision)
+            {
+                var username = !string.IsNullOrEmpty(userEmail) ? userEmail : $"{state.Provider}:{sub}";
+                var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(userEmail) && u.Email == userEmail), http.RequestAborted);
+                if (user is null)
+                {
+                    user = new User { Username = username, Email = userEmail, Name = userName ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
+                    db.Users.Add(user);
+                    await db.SaveChangesAsync(http.RequestAborted);
+                }
+                userId = user.Id;
+
+                ext = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
+                db.ExternalIdentities.Add(ext);
+                await db.SaveChangesAsync(http.RequestAborted);
+
+                return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
+            }
+
+            // Neither linking nor auto-provision allowed
+            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "External sign-in is not allowed by client policy.");
         }
         else
         {
             userId = ext.UserId;
             ext.LastSeenAt = DateTimeOffset.UtcNow;
             ext.ClaimsJson = BuildClaimsJson(email, name);
-        }
-        await db.SaveChangesAsync(http.RequestAborted);
+            await db.SaveChangesAsync(http.RequestAborted);
 
+            return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
+        }
+    }
+
+    public async Task<IResult> ConfirmLinkAsync(HttpContext http)
+    {
+        var t = http.Request.Query["t"].ToString();
+        var cancel = http.Request.Query["cancel"].ToString();
+        if (!string.IsNullOrEmpty(cancel))
+        {
+            // Send back to provider picker if available
+            return FriendlyError(null, null, null, "Linking canceled by user.");
+        }
+        if (string.IsNullOrEmpty(t)) return Results.BadRequest("Missing token");
+        ConfirmModel model;
+        try
+        {
+            var data = _confirmProtector.Unprotect(Base64UrlDecode(t));
+            model = JsonSerializer.Deserialize<ConfirmModel>(data)!;
+        }
+        catch
+        {
+            return Results.BadRequest("Invalid token");
+        }
+
+        // Ensure not already linked
+        var extExisting = await db.ExternalIdentities.AsNoTracking().FirstOrDefaultAsync(e => e.Issuer == model.Issuer && e.Subject == model.Subject);
+        if (extExisting is not null)
+        {
+            // Already linked, sign in
+            return await SignInAndRedirectAsync(http, extExisting.UserId, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>());
+        }
+
+        // Create linkage
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == model.TargetUserId);
+        if (user is null)
+            return Results.BadRequest("User not found");
+
+        var ext = new ExternalIdentity
+        {
+            Issuer = model.Issuer!,
+            Subject = model.Subject!,
+            UserId = user.Id,
+            ProviderName = model.Provider,
+            ClaimsJson = BuildClaimsJson(model.Email, model.Name),
+            CreatedAt = DateTimeOffset.UtcNow,
+            LastSeenAt = DateTimeOffset.UtcNow
+        };
+        db.ExternalIdentities.Add(ext);
+        await db.SaveChangesAsync();
+
+        return await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>());
+    }
+
+    private async Task<IResult> SignInAndRedirectAsync(HttpContext http, Guid userId, StateModel state, string? name, string? email, string? sub, string? idp, string? acr, string[] amrs)
+    {
         // Issue local cookie
         var claims = new List<System.Security.Claims.Claim>
         {
             new(System.Security.Claims.ClaimTypes.NameIdentifier, userId.ToString()),
-            new(System.Security.Claims.ClaimTypes.Name, name ?? email ?? $"{state.Provider}:{sub}") ,
+            new(System.Security.Claims.ClaimTypes.Name, name ?? email ?? $"{state.Provider}:{sub}" ) ,
             new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
+        if (!string.IsNullOrEmpty(idp)) claims.Add(new("idp", idp));
+        if (!string.IsNullOrEmpty(acr)) claims.Add(new("acr", acr));
+        if (amrs is { Length: > 0 }) foreach (var v in amrs) claims.Add(new("amr", v));
+
         var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
@@ -333,7 +589,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (!string.IsNullOrEmpty(state.ClientId))
         {
             var cookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(state.ClientId))).Substring(0, 16);
-            http.Response.Cookies.Append(cookieName, state.Provider, new Microsoft.AspNetCore.Http.CookieOptions
+            http.Response.Cookies.Append(cookieName, state.Provider ?? string.Empty, new Microsoft.AspNetCore.Http.CookieOptions
             {
                 Expires = DateTimeOffset.UtcNow.AddDays(90),
                 SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
@@ -347,6 +603,43 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var redirect = state.ReturnUrl ?? "/";
         return Results.Redirect(redirect);
     }
+
+    private static string? TryGetClientIdFromReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl)) return null;
+        try
+        {
+            var ru = new Uri(returnUrl, UriKind.RelativeOrAbsolute);
+            var qs = System.Web.HttpUtility.ParseQueryString(ru.IsAbsoluteUri ? ru.Query : new Uri("http://local" + returnUrl).Query);
+            return qs["client_id"];
+        }
+        catch { return null; }
+    }
+
+    private async Task<User?> FindUserByEmailAsync(string email, CancellationToken ct)
+    {
+        email = email.Trim();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        if (user is not null) return user;
+        // Alternative emails
+        var alt = await db.UserAlternativeEmails.AsNoTracking().FirstOrDefaultAsync(a => a.Email == email && a.IsVerified, ct);
+        if (alt is not null)
+        {
+            return await db.Users.FirstOrDefaultAsync(u => u.Id == alt.UserId, ct);
+        }
+        return null;
+    }
+
+    private static string MapAlg(string alg)
+        => alg switch
+        {
+            "RS256" => SecurityAlgorithms.RsaSha256,
+            "PS256" => SecurityAlgorithms.RsaSsaPssSha256,
+            "ES256" => SecurityAlgorithms.EcdsaSha256,
+            "ES384" => SecurityAlgorithms.EcdsaSha384,
+            "ES512" => SecurityAlgorithms.EcdsaSha512,
+            _ => SecurityAlgorithms.RsaSha256
+        };
 
     private static IResult FriendlyError(string? returnUrl, string? clientId, string? correlationId, string message)
     {
@@ -371,6 +664,32 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         }
         builder.Append("</body></html>");
         return Results.Content(builder.ToString(), "text/html; charset=utf-8", statusCode: 400);
+    }
+
+    private IResult RenderConfirmPage(string token, string? returnUrl, string? clientId, string? correlationId, string email, string targetUserDisplay)
+    {
+        var builder = new StringBuilder();
+        builder.Append("<html><head><title>Confirm account linking</title>");
+        builder.Append("<link rel=\"stylesheet\" href=\"/lib/bootstrap/dist/css/bootstrap.min.css\" />");
+        builder.Append("</head><body class=\"container py-4\">");
+        builder.Append("<div class=\"alert alert-info\"><strong>Confirm account linking</strong></div>");
+        builder.Append("<p>We found an existing account for <code>");
+        builder.Append(System.Web.HttpUtility.HtmlEncode(email));
+        builder.Append("</code> (\");");
+        builder.Append(System.Web.HttpUtility.HtmlEncode(targetUserDisplay));
+        builder.Append("). Do you want to link this external identity to your existing account?</p>");
+        builder.Append("<div class=\"mt-3\">");
+        builder.Append($"<a class=\"btn btn-primary me-2\" href=\"/Auth/External/Confirm?t={Uri.EscapeDataString(token)}\">Yes, link and continue</a>");
+        builder.Append($"<a class=\"btn btn-secondary\" href=\"/Auth/External/Confirm?t={Uri.EscapeDataString(token)}&cancel=1\">Cancel</a>");
+        builder.Append("</div>");
+        builder.Append("</body></html>");
+        return Results.Content(builder.ToString(), "text/html; charset=utf-8");
+    }
+
+    private string ProtectConfirm(ConfirmModel model)
+    {
+        var json = JsonSerializer.Serialize(model);
+        return Base64Url(_confirmProtector.Protect(Encoding.UTF8.GetBytes(json)));
     }
 
     private static string? TryGetAny(JsonElement root, params string[] names)
@@ -416,5 +735,18 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         public string? Nonce { get; set; }
         public string? ClientId { get; set; }
         public string? CorrelationId { get; set; }
+    }
+
+    private sealed class ConfirmModel
+    {
+        public string Provider { get; set; } = string.Empty;
+        public string? Issuer { get; set; }
+        public string? Subject { get; set; }
+        public Guid TargetUserId { get; set; }
+        public string? ReturnUrl { get; set; }
+        public string? ClientId { get; set; }
+        public string? CorrelationId { get; set; }
+        public string? Email { get; set; }
+        public string? Name { get; set; }
     }
 }

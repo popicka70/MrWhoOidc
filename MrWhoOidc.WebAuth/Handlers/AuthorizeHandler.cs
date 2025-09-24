@@ -301,7 +301,7 @@ public sealed class AuthorizeHandler(
                     if (providerLinks.Count > 0)
                     {
                         // If idp_hint matches an available provider and account selection not forced, use it
-                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
+                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && !allowLocal && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
                         {
                             var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
                             SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
@@ -320,7 +320,7 @@ public sealed class AuthorizeHandler(
 
                         // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
                         var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
-                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection)
+                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection && !allowLocal)
                         {
                             var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
                             var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
@@ -423,6 +423,16 @@ public sealed class AuthorizeHandler(
             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validationResult.Resource))
             {
                 meta.SetResource(code!, validationResult.Resource!);
+            }
+
+            // New: stash upstream identity context (idp/acr/amr) for propagation into tokens
+            if (!string.IsNullOrEmpty(code))
+            {
+                var idp = http.User.FindFirst("idp")?.Value;
+                var acr = http.User.FindFirst("acr")?.Value;
+                var amrValues = http.User.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+                var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
+                meta.SetUpstream(code!, idp, acr, amr);
             }
 
             // JARM response if requested

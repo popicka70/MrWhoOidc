@@ -15,6 +15,10 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
     // Initial constant secret for the blazor-web client (development only)
     private const string InitialBlazorWebClientSecret = "blazor-web-initial-secret";
 
+    // PoC M2M client id/secret (intentionally hard-coded)
+    private const string M2MClientId = "m2m-test-client";
+    private const string M2MClientSecret = "m2m-test-secret";
+
     public async Task SeedAsync(CancellationToken ct = default)
     {
         // Ensure admin realm exists
@@ -87,6 +91,27 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             }
         }
 
+        // Seed a simple M2M confidential client (client_credentials)
+        var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId, ct).ConfigureAwait(false);
+        if (m2m is null)
+        {
+            m2m = new Client
+            {
+                ClientId = M2MClientId,
+                ClientName = "M2M Test Client",
+                RequirePkce = false,
+                RequireConsent = false,
+                ClientSecretHash = hasher.Hash(M2MClientSecret),
+                RealmId = adminRealm.Id
+            };
+            db.Clients.Add(m2m);
+        }
+        else if (string.IsNullOrEmpty(m2m.ClientSecretHash))
+        {
+            // Backfill a secret if missing
+            m2m.ClientSecretHash = hasher.Hash(M2MClientSecret);
+        }
+
         // Backfill RealmId for any existing client rows missing it
         var clientsWithoutRealm = await db.Clients.Where(c => c.RealmId == Guid.Empty).ToListAsync(ct).ConfigureAwait(false);
         foreach (var c in clientsWithoutRealm)
@@ -106,6 +131,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             }
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
+
+        // For M2M client we won't assign any special scopes by default; CC works without scopes in this PoC.
 
         // Optionally assign alice to blazor-web client in admin realm
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice", ct).ConfigureAwait(false);

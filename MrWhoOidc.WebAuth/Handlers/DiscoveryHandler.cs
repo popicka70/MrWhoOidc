@@ -44,7 +44,7 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             jwks_uri = $"{baseUrl}/jwks",
             end_session_endpoint = $"{baseUrl}/connect/endsession",
             response_types_supported = new[] { "code" },
-            grant_types_supported = new[] { "authorization_code", "refresh_token" },
+            grant_types_supported = new[] { "authorization_code", "refresh_token", "client_credentials" },
             token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
             token_endpoint_auth_signing_alg_values_supported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512" },
             code_challenge_methods_supported = new[] { "S256" },

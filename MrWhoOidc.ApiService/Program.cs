@@ -62,6 +62,12 @@ builder.Services.AddAuthorization(options =>
         var roles = ctx.User.FindAll("roles").Select(c => c.Value);
         return roles.Any(r => string.Equals(r, adminAuth.AdminRoleName, StringComparison.OrdinalIgnoreCase));
     }));
+
+    // Simple API policy for audience 'api'
+    options.AddPolicy("api", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+    });
 });
 
 var app = builder.Build();
@@ -443,6 +449,15 @@ RequireAdmin(app.MapDelete("/admin/users/{userId:guid}/roles/{roleId:guid}/clien
 }));
 
 app.MapDefaultEndpoints();
+
+// --- Test protected API endpoint for M2M proof of concept ---
+app.MapGet("/test/protected", (System.Security.Claims.ClaimsPrincipal user) =>
+{
+    // return something simple; include sub/client_id if present
+    var sub = user.FindFirst("sub")?.Value ?? "(no sub)";
+    var clientId = user.FindFirst("client_id")?.Value ?? "(no client_id)";
+    return Results.Ok(new { message = "OK from protected API", sub, client_id = clientId, when = DateTimeOffset.UtcNow });
+}).RequireAuthorization("api");
 
 app.Run();
 

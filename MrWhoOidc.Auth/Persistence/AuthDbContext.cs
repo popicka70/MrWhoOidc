@@ -109,6 +109,18 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.AllowQrLogin).HasDefaultValue(false);
             // New: UI login style scheme key
             b.Property(x => x.LoginStyleKey).HasMaxLength(50);
+            // New: M2M policy knobs
+            b.Property(x => x.M2MAllowedAudiencesJson).HasMaxLength(2000);
+            b.Property(x => x.M2MAccessTokenLifetimeSeconds);
+            b.Property(x => x.AllowClientSecretBasic).HasDefaultValue(true);
+            b.Property(x => x.AllowClientSecretPost).HasDefaultValue(true);
+            b.Property(x => x.AllowPrivateKeyJwt).HasDefaultValue(true);
+            b.Property(x => x.M2MMtlsThumbprintsJson).HasMaxLength(2000);
+            // New: external user provisioning/linking policies
+            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(true);
+            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(true);
+            b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
+
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -485,6 +497,25 @@ public class Client
     // New: UI style scheme key for login pages (null => default)
     [MaxLength(50)]
     public string? LoginStyleKey { get; set; }
+
+    // New: M2M (client_credentials) policy
+    // Per-client allow-list of audiences for CC tokens; if set, overrides global audiences.
+    [MaxLength(2000)]
+    public string? M2MAllowedAudiencesJson { get; set; }
+    // Per-client access token lifetime for CC (seconds). Null or <=0 => default 900s.
+    public int? M2MAccessTokenLifetimeSeconds { get; set; }
+    // Allowed token endpoint auth methods for this client (CC):
+    public bool AllowClientSecretBasic { get; set; } = true;
+    public bool AllowClientSecretPost { get; set; } = true;
+    public bool AllowPrivateKeyJwt { get; set; } = true;
+    // Optional mTLS requirement for CC: list of allowed certificate thumbprints (case-insensitive). Empty => no mTLS required.
+    [MaxLength(2000)]
+    public string? M2MMtlsThumbprintsJson { get; set; }
+
+    // New: external provisioning/linking policy
+    public bool AllowExternalAutoProvision { get; set; } = true; // if false, external users must pre-exist or be linked
+    public bool AllowExternalEmailLinking { get; set; } = true;   // allow linking by email when ExternalIdentity missing
+    public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
 }
 
 public class ClientScope

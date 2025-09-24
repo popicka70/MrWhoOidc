@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-23
+Updated: 2025-09-24
 
 Status legend
 - [x] Done
@@ -76,8 +76,13 @@ Epics and stories
   - Support `request` and `request_uri` in authorize requests.
   - Validate JWT signature against client registered keys (`ClientKeys` or client JWKS), allowed `alg` set; enforce `aud`, `iss`, `exp`, `nbf` checks and replay protection (nonce/jti store, TTL).
   - Merge parameters per RFC 9101 precedence; reject conflicting parameters.
-  - Replay: in-memory `jti/nonce` replay cache implemented with TTL; distributed store pending for HA.
+  - Replay: In-memory `jti/nonce` replay cache implemented with TTL and optional Redis-backed distributed cache when configured; TTL configurable via `AuthOptions`.
   - Acceptance: Conformance tests for valid/invalid signatures and claims.
+
+- [x] Story: JARM authorization responses
+  - Support `response_mode` values `query.jwt` and `form_post.jwt` for success and error.
+  - Optional JWE encryption using client RSA key (`RSA-OAEP` + `A256GCM`) selected from client JWKS (prefers `use=enc`).
+  - Discovery advertises signing/encryption capabilities.
 
 - [x] Story: Discovery metadata updates
   - `request_parameter_supported`, `request_uri_parameter_supported`, `request_object_signing_alg_values_supported`.
@@ -85,11 +90,11 @@ Epics and stories
   - Acceptance: Well-known document validates with external tools.
 
 5) Optional: Outbound JAR and PAR to upstream IdPs
-- [ ] Story: Outbound JAR
+- [x] Story: Outbound JAR
   - If provider `UseJAR`, sign upstream auth request with a configured provider key; support at least `RS256`/`PS256` and `kid`.
   - Acceptance: Works against an upstream IdP requiring JAR.
 
-- [ ] Story: Outbound PAR
+- [x] Story: Outbound PAR
   - If provider `UsePAR`, push request to upstream PAR endpoint, receive `request_uri`, then redirect using it.
   - Acceptance: Verified with an IdP enforcing PAR.
 
@@ -130,7 +135,7 @@ Epics and stories
 - [~] Story: Auditing & logging
   - Structured logs for provider selection, upstream start/finish, errors, claim mappings applied; correlation IDs.
   - Redact secrets; PII handling policy.
-  - Status: Metrics and correlation IDs used in `/authorize`; expand across external flow and admin APIs.
+  - Status: Metrics and correlation IDs used in `/authorize` (duration, request/JAR sizes, mode buckets, PAR consumption). Expand across external flow and admin APIs.
   - Acceptance: Logs useful for troubleshooting and pass security review.
 
 - [x] Story: Rate limiting & protections
@@ -184,34 +189,28 @@ Epics and stories
   - Acceptance: CI green on .NET 9; coverage for critical OBO paths.
 
 12) Machine-to-Machine (M2M) / Client Credentials
-- [ ] Story: Client Credentials grant at `/token`
-  - Accept `grant_type=client_credentials`.
-  - Client authentication: support `private_key_jwt` and client secret (basic/post); optional mTLS per client.
-  - Audience selection: require `audience` (or `resource`) parameter or use per-client default; validate against allowed audiences; restrict to single `aud` for MVP.
-  - Scope enforcement: issue only admin-allowed scopes for the client; return granted scopes in response.
-  - Token format/lifetime: JWT or opaque based on audience/server config; per-client configurable lifetime; include `cnf.jkt` when DPoP proof is presented.
-  - Claims: subject is the client (e.g., `sub` = client_id); include `client_id`, optional `azp`; no end-user claims.
-  - Response: `access_token`, `token_type`, `expires_in`, `scope`.
+- [x] Story: Client Credentials grant at `/token`
+  - Implemented: `/token` handles `grant_type=client_credentials` with `client_secret_basic`/`client_secret_post` and `private_key_jwt`; audience vs resource validation; scope allow-list via `ClientScopes`; JWT issuance (15 min); optional DPoP binding via `cnf.jkt`; includes `client_id`/`sub` and optional `realm` claim.
+  - Pending: Optional mTLS per client; configurable lifetime/format per client.
   - Acceptance: End-to-end issuance succeeds for allowed scopes/audiences; rejected for unauthorized scope/audience or failed client auth.
 
-- [ ] Story: M2M policy model + Admin UI
-  - Per-client settings: allowed scopes, default/allowed audiences, token lifetime/format, required client auth methods, optional mTLS thumbprints, DPoP required toggle, per-client rate limits.
-  - Admin UI to configure and audit; ProblemDetails on violations.
+- [~] Story: M2M policy model + Admin UI
+  - Current: Enforcement uses DB `ClientScopes` and server `ApiAudiences`; no dedicated Admin UI for M2M policy yet.
+  - TODO: Per-client allowed scopes/audiences UI, token lifetime/format, required auth methods (secret vs `private_key_jwt`), optional mTLS thumbprints, per-client rate limits.
   - Acceptance: Policies persisted and enforced; UI CRUD complete.
 
-- [ ] Story: Discovery metadata updates
-  - Advertise `grant_types_supported` including `client_credentials`.
-  - Advertise `token_endpoint_auth_methods_supported` and `token_endpoint_auth_signing_alg_values_supported`; DPoP metadata when enabled.
+- [x] Story: Discovery metadata updates
+  - Advertise `grant_types_supported` including `client_credentials`; `token_endpoint_auth_methods_supported` and signing alg values; DPoP capability hints.
   - Acceptance: Well-known validates; clients can discover M2M.
 
-- [ ] Story: Telemetry, rate limits, and auditing for M2M
-  - Metrics for success/denied/error; per-client rate limits; correlation IDs; minimal logs (no secrets/PII).
+- [~] Story: Telemetry, rate limits, and auditing for M2M
+  - Metrics include `grant_type=client_credentials`; token endpoint rate limits applied globally; logs include basic warnings/errors.
+  - TODO: Add richer structured logs/metrics (audience/scope buckets) specifically for M2M flows; redact PII.
   - Acceptance: Useful for troubleshooting; DoS protections in place.
 
-- [ ] Story: Tests and samples (M2M)
-  - Unit: scope/audience validation, auth method checks, JWT vs opaque issuance.
-  - Integration: success with `private_key_jwt`, secret-based, mTLS-restricted client, disallowed scope/audience, DPoP accepted/rejected.
-  - Samples/docs: minimal curl examples and client library snippets.
+- [~] Story: Tests and samples (M2M)
+  - Sample: Blazor page `/m2m-test` issues `client_credentials` token and calls protected API.
+  - TODO: Unit tests (scope/audience validation, auth method checks, DPoP accepted/rejected) and integration tests; sample docs.
   - Acceptance: CI green on .NET 9; critical M2M paths covered.
 
 Rollout plan
@@ -233,18 +232,19 @@ Next steps (proposed)
 - P0 (2 weeks)
   - [ ] Keys UI: PEM import (convert to JWK), pretty-print/compact toggle; strengthen JWKS validation (alg/kty/use checks).
   - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
-  - [ ] JAR hardening: move jti/nonce replay cache to distributed store (Redis); configurable TTL per environment.
+  - [ ] JAR hardening: enable Redis-backed replay cache in production (already supported via DI when Redis is configured); tune TTL/clock skew via `AuthOptions`.
   - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
   - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
+  - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
 - P1 (next 2–4 weeks)
   - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
   - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
-  - [ ] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
-  - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
+  - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
+  - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
   - [ ] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; limit to single-hop and bearer-only (no DPoP bridging) initially.
-  - [ ] M2M/Client Credentials MVP: implement grant, per-client scopes/audiences allow-list, JWT issuance, discovery update; optional DPoP; tests and samples.
+  - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.

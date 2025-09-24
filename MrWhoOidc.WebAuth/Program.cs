@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using MrWhoOidc.Auth;
+using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.Auth; // Add extension methods namespace
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
@@ -126,6 +127,8 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
     builder.Services.AddSingleton(redisMux);
     builder.Services.AddSingleton<IDPoPReplayCache, RedisDPoPReplayCache>();
     builder.Services.AddSingleton<IDPoPNonceStore, RedisDPoPNonceStore>();
+    // JAR replay cache: override in-memory default with Redis when available
+    builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
 }
 else
 {
@@ -348,6 +351,7 @@ app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
 // External OIDC chaining endpoints
 app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
 app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
+app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
 // Admin Management APIs (admin-only, ProblemDetails on errors)
 var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
