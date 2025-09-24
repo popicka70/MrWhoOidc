@@ -126,6 +126,16 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
 
+            // OBO policy columns
+            b.Property(x => x.OboEnabled);
+            b.Property(x => x.OboAllowedSourceAudiencesJson).HasMaxLength(2000);
+            b.Property(x => x.OboAllowedTargetAudiencesJson).HasMaxLength(2000);
+            b.Property(x => x.OboAllowedScopesJson).HasMaxLength(2000);
+            b.Property(x => x.OboMaxDelegationDepth);
+            b.Property(x => x.OboMaxLifetimeMinutes);
+            b.Property(x => x.OboDpopMode);
+            b.Property(x => x.OboAllowedCallersJson).HasMaxLength(2000);
+
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -298,6 +308,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Audience).HasMaxLength(200);
             b.Property(x => x.Jti).HasMaxLength(64);
             b.Property(x => x.CnfJkt).HasMaxLength(200);
+            b.Property(x => x.ActJson);
+            b.Property(x => x.DelegationDepth).HasDefaultValue(0);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
         });
 
@@ -530,6 +542,20 @@ public class Client
     [MaxLength(2000)]
     public string? FrontChannelLogoutUri { get; set; }
     public bool FrontChannelLogoutSessionRequired { get; set; } = true;
+
+    // New: OBO/Token Exchange policy (nullable => not enforced / defaults)
+    public bool? OboEnabled { get; set; }
+    [MaxLength(2000)]
+    public string? OboAllowedSourceAudiencesJson { get; set; }
+    [MaxLength(2000)]
+    public string? OboAllowedTargetAudiencesJson { get; set; }
+    [MaxLength(2000)]
+    public string? OboAllowedScopesJson { get; set; }
+    public int? OboMaxDelegationDepth { get; set; }
+    public int? OboMaxLifetimeMinutes { get; set; }
+    public OboDpopMode? OboDpopMode { get; set; }
+    [MaxLength(2000)]
+    public string? OboAllowedCallersJson { get; set; }
 }
 
 public class ClientScope
@@ -639,6 +665,9 @@ public class Token
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public Guid? ReplacedById { get; set; }
+    // OBO tracking (for opaque access tokens)
+    public string? ActJson { get; set; }
+    public int DelegationDepth { get; set; } = 0;
 }
 
 [Microsoft.EntityFrameworkCore.Index(nameof(RevocationAudit.TokenHash), nameof(RevocationAudit.ClientId))]
@@ -774,6 +803,14 @@ public class ClientJwksHistory
     [MaxLength(64)]
     public string? Hash { get; set; } // SHA-256 hex of compacted JSON
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+// OBO policy DPoP bridging modes
+public enum OboDpopMode
+{
+    Deny = 0,
+    RequireSameJkt = 1,
+    AllowSameJktOnly = 2
 }
 
 public class ExternalIdentity

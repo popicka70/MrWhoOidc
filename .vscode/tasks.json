@@ -11,6 +11,72 @@
 				"$msCompile"
 			],
 			"group": "build"
+		},
+		{
+			"label": "test-after-te-updates",
+			"type": "shell",
+			"command": "dotnet test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build-after-rl-te",
+			"type": "shell",
+			"command": "dotnet build",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build-obo-policy",
+			"type": "shell",
+			"command": "dotnet build",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build-obo-policy-2",
+			"type": "shell",
+			"command": "dotnet build",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "build-and-test-obo-dpop-depth",
+			"type": "shell",
+			"command": "dotnet test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "test-obo-policy-extensions",
+			"type": "shell",
+			"command": "dotnet test",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
 		}
 	]
 }

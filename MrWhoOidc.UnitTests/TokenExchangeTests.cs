@@ -35,7 +35,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api", "api2");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator);
+    var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -53,7 +53,8 @@ public sealed class TokenExchangeTests
             requestedAudience: "api2",
             requestedScopes: new[] { "read" },
             callerClientId: "caller-app",
-            issuer: "https://issuer"
+            issuer: "https://issuer",
+            dpopJkt: null
         );
 
         Assert.IsTrue(ok);
@@ -84,7 +85,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator);
+    var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -103,7 +104,8 @@ public sealed class TokenExchangeTests
             requestedAudience: null,
             requestedScopes: Array.Empty<string>(),
             callerClientId: "caller-app",
-            issuer: "https://issuer"
+            issuer: "https://issuer",
+            dpopJkt: null
         );
 
         Assert.IsFalse(ok);
