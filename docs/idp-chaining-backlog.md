@@ -221,7 +221,7 @@ Status: Token Exchange grant and DPoP Phase 2 (ath binding) — DONE
     - [x] TokenService integrated: delegated issuance via `ExchangeTokenAsync` uses policy evaluation; persists `act`/`DelegationDepth` and binds `cnf` when applicable.
   - Admin API/UI
     - Admin API endpoints under `/admin/api/obo-policies` or reuse Clients API with OBO subresource.
-    - Razor Pages: per-client OBO settings editor (enable, callers allow-list, source/target audiences, allowed scopes, lifetime, DPoP mode). Include help and validation hints. [pending]
+    - Razor Pages: per-client OBO settings editor (enable, callers allow-list, source/target audiences, allowed scopes, lifetime, DPoP mode) — added under Clients → Edit → OBO tab. [polish pending]
   - Acceptance
     - Policies persisted and enforced by `/token` exchange path. UI prevents invalid combinations and shows validation messages.
 

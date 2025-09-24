@@ -61,9 +61,17 @@ Example B — Require same DPoP key bridging with depth 2 and 10-minute cap
 }
 ```
 
-## Admin UI (coming soon)
+## Admin UI
 
-A per-client OBO editor will surface these fields under the Clients section in the Admin UI. Screenshots and guidance will be added here once the pages are available.
+You can edit OBO policy per client in the Admin UI under Clients → Edit → OBO tab. The page exposes:
+- Enable OBO
+- Allowed callers
+- Allowed source and target audiences
+- Allowed scopes
+- Max delegation depth and max lifetime
+- DPoP bridging mode
+
+Screenshots to be added later.
 
 ---
 

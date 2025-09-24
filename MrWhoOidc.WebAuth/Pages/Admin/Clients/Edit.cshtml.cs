@@ -122,6 +122,28 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             try { m2mMtls = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.M2MMtlsThumbprintsJson) ?? Array.Empty<string>()); } catch { }
         }
 
+        // OBO fields parse
+        string? oboCallers = null;
+        if (!string.IsNullOrWhiteSpace(client.OboAllowedCallersJson))
+        {
+            try { oboCallers = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.OboAllowedCallersJson) ?? Array.Empty<string>()); } catch { }
+        }
+        string? oboSourceAud = null;
+        if (!string.IsNullOrWhiteSpace(client.OboAllowedSourceAudiencesJson))
+        {
+            try { oboSourceAud = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.OboAllowedSourceAudiencesJson) ?? Array.Empty<string>()); } catch { }
+        }
+        string? oboTargetAud = null;
+        if (!string.IsNullOrWhiteSpace(client.OboAllowedTargetAudiencesJson))
+        {
+            try { oboTargetAud = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.OboAllowedTargetAudiencesJson) ?? Array.Empty<string>()); } catch { }
+        }
+        string? oboScopes = null;
+        if (!string.IsNullOrWhiteSpace(client.OboAllowedScopesJson))
+        {
+            try { oboScopes = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.OboAllowedScopesJson) ?? Array.Empty<string>()); } catch { }
+        }
+
         Input = new ClientInput
         {
             ClientId = client.ClientId,
@@ -147,7 +169,16 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             AllowClientSecretBasic = client.AllowClientSecretBasic,
             AllowClientSecretPost = client.AllowClientSecretPost,
             AllowPrivateKeyJwt = client.AllowPrivateKeyJwt,
-            M2MMtlsThumbprints = m2mMtls
+            M2MMtlsThumbprints = m2mMtls,
+            // OBO
+            OboEnabled = client.OboEnabled != false, // null or true => enabled
+            OboAllowedCallers = oboCallers,
+            OboAllowedSourceAudiences = oboSourceAud,
+            OboAllowedTargetAudiences = oboTargetAud,
+            OboAllowedScopes = oboScopes,
+            OboMaxDelegationDepth = client.OboMaxDelegationDepth,
+            OboMaxLifetimeMinutes = client.OboMaxLifetimeMinutes,
+            OboDpopMode = client.OboDpopMode ?? OboDpopMode.Deny
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
@@ -858,6 +889,83 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             client.M2MMtlsThumbprintsJson = null;
         }
 
+        // --- OBO policy fields ---
+        client.OboEnabled = Input.OboEnabled;
+
+        // Allowed callers
+        if (!string.IsNullOrWhiteSpace(Input.OboAllowedCallers))
+        {
+            var list = Input.OboAllowedCallers
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.OboAllowedCallersJson = list.Length == 0 ? null : JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.OboAllowedCallersJson = null;
+        }
+
+        // Allowed source audiences
+        if (!string.IsNullOrWhiteSpace(Input.OboAllowedSourceAudiences))
+        {
+            var list = Input.OboAllowedSourceAudiences
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.OboAllowedSourceAudiencesJson = list.Length == 0 ? null : JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.OboAllowedSourceAudiencesJson = null;
+        }
+
+        // Allowed target audiences
+        if (!string.IsNullOrWhiteSpace(Input.OboAllowedTargetAudiences))
+        {
+            var list = Input.OboAllowedTargetAudiences
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.OboAllowedTargetAudiencesJson = list.Length == 0 ? null : JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.OboAllowedTargetAudiencesJson = null;
+        }
+
+        // Allowed scopes
+        if (!string.IsNullOrWhiteSpace(Input.OboAllowedScopes))
+        {
+            var list = Input.OboAllowedScopes
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.OboAllowedScopesJson = list.Length == 0 ? null : JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.OboAllowedScopesJson = null;
+        }
+
+        // Max depth / lifetime
+        client.OboMaxDelegationDepth = Input.OboMaxDelegationDepth.HasValue && Input.OboMaxDelegationDepth.Value > 0
+            ? Input.OboMaxDelegationDepth
+            : null;
+        client.OboMaxLifetimeMinutes = Input.OboMaxLifetimeMinutes.HasValue && Input.OboMaxLifetimeMinutes.Value > 0
+            ? Input.OboMaxLifetimeMinutes
+            : null;
+
+        client.OboDpopMode = Input.OboDpopMode;
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
     }
@@ -1153,6 +1261,26 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public bool AllowPrivateKeyJwt { get; set; } = true;
         [Display(Name = "M2M mTLS thumbprints (comma-separated)")]
         public string? M2MMtlsThumbprints { get; set; }
+
+        // OBO policy editing
+        [Display(Name = "Enable Token Exchange / OBO")]
+        public bool OboEnabled { get; set; } = true;
+        [Display(Name = "OBO allowed callers (client_ids, comma-separated)")]
+        public string? OboAllowedCallers { get; set; }
+        [Display(Name = "OBO allowed source audiences (comma-separated)")]
+        public string? OboAllowedSourceAudiences { get; set; }
+        [Display(Name = "OBO allowed target audiences (comma-separated)")]
+        public string? OboAllowedTargetAudiences { get; set; }
+        [Display(Name = "OBO allowed scopes (comma-separated)")]
+        public string? OboAllowedScopes { get; set; }
+        [Display(Name = "OBO max delegation depth (0 or empty = default 1)")]
+        [Range(0, 10)]
+        public int? OboMaxDelegationDepth { get; set; }
+        [Display(Name = "OBO max lifetime (minutes, 0 or empty = default 15)")]
+        [Range(0, 1440)]
+        public int? OboMaxLifetimeMinutes { get; set; }
+        [Display(Name = "DPoP bridging mode")]
+        public OboDpopMode OboDpopMode { get; set; } = OboDpopMode.Deny;
     }
 
     public sealed class ProviderRow
