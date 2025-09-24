@@ -143,7 +143,7 @@ Epics and stories
 
 - [x] Story: Rate limiting & protections
   - Apply rate limits to authorize, callback, token, userinfo, introspection, and PAR paths; CSRF protections on local UI; strict referrer policy.
-  - Acceptance: Basic DoS protections in place.
+  - Acceptance: Basic DoS protections in place. When Redis is configured, a distributed limiter is used for shared enforcement and 429 responses include `Retry-After` and rate-limit headers; otherwise, in-process policies apply.
 
 10) Testing and documentation
 - [~] Story: Automated tests
@@ -230,16 +230,21 @@ Status: Token Exchange grant and DPoP Phase 2 (ath binding) — DONE
   - Document any non-standard metadata separately; keep discovery minimal.
   - Acceptance: External tools accept well-known; clients can discover token-exchange support.
 
-- [ ] Story: Introspection/UserInfo shaping for delegation
+- [x] Story: Introspection/UserInfo shaping for delegation
   - Introspection: include `act` claim when present (for both JWT and opaque). Ensure privacy shaping policy does not leak actor details to unauthorized callers.
   - UserInfo: unchanged by default; optionally include actor info only for trusted clients (future).
   - Acceptance: Responses reflect delegation appropriately without leaking PII.
+Status: DONE
+Notes:
+- Introspection now emits `act` for JWT and opaque tokens when present; `cnf` preserved where applicable.
+- Per-client allow-list (`IntrospectionResponseFieldsJson` or `AuthOptions.Introspection*`) continues to shape output; default list remains privacy-friendly.
+- UserInfo output unchanged.
 
 - [~] Story: Telemetry, rate limits, and auditing
   - Metrics: `token_exchange_requests`, `token_exchange_success`, `token_exchange_failures` counters with tags: `outcome`, `source_token_type` (jwt/opaque), `dpop_mode`, `target_aud` (bucketized), `client_bucket`.
   - Histogram: `token_exchange_duration_ms`.
   - Logs: structured audit entries including correlation id, hashed/bucketized `client_id`, source/target aud, outcome. [partial]
-  - Rate limiting: Implemented route policy `rl-token-exchange` and in-handler per-client limiter; added Redis-backed distributed limiter and `Retry-After`/rate-limit headers for `/token` and `/introspect`.
+  - Rate limiting: Implemented route policy `rl-token-exchange` and in-handler per-client limiter; added Redis-backed distributed limiter and `Retry-After`/rate-limit headers for `/token` and `/introspect` (only active when Redis is configured; falls back to in-process policies otherwise).
   - Acceptance: Metrics visible in dashboards; rate limits applied; audit logs usable for investigations.
 
 - [~] Story: Tests and samples

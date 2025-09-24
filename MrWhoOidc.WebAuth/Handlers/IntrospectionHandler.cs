@@ -231,6 +231,7 @@ public sealed class IntrospectionHandler(
             var nbfStr = principal.FindFirst("nbf")?.Value;
             var expStr = principal.FindFirst("exp")?.Value;
             var jti = principal.FindFirst("jti")?.Value;
+            var actRaw = principal.FindFirst("act")?.Value;
 
             // cnf (DPoP/bound tokens) when present
             object? cnf = null;
@@ -265,8 +266,23 @@ public sealed class IntrospectionHandler(
                 response["cnf"] = cnf;
             }
 
+            // Include act claim (delegation) if present; privacy shaping below may remove it
+            if (!string.IsNullOrEmpty(actRaw))
+            {
+                try
+                {
+                    using var actDoc = JsonDocument.Parse(actRaw);
+                    response["act"] = actDoc.RootElement.Clone();
+                }
+                catch
+                {
+                    // If not JSON, include as raw string to avoid throwing
+                    response["act"] = actRaw;
+                }
+            }
+
             // Privacy shaping
-            response = ShapeResponseForClient(response, clientId);
+            response = ShapeResponseForClient(response, client);
 
             metrics.IntrospectionActiveTrue.Add(1, tags);
             LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: requestedAud);
@@ -369,8 +385,22 @@ public sealed class IntrospectionHandler(
             responseOpaque["cnf"] = new { jkt = entity.CnfJkt };
         }
 
-        // Privacy shaping
-        responseOpaque = ShapeResponseForClient(responseOpaque, clientId);
+        // Include act claim for opaque tokens if stored
+        if (!string.IsNullOrEmpty(entity.ActJson))
+        {
+            try
+            {
+                using var actDoc = JsonDocument.Parse(entity.ActJson);
+                responseOpaque["act"] = actDoc.RootElement.Clone();
+            }
+            catch
+            {
+                // ignore parse errors
+            }
+        }
+
+    // Privacy shaping
+    responseOpaque = ShapeResponseForClient(responseOpaque, client);
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);
@@ -418,8 +448,14 @@ public sealed class IntrospectionHandler(
             ["client_id"] = clientId
         };
 
-        // Privacy shaping
-        response = ShapeResponseForClient(response, clientId);
+        // Privacy shaping (use client entity to resolve per-client allow-list)
+        var _client = await clients.FindByClientIdAsync(clientId);
+        if (_client is null)
+        {
+            // Fallback stub to allow default/global shaping
+            _client = new MrWhoOidc.Auth.Persistence.Client { ClientId = clientId };
+        }
+        response = ShapeResponseForClient(response, _client);
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: null);
@@ -471,15 +507,34 @@ public sealed class IntrospectionHandler(
         return audiences.Contains(audience, StringComparer.Ordinal);
     }
 
-    // Remove keys not allowed for this caller based on per-client or default allow-list
-    Dictionary<string, object?> ShapeResponseForClient(Dictionary<string, object?> response, string clientId)
+    // Remove keys not allowed for this caller based on per-client (DB) or configured allow-lists
+    Dictionary<string, object?> ShapeResponseForClient(Dictionary<string, object?> response, MrWhoOidc.Auth.Persistence.Client client)
     {
         var config = authOptions.Value;
         string[] allow;
-        if (config.IntrospectionResponseFields is { Count: > 0 } && config.IntrospectionResponseFields.TryGetValue(clientId, out var perClient))
+
+        // 1) Per-client DB-configured allow-list (comma list saved to JSON)
+        if (!string.IsNullOrEmpty(client.IntrospectionResponseFieldsJson))
+        {
+            try
+            {
+                allow = JsonSerializer.Deserialize<string[]>(client.IntrospectionResponseFieldsJson) ?? Array.Empty<string>();
+            }
+            catch
+            {
+                allow = Array.Empty<string>();
+            }
+        }
+        else if (config.IntrospectionResponseFields is { Count: > 0 } && config.IntrospectionResponseFields.TryGetValue(client.ClientId, out var perClient))
+        {
+            // 2) Configured per-client allow-list
             allow = perClient;
+        }
         else
+        {
+            // 3) Global default
             allow = config.IntrospectionDefaultResponseFields ?? Array.Empty<string>();
+        }
 
         if (allow is null || allow.Length == 0) return new Dictionary<string, object?> { ["active"] = response.TryGetValue("active", out var v) ? v : true };
 
