@@ -7,14 +7,18 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using System.IO;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "admin")]
-public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory) : PageModel
+public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory, IWebHostEnvironment env) : PageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
+
+    [BindProperty]
+    public IFormFile? Logo { get; set; }
 
     public List<SelectListItem> TypeOptions { get; private set; } = new();
 
@@ -156,6 +160,127 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
             DiscoverySummary = "Discovery failed: " + ex.Message;
         }
 
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostUploadLogoAsync(Guid id)
+    {
+        await LoadTypesAsync();
+        var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
+        if (entity is null) return NotFound();
+
+        if (Logo is null || Logo.Length == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Select a logo file.");
+            // Reload the input model for rendering
+            Input = new InputModel
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                DisplayName = entity.DisplayName,
+                Type = entity.Type,
+                Enabled = entity.Enabled,
+                IsDefault = entity.IsDefault,
+                SortOrder = entity.SortOrder,
+                LogoUrl = entity.LogoUrl,
+                ConfigJson = entity.ConfigJson
+            };
+            return Page();
+        }
+
+        // Validate file: size <= 512KB, allowed extensions
+        var maxBytes = 512 * 1024;
+        if (Logo.Length > maxBytes)
+        {
+            ModelState.AddModelError(string.Empty, "Logo too large (max 512 KB).");
+            Input = new InputModel
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                DisplayName = entity.DisplayName,
+                Type = entity.Type,
+                Enabled = entity.Enabled,
+                IsDefault = entity.IsDefault,
+                SortOrder = entity.SortOrder,
+                LogoUrl = entity.LogoUrl,
+                ConfigJson = entity.ConfigJson
+            };
+            return Page();
+        }
+
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".svg", ".webp" };
+        var ext = Path.GetExtension(Logo.FileName);
+        if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
+        {
+            ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .svg, .webp");
+            Input = new InputModel
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                DisplayName = entity.DisplayName,
+                Type = entity.Type,
+                Enabled = entity.Enabled,
+                IsDefault = entity.IsDefault,
+                SortOrder = entity.SortOrder,
+                LogoUrl = entity.LogoUrl,
+                ConfigJson = entity.ConfigJson
+            };
+            return Page();
+        }
+
+        var uploadsDir = Path.Combine(env.WebRootPath, "uploads", "providers");
+        Directory.CreateDirectory(uploadsDir);
+        var fileName = $"{entity.Id}{ext.ToLowerInvariant()}";
+        var fullPath = Path.Combine(uploadsDir, fileName);
+        using (var stream = System.IO.File.Create(fullPath))
+        {
+            await Logo.CopyToAsync(stream);
+        }
+        var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        entity.LogoUrl = $"/uploads/providers/{fileName}?v={version}";
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        // Repopulate Input for rendering
+        Input = new InputModel
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            DisplayName = entity.DisplayName,
+            Type = entity.Type,
+            Enabled = entity.Enabled,
+            IsDefault = entity.IsDefault,
+            SortOrder = entity.SortOrder,
+            LogoUrl = entity.LogoUrl,
+            ConfigJson = entity.ConfigJson
+        };
+
+        TempData["Success"] = "Logo uploaded.";
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostClearLogoAsync(Guid id)
+    {
+        await LoadTypesAsync();
+        var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
+        if (entity is null) return NotFound();
+        entity.LogoUrl = null;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+
+        Input = new InputModel
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            DisplayName = entity.DisplayName,
+            Type = entity.Type,
+            Enabled = entity.Enabled,
+            IsDefault = entity.IsDefault,
+            SortOrder = entity.SortOrder,
+            LogoUrl = entity.LogoUrl,
+            ConfigJson = entity.ConfigJson
+        };
+        TempData["Success"] = "Logo cleared.";
         return Page();
     }
 
