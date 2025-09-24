@@ -110,6 +110,18 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             try { logoutUris = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
         }
 
+        // M2M fields
+        string? m2mAudiences = null;
+        if (!string.IsNullOrWhiteSpace(client.M2MAllowedAudiencesJson))
+        {
+            try { m2mAudiences = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.M2MAllowedAudiencesJson) ?? Array.Empty<string>()); } catch { }
+        }
+        string? m2mMtls = null;
+        if (!string.IsNullOrWhiteSpace(client.M2MMtlsThumbprintsJson))
+        {
+            try { m2mMtls = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.M2MMtlsThumbprintsJson) ?? Array.Empty<string>()); } catch { }
+        }
+
         Input = new ClientInput
         {
             ClientId = client.ClientId,
@@ -128,7 +140,14 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             AllowLocalLogin = client.AllowLocalLogin,
             AllowExternalIdp = client.AllowExternalIdp,
             AllowQrLogin = client.AllowQrLogin,
-            LoginStyleKey = client.LoginStyleKey
+            LoginStyleKey = client.LoginStyleKey,
+            // M2M
+            M2MAllowedAudiences = m2mAudiences,
+            M2MAccessTokenLifetimeSeconds = client.M2MAccessTokenLifetimeSeconds,
+            AllowClientSecretBasic = client.AllowClientSecretBasic,
+            AllowClientSecretPost = client.AllowClientSecretPost,
+            AllowPrivateKeyJwt = client.AllowPrivateKeyJwt,
+            M2MMtlsThumbprints = m2mMtls
         };
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
@@ -797,6 +816,48 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
         client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
 
+        // M2M: allowed audiences
+        if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))
+        {
+            var list = Input.M2MAllowedAudiences
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            client.M2MAllowedAudiencesJson = JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.M2MAllowedAudiencesJson = null;
+        }
+
+        // M2M lifetime override
+        client.M2MAccessTokenLifetimeSeconds = Input.M2MAccessTokenLifetimeSeconds.HasValue && Input.M2MAccessTokenLifetimeSeconds.Value > 0
+            ? Input.M2MAccessTokenLifetimeSeconds
+            : null;
+
+        // Token endpoint auth method toggles
+        client.AllowClientSecretBasic = Input.AllowClientSecretBasic;
+        client.AllowClientSecretPost = Input.AllowClientSecretPost;
+        client.AllowPrivateKeyJwt = Input.AllowPrivateKeyJwt;
+
+        // M2M mTLS thumbprints
+        if (!string.IsNullOrWhiteSpace(Input.M2MMtlsThumbprints))
+        {
+            var list = Input.M2MMtlsThumbprints
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            client.M2MMtlsThumbprintsJson = JsonSerializer.Serialize(list);
+        }
+        else
+        {
+            client.M2MMtlsThumbprintsJson = null;
+        }
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
     }
@@ -1077,6 +1138,21 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         // New: login UI style scheme
         [StringLength(50)]
         public string? LoginStyleKey { get; set; }
+
+        // New: M2M policy fields
+        [Display(Name = "M2M allowed audiences (comma-separated)")]
+        public string? M2MAllowedAudiences { get; set; }
+        [Display(Name = "M2M access token lifetime (seconds)")]
+        [Range(0, 86400)]
+        public int? M2MAccessTokenLifetimeSeconds { get; set; }
+        [Display(Name = "Allow client_secret_basic")]
+        public bool AllowClientSecretBasic { get; set; } = true;
+        [Display(Name = "Allow client_secret_post")]
+        public bool AllowClientSecretPost { get; set; } = true;
+        [Display(Name = "Allow private_key_jwt")]
+        public bool AllowPrivateKeyJwt { get; set; } = true;
+        [Display(Name = "M2M mTLS thumbprints (comma-separated)")]
+        public string? M2MMtlsThumbprints { get; set; }
     }
 
     public sealed class ProviderRow

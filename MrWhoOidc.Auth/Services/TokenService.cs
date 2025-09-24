@@ -277,20 +277,28 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
-        // Validate audience against server-known audiences
-        var knownAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
-        if (knownAudiences.Length > 0 && !knownAudiences.Contains(audience, StringComparer.Ordinal))
-        {
-            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
-        }
-
-        // Resolve client and its allowed scopes from mapping table
+        // Resolve client and its policy/scopes
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client is null)
         {
             return (false, new { error = "unauthorized_client" }, "unauthorized_client", 400);
         }
 
+        // Determine allowed audiences: per-client override, else global server setting
+        string[] perClientAudiences = Array.Empty<string>();
+        if (!string.IsNullOrWhiteSpace(client.M2MAllowedAudiencesJson))
+        {
+            try { perClientAudiences = JsonSerializer.Deserialize<string[]>(client.M2MAllowedAudiencesJson) ?? Array.Empty<string>(); }
+            catch { perClientAudiences = Array.Empty<string>(); }
+        }
+        var globalAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+        var allowedAudiences = perClientAudiences.Length > 0 ? perClientAudiences : globalAudiences;
+        if (allowedAudiences.Length > 0 && !allowedAudiences.Contains(audience, StringComparer.Ordinal))
+        {
+            return (false, new { error = "invalid_target", error_description = "audience not allowed" }, "invalid_target", 400);
+        }
+
+        // Resolve allowed scopes from mapping table
         var allowedScopeNames = await db.ClientScopes.AsNoTracking()
             .Where(cs => cs.ClientId == client.Id)
             .Select(cs => cs.ScopeName)
@@ -340,14 +348,20 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             claims.Add(new("realm", realmName));
         }
 
+        // Lifetime override per client for M2M
+        var lifetime = (client.M2MAccessTokenLifetimeSeconds.HasValue && client.M2MAccessTokenLifetimeSeconds.Value > 0)
+            ? TimeSpan.FromSeconds(client.M2MAccessTokenLifetimeSeconds.Value)
+            : TimeSpan.FromMinutes(15);
+
         // Issue JWT access token (opaque not supported for M2M yet)
-        var accessToken = jwt.CreateJwt(issuer, audience, claims, DateTimeOffset.UtcNow.AddMinutes(15));
+        var expiry = DateTimeOffset.UtcNow.Add(lifetime);
+        var accessToken = jwt.CreateJwt(issuer, audience, claims, expiry);
 
         var payload = new
         {
             access_token = accessToken,
             token_type = "Bearer",
-            expires_in = 900,
+            expires_in = (int)lifetime.TotalSeconds,
             scope = granted.Count > 0 ? string.Join(' ', granted) : null
         };
         return (true, payload, null, 200);

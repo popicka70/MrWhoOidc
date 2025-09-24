@@ -50,14 +50,63 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             var clientAssertion = form["client_assertion"].ToString();
             var tokenEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/token";
 
+            // Fetch client once for policy checks
+            var clientEntity = await clients.FindByClientIdAsync(clientId!);
+            if (clientEntity is null)
+            {
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                return ErrorResults.UnauthorizedClient();
+            }
+
+            // mTLS check for client_credentials when configured
+            if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
+            {
+                string?[] allowedThumbprints = Array.Empty<string?>();
+                if (!string.IsNullOrWhiteSpace(clientEntity.M2MMtlsThumbprintsJson))
+                {
+                    try
+                    {
+                        allowedThumbprints = System.Text.Json.JsonSerializer.Deserialize<string[]>(clientEntity.M2MMtlsThumbprintsJson) ?? Array.Empty<string>();
+                    }
+                    catch
+                    {
+                        allowedThumbprints = Array.Empty<string>();
+                    }
+                }
+                if (allowedThumbprints.Length > 0)
+                {
+                    var cert = await http.Connection.GetClientCertificateAsync();
+                    var presented = cert?.Thumbprint;
+                    var ok = !string.IsNullOrEmpty(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase));
+                    if (!ok)
+                    {
+                        logger.LogWarning("/token mTLS required but missing/invalid for client {ClientIdHash}", Bucket(clientId!));
+                        metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                        metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                        http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
+                        return Results.Unauthorized();
+                    }
+                }
+            }
+
             bool usedPrivateKeyJwt = false;
             bool authenticated = false;
             if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
+                // Enforce per-client policy for private_key_jwt
+                if (!clientEntity.AllowPrivateKeyJwt)
+                {
+                    logger.LogWarning("/token unauthorized_client: private_key_jwt disabled for client {ClientIdHash}", Bucket(clientId!));
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.UnauthorizedClient();
+                }
+
                 usedPrivateKeyJwt = true;
-                authenticated = await assertions.ValidateAsync(clientId, clientAssertion, tokenEndpoint);
+                authenticated = await assertions.ValidateAsync(clientId!, clientAssertion, tokenEndpoint);
                 if (!authenticated)
-                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucket(clientId));
+                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucket(clientId!));
             }
             else
             {
@@ -66,26 +115,36 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 // For client_credentials, public clients must not be accepted with empty secret
                 if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
                 {
-                    var clientEntity = await clients.FindByClientIdAsync(clientId);
-                    if (clientEntity is null)
+                    if (string.IsNullOrEmpty(clientEntity.ClientSecretHash))
                     {
+                        // Force confidential client for CC when not using private_key_jwt
+                        logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         return ErrorResults.UnauthorizedClient();
                     }
-                    if (string.IsNullOrEmpty(clientEntity.ClientSecretHash))
+
+                    // Enforce per-client allowed methods (basic/post)
+                    var usedBasic = http.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.Ordinal);
+                    if (usedBasic && !clientEntity.AllowClientSecretBasic)
                     {
-                        // Force confidential client for CC when not using private_key_jwt
-                        logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucket(clientId));
+                        logger.LogWarning("/token unauthorized_client: client_secret_basic disabled for client {ClientIdHash}", Bucket(clientId!));
+                        metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                        metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                        return ErrorResults.UnauthorizedClient();
+                    }
+                    if (!usedBasic && !clientEntity.AllowClientSecretPost)
+                    {
+                        logger.LogWarning("/token unauthorized_client: client_secret_post disabled for client {ClientIdHash}", Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         return ErrorResults.UnauthorizedClient();
                     }
                 }
 
-                authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+                authenticated = await clients.ValidateClientSecretAsync(clientId!, clientSecret);
                 if (!authenticated)
-                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucket(clientId));
+                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucket(clientId!));
             }
 
             if (!authenticated)

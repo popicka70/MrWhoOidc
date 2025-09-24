@@ -36,6 +36,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="m2m-tab" data-bs-toggle="tab" data-bs-target="#tab-m2m" type="button" role="tab" aria-controls="tab-m2m" aria-selected="false">
+                <i class="bi bi-cpu me-1"></i> M2M
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tab-tools" type="button" role="tab" aria-controls="tab-tools" aria-selected="false">
                 <i class="bi bi-tools me-1"></i> Tools
             </button>
@@ -311,7 +316,7 @@
                                     @foreach (var k in Model.KeyPreviews)
                                     {
                                         <li>
-                                            <code>@k.Kid</code> – @k.Kty @k.Alg @(" ") @k.Details
+                                            <code>@k.Kid</code> ? @k.Kty @k.Alg @(" ") @k.Details
                                         </li>
                                     }
                                 </ul>
@@ -354,6 +359,48 @@
                     <input asp-for="Input.IntrospectionMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
                     <small class="form-text text-muted">When set, /introspect will require a matching client certificate. Values are case-insensitive.</small>
                     <span asp-validation-for="Input.IntrospectionMtlsThumbprints" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-m2m" role="tabpanel" aria-labelledby="m2m-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Input.M2MAllowedAudiences" class="form-label"></label>
+                    <input asp-for="Input.M2MAllowedAudiences" class="form-control" placeholder="api, https://api.example.com" />
+                    <small class="form-text text-muted">Comma-separated list of allowed audiences for client_credentials tokens. Empty to use server global allow-list.</small>
+                    <span asp-validation-for="Input.M2MAllowedAudiences" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Input.M2MAccessTokenLifetimeSeconds" class="form-label"></label>
+                    <input asp-for="Input.M2MAccessTokenLifetimeSeconds" class="form-control" />
+                    <small class="form-text text-muted">Override access token lifetime in seconds for M2M. Leave empty or 0 for default (900s).</small>
+                    <span asp-validation-for="Input.M2MAccessTokenLifetimeSeconds" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">Token endpoint auth methods</div>
+                        <div class="card-body row g-3">
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowClientSecretBasic" class="form-check-input" />
+                                <label asp-for="Input.AllowClientSecretBasic" class="form-check-label"></label>
+                            </div>
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowClientSecretPost" class="form-check-input" />
+                                <label asp-for="Input.AllowClientSecretPost" class="form-check-label"></label>
+                            </div>
+                            <div class="col-md-4 form-check">
+                                <input asp-for="Input.AllowPrivateKeyJwt" class="form-check-input" />
+                                <label asp-for="Input.AllowPrivateKeyJwt" class="form-check-label"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.M2MMtlsThumbprints" class="form-label"></label>
+                    <input asp-for="Input.M2MMtlsThumbprints" class="form-control" placeholder="ABCD..., 1234..." />
+                    <small class="form-text text-muted">When set, client_credentials will require a matching client certificate. Values are case-insensitive.</small>
+                    <span asp-validation-for="Input.M2MMtlsThumbprints" class="text-danger"></span>
                 </div>
             </div>
         </div>
