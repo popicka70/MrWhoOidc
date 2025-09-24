@@ -106,8 +106,10 @@ Epics and stories
 
 - [~] Story: Claim mapping and propagation
   - Implemented: `IdentityProviderClaimMappings` CRUD UI and `ClaimMappingService` with transforms (copy, trim, case, prefix/suffix, regex, concat); applied during external provisioning.
+  - Implemented: Default mappings fallback via `AuthOptions.DefaultClaimMappings` when a provider has no explicit mappings.
+  - Implemented: Mapping source now includes upstream `acr` and aggregated `amr` (space-delimited) alongside common claims; used during external provisioning.
   - Implemented: Include `idp` and `acr` from the upstream provider in issued tokens; propagate `auth_time` from the upstream sign-in when available.
-  - Pending: Emit `amr` consistently (and map where applicable); extend mapped claim propagation into issued tokens where policy allows.
+  - Pending: Emit `amr` consistently (and map where applicable); extend mapped claim propagation into issued tokens where policy allows (wire via `AuthorizationCodeMetadataStore`).
   - Acceptance: Downstream clients can consume upstream metadata.
 
 7) Login UI changes (Razor Pages end-user flow)
