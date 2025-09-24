@@ -30,7 +30,7 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new Client { ClientId = "c1" });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());
         var (jwt, kid) = CreateSignedRequest("c1", "https://as/authorize", out var jwk);
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsFalse(result.IsValid);
@@ -45,7 +45,7 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new Client { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsTrue(result.IsValid);
         Assert.AreEqual("c1", result.ClientId);

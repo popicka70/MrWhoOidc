@@ -7,7 +7,6 @@ using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -26,11 +25,14 @@ public sealed class RequestObjectValidationResult
     public AuthorizeRequest? Request { get; init; }
 }
 
-internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions) : IRequestObjectValidator
+public interface IJarReplayCache
 {
-    // Simple in-memory replay store for jti and nonce (per process). Can be replaced by distributed cache later.
-    private static readonly ConcurrentDictionary<string, DateTimeOffset> ReplayStore = new(StringComparer.Ordinal);
+    // Returns true when the key was added (not present), false when a non-expired entry already existed
+    bool TryAdd(string key, DateTimeOffset expiresAt);
+}
 
+internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions, IJarReplayCache replayCache) : IRequestObjectValidator
+{
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(requestJwt))
@@ -206,7 +208,6 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
         var keyId = !string.IsNullOrEmpty(jti) ? jti : (!string.IsNullOrEmpty(nonce) ? $"nonce:{nonce}" : null);
         if (!string.IsNullOrEmpty(keyId))
         {
-            // Compute TTL
             long? ReadLong2(object? o)
                 => o is null ? null : (o is long l ? l : (long.TryParse(o.ToString(), out var v) ? v : null));
             unsigned.Payload.TryGetValue("exp", out var expObj2);
@@ -217,17 +218,10 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             if (ttl <= TimeSpan.Zero) ttl = TimeSpan.FromSeconds(60);
             var expiresAt = now.Add(ttl);
             var replayKey = $"jar:{clientId}:{keyId}";
-            CleanupReplayStore();
-            if (!ReplayStore.TryAdd(replayKey, expiresAt))
+            if (!replayCache.TryAdd(replayKey, expiresAt))
             {
-                if (ReplayStore.TryGetValue(replayKey, out var existing) && existing > now)
-                {
-                    logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
-                    return Invalid("invalid_request_object", "Replay detected (jti/nonce) ");
-                }
-                // expired entry is present; replace it
-                ReplayStore.TryRemove(replayKey, out _);
-                ReplayStore.TryAdd(replayKey, expiresAt);
+                logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);
+                return Invalid("invalid_request_object", "Replay detected (jti/nonce) ");
             }
         }
 
@@ -253,18 +247,6 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             ClientId = clientId,
             Request = req
         };
-    }
-
-    private static void CleanupReplayStore()
-    {
-        var now = DateTimeOffset.UtcNow;
-        foreach (var kv in ReplayStore)
-        {
-            if (kv.Value <= now)
-            {
-                ReplayStore.TryRemove(kv.Key, out _);
-            }
-        }
     }
 
     static RequestObjectValidationResult Invalid(string code, string description) => new()
