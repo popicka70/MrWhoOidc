@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-23
+Updated: 2025-09-24
 
 Status legend
 - [x] Done
@@ -184,34 +184,28 @@ Epics and stories
   - Acceptance: CI green on .NET 9; coverage for critical OBO paths.
 
 12) Machine-to-Machine (M2M) / Client Credentials
-- [ ] Story: Client Credentials grant at `/token`
-  - Accept `grant_type=client_credentials`.
-  - Client authentication: support `private_key_jwt` and client secret (basic/post); optional mTLS per client.
-  - Audience selection: require `audience` (or `resource`) parameter or use per-client default; validate against allowed audiences; restrict to single `aud` for MVP.
-  - Scope enforcement: issue only admin-allowed scopes for the client; return granted scopes in response.
-  - Token format/lifetime: JWT or opaque based on audience/server config; per-client configurable lifetime; include `cnf.jkt` when DPoP proof is presented.
-  - Claims: subject is the client (e.g., `sub` = client_id); include `client_id`, optional `azp`; no end-user claims.
-  - Response: `access_token`, `token_type`, `expires_in`, `scope`.
+- [x] Story: Client Credentials grant at `/token`
+  - Implemented: `/token` handles `grant_type=client_credentials` with `client_secret_basic`/`client_secret_post` and `private_key_jwt`; audience vs resource validation; scope allow-list via `ClientScopes`; JWT issuance (15 min); optional DPoP binding via `cnf.jkt`; includes `client_id`/`sub` and optional `realm` claim.
+  - Pending: Optional mTLS per client; configurable lifetime/format per client.
   - Acceptance: End-to-end issuance succeeds for allowed scopes/audiences; rejected for unauthorized scope/audience or failed client auth.
 
-- [ ] Story: M2M policy model + Admin UI
-  - Per-client settings: allowed scopes, default/allowed audiences, token lifetime/format, required client auth methods, optional mTLS thumbprints, DPoP required toggle, per-client rate limits.
-  - Admin UI to configure and audit; ProblemDetails on violations.
+- [~] Story: M2M policy model + Admin UI
+  - Current: Enforcement uses DB `ClientScopes` and server `ApiAudiences`; no dedicated Admin UI for M2M policy yet.
+  - TODO: Per-client allowed scopes/audiences UI, token lifetime/format, required auth methods (secret vs `private_key_jwt`), optional mTLS thumbprints, per-client rate limits.
   - Acceptance: Policies persisted and enforced; UI CRUD complete.
 
-- [ ] Story: Discovery metadata updates
-  - Advertise `grant_types_supported` including `client_credentials`.
-  - Advertise `token_endpoint_auth_methods_supported` and `token_endpoint_auth_signing_alg_values_supported`; DPoP metadata when enabled.
+- [x] Story: Discovery metadata updates
+  - Advertise `grant_types_supported` including `client_credentials`; `token_endpoint_auth_methods_supported` and signing alg values; DPoP capability hints.
   - Acceptance: Well-known validates; clients can discover M2M.
 
-- [ ] Story: Telemetry, rate limits, and auditing for M2M
-  - Metrics for success/denied/error; per-client rate limits; correlation IDs; minimal logs (no secrets/PII).
+- [~] Story: Telemetry, rate limits, and auditing for M2M
+  - Metrics include `grant_type=client_credentials`; token endpoint rate limits applied globally; logs include basic warnings/errors.
+  - TODO: Add richer structured logs/metrics (audience/scope buckets) specifically for M2M flows; redact PII.
   - Acceptance: Useful for troubleshooting; DoS protections in place.
 
-- [ ] Story: Tests and samples (M2M)
-  - Unit: scope/audience validation, auth method checks, JWT vs opaque issuance.
-  - Integration: success with `private_key_jwt`, secret-based, mTLS-restricted client, disallowed scope/audience, DPoP accepted/rejected.
-  - Samples/docs: minimal curl examples and client library snippets.
+- [~] Story: Tests and samples (M2M)
+  - Sample: Blazor page `/m2m-test` issues `client_credentials` token and calls protected API.
+  - TODO: Unit tests (scope/audience validation, auth method checks, DPoP accepted/rejected) and integration tests; sample docs.
   - Acceptance: CI green on .NET 9; critical M2M paths covered.
 
 Rollout plan
@@ -244,7 +238,7 @@ Next steps (proposed)
   - [ ] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
   - [ ] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; limit to single-hop and bearer-only (no DPoP bridging) initially.
-  - [ ] M2M/Client Credentials MVP: implement grant, per-client scopes/audiences allow-list, JWT issuance, discovery update; optional DPoP; tests and samples.
+  - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
