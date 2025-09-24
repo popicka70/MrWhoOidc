@@ -77,7 +77,7 @@ public class IndexModel(AuthDbContext db) : PageModel
             {
                 using var doc = JsonDocument.Parse(Input.JwkJson!);
                 if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                    throw new InvalidOperationException("JWK must be a JSON object.") ;
+                    throw new InvalidOperationException("JWK must be a JSON object.");
                 if (!doc.RootElement.TryGetProperty("kty", out var ktyProp))
                     throw new InvalidOperationException("Missing 'kty' in JWK.");
                 var kty = ktyProp.GetString();
