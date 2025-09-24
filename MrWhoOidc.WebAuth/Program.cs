@@ -351,6 +351,7 @@ app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
 // External OIDC chaining endpoints
 app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
 app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
+app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
 // Admin Management APIs (admin-only, ProblemDetails on errors)
 var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");

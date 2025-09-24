@@ -116,6 +116,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.AllowClientSecretPost).HasDefaultValue(true);
             b.Property(x => x.AllowPrivateKeyJwt).HasDefaultValue(true);
             b.Property(x => x.M2MMtlsThumbprintsJson).HasMaxLength(2000);
+            // New: external user provisioning/linking policies
+            b.Property(x => x.AllowExternalAutoProvision).HasDefaultValue(true);
+            b.Property(x => x.AllowExternalEmailLinking).HasDefaultValue(true);
+            b.Property(x => x.RequireEmailLinkConfirmation).HasDefaultValue(true);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -507,6 +511,11 @@ public class Client
     // Optional mTLS requirement for CC: list of allowed certificate thumbprints (case-insensitive). Empty => no mTLS required.
     [MaxLength(2000)]
     public string? M2MMtlsThumbprintsJson { get; set; }
+
+    // New: external provisioning/linking policy
+    public bool AllowExternalAutoProvision { get; set; } = true; // if false, external users must pre-exist or be linked
+    public bool AllowExternalEmailLinking { get; set; } = true;   // allow linking by email when ExternalIdentity missing
+    public bool RequireEmailLinkConfirmation { get; set; } = true; // if true, show confirmation UI instead of auto-linking
 }
 
 public class ClientScope
