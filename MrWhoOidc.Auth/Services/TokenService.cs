@@ -87,6 +87,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             }
         }
 
+        // Upstream context captured during /authorize
+        meta.TryGetUpstream(code, out var upstreamIdp, out var upstreamAcr, out var upstreamAmrStr);
+        var upstreamAmrs = string.IsNullOrWhiteSpace(upstreamAmrStr)
+            ? Array.Empty<string>()
+            : upstreamAmrStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         string accessToken;
         if (opaqueEnabled)
         {
@@ -119,6 +125,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 accessClaims.Add(new("realm", realmName));
             }
+            // Propagate upstream context into access token when available
+            if (!string.IsNullOrWhiteSpace(upstreamIdp)) accessClaims.Add(new("idp", upstreamIdp!));
+            if (!string.IsNullOrWhiteSpace(upstreamAcr)) accessClaims.Add(new("acr", upstreamAcr!));
+            foreach (var amr in upstreamAmrs) accessClaims.Add(new("amr", amr));
+
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
 
@@ -153,6 +164,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Pull auth_time from metadata store if available
         DateTimeOffset? authTime = null;
         if (meta.TryGetAuthTime(code, out var at)) authTime = at;
+
+        // Propagate upstream context into ID token as well
+        if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new("idp", upstreamIdp!));
+        if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new("acr", upstreamAcr!));
+        foreach (var amr in upstreamAmrs) idClaims.Add(new("amr", amr));
 
         var idToken = jwt.CreateJwt(
             issuer,

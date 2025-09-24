@@ -425,6 +425,16 @@ public sealed class AuthorizeHandler(
                 meta.SetResource(code!, validationResult.Resource!);
             }
 
+            // New: stash upstream identity context (idp/acr/amr) for propagation into tokens
+            if (!string.IsNullOrEmpty(code))
+            {
+                var idp = http.User.FindFirst("idp")?.Value;
+                var acr = http.User.FindFirst("acr")?.Value;
+                var amrValues = http.User.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+                var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
+                meta.SetUpstream(code!, idp, acr, amr);
+            }
+
             // JARM response if requested
             if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == "query.jwt" || validationResult.ResponseMode == "form_post.jwt"))
             {

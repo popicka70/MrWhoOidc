@@ -327,6 +327,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
 
         string? email = null, name = null, sub = null, issuer = null, nonce = state.Nonce;
+        string? acr = null; string[] amrs = Array.Empty<string>();
 
         try
         {
@@ -359,6 +360,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 name = principal.FindFirst("name")?.Value ?? principal.FindFirst(ClaimTypes.Name)?.Value;
                 email = principal.FindFirst("email")?.Value ?? principal.FindFirst(ClaimTypes.Email)?.Value;
+                acr = principal.FindFirst("acr")?.Value;
+                amrs = principal.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
                 var nonceClaim = principal.FindFirst("nonce")?.Value;
                 if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
                     return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Nonce mismatch");
@@ -476,7 +479,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                         var newExt = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
                         db.ExternalIdentities.Add(newExt);
                         await db.SaveChangesAsync(http.RequestAborted);
-                        return await SignInAndRedirectAsync(http, userId, state, name, email, sub);
+                        return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
                     }
                 }
             }
@@ -498,7 +501,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 db.ExternalIdentities.Add(ext);
                 await db.SaveChangesAsync(http.RequestAborted);
 
-                return await SignInAndRedirectAsync(http, userId, state, name, email, sub);
+                return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
             }
 
             // Neither linking nor auto-provision allowed
@@ -511,7 +514,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             ext.ClaimsJson = BuildClaimsJson(email, name);
             await db.SaveChangesAsync(http.RequestAborted);
 
-            return await SignInAndRedirectAsync(http, userId, state, name, email, sub);
+            return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs);
         }
     }
 
@@ -541,7 +544,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (extExisting is not null)
         {
             // Already linked, sign in
-            return await SignInAndRedirectAsync(http, extExisting.UserId, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId }, model.Name, model.Email, model.Subject);
+            return await SignInAndRedirectAsync(http, extExisting.UserId, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>());
         }
 
         // Create linkage
@@ -562,10 +565,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         db.ExternalIdentities.Add(ext);
         await db.SaveChangesAsync();
 
-        return await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId }, model.Name, model.Email, model.Subject);
+        return await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>());
     }
 
-    private async Task<IResult> SignInAndRedirectAsync(HttpContext http, Guid userId, StateModel state, string? name, string? email, string? sub)
+    private async Task<IResult> SignInAndRedirectAsync(HttpContext http, Guid userId, StateModel state, string? name, string? email, string? sub, string? idp, string? acr, string[] amrs)
     {
         // Issue local cookie
         var claims = new List<System.Security.Claims.Claim>
@@ -574,6 +577,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             new(System.Security.Claims.ClaimTypes.Name, name ?? email ?? $"{state.Provider}:{sub}" ) ,
             new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
+        if (!string.IsNullOrEmpty(idp)) claims.Add(new("idp", idp));
+        if (!string.IsNullOrEmpty(acr)) claims.Add(new("acr", acr));
+        if (amrs is { Length: > 0 }) foreach (var v in amrs) claims.Add(new("amr", v));
+
         var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
