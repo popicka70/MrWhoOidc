@@ -433,6 +433,15 @@ public sealed class AuthorizeHandler(
                 var amrValues = http.User.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
                 var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
                 meta.SetUpstream(code!, idp, acr, amr);
+
+                // Also capture mapped claims with ext_map_* prefix
+                var mapped = http.User.Claims
+                    .Where(c => c.Type.StartsWith("ext_map_", StringComparison.Ordinal))
+                    .ToDictionary(c => c.Type.Substring("ext_map_".Length), c => c.Value, StringComparer.Ordinal);
+                if (mapped.Count > 0)
+                {
+                    meta.SetMappedClaims(code!, mapped);
+                }
             }
 
             // JARM response if requested

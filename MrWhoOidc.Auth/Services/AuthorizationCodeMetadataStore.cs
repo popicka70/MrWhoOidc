@@ -9,6 +9,9 @@ public interface IAuthorizationCodeMetadataStore
     // New: upstream context propagation
     void SetUpstream(string code, string? idp, string? acr, string? amr);
     bool TryGetUpstream(string code, out string? idp, out string? acr, out string? amr);
+    // New: mapped claim propagation
+    void SetMappedClaims(string code, IReadOnlyDictionary<string, string> claims);
+    bool TryGetMappedClaims(string code, out IReadOnlyDictionary<string, string> claims);
     void Remove(string code);
 }
 
@@ -17,6 +20,7 @@ internal sealed class InMemoryAuthorizationCodeMetadataStore : IAuthorizationCod
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> _authTimes = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _resources = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string? idp, string? acr, string? amr)> _upstream = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Generic.Dictionary<string, string>> _mapped = new();
 
     public void SetAuthTime(string code, DateTimeOffset authTime) => _authTimes[code] = authTime;
     public bool TryGetAuthTime(string code, out DateTimeOffset authTime) => _authTimes.TryGetValue(code, out authTime);
@@ -34,10 +38,26 @@ internal sealed class InMemoryAuthorizationCodeMetadataStore : IAuthorizationCod
         idp = null; acr = null; amr = null; return false;
     }
 
+    public void SetMappedClaims(string code, IReadOnlyDictionary<string, string> claims)
+    {
+        _mapped[code] = new System.Collections.Generic.Dictionary<string, string>(claims, System.StringComparer.Ordinal);
+    }
+
+    public bool TryGetMappedClaims(string code, out IReadOnlyDictionary<string, string> claims)
+    {
+        if (_mapped.TryGetValue(code, out var dict))
+        {
+            claims = dict; return true;
+        }
+        claims = System.Array.Empty<System.Collections.Generic.KeyValuePair<string, string>>().ToDictionary(k => k.Key, v => v.Value);
+        return false;
+    }
+
     public void Remove(string code)
     {
         _authTimes.TryRemove(code, out _);
         _resources.TryRemove(code, out _);
         _upstream.TryRemove(code, out _);
+        _mapped.TryRemove(code, out _);
     }
 }

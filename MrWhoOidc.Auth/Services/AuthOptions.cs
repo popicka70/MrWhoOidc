@@ -46,6 +46,14 @@ public sealed class AuthOptions
 
     // PAR per-client pending entries cap (in-memory enforcement)
     public int ParClientPendingLimit { get; set; } = 50;
+
+    // === Claim propagation policy ===
+    // Emit amr consistently in ID and access tokens when available from upstream.
+    public bool EmitAmrInIdToken { get; set; } = true;
+    public bool EmitAmrInAccessToken { get; set; } = true;
+    // Allow-list of mapped claim names we may propagate into ID/access tokens when present and policy allows.
+    public string[] PropagateMappedClaimsToIdToken { get; set; } = Array.Empty<string>();
+    public string[] PropagateMappedClaimsToAccessToken { get; set; } = Array.Empty<string>();
 }
 
 public sealed class OpaqueAccessTokenOptions

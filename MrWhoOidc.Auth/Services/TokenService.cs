@@ -93,6 +93,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             ? Array.Empty<string>()
             : upstreamAmrStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        // Mapped claims captured during /authorize (from external mapping)
+        meta.TryGetMappedClaims(code, out var mappedClaimsReadOnly);
+        var mappedClaims = mappedClaimsReadOnly is null ? new Dictionary<string, string>() : new Dictionary<string, string>(mappedClaimsReadOnly);
+
         string accessToken;
         if (opaqueEnabled)
         {
@@ -128,7 +132,23 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             // Propagate upstream context into access token when available
             if (!string.IsNullOrWhiteSpace(upstreamIdp)) accessClaims.Add(new("idp", upstreamIdp!));
             if (!string.IsNullOrWhiteSpace(upstreamAcr)) accessClaims.Add(new("acr", upstreamAcr!));
-            foreach (var amr in upstreamAmrs) accessClaims.Add(new("amr", amr));
+            if (authOptions.Value.EmitAmrInAccessToken)
+            {
+                foreach (var amr in upstreamAmrs) accessClaims.Add(new("amr", amr));
+            }
+
+            // Propagate mapped claims into access token when allow-listed
+            var allowAccess = authOptions.Value.PropagateMappedClaimsToAccessToken ?? Array.Empty<string>();
+            if (allowAccess.Length > 0 && mappedClaims.Count > 0)
+            {
+                foreach (var name in allowAccess)
+                {
+                    if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        accessClaims.Add(new(name, val));
+                    }
+                }
+            }
 
             accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
         }
@@ -168,7 +188,23 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Propagate upstream context into ID token as well
         if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new("idp", upstreamIdp!));
         if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new("acr", upstreamAcr!));
-        foreach (var amr in upstreamAmrs) idClaims.Add(new("amr", amr));
+        if (authOptions.Value.EmitAmrInIdToken)
+        {
+            foreach (var amr in upstreamAmrs) idClaims.Add(new("amr", amr));
+        }
+
+        // Propagate mapped claims into ID token when allow-listed
+        var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();
+        if (allowId.Length > 0 && mappedClaims.Count > 0)
+        {
+            foreach (var name in allowId)
+            {
+                if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
+                {
+                    idClaims.Add(new(name, val));
+                }
+            }
+        }
 
         var idToken = jwt.CreateJwt(
             issuer,
