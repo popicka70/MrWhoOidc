@@ -17,9 +17,19 @@ public interface ITokenService
     // New: client credentials (M2M)
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+    // New: Token Exchange (RFC 8693) MVP
+    Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
+        string subjectToken,
+        string? subjectTokenType,
+        string? requestedTokenType,
+        string? requestedAudience,
+        string[] requestedScopes,
+        string callerClientId,
+        string issuer,
+        CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default)
@@ -482,5 +492,192 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     {
         using var sha = SHA256.Create();
         return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
+    }
+
+    public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
+        string subjectToken,
+        string? subjectTokenType,
+        string? requestedTokenType,
+        string? requestedAudience,
+        string[] requestedScopes,
+        string callerClientId,
+        string issuer,
+        CancellationToken ct = default)
+    {
+        // Support only access tokens for MVP
+        if (!string.IsNullOrEmpty(requestedTokenType) && !string.Equals(requestedTokenType, "urn:ietf:params:oauth:token-type:access_token", StringComparison.Ordinal))
+        {
+            return (false, new { error = "unsupported_token_type" }, "unsupported_token_type", 400);
+        }
+
+        if (string.IsNullOrWhiteSpace(subjectToken))
+        {
+            return (false, new { error = "invalid_request", error_description = "missing subject_token" }, "invalid_request", 400);
+        }
+
+        // Determine subject token type if missing
+        var isLikelyJwt = subjectToken.Count(c => c == '.') == 2;
+        var isJwt = isLikelyJwt || string.Equals(subjectTokenType, "urn:ietf:params:oauth:token-type:access_token", StringComparison.Ordinal)
+                                   || string.Equals(subjectTokenType, "urn:ietf:params:oauth:token-type:jwt", StringComparison.Ordinal);
+
+        Guid userId;
+        string[] subjectScopes = Array.Empty<string>();
+        string? sourceAudience = null;
+        string? subjectCnfJkt = null;
+        DateTimeOffset subjectExpiry;
+
+        if (isJwt)
+        {
+            // Validate as local JWT access token
+            var (ok, principal, error) = validator.Validate(subjectToken, issuer);
+            if (!ok || principal is null)
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
+            var sub = principal.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out userId))
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
+            // scope claim is space-delimited
+            var scopeStr = principal.FindFirst("scope")?.Value;
+            subjectScopes = string.IsNullOrWhiteSpace(scopeStr) ? Array.Empty<string>() : scopeStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            // aud from JWT (not validated by validator); parse token directly
+            try
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var unsigned = handler.ReadJwtToken(subjectToken);
+                var expUnix = unsigned.Payload.Expiration;
+                subjectExpiry = expUnix.HasValue ? DateTimeOffset.FromUnixTimeSeconds(expUnix.Value) : DateTimeOffset.UtcNow.AddMinutes(15);
+                if (unsigned.Audiences is not null) sourceAudience = unsigned.Audiences.FirstOrDefault();
+                // Single-hop: reject if act present
+                if (unsigned.Payload.TryGetValue("act", out _))
+                {
+                    return (false, new { error = "invalid_grant", error_description = "single_hop_only" }, "invalid_grant", 400);
+                }
+                if (unsigned.Payload.TryGetValue("cnf", out var cnfVal) && cnfVal is not null)
+                {
+                    try
+                    {
+                        // cnf claim stored as object or stringified json; handle both
+                        string json = cnfVal is string s ? s : System.Text.Json.JsonSerializer.Serialize(cnfVal);
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("jkt", out var jktEl)) subjectCnfJkt = jktEl.GetString();
+                    }
+                    catch { }
+                }
+            }
+            catch
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+        }
+        else
+        {
+            // Opaque access token: lookup in DB
+            var hash = Hash(subjectToken);
+            var entity = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.Type == "access" && t.TokenHash == hash, ct).ConfigureAwait(false);
+            if (entity is null || entity.RevokedAt is not null || entity.ExpiresAt <= DateTimeOffset.UtcNow)
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
+            userId = entity.UserId;
+            subjectExpiry = entity.ExpiresAt;
+            sourceAudience = entity.Audience;
+            subjectCnfJkt = entity.CnfJkt;
+            try { subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>(); }
+            catch { subjectScopes = Array.Empty<string>(); }
+
+            // Single-hop: we cannot detect 'act' for opaque in MVP, assume not delegated
+        }
+
+        // MVP: deny DPoP bridging if subject is bound
+        if (!string.IsNullOrEmpty(subjectCnfJkt))
+        {
+            return (false, new { error = "invalid_request", error_description = "dpop_bridging_not_supported" }, "invalid_request", 400);
+        }
+
+        // Resolve target audience
+        string audience = requestedAudience ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(audience))
+        {
+            audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+        }
+        else
+        {
+            // Basic allow-list: audience must be in configured ApiAudiences if configured
+            var allowed = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+            if (allowed.Length > 0 && !allowed.Contains(audience, StringComparer.Ordinal))
+            {
+                return (false, new { error = "invalid_target" }, "invalid_target", 400);
+            }
+        }
+
+        // Scope narrowing: intersection(subject_scopes, requested_scopes)
+        HashSet<string> resultScopesSet = new(StringComparer.Ordinal);
+        if (requestedScopes is { Length: > 0 })
+        {
+            var subjectSet = new HashSet<string>(subjectScopes, StringComparer.Ordinal);
+            foreach (var s in requestedScopes)
+            {
+                if (subjectSet.Contains(s)) resultScopesSet.Add(s);
+            }
+        }
+        else
+        {
+            foreach (var s in subjectScopes) resultScopesSet.Add(s);
+        }
+
+        var resultScopes = resultScopesSet.ToArray();
+        if (resultScopes.Length == 0)
+        {
+            return (false, new { error = "insufficient_scope" }, "insufficient_scope", 400);
+        }
+
+        // Lifetime cap: min(subject_remaining, policy default 15m)
+        var nowUtc = DateTimeOffset.UtcNow;
+        var remaining = subjectExpiry - nowUtc;
+        if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
+        var policyMax = TimeSpan.FromMinutes(15);
+        var lifetime = remaining <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : (remaining < policyMax ? remaining : policyMax);
+
+        // Issue token: JWT or opaque per config
+        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
+            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
+             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+
+        var jtiNew = Guid.NewGuid().ToString("N");
+        string accessToken;
+        if (opaqueEnabled)
+        {
+            var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            await PersistOpaqueAccessAsync(userId, callerClientId, audience, resultScopes, jtiNew, raw, lifetime, cnfJkt: null, ct).ConfigureAwait(false);
+            accessToken = raw;
+        }
+        else
+        {
+            var claims = new List<System.Security.Claims.Claim>
+            {
+                new("sub", userId.ToString()),
+                new("jti", jtiNew),
+                new("scope", string.Join(' ', resultScopes)),
+                new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = callerClientId }))
+            };
+            accessToken = jwt.CreateJwt(issuer, audience, claims, nowUtc.Add(lifetime));
+        }
+
+        var payload = new
+        {
+            access_token = accessToken,
+            issued_token_type = "urn:ietf:params:oauth:token-type:access_token",
+            token_type = "Bearer",
+            expires_in = (int)lifetime.TotalSeconds,
+            scope = string.Join(' ', resultScopes)
+        };
+        return (true, payload, null, 200);
     }
 }

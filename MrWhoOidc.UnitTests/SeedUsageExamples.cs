@@ -30,7 +30,8 @@ public sealed class SeedUsageExamples
         Assert.IsTrue(ok);
 
         // Exchange it
-        var tokenSvc = new TokenService(db, new JwtService(new KeyStore(db)), new RefreshTokenService(db), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta);
+    var ks = new KeyStore(db);
+    var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks));
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);

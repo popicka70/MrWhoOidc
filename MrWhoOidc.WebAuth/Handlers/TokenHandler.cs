@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.WebAuth.Infrastructure;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -90,7 +91,6 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 }
             }
 
-            bool usedPrivateKeyJwt = false;
             bool authenticated = false;
             if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
@@ -103,7 +103,6 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     return ErrorResults.UnauthorizedClient();
                 }
 
-                usedPrivateKeyJwt = true;
                 authenticated = await assertions.ValidateAsync(clientId!, clientAssertion, tokenEndpoint);
                 if (!authenticated)
                     logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucket(clientId!));
@@ -241,6 +240,41 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
                 var result = await tokens.CreateClientCredentialsTokenAsync(clientId!, audience, requestedScopes, issuer, dpopJkt);
 
+                outcome = result.ok ? "success" : "failure";
+                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
+                if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                return Results.Json(result.payload!, statusCode: result.status);
+            }
+
+            if (string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
+            {
+                // Feature flag gate
+                var authOpts = http.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>().Value;
+                if (!authOpts.EnableTokenExchange)
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.UnsupportedGrant();
+                }
+
+                var subjectToken = form["subject_token"].ToString();
+                var subjectTokenType = form["subject_token_type"].ToString();
+                var requestedTokenType = form["requested_token_type"].ToString();
+                var audience = form["audience"].ToString();
+                var resource = form["resource"].ToString();
+                if (!string.IsNullOrEmpty(audience) && !string.IsNullOrEmpty(resource) && !string.Equals(audience, resource, StringComparison.Ordinal))
+                {
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
+                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return ErrorResults.InvalidRequest("audience and resource conflict");
+                }
+                var target = !string.IsNullOrEmpty(resource) ? resource : audience;
+                // Optional scopes requested
+                var scopeParam = form["scope"].ToString();
+                var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? Array.Empty<string>() : scopeParam.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+                var result = await tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId!, issuer);
                 outcome = result.ok ? "success" : "failure";
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
                 if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });

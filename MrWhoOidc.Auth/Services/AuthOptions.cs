@@ -57,6 +57,11 @@ public sealed class AuthOptions
 
     // Default claim mappings applied when a provider has no explicit mappings in the database.
     public ClaimMappingRule[] DefaultClaimMappings { get; set; } = Array.Empty<ClaimMappingRule>();
+
+    // === Features ===
+    // Enable OAuth 2.0 Token Exchange (RFC 8693) at the token endpoint.
+    // When disabled, the grant is not accepted and not advertised in discovery.
+    public bool EnableTokenExchange { get; set; } = false;
 }
 
 public sealed class OpaqueAccessTokenOptions

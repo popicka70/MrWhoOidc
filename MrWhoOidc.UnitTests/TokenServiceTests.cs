@@ -28,7 +28,8 @@ public sealed class TokenServiceTests
     public async Task ExchangeAuthorizationCode_Fails_ForInvalidCode()
     {
         using var db = CreateDb();
-        var svc = new TokenService(db, new JwtService(new KeyStore(db)), new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore());
+    var ks = new KeyStore(db);
+    var svc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks));
         var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "verifier", "https://issuer");
         Assert.IsFalse(ok);
         Assert.AreEqual(400, status);
@@ -58,8 +59,9 @@ public sealed class TokenServiceTests
         db.AuthorizationCodes.Add(code);
         await db.SaveChangesAsync();
 
-        var jwtSvc = new JwtService(new KeyStore(db));
-        var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore());
+    var ks2 = new KeyStore(db);
+    var jwtSvc = new JwtService(ks2);
+    var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db), Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks2));
         var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("code", "https://cb", "c1", "", "https://issuer");
         Assert.IsTrue(ok);
         var anon = (dynamic)payload!;
@@ -95,7 +97,8 @@ public sealed class TokenServiceTests
         db.AuthorizationCodes.Add(code);
         await db.SaveChangesAsync();
 
-        var svc = new TokenService(db, new JwtService(new KeyStore(db)), new RefreshTokenService(db), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore());
+    var ks3 = new KeyStore(db);
+    var svc = new TokenService(db, new JwtService(ks3), new RefreshTokenService(db), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks3));
         var (ok, payload, _, status) = await svc.ExchangeAuthorizationCodeAsync("code2", "https://cb", "c1", "", "https://issuer");
         Assert.IsTrue(ok);
         Assert.AreEqual(200, status);
@@ -116,7 +119,8 @@ public sealed class TokenServiceTests
         // Create RT directly via service
         var rtSvc = new RefreshTokenService(db);
         var (rt, hash) = await rtSvc.CreateRefreshTokenAsync(user.Id, "c1", TimeSpan.FromDays(1), new[] { "openid" });
-        var svc = new TokenService(db, new JwtService(new KeyStore(db)), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore());
+    var ks4 = new KeyStore(db);
+    var svc = new TokenService(db, new JwtService(ks4), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks4));
         var (ok, payload, _, status) = await svc.ExchangeRefreshTokenAsync(rt, "c1", "https://issuer");
         Assert.IsTrue(ok);
         Assert.AreEqual(200, status);
