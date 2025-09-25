@@ -48,6 +48,7 @@ public class SelectModel(AuthDbContext db) : PageModel
     public bool AllowQrLogin { get; private set; }
 
     public string? LastProvider { get; private set; }
+    public string? RecommendationSource { get; private set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -85,10 +86,12 @@ public class SelectModel(AuthDbContext db) : PageModel
         if (!string.IsNullOrWhiteSpace(Idp_Hint) && providerLinks.Any(p => string.Equals(p.Name, Idp_Hint, StringComparison.Ordinal)))
         {
             suggested = Idp_Hint;
+            RecommendationSource = "hint";
         }
         else if (!string.IsNullOrWhiteSpace(LastProvider) && providerLinks.Any(p => string.Equals(p.Name, LastProvider, StringComparison.Ordinal)))
         {
             suggested = LastProvider;
+            RecommendationSource = "last";
         }
 
         if (suggested is not null)

@@ -7,14 +7,14 @@
     var scheme = StyleSchemes.Resolve(string.IsNullOrWhiteSpace(Model.StyleKey) ? Model.ClientStyleKey : Model.StyleKey);
 }
 
-<div class="mx-auto @scheme.CssClass" style="max-width: 600px;">
+<div class="mx-auto @scheme.CssClass" style="max-width: 600px;" role="region" aria-labelledby="providerPickerHeading">
     @if (!string.IsNullOrEmpty(Model.ClientName))
     {
         <div class="small text-muted text-center mb-1">You are signing in to</div>
         <div class="h5 text-center mb-2">@Model.ClientName @if(!string.IsNullOrEmpty(Model.RealmName)){<span class="text-muted">(@Model.RealmName)</span>}</div>
     }
 
-    <h2 class="text-center auth-heading">Select your identity provider</h2>
+    <h2 id="providerPickerHeading" class="text-center auth-heading">Select your identity provider</h2>
 
     @if (!string.IsNullOrEmpty(Model.Error))
     {
@@ -40,33 +40,69 @@
     {
         <div class="card auth-card mt-3 shadow-sm">
             <div class="card-body">
+                @{
+                    var recommended = Model.Providers.FirstOrDefault(p => p.IsRecommended);
+                }
+                @if (recommended is not null)
+                {
+                    <div class="alert alert-warning py-2 px-3 small d-flex align-items-center" role="status" aria-live="polite">
+                        <i class="bi bi-star-fill me-2" aria-hidden="true"></i>
+                        <div>
+                            <span class="fw-semibold">Recommended:</span>
+                            <span class="ms-1">@recommended.Display</span>
+                            @if (string.Equals(Model.RecommendationSource, "last", StringComparison.Ordinal))
+                            {
+                                <span class="text-muted ms-2">based on your last sign-in</span>
+                            }
+                            else if (string.Equals(Model.RecommendationSource, "hint", StringComparison.Ordinal))
+                            {
+                                <span class="text-muted ms-2">based on a sign-in hint</span>
+                            }
+                        </div>
+                    </div>
+                }
                 <div class="d-grid gap-2">
+                    <div class="visually-hidden" id="sr-recommended-text">Recommended based on your previous choice</div>
                     @foreach (var p in Model.Providers)
                     {
                         var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@url">
+                        var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
+                        var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start"
+                           role="button"
+                           href="@url"
+                           aria-label="@aria"
+                           @(describedBy is null ? null : Html.Raw($"aria-describedby=\"{describedBy}\""))
+                           data-provider-name="@p.Name">
                             @if (!string.IsNullOrEmpty(p.LogoUrl))
                             {
-                                <img src="@p.LogoUrl" alt="@p.Display" class="me-2" style="height:24px;width:24px;object-fit:contain" />
+                                <img src="@p.LogoUrl" alt="" class="me-2 auth-provider-logo" />
                             }
                             else
                             {
                                 <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
                             }
-                            <span>@p.Display</span>
+                            <span class="flex-grow-1">@p.Display</span>
+                            @if (p.IsRecommended)
+                            {
+                                <span class="badge rounded-pill bg-warning-subtle text-dark border border-warning ms-2 d-flex align-items-center">
+                                    <i class="bi bi-star-fill me-1" aria-hidden="true"></i>
+                                    <span>Recommended</span>
+                                </span>
+                            }
                         </a>
                     }
                     @if (Model.AllowLocalLogin)
                     {
                         var loginUrl = "/login?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@loginUrl">
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@loginUrl" role="button" aria-label="Sign in with username and password">
                             <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
                         </a>
                     }
                     @if (Model.AllowQrLogin)
                     {
                         var qrUrl = "/Auth/Qr?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@qrUrl">
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@qrUrl" role="button" aria-label="Sign in with QR code">
                             <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
                         </a>
                     }
@@ -74,7 +110,7 @@
 
                 <hr class="my-3" />
 
-                <a class="btn btn-outline-primary w-100 auth-cta" asp-page="/Registrations/Index">
+                <a class="btn btn-outline-primary w-100 auth-cta" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
                     <i class="bi bi-person-plus me-2"></i>
                     Register a new account
                 </a>
