@@ -158,6 +158,8 @@ builder.Services.AddHostedService<ExpiredTokenCleanupService>();
 builder.Services.AddHostedService<ParCleanupHostedService>();
 // BCL outbox dispatcher
 builder.Services.AddSingleton(new BackchannelDispatchOptions());
+builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(builder.Configuration.GetSection("Backchannel"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.BackchannelRuntimeState>();
 builder.Services.AddHostedService<BackchannelLogoutDispatcher>();
 
 // Rate limiting policies using distributed store (Redis)
@@ -801,6 +803,30 @@ admin.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, C
     await db.SaveChangesAsync(ct);
     return Results.NoContent();
 });
+
+// Lightweight health endpoint for BCL dispatcher
+app.MapGet("/health/backchannel", async (AuthDbContext db, MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state, CancellationToken ct) =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var backlog = await db.BackchannelLogoutNotifications
+        .AsNoTracking()
+        .LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now), ct);
+
+    // Top circuits (open ones only)
+    var openCircuits = state.Circuits
+        .Where(kv => kv.Value.OpenUntil is not null && kv.Value.OpenUntil > DateTimeOffset.UtcNow)
+        .Select(kv => new { clientId = kv.Key, kv.Value.Failures, kv.Value.OpenUntil })
+        .OrderByDescending(x => x.Failures)
+        .Take(20)
+        .ToList();
+
+    return Results.Ok(new
+    {
+        enabled = state.EmissionEnabled,
+        backlog,
+        openCircuits,
+    });
+}).WithName("BackchannelHealth");
 
 app.MapStaticAssets();
 

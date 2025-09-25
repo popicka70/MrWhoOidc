@@ -66,6 +66,14 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
         var backChannelClients = clients.Where(c => !string.IsNullOrEmpty(c.BackChannelLogoutUri)).ToList();
         if (backChannelClients.Count > 0)
         {
+            // Feature flag: Backchannel.Enabled (default true)
+            var feature = http.RequestServices.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>>();
+            if (!feature.CurrentValue.Enabled)
+            {
+                logger.LogInformation("BCL emission disabled by feature flag - skipping enqueue for {Count} clients", backChannelClients.Count);
+            }
+            else
+            {
             // Enqueue into outbox for background delivery
             foreach (var c in backChannelClients)
             {
@@ -106,6 +114,7 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
                 });
             }
             await db.SaveChangesAsync();
+            }
         }
 
         // Validate post_logout_redirect_uri against allow-list if a client parameter is present

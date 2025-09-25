@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +18,25 @@ public sealed class BackchannelDispatchOptions
     public TimeSpan CircuitOpenDuration { get; set; } = TimeSpan.FromSeconds(30);
 }
 
+public sealed class BackchannelFeatureOptions
+{
+    // Global feature flag to enable/disable BCL processing and enqueueing
+    public bool Enabled { get; set; } = true;
+    // Simple alerting thresholds (logs warnings when exceeded)
+    public int AlertBacklogThreshold { get; set; } = 100;
+    public int AlertOpenCircuitThreshold { get; set; } = 5;
+}
+
+public sealed record CircuitStateSnapshot(int Failures, DateTimeOffset? OpenUntil);
+
+// Runtime state for health inspection
+public sealed class BackchannelRuntimeState
+{
+    public long PendingBacklog { get; set; }
+    public ConcurrentDictionary<string, CircuitStateSnapshot> Circuits { get; } = new(StringComparer.Ordinal);
+    public bool EmissionEnabled { get; set; } = true;
+}
+
 internal sealed class CircuitState
 {
     public int Failures;
@@ -30,15 +50,26 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
     private readonly OidcMetrics _metrics;
     private readonly BackchannelDispatchOptions _options;
+    private readonly Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> _feature;
+    private readonly BackchannelRuntimeState _state;
     private readonly Dictionary<string, CircuitState> _circuits = new(StringComparer.Ordinal);
 
-    public BackchannelLogoutDispatcher(IDbContextFactory<AuthDbContext> dbFactory, IHttpClientFactory httpFactory, ILogger<BackchannelLogoutDispatcher> logger, OidcMetrics metrics, BackchannelDispatchOptions options)
+    public BackchannelLogoutDispatcher(
+        IDbContextFactory<AuthDbContext> dbFactory,
+        IHttpClientFactory httpFactory,
+        ILogger<BackchannelLogoutDispatcher> logger,
+        OidcMetrics metrics,
+        BackchannelDispatchOptions options,
+        Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> feature,
+        BackchannelRuntimeState state)
     {
         _dbFactory = dbFactory;
         _httpFactory = httpFactory;
         _logger = logger;
         _metrics = metrics;
         _options = options;
+        _feature = feature;
+        _state = state;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -50,8 +81,25 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         {
             try
             {
+                // Respect feature flag and update runtime state
+                var enabled = _feature.CurrentValue.Enabled;
+                _state.EmissionEnabled = enabled;
+                if (!enabled)
+                {
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+
                 using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
                 var now = DateTimeOffset.UtcNow;
+                // capture backlog size for health
+                _state.PendingBacklog = await db.BackchannelLogoutNotifications
+                    .AsNoTracking()
+                    .LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now), stoppingToken);
+                if (_state.PendingBacklog > _feature.CurrentValue.AlertBacklogThreshold)
+                {
+                    _logger.LogWarning("BCL backlog high: {Backlog} > threshold {Threshold}", _state.PendingBacklog, _feature.CurrentValue.AlertBacklogThreshold);
+                }
                 var batchIds = await db.BackchannelLogoutNotifications
                     .AsNoTracking()
                     .Where(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now))
@@ -69,6 +117,13 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 var sem = new SemaphoreSlim(_options.MaxDegreeOfParallelism);
                 var tasks = batchIds.Select(id => ProcessOneAsync(http, id, sem, stoppingToken)).ToArray();
                 await Task.WhenAll(tasks);
+
+                // Alert on circuits after batch
+                var openCircuits = _circuits.Values.Count(c => c.OpenUntil is not null && c.OpenUntil > DateTimeOffset.UtcNow);
+                if (openCircuits > _feature.CurrentValue.AlertOpenCircuitThreshold)
+                {
+                    _logger.LogWarning("BCL circuits open: {Count} > threshold {Threshold}", openCircuits, _feature.CurrentValue.AlertOpenCircuitThreshold);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -216,6 +271,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         {
             c.OpenUntil = DateTimeOffset.UtcNow.Add(_options.CircuitOpenDuration);
         }
+        _state.Circuits[clientId] = new CircuitStateSnapshot(c.Failures, c.OpenUntil);
     }
 
     private void OpenCircuitMaybe(string clientId)
@@ -230,5 +286,6 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
             c.Failures = 0;
             c.OpenUntil = null;
         }
+        _state.Circuits[clientId] = new CircuitStateSnapshot(0, null);
     }
 }

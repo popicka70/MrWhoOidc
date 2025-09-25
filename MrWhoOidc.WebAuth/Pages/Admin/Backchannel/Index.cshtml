@@ -1,0 +1,93 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.Backchannel.IndexModel
+@{
+    ViewData["Title"] = "Back-channel logout outbox";
+}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">Back-channel logout outbox</h2>
+    <form method="get" class="d-flex gap-2">
+        <select class="form-select" name="status" onchange="this.form.submit()">
+            <option value="" selected="@(Model.Status is null)">All</option>
+            <option value="pending" selected="@(Model.Status=="pending")">Pending</option>
+            <option value="succeeded" selected="@(Model.Status=="succeeded")">Succeeded</option>
+            <option value="failed" selected="@(Model.Status=="failed")">Failed</option>
+            <option value="dead_letter" selected="@(Model.Status=="dead_letter")">Dead-letter</option>
+        </select>
+        <button type="submit" class="btn btn-outline-secondary">Refresh</button>
+    </form>
+}
+
+<div class="alert alert-info">
+    <div><strong>Backlog:</strong> @Model.Backlog</div>
+    <div><strong>Feature enabled:</strong> @(Model.Enabled ? "Yes" : "No")</div>
+</div>
+
+<table class="table table-sm table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Created</th>
+            <th>Client</th>
+            <th>Target</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Last HTTP</th>
+            <th>Last error</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var item in Model.Items)
+    {
+        <tr>
+            <td>@item.CreatedAt.ToLocalTime().ToString("G")</td>
+            <td><code>@item.ClientId</code></td>
+            <td style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><code>@item.TargetUri</code></td>
+            <td>
+                @switch(item.Status)
+                {
+                    case "pending": <span class="badge text-bg-warning">pending</span>; break;
+                    case "succeeded": <span class="badge text-bg-success">succeeded</span>; break;
+                    case "failed": <span class="badge text-bg-danger">failed</span>; break;
+                    case "dead_letter": <span class="badge text-bg-secondary">dead-letter</span>; break;
+                    default: <span class="badge text-bg-light">@item.Status</span>; break;
+                }
+            </td>
+            <td>@item.AttemptCount/@item.MaxAttempts</td>
+            <td>@item.LastHttpStatus</td>
+            <td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="@item.LastError">@item.LastError</td>
+            <td class="text-end">
+                @if(item.Status != "succeeded")
+                {
+                    <form method="post">
+                        <input type="hidden" name="id" value="@item.Id" />
+                        <button class="btn btn-sm btn-outline-primary" formaction="@Url.Page(null, "Retry")">Retry</button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3 class="mt-4">Open circuits</h3>
+@if (Model.OpenCircuits.Count == 0)
+{
+    <p class="text-muted">None</p>
+}
+else
+{
+    <table class="table table-sm table-striped align-middle">
+        <thead><tr><th>Client</th><th>Failures</th><th>Open until</th></tr></thead>
+        <tbody>
+        @foreach (var c in Model.OpenCircuits)
+        {
+            <tr>
+                <td><code>@c.ClientId</code></td>
+                <td>@c.Failures</td>
+                <td>@c.OpenUntil?.ToLocalTime().ToString("G")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
