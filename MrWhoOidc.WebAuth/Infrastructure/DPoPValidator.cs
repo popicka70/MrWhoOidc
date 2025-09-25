@@ -40,7 +40,21 @@ internal sealed class DPoPValidator : IDPoPValidator
             var handler = new JwtSecurityTokenHandler();
             var unsigned = handler.ReadJwtToken(header);
 
-            if (!string.Equals(unsigned.Header.Typ, "dpop+jwt", StringComparison.OrdinalIgnoreCase))
+            // Tolerant 'typ' detection: some writers may set it only in the raw header map
+            string? typ = unsigned.Header.Typ;
+            if (string.IsNullOrEmpty(typ))
+            {
+                if (unsigned.Header.TryGetValue("typ", out var typObj) && typObj is string s) typ = s;
+                else
+                {
+                    // Fallback: parse raw header JSON
+                    var rawHeaderJson = unsigned.EncodedHeader;
+                    var headerBytes = Base64UrlEncoder.DecodeBytes(rawHeaderJson);
+                    using var json = JsonDocument.Parse(headerBytes);
+                    if (json.RootElement.TryGetProperty("typ", out var typEl)) typ = typEl.GetString();
+                }
+            }
+            if (!string.Equals(typ, "dpop+jwt", StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "invalid_typ"));
             }

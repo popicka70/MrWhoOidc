@@ -77,6 +77,14 @@
 				"$msCompile"
 			],
 			"group": "build"
+		},
+		{
+			"label": "test-mrwhooidc",
+			"type": "shell",
+			"command": "dotnet test",
+			"args": [],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }
