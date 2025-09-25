@@ -56,4 +56,19 @@ public sealed class OidcMetrics
     public Counter<long> ExternalCallbackSuccess { get; } = Meter.CreateCounter<long>("oidc.external.callback.success");
     public Counter<long> ExternalCallbackFailures { get; } = Meter.CreateCounter<long>("oidc.external.callback.failures");
     public Histogram<double> ExternalCallbackDurationMs { get; } = Meter.CreateHistogram<double>("oidc.external.callback.duration.ms");
+
+    // Back-channel logout metrics
+    public Counter<long> BclEmitted { get; } = Meter.CreateCounter<long>("oidc.bcl.emitted");
+    public Counter<long> BclDelivered { get; } = Meter.CreateCounter<long>("oidc.bcl.delivered");
+    public Counter<long> BclFailed { get; } = Meter.CreateCounter<long>("oidc.bcl.failed");
+    public Histogram<double> BclDeliveryLatencyMs { get; } = Meter.CreateHistogram<double>("oidc.bcl.delivery.ms");
+    public ObservableGauge<long> BclPendingBacklog { get; }
+
+    private long _backlog; // updated by dispatcher
+    public void SetBclBacklog(long value) => _backlog = value;
+
+    public OidcMetrics()
+    {
+        BclPendingBacklog = Meter.CreateObservableGauge<long>("oidc.bcl.backlog", () => _backlog);
+    }
 }

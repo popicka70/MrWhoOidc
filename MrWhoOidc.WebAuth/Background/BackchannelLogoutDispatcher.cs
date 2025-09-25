@@ -49,6 +49,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
     private readonly OidcMetrics _metrics;
+    private readonly IAlertPublisher _alerts;
     private readonly BackchannelDispatchOptions _options;
     private readonly Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> _feature;
     private readonly BackchannelRuntimeState _state;
@@ -58,7 +59,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         IDbContextFactory<AuthDbContext> dbFactory,
         IHttpClientFactory httpFactory,
         ILogger<BackchannelLogoutDispatcher> logger,
-        OidcMetrics metrics,
+    OidcMetrics metrics,
+    IAlertPublisher alerts,
         BackchannelDispatchOptions options,
         Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> feature,
         BackchannelRuntimeState state)
@@ -66,7 +68,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         _dbFactory = dbFactory;
         _httpFactory = httpFactory;
         _logger = logger;
-        _metrics = metrics;
+    _metrics = metrics;
+    _alerts = alerts;
         _options = options;
         _feature = feature;
         _state = state;
@@ -96,9 +99,11 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 _state.PendingBacklog = await db.BackchannelLogoutNotifications
                     .AsNoTracking()
                     .LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now), stoppingToken);
+                _metrics.SetBclBacklog(_state.PendingBacklog);
                 if (_state.PendingBacklog > _feature.CurrentValue.AlertBacklogThreshold)
                 {
                     _logger.LogWarning("BCL backlog high: {Backlog} > threshold {Threshold}", _state.PendingBacklog, _feature.CurrentValue.AlertBacklogThreshold);
+                    await _alerts.PublishAsync("bcl.backlog.high", new { backlog = _state.PendingBacklog, threshold = _feature.CurrentValue.AlertBacklogThreshold }, stoppingToken);
                 }
                 var batchIds = await db.BackchannelLogoutNotifications
                     .AsNoTracking()
@@ -123,6 +128,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 if (openCircuits > _feature.CurrentValue.AlertOpenCircuitThreshold)
                 {
                     _logger.LogWarning("BCL circuits open: {Count} > threshold {Threshold}", openCircuits, _feature.CurrentValue.AlertOpenCircuitThreshold);
+                    await _alerts.PublishAsync("bcl.circuits.open", new { count = openCircuits, threshold = _feature.CurrentValue.AlertOpenCircuitThreshold }, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -170,6 +176,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 {
                     n.Status = "succeeded";
                     _metrics.TokenSuccess.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
+                    _metrics.BclDelivered.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
                     ResetCircuit(n.ClientId);
                 }
                 else
@@ -186,12 +193,14 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                         n.NextAttemptAt = DateTimeOffset.UtcNow.Add(backoff);
                         BumpCircuit(n.ClientId);
                         _metrics.TokenFailures.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
+                        _metrics.BclFailed.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
                     }
                     else
                     {
                         n.Status = attempt >= _options.MaxAttempts ? "dead_letter" : "failed";
                         OpenCircuitMaybe(n.ClientId);
                         _metrics.TokenFailures.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
+                        _metrics.BclFailed.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
                     }
                 }
             }
@@ -219,14 +228,17 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 sw.Stop();
                 n.LastAttemptAt = DateTimeOffset.UtcNow;
                 _metrics.TokenDurationMs.Record(sw.Elapsed.TotalMilliseconds, new("kind", "bcl"), new("client_id", n.ClientId));
+                _metrics.BclDeliveryLatencyMs.Record(sw.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("client_id", n.ClientId));
                 await db.SaveChangesAsync(ct);
                 if (lastEx != null)
                 {
                     _logger.LogWarning(lastEx, "BCL delivery error for {ClientId} attempt {Attempt}", n.ClientId, attempt);
+                    await _alerts.PublishAsync("bcl.delivery.error", new { n.ClientId, n.TargetUri, attempt, error = lastEx.Message }, ct);
                 }
                 else if (resp != null && !resp.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("BCL delivery failed for {ClientId} HTTP {Status} attempt {Attempt}", n.ClientId, (int)resp.StatusCode, attempt);
+                    await _alerts.PublishAsync("bcl.delivery.failed", new { n.ClientId, n.TargetUri, status = (int)resp.StatusCode, attempt }, ct);
                 }
                 else if (resp != null)
                 {

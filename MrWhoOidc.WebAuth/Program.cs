@@ -55,6 +55,14 @@ builder.Services.AddRazorPages(options =>
 
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
+// Alerting
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IAlertPublisher>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
+    return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
+});
 
 // Seed command support
 builder.Services.AddScoped<ISeeder, Seeder>();

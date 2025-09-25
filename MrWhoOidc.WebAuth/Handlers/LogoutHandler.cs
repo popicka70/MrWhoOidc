@@ -20,7 +20,7 @@ public interface ILogoutHandler
     Task<IResult> EndSessionAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger) : ILogoutHandler
+public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger, OidcMetrics metrics) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
@@ -99,7 +99,7 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
                     }
                 }
 
-                db.BackchannelLogoutNotifications.Add(new BackchannelLogoutNotification
+                var entity = new BackchannelLogoutNotification
                 {
                     ClientDbId = c.Id,
                     ClientId = c.ClientId,
@@ -111,7 +111,12 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
                     AttemptCount = 0,
                     MaxAttempts = 5,
                     CreatedAt = DateTimeOffset.UtcNow
-                });
+                };
+                db.BackchannelLogoutNotifications.Add(entity);
+                // Audit-like info in logs for enqueue (PII minimized): who/what/when
+                logger.LogInformation("BCL enqueue: client={ClientId} target={TargetHost} sid={HasSid} sub={HasSub}",
+                    entity.ClientId, new Uri(entity.TargetUri).Host, !string.IsNullOrEmpty(entity.Sid), !string.IsNullOrEmpty(entity.Sub));
+                metrics.BclEmitted.Add(1, new KeyValuePair<string, object?>("client_id", entity.ClientId));
             }
             await db.SaveChangesAsync();
             }
