@@ -115,4 +115,46 @@ public sealed class TokenExchangeTests
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.AreEqual("dpop_bridging_not_supported", doc.RootElement.GetProperty("error_description").GetString());
     }
+
+    [TestMethod]
+    public async Task TokenExchange_SingleHop_Rejected_WhenActPresent()
+    {
+        using var db = CreateDb();
+        var keyStore = new KeyStore(db);
+        var jwt = new JwtService(keyStore);
+        var refresh = new RefreshTokenService(db);
+        var opts = Options("api");
+        var meta = new InMemoryAuthorizationCodeMetadataStore();
+        var validator = new TokenValidator(keyStore);
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
+
+        var userId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        // Subject JWT contains an 'act' claim -> must be rejected as single-hop only
+        var actJson = System.Text.Json.JsonSerializer.Serialize(new { sub = "some-actor" });
+        var subject = jwt.CreateJwt(
+            issuer: "https://issuer",
+            audience: "api",
+            claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("act", actJson) },
+            expires: now.AddMinutes(10)
+        );
+
+        var (ok, payload, error, status) = await svc.ExchangeTokenAsync(
+            subjectToken: subject,
+            subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+            requestedTokenType: null,
+            requestedAudience: null,
+            requestedScopes: Array.Empty<string>(),
+            callerClientId: "caller-app",
+            issuer: "https://issuer",
+            dpopJkt: null
+        );
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.AreEqual("single_hop_only", doc.RootElement.GetProperty("error_description").GetString());
+    }
 }

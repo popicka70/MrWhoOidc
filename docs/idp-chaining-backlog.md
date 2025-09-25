@@ -254,13 +254,17 @@ Notes:
     - Added: Happy path (JWT subject) with scope narrowing and `act` claim; DPoP bridging denied when `cnf.jkt` present.
     - Added: DPoP same-key requirement enforced by policy (`RequireSameJkt`) and outgoing `cnf.jkt` binding.
     - Added: Opaque subject `DelegationDepth` enforcement with `OboMaxDelegationDepth`.
-    - Pending: Single-hop rejection when `act` present (JWT subject); audience policy failures; lifetime cap scenarios; full policy matrix.
+    - Added: Single-hop rejection when `act` present (JWT subject) — asserts `invalid_grant`/`single_hop_only`.
+    - Added: Audience policy failures — `invalid_target` (target not allowed) and `invalid_grant` (source not allowed).
+    - Added: Lifetime cap scenarios — `expires_in` capped by `OboMaxLifetimeMinutes` and subject remaining lifetime.
+    - Pending: Full policy matrix coverage and additional DPoP mode combinations.
   - Integration tests
     - Happy path: API A issued token -> exchange to API B by allowed client -> new token works for B.
     - Unauthorized client, disallowed source/target audience, `insufficient_scope`.
     - Opaque and JWT subject token variants.
   - Samples/docs
     - Minimal "service calls API on behalf of user" sample with Blazor front-end + API-to-API call path.
+    - Added: HTTP request samples for token exchange (with and without DPoP) under `docs/http/obo-token-exchange.http`.
   - Acceptance: CI green on .NET 9; core OBO paths covered.
 
 - [x] Story: Phase 2 – DPoP bridging and fidelity

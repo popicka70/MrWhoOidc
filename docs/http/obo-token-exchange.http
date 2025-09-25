@@ -1,0 +1,29 @@
+### Token Exchange – Bearer subject (no DPoP bridging)
+# @name token_exchange_bearer
+POST https://localhost:5001/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(client_id:client_secret)}}
+
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange&
+subject_token={{SUBJECT_ACCESS_TOKEN}}&
+subject_token_type=urn:ietf:params:oauth:token-type:access_token&
+audience={{TARGET_AUD}}&
+scope={{REQUESTED_SCOPES}}
+
+### Token Exchange – DPoP same-key (ath bound)
+# @name token_exchange_dpop
+POST https://localhost:5001/token
+Content-Type: application/x-www-form-urlencoded
+DPoP: {{DPoP_PROOF}}
+Authorization: Basic {{base64(client_id:client_secret)}}
+
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange&
+subject_token={{SUBJECT_ACCESS_TOKEN}}&
+subject_token_type=urn:ietf:params:oauth:token-type:access_token&
+audience={{TARGET_AUD}}&
+scope={{REQUESTED_SCOPES}}
+
+### Notes
+# - Compute DPoP proof with the same key that bound the SUBJECT_ACCESS_TOKEN (same jkt) and include ath = base64url(SHA-256(subject_token)).
+# - When OboDpopMode is RequireSameJkt or AllowSameJktOnly, the server will enforce same jkt and validate ath.
+# - Adjust host/port to your WebAuth app.
