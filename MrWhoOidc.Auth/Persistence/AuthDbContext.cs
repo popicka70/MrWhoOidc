@@ -36,6 +36,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<ClientJwksHistory> ClientJwksHistories => Set<ClientJwksHistory>();
     // New: External identities (issuer+sub linkage)
     public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
+    // New: Back-channel logout outbox
+    public DbSet<BackchannelLogoutNotification> BackchannelLogoutNotifications => Set<BackchannelLogoutNotification>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -426,6 +428,27 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.FriendlyName).HasMaxLength(200);
             b.Property(x => x.Xml).IsRequired();
+        });
+
+        // New: Back-channel logout outbox
+        modelBuilder.Entity<BackchannelLogoutNotification>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.ClientId).IsRequired();
+            b.Property(x => x.TargetUri).IsRequired().HasMaxLength(2000);
+            b.Property(x => x.LogoutToken).IsRequired().HasMaxLength(8000);
+            b.Property(x => x.Status).IsRequired().HasMaxLength(20);
+            b.Property(x => x.AttemptCount).HasDefaultValue(0);
+            b.Property(x => x.MaxAttempts).HasDefaultValue(5);
+            b.Property(x => x.LastHttpStatus);
+            b.Property(x => x.LastError).HasMaxLength(1000);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.HasIndex(x => new { x.Status, x.NextAttemptAt });
+            b.HasIndex(x => x.ClientId);
+            b.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(x => x.ClientDbId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
@@ -832,4 +855,25 @@ public class ExternalIdentity
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastSeenAt { get; set; } = DateTimeOffset.UtcNow;
     [MaxLength(4000)] public string? ClaimsJson { get; set; }
+}
+
+// New: Outbox entity for back-channel logout delivery
+public class BackchannelLogoutNotification
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ClientDbId { get; set; } // link to Clients table
+    public string ClientId { get; set; } = string.Empty; // stable client_id string
+    [MaxLength(2000)] public string TargetUri { get; set; } = string.Empty;
+    [MaxLength(8000)] public string LogoutToken { get; set; } = string.Empty; // compact JWT
+    [MaxLength(64)] public string? Sid { get; set; }
+    [MaxLength(200)] public string? Sub { get; set; }
+    // pending | in_progress | succeeded | failed | dead_letter
+    [MaxLength(20)] public string Status { get; set; } = "pending";
+    public int AttemptCount { get; set; } = 0;
+    public int MaxAttempts { get; set; } = 5;
+    public int? LastHttpStatus { get; set; }
+    [MaxLength(1000)] public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
 }

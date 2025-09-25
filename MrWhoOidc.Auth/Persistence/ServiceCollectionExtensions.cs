@@ -22,6 +22,7 @@ public static class PersistenceServiceCollectionExtensions
 
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
+        // Configure DbContext options once and register them as Singleton so the factory (singleton) can consume them
         services.AddDbContext<AuthDbContext>(options =>
         {
             options.UseNpgsql(cs, npgsql =>
@@ -29,7 +30,10 @@ public static class PersistenceServiceCollectionExtensions
                 npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
                 npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(2), errorCodesToAdd: null);
             });
-        });
+        }, contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+
+        // Register a factory that uses the same options configuration
+        services.AddDbContextFactory<AuthDbContext>();
 
         return services;
     }

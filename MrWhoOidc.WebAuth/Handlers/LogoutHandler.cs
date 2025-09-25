@@ -10,6 +10,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using MrWhoOidc.Auth.Crypto;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -19,7 +20,7 @@ public interface ILogoutHandler
     Task<IResult> EndSessionAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, IHttpClientFactory httpFactory, ILogger<LogoutHandler> logger) : ILogoutHandler
+public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
@@ -65,86 +66,46 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, IHttpCli
         var backChannelClients = clients.Where(c => !string.IsNullOrEmpty(c.BackChannelLogoutUri)).ToList();
         if (backChannelClients.Count > 0)
         {
-            var httpClient = httpFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
-
-            // Bounded concurrency and simple retry with jitter
-            var semaphore = new SemaphoreSlim(5); // configurable limit if needed
-            var ct = http.RequestAborted;
-            var tasks = new List<Task>();
-
+            // Enqueue into outbox for background delivery
             foreach (var c in backChannelClients)
             {
-                await semaphore.WaitAsync(ct);
-                tasks.Add(Task.Run(async () =>
+                var token = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
+                if (token is null) continue;
+
+                // Allow/block list by host (optional via config)
+                if (Uri.TryCreate(c.BackChannelLogoutUri, UriKind.Absolute, out var target))
                 {
-                    try
+                    var cfg = http.RequestServices.GetRequiredService<IConfiguration>();
+                    var allowList = cfg.GetSection("Backchannel:AllowHosts").Get<string[]>() ?? Array.Empty<string>();
+                    var blockList = cfg.GetSection("Backchannel:BlockHosts").Get<string[]>() ?? Array.Empty<string>();
+                    var host = target.Host;
+                    if (blockList.Contains(host, StringComparer.OrdinalIgnoreCase))
                     {
-                        var token = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
-                        if (token is null)
-                        {
-                            logger.LogDebug("Backchannel logout skipped for client {ClientId}: no sid/sub available", c.ClientId);
-                            return;
-                        }
-
-                        var attempt = 0;
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
-                        HttpResponseMessage? resp = null;
-                        Exception? lastEx = null;
-                        while (attempt < 3 && !ct.IsCancellationRequested)
-                        {
-                            attempt++;
-                            try
-                            {
-                                using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("logout_token", token) });
-                                resp = await httpClient.PostAsync(c.BackChannelLogoutUri, content, ct);
-                                var status = (int)resp.StatusCode;
-                                var retriable = status == 408 || status == 429 || status >= 500;
-                                if (!retriable)
-                                {
-                                    break; // success or non-retriable
-                                }
-                            }
-                            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-                            {
-                                lastEx = ex;
-                            }
-                            catch (HttpRequestException ex)
-                            {
-                                lastEx = ex;
-                            }
-
-                            // backoff with jitter
-                            var delayMs = (int)(Math.Min(2000, Math.Pow(2, attempt) * 100) + Random.Shared.Next(0, 100));
-                            await Task.Delay(delayMs, ct);
-                        }
-                        sw.Stop();
-
-                        if (resp is null)
-                        {
-                            logger.LogWarning(lastEx, "Backchannel logout failed for client {ClientId} after {Attempts} attempts in {ElapsedMs}ms", c.ClientId, attempt, sw.ElapsedMilliseconds);
-                        }
-                        else if (!resp.IsSuccessStatusCode)
-                        {
-                            logger.LogWarning("Backchannel logout failed for client {ClientId}: {Status} after {Attempts} attempts in {ElapsedMs}ms", c.ClientId, (int)resp.StatusCode, attempt, sw.ElapsedMilliseconds);
-                        }
-                        else
-                        {
-                            logger.LogInformation("Backchannel logout success for client {ClientId} in {ElapsedMs}ms", c.ClientId, sw.ElapsedMilliseconds);
-                        }
+                        logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} is blocked", c.ClientId, host);
+                        continue;
                     }
-                    catch (Exception ex)
+                    if (allowList.Length > 0 && !allowList.Contains(host, StringComparer.OrdinalIgnoreCase))
                     {
-                        logger.LogWarning(ex, "Backchannel logout exception for client {ClientId}", c.ClientId);
+                        logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} not in allow-list", c.ClientId, host);
+                        continue;
                     }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, ct));
+                }
+
+                db.BackchannelLogoutNotifications.Add(new BackchannelLogoutNotification
+                {
+                    ClientDbId = c.Id,
+                    ClientId = c.ClientId,
+                    TargetUri = c.BackChannelLogoutUri!,
+                    LogoutToken = token,
+                    Sid = string.IsNullOrEmpty(sid) ? ExtractSidFromIdToken(idTokenHint) : sid,
+                    Sub = TryExtractClaim(idTokenHint, "sub"),
+                    Status = "pending",
+                    AttemptCount = 0,
+                    MaxAttempts = 5,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
             }
-
-            try { await Task.WhenAll(tasks); } catch (OperationCanceledException) { }
+            await db.SaveChangesAsync();
         }
 
         // Validate post_logout_redirect_uri against allow-list if a client parameter is present

@@ -20,6 +20,7 @@ using MrWhoOidc.WebAuth.Security;
 using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
+using MrWhoOidc.WebAuth.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -155,6 +156,9 @@ builder.Services.AddDataProtection()
 builder.Services.AddHostedService<ExpiredTokenCleanupService>();
 // PAR cleanup
 builder.Services.AddHostedService<ParCleanupHostedService>();
+// BCL outbox dispatcher
+builder.Services.AddSingleton(new BackchannelDispatchOptions());
+builder.Services.AddHostedService<BackchannelLogoutDispatcher>();
 
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
@@ -771,6 +775,29 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     }
     client.PublicJwksUri = string.IsNullOrWhiteSpace(input.PublicJwksUri) ? null : input.PublicJwksUri;
 
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+// BCL outbox admin endpoints
+admin.MapGet("/bcl/outbox", async (AuthDbContext db, int? take, string? status, CancellationToken ct) =>
+{
+    var q = db.BackchannelLogoutNotifications.AsNoTracking();
+    if (!string.IsNullOrWhiteSpace(status)) q = q.Where(n => n.Status == status);
+    var list = await q.OrderByDescending(n => n.CreatedAt)
+        .Take(Math.Clamp(take ?? 100, 1, 1000))
+        .Select(n => new { n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt })
+        .ToListAsync(ct);
+    var backlog = await db.BackchannelLogoutNotifications.CountAsync(n => n.Status == "pending", ct);
+    return Results.Ok(new { backlog, items = list });
+});
+
+admin.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+{
+    var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id, ct);
+    if (n is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    n.Status = "pending";
+    n.NextAttemptAt = DateTimeOffset.UtcNow;
     await db.SaveChangesAsync(ct);
     return Results.NoContent();
 });
