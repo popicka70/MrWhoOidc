@@ -45,4 +45,15 @@ public sealed class OidcMetrics
     public Counter<long> JarValid { get; } = Meter.CreateCounter<long>("oidc.jar.valid");
     public Counter<long> JarInvalid { get; } = Meter.CreateCounter<long>("oidc.jar.invalid");
     public Histogram<long> JarRequestSizeBytes { get; } = Meter.CreateHistogram<long>("oidc.jar.request.size.bytes");
+
+    // External OIDC (third-party identity) flow metrics
+    public Counter<long> ExternalStartRequests { get; } = Meter.CreateCounter<long>("oidc.external.start.requests");
+    public Counter<long> ExternalStartSuccess { get; } = Meter.CreateCounter<long>("oidc.external.start.success");
+    public Counter<long> ExternalStartFailures { get; } = Meter.CreateCounter<long>("oidc.external.start.failures");
+    public Histogram<double> ExternalStartDurationMs { get; } = Meter.CreateHistogram<double>("oidc.external.start.duration.ms");
+
+    public Counter<long> ExternalCallbackRequests { get; } = Meter.CreateCounter<long>("oidc.external.callback.requests");
+    public Counter<long> ExternalCallbackSuccess { get; } = Meter.CreateCounter<long>("oidc.external.callback.success");
+    public Counter<long> ExternalCallbackFailures { get; } = Meter.CreateCounter<long>("oidc.external.callback.failures");
+    public Histogram<double> ExternalCallbackDurationMs { get; } = Meter.CreateHistogram<double>("oidc.external.callback.duration.ms");
 }

@@ -42,16 +42,16 @@ Milestones
   - Acceptance
     - Operators can correlate failures quickly; end‑users see clear, localized messages.
 
-- [ ] Inbound JAR hardening with Redis replay cache
+- [x] Inbound JAR hardening with Redis replay cache
   - Deliverables
-    - Enable Redis‑backed replay cache in production profile.
-    - Expose TTL and clock skew in `AuthOptions` and document recommended values.
-    - Ensure replay cache key includes `iss+aud+jti` (and nonce where applicable).
-    - Align discovery `request_object_signing_alg_values_supported` with allowed algs.
+    - [x] Enable Redis‑backed replay cache in production profile (DI overrides in WebAuth when `ConnectionStrings:redis` is set).
+    - [x] Expose TTL and clock skew in `AuthOptions` and document recommended values (see `docs/jar-replay-cache.md`).
+    - [x] Ensure replay cache key includes `iss+aud+jti` (and nonce where applicable).
+    - [x] Align discovery `request_object_signing_alg_values_supported` with allowed algs (reads from `AuthOptions`).
   - Tests
-    - Conformance tests for replay rejection; boundary checks for exp/nbf skew.
+    - [x] Conformance tests for replay rejection; boundary checks for exp/nbf skew.
   - Acceptance
-    - Replay attempts are reliably blocked; discovery reflects actual capabilities.
+    - [x] Replay attempts are reliably blocked; discovery reflects actual capabilities.
 
 - [ ] Provider picker polish (a11y + mobile)
   - Deliverables

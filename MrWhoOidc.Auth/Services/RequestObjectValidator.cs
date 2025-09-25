@@ -217,7 +217,8 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
                                        : TimeSpan.FromSeconds(Math.Max(60, opts.RequestObjectReplayTtlSeconds));
             if (ttl <= TimeSpan.Zero) ttl = TimeSpan.FromSeconds(60);
             var expiresAt = now.Add(ttl);
-            var replayKey = $"jar:{clientId}:{keyId}";
+            // Include issuer (clientId) + audience + jti/nonce to scope replay keys across different audiences
+            var replayKey = $"jar:{clientId}:{expectedAudience}:{keyId}";
             if (!replayCache.TryAdd(replayKey, expiresAt))
             {
                 logger.LogWarning("JAR: replay detected for client {ClientId} key {KeyId}", clientId, keyId);

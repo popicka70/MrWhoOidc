@@ -13,6 +13,9 @@ using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 using System.Net.Http.Headers;
 using System.Globalization;
+using MrWhoOidc.WebAuth.Observability;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -23,27 +26,42 @@ public interface IExternalOidcHandler
     Task<IResult> ConfirmLinkAsync(HttpContext http);
 }
 
-public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, IJwksCache jwksCache, IClaimMappingService mapper) : IExternalOidcHandler
+public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory httpFactory, IDataProtectionProvider dp, IJwksCache jwksCache, IClaimMappingService mapper, OidcMetrics metrics, ILogger<ExternalOidcHandler> logger) : IExternalOidcHandler
 {
     private readonly IDataProtector _protector = dp.CreateProtector("ext-oidc-state");
     private readonly IDataProtector _confirmProtector = dp.CreateProtector("ext-oidc-confirm");
+    private readonly OidcMetrics _metrics = metrics;
+    private readonly ILogger<ExternalOidcHandler> _logger = logger;
 
     public async Task<IResult> StartAsync(HttpContext http)
     {
+        var startTs = DateTime.UtcNow;
+        _metrics.ExternalStartRequests.Add(1);
         var providerName = http.Request.Query["provider"].ToString();
         var returnUrl = http.Request.Query["returnUrl"].ToString(); // original /authorize URL
         var clientId = http.Request.Query["clientId"].ToString(); // for last-used cookie
         if (string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(returnUrl))
+        {
+            _logger.LogWarning("External start rejected due to missing parameters. provider({Provider}) returnUrl({ReturnUrl})", providerName, returnUrl);
             return Results.BadRequest("provider and returnUrl are required");
+        }
 
         var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled);
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
+        {
+            _logger.LogWarning("External start unknown provider {Provider}", providerName);
             return Results.BadRequest("Unknown provider");
+        }
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
+        {
+            _logger.LogError("External start invalid configuration for provider {Provider}", providerName);
             return Results.BadRequest("Invalid provider configuration");
+        }
 
         // Pre-generate correlation id for observability and friendly errors
-        var corr = Guid.NewGuid().ToString("N");
+    var corr = Guid.NewGuid().ToString("N");
+    using var _ = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = corr, ["provider"] = providerName, ["clientId"] = clientId });
+    _logger.LogInformation("External OIDC start: initiating discovery and redirect.");
 
         // Discovery
         var httpc = httpFactory.CreateClient();
@@ -54,13 +72,19 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             using var resp = await httpc.GetAsync(discoUrl, http.RequestAborted);
             if (!resp.IsSuccessStatusCode)
             {
-                return FriendlyError(returnUrl, clientId, corr, $"Discovery failed: {(int)resp.StatusCode}");
+                _logger.LogWarning("Discovery failed with status {Status} for {Url}", (int)resp.StatusCode, discoUrl);
+                var res = FriendlyError(returnUrl, clientId, corr, $"Discovery failed: {(int)resp.StatusCode}");
+                RecordExternalStart(false, startTs, providerName, clientId, "discovery_failed");
+                return res;
             }
             doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         }
         catch (Exception ex)
         {
-            return FriendlyError(returnUrl, clientId, corr, "Discovery error: " + ex.Message);
+            _logger.LogError(ex, "Discovery error for {Url}", discoUrl);
+            var res = FriendlyError(returnUrl, clientId, corr, "Discovery error: " + ex.Message);
+            RecordExternalStart(false, startTs, providerName, clientId, "discovery_exception");
+            return res;
         }
 
         using (doc)
@@ -245,6 +269,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                             qPar["client_id"] = cfg.ClientId;
                             qPar["request_uri"] = requestUri;
                             ubPar.Query = qPar.ToString();
+                            _logger.LogInformation("Redirecting to authorization endpoint with PAR request_uri.");
+                            RecordExternalStart(true, startTs, providerName, clientId, "par");
                             return Results.Redirect(ubPar.ToString());
                         }
                     }
@@ -252,6 +278,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 catch
                 {
                     // Fallback to redirect path below
+                    _logger.LogWarning("PAR attempt failed; falling back to direct redirect");
                 }
             }
 
@@ -268,13 +295,17 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 foreach (var kv in query) if (!string.IsNullOrEmpty(kv.Value)) q[kv.Key] = kv.Value;
             }
             ub.Query = q.ToString();
+            _logger.LogInformation("Redirecting to authorization endpoint (standard).");
+            RecordExternalStart(true, startTs, providerName, clientId, string.IsNullOrEmpty(requestJwt) ? "query" : "jar");
             return Results.Redirect(ub.ToString());
         }
     }
 
     public async Task<IResult> CallbackAsync(HttpContext http)
     {
-        var idTokenFromAuth = http.Request.Query["id_token"].ToString();
+    var cbStart = DateTime.UtcNow;
+    _metrics.ExternalCallbackRequests.Add(1);
+    var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
         var errorDescription = http.Request.Query["error_description"].ToString();
@@ -285,26 +316,42 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         {
             var bytes = _protector.Unprotect(Base64UrlDecode(stateRaw));
             state = JsonSerializer.Deserialize<StateModel>(bytes)!;
-        }
-        catch { return Results.BadRequest("Invalid state"); }
+    }
+    catch { return Results.BadRequest("Invalid state"); }
 
         // Upstream error/cancel handling -> friendly page with correlation id and reselect link
         if (!string.IsNullOrEmpty(error))
         {
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Upstream error: {error}{(string.IsNullOrEmpty(errorDescription) ? string.Empty : " - " + errorDescription)}");
+            using var _ = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = state.CorrelationId, ["provider"] = state.Provider, ["clientId"] = state.ClientId });
+            _logger.LogWarning("External callback contained error from IdP: {Error} - {Description}", error, errorDescription);
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Upstream error: {error}{(string.IsNullOrEmpty(errorDescription) ? string.Empty : " - " + errorDescription)}");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "upstream_error");
+            return res;
         }
 
         var code = http.Request.Query["code"].ToString();
         if (string.IsNullOrEmpty(code))
         {
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing authorization code from upstream IdP.");
+            using var _ = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = state.CorrelationId, ["provider"] = state.Provider, ["clientId"] = state.ClientId });
+            _logger.LogWarning("External callback missing authorization code");
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing authorization code from upstream IdP.");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "missing_code");
+            return res;
         }
 
         var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == state.Provider && p.Enabled);
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Unknown or disabled provider.");
+        {
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Unknown or disabled provider.");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "unknown_provider");
+            return res;
+        }
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Invalid provider configuration.");
+        {
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Invalid provider configuration.");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "invalid_config");
+            return res;
+        }
 
         // Discovery
         var httpc = httpFactory.CreateClient();
@@ -312,7 +359,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         using var resp = await httpc.GetAsync(discoUrl, http.RequestAborted);
         if (!resp.IsSuccessStatusCode)
         {
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Discovery failed: {(int)resp.StatusCode}");
+            _logger.LogWarning("Callback discovery failed with status {Status} for {Url}", (int)resp.StatusCode, discoUrl);
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, $"Discovery failed: {(int)resp.StatusCode}");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "discovery_failed");
+            return res;
         }
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(http.RequestAborted));
         var root = doc.RootElement;
@@ -352,7 +402,12 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             {
                 // Validate ID token
                 var set = await jwksCache.GetAsync(jwksUri, TimeSpan.FromMinutes(15), httpFactory, http.RequestAborted);
-                if (set is null) return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "JWKS fetch failed");
+                if (set is null)
+                {
+                    var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "JWKS fetch failed");
+                    RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "jwks_failed");
+                    return res;
+                }
 
                 var tokenHandler = new JwtSecurityTokenHandler();
                 tokenHandler.InboundClaimTypeMap.Clear();
@@ -381,12 +436,19 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 amrs = principal.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
                 var nonceClaim = principal.FindFirst("nonce")?.Value;
                 if (!string.IsNullOrEmpty(nonce) && !string.Equals(nonce, nonceClaim, StringComparison.Ordinal))
-                    return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Nonce mismatch");
+                {
+                    var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Nonce mismatch");
+                    RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "nonce_mismatch");
+                    return res;
+                }
             }
         }
         catch (Exception ex)
         {
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "ID token validation failed: " + ex.Message);
+            _logger.LogWarning(ex, "ID token validation failed");
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "ID token validation failed: " + ex.Message);
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "id_token_validation_failed");
+            return res;
         }
 
         // Fallbacks: when id_token missing or lacks claims
@@ -438,7 +500,11 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         issuer ??= issuerFromDiscovery; // last resort: issuer from discovery
 
         if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(issuer))
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing subject/issuer from upstream IdP");
+        {
+            var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "Missing subject/issuer from upstream IdP");
+            RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "missing_sub_or_issuer");
+            return res;
+        }
 
         // Determine client policy from the original returnUrl (client_id)
         var clientPublicId = TryGetClientIdFromReturnUrl(state.ReturnUrl);
@@ -499,7 +565,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                         var newExt = new ExternalIdentity { Issuer = issuer!, Subject = sub!, UserId = userId, ProviderName = state.Provider, ClaimsJson = BuildClaimsJson(userEmail, userName), CreatedAt = DateTimeOffset.UtcNow, LastSeenAt = DateTimeOffset.UtcNow };
                         db.ExternalIdentities.Add(newExt);
                         await db.SaveChangesAsync(http.RequestAborted);
-                        return await SignInAndRedirectAsync(http, userId, state, userName ?? name, userEmail ?? email, sub, state.Provider, acr, amrs, mapped);
+                        var resultLinkNow = await SignInAndRedirectAsync(http, userId, state, userName ?? name, userEmail ?? email, sub, state.Provider, acr, amrs, mapped);
+                        RecordExternalCallback(true, cbStart, state.Provider, state.ClientId, "linked_immediate");
+                        return resultLinkNow;
                     }
                 }
             }
@@ -521,11 +589,17 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
                 db.ExternalIdentities.Add(ext);
                 await db.SaveChangesAsync(http.RequestAborted);
 
-                return await SignInAndRedirectAsync(http, userId, state, userName ?? name, userEmail ?? email, sub, state.Provider, acr, amrs, mapped);
+                var resultAuto = await SignInAndRedirectAsync(http, userId, state, userName ?? name, userEmail ?? email, sub, state.Provider, acr, amrs, mapped);
+                RecordExternalCallback(true, cbStart, state.Provider, state.ClientId, "auto_provisioned");
+                return resultAuto;
             }
 
             // Neither linking nor auto-provision allowed
-            return FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "External sign-in is not allowed by client policy.");
+            {
+                var res = FriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationId, "External sign-in is not allowed by client policy.");
+                RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, "policy_denied");
+                return res;
+            }
         }
         else
         {
@@ -534,7 +608,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             ext.ClaimsJson = BuildClaimsJson(email, name);
             await db.SaveChangesAsync(http.RequestAborted);
 
-            return await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs, mapped);
+            var result = await SignInAndRedirectAsync(http, userId, state, name, email, sub, state.Provider, acr, amrs, mapped);
+            RecordExternalCallback(true, cbStart, state.Provider, state.ClientId, "linked");
+            return result;
         }
     }
 
@@ -588,7 +664,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         db.ExternalIdentities.Add(ext);
         await db.SaveChangesAsync();
 
-        return await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>());
+    var confirmRes = await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>());
+    // Treat confirmation as part of callback success
+    RecordExternalCallback(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
+    return confirmRes;
     }
 
     private async Task<IResult> SignInAndRedirectAsync(HttpContext http, Guid userId, StateModel state, string? name, string? email, string? sub, string? idp, string? acr, string[] amrs, IReadOnlyDictionary<string, string> mapped)
@@ -616,7 +695,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             }
         }
 
-        var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+    var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
 
@@ -636,6 +715,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         }
 
         var redirect = state.ReturnUrl ?? "/";
+        _logger.LogInformation("External sign-in successful; redirecting to returnUrl");
+        RecordExternalCallback(true, DateTime.UtcNow, state.Provider, state.ClientId, "signed_in");
         return Results.Redirect(redirect);
     }
 
@@ -695,6 +776,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             builder.Append("<div class=\"mt-3\"><a class=\"btn btn-outline-primary\" href=\"");
             builder.Append(picker);
             builder.Append("\">Choose a different provider</a></div>");
+        }
+        if (!string.IsNullOrEmpty(correlationId))
+        {
+            builder.Append("<div class=\"mt-2 small text-muted\">Include this correlation ID when contacting support.</div>");
         }
         builder.Append("</body></html>");
         return Results.Content(builder.ToString(), "text/html; charset=utf-8", statusCode: 400);
@@ -782,5 +867,31 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         public string? CorrelationId { get; set; }
         public string? Email { get; set; }
         public string? Name { get; set; }
+    }
+
+    private void RecordExternalStart(bool success, DateTime startTs, string? provider, string? clientId, string outcome)
+    {
+        var tags = new TagList
+        {
+            { "provider", provider ?? string.Empty },
+            { "clientId", clientId ?? string.Empty },
+            { "outcome", outcome }
+        };
+        var durMs = (DateTime.UtcNow - startTs).TotalMilliseconds;
+        _metrics.ExternalStartDurationMs.Record(durMs, tags);
+        if (success) _metrics.ExternalStartSuccess.Add(1, tags); else _metrics.ExternalStartFailures.Add(1, tags);
+    }
+
+    private void RecordExternalCallback(bool success, DateTime startTs, string? provider, string? clientId, string outcome)
+    {
+        var tags = new TagList
+        {
+            { "provider", provider ?? string.Empty },
+            { "clientId", clientId ?? string.Empty },
+            { "outcome", outcome }
+        };
+        var durMs = (DateTime.UtcNow - startTs).TotalMilliseconds;
+        _metrics.ExternalCallbackDurationMs.Record(durMs, tags);
+        if (success) _metrics.ExternalCallbackSuccess.Add(1, tags); else _metrics.ExternalCallbackFailures.Add(1, tags);
     }
 }
