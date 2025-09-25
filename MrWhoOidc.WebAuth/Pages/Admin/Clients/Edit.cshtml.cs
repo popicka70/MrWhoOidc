@@ -846,8 +846,30 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
         client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
-    client.BackChannelLogoutUri = string.IsNullOrWhiteSpace(Input.BackChannelLogoutUri) ? null : Input.BackChannelLogoutUri.Trim();
-    client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
+        // Back-channel logout fields with validation
+        if (!string.IsNullOrWhiteSpace(Input.BackChannelLogoutUri))
+        {
+            var uri = Input.BackChannelLogoutUri.Trim();
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            {
+                ModelState.AddModelError("Input.BackChannelLogoutUri", "Must be an absolute URI.");
+                return Page();
+            }
+            var isHttps = string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+            var allowHttpDev = HttpContext.RequestServices.GetService<IConfiguration>()?
+                .GetValue<bool>("Dev:AllowHttpBackchannel") == true;
+            if (!isHttps && !allowHttpDev)
+            {
+                ModelState.AddModelError("Input.BackChannelLogoutUri", "HTTPS is required in production. Set Dev:AllowHttpBackchannel=true to allow http for local/dev.");
+                return Page();
+            }
+            client.BackChannelLogoutUri = parsed.ToString().TrimEnd('/');
+        }
+        else
+        {
+            client.BackChannelLogoutUri = null;
+        }
+        client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
 
         // M2M: allowed audiences
         if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))

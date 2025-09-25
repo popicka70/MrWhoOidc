@@ -65,27 +65,86 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, IHttpCli
         var backChannelClients = clients.Where(c => !string.IsNullOrEmpty(c.BackChannelLogoutUri)).ToList();
         if (backChannelClients.Count > 0)
         {
-            // Create HttpClient once
             var httpClient = httpFactory.CreateClient();
             httpClient.Timeout = TimeSpan.FromSeconds(5);
+
+            // Bounded concurrency and simple retry with jitter
+            var semaphore = new SemaphoreSlim(5); // configurable limit if needed
+            var ct = http.RequestAborted;
+            var tasks = new List<Task>();
+
             foreach (var c in backChannelClients)
             {
-                try
+                await semaphore.WaitAsync(ct);
+                tasks.Add(Task.Run(async () =>
                 {
-                    var logoutToken = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
-                    using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("logout_token", logoutToken) });
-                    // Per spec, content-type is application/x-www-form-urlencoded
-                    var resp = await httpClient.PostAsync(c.BackChannelLogoutUri, content);
-                    if (!resp.IsSuccessStatusCode)
+                    try
                     {
-                        logger.LogWarning("Backchannel logout failed for client {ClientId}: {Status}", c.ClientId, (int)resp.StatusCode);
+                        var token = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
+                        if (token is null)
+                        {
+                            logger.LogDebug("Backchannel logout skipped for client {ClientId}: no sid/sub available", c.ClientId);
+                            return;
+                        }
+
+                        var attempt = 0;
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        HttpResponseMessage? resp = null;
+                        Exception? lastEx = null;
+                        while (attempt < 3 && !ct.IsCancellationRequested)
+                        {
+                            attempt++;
+                            try
+                            {
+                                using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("logout_token", token) });
+                                resp = await httpClient.PostAsync(c.BackChannelLogoutUri, content, ct);
+                                var status = (int)resp.StatusCode;
+                                var retriable = status == 408 || status == 429 || status >= 500;
+                                if (!retriable)
+                                {
+                                    break; // success or non-retriable
+                                }
+                            }
+                            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+                            {
+                                lastEx = ex;
+                            }
+                            catch (HttpRequestException ex)
+                            {
+                                lastEx = ex;
+                            }
+
+                            // backoff with jitter
+                            var delayMs = (int)(Math.Min(2000, Math.Pow(2, attempt) * 100) + Random.Shared.Next(0, 100));
+                            await Task.Delay(delayMs, ct);
+                        }
+                        sw.Stop();
+
+                        if (resp is null)
+                        {
+                            logger.LogWarning(lastEx, "Backchannel logout failed for client {ClientId} after {Attempts} attempts in {ElapsedMs}ms", c.ClientId, attempt, sw.ElapsedMilliseconds);
+                        }
+                        else if (!resp.IsSuccessStatusCode)
+                        {
+                            logger.LogWarning("Backchannel logout failed for client {ClientId}: {Status} after {Attempts} attempts in {ElapsedMs}ms", c.ClientId, (int)resp.StatusCode, attempt, sw.ElapsedMilliseconds);
+                        }
+                        else
+                        {
+                            logger.LogInformation("Backchannel logout success for client {ClientId} in {ElapsedMs}ms", c.ClientId, sw.ElapsedMilliseconds);
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Backchannel logout exception for client {ClientId}", c.ClientId);
-                }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Backchannel logout exception for client {ClientId}", c.ClientId);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, ct));
             }
+
+            try { await Task.WhenAll(tasks); } catch (OperationCanceledException) { }
         }
 
         // Validate post_logout_redirect_uri against allow-list if a client parameter is present
@@ -112,28 +171,40 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, IHttpCli
         return Results.Content(html, "text/html; charset=utf-8");
     }
 
-    private string CreateLogoutToken(string issuer, string audienceClientId, string idTokenHint, string sidFromQuery)
+    private string? CreateLogoutToken(string issuer, string audienceClientId, string idTokenHint, string sidFromQuery)
     {
-        var claims = new List<Claim>
+        // Build payload per spec with JSON events claim
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var payload = new JwtPayload
         {
-            new("iss", issuer),
-            new("aud", audienceClientId),
-            new("iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new("jti", Guid.NewGuid().ToString("N")),
-            new("events", "{\"http://schemas.openid.net/event/backchannel-logout\":{}}")
+            { "iss", issuer },
+            { "aud", audienceClientId },
+            { "iat", now },
+            { "jti", Guid.NewGuid().ToString("N") },
+            { "events", new Dictionary<string, object> { { "http://schemas.openid.net/event/backchannel-logout", new Dictionary<string, object>() } } }
         };
-        // Include sub if id_token_hint present and parseable
+
         var sub = TryExtractClaim(idTokenHint, "sub");
-        if (!string.IsNullOrEmpty(sub)) claims.Add(new("sub", sub));
-        // Include sid if provided or can be extracted
         var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : ExtractSidFromIdToken(idTokenHint);
-        if (!string.IsNullOrEmpty(sid)) claims.Add(new("sid", sid));
+        if (!string.IsNullOrEmpty(sub)) payload["sub"] = sub;
+        if (!string.IsNullOrEmpty(sid)) payload["sid"] = sid;
+        if (string.IsNullOrEmpty(sub) && string.IsNullOrEmpty(sid))
+        {
+            // Spec requires at least one of sid or sub
+            return null;
+        }
 
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
         var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
         var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
+        var header = new JwtHeader(creds)
+        {
+            { "typ", "logout+jwt" }
+        };
+
         var handler = new JwtSecurityTokenHandler();
-        var token = new JwtSecurityToken(issuer, audienceClientId, claims, DateTime.UtcNow, DateTime.UtcNow.AddMinutes(5), creds);
+        var token = new JwtSecurityToken(header, payload);
+        token.Payload["exp"] = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds();
         return handler.WriteToken(token);
     }
 
