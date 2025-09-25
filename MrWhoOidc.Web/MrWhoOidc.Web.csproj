@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MrWhoOidc.ServiceDefaults\MrWhoOidc.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,6 +18,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.9" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.1" />
   </ItemGroup>
 
 </Project>
