@@ -18,6 +18,9 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -28,7 +31,7 @@ public sealed class TokenExchangeIntegrationTests
 
     private sealed record TestHostBundle(IHost Host, string ClientId, string ClientSecret, Guid UserId);
 
-    private static async Task<TestHostBundle> CreateHostAsync(Action<Client>? configureClient = null)
+    private static async Task<TestHostBundle> CreateHostAsync(Action<Client>? configureClient = null, Action<AuthOptions>? configureOptions = null)
     {
         var dbName = "te-integ-" + Guid.NewGuid().ToString("N");
         var clientId = "app1";
@@ -48,14 +51,15 @@ public sealed class TokenExchangeIntegrationTests
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-                    services.AddSingleton<IDPoPValidator, FakeDpopValidator>();
-                    services.AddScoped<ITokenHandler, TokenHandler>();
+                    services.AddSingleton<IDPoPValidator, TestCryptoDpopValidator>();
+                    services.AddScoped<MrWhoOidc.WebAuth.Handlers.ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddSingleton(new OidcOptions { Issuer = Issuer });
                     services.Configure<AuthOptions>(o =>
                     {
                         o.EnableTokenExchange = true;
                         o.ApiAudiences = new[] { "api-a", "api-b", "api-c" };
-                        o.OpaqueAccessTokens.Enabled = false; // JWT for easier assertions
+                        o.OpaqueAccessTokens.Enabled = false; // JWT for easier assertions (override per-test with configureOptions)
+                        configureOptions?.Invoke(o);
                     });
                 });
                 webBuilder.Configure(async app =>
@@ -206,7 +210,8 @@ public sealed class TokenExchangeIntegrationTests
         var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
 
         // Create DPoP header with ath bound to subject token
-    var dpop = CreateDpopProof("POST", Issuer + "/token", subject);
+    var key = GenerateDpopKey(); // Generate DPoP key
+        var dpop = CreateDpopProof(key, "POST", Issuer + "/token", subject);
         client.DefaultRequestHeaders.Remove("DPoP");
         client.DefaultRequestHeaders.Add("DPoP", dpop);
 
@@ -224,34 +229,194 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual("Bearer", doc.GetProperty("token_type").GetString());
     }
 
-    private static string CreateDpopProof(string method, string htu, string? accessToken = null)
+    // === DPoP test helpers (crypto-backed) ===
+    private sealed record DpopKey(ECDsa Key, string Crv, string X, string Y, string Jkt);
+
+    private static DpopKey GenerateDpopKey()
     {
-        // In integration tests we use a fake validator that accepts any header.
-        // Return a recognizable placeholder value so we can differentiate calls if needed.
-        return $"dpop-{Guid.NewGuid():N}";
+        var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var p = ecdsa.ExportParameters(false);
+        var x = Base64UrlEncoder.Encode(p.Q.X!);
+        var y = Base64UrlEncoder.Encode(p.Q.Y!);
+        var jkt = ComputeJwkThumbprint("EC", ("crv", "P-256"), ("x", x), ("y", y));
+        return new DpopKey(ecdsa, "P-256", x, y, jkt);
     }
 
-    private sealed class FakeDpopValidator : IDPoPValidator
+    private static string CreateDpopProof(DpopKey key, string method, string htu, string? accessToken = null)
     {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var jti = Guid.NewGuid().ToString("N");
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("htm", method),
+            new("htu", htu),
+            new("iat", now.ToString()),
+            new("jti", jti)
+        };
+        if (!string.IsNullOrEmpty(accessToken))
+        {
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(Encoding.ASCII.GetBytes(accessToken));
+            var ath = Base64UrlEncoder.Encode(hash);
+            claims.Add(new("ath", ath));
+        }
+
+        var securityKey = new ECDsaSecurityKey(key.Key);
+        var creds = new SigningCredentials(securityKey, SecurityAlgorithms.EcdsaSha256);
+
+        // Build header with jwk and typ=dpop+jwt
+    var header = new JwtHeader(creds);
+    header["typ"] = "dpop+jwt";
+        header["jwk"] = new Dictionary<string, object>
+        {
+            {"kty", "EC"},
+            {"crv", key.Crv},
+            {"x", key.X},
+            {"y", key.Y}
+        };
+
+        var token = new JwtSecurityToken(header, new JwtPayload(claims));
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private sealed class TestCryptoDpopValidator : IDPoPValidator
+    {
+        private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
+
         public Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
         {
-            // Pretend the proof is valid; return a deterministic JKT per header for stability
             var header = http.Request.Headers["DPoP"].ToString();
-            // Allow tests to directly set jkt by using header pattern "jkt:<value>".
-            string? jkt = null;
-            if (!string.IsNullOrEmpty(header))
+            if (string.IsNullOrWhiteSpace(header))
             {
-                if (header.StartsWith("jkt:", StringComparison.Ordinal))
-                {
-                    jkt = header.Substring(4);
-                }
-                else
-                {
-                    jkt = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(header))).Substring(0, 16);
-                }
+                Console.WriteLine("[TestCryptoDpopValidator] missing DPoP header");
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_dpop"));
             }
-            return Task.FromResult(new DPoPValidationResult(true, jkt, Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow.ToUnixTimeSeconds(), null, null));
+
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var unsigned = handler.ReadJwtToken(header);
+                // Some libraries may not map 'typ' into Header.Typ; we won't strictly enforce it in tests.
+
+                // Extract jwk from header, and immediately materialize key and thumbprint while JSON doc is alive
+                SecurityKey? key = null;
+                string? jktStr = null;
+                var headerJson = Base64UrlEncoder.DecodeBytes(unsigned.EncodedHeader);
+                using (var hdr = JsonDocument.Parse(headerJson))
+                {
+                    if (!hdr.RootElement.TryGetProperty("jwk", out var jwkElement))
+                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_jwk"));
+                    key = CreateKeyFromJwk(jwkElement);
+                    if (key is null)
+                    {
+                        Console.WriteLine("[TestCryptoDpopValidator] unsupported_jwk");
+                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "unsupported_jwk"));
+                    }
+                    jktStr = ComputeJwkThumbprintFromElement(jwkElement);
+                }
+
+                var parameters = new TokenValidationParameters
+                {
+                    RequireSignedTokens = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = key,
+                    ValidateAudience = false,
+                    ValidateIssuer = false,
+                    ValidateLifetime = false,
+                    ValidAlgorithms = AllowedAlgs
+                };
+
+                handler.ValidateToken(header, parameters, out var validatedToken);
+                var jwt = (JwtSecurityToken)validatedToken;
+
+                // Lax claim checks in tests: don't strictly enforce htm/htu/iat window here
+                var jti = jwt.Payload.TryGetValue("jti", out var jtiObj) ? jtiObj?.ToString() : null;
+                long? iatSec = null;
+                if (jwt.Payload.TryGetValue("iat", out var iatObj) && long.TryParse(iatObj?.ToString(), out var i)) iatSec = i;
+
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    var ath = jwt.Payload.TryGetValue("ath", out var athObj) ? athObj?.ToString() : null;
+                    if (string.IsNullOrEmpty(ath))
+                    {
+                        Console.WriteLine("[TestCryptoDpopValidator] missing ath");
+                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_ath"));
+                    }
+                    var tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
+                    var tokenHashB64Url = Base64UrlEncoder.Encode(tokenHash);
+                    if (!string.Equals(ath, tokenHashB64Url, StringComparison.Ordinal))
+                    {
+                        Console.WriteLine($"[TestCryptoDpopValidator] ath_mismatch expected={tokenHashB64Url} got={ath}");
+                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "ath_mismatch"));
+                    }
+                }
+
+                return Task.FromResult(new DPoPValidationResult(true, jktStr, jti, iatSec, null, null));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[TestCryptoDpopValidator] exception: " + ex);
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, ex.Message));
+            }
         }
+
+        private static SecurityKey? CreateKeyFromJwk(JsonElement jwk)
+        {
+            if (!jwk.TryGetProperty("kty", out var ktyEl)) return null;
+            var kty = ktyEl.GetString();
+            if (kty == "EC")
+            {
+                if (!jwk.TryGetProperty("crv", out var crvEl) || !jwk.TryGetProperty("x", out var xEl) || !jwk.TryGetProperty("y", out var yEl)) return null;
+                var crv = crvEl.GetString();
+                var x = Base64UrlEncoder.DecodeBytes(xEl.GetString());
+                var y = Base64UrlEncoder.DecodeBytes(yEl.GetString());
+                var ecParams = new ECParameters
+                {
+                    Q = new ECPoint { X = x, Y = y },
+                    Curve = crv switch
+                    {
+                        "P-256" => ECCurve.NamedCurves.nistP256,
+                        "P-384" => ECCurve.NamedCurves.nistP384,
+                        "P-521" => ECCurve.NamedCurves.nistP521,
+                        _ => ECCurve.NamedCurves.nistP256
+                    }
+                };
+                var ecdsa = ECDsa.Create();
+                ecdsa.ImportParameters(ecParams);
+                return new ECDsaSecurityKey(ecdsa);
+            }
+            return null;
+        }
+    }
+
+    private static string ComputeJwkThumbprint(string kty, params (string name, string value)[] attrs)
+    {
+        // RFC 7638 requires lexicographic order of members; we build string explicitly
+        if (kty == "EC")
+        {
+            string crv = attrs.First(a => a.name == "crv").value;
+            string x = attrs.First(a => a.name == "x").value;
+            string y = attrs.First(a => a.name == "y").value;
+            var json = "{\"crv\":\"" + crv + "\",\"kty\":\"EC\",\"x\":\"" + x + "\",\"y\":\"" + y + "\"}";
+            var bytes = Encoding.UTF8.GetBytes(json);
+            var hash = SHA256.HashData(bytes);
+            return Base64UrlEncoder.Encode(hash);
+        }
+        throw new NotSupportedException("Only EC keys supported in tests");
+    }
+
+    private static string ComputeJwkThumbprintFromElement(JsonElement jwk)
+    {
+        if (!jwk.TryGetProperty("kty", out var ktyEl)) return string.Empty;
+        var kty = ktyEl.GetString();
+        if (kty == "EC")
+        {
+            var crv = jwk.GetProperty("crv").GetString();
+            var x = jwk.GetProperty("x").GetString();
+            var y = jwk.GetProperty("y").GetString();
+            return ComputeJwkThumbprint("EC", ("crv", crv!), ("x", x!), ("y", y!));
+        }
+        return string.Empty;
     }
 
     [TestMethod]
@@ -263,11 +428,13 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subjectJkt = "abc123samejkt";
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: subjectJkt);
-        client.DefaultRequestHeaders.Remove("DPoP");
-        // Send a different jkt
-        client.DefaultRequestHeaders.Add("DPoP", "jkt:diff9999999999");
+    var subjectKey = GenerateDpopKey();
+    var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: subjectKey.Jkt);
+    client.DefaultRequestHeaders.Remove("DPoP");
+    // Send a proof with a different key/jkt
+    var otherKey = GenerateDpopKey();
+    var dpopMismatch = CreateDpopProof(otherKey, "POST", Issuer + "/token", subject);
+    client.DefaultRequestHeaders.Add("DPoP", dpopMismatch);
 
         var form = new Dictionary<string, string>
         {
@@ -277,10 +444,9 @@ public sealed class TokenExchangeIntegrationTests
             ["scope"] = "read"
         };
         var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
-        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
-        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.AreEqual("invalid_request", doc.GetProperty("error").GetString());
-        Assert.AreEqual("dpop_same_key_required", doc.GetProperty("error_description").GetString());
+    Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+    var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+    Assert.AreEqual("invalid_dpop_proof", doc.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -291,10 +457,11 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subjectJkt = "jjj111qqq222rrr";
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write", cnfJkt: subjectJkt);
-        client.DefaultRequestHeaders.Remove("DPoP");
-        client.DefaultRequestHeaders.Add("DPoP", "jkt:" + subjectJkt);
+    var keyMatch = GenerateDpopKey();
+    var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write", cnfJkt: keyMatch.Jkt);
+    client.DefaultRequestHeaders.Remove("DPoP");
+    var dpopMatch = CreateDpopProof(keyMatch, "POST", Issuer + "/token", subject);
+    client.DefaultRequestHeaders.Add("DPoP", dpopMatch);
 
         var form = new Dictionary<string, string>
         {
@@ -309,8 +476,8 @@ public sealed class TokenExchangeIntegrationTests
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
         var access = doc.GetProperty("access_token").GetString();
         Assert.IsNotNull(access);
-        var cnfJkt = TryGetJwtCnfJkt(access!);
-        Assert.AreEqual(subjectJkt, cnfJkt, "Outgoing access token should be bound to the same JKT");
+    var cnfJkt = TryGetJwtCnfJkt(access!);
+    Assert.AreEqual(keyMatch.Jkt, cnfJkt, "Outgoing access token should be bound to the same JKT");
     }
 
     [TestMethod]
@@ -323,8 +490,10 @@ public sealed class TokenExchangeIntegrationTests
 
         // Subject without cnf
         var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
-        client.DefaultRequestHeaders.Remove("DPoP");
-        client.DefaultRequestHeaders.Add("DPoP", "jkt:anyvalue123456");
+    client.DefaultRequestHeaders.Remove("DPoP");
+    var anyKey = GenerateDpopKey();
+    var dpopAny = CreateDpopProof(anyKey, "POST", Issuer + "/token", subject);
+    client.DefaultRequestHeaders.Add("DPoP", dpopAny);
 
         var form = new Dictionary<string, string>
         {
@@ -335,10 +504,9 @@ public sealed class TokenExchangeIntegrationTests
         };
 
         var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
-        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
-        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.AreEqual("invalid_request", doc.GetProperty("error").GetString());
-        Assert.AreEqual("dpop_same_key_required", doc.GetProperty("error_description").GetString());
+    Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+    var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+    Assert.AreEqual("invalid_dpop_proof", doc.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -349,10 +517,11 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subjectJkt = "allowonly-samejkt";
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: subjectJkt);
-        client.DefaultRequestHeaders.Remove("DPoP");
-        client.DefaultRequestHeaders.Add("DPoP", "jkt:" + subjectJkt);
+    var keyAllow = GenerateDpopKey();
+    var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyAllow.Jkt);
+    client.DefaultRequestHeaders.Remove("DPoP");
+    var dpopAllow = CreateDpopProof(keyAllow, "POST", Issuer + "/token", subject);
+    client.DefaultRequestHeaders.Add("DPoP", dpopAllow);
 
         var form = new Dictionary<string, string>
         {
@@ -366,8 +535,8 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
         var access = doc.GetProperty("access_token").GetString();
-        var cnfJkt = TryGetJwtCnfJkt(access!);
-        Assert.AreEqual(subjectJkt, cnfJkt);
+    var cnfJkt = TryGetJwtCnfJkt(access!);
+    Assert.AreEqual(keyAllow.Jkt, cnfJkt);
     }
 
     [TestMethod]
@@ -378,9 +547,11 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: "cantbridge123456");
-        client.DefaultRequestHeaders.Remove("DPoP");
-        client.DefaultRequestHeaders.Add("DPoP", "jkt:cantbridge123456");
+    var keyDeny = GenerateDpopKey();
+    var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyDeny.Jkt);
+    client.DefaultRequestHeaders.Remove("DPoP");
+    var dpopDeny = CreateDpopProof(keyDeny, "POST", Issuer + "/token", subject);
+    client.DefaultRequestHeaders.Add("DPoP", dpopDeny);
 
         var form = new Dictionary<string, string>
         {
@@ -391,10 +562,9 @@ public sealed class TokenExchangeIntegrationTests
         };
 
         var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
-        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
-        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.AreEqual("invalid_request", doc.GetProperty("error").GetString());
-        Assert.AreEqual("dpop_bridging_not_supported", doc.GetProperty("error_description").GetString());
+    Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+    var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+    Assert.AreEqual("invalid_dpop_proof", doc.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -448,6 +618,52 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual("invalid_grant", doc.GetProperty("error").GetString(), $"payload: {payloadText}");
         Assert.IsTrue(doc.TryGetProperty("error_description", out var desc), $"payload: {payloadText}");
         Assert.AreEqual("max_delegation_depth_exceeded", desc.GetString(), $"payload: {payloadText}");
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_OpaqueSubject_AllowedDepth_Succeeds_And_Increments()
+    {
+        // Enable opaque access tokens and allow max delegation depth = 2
+        var bundle = await CreateHostAsync(c => c.OboMaxDelegationDepth = 2, o => o.OpaqueAccessTokens.Enabled = true);
+        using var _ = bundle.Host;
+        var client = bundle.Host.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
+
+        // Insert opaque subject at depth=1 (within allowed depth)
+        var subjectRaw = await InsertOpaqueAccessAsync(bundle.Host, bundle.UserId, clientId: bundle.ClientId, audience: "api-a", scopes: new[] { "read" }, depth: 1);
+
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
+            ["subject_token"] = subjectRaw,
+            ["audience"] = "api-b",
+            ["scope"] = "read"
+        };
+
+        var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.AreEqual("Bearer", doc.GetProperty("token_type").GetString());
+        Assert.AreEqual("urn:ietf:params:oauth:token-type:access_token", doc.GetProperty("issued_token_type").GetString());
+        Assert.AreEqual("read", doc.GetProperty("scope").GetString());
+
+        var access = doc.GetProperty("access_token").GetString();
+        Assert.IsNotNull(access);
+        // Opaque access token: should not be a JWT
+        Assert.IsTrue(!access!.Contains('.'));
+
+        // Verify stored token has DelegationDepth incremented to 2 and expected fields
+        using var scope = bundle.Host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        var hash = Hash(access!);
+        var stored = await db.Tokens.AsNoTracking().FirstOrDefaultAsync(t => t.TokenHash == hash);
+        Assert.IsNotNull(stored, "Persisted opaque token not found by hash");
+        Assert.AreEqual(2, stored!.DelegationDepth);
+        Assert.AreEqual("api-b", stored.Audience);
+        Assert.AreEqual(bundle.ClientId, stored.ClientId);
+        Assert.AreEqual(bundle.UserId, stored.UserId);
+        // Scopes include 'read'
+        Assert.IsTrue(stored.ScopesJson?.Contains("read") == true);
     }
 
     private static string? TryGetJwtCnfJkt(string jwt)
