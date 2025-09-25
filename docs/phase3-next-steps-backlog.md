@@ -69,12 +69,15 @@ Milestones
   - Acceptance
     - CI turns red on regressions in critical OBO and chaining paths; Redis‑backed tests are stable.
 
-- [ ] Documentation first draft
+- [~] Documentation first draft
   - Deliverables
     - Admin guide: providers, mappings, keys, OBO policy editors (with screenshots).
     - Developer guide: authorize params (`idp`, `acr_values`), inbound JAR/JARM, token exchange usage and DPoP modes.
   - Acceptance
     - New clients and admins can complete basic setups without code changes.
+  - Links
+    - Draft Admin guide: `docs/admin-guide.md`
+    - Draft Developer guide: `docs/developer-guide.md`
 
 ### Quick wins (parallel with P0)
 
