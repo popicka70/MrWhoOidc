@@ -20,7 +20,7 @@ Milestones
 
 ## P0 Sprint (2 weeks)
 
-- [ ] Keys UI: PEM import and JWKS validation hardening
+- [x] Keys UI: PEM import and JWKS validation hardening
   - Deliverables
     - Import PEM (PKCS8/PKCS1/EC) and convert to JWK in Admin UI.
     - Pretty‑print/compact toggle and richer JWKS preview (kid/alg/kty/use/thumbprint summary).
@@ -78,7 +78,7 @@ Milestones
 
 ### Quick wins (parallel with P0)
 
-- [ ] Discovery hygiene
+- [x] Discovery hygiene
   - Ensure `request_object_signing_alg_values_supported` exactly matches `AuthOptions` allow‑list; verify well‑known with an external validator.
 
 - [ ] Rate‑limit headers verification
@@ -158,4 +158,4 @@ Milestones
   - “RequireSameJkt” OBO (exists) + “Two OIDC providers” flow with cancel/error variants
 
 Notes
-- Current test status: CI green locally; 60/60 unit tests passing (2025‑09‑25). Integration coverage will expand in P0.
+- Current test status: CI green locally; 65/65 unit tests passing (2025‑09‑25). Integration coverage will expand in P0.
