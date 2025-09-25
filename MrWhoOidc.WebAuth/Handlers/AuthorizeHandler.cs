@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -224,6 +225,16 @@ public sealed class AuthorizeHandler(
                     resource = http.Request.Query["resource"],
                     response_mode = http.Request.Query["response_mode"]
                 };
+            }
+
+            // If no client_id provided, use admin default so login UX is controlled by admin client
+            if (string.IsNullOrWhiteSpace(effectiveReq.client_id))
+            {
+                effectiveReq.client_id = await db.ResolveDefaultClientIdAsync();
+                if (!string.IsNullOrWhiteSpace(effectiveReq.client_id))
+                {
+                    clientBucket = BucketizeClientId(effectiveReq.client_id);
+                }
             }
 
             // Parameter: idp and idp_hint
