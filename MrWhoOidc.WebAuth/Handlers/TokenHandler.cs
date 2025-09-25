@@ -261,6 +261,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 {
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    metrics.TokenExchangeRequests.Add(1, new TagList { new("outcome", "failure") });
+                    metrics.TokenExchangeFailures.Add(1);
                     return ErrorResults.UnsupportedGrant();
                 }
 
@@ -285,6 +287,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 if (snapshot.Count > TokenExchangeRateLimitPerMinute && now - snapshot.WindowStart < TimeSpan.FromMinutes(1))
                 {
                     logger.LogWarning("/token 429: token-exchange per-client limit exceeded client={Client}", clientBucket);
+                    metrics.TokenExchangeRequests.Add(1, new TagList { new("outcome", "rate_limited") });
+                    metrics.TokenExchangeFailures.Add(1);
                     return Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many token_exchange requests" }, statusCode: 429);
                 }
 
@@ -297,12 +301,16 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 {
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    metrics.TokenExchangeRequests.Add(1, new TagList { new("outcome", "failure") });
+                    metrics.TokenExchangeFailures.Add(1);
                     return ErrorResults.InvalidRequest("Missing subject_token");
                 }
                 if (!string.IsNullOrEmpty(audience) && !string.IsNullOrEmpty(resource) && !string.Equals(audience, resource, StringComparison.Ordinal))
                 {
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    metrics.TokenExchangeRequests.Add(1, new TagList { new("outcome", "failure") });
+                    metrics.TokenExchangeFailures.Add(1);
                     return ErrorResults.InvalidRequest("audience and resource conflict");
                 }
                 var target = !string.IsNullOrEmpty(resource) ? resource : audience;
@@ -318,6 +326,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     {
                         logger.LogWarning("/token invalid_dpop_proof (ath): reason={Reason} ip={IP}", validationWithAth.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
                         http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
+                        metrics.TokenExchangeRequests.Add(1, new TagList { new("outcome", "failure"), new("reason", "invalid_dpop_proof") });
+                        metrics.TokenExchangeFailures.Add(1);
                         return Results.BadRequest(new { error = "invalid_dpop_proof" });
                     }
                     // Overwrite dpopJkt with validated value (should be same as earlier validation)
@@ -325,10 +335,35 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 }
 
                 var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+                var swTe = Stopwatch.StartNew();
                 var result = await tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId!, issuer, dpopJkt);
                 outcome = result.ok ? "success" : "failure";
                 metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
                 if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+
+                // Dedicated TE metrics with richer tagging
+                var clientBucketTag = Bucket(clientId!);
+                var targetBucket = string.IsNullOrWhiteSpace(target) ? "none" : BucketizeAudience(target);
+                var dpopModeTag = clientEntity?.OboDpopMode?.ToString() ?? "unknown";
+
+                var teTags = new TagList
+                {
+                    new("outcome", outcome),
+                    new("client_bucket", clientBucketTag),
+                    new("target_aud", targetBucket),
+                    new("dpop_mode", dpopModeTag),
+                    new("source_token_type", string.IsNullOrEmpty(subjectTokenType) ? (IsProbablyJwt(subjectToken) ? "jwt" : "opaque") : (subjectTokenType.Contains("jwt", StringComparison.OrdinalIgnoreCase) ? "jwt" : "opaque"))
+                };
+                metrics.TokenExchangeRequests.Add(1, teTags);
+                if (result.ok) metrics.TokenExchangeSuccess.Add(1, teTags); else metrics.TokenExchangeFailures.Add(1, teTags);
+                swTe.Stop();
+                metrics.TokenExchangeDurationMs.Record(swTe.Elapsed.TotalMilliseconds, teTags);
+
+                // Structured audit log (PII-reduced)
+                var corr = http.Request.Headers["x-correlation-id"].ToString();
+                if (string.IsNullOrWhiteSpace(corr)) corr = http.TraceIdentifier;
+                var sourceAudBucket = string.IsNullOrEmpty(subjectTokenType) && IsProbablyJwt(subjectToken) ? BucketizeAudience(TryGetJwtAudience(subjectToken) ?? "none") : "none";
+                logger.LogInformation("token_exchange outcome={Outcome} client={ClientBucket} source={SourceBucket} target={TargetBucket} dpop_mode={DpopMode} corr={CorrelationId}", outcome, clientBucketTag, sourceAudBucket, targetBucket, dpopModeTag, corr);
                 return Results.Json(result.payload!, statusCode: result.status);
             }
 
@@ -370,5 +405,51 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
     {
         var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
         return Convert.ToHexString(bytes.AsSpan(0, 8));
+    }
+
+    static string BucketizeAudience(string audience)
+    {
+        if (Uri.TryCreate(audience, UriKind.Absolute, out var uri))
+        {
+            return string.IsNullOrEmpty(uri.Host) ? Bucket(audience) : uri.Host.ToLowerInvariant();
+        }
+        if (audience.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = audience.Split(':');
+            if (parts.Length >= 3) return string.Join(':', parts.Take(3));
+            return audience;
+        }
+        return Bucket(audience);
+    }
+
+    static bool IsProbablyJwt(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        int dots = 0;
+        foreach (var ch in token)
+        {
+            if (ch == '.') { dots++; if (dots >= 2) break; }
+        }
+        return dots >= 2;
+    }
+
+    static string? TryGetJwtAudience(string token)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length < 2) return null;
+            // JWT payload is base64url; pad if needed
+            static string Pad(string s) => s.Length % 4 == 2 ? s + "==" : (s.Length % 4 == 3 ? s + "=" : (s.Length % 4 == 1 ? s + "===" : s));
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(Pad(parts[1].Replace('-', '+').Replace('_', '/'))));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("aud", out var audEl))
+            {
+                if (audEl.ValueKind == System.Text.Json.JsonValueKind.String) return audEl.GetString();
+                if (audEl.ValueKind == System.Text.Json.JsonValueKind.Array && audEl.GetArrayLength() > 0) return audEl[0].GetString();
+            }
+        }
+        catch { }
+        return null;
     }
 }

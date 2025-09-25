@@ -240,12 +240,14 @@ Notes:
 - Per-client allow-list (`IntrospectionResponseFieldsJson` or `AuthOptions.Introspection*`) continues to shape output; default list remains privacy-friendly.
 - UserInfo output unchanged.
 
-- [~] Story: Telemetry, rate limits, and auditing
-  - Metrics: `token_exchange_requests`, `token_exchange_success`, `token_exchange_failures` counters with tags: `outcome`, `source_token_type` (jwt/opaque), `dpop_mode`, `target_aud` (bucketized), `client_bucket`.
-  - Histogram: `token_exchange_duration_ms`.
-  - Logs: structured audit entries including correlation id, hashed/bucketized `client_id`, source/target aud, outcome. [partial]
-  - Rate limiting: Implemented route policy `rl-token-exchange` and in-handler per-client limiter; added Redis-backed distributed limiter and `Retry-After`/rate-limit headers for `/token` and `/introspect` (only active when Redis is configured; falls back to in-process policies otherwise).
-  - Acceptance: Metrics visible in dashboards; rate limits applied; audit logs usable for investigations.
+- [x] Story: Telemetry, rate limits, and auditing
+  - Metrics: added dedicated Token Exchange metrics under `MrWhoOidc.WebAuth` Meter
+    - Counters: `oidc.token_exchange.requests`, `oidc.token_exchange.success`, `oidc.token_exchange.failures`
+    - Histogram: `oidc.token_exchange.duration.ms`
+    - Tags: `outcome` (success/failure/rate_limited), `source_token_type` (jwt/opaque), `dpop_mode`, `target_aud` (bucketized), `client_bucket`
+  - Logs: structured audit entries in `/token` handler for TE path: includes `client_bucket`, bucketized `source` and `target` audiences, `dpop_mode`, and correlation id (uses `X-Correlation-Id` header when present, otherwise ASP.NET `TraceIdentifier`). No PII logged.
+  - Rate limiting: kept route policy `rl-token-exchange` and in-handler per-client sliding window; added Redis-backed distributed limiter middleware emitting `Retry-After`/rate-limit headers for `/token` and `/introspect` when Redis is configured; falls back to in-process policies otherwise.
+  - Acceptance: Metrics and logs are emitted; 429s include rate-limit headers; dashboards can slice by tags.
 
 - [~] Story: Tests and samples
   - Unit tests

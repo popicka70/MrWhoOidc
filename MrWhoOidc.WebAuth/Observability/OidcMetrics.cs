@@ -16,6 +16,12 @@ public sealed class OidcMetrics
     public Counter<long> TokenFailures { get; } = Meter.CreateCounter<long>("oidc.token.failures");
     public Histogram<double> TokenDurationMs { get; } = Meter.CreateHistogram<double>("oidc.token.duration.ms");
 
+    // Token Exchange specific metrics (RFC 8693)
+    public Counter<long> TokenExchangeRequests { get; } = Meter.CreateCounter<long>("oidc.token_exchange.requests");
+    public Counter<long> TokenExchangeSuccess { get; } = Meter.CreateCounter<long>("oidc.token_exchange.success");
+    public Counter<long> TokenExchangeFailures { get; } = Meter.CreateCounter<long>("oidc.token_exchange.failures");
+    public Histogram<double> TokenExchangeDurationMs { get; } = Meter.CreateHistogram<double>("oidc.token_exchange.duration.ms");
+
     public Counter<long> UserInfoRequests { get; } = Meter.CreateCounter<long>("oidc.userinfo.requests");
     public Counter<long> UserInfoSuccess { get; } = Meter.CreateCounter<long>("oidc.userinfo.success");
     public Counter<long> UserInfoFailures { get; } = Meter.CreateCounter<long>("oidc.userinfo.failures");
