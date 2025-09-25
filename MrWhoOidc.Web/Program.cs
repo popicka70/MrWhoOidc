@@ -13,6 +13,9 @@ using Microsoft.AspNetCore.Components.Authorization;
 using MrWhoOidc.Web.DPoP;
 using MrWhoOidc.Web.JAR;
 using System.Security.Cryptography;
+using MrWhoOidc.Web.Backchannel;
+using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +35,7 @@ string responseMode = (builder.Configuration["Oidc:ResponseMode"] ?? "query.jwt"
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddOptions<BackchannelOptions>();
 
 // DPoP key store for OIDC backchannel
 builder.Services.AddSingleton<DPoPKeyStore>();
@@ -78,6 +82,20 @@ builder.Services.AddAuthentication(options =>
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        // Validate principal against backchannel logout blacklist
+        options.Events.OnValidatePrincipal = async ctx =>
+        {
+            var sid = ctx.Principal?.FindFirst("sid")?.Value;
+            if (!string.IsNullOrEmpty(sid))
+            {
+                var store = ctx.HttpContext.RequestServices.GetRequiredService<IRevocationStore>();
+                if (await store.IsSidRevokedAsync(sid))
+                {
+                    await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    ctx.RejectPrincipal();
+                }
+            }
+        };
     })
     .AddOpenIdConnect(options =>
     {
@@ -179,6 +197,42 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddOutputCache();
 
+// Distributed cache and backchannel stores
+var redisConn = builder.Configuration["Redis:Configuration"];
+if (!string.IsNullOrWhiteSpace(redisConn))
+{
+    builder.Services.AddStackExchangeRedisCache(opts =>
+    {
+        opts.Configuration = redisConn;
+    });
+    builder.Services.AddSingleton<IRevocationStore, DistributedRevocationStore>();
+    builder.Services.AddSingleton<IReplayCache, DistributedReplayCache>();
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddSingleton<IRevocationStore, MemoryRevocationStore>();
+    builder.Services.AddSingleton<IReplayCache, MemoryReplayCache>();
+}
+
+// JWKS cache and validator
+builder.Services.AddSingleton<IJwksCache, JwksCache>();
+builder.Services.AddSingleton(sp =>
+{
+    // Bind options snapshot for validator
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var authority = cfg["Oidc:Authority"] ?? cfg["OIDC:Authority"] ?? string.Empty;
+    var clientId = cfg["Oidc:ClientId"] ?? cfg["OIDC:ClientId"] ?? "blazor-web";
+    var opts = new BackchannelOptions
+    {
+        Enabled = true,
+        Authority = authority,
+        ClientId = clientId
+    };
+    return opts;
+});
+builder.Services.AddSingleton<LogoutTokenValidator>();
+
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
 {
     client.BaseAddress = new("https+http://apiservice");
@@ -234,6 +288,43 @@ app.MapGet("/logout", async ctx =>
     });
 }).ExcludeFromDescription();
 
+// Backchannel logout receiver (per OIDC): accepts logout_token and invalidates sessions by sid
+app.MapPost("/backchannel-logout", async ctx =>
+{
+    // Read form-encoded body
+    if (!ctx.Request.HasFormContentType)
+    {
+        ctx.Response.StatusCode = 400; return;
+    }
+    if (ctx.Request.ContentLength is > 8192)
+    {
+        ctx.Response.StatusCode = 413; return; // Payload Too Large
+    }
+    var form = await ctx.Request.ReadFormAsync();
+    var logoutToken = form["logout_token"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(logoutToken)) { ctx.Response.StatusCode = 400; return; }
+    var validator = ctx.RequestServices.GetRequiredService<LogoutTokenValidator>();
+    var result = await validator.ValidateAsync(logoutToken, ctx.RequestAborted);
+    if (!result.Success)
+    {
+        ctx.Response.StatusCode = 401; return;
+    }
+
+    var opts = ctx.RequestServices.GetRequiredService<BackchannelOptions>();
+    var store = ctx.RequestServices.GetRequiredService<IRevocationStore>();
+    if (!string.IsNullOrEmpty(result.Sid))
+    {
+        await store.RevokeSidAsync(result.Sid!, opts.SidTtl, ctx.RequestAborted);
+    }
+    else if (!string.IsNullOrEmpty(result.Sub))
+    {
+        // For sub-only, a real app would map sub->local sessions; here we have no per-user session index
+        ctx.Response.StatusCode = 200; return;
+    }
+
+    ctx.Response.StatusCode = 200;
+}).ExcludeFromDescription();
+
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
@@ -242,3 +333,5 @@ app.MapRazorComponents<App>()
 app.MapDefaultEndpoints();
 
 app.Run();
+
+// Old in-memory BackchannelLogoutStore removed (replaced by IRevocationStore implementations)

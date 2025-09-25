@@ -20,6 +20,7 @@ using MrWhoOidc.WebAuth.Security;
 using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
+using MrWhoOidc.WebAuth.Background;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,6 +55,22 @@ builder.Services.AddRazorPages(options =>
 
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
+// Alerting
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IAlertPublisher>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
+    return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
+});
+// Audit sink
+builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var enabled = cfg.GetSection("Audit").GetValue<bool?>("Enabled") ?? true;
+    return enabled ? new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()) : new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+});
 
 // Seed command support
 builder.Services.AddScoped<ISeeder, Seeder>();
@@ -155,6 +172,11 @@ builder.Services.AddDataProtection()
 builder.Services.AddHostedService<ExpiredTokenCleanupService>();
 // PAR cleanup
 builder.Services.AddHostedService<ParCleanupHostedService>();
+// BCL outbox dispatcher
+builder.Services.AddSingleton(new BackchannelDispatchOptions());
+builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(builder.Configuration.GetSection("Backchannel"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.BackchannelRuntimeState>();
+builder.Services.AddHostedService<BackchannelLogoutDispatcher>();
 
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
@@ -320,11 +342,17 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
 
 app.MapDefaultEndpoints();
 
-// Trust proxy forwarded headers
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Trust proxy forwarded headers (needed for TLS termination behind a reverse proxy like Render)
+// This ensures Request.Scheme/Host reflect the original client-facing values so discovery publishes https URLs.
+var fwdOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+// When running behind a managed proxy (IPs may change), clear KnownNetworks/Proxies to accept the headers.
+// IMPORTANT: Only do this when the app isn't directly internet-exposed without a reverse proxy.
+fwdOptions.KnownNetworks.Clear();
+fwdOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(fwdOptions);
 
 // Forward client certificates from proxy header if present
 app.UseCertificateForwarding();
@@ -774,6 +802,55 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     await db.SaveChangesAsync(ct);
     return Results.NoContent();
 });
+
+// BCL outbox admin endpoints
+admin.MapGet("/bcl/outbox", async (AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, int? take, string? status, CancellationToken ct) =>
+{
+    var q = db.BackchannelLogoutNotifications.AsNoTracking();
+    if (!string.IsNullOrWhiteSpace(status)) q = q.Where(n => n.Status == status);
+    var list = await q.OrderByDescending(n => n.CreatedAt)
+        .Take(Math.Clamp(take ?? 100, 1, 1000))
+        .Select(n => new { n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt })
+        .ToListAsync(ct);
+    var backlog = await db.BackchannelLogoutNotifications.CountAsync(n => n.Status == "pending", ct);
+    audit.Emit("bcl.admin.outbox.list", new { count = list.Count, backlog, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
+    return Results.Ok(new { backlog, items = list });
+});
+
+admin.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, CancellationToken ct) =>
+{
+    var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id, ct);
+    if (n is null) return Results.Problem(statusCode: 404, title: "Not Found");
+    n.Status = "pending";
+    n.NextAttemptAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(ct);
+    audit.Emit("bcl.admin.outbox.retry", new { id = n.Id, client_id = n.ClientId, target = new Uri(n.TargetUri).Host, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
+    return Results.NoContent();
+});
+
+// Lightweight health endpoint for BCL dispatcher
+app.MapGet("/health/backchannel", async (AuthDbContext db, MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state, CancellationToken ct) =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var backlog = await db.BackchannelLogoutNotifications
+        .AsNoTracking()
+        .LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now), ct);
+
+    // Top circuits (open ones only)
+    var openCircuits = state.Circuits
+        .Where(kv => kv.Value.OpenUntil is not null && kv.Value.OpenUntil > DateTimeOffset.UtcNow)
+        .Select(kv => new { clientId = kv.Key, kv.Value.Failures, kv.Value.OpenUntil })
+        .OrderByDescending(x => x.Failures)
+        .Take(20)
+        .ToList();
+
+    return Results.Ok(new
+    {
+        enabled = state.EmissionEnabled,
+        backlog,
+        openCircuits,
+    });
+}).WithName("BackchannelHealth");
 
 app.MapStaticAssets();
 

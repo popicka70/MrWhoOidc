@@ -17,9 +17,10 @@ using MrWhoOidc.Auth.Crypto;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize]
-public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger) : PageModel
+public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : PageModel
 {
     private readonly ILogger<EditModel> _logger = logger;
+    private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
 
     [FromRoute]
     public Guid Id { get; set; }
@@ -758,8 +759,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             }
         }
 
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
+    var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
         if (client is null) return NotFound();
+    // Capture old values for audit comparison
+    var oldBclUri = client.BackChannelLogoutUri;
+    var oldBclSess = client.BackChannelLogoutSessionRequired;
 
         // If client id changed, enforce uniqueness
         if (!string.Equals(client.ClientId, Input.ClientId, StringComparison.Ordinal))
@@ -846,6 +850,30 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
         client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
+        // Back-channel logout fields with validation
+        if (!string.IsNullOrWhiteSpace(Input.BackChannelLogoutUri))
+        {
+            var uri = Input.BackChannelLogoutUri.Trim();
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            {
+                ModelState.AddModelError("Input.BackChannelLogoutUri", "Must be an absolute URI.");
+                return Page();
+            }
+            var isHttps = string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+            var allowHttpDev = HttpContext.RequestServices.GetService<IConfiguration>()?
+                .GetValue<bool>("Dev:AllowHttpBackchannel") == true;
+            if (!isHttps && !allowHttpDev)
+            {
+                ModelState.AddModelError("Input.BackChannelLogoutUri", "HTTPS is required in production. Set Dev:AllowHttpBackchannel=true to allow http for local/dev.");
+                return Page();
+            }
+            client.BackChannelLogoutUri = parsed.ToString().TrimEnd('/');
+        }
+        else
+        {
+            client.BackChannelLogoutUri = null;
+        }
+    client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
 
         // M2M: allowed audiences
         if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))
@@ -967,6 +995,21 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.OboDpopMode = Input.OboDpopMode;
 
         await db.SaveChangesAsync();
+        // Audit backchannel field changes if any
+        if (!string.Equals(oldBclUri, client.BackChannelLogoutUri, StringComparison.Ordinal) || oldBclSess != client.BackChannelLogoutSessionRequired)
+        {
+            _audit.Emit("admin.client.backchannel.update", new
+            {
+                client_id = client.ClientId,
+                backchannel_logout_uri_old = oldBclUri,
+                backchannel_logout_uri_new = client.BackChannelLogoutUri,
+                backchannel_logout_session_required_old = oldBclSess,
+                backchannel_logout_session_required_new = client.BackChannelLogoutSessionRequired,
+                user = User?.Identity?.Name,
+                ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                when = DateTimeOffset.UtcNow
+            });
+        }
         return RedirectToPage("Index");
     }
 
@@ -1234,6 +1277,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? AllowedLoginRedirectUris { get; set; }
         [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
         public string? AllowedLogoutRedirectUris { get; set; }
+
+    [Display(Name = "Back-channel logout URI")] 
+    public string? BackChannelLogoutUri { get; set; }
+    [Display(Name = "Back-channel logout session required")] 
+    public bool BackChannelLogoutSessionRequired { get; set; } = true;
 
         // New: login method toggles
         [Display(Name = "Allow local username/password login")]

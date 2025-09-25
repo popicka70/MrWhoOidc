@@ -51,6 +51,8 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             end_session_endpoint = $"{baseUrl}/connect/endsession",
             frontchannel_logout_supported = true,
             frontchannel_logout_session_supported = true,
+            backchannel_logout_supported = true,
+            backchannel_logout_session_supported = true,
             response_types_supported = new[] { "code" },
             grant_types_supported = grants.ToArray(),
             token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
