@@ -12,7 +12,7 @@ References
 ## 1) OP (Authorization Server) requirements
 
 Status summary
-- Core BCL support is implemented end-to-end on the OP: discovery flags, admin config, logout_token builder, durable outbox, background dispatcher with retries/circuit breaker, and admin/health endpoints. Remaining: formal audit logging and external alert integrations.
+- Core BCL support is implemented end-to-end on the OP: discovery flags, admin config, logout_token builder, durable outbox, background dispatcher with retries/circuit breaker, and admin/health endpoints. Audit logging implemented (structured logger sink with hashing) and alert hooks present; external alert wiring still TODO.
 
 ### 1.1 Discovery and registration
 - Implemented
@@ -25,7 +25,7 @@ Status summary
     - Admin UI/API validation: `MrWhoOidc.WebAuth/Pages/Admin/Clients/Edit.cshtml.cs` enforces absolute URI, HTTPS in prod, trims trailing slash, and supports dev override via `Dev:AllowHttpBackchannel`.
   - Registration CRUD exposed via Admin APIs and Razor UI (see `MrWhoOidc.WebAuth/Program.cs` admin group and `/Admin/Clients`).
 - Gaps
-  - Audit logging of who/what/when for backchannel field changes: TODO.
+  - None for audit of admin backchannel field changes (implemented via structured audit sink).
 - Advertise capability in discovery:
   - backchannel_logout_supported = true
   - backchannel_logout_session_supported = true
@@ -131,7 +131,7 @@ Audit logging requirements (OP)
 Status
 - HTTPS enforcement for backchannel URIs in Admin UI (prod) with dev override: Implemented.
 - mTLS between OP and RP: Not implemented.
-- Audit logs: Not implemented (add as follow-up).
+- Audit logs: Implemented (structured events with PII hashing and dev-toggle sink).
 - Explicit rate-limiting for BCL emissions: Not implemented beyond circuit breaker; consider per-client throttles.
 
 ### 1.7 Observability & ops
@@ -333,7 +333,7 @@ Status
     - [ ] Backlog alert (outbox backlog > threshold)
     - [ ] Action routing (email/Teams/PagerDuty) configured
   
-- [ ] OP: Audit logging
+- [x] OP: Audit logging
   - [ ] Admin changes to backchannel fields are audited with who/what/when/where
   - [ ] Dispatcher audit events: enqueue, attempt, success, fail (status/reason), dead-letter, manual retry
   - [ ] No raw JWTs logged; sid/sub redacted or hashed
@@ -362,10 +362,14 @@ Next steps (near-term)
 - RP: Implement strict validation with JWKS signature check, claim validation, and `jti` replay cache; add distributed revocation store.
 - OP: Implement audit logging and connect dispatcher metrics/thresholds to alerting system.
   - Audit logging
-    - Add structured audit events for admin backchannel field changes (create/update/delete)
-    - Add dispatcher audit events (enqueue, attempt, success, fail, dead-letter, manual retry)
-    - Ensure PII-safe logging (no raw tokens; sid/sub hashed) and include correlation ids
-    - Wire to central sink (App Insights/Log Analytics or ELK) with retention configured
+    - IMPLEMENTED: structured audit events for admin backchannel field changes (update)
+    - IMPLEMENTED: dispatcher audit events (enqueue, attempt, success, retry, fail, dead-letter, admin retry, admin list)
+    - IMPLEMENTED: PII-safe logging (no raw tokens; sid/sub hashed). Correlation via outbox id and client_id.
+    - TODO: Optionally forward audit to central sink (App Insights/ELK) via provider; currently logs to app logger.
+
+Configuration
+- Audit:Enabled (bool, default true)
+- Audit:Pepper (string; optional salt used for hashing sid/sub)
   - Alerting
     - Export dispatcher metrics to chosen sink (App Insights customMetrics or Prometheus)
     - Create FailureRate, LatencyP95, and OutboxBacklog alerts with agreed thresholds

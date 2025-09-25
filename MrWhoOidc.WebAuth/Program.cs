@@ -63,6 +63,14 @@ builder.Services.AddSingleton<IAlertPublisher>(sp =>
     var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
     return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
 });
+// Audit sink
+builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var enabled = cfg.GetSection("Audit").GetValue<bool?>("Enabled") ?? true;
+    return enabled ? new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()) : new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+});
 
 // Seed command support
 builder.Services.AddScoped<ISeeder, Seeder>();
@@ -790,7 +798,7 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
 });
 
 // BCL outbox admin endpoints
-admin.MapGet("/bcl/outbox", async (AuthDbContext db, int? take, string? status, CancellationToken ct) =>
+admin.MapGet("/bcl/outbox", async (AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, int? take, string? status, CancellationToken ct) =>
 {
     var q = db.BackchannelLogoutNotifications.AsNoTracking();
     if (!string.IsNullOrWhiteSpace(status)) q = q.Where(n => n.Status == status);
@@ -799,16 +807,18 @@ admin.MapGet("/bcl/outbox", async (AuthDbContext db, int? take, string? status, 
         .Select(n => new { n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt })
         .ToListAsync(ct);
     var backlog = await db.BackchannelLogoutNotifications.CountAsync(n => n.Status == "pending", ct);
+    audit.Emit("bcl.admin.outbox.list", new { count = list.Count, backlog, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
     return Results.Ok(new { backlog, items = list });
 });
 
-admin.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+admin.MapPost("/bcl/outbox/{id:guid}/retry", async (Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, CancellationToken ct) =>
 {
     var n = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id, ct);
     if (n is null) return Results.Problem(statusCode: 404, title: "Not Found");
     n.Status = "pending";
     n.NextAttemptAt = DateTimeOffset.UtcNow;
     await db.SaveChangesAsync(ct);
+    audit.Emit("bcl.admin.outbox.retry", new { id = n.Id, client_id = n.ClientId, target = new Uri(n.TargetUri).Host, ip = httpContext.Connection.RemoteIpAddress?.ToString() });
     return Results.NoContent();
 });
 

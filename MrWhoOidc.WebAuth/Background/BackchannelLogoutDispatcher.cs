@@ -50,6 +50,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
     private readonly OidcMetrics _metrics;
     private readonly IAlertPublisher _alerts;
+    private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit;
     private readonly BackchannelDispatchOptions _options;
     private readonly Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> _feature;
     private readonly BackchannelRuntimeState _state;
@@ -61,6 +62,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         ILogger<BackchannelLogoutDispatcher> logger,
     OidcMetrics metrics,
     IAlertPublisher alerts,
+        MrWhoOidc.WebAuth.Observability.IAuditSink audit,
         BackchannelDispatchOptions options,
         Microsoft.Extensions.Options.IOptionsMonitor<BackchannelFeatureOptions> feature,
         BackchannelRuntimeState state)
@@ -70,6 +72,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         _logger = logger;
     _metrics = metrics;
     _alerts = alerts;
+        _audit = audit;
         _options = options;
         _feature = feature;
         _state = state;
@@ -167,6 +170,17 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
             Exception? lastEx = null;
             var attempt = n.AttemptCount + 1;
 
+            // Audit attempt start
+            _audit.Emit("bcl.attempt", new
+            {
+                client_id = n.ClientId,
+                target = new Uri(n.TargetUri).Host,
+                attempt,
+                sid_hash = _audit.HashValue(n.Sid),
+                sub_hash = _audit.HashValue(n.Sub),
+                id = n.Id
+            });
+
             try
             {
                 using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("logout_token", n.LogoutToken) });
@@ -178,6 +192,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                     _metrics.TokenSuccess.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
                     _metrics.BclDelivered.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
                     ResetCircuit(n.ClientId);
+                    _audit.Emit("bcl.success", new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, id = n.Id, status = (int)resp.StatusCode });
                 }
                 else
                 {
@@ -194,6 +209,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                         BumpCircuit(n.ClientId);
                         _metrics.TokenFailures.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
                         _metrics.BclFailed.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
+                        _audit.Emit("bcl.retry", new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, http_status = status, next_in_ms = (int)backoff.TotalMilliseconds, id = n.Id });
                     }
                     else
                     {
@@ -201,6 +217,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                         OpenCircuitMaybe(n.ClientId);
                         _metrics.TokenFailures.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
                         _metrics.BclFailed.Add(1, new KeyValuePair<string, object?>("client_id", n.ClientId));
+                        var t = n.Status == "dead_letter" ? "bcl.dead_letter" : "bcl.fail";
+                        _audit.Emit(t, new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, http_status = status, id = n.Id });
                     }
                 }
             }
@@ -208,11 +226,13 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
             {
                 lastEx = ex;
                 await MarkRetryAsync(n, attempt, ex);
+                _audit.Emit("bcl.retry", new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, error = "timeout", id = n.Id });
             }
             catch (HttpRequestException ex)
             {
                 lastEx = ex;
                 await MarkRetryAsync(n, attempt, ex);
+                _audit.Emit("bcl.retry", new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, error = ex.GetType().Name, id = n.Id });
             }
             catch (Exception ex)
             {
@@ -222,6 +242,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
                 n.LastError = ex.Message;
                 OpenCircuitMaybe(n.ClientId);
                 _metrics.TokenFailures.Add(1, new("kind", "bcl"), new("client_id", n.ClientId));
+                var t = n.Status == "dead_letter" ? "bcl.dead_letter" : "bcl.fail";
+                _audit.Emit(t, new { client_id = n.ClientId, target = new Uri(n.TargetUri).Host, attempt, error = ex.GetType().Name, id = n.Id });
             }
             finally
             {

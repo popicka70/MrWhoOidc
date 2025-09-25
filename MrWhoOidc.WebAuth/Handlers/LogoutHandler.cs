@@ -20,7 +20,7 @@ public interface ILogoutHandler
     Task<IResult> EndSessionAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger, OidcMetrics metrics) : ILogoutHandler
+public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger, OidcMetrics metrics, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
@@ -117,6 +117,17 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
                 logger.LogInformation("BCL enqueue: client={ClientId} target={TargetHost} sid={HasSid} sub={HasSub}",
                     entity.ClientId, new Uri(entity.TargetUri).Host, !string.IsNullOrEmpty(entity.Sid), !string.IsNullOrEmpty(entity.Sub));
                 metrics.BclEmitted.Add(1, new KeyValuePair<string, object?>("client_id", entity.ClientId));
+                // Audit event (no raw tokens)
+                var httpIp = http.Connection.RemoteIpAddress?.ToString();
+                audit.Emit("bcl.enqueue", new
+                {
+                    client_id = entity.ClientId,
+                    target = new Uri(entity.TargetUri).Host,
+                    sid_hash = audit.HashValue(entity.Sid),
+                    sub_hash = audit.HashValue(entity.Sub),
+                    created_at = entity.CreatedAt,
+                    ip = httpIp
+                });
             }
             await db.SaveChangesAsync();
             }

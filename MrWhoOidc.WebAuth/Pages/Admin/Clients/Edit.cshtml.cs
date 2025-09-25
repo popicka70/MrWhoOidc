@@ -17,9 +17,10 @@ using MrWhoOidc.Auth.Crypto;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize]
-public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger) : PageModel
+public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : PageModel
 {
     private readonly ILogger<EditModel> _logger = logger;
+    private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
 
     [FromRoute]
     public Guid Id { get; set; }
@@ -758,8 +759,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             }
         }
 
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
+    var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
         if (client is null) return NotFound();
+    // Capture old values for audit comparison
+    var oldBclUri = client.BackChannelLogoutUri;
+    var oldBclSess = client.BackChannelLogoutSessionRequired;
 
         // If client id changed, enforce uniqueness
         if (!string.Equals(client.ClientId, Input.ClientId, StringComparison.Ordinal))
@@ -869,7 +873,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         {
             client.BackChannelLogoutUri = null;
         }
-        client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
+    client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
 
         // M2M: allowed audiences
         if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))
@@ -991,6 +995,21 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.OboDpopMode = Input.OboDpopMode;
 
         await db.SaveChangesAsync();
+        // Audit backchannel field changes if any
+        if (!string.Equals(oldBclUri, client.BackChannelLogoutUri, StringComparison.Ordinal) || oldBclSess != client.BackChannelLogoutSessionRequired)
+        {
+            _audit.Emit("admin.client.backchannel.update", new
+            {
+                client_id = client.ClientId,
+                backchannel_logout_uri_old = oldBclUri,
+                backchannel_logout_uri_new = client.BackChannelLogoutUri,
+                backchannel_logout_session_required_old = oldBclSess,
+                backchannel_logout_session_required_new = client.BackChannelLogoutSessionRequired,
+                user = User?.Identity?.Name,
+                ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                when = DateTimeOffset.UtcNow
+            });
+        }
         return RedirectToPage("Index");
     }
 
