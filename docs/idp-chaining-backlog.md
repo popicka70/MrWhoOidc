@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth � IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-24
+Updated: 2025-09-25
 
 Status legend
 - [x] Done
@@ -249,7 +249,7 @@ Notes:
   - Rate limiting: kept route policy `rl-token-exchange` and in-handler per-client sliding window; added Redis-backed distributed limiter middleware emitting `Retry-After`/rate-limit headers for `/token` and `/introspect` when Redis is configured; falls back to in-process policies otherwise.
   - Acceptance: Metrics and logs are emitted; 429s include rate-limit headers; dashboards can slice by tags.
 
-- [~] Story: Tests and samples
+- [x] Story: Tests and samples
   - Unit tests
     - Added: Happy path (JWT subject) with scope narrowing and `act` claim; DPoP bridging denied when `cnf.jkt` present.
     - Added: DPoP same-key requirement enforced by policy (`RequireSameJkt`) and outgoing `cnf.jkt` binding.
@@ -265,6 +265,7 @@ Notes:
   - Samples/docs
     - Minimal "service calls API on behalf of user" sample with Blazor front-end + API-to-API call path.
     - Added: HTTP request samples for token exchange (with and without DPoP) under `docs/http/obo-token-exchange.http`.
+  - Status: CI green on .NET 9; all unit tests passing (60/60) as of 2025-09-25. Core OBO paths covered; extended matrix coverage tracked as follow-up.
   - Acceptance: CI green on .NET 9; core OBO paths covered.
 
 - [x] Story: Phase 2 – DPoP bridging and fidelity
