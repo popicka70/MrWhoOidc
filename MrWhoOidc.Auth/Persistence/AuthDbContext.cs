@@ -126,6 +126,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.FrontChannelLogoutUri).HasMaxLength(2000);
             b.Property(x => x.FrontChannelLogoutSessionRequired).HasDefaultValue(true);
 
+            // New: Back-channel logout
+            b.Property(x => x.BackChannelLogoutUri).HasMaxLength(2000);
+            b.Property(x => x.BackChannelLogoutSessionRequired).HasDefaultValue(true);
+
             // OBO policy columns
             b.Property(x => x.OboEnabled);
             b.Property(x => x.OboAllowedSourceAudiencesJson).HasMaxLength(2000);
@@ -542,6 +546,11 @@ public class Client
     [MaxLength(2000)]
     public string? FrontChannelLogoutUri { get; set; }
     public bool FrontChannelLogoutSessionRequired { get; set; } = true;
+
+    // New: Back-channel logout configuration
+    [MaxLength(2000)]
+    public string? BackChannelLogoutUri { get; set; }
+    public bool BackChannelLogoutSessionRequired { get; set; } = true;
 
     // New: OBO/Token Exchange policy (nullable => not enforced / defaults)
     public bool? OboEnabled { get; set; }

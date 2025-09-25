@@ -78,6 +78,20 @@ builder.Services.AddAuthentication(options =>
         options.Cookie.HttpOnly = true;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        // Validate principal against backchannel logout blacklist
+        options.Events.OnValidatePrincipal = async ctx =>
+        {
+            var sid = ctx.Principal?.FindFirst("sid")?.Value;
+            if (!string.IsNullOrEmpty(sid))
+            {
+                var store = ctx.HttpContext.RequestServices.GetRequiredService<BackchannelLogoutStore>();
+                if (store.IsSidRevoked(sid))
+                {
+                    await ctx.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    ctx.RejectPrincipal();
+                }
+            }
+        };
     })
     .AddOpenIdConnect(options =>
     {
@@ -179,6 +193,9 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddOutputCache();
 
+// Backchannel logout store
+builder.Services.AddSingleton<BackchannelLogoutStore>();
+
 builder.Services.AddHttpClient<WeatherApiClient>(client =>
 {
     client.BaseAddress = new("https+http://apiservice");
@@ -234,6 +251,45 @@ app.MapGet("/logout", async ctx =>
     });
 }).ExcludeFromDescription();
 
+// Backchannel logout receiver (per OIDC): accepts logout_token and invalidates sessions by sid
+app.MapPost("/backchannel-logout", async ctx =>
+{
+    // Read form-encoded body
+    if (!ctx.Request.HasFormContentType)
+    {
+        ctx.Response.StatusCode = 400; return;
+    }
+    var form = await ctx.Request.ReadFormAsync();
+    var logoutToken = form["logout_token"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(logoutToken)) { ctx.Response.StatusCode = 400; return; }
+
+    // Parse JWT minimally to extract sid claim; validation is optional here if using same OP
+    string? sid = null;
+    try
+    {
+        var parts = logoutToken.Split('.');
+        if (parts.Length == 3)
+        {
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + ((4 - payload.Length % 4) % 4), '=');
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("sid", out var sidEl) && sidEl.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                sid = sidEl.GetString();
+            }
+        }
+    }
+    catch { }
+
+    if (!string.IsNullOrEmpty(sid))
+    {
+        var store = ctx.RequestServices.GetRequiredService<BackchannelLogoutStore>();
+        store.RevokeSid(sid);
+    }
+    ctx.Response.StatusCode = 200;
+}).ExcludeFromDescription();
+
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
@@ -242,3 +298,17 @@ app.MapRazorComponents<App>()
 app.MapDefaultEndpoints();
 
 app.Run();
+
+public sealed class BackchannelLogoutStore
+{
+    private readonly HashSet<string> _revoked = new(StringComparer.Ordinal);
+    private readonly object _gate = new();
+    public void RevokeSid(string sid)
+    {
+        lock (_gate) _revoked.Add(sid);
+    }
+    public bool IsSidRevoked(string sid)
+    {
+        lock (_gate) return _revoked.Contains(sid);
+    }
+}

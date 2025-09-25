@@ -107,6 +107,13 @@
 				"$msCompile"
 			],
 			"group": "build"
+		},
+		{
+			"label": "build-after-backchannel",
+			"type": "shell",
+			"command": "dotnet build",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -846,6 +846,8 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
         client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
+    client.BackChannelLogoutUri = string.IsNullOrWhiteSpace(Input.BackChannelLogoutUri) ? null : Input.BackChannelLogoutUri.Trim();
+    client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
 
         // M2M: allowed audiences
         if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))
@@ -1234,6 +1236,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         public string? AllowedLoginRedirectUris { get; set; }
         [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
         public string? AllowedLogoutRedirectUris { get; set; }
+
+    [Display(Name = "Back-channel logout URI")] 
+    public string? BackChannelLogoutUri { get; set; }
+    [Display(Name = "Back-channel logout session required")] 
+    public bool BackChannelLogoutSessionRequired { get; set; } = true;
 
         // New: login method toggles
         [Display(Name = "Allow local username/password login")]
