@@ -1,8 +1,9 @@
 using StackExchange.Redis;
+using MrWhoOidc.Security;
 
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
-internal sealed class RedisDPoPNonceStore : IDPoPNonceStore
+internal sealed class RedisDPoPNonceStore : MrWhoOidc.Security.IDPoPNonceStore
 {
     private readonly IConnectionMultiplexer _mux;
     private readonly IDatabase _db;

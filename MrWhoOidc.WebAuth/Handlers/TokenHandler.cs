@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Security;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;

@@ -1,8 +1,9 @@
 using StackExchange.Redis;
+using MrWhoOidc.Security;
 
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
-internal sealed class RedisDPoPReplayCache : IDPoPReplayCache
+internal sealed class RedisDPoPReplayCache : MrWhoOidc.Security.IDPoPReplayCache
 {
     private readonly IConnectionMultiplexer _mux;
     private readonly IDatabase _db;

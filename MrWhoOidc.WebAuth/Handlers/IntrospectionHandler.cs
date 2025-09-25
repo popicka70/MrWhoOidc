@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using System.Text.Json;
-using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Security;
 using System.Security.Cryptography.X509Certificates;
 
 namespace MrWhoOidc.WebAuth.Handlers;

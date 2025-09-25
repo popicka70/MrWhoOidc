@@ -15,7 +15,6 @@ using Microsoft.Extensions.Hosting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
-using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth;
 using Microsoft.IdentityModel.Tokens;
@@ -51,7 +50,7 @@ public sealed class TokenExchangeIntegrationTests
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-                    services.AddSingleton<IDPoPValidator, TestCryptoDpopValidator>();
+                    services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddScoped<MrWhoOidc.WebAuth.Handlers.ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddSingleton(new OidcOptions { Issuer = Issuer });
                     services.Configure<AuthOptions>(o =>
@@ -279,17 +278,17 @@ public sealed class TokenExchangeIntegrationTests
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private sealed class TestCryptoDpopValidator : IDPoPValidator
+    private sealed class TestCryptoDpopValidator : MrWhoOidc.Security.IDPoPValidator
     {
         private static readonly string[] AllowedAlgs = [SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.RsaSha256];
 
-        public Task<DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
+    public Task<MrWhoOidc.Security.DPoPValidationResult> ValidateForEndpointAsync(HttpContext http, string absoluteEndpointUrl, string? accessToken = null, CancellationToken ct = default)
         {
             var header = http.Request.Headers["DPoP"].ToString();
             if (string.IsNullOrWhiteSpace(header))
             {
                 Console.WriteLine("[TestCryptoDpopValidator] missing DPoP header");
-                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_dpop"));
+                return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, "missing_dpop"));
             }
 
             try
@@ -305,12 +304,12 @@ public sealed class TokenExchangeIntegrationTests
                 using (var hdr = JsonDocument.Parse(headerJson))
                 {
                     if (!hdr.RootElement.TryGetProperty("jwk", out var jwkElement))
-                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_jwk"));
+                        return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, "missing_jwk"));
                     key = CreateKeyFromJwk(jwkElement);
                     if (key is null)
                     {
                         Console.WriteLine("[TestCryptoDpopValidator] unsupported_jwk");
-                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "unsupported_jwk"));
+                        return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, "unsupported_jwk"));
                     }
                     jktStr = ComputeJwkThumbprintFromElement(jwkElement);
                 }
@@ -340,23 +339,23 @@ public sealed class TokenExchangeIntegrationTests
                     if (string.IsNullOrEmpty(ath))
                     {
                         Console.WriteLine("[TestCryptoDpopValidator] missing ath");
-                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "missing_ath"));
+                        return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, "missing_ath"));
                     }
                     var tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
                     var tokenHashB64Url = Base64UrlEncoder.Encode(tokenHash);
                     if (!string.Equals(ath, tokenHashB64Url, StringComparison.Ordinal))
                     {
                         Console.WriteLine($"[TestCryptoDpopValidator] ath_mismatch expected={tokenHashB64Url} got={ath}");
-                        return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "ath_mismatch"));
+                        return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, "ath_mismatch"));
                     }
                 }
 
-                return Task.FromResult(new DPoPValidationResult(true, jktStr, jti, iatSec, null, null));
+                return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(true, jktStr, jti, iatSec, null, null));
             }
             catch (Exception ex)
             {
                 Console.WriteLine("[TestCryptoDpopValidator] exception: " + ex);
-                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, ex.Message));
+                return Task.FromResult(new MrWhoOidc.Security.DPoPValidationResult(false, null, null, null, null, ex.Message));
             }
         }
 

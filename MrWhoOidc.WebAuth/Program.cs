@@ -15,6 +15,7 @@ using MrWhoOidc.WebAuth.Observability;
 using Microsoft.AspNetCore.HttpOverrides;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Security;
 using Microsoft.AspNetCore.Authorization;
 using MrWhoOidc.WebAuth.Security;
 using System.Text.Json;
@@ -145,23 +146,23 @@ builder.Services.AddSingleton<IJwksCache, JwksCache>();
 // Claim mapping service
 builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
 
-// DPoP services
-builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
+// DPoP services (use shared Security implementation)
+builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, MrWhoOidc.Security.DPoPValidator>();
 var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
 IConnectionMultiplexer? redisMux = null;
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
     builder.Services.AddSingleton(redisMux);
-    builder.Services.AddSingleton<IDPoPReplayCache, RedisDPoPReplayCache>();
-    builder.Services.AddSingleton<IDPoPNonceStore, RedisDPoPNonceStore>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, RedisDPoPReplayCache>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
     // JAR replay cache: override in-memory default with Redis when available
     builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
 }
 else
 {
-    builder.Services.AddSingleton<IDPoPReplayCache, InMemoryDPoPReplayCache>();
-    builder.Services.AddSingleton<IDPoPNonceStore, InMemoryDPoPNonceStore>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, MrWhoOidc.Security.InMemoryDPoPNonceStore>();
 }
 
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
