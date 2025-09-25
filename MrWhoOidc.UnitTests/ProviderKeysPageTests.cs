@@ -192,4 +192,53 @@ public class ProviderKeysPageTests
         Assert.IsTrue(page.ModelState.ContainsKey("Input.Kid"), "Expected model error for duplicate kid");
         Assert.AreEqual(1, db.IdentityProviderKeys.Count());
     }
+
+    [TestMethod]
+    public async Task ExpiresAt_PersistsToDatabase()
+    {
+        using var db = NewDb(nameof(ExpiresAt_PersistsToDatabase));
+        var providerId = SeedProvider(db);
+        var expires = DateTimeOffset.UtcNow.AddDays(30).ToOffset(TimeSpan.Zero); // normalize for deterministic compare
+        var page = new IndexModel(db)
+        {
+            Input = new IndexModel.InputModel
+            {
+                Purpose = "Signing",
+                Alg = "RS256",
+                Kid = "kid-exp",
+                Active = false,
+                JwkJson = RsaPkcs8Pem(),
+                ExpiresAt = expires
+            }
+        };
+
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
+
+        var saved = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId && k.Kid == "kid-exp").SingleAsync();
+        Assert.AreEqual(expires.ToUnixTimeSeconds(), saved.ExpiresAt!.Value.ToUnixTimeSeconds());
+    }
+
+    [TestMethod]
+    public async Task EcCurveMismatch_WithAlg_ES384_OnP256_Errors()
+    {
+        using var db = NewDb(nameof(EcCurveMismatch_WithAlg_ES384_OnP256_Errors));
+        var providerId = SeedProvider(db);
+        var page = new IndexModel(db)
+        {
+            Input = new IndexModel.InputModel
+            {
+                Purpose = "Signing",
+                Alg = "ES384", // expects P-384, but we'll provide P-256 key
+                Kid = "kid-ec384",
+                Active = true,
+                JwkJson = EcPkcs8Pem()
+            }
+        };
+
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
+        Assert.IsTrue(page.ModelState.ContainsKey("Input.Alg"), "Expected model error for ES384 on P-256 curve");
+        Assert.AreEqual(0, db.IdentityProviderKeys.Count());
+    }
 }
