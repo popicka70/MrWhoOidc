@@ -113,6 +113,21 @@ Status summary
 - Rate-limit BCL emissions per RP; per-tenant throttles.
 - Respect privacy laws (e.g., keep only necessary logs, retention schedules).
 
+Audit logging requirements (OP)
+- What to audit (minimum):
+  - Admin changes to backchannel-related client fields (BackChannelLogoutUri, BackChannelLogoutSessionRequired): who (user id/name), when (UTC), where (IP), what changed (old -> new), client_id, correlation id.
+  - Dispatcher lifecycle events: notification enqueued, dequeued, delivery attempted, success, failed (status/reason), dead-lettered, manual retry invoked.
+  - Outbox admin actions: list/export, single retry, bulk retry, purge.
+- Data hygiene:
+  - Never log raw logout_token; redact or omit JWT entirely.
+  - Hash sid/sub in audit (e.g., SHA-256 with salt/pepper) if included for correlation.
+  - Include notification id and client_id to correlate across logs and metrics.
+- Storage & retention:
+  - Structured, append-only audit stream (e.g., JSON) to central sink (App Insights/Log Analytics/ELK) with retention aligned to policy (e.g., 90 days, configurable).
+  - Local fallback to rolling file for dev.
+  - Feature flag to enable/disable audit emission (dev/test).
+ 
+
 Status
 - HTTPS enforcement for backchannel URIs in Admin UI (prod) with dev override: Implemented.
 - mTLS between OP and RP: Not implemented.
@@ -130,6 +145,32 @@ Status
 Status
 - Logs and metrics present in dispatcher; admin and health endpoints exposed (see 1.5).
 - Alerts: Threshold logging only; integrate with your alerting stack (e.g., App Insights, Prometheus Alertmanager) — TODO.
+
+Planned alerting integration (target by prod cutover)
+- Sinks supported (choose one per environment):
+  - Azure Application Insights/Log Analytics: export counters/histograms as customMetrics and use Metric Alerts.
+  - Prometheus/Alertmanager: expose metrics via existing scraping endpoint; configure recording rules and alerts.
+- Configurable thresholds (appsettings):
+  - Backchannel:Alerts:Enabled (bool)
+  - Backchannel:Alerts:FailureRatePercent (default 5)
+  - Backchannel:Alerts:LatencyP95Ms (default 2000)
+  - Backchannel:Alerts:OutboxBacklogThreshold (default 50)
+  - Backchannel:Alerts:ConsecutiveMinutes (default 5)
+- Azure App Insights specifics:
+  - Metrics: Oidc.Bcl.SuccessCount, Oidc.Bcl.FailCount, Oidc.Bcl.EmittedCount, Oidc.Bcl.RetryCount, Oidc.Bcl.LatencyMs (histogram), Oidc.Bcl.OutboxBacklog.
+  - Create Metric Alerts (static) with Action Group routing to on-call: failure rate percent > threshold over rolling window; P95 latency > threshold; backlog > threshold.
+- Prometheus specifics:
+  - Rules (examples):
+    - alert: BclHighFailureRate
+      expr: rate(oidc_bcl_fail_total[5m]) / rate(oidc_bcl_emitted_total[5m]) * 100 > 5
+      for: 5m
+    - alert: BclHighLatency
+      expr: histogram_quantile(0.95, sum(rate(oidc_bcl_latency_ms_bucket[5m])) by (le)) > 2000
+      for: 5m
+    - alert: BclOutboxBacklogHigh
+      expr: oidc_bcl_outbox_backlog > 50
+      for: 5m
+
 
 ### 1.8 Testing
 - Unit: token creation, claims, signing; fan-out selection; retry decision logic.
@@ -286,6 +327,17 @@ Status
   - [x] Durable outbox + admin + health
   - [x] Logs + metrics
   - [ ] Alerts integration (external)
+    - [ ] Choose sink per env (App Insights or Prometheus) and wire exporter
+    - [ ] Failure rate alert (Fail/Emitted > threshold over window)
+    - [ ] Latency alert (P95 > threshold)
+    - [ ] Backlog alert (outbox backlog > threshold)
+    - [ ] Action routing (email/Teams/PagerDuty) configured
+  
+- [ ] OP: Audit logging
+  - [ ] Admin changes to backchannel fields are audited with who/what/when/where
+  - [ ] Dispatcher audit events: enqueue, attempt, success, fail (status/reason), dead-letter, manual retry
+  - [ ] No raw JWTs logged; sid/sub redacted or hashed
+  - [ ] Central sink + retention configured; dev fallback works
 - [ ] RP: /backchannel-logout endpoint
   - [x] Endpoint (POST form), revokes sid
   - [ ] Strict validation (sig, iss, aud, events, iat, jti replay)
@@ -308,5 +360,15 @@ Status
 
 Next steps (near-term)
 - RP: Implement strict validation with JWKS signature check, claim validation, and `jti` replay cache; add distributed revocation store.
-- OP: Add audit logging and connect dispatcher metrics/thresholds to alerting system.
+- OP: Implement audit logging and connect dispatcher metrics/thresholds to alerting system.
+  - Audit logging
+    - Add structured audit events for admin backchannel field changes (create/update/delete)
+    - Add dispatcher audit events (enqueue, attempt, success, fail, dead-letter, manual retry)
+    - Ensure PII-safe logging (no raw tokens; sid/sub hashed) and include correlation ids
+    - Wire to central sink (App Insights/Log Analytics or ELK) with retention configured
+  - Alerting
+    - Export dispatcher metrics to chosen sink (App Insights customMetrics or Prometheus)
+    - Create FailureRate, LatencyP95, and OutboxBacklog alerts with agreed thresholds
+    - Add environment-specific configuration flags and thresholds in appsettings
+    - Validate alerts fire in a dry-run/test environment and document runbook
 - Tests: add unit tests for token builder and dispatcher retry logic; integration test OP->RP flow.
