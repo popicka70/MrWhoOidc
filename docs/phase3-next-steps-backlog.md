@@ -61,11 +61,15 @@ Milestones
   - Acceptance
     - Picker works well on desktop/mobile with accessibility basics covered.
 
-- [ ] Integration tests and CI gates
+- [~] Integration tests and CI gates
   - Deliverables
     - Integration tests: OBO happy path + error cases (JWT and opaque subjects); multi‑provider selection logic.
     - CI: run integration tests on PRs; spin up Redis for replay cache tests.
     - Artifacts: update `docs/http/obo-token-exchange.http` if needed; add one end‑to‑end script using a fake upstream.
+  - Status
+    - Core unit tests green locally; rate‑limit header integration tests present but failing due to missing routing services in test host. Redis must be provisioned in CI.
+  - Next
+    - Fix test host setup (register routing + map endpoints) and ensure Redis container is available for CI job.
   - Acceptance
     - CI turns red on regressions in critical OBO and chaining paths; Redis‑backed tests are stable.
 
@@ -84,8 +88,12 @@ Milestones
 - [x] Discovery hygiene
   - Ensure `request_object_signing_alg_values_supported` exactly matches `AuthOptions` allow‑list; verify well‑known with an external validator.
 
-- [ ] Rate‑limit headers verification
-  - Add tests asserting `Retry-After` and rate‑limit headers on 429 for `/token` and `/introspect` when Redis is configured.
+- [~] Rate‑limit headers verification
+  - Status: Integration tests exist in `MrWhoOidc.UnitTests/RateLimitHeadersIntegrationTests.cs` but currently fail with missing routing services in the test host (needs `services.AddRouting()`); headers verification not yet executed end‑to‑end.
+  - Next:
+    - Add `services.AddRouting()` in the test host setup and map minimal endpoints before `UseRouting()`; ensure `/token` and `/introspect` paths are reachable in the test server.
+    - Confirm `Retry-After` and standard rate‑limit headers are emitted on 429 when Redis limits are hit.
+    - Ensure Redis is available in CI (container service) or provide a test fallback.
 
 - [ ] Caching guardrails
   - Verify discovery/JWKS caching with ETag/Cache‑Control; add configurable max‑age and retry/backoff settings.
@@ -148,6 +156,7 @@ Milestones
 
 - [ ] .NET 9 preview guard
   - Lock the toolchain in CI to a known‑good version until GA; review updates periodically.
+  - Note: `NETSDK1057` (preview SDK in use) observed during local test runs — add a repo `global.json` to pin the intended SDK.
 
 ---
 
@@ -161,4 +170,4 @@ Milestones
   - “RequireSameJkt” OBO (exists) + “Two OIDC providers” flow with cancel/error variants
 
 Notes
-- Current test status: CI green locally; 65/65 unit tests passing (2025‑09‑25). Integration coverage will expand in P0.
+- Current test status (2025‑09‑25): 74 total; 72 passing; 2 failing (RateLimit headers integration) due to missing routing services in test host. Fix tracked under Quick wins.
