@@ -44,7 +44,6 @@ body {
 }
 
 /* Style schemes for Auth/Providers/Select */
-.scheme-classic {}
 
 .scheme-ocean {
   --accent: #0dcaf0;
@@ -159,4 +158,20 @@ body {
 .scheme-classic .auth-card {
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0,0,0,.04);
+}
+
+/* Provider logo sizing and spacing */
+.auth-provider-logo { height: 24px; width: 24px; object-fit: contain; }
+
+/* Improve touch target size on mobile */
+@media (max-width: 576px) {
+  .auth-btn { padding: .85rem 1rem; }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .scheme-ocean .auth-option,
+  .scheme-forest .auth-option,
+  .scheme-plum .auth-option,
+  .scheme-contrast .auth-option { transition: none; }
 }

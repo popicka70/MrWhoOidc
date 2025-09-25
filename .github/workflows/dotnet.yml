@@ -8,6 +8,16 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
 
     steps:
       - name: Checkout
@@ -25,6 +35,8 @@ jobs:
         run: dotnet build -c Release
 
       - name: Test
+        env:
+          ConnectionStrings__redis: localhost:6379
         run: dotnet test -c Release --collect:"XPlat Code Coverage" --logger trx
 
       - name: Upload Test Results (TRX)
