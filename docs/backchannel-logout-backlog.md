@@ -320,7 +320,7 @@ Status
 - [x] OP: Client model + migration for BackChannelLogoutUri + session required (AuthDbContext) — ensure migration applied in all envs
 - [ ] OP: Admin for backchannel fields
   - [x] UI/API + validation
-  - [ ] Audit logging
+  - [x] Audit logging
 - [x] OP: logout_token builder (iss, aud, iat, jti, events, sid/sub)
 - [x] OP: Fan-out dispatcher with retries, backoff, circuit breaker
 - [ ] OP: Telemetry/outbox
@@ -334,10 +334,11 @@ Status
     - [ ] Action routing (email/Teams/PagerDuty) configured
   
 - [x] OP: Audit logging
-  - [ ] Admin changes to backchannel fields are audited with who/what/when/where
-  - [ ] Dispatcher audit events: enqueue, attempt, success, fail (status/reason), dead-letter, manual retry
-  - [ ] No raw JWTs logged; sid/sub redacted or hashed
-  - [ ] Central sink + retention configured; dev fallback works
+  - [x] Admin changes to backchannel fields are audited with who/what/when/where
+  - [x] Dispatcher audit events: enqueue, attempt, success, fail (status/reason), dead-letter, manual retry
+  - [x] No raw JWTs logged; sid/sub redacted or hashed
+  - [x] Dev fallback works (structured audit to app logger)
+  - [ ] Central sink + retention configured (App Insights/ELK)
 - [ ] RP: /backchannel-logout endpoint
   - [x] Endpoint (POST form), revokes sid
   - [ ] Strict validation (sig, iss, aud, events, iat, jti replay)
@@ -360,7 +361,7 @@ Status
 
 Next steps (near-term)
 - RP: Implement strict validation with JWKS signature check, claim validation, and `jti` replay cache; add distributed revocation store.
-- OP: Implement audit logging and connect dispatcher metrics/thresholds to alerting system.
+- OP: Connect dispatcher metrics/thresholds to alerting system; optionally forward audit to central sink.
   - Audit logging
     - IMPLEMENTED: structured audit events for admin backchannel field changes (update)
     - IMPLEMENTED: dispatcher audit events (enqueue, attempt, success, retry, fail, dead-letter, admin retry, admin list)
