@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using MrWhoOidc.Auth.Crypto;
+using System.Text;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
 
@@ -22,6 +23,9 @@ public class IndexModel(AuthDbContext db) : PageModel
     public string ProviderDisplay { get; private set; } = string.Empty;
     public string? Error { get; private set; }
     public string? Message { get; private set; }
+
+    // Live preview of the JWK being edited/imported
+    public JwkPreview? Preview { get; private set; }
 
     public IReadOnlyList<Row> Rows { get; private set; } = Array.Empty<Row>();
 
@@ -66,7 +70,8 @@ public class IndexModel(AuthDbContext db) : PageModel
                 await LoadAsync();
                 return Page();
             }
-            Input.JwkJson = jwkJson!;
+            // Align 'use' claim with selected purpose (sig/enc)
+            Input.JwkJson = EnsureUseMatchesPurpose(jwkJson!, Input.Purpose);
             // Ensure kid set from conversion
             if (string.IsNullOrWhiteSpace(Input.Kid)) Input.Kid = JsonDocument.Parse(jwkJson!).RootElement.TryGetProperty("kid", out var kidEl) ? kidEl.GetString() : Input.Kid;
         }
@@ -115,6 +120,16 @@ public class IndexModel(AuthDbContext db) : PageModel
             return Page();
         }
 
+        // Validate algorithm/kty/use consistency and compute preview
+        if (!TryValidateAlgKtyUse(Input.Purpose, Input.Alg, Input.JwkJson!, out var validationError, out var preview))
+        {
+            ModelState.AddModelError("Input.Alg", validationError!);
+            Preview = preview; // show what we parsed to help user fix
+            await LoadAsync();
+            return Page();
+        }
+        Preview = preview;
+
         var entity = new IdentityProviderKey
         {
             IdentityProviderId = providerId,
@@ -124,7 +139,7 @@ public class IndexModel(AuthDbContext db) : PageModel
             Active = Input.Active,
             Kid = string.IsNullOrWhiteSpace(Input.Kid) ? null : Input.Kid,
             CreatedAt = DateTimeOffset.UtcNow,
-            ExpiresAt = null
+            ExpiresAt = Input.ExpiresAt
         };
         db.IdentityProviderKeys.Add(entity);
 
@@ -287,5 +302,117 @@ public class IndexModel(AuthDbContext db) : PageModel
         public bool Active { get; set; } = true;
         [Required]
         public string JwkJson { get; set; } = string.Empty; // private JWK JSON or PEM
+        public DateTimeOffset? ExpiresAt { get; set; }
+    }
+
+    // === Preview + validation helpers ===
+    public sealed record JwkPreview(string? Kid, string? Alg, string? Kty, string? Use, string? Curve, string ThumbprintB64Url);
+
+    private static string EnsureUseMatchesPurpose(string jwkJson, string purpose)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(jwkJson);
+            var root = doc.RootElement;
+            using var stream = new MemoryStream();
+            using var writer = new Utf8JsonWriter(stream);
+            writer.WriteStartObject();
+            string desiredUse = string.Equals(purpose, nameof(IdentityProviderKeyPurpose.Encryption), StringComparison.OrdinalIgnoreCase) ? "enc" : "sig";
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.NameEquals("use")) continue; // we'll write our own
+                prop.WriteTo(writer);
+            }
+            writer.WriteString("use", desiredUse);
+            writer.WriteEndObject();
+            writer.Flush();
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        catch { return jwkJson; }
+    }
+
+    private static bool TryValidateAlgKtyUse(string purpose, string alg, string jwkJson, out string? error, out JwkPreview? preview)
+    {
+        error = null;
+        preview = null;
+        using var doc = JsonDocument.Parse(jwkJson);
+        var root = doc.RootElement;
+        var kty = root.TryGetProperty("kty", out var ktyEl) ? ktyEl.GetString() : null;
+        var use = root.TryGetProperty("use", out var useEl) ? useEl.GetString() : null;
+        var kid = root.TryGetProperty("kid", out var kidEl) ? kidEl.GetString() : null;
+        var crv = root.TryGetProperty("crv", out var crvEl) ? crvEl.GetString() : null;
+
+        var expectedUse = string.Equals(purpose, nameof(IdentityProviderKeyPurpose.Encryption), StringComparison.OrdinalIgnoreCase) ? "enc" : "sig";
+        if (!string.IsNullOrWhiteSpace(use) && !string.Equals(use, expectedUse, StringComparison.Ordinal))
+        {
+            error = $"JWK 'use' is '{use}', but purpose is '{purpose}'. Expected use='{expectedUse}'.";
+        }
+
+        // Normalize alg for checks
+        var A = alg?.Trim() ?? string.Empty;
+        static bool IsRsaSig(string a) => a.StartsWith("RS", StringComparison.OrdinalIgnoreCase) || a.StartsWith("PS", StringComparison.OrdinalIgnoreCase);
+        static bool IsEcSig(string a) => a.StartsWith("ES", StringComparison.OrdinalIgnoreCase);
+        static bool IsRsaEnc(string a) => a.StartsWith("RSA-OAEP", StringComparison.OrdinalIgnoreCase);
+        static bool IsEcEnc(string a) => a.StartsWith("ECDH-ES", StringComparison.OrdinalIgnoreCase);
+
+        // kty vs alg
+        if (string.Equals(expectedUse, "sig", StringComparison.Ordinal))
+        {
+            if (IsRsaSig(A) && !string.Equals(kty, "RSA", StringComparison.Ordinal))
+                error ??= $"Alg '{alg}' requires kty=RSA.";
+            if (IsEcSig(A) && !string.Equals(kty, "EC", StringComparison.Ordinal))
+                error ??= $"Alg '{alg}' requires kty=EC.";
+
+            if (IsEcSig(A) && string.Equals(kty, "EC", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(crv))
+            {
+                // ES256 -> P-256, ES384 -> P-384, ES512 -> P-521
+                var expectedCrv = A switch
+                {
+                    "ES256" => "P-256",
+                    "ES384" => "P-384",
+                    "ES512" => "P-521",
+                    _ => null
+                };
+                if (expectedCrv is not null && !string.Equals(crv, expectedCrv, StringComparison.Ordinal))
+                {
+                    error ??= $"Alg '{alg}' expects EC curve '{expectedCrv}', but JWK has '{crv}'.";
+                }
+            }
+        }
+        else // enc
+        {
+            if (IsRsaEnc(A) && !string.Equals(kty, "RSA", StringComparison.Ordinal))
+                error ??= $"Alg '{alg}' requires kty=RSA.";
+            if (IsEcEnc(A) && !string.Equals(kty, "EC", StringComparison.Ordinal))
+                error ??= $"Alg '{alg}' requires kty=EC.";
+        }
+
+        // Compute thumbprint for preview
+        var thumb = ComputeJwkThumbprintB64Url(root);
+        preview = new JwkPreview(kid, A, kty, string.IsNullOrWhiteSpace(use) ? expectedUse : use, crv, thumb);
+        return error is null;
+    }
+
+    private static string ComputeJwkThumbprintB64Url(JsonElement jwk)
+    {
+        // RFC 7638: canonical JSON with required public members in lexicographic order
+        string json;
+        if (jwk.TryGetProperty("kty", out var ktyEl) && string.Equals(ktyEl.GetString(), "RSA", StringComparison.Ordinal))
+        {
+            var e = jwk.TryGetProperty("e", out var eEl) ? eEl.GetString() ?? string.Empty : string.Empty;
+            var n = jwk.TryGetProperty("n", out var nEl) ? nEl.GetString() ?? string.Empty : string.Empty;
+            json = "{" + "\"e\":\"" + e + "\",\"kty\":\"RSA\",\"n\":\"" + n + "\"}";
+        }
+        else // EC
+        {
+            var crv = jwk.TryGetProperty("crv", out var crvEl) ? crvEl.GetString() ?? string.Empty : string.Empty;
+            var x = jwk.TryGetProperty("x", out var xEl) ? xEl.GetString() ?? string.Empty : string.Empty;
+            var y = jwk.TryGetProperty("y", out var yEl) ? yEl.GetString() ?? string.Empty : string.Empty;
+            json = "{" + "\"crv\":\"" + crv + "\",\"kty\":\"EC\",\"x\":\"" + x + "\",\"y\":\"" + y + "\"}";
+        }
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(json);
+        var hash = sha.ComputeHash(bytes);
+        return MrWhoOidc.Auth.Crypto.Base64Url.Encode(hash);
     }
 }

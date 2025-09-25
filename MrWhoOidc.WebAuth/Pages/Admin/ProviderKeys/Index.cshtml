@@ -36,6 +36,10 @@
             <input asp-for="Input.Active" class="form-check-input" />
             <label asp-for="Input.Active" class="form-check-label">Set active</label>
         </div>
+        <div class="col-md-3">
+            <label asp-for="Input.ExpiresAt" class="form-label">Expires at (optional)</label>
+            <input asp-for="Input.ExpiresAt" class="form-control" type="datetime-local" />
+        </div>
         <div class="col-12">
             <label asp-for="Input.JwkJson" class="form-label">Private JWK JSON or PEM</label>
             <textarea asp-for="Input.JwkJson" class="form-control" rows="6" placeholder='{"kty":"RSA",...} or -----BEGIN PRIVATE KEY-----'></textarea>
@@ -49,6 +53,26 @@
         </div>
     </div>
 </form>
+
+@if (Model.Preview is not null)
+{
+    <div class="card mb-3">
+        <div class="card-header">JWK preview</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3"><strong>kid</strong><br />@Model.Preview.Kid</div>
+                <div class="col-md-2"><strong>alg</strong><br />@Model.Preview.Alg</div>
+                <div class="col-md-2"><strong>kty</strong><br />@Model.Preview.Kty</div>
+                <div class="col-md-2"><strong>use</strong><br />@Model.Preview.Use</div>
+                <div class="col-md-3"><strong>thumbprint (b64url)</strong><br /><code>@Model.Preview.ThumbprintB64Url</code></div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Model.Preview.Curve))
+            {
+                <div class="mt-2"><strong>curve</strong>: @Model.Preview.Curve</div>
+            }
+        </div>
+    </div>
+}
 
 @if (Model.Rows.Count == 0)
 {
