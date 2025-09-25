@@ -108,3 +108,33 @@ Related docs
 - `docs/obo-client-policy.md`
 - `docs/obo-dpop-requiresamejkt-e2e.md`
 - `docs/jar-replay-cache.md`
+
+## TLS termination / reverse proxy (Render, Nginx, etc.)
+
+When running behind a reverse proxy that terminates TLS (for example, Render), the app must honor forwarded headers so it can publish https URLs in discovery and redirects.
+
+What we do in code
+- The WebAuth host enables forwarded headers early in the pipeline and honors X-Forwarded-Proto, X-Forwarded-Host, and X-Forwarded-For.
+- KnownProxies/KnownNetworks are cleared so managed platforms with dynamic proxy IPs are accepted. Only use this setup when the app is actually behind a trusted proxy.
+- With this in place, `HttpContext.Request.Scheme` and `Host` reflect the client-facing values, so `/.well-known/openid-configuration` advertises https endpoints.
+
+Optional explicit issuer
+- You can force the issuer via configuration to avoid any ambiguity behind multiple layers of proxies:
+  - Set `Oidc:Issuer = https://your-domain.example.com` (environment variable key: `Oidc__Issuer`).
+  - If set, discovery uses this value instead of computing from the incoming request.
+
+Render specifics
+- Render automatically adds `X-Forwarded-Proto` and `X-Forwarded-Host`. No custom headers are required.
+- Keep the app listening on HTTP inside the container; TLS is handled by Render’s edge.
+
+Verify after deploy
+- Open `https://<host>/.well-known/openid-configuration` and check:
+  - `issuer` is `https://<host>`
+  - `jwks_uri`, `authorization_endpoint`, `token_endpoint`, etc. all start with `https://`
+- If they appear as `http://`:
+  - Ensure the proxy is sending `X-Forwarded-Proto: https` and `X-Forwarded-Host`.
+  - Confirm forwarded headers middleware runs before routing and redirection.
+  - Optionally set `Oidc__Issuer` as a quick override.
+
+Security note
+- Don’t clear `KnownProxies`/`KnownNetworks` if the app is directly exposed to the internet without a reverse proxy; restrict to known proxy IPs instead.

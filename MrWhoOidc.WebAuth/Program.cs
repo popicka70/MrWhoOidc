@@ -342,11 +342,17 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
 
 app.MapDefaultEndpoints();
 
-// Trust proxy forwarded headers
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Trust proxy forwarded headers (needed for TLS termination behind a reverse proxy like Render)
+// This ensures Request.Scheme/Host reflect the original client-facing values so discovery publishes https URLs.
+var fwdOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+// When running behind a managed proxy (IPs may change), clear KnownNetworks/Proxies to accept the headers.
+// IMPORTANT: Only do this when the app isn't directly internet-exposed without a reverse proxy.
+fwdOptions.KnownNetworks.Clear();
+fwdOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(fwdOptions);
 
 // Forward client certificates from proxy header if present
 app.UseCertificateForwarding();
