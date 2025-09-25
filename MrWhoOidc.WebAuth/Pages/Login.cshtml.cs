@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
-public class LoginModel(IUserService users, ILogger<LoginModel> logger, ITotpService totp, MrWhoOidc.Auth.Persistence.AuthDbContext db) : PageModel
+public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;

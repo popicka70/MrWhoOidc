@@ -10,7 +10,7 @@ using QRCoder;
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
 [Authorize]
-public class IndexModel(AuthDbContext db, ITotpService totp, ILogger<IndexModel> logger, IConfiguration config) : PageModel
+public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration config) : PageModel
 {
     [BindProperty]
     public string? Action { get; set; }
