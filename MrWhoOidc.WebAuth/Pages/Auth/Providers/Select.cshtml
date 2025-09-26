@@ -7,14 +7,14 @@
     var scheme = StyleSchemes.Resolve(string.IsNullOrWhiteSpace(Model.StyleKey) ? Model.ClientStyleKey : Model.StyleKey);
 }
 
-<div class="mx-auto @scheme.CssClass" style="max-width: 600px;" role="region" aria-labelledby="providerPickerHeading">
+<main class="mx-auto @scheme.CssClass provider-picker-container" style="max-width: 640px;" role="main" aria-labelledby="providerPickerHeading">
     @if (!string.IsNullOrEmpty(Model.ClientName))
     {
         <div class="small text-muted text-center mb-1">You are signing in to</div>
         <div class="h5 text-center mb-2">@Model.ClientName @if(!string.IsNullOrEmpty(Model.RealmName)){<span class="text-muted">(@Model.RealmName)</span>}</div>
     }
 
-    <h2 id="providerPickerHeading" class="text-center auth-heading">Select your identity provider</h2>
+    <h1 id="providerPickerHeading" class="text-center auth-heading h4">Select your identity provider</h1>
 
     @if (!string.IsNullOrEmpty(Model.Error))
     {
@@ -38,7 +38,7 @@
     }
     else
     {
-        <div class="card auth-card mt-3 shadow-sm">
+        <div class="card auth-card mt-3 shadow-sm" role="region" aria-label="Identity provider selection">
             <div class="card-body">
                 @{
                     var recommended = Model.Providers.FirstOrDefault(p => p.IsRecommended);
@@ -61,15 +61,15 @@
                         </div>
                     </div>
                 }
-                <div class="d-grid gap-2">
+                <div class="d-grid gap-2 provider-list" role="list">
                     <div class="visually-hidden" id="sr-recommended-text">Recommended based on your previous choice</div>
                     @foreach (var p in Model.Providers)
                     {
                         var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
                         var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start"
-                           role="button"
+                                <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"
+                                    role="listitem"
                            href="@url"
                            aria-label="@aria"
                            @(describedBy is null ? null : Html.Raw($"aria-describedby=\"{describedBy}\""))
@@ -95,14 +95,14 @@
                     @if (Model.AllowLocalLogin)
                     {
                         var loginUrl = "/login?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@loginUrl" role="button" aria-label="Sign in with username and password">
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@loginUrl" role="listitem" aria-label="Sign in with username and password" data-provider-name="_local">
                             <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
                         </a>
                     }
                     @if (Model.AllowQrLogin)
                     {
                         var qrUrl = "/Auth/Qr?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
-                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start" href="@qrUrl" role="button" aria-label="Sign in with QR code">
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@qrUrl" role="listitem" aria-label="Sign in with QR code" data-provider-name="_qr">
                             <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
                         </a>
                     }
@@ -110,11 +110,12 @@
 
                 <hr class="my-3" />
 
-                <a class="btn btn-outline-primary w-100 auth-cta" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
+                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
                     <i class="bi bi-person-plus me-2"></i>
                     Register a new account
                 </a>
             </div>
         </div>
     }
-</div>
+</main>
+
