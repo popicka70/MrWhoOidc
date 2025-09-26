@@ -1,11 +1,11 @@
 using System.Diagnostics;
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 
@@ -13,10 +13,12 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Strategy for RFC 8693 Token Exchange.
 /// Mirrors prior inline implementation; future: externalize rate limit.
 /// </summary>
-public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions, IDPoPValidator dpop, ITokenMetricsRecorder metrics, ILogger<TokenExchangeGrantHandler> logger) : ITokenGrantHandler
+public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
+    IDPoPValidator dpop,
+    ITokenMetricsRecorder metrics,
+    ITokenExchangeRateLimiter rateLimiter,
+    ILogger<TokenExchangeGrantHandler> logger) : ITokenGrantHandler
 {
-    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _teWindows = new();
-    private const int TokenExchangeRateLimitPerMinute = 60; // TODO: configurable
 
     public string GrantType => "urn:ietf:params:oauth:grant-type:token-exchange";
 
@@ -43,19 +45,20 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
             return new(true, false, ErrorResults.UnauthorizedClient());
         }
 
-        // Simple in-memory per-client limiter (preserved from original)
+        // Externalized rate limiting
         var clientBucket = Bucketization.Bucket(clientId);
-        var now = DateTimeOffset.UtcNow;
-        _teWindows.AddOrUpdate(clientBucket, _ => (1, now), (_, cur) =>
+        var rl = await rateLimiter.ShouldAllowAsync(clientBucket, http.RequestAborted);
+        if (!rl.Allowed)
         {
-            if (now - cur.WindowStart >= TimeSpan.FromMinutes(1)) return (1, now);
-            return (cur.Count + 1, cur.WindowStart);
-        });
-        var snapshot = _teWindows[clientBucket];
-        if (snapshot.Count > TokenExchangeRateLimitPerMinute && now - snapshot.WindowStart < TimeSpan.FromMinutes(1))
-        {
+            if (rl.RetryAfterSeconds.HasValue)
+                http.Response.Headers["Retry-After"] = rl.RetryAfterSeconds.Value.ToString();
+            metrics.RecordTokenExchangeRateLimitBlocked(clientBucket, rl.RetryAfterSeconds);
             metrics.RecordTokenExchangeFailure(clientBucket, null, client?.OboDpopMode?.ToString() ?? "unknown", "unknown", "rate_limited");
             return new(true, false, Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many token_exchange requests" }, statusCode: 429));
+        }
+        else
+        {
+            metrics.RecordTokenExchangeRateLimitAllowed(clientBucket);
         }
 
         var subjectToken = form["subject_token"].ToString();
@@ -82,14 +85,14 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var endpointUrl = (context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/') + "/token";
         if (http.Request.Headers.ContainsKey("DPoP"))
         {
-            var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl, subjectToken);
-            if (!validation.Ok)
+            var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, subjectToken, logger);
+            if (!ok)
             {
                 http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                 metrics.RecordTokenExchangeFailure(clientBucket, target is null ? null : Bucketization.BucketizeAudience(target), client?.OboDpopMode?.ToString() ?? "unknown", InferSourceTokenType(subjectTokenType, subjectToken), "invalid_dpop_proof");
                 return new(true, false, Results.BadRequest(new { error = "invalid_dpop_proof" }));
             }
-            dpopJkt = validation.Jkt;
+            dpopJkt = jkt;
         }
 
         var issuer = context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
@@ -118,7 +121,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         sw.Stop();
         var outcome = result.ok ? "success" : "failure";
         var targetBucket = string.IsNullOrWhiteSpace(target) ? "none" : Bucketization.BucketizeAudience(target);
-        var sourceTokenType = InferSourceTokenType(subjectTokenType, subjectToken);
+    var sourceTokenType = InferSourceTokenType(subjectTokenType, subjectToken);
         var dpopMode = client?.OboDpopMode?.ToString() ?? "unknown";
         metrics.RecordTokenExchange(outcome, clientBucket, targetBucket, dpopMode, sourceTokenType, sw.Elapsed.TotalMilliseconds);
 

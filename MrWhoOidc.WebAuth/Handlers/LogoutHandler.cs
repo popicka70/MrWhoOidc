@@ -12,22 +12,145 @@ using System.Net.Http.Headers;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Infrastructure;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
 public interface ILogoutHandler
 {
+    // Legacy local logout (kept for RP-initiated flows and existing links)
     Task<IResult> LocalLogoutAsync(HttpContext http);
+    // OIDC end session endpoint (RP-initiated logout with front/back-channel to clients)
     Task<IResult> EndSessionAsync(HttpContext http);
+    // New entry point that can present federated option
+    Task<IResult> LogoutEntryAsync(HttpContext http);
+    Task<IResult> LogoutPostAsync(HttpContext http);
+    Task<IResult> FederatedCallbackAsync(HttpContext http);
 }
 
-public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<LogoutHandler> logger, OidcMetrics metrics, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : ILogoutHandler
+public sealed class LogoutHandler(AuthDbContext db,
+    IKeyStore keyStore,
+    ILogger<LogoutHandler> logger,
+    OidcMetrics metrics,
+    MrWhoOidc.WebAuth.Observability.IAuditSink audit,
+    IUpstreamLogoutService upstreamLogoutSvc,
+    IOptions<FederatedLogoutOptions> fedOpts) : ILogoutHandler
 {
     public async Task<IResult> LocalLogoutAsync(HttpContext http)
     {
         await http.SignOutAsync();
         var returnUrl = http.Request.Query["returnUrl"].ToString();
         return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
+    }
+
+    public async Task<IResult> LogoutEntryAsync(HttpContext http)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var returnUrl = http.Request.Query["returnUrl"].ToString();
+        if (!fedOpts.Value.Enabled)
+        {
+            logger.LogInformation("Federated logout disabled - performing local logout");
+            audit.Emit("logout.federated.prompt.skip_disabled", new { });
+            return await LocalLogoutAsync(http);
+        }
+
+        var capability = await upstreamLogoutSvc.CanFederateAsync(http.User, http.RequestAborted);
+        if (!capability.CanFederate)
+        {
+            // Fall back to legacy local logout
+            audit.Emit("logout.federated.prompt.skip_no_capability", new { });
+            return await LocalLogoutAsync(http);
+        }
+
+        // Render simple choice HTML (minimal styling; Razor page could replace later)
+        var idpDisplay = System.Web.HttpUtility.HtmlEncode(capability.ProviderDisplayName ?? capability.ProviderName);
+        var formReturn = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
+        var html = $"<!DOCTYPE html><html><head><title>Sign out</title><meta charset='utf-8'/><meta http-equiv='cache-control' content='no-cache' /></head><body>\n<h2>Sign out</h2>\n<p>You signed in using external provider <strong>{idpDisplay}</strong>. Choose how you want to sign out:</p>\n<form method='post' action='/logout'>\n  <input type='hidden' name='returnUrl' value='{System.Web.HttpUtility.HtmlAttributeEncode(formReturn)}' />\n  <div><label><input type='radio' name='mode' value='local' checked /> Sign out only from this application</label></div>\n  <div><label><input type='radio' name='mode' value='federated' /> Sign out here and at {idpDisplay}</label></div>\n  <p style='font-size:smaller;color:#555'>Local-only leaves you signed in at the external provider; other apps using it may remain signed in.</p>\n  <button type='submit'>Continue</button>\n</form>\n</body></html>";
+        audit.Emit("logout.federated.prompt", new { provider = capability.ProviderName });
+        metrics.LogoutRequests.Add(1, new KeyValuePair<string, object?>("mode", "prompt"));
+        metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "prompt"));
+        return Results.Content(html, "text/html; charset=utf-8");
+    }
+
+    public async Task<IResult> LogoutPostAsync(HttpContext http)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var mode = http.Request.Form["mode"].ToString();
+        var returnUrl = http.Request.Form["returnUrl"].ToString();
+        if (string.IsNullOrEmpty(mode)) mode = "local"; // safe default
+        if (mode == "local")
+        {
+            metrics.LogoutLocal.Add(1);
+            audit.Emit("logout.federated.choice.local", new { return_hash = audit.HashValue(returnUrl) });
+            var res = await LocalLogoutAsync(http);
+            metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "local"));
+            return res;
+        }
+        if (mode == "federated")
+        {
+            audit.Emit("logout.federated.choice.federated", new { return_hash = audit.HashValue(returnUrl) });
+            var capability = await upstreamLogoutSvc.CanFederateAsync(http.User, http.RequestAborted);
+            if (!capability.CanFederate)
+            {
+                logger.LogWarning("Federated logout chosen but capability missing - falling back to local");
+                metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "capability_missing"));
+                audit.Emit("logout.federated.choice.federated.capability_missing", new { });
+                var resFallback = await LocalLogoutAsync(http);
+                metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
+                return resFallback;
+            }
+
+            // Extract upstream metadata from auth properties if still authenticated (should be prior to SignOut)
+            string? encIdToken = null; string? upstreamSid = null;
+            if (http.User?.Identity?.IsAuthenticated == true)
+            {
+                // Retrieve current auth ticket to access AuthenticationProperties (framework lacks direct API; try AuthenticateAsync)
+                var authResult = await http.AuthenticateAsync();
+                encIdToken = authResult?.Properties?.Items?.TryGetValue("UpstreamIdTokenEnc", out var enc) == true ? enc : null;
+                upstreamSid = authResult?.Properties?.Items?.TryGetValue("UpstreamSid", out var sidVal) == true ? sidVal : null;
+            }
+            var callbackBase = $"{http.Request.Scheme}://{http.Request.Host}";
+            var principal = http.User ?? new ClaimsPrincipal();
+            var redirectModel = await upstreamLogoutSvc.BuildFederatedRedirectAsync(principal, encIdToken, upstreamSid, callbackBase, returnUrl, http.RequestAborted);
+            if (!redirectModel.Success)
+            {
+                logger.LogWarning("Failed to build federated logout redirect: {Reason}", redirectModel.FailureReason);
+                metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", redirectModel.FailureReason));
+                audit.Emit("logout.federated.redirect.fail", new { reason = redirectModel.FailureReason });
+                var resLocal = await LocalLogoutAsync(http);
+                metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
+                return resLocal;
+            }
+
+            await http.SignOutAsync(); // Ensure local cookie cleared first
+            metrics.LogoutFederated.Add(1);
+            metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_redirect"));
+            return Results.Redirect(redirectModel.RedirectUrl ?? "/");
+        }
+        // Unknown mode => local
+        audit.Emit("logout.federated.choice.unknown", new { mode });
+        var resDefault = await LocalLogoutAsync(http);
+        metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "unknown_local"));
+        return resDefault;
+    }
+
+    public async Task<IResult> FederatedCallbackAsync(HttpContext http)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var state = http.Request.Query["state"].ToString();
+        var validation = await upstreamLogoutSvc.ValidateCallbackAsync(state, http.RequestAborted);
+        if (!validation.Valid)
+        {
+            metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", validation.Reason ?? "invalid_state"));
+            metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback_fail"));
+            var htmlBad = "<!DOCTYPE html><html><body><h2>Logout complete (local)</h2><p>The external logout response could not be validated. You are signed out locally.</p></body></html>";
+            audit.Emit("logout.federated.callback.page.fail", new { reason = validation.Reason });
+            return Results.Content(htmlBad, "text/html; charset=utf-8");
+        }
+        metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback"));
+        audit.Emit("logout.federated.callback.page.ok", new { });
+        var html = "<!DOCTYPE html><html><body><h2>Signed out</h2><p>You have been signed out from this application and the external provider.</p></body></html>";
+        return Results.Content(html, "text/html; charset=utf-8");
     }
 
     public async Task<IResult> EndSessionAsync(HttpContext http)

@@ -58,6 +58,8 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
                     services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
                     services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
+                    services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
+                    services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(o => { o.Enabled = true; o.PerClientPerMinute = 60; });
                     services.AddSingleton(new OidcOptions { Issuer = Issuer });
                     services.Configure<AuthOptions>(o =>
                     {

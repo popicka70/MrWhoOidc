@@ -21,6 +21,8 @@ public sealed class OidcMetrics
     public Counter<long> TokenExchangeSuccess { get; } = Meter.CreateCounter<long>("oidc.token_exchange.success");
     public Counter<long> TokenExchangeFailures { get; } = Meter.CreateCounter<long>("oidc.token_exchange.failures");
     public Histogram<double> TokenExchangeDurationMs { get; } = Meter.CreateHistogram<double>("oidc.token_exchange.duration.ms");
+    public Counter<long> TokenExchangeRateLimitAllowed { get; } = Meter.CreateCounter<long>("oidc.token_exchange.ratelimit.allowed");
+    public Counter<long> TokenExchangeRateLimitBlocked { get; } = Meter.CreateCounter<long>("oidc.token_exchange.ratelimit.blocked");
 
     public Counter<long> UserInfoRequests { get; } = Meter.CreateCounter<long>("oidc.userinfo.requests");
     public Counter<long> UserInfoSuccess { get; } = Meter.CreateCounter<long>("oidc.userinfo.success");
@@ -71,4 +73,11 @@ public sealed class OidcMetrics
     {
         BclPendingBacklog = Meter.CreateObservableGauge<long>("oidc.bcl.backlog", () => _backlog);
     }
+
+    // Federated logout metrics (added later to avoid breaking consumers)
+    public Counter<long> LogoutRequests { get; } = Meter.CreateCounter<long>("oidc.logout.requests");
+    public Counter<long> LogoutFederated { get; } = Meter.CreateCounter<long>("oidc.logout.federated");
+    public Counter<long> LogoutLocal { get; } = Meter.CreateCounter<long>("oidc.logout.local");
+    public Counter<long> LogoutFailures { get; } = Meter.CreateCounter<long>("oidc.logout.failures");
+    public Histogram<double> LogoutDuration { get; } = Meter.CreateHistogram<double>("oidc.logout.duration.ms");
 }

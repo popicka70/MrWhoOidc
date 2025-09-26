@@ -30,6 +30,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Application Insights (optional): only wires if instrumentation key / connection string present
+var aiConn = builder.Configuration["ApplicationInsights:ConnectionString"] ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(aiConn))
+{
+    builder.Services.AddApplicationInsightsTelemetry(o =>
+    {
+        o.ConnectionString = aiConn;
+    });
+}
+
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
 
@@ -60,21 +70,72 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
 builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
+// Safety: ensure at least one implementation exists (tests that construct very slim hosts may miss this)
+if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
+{
+    builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
+}
+// Token-exchange rate limiting
+builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
+// Default to in-memory; override with Redis below if available
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
 // Alerting
 builder.Services.AddHttpClient();
+// Provide system clock abstraction for alert sampler
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
     var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
     return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
 });
-// Audit sink
+// Backchannel alert sampler (threshold evaluation)
+builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelAlertOptions>(builder.Configuration.GetSection("Backchannel:Alerts"));
+builder.Services.AddHostedService<MrWhoOidc.WebAuth.Background.BackchannelAlertSampler>();
+// Expose diagnostics interface for sampler
+builder.Services.AddSingleton<IBackchannelAlertDiagnostics>(sp => (IBackchannelAlertDiagnostics)sp.GetRequiredService<BackchannelAlertSampler>());
+// Audit sink (supports logger | appinsights | both)
 builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
-    var enabled = cfg.GetSection("Audit").GetValue<bool?>("Enabled") ?? true;
-    return enabled ? new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()) : new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>().Value;
+    if (!opts.Enabled)
+        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+
+    var sinks = new List<MrWhoOidc.WebAuth.Observability.IAuditSink>();
+    var sink = opts.Sink?.ToLowerInvariant() ?? "logger";
+    if (sink is "logger" or "both")
+    {
+        sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
+            sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+    }
+    if (sink is "appinsights" or "both")
+    {
+        // TelemetryClient is auto-registered when Microsoft.ApplicationInsights.AspNetCore is referenced & AddApplicationInsightsTelemetry called.
+        var telemetry = sp.GetService<Microsoft.ApplicationInsights.TelemetryClient>();
+        if (telemetry != null)
+        {
+            sinks.Add(new MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink(
+                telemetry,
+                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink>>(),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+        }
+        else if (sink != "logger")
+        {
+            // Fallback to logger if App Insights not configured
+            sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
+                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+        }
+    }
+
+    if (sinks.Count == 1)
+        return sinks[0];
+    if (sinks.Count == 0)
+        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+    return new MrWhoOidc.WebAuth.Observability.CompositeAuditSink(sinks);
 });
 
 // Seed command support
@@ -162,6 +223,8 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
     builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
     // JAR replay cache: override in-memory default with Redis when available
     builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
+    // Override TE rate limiter with Redis implementation when Redis is present
+    builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.RedisTokenExchangeRateLimiter>();
 }
 else
 {
@@ -326,6 +389,10 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
 builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
+// Lifetime fix: service uses AuthDbContext (scoped) so must not be singleton
+builder.Services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>();
+builder.Services.AddMemoryCache();
+builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 // Grant handlers (strategy pattern pilot)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
@@ -428,7 +495,10 @@ app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct
 });
 app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireRateLimiting("rl-authorize");
-app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(ctx));
+// Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
+app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
+app.MapPost("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutPostAsync(ctx));
+app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireCors("oidc")
@@ -821,6 +891,7 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
 });
 
 // BCL outbox admin endpoints
+admin.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
 admin.MapGet("/bcl/outbox", async (AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, int? take, string? status, CancellationToken ct) =>
 {
     var q = db.BackchannelLogoutNotifications.AsNoTracking();
