@@ -13,6 +13,7 @@ using System.Net.Http;
 using System.Net;
 using System;
 using System.Collections.Generic;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -60,7 +61,7 @@ public class FederatedLogoutServiceTests
         };
         var httpClientFactory = new TestHttpClientFactory(new HttpClient(handler));
 
-        var svc = new UpstreamLogoutService(cache, opts, dp, new NullLogger<UpstreamLogoutService>(), db, httpClientFactory);
+        var svc = new UpstreamLogoutService(cache, opts, dp, new NullLogger<UpstreamLogoutService>(), db, httpClientFactory, new NoopAuditSink());
         var idTokProt = dp.CreateProtector("federated-logout-idtoken");
         return (svc, db, handler, idTokProt);
     }
@@ -86,7 +87,7 @@ public class FederatedLogoutServiceTests
         var db = BuildDb();
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
-        var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = false }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHandler())));
+    var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = false }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHandler())), new NoopAuditSink());
         var principal = BuildPrincipal("foo");
         var cap = await svc.CanFederateAsync(principal, CancellationToken.None);
         Assert.IsFalse(cap.CanFederate);
@@ -144,7 +145,7 @@ public class FederatedLogoutServiceTests
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
         var handler = new TestHandler { OnSend = req => new HttpResponseMessage(HttpStatusCode.InternalServerError) };
-        var svc = new UpstreamLogoutService(cache, FedOpts(), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(handler)));
+    var svc = new UpstreamLogoutService(cache, FedOpts(), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(handler)), new NoopAuditSink());
         var principal = BuildPrincipal("foo");
         var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, CancellationToken.None);
         Assert.IsFalse(res.Success);
