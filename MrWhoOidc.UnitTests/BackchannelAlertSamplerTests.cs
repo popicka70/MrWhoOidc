@@ -155,6 +155,42 @@ public class BackchannelAlertSamplerTests
         Assert.AreEqual(2, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"), "Second alert after cooldown elapsed");
     }
 
+    [TestMethod]
+    public async Task SustainZero_EmitsImmediately_ForAllEnabledMetrics()
+    {
+        var alerts = new CollectingAlertPublisher();
+        var clock = new TestClock();
+        var dbName = Guid.NewGuid().ToString();
+        await using var ctx = CreateContext(dbName);
+
+        // Seed failures for failure metric evaluation
+        for (int i = 0; i < 2; i++)
+        {
+            ctx.BackchannelLogoutNotifications.Add(Make("failed", clock.UtcNow.AddMinutes(-i), clock.UtcNow.AddMinutes(-i)));
+        }
+        await ctx.SaveChangesAsync();
+
+        var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
+        var metrics = new OidcMetrics();
+        var opts = Options.Create(new BackchannelAlertOptions
+        {
+            Enabled = true,
+            FailureRatePercent = 50,
+            OutboxBacklogThreshold = 5,
+            SampleIntervalSeconds = 30,
+            ConsecutiveMinutes = 0,
+            LookbackMinutes = 5,
+            CooldownSeconds = 0
+        });
+        var optMonitor = Mock.Of<IOptionsMonitor<BackchannelAlertOptions>>(m => m.CurrentValue == opts.Value);
+        var runtime = new BackchannelRuntimeState { PendingBacklog = 10 }; // exceed threshold
+        var sampler = new BackchannelAlertSampler(dbFactory, metrics, Mock.Of<Microsoft.Extensions.Logging.ILogger<BackchannelAlertSampler>>(), alerts, optMonitor, runtime, clock);
+
+        await sampler.TickAsync(CancellationToken.None);
+        Assert.IsTrue(alerts.Published.Any(a => a.Type == "bcl.alert.backlog"), "Backlog alert should emit immediately with sustain=0");
+        Assert.IsTrue(alerts.Published.Any(a => a.Type == "bcl.alert.failure_rate"), "Failure rate alert should emit immediately with sustain=0");
+    }
+
     private sealed class CollectingAlertPublisher : IAlertPublisher
     {
         public record AlertRec(string Type, object Payload);

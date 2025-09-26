@@ -92,6 +92,8 @@ builder.Services.AddSingleton<IAlertPublisher>(sp =>
 // Backchannel alert sampler (threshold evaluation)
 builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelAlertOptions>(builder.Configuration.GetSection("Backchannel:Alerts"));
 builder.Services.AddHostedService<MrWhoOidc.WebAuth.Background.BackchannelAlertSampler>();
+// Expose diagnostics interface for sampler
+builder.Services.AddSingleton<IBackchannelAlertDiagnostics>(sp => (IBackchannelAlertDiagnostics)sp.GetRequiredService<BackchannelAlertSampler>());
 // Audit sink (supports logger | appinsights | both)
 builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
@@ -882,6 +884,7 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
 });
 
 // BCL outbox admin endpoints
+admin.MapGet("/bcl/alerts/snapshot", (IBackchannelAlertDiagnostics diag) => Results.Ok(diag.GetSnapshot()));
 admin.MapGet("/bcl/outbox", async (AuthDbContext db, MrWhoOidc.WebAuth.Observability.IAuditSink audit, HttpContext httpContext, int? take, string? status, CancellationToken ct) =>
 {
     var q = db.BackchannelLogoutNotifications.AsNoTracking();

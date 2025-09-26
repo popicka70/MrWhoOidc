@@ -5,16 +5,44 @@ using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Background;
 
+/// <summary>
+/// Configuration for back-channel logout alert sampling.
+/// </summary>
 public sealed class BackchannelAlertOptions
 {
+    /// <summary>Enable alert sampling background service.</summary>
     public bool Enabled { get; set; } = false;
-    public int FailureRatePercent { get; set; } = 5; // percent over window
+    /// <summary>Failure rate percentage (failed / total * 100) over the <see cref="LookbackMinutes"/> window that constitutes a breach.</summary>
+    public int FailureRatePercent { get; set; } = 5;
+    /// <summary>P95 latency (ms) threshold for delivery attempts over the lookback window.</summary>
     public int LatencyP95Ms { get; set; } = 2000;
+    /// <summary>Pending outbox backlog threshold (count of pending notifications ready to send).</summary>
     public int OutboxBacklogThreshold { get; set; } = 50;
-    public int ConsecutiveMinutes { get; set; } = 5; // sustained condition before alert
-    public int SampleIntervalSeconds { get; set; } = 60; // 1 minute
-    public int LookbackMinutes { get; set; } = 10; // window for rate
-    public int CooldownSeconds { get; set; } = 300; // emit again only after this cooldown while still breaching
+    /// <summary>
+    /// Number of consecutive minutes a metric must remain in breach before first alert emission.
+    /// Set to 0 to emit immediately (single-sample mode) while still honoring <see cref="CooldownSeconds"/>.
+    /// </summary>
+    public int ConsecutiveMinutes { get; set; } = 5;
+    /// <summary>Interval between samples (seconds). Clamped internally to [10,300].</summary>
+    public int SampleIntervalSeconds { get; set; } = 60;
+    /// <summary>Lookback window (minutes) for failure rate / latency calculations.</summary>
+    public int LookbackMinutes { get; set; } = 10;
+    /// <summary>Cooldown (seconds) after emitting an alert for a metric before emitting again if still breaching.</summary>
+    public int CooldownSeconds { get; set; } = 300;
+}
+
+/// <summary>Snapshot of internal alert sampler state for diagnostics.</summary>
+public sealed record BackchannelAlertSamplerSnapshot(
+    DateTimeOffset CapturedAt,
+    int RequiredSamples,
+    int CooldownSeconds,
+    IReadOnlyDictionary<string,int> BreachSamples,
+    IReadOnlyDictionary<string,DateTimeOffset> FirstBreachAt,
+    IReadOnlyDictionary<string,DateTimeOffset> LastEmitAt);
+
+public interface IBackchannelAlertDiagnostics
+{
+    BackchannelAlertSamplerSnapshot GetSnapshot();
 }
 
 public interface ISystemClock { DateTimeOffset UtcNow { get; } }
@@ -27,7 +55,7 @@ public sealed class BackchannelAlertSampler(
     IAlertPublisher alerts,
     IOptionsMonitor<BackchannelAlertOptions> options,
     MrWhoOidc.WebAuth.Background.BackchannelRuntimeState runtimeState,
-    ISystemClock clock) : BackgroundService
+    ISystemClock clock) : BackgroundService, IBackchannelAlertDiagnostics
 {
     private readonly IDbContextFactory<AuthDbContext> _dbFactory = dbFactory;
     private readonly OidcMetrics _metrics = metrics;
@@ -132,6 +160,7 @@ public sealed class BackchannelAlertSampler(
     private readonly Dictionary<string, int> _breachSamples = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _firstBreachAt = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _lastEmitAt = new(StringComparer.Ordinal);
+    private readonly object _stateGate = new();
 
     private IEnumerable<(string type, object payload)> EvaluateAlertsWithSustained(double failureRate, double p95, long backlog, BackchannelAlertOptions cfg, DateTimeOffset now)
     {
@@ -150,21 +179,30 @@ public sealed class BackchannelAlertSampler(
 
             if (!breach)
             {
-                _breachSamples.Remove(metric);
-                _firstBreachAt.Remove(metric);
-                _lastEmitAt.Remove(metric);
+                lock (_stateGate)
+                {
+                    _breachSamples.Remove(metric);
+                    _firstBreachAt.Remove(metric);
+                    _lastEmitAt.Remove(metric);
+                }
                 continue;
             }
 
             // Fast-path: if sustain requirement collapses to a single sample, emit immediately (cooldown still enforced)
             if (requiredSamples == 1)
             {
-                var shouldEmitImmediate = !_lastEmitAt.TryGetValue(metric, out var lastImmediate) || cooldown == TimeSpan.Zero || (now - lastImmediate >= cooldown);
+                DateTimeOffset lastImmediate;
+                bool hasLast;
+                lock (_stateGate) hasLast = _lastEmitAt.TryGetValue(metric, out lastImmediate);
+                var shouldEmitImmediate = !hasLast || cooldown == TimeSpan.Zero || (now - lastImmediate >= cooldown);
                 if (shouldEmitImmediate)
                 {
-                    _breachSamples[metric] = 1;
-                    _firstBreachAt[metric] = now;
-                    _lastEmitAt[metric] = now;
+                    lock (_stateGate)
+                    {
+                        _breachSamples[metric] = 1;
+                        _firstBreachAt[metric] = now;
+                        _lastEmitAt[metric] = now;
+                    }
                     switch (metric)
                     {
                         case "failure":
@@ -184,30 +222,44 @@ public sealed class BackchannelAlertSampler(
 
             if (!_breachSamples.TryGetValue(metric, out var count))
             {
-                _breachSamples[metric] = 1;
-                _firstBreachAt[metric] = now;
+                lock (_stateGate)
+                {
+                    _breachSamples[metric] = 1;
+                    _firstBreachAt[metric] = now;
+                }
             }
             else
             {
-                _breachSamples[metric] = count + 1;
+                lock (_stateGate) _breachSamples[metric] = count + 1;
             }
 
-            if (_breachSamples[metric] >= requiredSamples)
+            int currentSamples;
+            lock (_stateGate) currentSamples = _breachSamples[metric];
+            if (currentSamples >= requiredSamples)
             {
-                var shouldEmit = !_lastEmitAt.TryGetValue(metric, out var last) || (cooldown == TimeSpan.Zero) || (now - last >= cooldown);
+                DateTimeOffset last;
+                bool hasLastEmit;
+                lock (_stateGate) hasLastEmit = _lastEmitAt.TryGetValue(metric, out last);
+                var shouldEmit = !hasLastEmit || (cooldown == TimeSpan.Zero) || (now - last >= cooldown);
                 if (shouldEmit)
                 {
-                    _lastEmitAt[metric] = now;
+                    lock (_stateGate) _lastEmitAt[metric] = now;
                     switch (metric)
                     {
                         case "failure":
-                            yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            int sustainedF;
+                            lock (_stateGate) sustainedF = _breachSamples[metric];
+                            yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = sustainedF, cooldown_sec = cfg.CooldownSeconds });
                             break;
                         case "latency":
-                            yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            int sustainedL;
+                            lock (_stateGate) sustainedL = _breachSamples[metric];
+                            yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = sustainedL, cooldown_sec = cfg.CooldownSeconds });
                             break;
                         case "backlog":
-                            yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            int sustainedB;
+                            lock (_stateGate) sustainedB = _breachSamples[metric];
+                            yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = sustainedB, cooldown_sec = cfg.CooldownSeconds });
                             break;
                     }
                 }
@@ -222,5 +274,22 @@ public sealed class BackchannelAlertSampler(
         var idx = (int)Math.Ceiling(values.Count * 0.95) - 1;
         idx = Math.Clamp(idx, 0, values.Count - 1);
         return values[idx];
+    }
+
+    public BackchannelAlertSamplerSnapshot GetSnapshot()
+    {
+        var cfg = _options.CurrentValue;
+        var now = _clock.UtcNow;
+        int requiredSamples = Math.Max(1, (int)Math.Ceiling((cfg.ConsecutiveMinutes * 60.0) / Math.Clamp(cfg.SampleIntervalSeconds, 10, 300)));
+        lock (_stateGate)
+        {
+            return new BackchannelAlertSamplerSnapshot(
+                CapturedAt: now,
+                RequiredSamples: requiredSamples,
+                CooldownSeconds: cfg.CooldownSeconds,
+                BreachSamples: new Dictionary<string,int>(_breachSamples),
+                FirstBreachAt: new Dictionary<string,DateTimeOffset>(_firstBreachAt),
+                LastEmitAt: new Dictionary<string,DateTimeOffset>(_lastEmitAt));
+        }
     }
 }
