@@ -49,9 +49,15 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddMrWhoOidcAuthCore();
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
+                    services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddScoped<MrWhoOidc.WebAuth.Handlers.ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
+                    // Register grant handlers explicitly for strategy dispatch
+                    services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
+                    services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
+                    services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
+                    services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
                     services.AddSingleton(new OidcOptions { Issuer = Issuer });
                     services.Configure<AuthOptions>(o =>
                     {

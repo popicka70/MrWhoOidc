@@ -59,6 +59,7 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
+builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
 // Alerting
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>
@@ -330,6 +331,7 @@ builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
 builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
 builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
 builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
 // Introspection

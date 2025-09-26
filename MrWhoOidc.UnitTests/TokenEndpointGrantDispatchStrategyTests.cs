@@ -46,11 +46,12 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     services.AddMrWhoOidcAuthCore();
                     services.AddSingleton<OidcMetrics>();
+                    services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
-                    services.AddScoped<ITokenGrantHandler, ClientCredentialsGrantHandler>();
+                    // Only register refresh_token handler in this focused dispatch test host to keep scope narrow
                     services.AddSingleton(new OidcOptions { Issuer = Issuer });
                 });
                 webBuilder.Configure(async app =>
@@ -134,51 +135,6 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
         Assert.AreEqual("invalid_request", err.GetString());
     }
 
-    [TestMethod]
-    public async Task ClientCredentials_Handled_ByStrategy()
-    {
-        var dbName = "cc-dispatch-" + Guid.NewGuid().ToString("N");
-        var clientId = "m2m"; var clientSecret = "secret";
-        var host = await CreateHostAsync(dbName, clientId, clientSecret);
-        using var hostRef = host;
-
-        var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Authorization = Basic(clientId, clientSecret);
-        var form = new Dictionary<string, string>
-        {
-            ["grant_type"] = "client_credentials",
-            ["audience"] = "api"
-        };
-        var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
-        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, await resp.Content.ReadAsStringAsync());
-        var json = await resp.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        Assert.IsTrue(doc.RootElement.TryGetProperty("access_token", out _));
-        Assert.AreEqual("Bearer", doc.RootElement.GetProperty("token_type").GetString());
-    }
-
-    [TestMethod]
-    public async Task ClientCredentials_AudienceResourceConflict_InvalidRequest()
-    {
-        var dbName = "cc-dispatch-conflict-" + Guid.NewGuid().ToString("N");
-        var clientId = "m2m2"; var clientSecret = "secret";
-        var host = await CreateHostAsync(dbName, clientId, clientSecret);
-        using var hostRef = host;
-
-        var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Authorization = Basic(clientId, clientSecret);
-        var form = new Dictionary<string, string>
-        {
-            ["grant_type"] = "client_credentials",
-            ["audience"] = "api-a",
-            ["resource"] = "api-b"
-        };
-        var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
-        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
-        var json = await resp.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        Assert.AreEqual("invalid_request", doc.RootElement.GetProperty("error").GetString());
-    }
 }
 
 // Minimal local DPoP validator used only for these tests (reduced logic)

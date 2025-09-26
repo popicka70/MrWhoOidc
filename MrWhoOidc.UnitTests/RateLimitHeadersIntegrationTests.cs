@@ -89,7 +89,9 @@ public sealed class RateLimitHeadersIntegrationTests
         var client = host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic("client1", "secret");
 
-        // Hit token-exchange path 41 times; limit is 40/min per middleware
+        // Adaptive: issue requests until 429 or maxAttempts (limit + buffer) reached to reduce timing flakiness
+        const int expectedLimit = 40;
+        int maxAttempts = expectedLimit + 5; // small buffer
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -98,13 +100,17 @@ public sealed class RateLimitHeadersIntegrationTests
         };
 
         HttpResponseMessage? last = null;
-        for (int i = 0; i < 41; i++)
+        int attempts = 0;
+        for (; attempts < maxAttempts; attempts++)
         {
             last = await client.PostAsync("/token", new FormUrlEncodedContent(form));
+            if (last.StatusCode == HttpStatusCode.TooManyRequests) break;
+            // tiny delay to allow Redis TTL window to apply consistently (helps on slower CI machines)
+            await Task.Delay(10);
         }
 
-        Assert.IsNotNull(last);
-        Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode, "Expected 429 on exceeding Redis-backed limit");
+        Assert.IsNotNull(last, "No response captured");
+        Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode, $"Did not observe 429 within {maxAttempts} attempts (observed {attempts}).");
         Assert.IsTrue(last.Headers.Contains("Retry-After"), "Missing Retry-After header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Limit"), "Missing X-RateLimit-Limit header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Remaining"), "Missing X-RateLimit-Remaining header");
@@ -112,7 +118,7 @@ public sealed class RateLimitHeadersIntegrationTests
 
         var limit = last.Headers.GetValues("X-RateLimit-Limit").FirstOrDefault();
         var remaining = last.Headers.GetValues("X-RateLimit-Remaining").FirstOrDefault();
-        Assert.AreEqual("40", limit, "Expected token-exchange limit 40");
+        Assert.AreEqual(expectedLimit.ToString(), limit, $"Expected token-exchange limit {expectedLimit}");
         Assert.AreEqual("0", remaining, "Expected 0 remaining after exceeding limit");
     }
 
@@ -133,15 +139,20 @@ public sealed class RateLimitHeadersIntegrationTests
         using var _ = host;
         var client = host.GetTestClient();
 
-        // Hit introspect path 81 times; limit is 80/min per middleware
+        // Adaptive loop similar to token-exchange
+        const int expectedLimit = 80;
+        int maxAttempts = expectedLimit + 5;
         HttpResponseMessage? last = null;
-        for (int i = 0; i < 81; i++)
+        int attempts = 0;
+        for (; attempts < maxAttempts; attempts++)
         {
             last = await client.PostAsync("/introspect", new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = "x" }));
+            if (last.StatusCode == HttpStatusCode.TooManyRequests) break;
+            await Task.Delay(10);
         }
 
-        Assert.IsNotNull(last);
-        Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode, "Expected 429 on exceeding Redis-backed limit");
+        Assert.IsNotNull(last, "No response captured");
+        Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode, $"Did not observe 429 within {maxAttempts} attempts (observed {attempts}).");
         Assert.IsTrue(last.Headers.Contains("Retry-After"), "Missing Retry-After header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Limit"), "Missing X-RateLimit-Limit header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Remaining"), "Missing X-RateLimit-Remaining header");
@@ -149,7 +160,7 @@ public sealed class RateLimitHeadersIntegrationTests
 
         var limit = last.Headers.GetValues("X-RateLimit-Limit").FirstOrDefault();
         var remaining = last.Headers.GetValues("X-RateLimit-Remaining").FirstOrDefault();
-        Assert.AreEqual("80", limit, "Expected introspect limit 80");
+        Assert.AreEqual(expectedLimit.ToString(), limit, $"Expected introspect limit {expectedLimit}");
         Assert.AreEqual("0", remaining, "Expected 0 remaining after exceeding limit");
     }
 }

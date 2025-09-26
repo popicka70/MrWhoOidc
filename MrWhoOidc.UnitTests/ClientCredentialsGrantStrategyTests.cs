@@ -19,6 +19,7 @@ using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class ClientCredentialsGrantStrategyTests
 {
     private const string Issuer = "https://issuer";
@@ -41,6 +42,7 @@ public sealed class ClientCredentialsGrantStrategyTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     services.AddMrWhoOidcAuthCore();
                     services.AddSingleton<OidcMetrics>();
+                    services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
