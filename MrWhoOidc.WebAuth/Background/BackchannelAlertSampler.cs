@@ -14,6 +14,7 @@ public sealed class BackchannelAlertOptions
     public int ConsecutiveMinutes { get; set; } = 5; // sustained condition before alert
     public int SampleIntervalSeconds { get; set; } = 60; // 1 minute
     public int LookbackMinutes { get; set; } = 10; // window for rate
+    public int CooldownSeconds { get; set; } = 300; // emit again only after this cooldown while still breaching
 }
 
 public interface ISystemClock { DateTimeOffset UtcNow { get; } }
@@ -106,13 +107,14 @@ public sealed class BackchannelAlertSampler(
                 _window.Dequeue();
         }
 
-        double failureRate = 0;
+        double failureRate;
         List<double> allLatencies;
         long totalEmitted, totalFailed;
         lock (_gate)
         {
-            totalEmitted = _window.Sum(x => x.emittedDelta);
-            totalFailed = _window.Sum(x => x.failedDelta);
+            // Use snapshot-based rate (latest aggregate) for stability instead of sum of deltas, while still keeping latency window aggregation
+            totalEmitted = emitted; // current snapshot over lookback
+            totalFailed = failed;
             failureRate = totalEmitted > 0 ? (double)totalFailed / totalEmitted * 100 : 0;
             allLatencies = _window.SelectMany(x => x.latencies).ToList();
         }
@@ -129,10 +131,12 @@ public sealed class BackchannelAlertSampler(
     // Sustained breach tracking
     private readonly Dictionary<string, int> _breachSamples = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _firstBreachAt = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _lastEmitAt = new(StringComparer.Ordinal);
 
     private IEnumerable<(string type, object payload)> EvaluateAlertsWithSustained(double failureRate, double p95, long backlog, BackchannelAlertOptions cfg, DateTimeOffset now)
     {
         int requiredSamples = Math.Max(1, (int)Math.Ceiling((cfg.ConsecutiveMinutes * 60.0) / Math.Clamp(cfg.SampleIntervalSeconds, 10, 300)));
+        var cooldown = TimeSpan.FromSeconds(Math.Max(0, cfg.CooldownSeconds));
 
         foreach (var metric in new[] { "failure", "latency", "backlog" })
         {
@@ -148,6 +152,33 @@ public sealed class BackchannelAlertSampler(
             {
                 _breachSamples.Remove(metric);
                 _firstBreachAt.Remove(metric);
+                _lastEmitAt.Remove(metric);
+                continue;
+            }
+
+            // Fast-path: if sustain requirement collapses to a single sample, emit immediately (cooldown still enforced)
+            if (requiredSamples == 1)
+            {
+                var shouldEmitImmediate = !_lastEmitAt.TryGetValue(metric, out var lastImmediate) || cooldown == TimeSpan.Zero || (now - lastImmediate >= cooldown);
+                if (shouldEmitImmediate)
+                {
+                    _breachSamples[metric] = 1;
+                    _firstBreachAt[metric] = now;
+                    _lastEmitAt[metric] = now;
+                    switch (metric)
+                    {
+                        case "failure":
+                            yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = 1, cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                        case "latency":
+                            yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = 1, cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                        case "backlog":
+                            yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = 1, cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                    }
+                }
+                // Skip sustained logic since we've handled single-sample emission
                 continue;
             }
 
@@ -163,18 +194,22 @@ public sealed class BackchannelAlertSampler(
 
             if (_breachSamples[metric] >= requiredSamples)
             {
-                // Emit and keep counting (continuous alert events each sample once sustained). Could add cooldown later.
-                switch (metric)
+                var shouldEmit = !_lastEmitAt.TryGetValue(metric, out var last) || (cooldown == TimeSpan.Zero) || (now - last >= cooldown);
+                if (shouldEmit)
                 {
-                    case "failure":
-                        yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric] });
-                        break;
-                    case "latency":
-                        yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric] });
-                        break;
-                    case "backlog":
-                        yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = _breachSamples[metric] });
-                        break;
+                    _lastEmitAt[metric] = now;
+                    switch (metric)
+                    {
+                        case "failure":
+                            yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                        case "latency":
+                            yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                        case "backlog":
+                            yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = _breachSamples[metric], cooldown_sec = cfg.CooldownSeconds });
+                            break;
+                    }
                 }
             }
         }

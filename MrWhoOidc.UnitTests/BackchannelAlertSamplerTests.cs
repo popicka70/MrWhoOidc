@@ -63,7 +63,8 @@ public class BackchannelAlertSamplerTests
             FailureRatePercent = 50,
             SampleIntervalSeconds = 30,
             ConsecutiveMinutes = 2,
-            LookbackMinutes = 10
+            LookbackMinutes = 10,
+            CooldownSeconds = 0
         });
         var optMonitor = Mock.Of<IOptionsMonitor<BackchannelAlertOptions>>(m => m.CurrentValue == opts.Value);
         var runtime = new BackchannelRuntimeState { PendingBacklog = 0 };
@@ -105,7 +106,8 @@ public class BackchannelAlertSamplerTests
             OutboxBacklogThreshold = 10,
             SampleIntervalSeconds = 60,
             ConsecutiveMinutes = 1,
-            LookbackMinutes = 5
+            LookbackMinutes = 5,
+            CooldownSeconds = 0
         });
         var optMonitor = Mock.Of<IOptionsMonitor<BackchannelAlertOptions>>(m => m.CurrentValue == opts.Value);
         var runtime = new BackchannelRuntimeState { PendingBacklog = 12 };
@@ -113,6 +115,44 @@ public class BackchannelAlertSamplerTests
 
         await sampler.TickAsync(CancellationToken.None); // requiredSamples = 1 ( (1*60)/60 )
         Assert.IsTrue(alerts.Published.Any(a => a.Type == "bcl.alert.backlog"), "Backlog alert emitted immediately when sustained=1");
+    }
+
+    [TestMethod]
+    public async Task Cooldown_PreventsRapidRepeatAlerts()
+    {
+        var alerts = new CollectingAlertPublisher();
+        var clock = new TestClock();
+        // Use backlog metric (simpler: independent of DB counts) for deterministic cooldown verification
+        var dbName = Guid.NewGuid().ToString();
+        await using var ctx = CreateContext(dbName); // empty DB is fine
+        var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
+        var metrics = new OidcMetrics();
+        var opts = Options.Create(new BackchannelAlertOptions
+        {
+            Enabled = true,
+            FailureRatePercent = 0, // disable failure metric
+            OutboxBacklogThreshold = 10,
+            SampleIntervalSeconds = 30,
+            ConsecutiveMinutes = 0, // zero means sustain requirement collapses to 1 sample
+            LookbackMinutes = 5,
+            CooldownSeconds = 300 // 5 min cooldown
+        });
+        var optMonitor = Mock.Of<IOptionsMonitor<BackchannelAlertOptions>>(m => m.CurrentValue == opts.Value);
+        var runtime = new BackchannelRuntimeState { PendingBacklog = 15 }; // exceed threshold
+        var sampler = new BackchannelAlertSampler(dbFactory, metrics, Mock.Of<Microsoft.Extensions.Logging.ILogger<BackchannelAlertSampler>>(), alerts, optMonitor, runtime, clock);
+
+        await sampler.TickAsync(CancellationToken.None); // first sample triggers (sustain satisfied)
+        Assert.AreEqual(1, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"));
+
+        // Advance less than cooldown and sample again - should not emit
+        clock.Advance(TimeSpan.FromSeconds(60));
+        await sampler.TickAsync(CancellationToken.None);
+        Assert.AreEqual(1, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"), "No second alert within cooldown");
+
+        // Advance beyond cooldown and sample again - should emit second alert
+        clock.Advance(TimeSpan.FromSeconds(300));
+        await sampler.TickAsync(CancellationToken.None);
+        Assert.AreEqual(2, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"), "Second alert after cooldown elapsed");
     }
 
     private sealed class CollectingAlertPublisher : IAlertPublisher

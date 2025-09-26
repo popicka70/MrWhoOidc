@@ -145,18 +145,18 @@ Status
 - [x] External audit sink abstraction + AppInsights optional sink
 - [x] Periodic sampler computing failure rate, backlog, p95 latency – emits alert events (initial thresholds)
 - [x] Sustained breach logic (ConsecutiveMinutes) + unit tests (`BackchannelAlertSamplerTests`)
-- [ ] Cool-down / suppression window to avoid alert storm (optional – current behavior emits every sample once sustained)
+- [x] Cool-down / suppression window via `CooldownSeconds` (prevents rapid repeat alerts while still breaching)
 - [ ] Docs: runbook (what each alert means + suggested operator action)
 
 Planned alerting integration (target by prod cutover)
   - Backchannel:Alerts:Enabled (bool)
   - Backchannel:Alerts:FailureRatePercent (default 5)
 ### Next Increment (proposed)
-1. Add simple cooldown (emit at sustain onset, then every N minutes while still breaching) – optional but recommended.
-2. Update docs with configuration examples (`Audit:Sink`, `Backchannel:Alerts:*`).
-3. Add health/admin endpoint to expose last alert sample snapshot (for dashboards) – optional.
-4. RP side: add structured reason codes for validation failures (to enable richer failure rate slicing) – optional.
-5. Runbook documentation: escalation paths, sample query (App Insights / Prometheus) snippets.
+1. Update docs with configuration examples (`Audit:Sink`, `Backchannel:Alerts:*`) and explain cooldown semantics.
+2. Add health/admin endpoint to expose last alert sample snapshot & current breach state (for dashboards) – optional.
+3. RP side: add structured reason codes for validation failures (to enable richer failure rate slicing) – optional.
+4. Runbook documentation: escalation paths, sample query (App Insights / Prometheus) snippets.
+5. (Optional) Per-metric independent cooldown overrides if operational experience requires finer control.
   - Backchannel:Alerts:OutboxBacklogThreshold (default 50)
   - Backchannel:Alerts:ConsecutiveMinutes (default 5)
 - Azure App Insights specifics:
