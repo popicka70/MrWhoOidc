@@ -146,17 +146,17 @@ Status
 - [x] Periodic sampler computing failure rate, backlog, p95 latency – emits alert events (initial thresholds)
 - [x] Sustained breach logic (ConsecutiveMinutes) + unit tests (`BackchannelAlertSamplerTests`)
 - [x] Cool-down / suppression window via `CooldownSeconds` (prevents rapid repeat alerts while still breaching)
+- [x] Diagnostics snapshot endpoint: `GET /admin/api/bcl/alerts/snapshot` (admin auth) returns current breach sample counts, first breach timestamps, last emission timestamps, required sample count and cooldown. Suitable for dashboards.
 - [ ] Docs: runbook (what each alert means + suggested operator action)
 
 Planned alerting integration (target by prod cutover)
   - Backchannel:Alerts:Enabled (bool)
   - Backchannel:Alerts:FailureRatePercent (default 5)
 ### Next Increment (proposed)
-1. Update docs with configuration examples (`Audit:Sink`, `Backchannel:Alerts:*`) and explain cooldown semantics.
-2. Add health/admin endpoint to expose last alert sample snapshot & current breach state (for dashboards) – optional.
-3. RP side: add structured reason codes for validation failures (to enable richer failure rate slicing) – optional.
-4. Runbook documentation: escalation paths, sample query (App Insights / Prometheus) snippets.
-5. (Optional) Per-metric independent cooldown overrides if operational experience requires finer control.
+1. Runbook documentation: configuration examples + escalation paths + sample queries (App Insights / Prometheus) (IN PROGRESS).
+2. RP side: add structured reason codes for validation failures (to enable richer failure rate slicing) – optional.
+3. (Optional) Per-metric independent cooldown overrides if operational experience requires finer control.
+4. External alert routing (Teams/PagerDuty) wiring using emitted alert events.
   - Backchannel:Alerts:OutboxBacklogThreshold (default 50)
   - Backchannel:Alerts:ConsecutiveMinutes (default 5)
 - Azure App Insights specifics:
@@ -393,3 +393,57 @@ Configuration
     - Add environment-specific configuration flags and thresholds in appsettings
     - Validate alerts fire in a dry-run/test environment and document runbook
 - Tests: add unit tests for token builder and dispatcher retry logic; integration test OP->RP flow.
+
+### Alert Sampler Configuration Reference
+
+`Backchannel:Alerts` section example (appsettings.*):
+
+```
+"Backchannel": {
+  "Alerts": {
+    "Enabled": true,
+    "FailureRatePercent": 5,
+    "LatencyP95Ms": 2000,
+    "OutboxBacklogThreshold": 50,
+    "ConsecutiveMinutes": 5,
+    "SampleIntervalSeconds": 60,
+    "LookbackMinutes": 10,
+    "CooldownSeconds": 300
+  }
+}
+```
+
+Semantics:
+- `ConsecutiveMinutes`: sustained breach window before first alert. Set to 0 for immediate single-sample mode (still obeys cooldown).
+- `CooldownSeconds`: minimum interval between repeated alerts for the same metric while still breaching.
+- `RequiredSamples` (internal) = ceil(ConsecutiveMinutes * 60 / SampleIntervalSeconds); exposed via snapshot endpoint.
+
+Snapshot endpoint (`GET /admin/api/bcl/alerts/snapshot`) returns JSON:
+```
+{
+  "capturedAt": "2025-09-26T12:34:56Z",
+  "requiredSamples": 5,
+  "cooldownSeconds": 300,
+  "breachSamples": { "failure": 3, "backlog": 5 },
+  "firstBreachAt": { "failure": "...", "backlog": "..." },
+  "lastEmitAt": { "backlog": "..." }
+}
+```
+
+### Runbook (Draft Outline)
+Alert Types:
+- `bcl.alert.failure_rate`: Failure rate >= threshold over lookback window and sustained.
+- `bcl.alert.latency_p95`: P95 latency >= threshold.
+- `bcl.alert.backlog`: Pending outbox >= threshold.
+
+Operator Actions (initial guidance):
+- Failure rate: Inspect `/admin/api/bcl/outbox?status=failed` and `/health/backchannel` circuits; check RP availability; consider pausing high-failure clients.
+- Latency: Look for network slowness, elevated retries; verify outbound network / DNS.
+- Backlog: Identify circuits open or large pending queue; ensure dispatcher concurrency not starved; verify downstream RP endpoints reachable.
+
+Immediate Mode (ConsecutiveMinutes=0):
+- Use only for pre-production or during active incident triage to shorten time-to-alert. In production keep a small sustain window (e.g., 2–5 minutes) to avoid noise.
+
+Future Enhancements:
+- Per-metric cooldown overrides (e.g., longer cooldown for backlog vs latency).
+- Alert severity tiers (warning vs critical) based on percentage over threshold.

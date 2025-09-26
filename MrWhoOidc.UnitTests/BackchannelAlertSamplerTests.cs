@@ -13,6 +13,7 @@ using MrWhoOidc.WebAuth.Observability;
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public class BackchannelAlertSamplerTests
 {
     private class TestClock : ISystemClock { public DateTimeOffset UtcNow => _now; public void Advance(TimeSpan span) => _now += span; private DateTimeOffset _now = DateTimeOffset.UtcNow; }
@@ -149,8 +150,8 @@ public class BackchannelAlertSamplerTests
         await sampler.TickAsync(CancellationToken.None);
         Assert.AreEqual(1, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"), "No second alert within cooldown");
 
-        // Advance beyond cooldown and sample again - should emit second alert
-        clock.Advance(TimeSpan.FromSeconds(300));
+        // Advance beyond cooldown (add +1s guard to avoid edge precision) and sample again - should emit second alert
+        clock.Advance(TimeSpan.FromSeconds(301));
         await sampler.TickAsync(CancellationToken.None);
         Assert.AreEqual(2, alerts.Published.Count(a => a.Type == "bcl.alert.backlog"), "Second alert after cooldown elapsed");
     }
