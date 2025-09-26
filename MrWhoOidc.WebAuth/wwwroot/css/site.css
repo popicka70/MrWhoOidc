@@ -147,17 +147,88 @@ body {
 }
 
 /* Subtle page background under the centered container */
+/* Page-level scheme backgrounds (applied to body via _AuthLayout or to main wrapper on provider select) */
 .scheme-ocean,
 .scheme-forest,
 .scheme-plum,
-.scheme-contrast {
+.scheme-contrast,
+.scheme-classic {
   padding: 4px 8px;
+  min-height: 100dvh; /* full viewport height for centered auth flows */
+  background-attachment: fixed;
+  background-size: cover;
 }
+
+/* Ocean: airy cyan gradients with soft radial accents */
+.scheme-ocean {
+  --ocean-base: #f0fbff;
+  background-image:
+    radial-gradient(circle at 85% 18%, rgba(13,202,240,.28), transparent 60%),
+    radial-gradient(circle at 12% 88%, rgba(13,202,240,.20), transparent 70%),
+    linear-gradient(135deg, var(--ocean-base) 0%, #ffffff 45%, #e3f8ff 100%);
+}
+
+/* Forest: gentle green mist with diagonal light */
+.scheme-forest {
+  --forest-base: #f6fff8;
+  background-image:
+    radial-gradient(circle at 88% 20%, rgba(25,135,84,.20), transparent 55%),
+    radial-gradient(circle at 15% 85%, rgba(25,135,84,.18), transparent 65%),
+    linear-gradient(140deg, var(--forest-base) 0%, #ffffff 50%, #ebfff2 100%);
+}
+
+/* Plum: subtle purple haze with tonal layering */
+.scheme-plum {
+  --plum-base: #faf5ff;
+  background-image:
+    radial-gradient(circle at 80% 15%, rgba(111,66,193,.25), transparent 55%),
+    radial-gradient(circle at 18% 90%, rgba(111,66,193,.20), transparent 65%),
+    linear-gradient(145deg, var(--plum-base) 0%, #ffffff 52%, #f3e9ff 100%);
+}
+
+/* Contrast: crisp light surface with a faint grid pattern */
+.scheme-contrast {
+  --contrast-base: #f8f9fa;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(33,37,41,.04) 0 12px, rgba(33,37,41,0) 12px 24px),
+    linear-gradient(120deg, var(--contrast-base) 0%, #ffffff 55%, #f1f3f5 100%);
+}
+
+/* Classic: keep very light differentiation */
+.scheme-classic {
+  background-image: linear-gradient(150deg, #fdfdfd 0%, #ffffff 40%, #f5f7fa 100%);
+}
+
+/* Provide a neutral backdrop behind the centered auth card */
+.auth-scheme-body .auth-card { backdrop-filter: saturate(1.4) brightness(1.02); }
 
 /* Classic (default) gets gentle rounding/shadow too */
 .scheme-classic .auth-card {
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0,0,0,.04);
+}
+
+/* Elevation tweak so cards stand out on richer backgrounds */
+.scheme-ocean .auth-card,
+.scheme-forest .auth-card,
+.scheme-plum .auth-card,
+.scheme-contrast .auth-card { box-shadow: 0 10px 28px -6px rgba(0,0,0,.12), 0 4px 12px -2px rgba(0,0,0,.06); }
+
+/* Accessible focus ring contrast on colored patterns */
+.auth-scheme-body :focus-visible { outline: 3px solid var(--accent, #0d6efd); outline-offset: 2px; }
+
+/* Dark mode (prefers-color-scheme) adjustments for contrast scheme */
+@media (prefers-color-scheme: dark) {
+  .scheme-contrast { background-image: linear-gradient(135deg,#1f2224 0%,#2a2d30 55%,#1c1e21 100%); }
+  .scheme-contrast .auth-card { background-color: #2f3336; border-color: #444; }
+}
+
+/* Reduce motion: drop complex layered backgrounds */
+@media (prefers-reduced-motion: reduce) {
+  .scheme-ocean,
+  .scheme-forest,
+  .scheme-plum,
+  .scheme-contrast { background-image: linear-gradient(140deg, #ffffff, var(--bg-grad-from, #f8f9fa)); }
 }
 
 /* Provider logo sizing and spacing */
