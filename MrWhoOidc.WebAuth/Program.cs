@@ -389,7 +389,8 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
 builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
-builder.Services.AddSingleton<IUpstreamLogoutService, UpstreamLogoutService>();
+// Lifetime fix: service uses AuthDbContext (scoped) so must not be singleton
+builder.Services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>();
 builder.Services.AddMemoryCache();
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();

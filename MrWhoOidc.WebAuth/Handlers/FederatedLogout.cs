@@ -3,6 +3,13 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using MrWhoOidc.Auth.Persistence;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.IdentityProviders;
+using System.Net.Http;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -19,7 +26,11 @@ public record FederatedCallbackValidation(bool Valid, string? Reason);
 public interface IUpstreamLogoutService
 {
     Task<FederatedCapability> CanFederateAsync(ClaimsPrincipal principal, CancellationToken ct);
-    Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? returnUrl, CancellationToken ct);
+    /// <summary>
+    /// Build redirect to upstream end_session_endpoint. upstreamIdTokenEnc is an encrypted upstream id_token captured at sign-in; may be null.
+    /// upstreamSid optional session identifier extracted from upstream id_token. callbackBase should be scheme://host of current request.
+    /// </summary>
+    Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? returnUrl, CancellationToken ct);
     Task<FederatedCallbackValidation> ValidateCallbackAsync(string? state, CancellationToken ct);
 }
 
@@ -28,42 +39,139 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
     private readonly IMemoryCache _cache;
     private readonly IOptions<FederatedLogoutOptions> _opts;
     private readonly ILogger<UpstreamLogoutService> _logger;
-    private readonly IDataProtector _protector;
+    private readonly IDataProtector _stateProtector;
+    private readonly IDataProtector _idTokenProtector;
+    private readonly AuthDbContext _db;
+    private readonly IHttpClientFactory _http;
 
     private const string CachePrefix = "fedlogout_state_";
+    private const string DiscoCachePrefix = "fedlogout_disco_";
 
-    public UpstreamLogoutService(IMemoryCache cache, IOptions<FederatedLogoutOptions> opts, IDataProtectionProvider dp, ILogger<UpstreamLogoutService> logger)
+    public UpstreamLogoutService(IMemoryCache cache,
+        IOptions<FederatedLogoutOptions> opts,
+        IDataProtectionProvider dp,
+        ILogger<UpstreamLogoutService> logger,
+        AuthDbContext db,
+        IHttpClientFactory http)
     {
-        _cache = cache; _opts = opts; _logger = logger; _protector = dp.CreateProtector("federated-logout-state");
+        _cache = cache; _opts = opts; _logger = logger; _db = db; _http = http;
+        _stateProtector = dp.CreateProtector("federated-logout-state");
+        _idTokenProtector = dp.CreateProtector("federated-logout-idtoken");
     }
 
-    public Task<FederatedCapability> CanFederateAsync(ClaimsPrincipal principal, CancellationToken ct)
+    public async Task<FederatedCapability> CanFederateAsync(ClaimsPrincipal principal, CancellationToken ct)
     {
-        if (!_opts.Value.Enabled) return Task.FromResult(new FederatedCapability(false, null, null));
-        var idp = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
-        if (string.IsNullOrEmpty(idp)) return Task.FromResult(new FederatedCapability(false, null, null));
-        // Placeholder: we would look up provider config & discovery info to ensure end_session_endpoint exists.
-        // For now assume presence of idp claim means we can federate (caller ensures only set for capable providers).
-        return Task.FromResult(new FederatedCapability(true, idp, idp));
+        if (!_opts.Value.Enabled) return new FederatedCapability(false, null, null);
+        var idpName = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
+        if (string.IsNullOrEmpty(idpName)) return new FederatedCapability(false, null, null);
+
+        // Quick existence check in DB; avoid full discovery until needed.
+        var provider = await _db.IdentityProviders.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Name == idpName && p.Enabled, ct);
+        if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson)) return new FederatedCapability(false, null, null);
+
+        // Parse config to get Authority (needed for discovery later)
+        if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null) return new FederatedCapability(false, null, null);
+
+        return new FederatedCapability(true, provider.Name, provider.DisplayName ?? provider.Name);
     }
 
-    public Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? returnUrl, CancellationToken ct)
+    public async Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? returnUrl, CancellationToken ct)
     {
-        var idp = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
-        if (string.IsNullOrEmpty(idp)) return Task.FromResult(new FederatedRedirectResult(false, null, "missing_idp"));
+        var idpName = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
+        if (string.IsNullOrEmpty(idpName)) return new FederatedRedirectResult(false, null, "missing_idp");
 
-        // TODO: fetch provider's discovered end_session_endpoint; placeholder base URL
-        var endSession = $"https://{idp}.example.com/oidc/logout"; // placeholder
+        var provider = await _db.IdentityProviders.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Name == idpName && p.Enabled, ct);
+        if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson)) return new FederatedRedirectResult(false, null, "provider_not_found");
+        if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null) return new FederatedRedirectResult(false, null, "invalid_config");
 
-        var state = Guid.NewGuid().ToString("N");
-        var model = new { s = state, ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ret = SanitizeLocalReturn(returnUrl) };
-        var json = JsonSerializer.Serialize(model);
-        var protectedState = _protector.Protect(json);
-        _cache.Set(CachePrefix + state, protectedState, TimeSpan.FromSeconds(_opts.Value.StateTtlSeconds));
+        // Get discovery document (cache short-lived)
+        var discoKey = DiscoCachePrefix + provider.Id.ToString("N");
+        JsonDocument? discoDoc = null;
+        if (!_cache.TryGetValue(discoKey, out string? discoJson))
+        {
+            try
+            {
+                var httpc = _http.CreateClient();
+                var discoUrl = string.IsNullOrWhiteSpace(cfg.DiscoveryUrl) ? cfg.Authority.TrimEnd('/') + "/.well-known/openid-configuration" : cfg.DiscoveryUrl!;
+                using var resp = await httpc.GetAsync(discoUrl, ct);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Federated logout discovery failed {Status} for {Url}", (int)resp.StatusCode, discoUrl);
+                    return new FederatedRedirectResult(false, null, "discovery_failed");
+                }
+                discoJson = await resp.Content.ReadAsStringAsync(ct);
+                _cache.Set(discoKey, discoJson, TimeSpan.FromMinutes(10));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Federated logout discovery exception for provider {Provider}", provider.Name);
+                return new FederatedRedirectResult(false, null, "discovery_exception");
+            }
+        }
+        try
+        {
+            discoDoc = JsonDocument.Parse(discoJson!);
+        }
+        catch
+        {
+            return new FederatedRedirectResult(false, null, "discovery_parse_failed");
+        }
 
-        // Build redirect (no id_token_hint for now; placeholder for sid)
-        var redirectUrl = endSession + "?post_logout_redirect_uri=" + Uri.EscapeDataString($"https://localhost:5001/logout/federated-callback") + "&state=" + Uri.EscapeDataString(state);
-        return Task.FromResult(new FederatedRedirectResult(true, redirectUrl, null));
+        using (discoDoc)
+        {
+            var root = discoDoc!.RootElement;
+            string? endSession = null;
+            if (root.TryGetProperty("end_session_endpoint", out var ese)) endSession = ese.GetString();
+            if (string.IsNullOrWhiteSpace(endSession))
+            {
+                // Fallback heuristic: authority + "/v2/logout" then "/logout"
+                var authority = cfg.Authority.TrimEnd('/');
+                var guess1 = authority + "/v2/logout";
+                var guess2 = authority + "/logout";
+                endSession = guess1; // choose first guess; some providers (Auth0) use /v2/logout
+                _logger.LogDebug("end_session_endpoint not published for {Provider}; using heuristic {Guess}", provider.Name, endSession);
+            }
+
+            var state = Guid.NewGuid().ToString("N");
+            var sanitizedReturn = SanitizeLocalReturn(returnUrl);
+            var model = new { s = state, ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ret = sanitizedReturn };
+            var json = JsonSerializer.Serialize(model);
+            var protectedState = _stateProtector.Protect(json);
+            _cache.Set(CachePrefix + state, protectedState, TimeSpan.FromSeconds(_opts.Value.StateTtlSeconds));
+
+            // Build callback URL
+            if (!callbackBase.EndsWith('/')) callbackBase += string.Empty; // ensure no trailing slash assumption
+            var callback = callbackBase + "/logout/federated-callback";
+
+            var qp = new List<string>
+            {
+                "post_logout_redirect_uri=" + Uri.EscapeDataString(callback),
+                "state=" + Uri.EscapeDataString(state)
+            };
+
+            // Attempt to decrypt upstream id_token for id_token_hint
+            if (!string.IsNullOrEmpty(upstreamIdTokenEnc))
+            {
+                try
+                {
+                    var raw = _idTokenProtector.Unprotect(upstreamIdTokenEnc);
+                    if (!string.IsNullOrEmpty(raw)) qp.Add("id_token_hint=" + Uri.EscapeDataString(raw));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to unprotect upstream id_token for provider {Provider}", provider.Name);
+                }
+            }
+            if (!string.IsNullOrEmpty(upstreamSid))
+            {
+                qp.Add("sid=" + Uri.EscapeDataString(upstreamSid));
+            }
+
+            var redirectUrl = endSession + (endSession!.Contains('?') ? '&' : '?') + string.Join('&', qp);
+            return new FederatedRedirectResult(true, redirectUrl, null);
+        }
     }
 
     public Task<FederatedCallbackValidation> ValidateCallbackAsync(string? state, CancellationToken ct)
@@ -76,9 +184,8 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
         _cache.Remove(CachePrefix + state); // single use
         try
         {
-            var json = _protector.Unprotect(protectedState!);
+            var json = _stateProtector.Unprotect(protectedState!);
             var doc = JsonDocument.Parse(json);
-            // Basic structure check
             if (!doc.RootElement.TryGetProperty("s", out var sEl) || sEl.GetString() != state)
                 return Task.FromResult(new FederatedCallbackValidation(false, "state_mismatch"));
             return Task.FromResult(new FederatedCallbackValidation(true, null));

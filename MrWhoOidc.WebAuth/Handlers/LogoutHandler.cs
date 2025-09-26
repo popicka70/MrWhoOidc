@@ -94,7 +94,18 @@ public sealed class LogoutHandler(AuthDbContext db,
                 return resFallback;
             }
 
-            var redirectModel = await upstreamLogoutSvc.BuildFederatedRedirectAsync(http.User, returnUrl, http.RequestAborted);
+            // Extract upstream metadata from auth properties if still authenticated (should be prior to SignOut)
+            string? encIdToken = null; string? upstreamSid = null;
+            if (http.User?.Identity?.IsAuthenticated == true)
+            {
+                // Retrieve current auth ticket to access AuthenticationProperties (framework lacks direct API; try AuthenticateAsync)
+                var authResult = await http.AuthenticateAsync();
+                encIdToken = authResult?.Properties?.Items?.TryGetValue("UpstreamIdTokenEnc", out var enc) == true ? enc : null;
+                upstreamSid = authResult?.Properties?.Items?.TryGetValue("UpstreamSid", out var sidVal) == true ? sidVal : null;
+            }
+            var callbackBase = $"{http.Request.Scheme}://{http.Request.Host}";
+            var principal = http.User ?? new ClaimsPrincipal();
+            var redirectModel = await upstreamLogoutSvc.BuildFederatedRedirectAsync(principal, encIdToken, upstreamSid, callbackBase, returnUrl, http.RequestAborted);
             if (!redirectModel.Success)
             {
                 logger.LogWarning("Failed to build federated logout redirect: {Reason}", redirectModel.FailureReason);

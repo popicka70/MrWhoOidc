@@ -699,9 +699,31 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             }
         }
 
-    var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var id = new System.Security.Claims.ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal2 = new System.Security.Claims.ClaimsPrincipal(id);
-        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2);
+        // Capture upstream logout metadata (sid + encrypted id_token if present on request items)
+        var props = new AuthenticationProperties();
+        if (http.Items.TryGetValue("external.id_token", out var rawIdTokObj) && rawIdTokObj is string rawIdToken && !string.IsNullOrEmpty(rawIdToken))
+        {
+            try
+            {
+                var dp = http.RequestServices.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
+                var protector = dp.CreateProtector("federated-logout-idtoken");
+                props.Items["UpstreamIdTokenEnc"] = protector.Protect(rawIdToken);
+            }
+            catch { /* swallow, non-fatal */ }
+        }
+        // sid claim may already be in ID token; attempt lightweight parse
+        if (http.Items.TryGetValue("external.id_token", out var rawId2) && rawId2 is string raw2 && raw2.Count(c => c == '.') == 2)
+        {
+            try
+            {
+                var sidVal = MrWhoOidc.WebAuth.Infrastructure.JwtLightParser.TryGetClaim(raw2, "sid");
+                if (!string.IsNullOrEmpty(sidVal)) props.Items["UpstreamSid"] = sidVal;
+            }
+            catch { }
+        }
+        await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal2, props);
 
         // Remember last provider for this client if present in state
         if (!string.IsNullOrEmpty(state.ClientId))
