@@ -82,14 +82,14 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var endpointUrl = (context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/') + "/token";
         if (http.Request.Headers.ContainsKey("DPoP"))
         {
-            var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl, subjectToken);
-            if (!validation.Ok)
+            var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, subjectToken, logger);
+            if (!ok)
             {
                 http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                 metrics.RecordTokenExchangeFailure(clientBucket, target is null ? null : Bucketization.BucketizeAudience(target), client?.OboDpopMode?.ToString() ?? "unknown", InferSourceTokenType(subjectTokenType, subjectToken), "invalid_dpop_proof");
                 return new(true, false, Results.BadRequest(new { error = "invalid_dpop_proof" }));
             }
-            dpopJkt = validation.Jkt;
+            dpopJkt = jkt;
         }
 
         var issuer = context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";

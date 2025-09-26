@@ -60,6 +60,11 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
 builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
+// Safety: ensure at least one implementation exists (tests that construct very slim hosts may miss this)
+if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
+{
+    builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
+}
 // Alerting
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>

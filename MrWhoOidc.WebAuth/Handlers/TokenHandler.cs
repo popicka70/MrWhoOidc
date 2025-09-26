@@ -158,14 +158,13 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             {
                 if (http.Request.Headers.ContainsKey("DPoP"))
                 {
-                    var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl);
-                    if (!validation.Ok)
+                    var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, null, logger);
+                    if (!ok)
                     {
-                        logger.LogWarning("/token invalid_dpop_proof: reason={Reason} ip={IP}", validation.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
                         http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                         return Results.BadRequest(new { error = "invalid_dpop_proof" });
                     }
-                    dpopJkt = validation.Jkt;
+                    dpopJkt = jkt;
                     logger.LogInformation("/token DPoP accepted: jkt={Jkt} ip={IP}", dpopJkt, http.Connection.RemoteIpAddress?.ToString());
                 }
             }
