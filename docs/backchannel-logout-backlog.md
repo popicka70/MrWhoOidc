@@ -135,25 +135,28 @@ Status
 - Explicit rate-limiting for BCL emissions: Not implemented beyond circuit breaker; consider per-client throttles.
 
 ### 1.7 Observability & ops
-- Structured logs for each POST with correlation id.
-- Metrics: emitted_count, success_count, fail_count, retry_count, latency, per-client breakdown.
-- Alerts:
   - Failure rate > X% over Y minutes
   - Latency > threshold
   - Outbox backlog > threshold
 
 Status
-- Logs and metrics present in dispatcher; admin and health endpoints exposed (see 1.5).
-- Alerts: Threshold logging only; integrate with your alerting stack (e.g., App Insights, Prometheus Alertmanager) — TODO.
+### Observability / Alerting
+- [x] Basic metrics (emitted/delivered/failed/backlog/latency histogram)
+- [x] External audit sink abstraction + AppInsights optional sink
+- [x] Periodic sampler computing failure rate, backlog, p95 latency – emits alert events (initial thresholds)
+- [x] Sustained breach logic (ConsecutiveMinutes) + unit tests (`BackchannelAlertSamplerTests`)
+- [ ] Cool-down / suppression window to avoid alert storm (optional – current behavior emits every sample once sustained)
+- [ ] Docs: runbook (what each alert means + suggested operator action)
 
 Planned alerting integration (target by prod cutover)
-- Sinks supported (choose one per environment):
-  - Azure Application Insights/Log Analytics: export counters/histograms as customMetrics and use Metric Alerts.
-  - Prometheus/Alertmanager: expose metrics via existing scraping endpoint; configure recording rules and alerts.
-- Configurable thresholds (appsettings):
   - Backchannel:Alerts:Enabled (bool)
   - Backchannel:Alerts:FailureRatePercent (default 5)
-  - Backchannel:Alerts:LatencyP95Ms (default 2000)
+### Next Increment (proposed)
+1. Add simple cooldown (emit at sustain onset, then every N minutes while still breaching) – optional but recommended.
+2. Update docs with configuration examples (`Audit:Sink`, `Backchannel:Alerts:*`).
+3. Add health/admin endpoint to expose last alert sample snapshot (for dashboards) – optional.
+4. RP side: add structured reason codes for validation failures (to enable richer failure rate slicing) – optional.
+5. Runbook documentation: escalation paths, sample query (App Insights / Prometheus) snippets.
   - Backchannel:Alerts:OutboxBacklogThreshold (default 50)
   - Backchannel:Alerts:ConsecutiveMinutes (default 5)
 - Azure App Insights specifics:

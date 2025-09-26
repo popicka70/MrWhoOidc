@@ -81,6 +81,8 @@ builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExc
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
 // Alerting
 builder.Services.AddHttpClient();
+// Provide system clock abstraction for alert sampler
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();

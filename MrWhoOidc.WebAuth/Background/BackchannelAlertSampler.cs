@@ -16,13 +16,17 @@ public sealed class BackchannelAlertOptions
     public int LookbackMinutes { get; set; } = 10; // window for rate
 }
 
+public interface ISystemClock { DateTimeOffset UtcNow { get; } }
+public sealed class SystemClock : ISystemClock { public DateTimeOffset UtcNow => DateTimeOffset.UtcNow; }
+
 public sealed class BackchannelAlertSampler(
     IDbContextFactory<AuthDbContext> dbFactory,
     OidcMetrics metrics,
     ILogger<BackchannelAlertSampler> logger,
     IAlertPublisher alerts,
     IOptionsMonitor<BackchannelAlertOptions> options,
-    MrWhoOidc.WebAuth.Background.BackchannelRuntimeState runtimeState) : BackgroundService
+    MrWhoOidc.WebAuth.Background.BackchannelRuntimeState runtimeState,
+    ISystemClock clock) : BackgroundService
 {
     private readonly IDbContextFactory<AuthDbContext> _dbFactory = dbFactory;
     private readonly OidcMetrics _metrics = metrics;
@@ -30,6 +34,7 @@ public sealed class BackchannelAlertSampler(
     private readonly IAlertPublisher _alerts = alerts;
     private readonly IOptionsMonitor<BackchannelAlertOptions> _options = options;
     private readonly BackchannelRuntimeState _runtime = runtimeState;
+    private readonly ISystemClock _clock = clock;
 
     // Rolling counters (approximate) since process start – we compute deltas per interval
     private long _lastEmitted;
@@ -46,7 +51,7 @@ public sealed class BackchannelAlertSampler(
                 var cfg = _options.CurrentValue;
                 if (cfg.Enabled)
                 {
-                    await SampleAsync(cfg, stoppingToken);
+                    await TickAsync(stoppingToken);
                 }
             }
             catch (Exception ex)
@@ -58,11 +63,16 @@ public sealed class BackchannelAlertSampler(
         }
     }
 
-    private async Task SampleAsync(BackchannelAlertOptions cfg, CancellationToken ct)
+    // Public for tests (invoke individual sampling cycle)
+    public async Task TickAsync(CancellationToken ct)
     {
+        var cfg = _options.CurrentValue;
+        if (!cfg.Enabled) return;
+
         // We derive emitted/failed counts from DB since metrics counters are cumulative but not directly accessible per client here.
         using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var lookbackStart = DateTimeOffset.UtcNow.AddMinutes(-cfg.LookbackMinutes);
+        var now = _clock.UtcNow;
+        var lookbackStart = now.AddMinutes(-cfg.LookbackMinutes);
 
         var emitted = await db.BackchannelLogoutNotifications
             .LongCountAsync(n => n.LastAttemptAt >= lookbackStart, ct);
@@ -91,8 +101,8 @@ public sealed class BackchannelAlertSampler(
             _lastEmitted = emitted;
             _lastFailed = failed;
             // store a copy of latency list for this sample
-            _window.Enqueue((DateTimeOffset.UtcNow, emittedDelta, failedDelta, new List<double>(latencies)));
-            while (_window.Count > 0 && _window.Peek().ts < DateTimeOffset.UtcNow.AddMinutes(-cfg.LookbackMinutes))
+            _window.Enqueue((now, emittedDelta, failedDelta, new List<double>(latencies)));
+            while (_window.Count > 0 && _window.Peek().ts < now.AddMinutes(-cfg.LookbackMinutes))
                 _window.Dequeue();
         }
 
@@ -110,26 +120,63 @@ public sealed class BackchannelAlertSampler(
         var p95 = ComputeP95(allLatencies);
         var backlog = _runtime.PendingBacklog;
 
-        foreach (var alert in EvaluateAlerts(failureRate, p95, backlog, cfg, ct))
+        foreach (var alert in EvaluateAlertsWithSustained(failureRate, p95, backlog, cfg, now))
         {
             await _alerts.PublishAsync(alert.type, alert.payload, ct);
         }
     }
 
-    private IEnumerable<(string type, object payload)> EvaluateAlerts(double failureRate, double p95, long backlog, BackchannelAlertOptions cfg, CancellationToken ct)
+    // Sustained breach tracking
+    private readonly Dictionary<string, int> _breachSamples = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _firstBreachAt = new(StringComparer.Ordinal);
+
+    private IEnumerable<(string type, object payload)> EvaluateAlertsWithSustained(double failureRate, double p95, long backlog, BackchannelAlertOptions cfg, DateTimeOffset now)
     {
-        // Simple threshold checks; external system handles dedupe. Could add stateful suppression if needed.
-        if (failureRate >= cfg.FailureRatePercent)
+        int requiredSamples = Math.Max(1, (int)Math.Ceiling((cfg.ConsecutiveMinutes * 60.0) / Math.Clamp(cfg.SampleIntervalSeconds, 10, 300)));
+
+        foreach (var metric in new[] { "failure", "latency", "backlog" })
         {
-            yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes });
-        }
-        if (p95 >= cfg.LatencyP95Ms && p95 > 0)
-        {
-            yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes });
-        }
-        if (backlog >= cfg.OutboxBacklogThreshold)
-        {
-            yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold });
+            bool breach = metric switch
+            {
+                "failure" => failureRate >= cfg.FailureRatePercent && cfg.FailureRatePercent > 0,
+                "latency" => p95 >= cfg.LatencyP95Ms && p95 > 0 && cfg.LatencyP95Ms > 0,
+                "backlog" => backlog >= cfg.OutboxBacklogThreshold && cfg.OutboxBacklogThreshold > 0,
+                _ => false
+            };
+
+            if (!breach)
+            {
+                _breachSamples.Remove(metric);
+                _firstBreachAt.Remove(metric);
+                continue;
+            }
+
+            if (!_breachSamples.TryGetValue(metric, out var count))
+            {
+                _breachSamples[metric] = 1;
+                _firstBreachAt[metric] = now;
+            }
+            else
+            {
+                _breachSamples[metric] = count + 1;
+            }
+
+            if (_breachSamples[metric] >= requiredSamples)
+            {
+                // Emit and keep counting (continuous alert events each sample once sustained). Could add cooldown later.
+                switch (metric)
+                {
+                    case "failure":
+                        yield return ("bcl.alert.failure_rate", new { failure_rate = Math.Round(failureRate, 2), threshold = cfg.FailureRatePercent, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric] });
+                        break;
+                    case "latency":
+                        yield return ("bcl.alert.latency_p95", new { p95_ms = (int)p95, threshold = cfg.LatencyP95Ms, window_min = cfg.LookbackMinutes, sustained_samples = _breachSamples[metric] });
+                        break;
+                    case "backlog":
+                        yield return ("bcl.alert.backlog", new { backlog, threshold = cfg.OutboxBacklogThreshold, sustained_samples = _breachSamples[metric] });
+                        break;
+                }
+            }
         }
     }
 
