@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 
+using MrWhoOidc.Security;
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
 internal sealed class InMemoryDPoPReplayCache : IDPoPReplayCache

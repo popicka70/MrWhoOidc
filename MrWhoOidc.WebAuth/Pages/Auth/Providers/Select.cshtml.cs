@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using System.Text;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
@@ -54,15 +55,33 @@ public class SelectModel(AuthDbContext db) : PageModel
     {
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
-            Error = "Missing client_id.";
-            return Page();
+            // Auto-fallback to admin client when client_id is not specified
+            var defCid = await db.ResolveDefaultClientIdAsync();
+            if (string.IsNullOrWhiteSpace(defCid))
+            {
+                Error = "Missing client_id.";
+                return Page();
+            }
+            Client_Id = defCid;
         }
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == Client_Id);
         if (client is null)
         {
-            Error = "Unknown client.";
-            return Page();
+            // If unknown, try falling back to admin client
+            var defCid = await db.ResolveDefaultClientIdAsync();
+            if (string.IsNullOrWhiteSpace(defCid))
+            {
+                Error = "Unknown client.";
+                return Page();
+            }
+            Client_Id = defCid;
+            client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == Client_Id);
+            if (client is null)
+            {
+                Error = "Unknown client.";
+                return Page();
+            }
         }
 
         AllowLocalLogin = client.AllowLocalLogin;
@@ -122,6 +141,10 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     private async Task<IActionResult> ChooseAsync(string provider)
     {
+        if (string.IsNullOrWhiteSpace(Client_Id))
+        {
+            Client_Id = await db.ResolveDefaultClientIdAsync();
+        }
         if (string.IsNullOrWhiteSpace(Client_Id) || string.IsNullOrWhiteSpace(ReturnUrl))
         {
             Error = "Missing parameters.";

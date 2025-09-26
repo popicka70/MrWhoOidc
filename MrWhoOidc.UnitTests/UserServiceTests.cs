@@ -40,6 +40,34 @@ public sealed class UserServiceTests
         Assert.IsFalse(await svc.VerifyPasswordAsync(user, "nope"));
     }
 
+    [TestMethod]
+    public async Task FindByUsernameOrEmail_FindsByPrimaryAndAlternativeEmail()
+    {
+        using var db = CreateDb();
+        var u1 = new User { Username = "carol", Email = "carol@example.com", PasswordHash = "h" };
+        var u2 = new User { Username = "dave", PasswordHash = "h" };
+        db.Users.AddRange(u1, u2);
+        await db.SaveChangesAsync();
+        db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = u2.Id, Email = "dave.alt@example.com", IsVerified = true });
+        await db.SaveChangesAsync();
+        var svc = new UserService(db, new DummyHasher());
+
+        var byUser = await svc.FindByUsernameOrEmailAsync("carol");
+        Assert.IsNotNull(byUser);
+        Assert.AreEqual(u1.Id, byUser!.Id);
+
+        var byPrimaryEmail = await svc.FindByUsernameOrEmailAsync("carol@example.com");
+        Assert.IsNotNull(byPrimaryEmail);
+        Assert.AreEqual(u1.Id, byPrimaryEmail!.Id);
+
+        var byAlt = await svc.FindByUsernameOrEmailAsync("dave.alt@example.com");
+        Assert.IsNotNull(byAlt);
+        Assert.AreEqual(u2.Id, byAlt!.Id);
+
+        var missing = await svc.FindByUsernameOrEmailAsync("nobody@example.com");
+        Assert.IsNull(missing);
+    }
+
     private sealed class DummyHasher : IPasswordHasher
     {
         private readonly string? _expected;

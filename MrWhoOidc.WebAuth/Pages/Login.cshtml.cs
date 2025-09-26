@@ -15,6 +15,7 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
 
     [BindProperty]
+    // Accepts either traditional username or an email address.
     public string Username { get; set; } = string.Empty;
 
     [BindProperty]
@@ -39,7 +40,8 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
             return Page();
         }
 
-        var user = await users.FindByUsernameAsync(Username);
+    // Try username first; fallback to email/alternative email match.
+    var user = await users.FindByUsernameAsync(Username) ?? await users.FindByUsernameOrEmailAsync(Username);
         if (user is null || !await users.VerifyPasswordAsync(user, Password))
         {
             RegisterFailedAttempt(HttpContext, Username);

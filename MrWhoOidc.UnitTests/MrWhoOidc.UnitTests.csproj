@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
     <ProjectReference Include="..\MrWhoOidc.WebAuth\MrWhoOidc.WebAuth.csproj" />
+    <ProjectReference Include="..\MrWhoOidc.Security\MrWhoOidc.Security.csproj" />
   </ItemGroup>
 
   <ItemGroup>

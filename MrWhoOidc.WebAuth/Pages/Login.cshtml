@@ -10,8 +10,8 @@
 <form method="post" asp-antiforgery="true">
     <input type="hidden" asp-for="ReturnUrl" />
     <div class="mb-3">
-        <label asp-for="Username" class="form-label"></label>
-        <input asp-for="Username" class="form-control" autocomplete="username" />
+        <label asp-for="Username" class="form-label">Username or Email</label>
+        <input asp-for="Username" class="form-control" autocomplete="username" placeholder="alice or alice@example.com" />
         <span asp-validation-for="Username" class="text-danger"></span>
     </div>
     <div class="mb-3">

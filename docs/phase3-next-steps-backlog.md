@@ -1,6 +1,6 @@
 # Phase 3 – Next Steps Backlog (Multi‑provider GA)
 
-Updated: 2025-09-25
+Updated: 2025-09-26
 
 Status legend
 - [x] Done
@@ -33,8 +33,10 @@ Milestones
     - Admin can import keys reliably; invalid inputs are rejected with actionable errors; JWKS preview is informative.
 
 - [ ] External OIDC UX telemetry + friendly errors
+  - Progress
+    - Not started (no correlation propagation helper or friendly error page assets committed yet).
   - Deliverables
-    - Structured logs with correlation IDs across start and callback.
+    - Structured logs with correlation IDs (or Activity TraceId) across start and callback.
     - User‑facing error pages for cancel/timeout/invalid_scope with localization plumbing.
     - Metrics: start/callback duration histograms; outcome counters (success/cancel/error); provider and prompt/acr buckets (no PII).
   - Tests
@@ -53,32 +55,42 @@ Milestones
   - Acceptance
     - [x] Replay attempts are reliably blocked; discovery reflects actual capabilities.
 
-- [ ] Provider picker polish (a11y + mobile)
-  - Deliverables
-    - Remembered provider hint UI; a11y roles/labels/tab order; responsive/mobility tweaks.
+- [~] Provider picker polish (a11y + mobile)
+  - Progress
+    - Remembered provider logic + hint ordering covered by `ProviderPickerTests` (cookie + idp hint scenarios).
+    - Remaining: ARIA roles/labels, focus order validation, responsive/mobile CSS adjustment, highlight styling for recommended provider.
+  - Deliverables (remaining)
+    - A11y roles/labels/tab order; responsive tweaks; highlight style for recommended provider; optional basic analytics hook.
   - Tests
-    - Accessibility checks; cookie‑based last‑provider preference behavior.
+    - Existing: cookie + idp hint ordering.
+    - Add: accessibility markup assertions (axe or static checks) and mobile viewport snapshot.
   - Acceptance
     - Picker works well on desktop/mobile with accessibility basics covered.
 
 - [~] Integration tests and CI gates
-  - Deliverables
-    - Integration tests: OBO happy path + error cases (JWT and opaque subjects); multi‑provider selection logic.
-    - CI: run integration tests on PRs; spin up Redis for replay cache tests.
-    - Artifacts: update `docs/http/obo-token-exchange.http` if needed; add one end‑to‑end script using a fake upstream.
-  - Status
-    - Core unit tests green locally; rate‑limit header integration tests present but failing due to missing routing services in test host. Redis must be provisioned in CI.
+  - Status (2025-09-26)
+    - All tests green (74/74). Rate‑limit header integration tests now succeed when Redis reachable; skip via Inconclusive if Redis absent (needs CI service to avoid silent skips).
+    - OBO tests present; need multi‑provider end‑to‑end and negative DPoP bridging scenarios.
+  - Deliverables (remaining)
+    - Provide Redis in CI; fail build if not reachable.
+    - Add multi‑provider selection + successful authorization test.
+    - Add negative tests: cancelled external login (after friendly error pages), invalid provider hint.
+    - Add `docs/http` scripted example for OBO negative + positive flows.
   - Next
-    - Fix test host setup (register routing + map endpoints) and ensure Redis container is available for CI job.
+    - Add CI job/service definition for Redis.
+    - Mark Redis‑dependent tests with category and assert they ran (no skip) in CI summary.
   - Acceptance
-    - CI turns red on regressions in critical OBO and chaining paths; Redis‑backed tests are stable.
+    - CI turns red on regressions in critical OBO, rate limiting, and multi‑provider selection; no silent skips.
 
 - [~] Documentation first draft
-  - Deliverables
-    - Admin guide: providers, mappings, keys, OBO policy editors (with screenshots).
-    - Developer guide: authorize params (`idp`, `acr_values`), inbound JAR/JARM, token exchange usage and DPoP modes.
+  - Status
+    - Admin + Developer guide drafts committed (2025-09-25). Content present; screenshots & quickstart examples pending.
+  - Remaining Deliverables
+    - Add screenshots (providers list, key import, OBO policy tab, provider picker with recommendation highlight).
+    - Quickstart: external OIDC + token exchange curl/HttpClient example.
+    - Cross-link replay cache + rate limiting docs.
   - Acceptance
-    - New clients and admins can complete basic setups without code changes.
+    - New clients and admins can complete setups without external assistance.
   - Links
     - Draft Admin guide: `docs/admin-guide.md`
     - Draft Developer guide: `docs/developer-guide.md`
@@ -88,15 +100,16 @@ Milestones
 - [x] Discovery hygiene
   - Ensure `request_object_signing_alg_values_supported` exactly matches `AuthOptions` allow‑list; verify well‑known with an external validator.
 
-- [~] Rate‑limit headers verification
-  - Status: Integration tests exist in `MrWhoOidc.UnitTests/RateLimitHeadersIntegrationTests.cs` but currently fail with missing routing services in the test host (needs `services.AddRouting()`); headers verification not yet executed end‑to‑end.
-  - Next:
-    - Add `services.AddRouting()` in the test host setup and map minimal endpoints before `UseRouting()`; ensure `/token` and `/introspect` paths are reachable in the test server.
-    - Confirm `Retry-After` and standard rate‑limit headers are emitted on 429 when Redis limits are hit.
-    - Ensure Redis is available in CI (container service) or provide a test fallback.
+- [x] Rate‑limit headers verification
+  - Status: Integration tests green (routing added). Conditional skip still possible if Redis unavailable.
+  - Next: Provide Redis in CI; add test asserting headers absent when under limit; ensure skip reported distinctly.
 
 - [ ] Caching guardrails
   - Verify discovery/JWKS caching with ETag/Cache‑Control; add configurable max‑age and retry/backoff settings.
+  - Add test: unchanged JWKS returns same ETag; rotation changes ETag & invalidates caches.
+
+- [ ] SDK pinning (global.json)
+  - Add global.json to pin .NET 9 preview SDK (remove NETSDK1057 noise; deterministic CI). Acceptance: warning removed in test run.
 
 ---
 
@@ -170,4 +183,31 @@ Milestones
   - “RequireSameJkt” OBO (exists) + “Two OIDC providers” flow with cancel/error variants
 
 Notes
-- Current test status (2025‑09‑25): 74 total; 72 passing; 2 failing (RateLimit headers integration) due to missing routing services in test host. Fix tracked under Quick wins.
+- Current test status (2025‑09‑26): 74 total; 74 passing; Redis‑dependent tests may skip if Redis absent (address via CI service).
+
+---
+
+## Near-term prioritized next steps (proposed)
+
+1. External OIDC UX telemetry & friendly error pages (P0, unstarted).
+2. Provider picker accessibility/mobile polish (complete logic; finish UI & a11y layer).
+3. SDK pinning (add global.json) to stabilize builds.
+4. CI Redis service to eliminate skipped rate-limit/replay tests.
+5. Additional integration tests: multi-provider success path + negative DPoP bridging + cancel external login.
+6. Documentation polish: screenshots & quickstart snippets.
+7. Caching guardrails (ETag/Cache-Control tests for discovery/JWKS).
+
+Secondary (start after 1–4):
+- Optional JWKS endpoint design clarifications.
+- Telemetry dashboard definitions (metrics naming + exemplar queries).
+- M2M polish scope validation plan.
+
+Risks / Watch:
+- Skipped Redis tests hiding regressions until CI change.
+- Missing user-friendly external OIDC error pages → poor UX/support load.
+- Unpinned SDK could introduce instability with future previews.
+
+Metric Targets (draft):
+- External OIDC start→callback median < 3s (excluding upstream latency), p95 < 6s.
+- Token exchange success/error ratio < 98/2 after telemetry.
+- Zero skipped critical (Redis) integration tests in CI.

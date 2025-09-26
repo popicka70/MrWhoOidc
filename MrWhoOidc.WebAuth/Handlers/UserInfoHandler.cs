@@ -3,7 +3,7 @@ using System.Security.Claims;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Security;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;

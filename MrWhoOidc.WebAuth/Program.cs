@@ -15,6 +15,7 @@ using MrWhoOidc.WebAuth.Observability;
 using Microsoft.AspNetCore.HttpOverrides;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Security;
 using Microsoft.AspNetCore.Authorization;
 using MrWhoOidc.WebAuth.Security;
 using System.Text.Json;
@@ -53,8 +54,12 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Admin", "admin");
 });
 
+// Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
+builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
 // Alerting
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>
@@ -145,23 +150,23 @@ builder.Services.AddSingleton<IJwksCache, JwksCache>();
 // Claim mapping service
 builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
 
-// DPoP services
-builder.Services.AddSingleton<IDPoPValidator, DPoPValidator>();
+// DPoP services (use shared Security implementation)
+builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, MrWhoOidc.Security.DPoPValidator>();
 var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
 IConnectionMultiplexer? redisMux = null;
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
     builder.Services.AddSingleton(redisMux);
-    builder.Services.AddSingleton<IDPoPReplayCache, RedisDPoPReplayCache>();
-    builder.Services.AddSingleton<IDPoPNonceStore, RedisDPoPNonceStore>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, RedisDPoPReplayCache>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
     // JAR replay cache: override in-memory default with Redis when available
     builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
 }
 else
 {
-    builder.Services.AddSingleton<IDPoPReplayCache, InMemoryDPoPReplayCache>();
-    builder.Services.AddSingleton<IDPoPNonceStore, InMemoryDPoPNonceStore>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
+    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, MrWhoOidc.Security.InMemoryDPoPNonceStore>();
 }
 
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
@@ -322,6 +327,11 @@ builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
 builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
+// Grant handlers (strategy pattern pilot)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
 builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
 // Introspection
@@ -371,6 +381,13 @@ else
 }
 
 app.UseRouting();
+// Request localization (default culture en-US; future: read from configuration or user preference)
+var supportedCultures = new[] { "en-US" };
+var localizationOptions = new RequestLocalizationOptions()
+    .SetDefaultCulture(supportedCultures[0])
+    .AddSupportedCultures(supportedCultures)
+    .AddSupportedUICultures(supportedCultures);
+app.UseRequestLocalization(localizationOptions);
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

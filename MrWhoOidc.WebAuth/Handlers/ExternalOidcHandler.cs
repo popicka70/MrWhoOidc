@@ -42,20 +42,24 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         var clientId = http.Request.Query["clientId"].ToString(); // for last-used cookie
         if (string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(returnUrl))
         {
+            var corrEarly = Guid.NewGuid().ToString("N");
+            using var scopeEarly = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = corrEarly, ["provider"] = providerName, ["clientId"] = clientId });
             _logger.LogWarning("External start rejected due to missing parameters. provider({Provider}) returnUrl({ReturnUrl})", providerName, returnUrl);
-            return Results.BadRequest("provider and returnUrl are required");
+            return FriendlyError(returnUrl, clientId, corrEarly, "Missing required parameters", "missing_params");
         }
 
         var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled);
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
+            var corrEarly = Guid.NewGuid().ToString("N");
+            using var scopeEarly = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = corrEarly, ["provider"] = providerName, ["clientId"] = clientId });
             _logger.LogWarning("External start unknown provider {Provider}", providerName);
-            return Results.BadRequest("Unknown provider");
+            return FriendlyError(returnUrl, clientId, corrEarly, "Unknown provider", "unknown_provider");
         }
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
         {
             _logger.LogError("External start invalid configuration for provider {Provider}", providerName);
-            return Results.BadRequest("Invalid provider configuration");
+            return FriendlyError(returnUrl, clientId, Guid.NewGuid().ToString("N"), "Invalid provider configuration", "invalid_provider_config");
         }
 
         // Pre-generate correlation id for observability and friendly errors
@@ -757,32 +761,26 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             _ => SecurityAlgorithms.RsaSha256
         };
 
-    private static IResult FriendlyError(string? returnUrl, string? clientId, string? correlationId, string message)
+    private static IResult FriendlyError(string? returnUrl, string? clientId, string? correlationId, string message, string? code = null)
     {
+        // Route to Razor Page for consistent styling & future localization support.
+        // Pass parameters via query (avoid large messages; message kept short/user-safe).
         var corr = correlationId ?? Guid.NewGuid().ToString("N");
-        var builder = new StringBuilder();
-        builder.Append("<html><head><title>Sign-in error</title>");
-        builder.Append("<link rel=\"stylesheet\" href=\"/lib/bootstrap/dist/css/bootstrap.min.css\" />");
-        builder.Append("</head><body class=\"container py-4\">");
-        builder.Append("<div class=\"alert alert-danger\"><strong>Sign-in failed.</strong> ");
-        builder.Append(System.Web.HttpUtility.HtmlEncode(message));
-        builder.Append("</div>");
-        builder.Append("<div class=\"small text-muted\">Correlation ID: <code>");
-        builder.Append(System.Web.HttpUtility.HtmlEncode(corr));
-        builder.Append("</code></div>");
-        if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(clientId))
+        var qp = new Dictionary<string, string?>
         {
-            var picker = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(clientId)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}";
-            builder.Append("<div class=\"mt-3\"><a class=\"btn btn-outline-primary\" href=\"");
-            builder.Append(picker);
-            builder.Append("\">Choose a different provider</a></div>");
-        }
-        if (!string.IsNullOrEmpty(correlationId))
+            ["cid"] = corr,
+            ["msg"] = message,
+            ["code"] = code,
+            ["returnUrl"] = returnUrl,
+            ["clientId"] = clientId
+        };
+        var qb = System.Web.HttpUtility.ParseQueryString(string.Empty);
+        foreach (var kv in qp)
         {
-            builder.Append("<div class=\"mt-2 small text-muted\">Include this correlation ID when contacting support.</div>");
+            if (!string.IsNullOrEmpty(kv.Value)) qb[kv.Key] = kv.Value;
         }
-        builder.Append("</body></html>");
-        return Results.Content(builder.ToString(), "text/html; charset=utf-8", statusCode: 400);
+        var url = "/Auth/External/Error?" + qb.ToString();
+        return Results.Redirect(url);
     }
 
     private IResult RenderConfirmPage(string token, string? returnUrl, string? clientId, string? correlationId, string email, string targetUserDisplay)

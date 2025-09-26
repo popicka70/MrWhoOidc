@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -53,7 +54,7 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
             var url = uri + sep + "iss=" + Uri.EscapeDataString(issuer);
             if (c.FrontChannelLogoutSessionRequired)
             {
-                var sidValue = !string.IsNullOrEmpty(sid) ? sid : ExtractSidFromIdToken(idTokenHint);
+                var sidValue = !string.IsNullOrEmpty(sid) ? sid : JwtLightParser.TryGetClaim(idTokenHint, "sid");
                 if (!string.IsNullOrEmpty(sidValue))
                 {
                     url += "&sid=" + Uri.EscapeDataString(sidValue);
@@ -105,8 +106,8 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
                     ClientId = c.ClientId,
                     TargetUri = c.BackChannelLogoutUri!,
                     LogoutToken = token,
-                    Sid = string.IsNullOrEmpty(sid) ? ExtractSidFromIdToken(idTokenHint) : sid,
-                    Sub = TryExtractClaim(idTokenHint, "sub"),
+                    Sid = string.IsNullOrEmpty(sid) ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : sid,
+                    Sub = JwtLightParser.TryGetClaim(idTokenHint, "sub"),
                     Status = "pending",
                     AttemptCount = 0,
                     MaxAttempts = 5,
@@ -170,8 +171,8 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
             { "events", new Dictionary<string, object> { { "http://schemas.openid.net/event/backchannel-logout", new Dictionary<string, object>() } } }
         };
 
-        var sub = TryExtractClaim(idTokenHint, "sub");
-        var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : ExtractSidFromIdToken(idTokenHint);
+    var sub = JwtLightParser.TryGetClaim(idTokenHint, "sub");
+    var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : JwtLightParser.TryGetClaim(idTokenHint, "sid");
         if (!string.IsNullOrEmpty(sub)) payload["sub"] = sub;
         if (!string.IsNullOrEmpty(sid)) payload["sid"] = sid;
         if (string.IsNullOrEmpty(sub) && string.IsNullOrEmpty(sid))
@@ -194,22 +195,7 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
         return handler.WriteToken(token);
     }
 
-    private static string? TryExtractClaim(string jwt, string claim)
-    {
-        if (string.IsNullOrEmpty(jwt) || jwt.Count(c => c == '.') != 2) return null;
-        try
-        {
-            var parts = jwt.Split('.');
-            var payload = parts[1];
-            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(Pad(payload.Replace('-', '+').Replace('_', '/'))));
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty(claim, out var el) && el.ValueKind == JsonValueKind.String)
-                return el.GetString();
-        }
-        catch { }
-        return null;
-    }
-
+    // Claim extraction moved to JwtLightParser.
     private static string BuildFrontChannelPage(IEnumerable<string> iframes, string? redirect, string? state)
     {
         var sb = new System.Text.StringBuilder();
@@ -243,24 +229,5 @@ public sealed class LogoutHandler(AuthDbContext db, IKeyStore keyStore, ILogger<
     private static string GetIssuer(HttpContext http)
         => (http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions)?.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
-    private static string? ExtractSidFromIdToken(string idToken)
-    {
-        if (string.IsNullOrEmpty(idToken) || idToken.Count(c => c == '.') != 2) return null;
-        try
-        {
-            var parts = idToken.Split('.');
-            var payload = parts[1];
-            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(Pad(payload.Replace('-', '+').Replace('_', '/'))));
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("sid", out var sidEl) && sidEl.ValueKind == JsonValueKind.String)
-                return sidEl.GetString();
-        }
-        catch { }
-        return null;
-    }
-
-    private static string Pad(string s)
-    {
-        return s.PadRight(s.Length + ((4 - s.Length % 4) % 4), '=');
-    }
+    // Sid extraction now uses JwtLightParser.
 }
