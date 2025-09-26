@@ -67,6 +67,7 @@ if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
 }
 // Token-exchange rate limiting
 builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
+// Default to in-memory; override with Redis below if available
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
 // Alerting
 builder.Services.AddHttpClient();
@@ -170,6 +171,8 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
     builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
     // JAR replay cache: override in-memory default with Redis when available
     builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
+    // Override TE rate limiter with Redis implementation when Redis is present
+    builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.RedisTokenExchangeRateLimiter>();
 }
 else
 {

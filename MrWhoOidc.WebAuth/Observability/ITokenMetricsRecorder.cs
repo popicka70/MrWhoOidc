@@ -18,6 +18,10 @@ public interface ITokenMetricsRecorder
     // Token exchange rich metrics
     void RecordTokenExchange(string outcome, string clientBucket, string targetAudBucket, string dpopMode, string sourceTokenType, double? durationMs = null);
     void RecordTokenExchangeFailure(string clientBucket, string? targetAudBucket, string dpopMode, string sourceTokenType, string reason);
+
+    // Rate limiter metrics (token-exchange specific for now)
+    void RecordTokenExchangeRateLimitAllowed(string clientBucket);
+    void RecordTokenExchangeRateLimitBlocked(string clientBucket, int? retryAfterSeconds);
 }
 
 public sealed class DefaultTokenMetricsRecorder(OidcMetrics metrics) : ITokenMetricsRecorder
@@ -62,5 +66,16 @@ public sealed class DefaultTokenMetricsRecorder(OidcMetrics metrics) : ITokenMet
         };
         metrics.TokenExchangeRequests.Add(1, tags);
         metrics.TokenExchangeFailures.Add(1, tags);
+    }
+
+    public void RecordTokenExchangeRateLimitAllowed(string clientBucket)
+        => metrics.TokenExchangeRateLimitAllowed.Add(1, new KeyValuePair<string, object?>[] { new("client_bucket", clientBucket) });
+
+    public void RecordTokenExchangeRateLimitBlocked(string clientBucket, int? retryAfterSeconds)
+    {
+        var tags = retryAfterSeconds.HasValue
+            ? new KeyValuePair<string, object?>[] { new("client_bucket", clientBucket), new("retry_after_seconds", retryAfterSeconds.Value) }
+            : new KeyValuePair<string, object?>[] { new("client_bucket", clientBucket) };
+        metrics.TokenExchangeRateLimitBlocked.Add(1, tags);
     }
 }

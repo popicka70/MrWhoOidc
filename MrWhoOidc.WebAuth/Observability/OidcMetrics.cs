@@ -21,6 +21,8 @@ public sealed class OidcMetrics
     public Counter<long> TokenExchangeSuccess { get; } = Meter.CreateCounter<long>("oidc.token_exchange.success");
     public Counter<long> TokenExchangeFailures { get; } = Meter.CreateCounter<long>("oidc.token_exchange.failures");
     public Histogram<double> TokenExchangeDurationMs { get; } = Meter.CreateHistogram<double>("oidc.token_exchange.duration.ms");
+    public Counter<long> TokenExchangeRateLimitAllowed { get; } = Meter.CreateCounter<long>("oidc.token_exchange.ratelimit.allowed");
+    public Counter<long> TokenExchangeRateLimitBlocked { get; } = Meter.CreateCounter<long>("oidc.token_exchange.ratelimit.blocked");
 
     public Counter<long> UserInfoRequests { get; } = Meter.CreateCounter<long>("oidc.userinfo.requests");
     public Counter<long> UserInfoSuccess { get; } = Meter.CreateCounter<long>("oidc.userinfo.success");

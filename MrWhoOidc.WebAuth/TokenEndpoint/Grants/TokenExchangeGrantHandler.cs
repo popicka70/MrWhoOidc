@@ -52,8 +52,13 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         {
             if (rl.RetryAfterSeconds.HasValue)
                 http.Response.Headers["Retry-After"] = rl.RetryAfterSeconds.Value.ToString();
+            metrics.RecordTokenExchangeRateLimitBlocked(clientBucket, rl.RetryAfterSeconds);
             metrics.RecordTokenExchangeFailure(clientBucket, null, client?.OboDpopMode?.ToString() ?? "unknown", "unknown", "rate_limited");
             return new(true, false, Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many token_exchange requests" }, statusCode: 429));
+        }
+        else
+        {
+            metrics.RecordTokenExchangeRateLimitAllowed(clientBucket);
         }
 
         var subjectToken = form["subject_token"].ToString();

@@ -230,5 +230,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
         public void RecordTokenDuration(string grantType, string outcome, double ms) { }
         public void RecordTokenExchange(string outcome, string clientBucket, string targetAudBucket, string dpopMode, string sourceTokenType, double? durationMs = null) { }
         public void RecordTokenExchangeFailure(string clientBucket, string? targetAudBucket, string dpopMode, string sourceTokenType, string reason) { }
+        public void RecordTokenExchangeRateLimitAllowed(string clientBucket) { }
+        public void RecordTokenExchangeRateLimitBlocked(string clientBucket, int? retryAfterSeconds) { }
     }
 }
