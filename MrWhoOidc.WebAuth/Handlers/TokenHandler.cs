@@ -9,6 +9,7 @@ using MrWhoOidc.Security;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -87,7 +88,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     var ok = !string.IsNullOrEmpty(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase));
                     if (!ok)
                     {
-                        logger.LogWarning("/token mTLS required but missing/invalid for client {ClientIdHash}", Bucket(clientId!));
+                        logger.LogWarning("/token mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
@@ -103,7 +104,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 // Enforce per-client policy for private_key_jwt
                 if (!clientEntity.AllowPrivateKeyJwt)
                 {
-                    logger.LogWarning("/token unauthorized_client: private_key_jwt disabled for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token unauthorized_client: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.UnauthorizedClient();
@@ -112,7 +113,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 usedPrivateKeyJwt = true;
                 authenticated = await assertions.ValidateAsync(clientId!, clientAssertion, tokenEndpoint);
                 if (!authenticated)
-                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
             }
             else
             {
@@ -124,7 +125,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     if (string.IsNullOrEmpty(clientEntity.ClientSecretHash))
                     {
                         // Force confidential client for CC when not using private_key_jwt
-                        logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucket(clientId!));
+                        logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucketization.Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         return ErrorResults.UnauthorizedClient();
@@ -134,14 +135,14 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     var usedBasic = http.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.Ordinal);
                     if (usedBasic && !clientEntity.AllowClientSecretBasic)
                     {
-                        logger.LogWarning("/token unauthorized_client: client_secret_basic disabled for client {ClientIdHash}", Bucket(clientId!));
+                        logger.LogWarning("/token unauthorized_client: client_secret_basic disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         return ErrorResults.UnauthorizedClient();
                     }
                     if (!usedBasic && !clientEntity.AllowClientSecretPost)
                     {
-                        logger.LogWarning("/token unauthorized_client: client_secret_post disabled for client {ClientIdHash}", Bucket(clientId!));
+                        logger.LogWarning("/token unauthorized_client: client_secret_post disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                         metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                         metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                         return ErrorResults.UnauthorizedClient();
@@ -150,7 +151,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
                 authenticated = await clients.ValidateClientSecretAsync(clientId!, clientSecret);
                 if (!authenticated)
-                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
             }
 
             if (!authenticated)
@@ -189,7 +190,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var codeVerifier = form["code_verifier"].ToString();
                 if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
                 {
-                    logger.LogWarning("/token invalid_request: missing code or redirect_uri for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token invalid_request: missing code or redirect_uri for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
@@ -199,7 +200,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var (ok, payload, _, status) = await tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, clientId!, codeVerifier, issuer, dpopJkt);
                 if (!ok)
                 {
-                    logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                 }
 
                 outcome = ok ? "success" : "failure";
@@ -213,7 +214,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var refresh = form["refresh_token"].ToString();
                 if (string.IsNullOrWhiteSpace(refresh))
                 {
-                    logger.LogWarning("/token invalid_request: missing refresh_token for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token invalid_request: missing refresh_token for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.InvalidRequest();
@@ -223,7 +224,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 var (ok, payload, _, status) = await tokens.ExchangeRefreshTokenAsync(refresh, clientId!, issuer, dpopJkt);
                 if (!ok)
                 {
-                    logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
                 }
 
                 outcome = ok ? "success" : "failure";
@@ -274,14 +275,14 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 // Enforce confidential client unless using private_key_jwt
                 if (!usedPrivateKeyJwt && string.IsNullOrEmpty(clientEntity.ClientSecretHash))
                 {
-                    logger.LogWarning("/token unauthorized_client: public client not allowed for token-exchange {ClientIdHash}", Bucket(clientId!));
+                    logger.LogWarning("/token unauthorized_client: public client not allowed for token-exchange {ClientIdHash}", Bucketization.Bucket(clientId!));
                     metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
                     metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
                     return ErrorResults.UnauthorizedClient();
                 }
 
                 // Per-client simple rate limit for token-exchange
-                var clientBucket = Bucket(clientId!);
+                var clientBucket = Bucketization.Bucket(clientId!);
                 var now = DateTimeOffset.UtcNow;
                 _teWindows.AddOrUpdate(clientBucket, _ => (1, now), (_, cur) =>
                 {
@@ -368,8 +369,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
 
                 // Dedicated TE metrics with richer tagging
-                var clientBucketTag = Bucket(clientId!);
-                var targetBucket = string.IsNullOrWhiteSpace(target) ? "none" : BucketizeAudience(target);
+                var clientBucketTag = Bucketization.Bucket(clientId!);
+                var targetBucket = string.IsNullOrWhiteSpace(target) ? "none" : Bucketization.BucketizeAudience(target);
                 var dpopModeTag = clientEntity?.OboDpopMode?.ToString() ?? "unknown";
 
                 var teTags = new TagList
@@ -378,7 +379,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                     new("client_bucket", clientBucketTag),
                     new("target_aud", targetBucket),
                     new("dpop_mode", dpopModeTag),
-                    new("source_token_type", string.IsNullOrEmpty(subjectTokenType) ? (IsProbablyJwt(subjectToken) ? "jwt" : "opaque") : (subjectTokenType.Contains("jwt", StringComparison.OrdinalIgnoreCase) ? "jwt" : "opaque"))
+                    new("source_token_type", string.IsNullOrEmpty(subjectTokenType) ? (JwtLightParser.IsProbablyJwt(subjectToken) ? "jwt" : "opaque") : (subjectTokenType.Contains("jwt", StringComparison.OrdinalIgnoreCase) ? "jwt" : "opaque"))
                 };
                 metrics.TokenExchangeRequests.Add(1, teTags);
                 if (result.ok) metrics.TokenExchangeSuccess.Add(1, teTags); else metrics.TokenExchangeFailures.Add(1, teTags);
@@ -388,7 +389,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 // Structured audit log (PII-reduced)
                 var corr = http.Request.Headers["x-correlation-id"].ToString();
                 if (string.IsNullOrWhiteSpace(corr)) corr = http.TraceIdentifier;
-                var sourceAudBucket = string.IsNullOrEmpty(subjectTokenType) && IsProbablyJwt(subjectToken) ? BucketizeAudience(TryGetJwtAudience(subjectToken) ?? "none") : "none";
+                var sourceAudBucket = string.IsNullOrEmpty(subjectTokenType) && JwtLightParser.IsProbablyJwt(subjectToken) ? Bucketization.BucketizeAudience(JwtLightParser.TryGetAudience(subjectToken) ?? "none") : "none";
                 logger.LogInformation("token_exchange outcome={Outcome} client={ClientBucket} source={SourceBucket} target={TargetBucket} dpop_mode={DpopMode} corr={CorrelationId}", outcome, clientBucketTag, sourceAudBucket, targetBucket, dpopModeTag, corr);
                 return Results.Json(result.payload!, statusCode: result.status);
             }
@@ -427,55 +428,5 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
         }
     }
 
-    static string Bucket(string clientId)
-    {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
-        return Convert.ToHexString(bytes.AsSpan(0, 8));
-    }
-
-    static string BucketizeAudience(string audience)
-    {
-        if (Uri.TryCreate(audience, UriKind.Absolute, out var uri))
-        {
-            return string.IsNullOrEmpty(uri.Host) ? Bucket(audience) : uri.Host.ToLowerInvariant();
-        }
-        if (audience.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
-        {
-            var parts = audience.Split(':');
-            if (parts.Length >= 3) return string.Join(':', parts.Take(3));
-            return audience;
-        }
-        return Bucket(audience);
-    }
-
-    static bool IsProbablyJwt(string token)
-    {
-        if (string.IsNullOrEmpty(token)) return false;
-        int dots = 0;
-        foreach (var ch in token)
-        {
-            if (ch == '.') { dots++; if (dots >= 2) break; }
-        }
-        return dots >= 2;
-    }
-
-    static string? TryGetJwtAudience(string token)
-    {
-        try
-        {
-            var parts = token.Split('.');
-            if (parts.Length < 2) return null;
-            // JWT payload is base64url; pad if needed
-            static string Pad(string s) => s.Length % 4 == 2 ? s + "==" : (s.Length % 4 == 3 ? s + "=" : (s.Length % 4 == 1 ? s + "===" : s));
-            var json = Encoding.UTF8.GetString(Convert.FromBase64String(Pad(parts[1].Replace('-', '+').Replace('_', '/'))));
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("aud", out var audEl))
-            {
-                if (audEl.ValueKind == System.Text.Json.JsonValueKind.String) return audEl.GetString();
-                if (audEl.ValueKind == System.Text.Json.JsonValueKind.Array && audEl.GetArrayLength() > 0) return audEl[0].GetString();
-            }
-        }
-        catch { }
-        return null;
-    }
+    // Bucketization & JWT parsing helpers moved to Infrastructure utilities.
 }

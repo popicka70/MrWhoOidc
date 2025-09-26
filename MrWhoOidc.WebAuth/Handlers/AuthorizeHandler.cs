@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -44,7 +45,7 @@ public sealed class AuthorizeHandler(
 
         // Compute initial client bucket from query (may be refined later for JAR/PAR)
         string rawClientId = http.Request.Query["client_id"].ToString();
-        string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : BucketizeClientId(rawClientId);
+    string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
         string mode = "query";
 
         // Record approximate request size (encoded query string length)
@@ -138,7 +139,7 @@ public sealed class AuthorizeHandler(
                 jarClientId = validation.ClientId;
 
                 // Update client bucket from JAR if available
-                if (!string.IsNullOrEmpty(jarClientId)) clientBucket = BucketizeClientId(jarClientId);
+                if (!string.IsNullOrEmpty(jarClientId)) clientBucket = Bucketization.BucketizeClientId(jarClientId);
                 metrics.JarValid.Add(1, new TagList { new("client", clientBucket) });
 
                 // If RequirePar is enabled globally or for this client, reject direct request objects
@@ -161,7 +162,7 @@ public sealed class AuthorizeHandler(
                     logger.LogWarning("/authorize 400: invalid or expired request_uri corr={Corr} client={Client}", corr, clientBucket);
                     return ErrorResults.InvalidRequest($"Invalid or expired request_uri (corr={corr})");
                 }
-                if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = BucketizeClientId(entry.ClientId);
+                if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
                 effectiveReq = entry.Request;
                 var stateFromQuery = http.Request.Query["state"].ToString();
                 if (!string.IsNullOrEmpty(stateFromQuery)) effectiveReq.state = stateFromQuery;
@@ -233,7 +234,7 @@ public sealed class AuthorizeHandler(
                 effectiveReq.client_id = await db.ResolveDefaultClientIdAsync();
                 if (!string.IsNullOrWhiteSpace(effectiveReq.client_id))
                 {
-                    clientBucket = BucketizeClientId(effectiveReq.client_id);
+                    clientBucket = Bucketization.BucketizeClientId(effectiveReq.client_id);
                 }
             }
 
@@ -544,14 +545,10 @@ public sealed class AuthorizeHandler(
         return requestUri;
     }
 
-    private static string BucketizeClientId(string clientId)
-    {
-        var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(clientId));
-        return Convert.ToHexString(bytes.AsSpan(0, 8));
-    }
+    // BucketizeClientId moved to Bucketization utility.
 
     private static string BuildLastProviderCookieName(string clientId)
-        => LastIdpCookiePrefix + BucketizeClientId(clientId);
+        => LastIdpCookiePrefix + Bucketization.BucketizeClientId(clientId);
 
     private static void SetLastProviderCookie(HttpContext http, string clientId, string provider)
     {
