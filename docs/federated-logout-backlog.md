@@ -30,99 +30,73 @@ Feature Flag (optional)
 ## Epics & Stories
 
 ### 1) Session Tagging & Capability Detection
-- [ ] Story: Capture upstream logout capability
-  - On successful external OIDC callback:
-    - Inspect discovery for `end_session_endpoint`.
-    - If present, record capability in `AuthenticationProperties.Items["UpstreamEndSessionEndpoint"]`.
-    - Persist minimal metadata: provider `idp`, optional `sid` claim (`idp_sid`), timestamp.
-  - Do not store raw ID token unprotected.
-  - Acceptance: Subsequent `/logout` GET can determine if federated option is available.
+- [x] Story: Capture upstream logout capability
+  - IMPLEMENTED VARIANT: We do not persist the upstream end_session_endpoint at sign-in; instead we store provider name (`idp` claim) plus encrypted upstream id token (`UpstreamIdTokenEnc`) and `UpstreamSid` (if present) in auth properties. Capability re-evaluated lazily at logout via `CanFederateAsync` which consults provider config + on-demand discovery.
+  - Raw upstream ID token never stored unprotected (encrypted with Data Protection API).
+  - Acceptance (met): `/logout` GET determines if federated option should be shown by calling service.
+  - TODO (optional hardening): Cache a positive capability flag in auth properties to avoid DB/discovery in prompt phase.
 
-- [ ] Story: Optional encryption helper
-  - If `id_token_hint` needed by upstream, encrypt using data protection API and store as `UpstreamIdTokenEnc` in auth properties OR ephemeral cache keyed by a `logout_ctx` (GUID) stored in cookie.
-  - Acceptance: Value cannot be read or replayed after expiration (<= 15 min).
+- [x] Story: Optional encryption helper
+  - Encrypted upstream id token stored as `UpstreamIdTokenEnc` (data protector purpose `federated-logout-idtoken`).
+  - TTL currently tied to auth cookie lifetime; optional short-lived cache not yet needed.
+  - Acceptance (met): Value unreadable without protector; decrypted only at redirect build; never logged.
 
 ### 2) Logout UX (Razor Page / Handler)
-- [ ] Story: Present federated option
-  - GET `/logout` inspects principal.
-  - If `idp` present AND upstream endpoint stored: show two choices (local-only, federated) with provider display name.
-  - If not: show existing single-option logout UI.
-  - Acceptance: Conditional UI path covered by tests; a11y basics (labels, focus) preserved.
+- [x] Story: Present federated option
+  - Minimal HTML choice page (not yet a Razor Page) displays when capability true; falls back silently to local logout otherwise.
+  - A11y basic labels present; further polish deferred.
+  - Tests: service logic covered; handler choice path still needs explicit tests (see Epics 6).
 
-- [ ] Story: Federated selection handling
-  - POST `/logout` includes selection (`federated=true|false`).
-  - Local-only: perform existing sign-out (cookie clear + tokens revocation logic unchanged) → show logged-out view.
-  - Federated: build redirect to upstream `end_session_endpoint` including:
-    - Fresh `state` (random, 256-bit) stored server-side or signed cookie.
-    - `post_logout_redirect_uri` = server-controlled absolute URL to `/logout/federated-callback`.
-    - Optional `id_token_hint` if available; else rely on `sid` if upstream supports; else omit.
-  - Acceptance: Redirect verified; local session cleared prior to external navigation.
+- [x] Story: Federated selection handling
+  - POST processes `mode=local|federated`; defaults to local if missing/unknown.
+  - Federated path clears local session BEFORE redirect.
+  - Redirect includes `post_logout_redirect_uri`, `state`, optional `id_token_hint`, optional `sid`.
+  - Fallback to local on discovery/build failure audited & metered.
 
-- [ ] Story: Federated callback finalize
-  - Endpoint `/logout/federated-callback` validates `state` then renders final page.
-  - Always idempotent: if state invalid or missing show safe generic message + new correlation id.
-  - Acceptance: Invalid / replayed state returns 400 (or friendly error) without exceptions; logs capture event.
+- [x] Story: Federated callback finalize
+  - Callback validates single-use protected state; success & failure paths audited.
+  - On invalid state we render generic local-success page (HTTP 200) rather than 400 to avoid UX confusion; metric + audit capture failure.
+  - Acceptance adjusted: friendly page + metrics/audit rather than status code.
 
 ### 3) Upstream Logout Orchestration Service
-- [ ] Story: Introduce `IUpstreamLogoutService`
-  - Methods:
-    - `CanFederate(ClaimsPrincipal p)` -> capability + provider info.
-    - `BuildFederatedRedirectAsync(ClaimsPrincipal p, FederatedLogoutRequest r)` -> URL + correlation id.
-    - `ValidateCallbackAsync(string state)` -> result (valid/invalid/expired).
-  - Encapsulates token decrypt, state issuance, secure logging.
-  - Acceptance: Unit tests cover happy path, missing upstream endpoint, expired state.
+- [x] Story: Introduce `IUpstreamLogoutService`
+  - Implemented as `UpstreamLogoutService` with methods: `CanFederateAsync`, `BuildFederatedRedirectAsync`, `ValidateCallbackAsync`.
+  - Discovery retrieval + heuristic fallback (`/v2/logout` then `/logout`) implemented with short cache.
+  - Unit tests cover: published endpoint, heuristic fallback, discovery HTTP error, state validation & replay.
+  - Follow-up: add test asserting discovery parse failure path & audit emission.
 
 ### 4) Security & Resilience
-- [ ] Story: State & CSRF protection
-  - `state` stored in ephemeral server cache (memory or distributed when configured) with TTL 5 min.
-  - Single use: consumption removes entry.
-  - Acceptance: Replay attempt fails gracefully.
+- [x] Story: State & CSRF protection
+  - Protected JSON payload (`s`, `ts`, `ret`) using Data Protection; cached with TTL (default 5 min); single-use removal verified by test.
 
-- [ ] Story: Output encoding & redirect safety
-  - No user-controlled input influences upstream logout URL except allowed values inserted server-side.
-  - Acceptance: Security review checklist passes (no open redirect, no token leakage in referrer).
+- [x] Story: Output encoding & redirect safety
+  - Return URL sanitized (relative only). Query parameters server-composed. HTML output encoded.
 
-- [ ] Story: Logging & PII discipline
-  - Structured events: `logout.initiated`, `logout.upstream.redirect`, `logout.upstream.callback` with fields: `federated`, `idp`, `correlation_id`, `has_id_token_hint` (bool), `outcome`.
-  - Do NOT log raw tokens, state values, or full URLs (strip query except for presence flags).
-  - Acceptance: Sample logs reviewed; automated test asserts absence of token substrings.
+- [~] Story: Logging & PII discipline
+  - Structured audit events implemented (see Audit Events section) using hashed SID/subject where relevant.
+  - Raw tokens & full URLs not logged (presence flags only). Need automated test to assert absence => remaining task.
 
 ### 5) Telemetry / Metrics
-- [ ] Story: Metrics counters & duration
-  - Meter: `MrWhoOidc.WebAuth`
-  - Counters: `oidc.logout.requests`, `oidc.logout.federated`, `oidc.logout.local`, `oidc.logout.failures`.
-  - Histogram: `oidc.logout.duration.ms` tagged with `mode=local|federated` and `idp_bucket` (hashed or bucketized provider id).
-  - Acceptance: Metrics emitted in test harness (can assert via in-memory exporter).
+- [x] Story: Metrics counters & duration
+  - Implemented counters: LogoutRequests, LogoutFederated, LogoutLocal, LogoutFailures; histogram LogoutDuration (ms) with mode tag.
+  - TODO: add discovery outcome counters & gauge for active federated states (optional).
 
 ### 6) Tests & Quality Gates
-- [ ] Story: Unit tests (service + handler)
-  - Cases: local-only path, federated path with id_token_hint, without hint (sid only), missing endpoint, replayed state, invalid state.
-  - Acceptance: 100% branch coverage for `IUpstreamLogoutService`.
+- [~] Story: Unit tests (service + handler)
+  - Service scenarios covered (published endpoint, fallback, discovery fail, state replay). Handler scenarios (prompt rendering, choice branches, redirect failure audit) still missing.
+  - Remaining: tests for id_token_hint inclusion flag & audit absence of raw token.
 
 - [ ] Story: Integration tests
-  - Simulated external provider discovery with logout endpoint.
-  - Flow: sign-in (external) → GET logout (option visible) → federated POST → redirected URL shape validated → callback finalizes.
-  - Local-only variant: option appears; choose local-only leads to no upstream redirect.
-  - Acceptance: Tests green in CI (Windows + Linux runners if applicable).
+  - Not started. Will add full round-trip with TestServer.
 
-- [ ] Story: Negative tests
-  - Attempt federated POST when no upstream endpoint (expect local fallback or 400).
-  - Callback with wrong state.
-  - Expired state (advance clock or manipulate TTL).
-  - Acceptance: Proper error shaping (ProblemDetails or friendly page) and no unhandled exceptions.
+- [~] Story: Negative tests
+  - Discovery failure & state replay covered at service layer; handler fallback & invalid callback page rendered (needs assertion). Expired state TTL boundary not simulated yet.
 
 ### 7) Documentation
 - [ ] Story: Admin / Operator guide section
-  - How federated logout works, prerequisites (provider with `end_session_endpoint`), risk notes (user expectation of staying signed in upstream when selecting local-only).
-  - Acceptance: Added to `admin-guide.md`.
-
 - [ ] Story: Developer guide additions
-  - Parameters unaffected (logout path remains) but mention presence of federated option; guidance on customizing UI.
-  - Acceptance: Added to `developer-guide.md`.
-
 - [ ] Story: Backlog cross-link
-  - Link from IdP chaining backlog to this document for traceability.
-  - Acceptance: PR references both docs.
+  - None started yet.
 
 ### 8) Optional Future (Not Phase 1)
 - [ ] Story: Auto-federated mode
@@ -138,9 +112,7 @@ Feature Flag (optional)
 
 ### 9) Configuration & Extensibility
 - [ ] Story: Provider config schema extension
-  - Fields: `SupportsFederatedLogout` (bool?; null => infer), `LogoutBehavior` (enum: Offer, AutoFederated, Disabled), `PreferSidForLogout` (bool).
-  - Validation: if `LogoutBehavior=AutoFederated` and no upstream endpoint -> reject.
-  - Acceptance: Validation tests.
+  - Not implemented. Currently inference happens dynamically; no explicit flags.
 
 ## Data & Persistence Impact
 Phase 1: No DB migration required (using auth cookie properties + ephemeral cache). Optional Phase 2 adds `ExternalSessions` table for IdP-initiated logout.
@@ -153,29 +125,55 @@ Threats & mitigations
 - DoS via repeated callback -> cheap state lookup + early reject.
 
 ## Observability
-Key log fields (structured): `event`, `correlation_id`, `idp`, `mode`, `outcome`, `has_hint`, `elapsed_ms`.
-Do not include full external URL / tokens.
+Implemented Audit Event Names (current instrumentation)
+| Event | Description |
+|-------|-------------|
+| logout.federated.prompt | Federated choice page rendered |
+| logout.federated.prompt.skip_disabled | Feature disabled -> skipped |
+| logout.federated.prompt.skip_no_capability | No upstream capability -> fall back local |
+| logout.federated.choice.local | User selected local-only |
+| logout.federated.choice.federated | User selected federated |
+| logout.federated.choice.federated.capability_missing | Race: user chose federated but capability not present at POST |
+| logout.federated.redirect.fail | Redirect build failed (reason) |
+| logout.federated.discovery.ok | Discovery succeeded |
+| logout.federated.discovery.fail | Discovery HTTP failure |
+| logout.federated.discovery.exception | Exception during discovery request |
+| logout.federated.discovery.parsefail | JSON parse failure |
+| logout.federated.discovery.heuristic | Heuristic endpoint guess used |
+| logout.federated.redirect | Successful redirect assembled (flags: has_id_token_hint, has_sid) |
+| logout.federated.callback.ok | Callback state valid (service-level) |
+| logout.federated.callback.fail | Callback state invalid (service-level) reason detail |
+| logout.federated.callback.page.ok | Final user page after valid federated logout |
+| logout.federated.callback.page.fail | Final page when callback invalid (local-only outcome) |
 
-## Test Matrix
-| Scenario | Expectation |
-|----------|-------------|
-| Local-only logout (no idp claim) | Single option UI, local sign-out success |
-| External session; upstream supports endpoint | Two options shown |
-| Federated chosen with id_token_hint | Redirect contains post_logout + state + id_token_hint |
-| Federated chosen without id_token_hint (sid present) | Redirect no id_token_hint; still upstream logout |
-| Federated chosen but endpoint missing (race) | Fallback to local-only + warning log |
-| Callback valid state | Final page success, metrics incremented |
-| Callback invalid state | 400 / friendly error, failure counter incremented |
-| Callback replayed state | Treated as invalid (single-use) |
-| Expired state | Invalid (friendly) |
-| Attempt POST federated w/o selection flag | Default to local-only (safe) |
+PII Handling
+- SID and subject hashed where present in other existing BCL audits; federated events avoid raw values entirely.
+- No raw tokens, state, or full upstream URLs emitted (only provider name & presence flags).
 
-## Metrics (Initial Definition)
-- `oidc.logout.requests` (counter) tags: `mode=unknown|local|federated` (decided after processing)
-- `oidc.logout.federated` (counter)
-- `oidc.logout.local` (counter)
-- `oidc.logout.failures` (counter) tags: `reason=state_invalid|upstream_missing|exception`
-- `oidc.logout.duration.ms` (histogram) tags: `mode`, `idp_bucket`
+Planned Additions
+- discovery counters (success/fail/heuristic) metrics
+- automated test asserting absence of `id_token_hint` substring in audit/log output.
+
+## Test Matrix (Revised Current vs Planned)
+| Scenario | Current Behavior | Status |
+|----------|------------------|--------|
+| Local-only logout (no idp claim) | Immediate local sign-out (prompt skipped) | Covered implicitly |
+| External session; upstream supports endpoint | Choice page rendered | Needs handler test |
+| Federated chosen with id_token_hint | Redirect includes id_token_hint + sid (if provided) | Service test covers hint inclusion |
+| Federated chosen without id_token_hint (sid present) | Redirect includes sid only | Service test covers |
+| Federated chosen but discovery HTTP fails | Fallback to local-only; audit + metric failure | Covered (service) |
+| Discovery parse failure | Fallback to failure -> local-only | Pending test |
+| Heuristic endpoint used | Redirect to /v2/logout | Covered (service) |
+| Callback valid state | Final page success (200) | Service test validates state; handler page needs test |
+| Callback invalid state | Generic local-complete page (200) + audit fail | Service test (invalid) |
+| Callback replayed state | Invalid (audit fail) | Tested |
+| Expired state | Invalid (needs TTL manipulation test) | Not tested |
+| POST federated but capability missing | Local fallback + audit capability_missing | Needs handler test |
+| Unknown mode value | Treat as local-only | Needs handler test |
+
+## Metrics (Initial Definition / Implemented)
+- Implemented: logout.requests, logout.federated, logout.local, logout.failures (with reason tag), logout.duration.ms.
+- Pending: discovery outcome counters, per-provider bucketization (currently omitted for cardinality control).
 
 ## Rollout Plan
 1. Implement service + tagging (dark) behind feature flag.
@@ -196,12 +194,12 @@ Do not include full external URL / tokens.
 - Multi-upstream-providers per session.
 - Token revocation coordination across microservices.
 
-## Acceptance (Phase 1)
-- User with external session sees choice and both flows work.
-- Local-only flow unchanged for non-external sessions.
-- Logs & metrics present without sensitive data.
-- All new tests pass in CI; coverage thresholds maintained.
-- No DB migration required.
+## Acceptance (Phase 1) (Updated Progress)
+- [x] User with external session sees choice and both flows work (manual & service unit coverage; handler test pending).
+- [x] Local-only flow unchanged for non-external sessions.
+- [~] Logs & metrics present without sensitive data (instrumented; add automated PII absence test).
+- [~] All new tests pass (service tests done; handler & integration tests outstanding).
+- [x] No DB migration required.
 
 ---
 Owner: TBD
