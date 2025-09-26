@@ -183,31 +183,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 }
             }
 
-            if (string.Equals(grantType, "authorization_code", StringComparison.Ordinal))
-            {
-                var code = form["code"].ToString();
-                var redirectUri = form["redirect_uri"].ToString();
-                var codeVerifier = form["code_verifier"].ToString();
-                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
-                {
-                    logger.LogWarning("/token invalid_request: missing code or redirect_uri for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
-                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                    return ErrorResults.InvalidRequest();
-                }
-
-                var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
-                var (ok, payload, _, status) = await tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, clientId!, codeVerifier, issuer, dpopJkt);
-                if (!ok)
-                {
-                    logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                }
-
-                outcome = ok ? "success" : "failure";
-                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
-                if (ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                return Results.Json(payload!, statusCode: status);
-            }
+            // authorization_code grant handled by strategy now
 
             // Strategy-based grant handling (pilot: refresh_token)
             var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(http, grantType, clientId!, form, options, tokens, dpopJkt);
@@ -223,31 +199,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 }
             }
 
-            if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
-            {
-                // Validate required audience/resource
-                var aud = form["audience"].ToString();
-                var resource = form["resource"].ToString();
-                if (!string.IsNullOrEmpty(aud) && !string.IsNullOrEmpty(resource) && !string.Equals(aud, resource, StringComparison.Ordinal))
-                {
-                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
-                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                    return ErrorResults.InvalidRequest("audience and resource conflict");
-                }
-                var audience = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(aud) ? aud : "api");
-
-                // Parse scopes
-                var scopeParam = form["scope"].ToString();
-                var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? Array.Empty<string>() : scopeParam.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-                var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
-                var result = await tokens.CreateClientCredentialsTokenAsync(clientId!, audience, requestedScopes, issuer, dpopJkt);
-
-                outcome = result.ok ? "success" : "failure";
-                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
-                if (result.ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                return Results.Json(result.payload!, statusCode: result.status);
-            }
+            // client_credentials handled by strategy now
 
             if (string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
             {

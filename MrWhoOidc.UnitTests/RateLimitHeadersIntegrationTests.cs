@@ -13,6 +13,7 @@ using StackExchange.Redis;
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class RateLimitHeadersIntegrationTests
 {
     private static async Task<IHost?> CreateHostWithRedisAsync(string? redisConnection)
