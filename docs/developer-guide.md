@@ -109,6 +109,64 @@ Related docs
 - `docs/obo-dpop-requiresamejkt-e2e.md`
 - `docs/jar-replay-cache.md`
 
+## 9) Token Exchange rate limiting & metrics
+
+Per-client Token Exchange requests are rate limited (in-memory by default; Redis-backed when a multiplexer is registered). The limiter enforces a maximum number of TE requests per client per rolling minute (`TokenExchangeRateLimitOptions:PerClientPerMinute`, default 60). When Redis is present, a fixed one‑minute bucket key (`te:rl:{client}:{yyyyMMddHHmm}`) with atomic INCR + TTL is used for horizontal scalability.
+
+Configuration (appsettings)
+
+```
+"TokenExchangeRateLimit": {
+  "Enabled": true,
+  "PerClientPerMinute": 60
+}
+```
+
+Environment overrides (examples)
+- `TokenExchangeRateLimit__Enabled=false`
+- `TokenExchangeRateLimit__PerClientPerMinute=120`
+
+Behavior
+- Under limit: request proceeds normally.
+- Over limit: HTTP 429 with `error = rate_limit_exceeded` and a `Retry-After` header (seconds until bucket resets).
+- Disabled (`Enabled=false`) or non-positive `PerClientPerMinute` => limiter short-circuits and always allows.
+
+### Metrics emitted
+
+All metrics are `System.Diagnostics.Metrics` instruments under meter name `MrWhoOidc.WebAuth` (prefix `oidc.`). Existing Token Exchange metrics:
+- `oidc.token_exchange.requests` (counter) – every attempt, tags: outcome, client_bucket, target_aud, dpop_mode, source_token_type
+- `oidc.token_exchange.success` (counter) – successful exchanges (same tags as above)
+- `oidc.token_exchange.failures` (counter) – failed exchanges (same tags as above)
+- `oidc.token_exchange.duration.ms` (histogram) – elapsed milliseconds (same tags as above)
+
+New rate limiter focused counters:
+- `oidc.token_exchange.ratelimit.allowed` (counter) – incremented for every TE request that passes the limiter; tags:
+  - `client_bucket`
+- `oidc.token_exchange.ratelimit.blocked` (counter) – incremented when a request is blocked with 429; tags:
+  - `client_bucket`
+  - `retry_after_seconds` (present only when computed)
+
+Interpretation / example queries (Prometheus style if exported via OTLP → Prometheus):
+- Block percentage per client (5m window):
+  `sum(rate(oidc_token_exchange_ratelimit_blocked[5m])) / ( sum(rate(oidc_token_exchange_ratelimit_allowed[5m])) + sum(rate(oidc_token_exchange_ratelimit_blocked[5m])) )`
+- Top N throttled clients (1h):
+  `topk(10, sum(rate(oidc_token_exchange_ratelimit_blocked[1h])) by (client_bucket))`
+- Latency of successful exchanges: histogram/summary derived from `oidc.token_exchange.duration.ms` filtering `outcome="success"`.
+
+Correlating limiting with failures
+- A blocked request also records a token exchange failure (`reason=rate_limited`) in the standard exchange counters. Use the dual signals to distinguish genuine policy validation failures from throttling.
+
+Operational guidance
+- Sudden spikes in `ratelimit.blocked` with flat `requests` usually indicate an abusive or misconfigured client (retry loop). Consider lowering the per-client limit temporarily or contacting the client owner.
+- If all clients start hitting the limit simultaneously, examine whether the configured value is too low for peak traffic or if a deployment introduced additional exchange calls in a single logical flow.
+
+Extensibility
+- Future enhancements may introduce per-client overrides (dictionary) or token-exchange specific sliding window / leaky bucket algorithms. Current interface (`ITokenExchangeRateLimiter`) allows swapping implementation without touching handlers.
+
+Troubleshooting
+- If you never see `ratelimit.blocked` even when intentionally hammering the endpoint, verify that Redis is reachable (if expected) and that `PerClientPerMinute` is not set to zero or a very high value via environment variables.
+
+
 ## TLS termination / reverse proxy (Render, Nginx, etc.)
 
 When running behind a reverse proxy that terminates TLS (for example, Render), the app must honor forwarded headers so it can publish https URLs in discovery and redirects.
