@@ -65,6 +65,9 @@ if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
 {
     builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
 }
+// Token-exchange rate limiting
+builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
 // Alerting
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IAlertPublisher>(sp =>
