@@ -73,4 +73,11 @@ public sealed class OidcMetrics
     {
         BclPendingBacklog = Meter.CreateObservableGauge<long>("oidc.bcl.backlog", () => _backlog);
     }
+
+    // Federated logout metrics (added later to avoid breaking consumers)
+    public Counter<long> LogoutRequests { get; } = Meter.CreateCounter<long>("oidc.logout.requests");
+    public Counter<long> LogoutFederated { get; } = Meter.CreateCounter<long>("oidc.logout.federated");
+    public Counter<long> LogoutLocal { get; } = Meter.CreateCounter<long>("oidc.logout.local");
+    public Counter<long> LogoutFailures { get; } = Meter.CreateCounter<long>("oidc.logout.failures");
+    public Histogram<double> LogoutDuration { get; } = Meter.CreateHistogram<double>("oidc.logout.duration.ms");
 }

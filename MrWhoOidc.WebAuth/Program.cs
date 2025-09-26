@@ -389,6 +389,9 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
 builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
 builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
+builder.Services.AddSingleton<IUpstreamLogoutService, UpstreamLogoutService>();
+builder.Services.AddMemoryCache();
+builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
 builder.Services.AddScoped<ITokenHandler, TokenHandler>();
 // Grant handlers (strategy pattern pilot)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
@@ -491,7 +494,10 @@ app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct
 });
 app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireRateLimiting("rl-authorize");
-app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LocalLogoutAsync(ctx));
+// Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
+app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
+app.MapPost("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutPostAsync(ctx));
+app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireCors("oidc")
