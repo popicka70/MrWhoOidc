@@ -186,7 +186,7 @@ Status
 ## 2) RP (Blazor app) requirements
 
 Status summary
-- Minimal RP receiver implemented with cookie revocation hook; strict validation, JWKS signature verification, and replay protection still TODO. In-memory store used for dev; move to distributed cache for prod.
+- RP receiver implemented with strict logout_token validation (signature, iss, aud, events, typ, jti replay) via `LogoutTokenValidator` plus distributed/in-memory revocation + replay caches. Cookie revocation hook active. Remaining: richer telemetry, rate limiting, admin visibility, sub-only session mapping, hardened replay (atomic add for Redis), body size config, and documentation.
 
 ### 2.1 Endpoint
 - Implement POST /backchannel-logout:
@@ -196,9 +196,9 @@ Status summary
 
 Status
 - Implemented receiver in `MrWhoOidc.Web/Program.cs`:
-  - Route: `POST /backchannel-logout` reads form `logout_token`, extracts `sid` (no full validation), revokes sid in store, returns 200.
-  - Dev store: `BackchannelLogoutStore` (in-memory) with `IsSidRevoked`/`RevokeSid`.
-- TODO: enforce body size limits and content length guard.
+  - Route: `POST /backchannel-logout` reads form `logout_token` (form-encoded), enforces content length (<= 8KB), invokes validator, revokes `sid`, returns 200.
+  - Validation + revocation store now integrated (see sections below).
+- TODO: make max body size configurable; add 415 rejection for wrong content type; structured logging of reasons for 4xx/401 responses.
 
 ### 2.2 Validation of logout_token
 - Validate signature using OP’s JWKS (discover via authority).
@@ -213,10 +213,13 @@ Status
 - Handle key rollover: refresh JWKS on kid miss; cache with TTL and backoff.
 
 Status
-- Not implemented yet in `MrWhoOidc.Web`. A reusable `IJwksCache` exists (`MrWhoOidc.Auth/Services/JwksCache.cs`) and can be used for RP validation logic.
-- Next steps:
-  - Add JWKS-based signature validation + issuer/audience/events checks.
-  - Add replay cache for `jti` with TTL.
+- Implemented in `LogoutTokenValidator`:
+  - Discovers metadata, validates issuer/audience, signature (with JWKS and rollover retry), `typ=logout+jwt`, `events` claim structure, `jti` uniqueness (replay cache), presence of `sid` or `sub`.
+  - Uses `IJwksCache`, `IReplayCache`, and distributed or in-memory implementations.
+- Remaining:
+  - Add explicit logging for each validation failure reason (currently generic warning on exception + terse error codes).
+  - Optional: enforce `exp` <= AllowedClockSkew window (already handled by token lifetime validation but could double-check short TTL policy).
+  - Metrics counters for validation outcomes (success, replay, bad_sig, bad_issuer, etc.).
 
 ### 2.3 Session mapping and invalidation
 - If sid present:
@@ -230,10 +233,13 @@ Status
   - On each request, reject cookies with a revoked sid (sign out + redirect to login).
 
 Status
-- Cookie validation hook implemented: in `MrWhoOidc.Web/Program.cs` `CookieAuthenticationOptions.Events.OnValidatePrincipal` checks `sid` and signs out if revoked (via `BackchannelLogoutStore`).
+- Cookie validation hook implemented (`OnValidatePrincipal`) uses `IRevocationStore` to check revoked `sid`.
 - Storage
-  - Dev: in-memory `BackchannelLogoutStore` (single-instance only).
-  - TODO: move to distributed cache (e.g., Redis) and implement `jti` replay cache.
+  - Distributed: `DistributedRevocationStore` + `DistributedReplayCache` (via `IDistributedCache`) available and wired when cache configured.
+  - In-memory fallbacks for dev: `MemoryRevocationStore`, `MemoryReplayCache`.
+- Remaining:
+  - Provide session index mapping for sub-only logout (currently no action if only `sub`).
+  - Add background cleanup/metrics for revoked sid cardinality.
 
 ### 2.4 Reliability & safety
 - Endpoint should return 200 OK upon successful processing (after validation & revocation).
@@ -243,7 +249,8 @@ Status
 - Concurrency: atomic revocation; avoid races on multi-instance.
 
 Status
-- Returns 200 after best-effort revocation; detailed error codes/rate-limiting: TODO.
+- Returns 200 on success; 400 for malformed form; 401 for failed validation; 413 for oversized payload.
+- Remaining: fine-grained reason response codes vs generic 401, rate limiting (e.g., token bucket on endpoint), and idempotent structured logging of attempts.
 
 ### 2.5 Security
 - Accept only POST; require form-encoded; reject other content types.
@@ -255,8 +262,8 @@ Status
   - Metrics for accepted vs. rejected, reason codes, per-issuer counts.
 
 Status
-- Basic POST/form-only: implemented.
-- Strict validation/signature + observability: TODO.
+- POST/form-only with size cap implemented; strict validation implemented (see 2.2).
+- Remaining: stricter Content-Type check (currently relies on HasFormContentType), configurable max size, per-issuer allowlist, metric emission, anonymized logging.
 
 ### 2.6 Admin & ops
 - Feature flags: enable/disable backchannel processing.
@@ -268,8 +275,9 @@ Status
   - Allowed issuers; JWKS cache TTL; backoff for JWKS refresh.
 
 Status
-- Feature flag exists on OP side (`BackchannelFeatureOptions.Enabled`) controlling emissions; no RP-side flag yet.
-- Admin UI endpoints exist on OP for backchannel outbox; RP-side: not applicable (yet).
+- RP processing flag: uses `BackchannelOptions.Enabled` already (settable via configuration) to short-circuit validation.
+- No dedicated admin UI for revoked SIDs or stats yet.
+- Remaining: add minimal admin/debug endpoint (e.g., /admin/backchannel/state) listing counts & recent reasons (guarded by admin policy).
 
 ### 2.7 Testing
 - Unit: validation logic, sid/sub mapping, cookie validator behavior.
@@ -310,7 +318,7 @@ Status
 - Client integration guide: how to configure BackChannelLogoutUri and verify behavior.
 
 Status
-- Pending — add docs after RP validation impl.
+- Draft docs pending — need to document RP validation, configuration knobs, and operator runbook.
 
 ---
 
@@ -318,7 +326,7 @@ Status
 
 - [x] OP: Discovery metadata includes backchannel flags (DiscoveryHandler)
 - [x] OP: Client model + migration for BackChannelLogoutUri + session required (AuthDbContext) — ensure migration applied in all envs
-- [ ] OP: Admin for backchannel fields
+- [x] OP: Admin for backchannel fields
   - [x] UI/API + validation
   - [x] Audit logging
 - [x] OP: logout_token builder (iss, aud, iat, jti, events, sid/sub)
@@ -339,15 +347,20 @@ Status
   - [x] No raw JWTs logged; sid/sub redacted or hashed
   - [x] Dev fallback works (structured audit to app logger)
   - [ ] Central sink + retention configured (App Insights/ELK)
-- [ ] RP: /backchannel-logout endpoint
+- [x] RP: /backchannel-logout endpoint
   - [x] Endpoint (POST form), revokes sid
-  - [ ] Strict validation (sig, iss, aud, events, iat, jti replay)
-- [ ] RP: JWKS validation with caching and rollover handling (use `IJwksCache`)
-- [ ] RP: Replay protection (jti cache) + sid revocation store (distributed)
-- [x] RP: Cookie validation hook rejects revoked sids (in-memory) — upgrade to distributed
+  - [x] Strict validation (sig, iss, aud, events, iat, jti replay, typ)
+- [x] RP: JWKS validation with caching and rollover handling (uses `IJwksCache` + rollover retry)
+- [x] RP: Replay protection (jti cache) + sid revocation store (distributed + memory fallback)
+- [x] RP: Cookie validation hook rejects revoked sids (distributed or in-memory)
 - [ ] RP: Telemetry (logs, metrics, alerts)
-- [ ] Tests: unit + integration + chaos; conformance checks
-- [ ] Docs: operator runbook, client integration guide
+  - [ ] Structured reason logs (success, replay, bad_sig, bad_issuer, etc.)
+  - [ ] Metrics counters & histogram (validation latency)
+- [ ] RP: Sub-only logout (session index for sub w/out sid)
+- [ ] RP: Rate limiting / abuse protection on endpoint
+- [ ] RP: Admin/debug endpoint for revoked SID count & recent failures
+- [ ] Tests: unit (validator edge cases, replay), integration (OP->RP), chaos (timeouts, invalid JWKS), conformance checks
+- [ ] Docs: operator runbook, client integration guide (includes RP validation & configuration)
 - [x] Feature flags & safe rollout plan (emission flag, allow/block host lists)
 
 ---
@@ -360,13 +373,13 @@ Status
 - Admin UI for live fan-out monitoring and per-client pause/resume.
 
 Next steps (near-term)
-- RP: Implement strict validation with JWKS signature check, claim validation, and `jti` replay cache; add distributed revocation store.
-- OP: Connect dispatcher metrics/thresholds to alerting system; optionally forward audit to central sink.
-  - Audit logging
-    - IMPLEMENTED: structured audit events for admin backchannel field changes (update)
-    - IMPLEMENTED: dispatcher audit events (enqueue, attempt, success, retry, fail, dead-letter, admin retry, admin list)
-    - IMPLEMENTED: PII-safe logging (no raw tokens; sid/sub hashed). Correlation via outbox id and client_id.
-    - TODO: Optionally forward audit to central sink (App Insights/ELK) via provider; currently logs to app logger.
+- OP: Wire external alerts (failure rate, P95 latency, backlog) to chosen sink; document runbook.
+- OP: Forward audit events to central sink (if not already) with retention policy config.
+- RP: Add structured telemetry (logs + metrics), rate limiting, and admin/debug endpoint.
+- RP: Implement sub-only session mapping strategy (session index) for tokens missing `sid`.
+- RP: Harden replay cache (atomic add using Redis SET NX if using StackExchange.Redis directly) — evaluate replacing IDistributedCache for that path.
+- Docs: Author operator runbook & client integration guide; add troubleshooting section.
+- Tests: Add comprehensive unit + integration + chaos tests for dispatcher & validator.
 
 Configuration
 - Audit:Enabled (bool, default true)

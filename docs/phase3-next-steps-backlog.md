@@ -55,17 +55,20 @@ Milestones
   - Acceptance
     - [x] Replay attempts are reliably blocked; discovery reflects actual capabilities.
 
-- [~] Provider picker polish (a11y + mobile)
+- [x] Provider picker polish (a11y + mobile)
   - Progress
-    - Remembered provider logic + hint ordering covered by `ProviderPickerTests` (cookie + idp hint scenarios).
-    - Remaining: ARIA roles/labels, focus order validation, responsive/mobile CSS adjustment, highlight styling for recommended provider.
-  - Deliverables (remaining)
-    - A11y roles/labels/tab order; responsive tweaks; highlight style for recommended provider; optional basic analytics hook.
+    - Implemented: ARIA landmarks/labels (`role="main"`, heading association, list/listitem semantics), recommended provider alert with `role="status"` + `aria-live="polite"`, hidden descriptive text for SR users, focus-visible outline styling, recommended highlight (badge + thicker border), responsive touch target sizing & layout tweaks (`@media (max-width:576px)`).
+    - Logic already covered by `ProviderPickerTests` (cookie + idp hint ordering, recommendation ordering).
+    - Remaining follow-up (moved to quick win / test hardening): basic analytics hook (emit provider selection event without PII) and automated a11y/static regression test + mobile viewport snapshot.
+  - Deliverables (remaining follow-up)
+    - Add lightweight analytics instrumentation (e.g., server log event or JS data-* beacon) – P0 nice-to-have.
+    - Add test: verify recommended provider gets `aria-label` including "Recommended" and presence of status alert; static check for list semantics.
+    - Add mobile viewport screenshot (for docs) & include in Admin/Developer guide screenshots section.
   - Tests
-    - Existing: cookie + idp hint ordering.
-    - Add: accessibility markup assertions (axe or static checks) and mobile viewport snapshot.
+    - Existing: cookie + idp hint ordering in `ProviderPickerTests`.
+    - Pending: accessibility markup assertions and mobile snapshot (see follow-up above).
   - Acceptance
-    - Picker works well on desktop/mobile with accessibility basics covered.
+    - Core picker UX, a11y, and mobile responsiveness complete; only telemetry/test reinforcement outstanding.
 
 - [~] Integration tests and CI gates
   - Status (2025-09-26)
@@ -190,7 +193,7 @@ Notes
 ## Near-term prioritized next steps (proposed)
 
 1. External OIDC UX telemetry & friendly error pages (P0, unstarted).
-2. Provider picker accessibility/mobile polish (complete logic; finish UI & a11y layer).
+2. Provider picker analytics + a11y regression test (core polish DONE; add instrumentation & tests).
 3. SDK pinning (add global.json) to stabilize builds.
 4. CI Redis service to eliminate skipped rate-limit/replay tests.
 5. Additional integration tests: multi-provider success path + negative DPoP bridging + cancel external login.

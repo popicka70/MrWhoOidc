@@ -30,6 +30,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Application Insights (optional): only wires if instrumentation key / connection string present
+var aiConn = builder.Configuration["ApplicationInsights:ConnectionString"] ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrWhiteSpace(aiConn))
+{
+    builder.Services.AddApplicationInsightsTelemetry(o =>
+    {
+        o.ConnectionString = aiConn;
+    });
+}
+
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
 
@@ -77,13 +87,51 @@ builder.Services.AddSingleton<IAlertPublisher>(sp =>
     var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
     return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
 });
-// Audit sink
+// Backchannel alert sampler (threshold evaluation)
+builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelAlertOptions>(builder.Configuration.GetSection("Backchannel:Alerts"));
+builder.Services.AddHostedService<MrWhoOidc.WebAuth.Background.BackchannelAlertSampler>();
+// Audit sink (supports logger | appinsights | both)
 builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
-    var enabled = cfg.GetSection("Audit").GetValue<bool?>("Enabled") ?? true;
-    return enabled ? new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(), sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()) : new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>().Value;
+    if (!opts.Enabled)
+        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+
+    var sinks = new List<MrWhoOidc.WebAuth.Observability.IAuditSink>();
+    var sink = opts.Sink?.ToLowerInvariant() ?? "logger";
+    if (sink is "logger" or "both")
+    {
+        sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
+            sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+    }
+    if (sink is "appinsights" or "both")
+    {
+        // TelemetryClient is auto-registered when Microsoft.ApplicationInsights.AspNetCore is referenced & AddApplicationInsightsTelemetry called.
+        var telemetry = sp.GetService<Microsoft.ApplicationInsights.TelemetryClient>();
+        if (telemetry != null)
+        {
+            sinks.Add(new MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink(
+                telemetry,
+                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink>>(),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+        }
+        else if (sink != "logger")
+        {
+            // Fallback to logger if App Insights not configured
+            sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
+                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+        }
+    }
+
+    if (sinks.Count == 1)
+        return sinks[0];
+    if (sinks.Count == 0)
+        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
+    return new MrWhoOidc.WebAuth.Observability.CompositeAuditSink(sinks);
 });
 
 // Seed command support
