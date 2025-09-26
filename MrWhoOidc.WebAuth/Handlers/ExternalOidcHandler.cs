@@ -396,6 +396,15 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
         using var tokDoc = JsonDocument.Parse(body);
         var idToken = !string.IsNullOrEmpty(idTokenFromAuth) ? idTokenFromAuth : tokDoc.RootElement.TryGetProperty("id_token", out var idt) ? idt.GetString() : null;
+        // Stash raw upstream id_token (if present) for later federated logout (encrypted when cookie issued)
+        if (!string.IsNullOrEmpty(idToken))
+        {
+            // Only assign if not already present (defensive)
+            if (!http.Items.ContainsKey("external.id_token"))
+            {
+                http.Items["external.id_token"] = idToken;
+            }
+        }
 
         string? email = null, name = null, sub = null, issuer = null, nonce = state.Nonce;
         string? acr = null; string[] amrs = Array.Empty<string>();

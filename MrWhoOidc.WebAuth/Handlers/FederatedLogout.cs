@@ -160,6 +160,13 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
                 "state=" + Uri.EscapeDataString(state)
             };
 
+            // Some providers (e.g., Auth0) require client_id on /v2/logout when no end_session_endpoint published
+            // Heuristic: if endpoint path contains "/v2/logout" and provider config includes a ClientId we append it.
+            if (endSession.Contains("/v2/logout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(cfg.ClientId))
+            {
+                qp.Add("client_id=" + Uri.EscapeDataString(cfg.ClientId));
+            }
+
             // Attempt to decrypt upstream id_token for id_token_hint
             if (!string.IsNullOrEmpty(upstreamIdTokenEnc))
             {
