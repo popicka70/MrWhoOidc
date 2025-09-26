@@ -21,7 +21,7 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher) : IU
         if (string.IsNullOrWhiteSpace(usernameOrEmail)) return null;
 
         // Fast path: direct username match (exact, case-sensitive as stored)
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == usernameOrEmail, ct);
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == usernameOrEmail, ct).ConfigureAwait(false);
         if (user != null) return user;
 
         // If looks like an email, normalize to lower and search primary + alternative verified emails.
@@ -29,17 +29,18 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher) : IU
         if (!looksEmail) return null; // do not treat arbitrary strings as email for perf
 
         var email = usernameOrEmail.Trim().ToLowerInvariant();
-        user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
+        user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct).ConfigureAwait(false);
         if (user != null) return user;
 
         // Alternative emails (only consider verified to reduce enumeration attacks)
         var alt = await db.UserAlternativeEmails.AsNoTracking()
             .Where(a => a.Email == email && a.IsVerified)
             .Select(a => a.UserId)
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
         if (alt != Guid.Empty)
         {
-            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == alt, ct);
+            user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == alt, ct).ConfigureAwait(false);
         }
         return user;
     }
