@@ -54,6 +54,9 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Admin", "admin");
 });
 
+// Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+
 // Metrics
 builder.Services.AddSingleton<OidcMetrics>();
 // Alerting
@@ -372,6 +375,13 @@ else
 }
 
 app.UseRouting();
+// Request localization (default culture en-US; future: read from configuration or user preference)
+var supportedCultures = new[] { "en-US" };
+var localizationOptions = new RequestLocalizationOptions()
+    .SetDefaultCulture(supportedCultures[0])
+    .AddSupportedCultures(supportedCultures)
+    .AddSupportedUICultures(supportedCultures);
+app.UseRequestLocalization(localizationOptions);
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
