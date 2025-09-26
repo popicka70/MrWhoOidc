@@ -18,7 +18,7 @@ public interface ITokenHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, IDPoPValidator dpop, ILogger<TokenHandler> logger) : ITokenHandler
+public sealed class TokenHandler(OidcOptions options, ITokenService tokens, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, IDPoPValidator dpop, IEnumerable<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler> grantHandlers, ILogger<TokenHandler> logger) : ITokenHandler
 {
     // Simple in-memory per-client limiter for token exchange; replace with distributed limiter in multi-node deployments.
     private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _teWindows = new();
@@ -209,28 +209,18 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 return Results.Json(payload!, statusCode: status);
             }
 
-            if (string.Equals(grantType, "refresh_token", StringComparison.Ordinal))
+            // Strategy-based grant handling (pilot: refresh_token)
+            var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(http, grantType, clientId!, form, options, tokens, dpopJkt);
+            foreach (var handler in grantHandlers)
             {
-                var refresh = form["refresh_token"].ToString();
-                if (string.IsNullOrWhiteSpace(refresh))
+                var gr = await handler.TryHandleAsync(ctxForGrants);
+                if (gr.Handled)
                 {
-                    logger.LogWarning("/token invalid_request: missing refresh_token for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", "failure") });
-                    metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                    return ErrorResults.InvalidRequest();
+                    outcome = gr.Success ? "success" : "failure";
+                    metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
+                    if (gr.Success) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
+                    return gr.Result ?? Results.StatusCode(500);
                 }
-
-                var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
-                var (ok, payload, _, status) = await tokens.ExchangeRefreshTokenAsync(refresh, clientId!, issuer, dpopJkt);
-                if (!ok)
-                {
-                    logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                }
-
-                outcome = ok ? "success" : "failure";
-                metrics.TokenRequests.Add(1, new TagList { new("grant_type", grantType), new("outcome", outcome) });
-                if (ok) metrics.TokenSuccess.Add(1, new TagList { new("grant_type", grantType) }); else metrics.TokenFailures.Add(1, new TagList { new("grant_type", grantType) });
-                return Results.Json(payload!, statusCode: status);
             }
 
             if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
