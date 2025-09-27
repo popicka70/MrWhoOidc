@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography; // added for future cryptographic helpers if needed
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -38,6 +39,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
     // New: Back-channel logout outbox
     public DbSet<BackchannelLogoutNotification> BackchannelLogoutNotifications => Set<BackchannelLogoutNotification>();
+    // New: Opaque logout redirect references (post_logout_redirect_uri indirection)
+    public DbSet<LogoutRedirectReference> LogoutRedirectReferences => Set<LogoutRedirectReference>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -275,7 +278,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasOne<Client>()
                 .WithMany()
                 .HasForeignKey(x => x.ClientId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.SetNull); // restore original behavior
         });
 
         modelBuilder.Entity<SigningKey>(b =>
@@ -405,9 +408,6 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Active).HasDefaultValue(true);
             b.Property(x => x.Kid).HasMaxLength(200);
             b.Property(x => x.CreatedAt).IsRequired();
-            // Uniqueness: providerId + lower(kid) (null kids allowed multiple). Implemented via filtered index expression.
-            // Note: Requires manual migration: b.HasIndex(e => new { e.IdentityProviderId, e.Kid }) with custom annotation
-            // or raw SQL in migration using: CREATE UNIQUE INDEX ... ON "IdentityProviderKeys" ("IdentityProviderId", lower("Kid")) WHERE "Kid" IS NOT NULL;
             b.HasIndex(x => new { x.IdentityProviderId, x.Kid })
                 .HasDatabaseName("IX_IdentityProviderKeys_Provider_Kid_CI");
         });
@@ -454,6 +454,20 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .WithMany()
                 .HasForeignKey(x => x.ClientDbId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: Logout redirect references (opaque indirection table)
+        modelBuilder.Entity<LogoutRedirectReference>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).HasMaxLength(64);
+            b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
+            b.Property(x => x.RedirectUri).IsRequired().HasMaxLength(2000);
+            b.Property(x => x.State).HasMaxLength(400);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.Used).HasDefaultValue(false);
+            b.HasIndex(x => x.ExpiresAt);
         });
     }
 }
@@ -883,4 +897,18 @@ public class BackchannelLogoutNotification
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastAttemptAt { get; set; }
     public DateTimeOffset? NextAttemptAt { get; set; }
+}
+
+// New: Opaque logout redirect reference entity
+public class LogoutRedirectReference
+{
+    [Key]
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty; // random base64url (>=96 bits entropy)
+    [MaxLength(200)] public string ClientId { get; set; } = string.Empty; // client that initiated logout
+    [MaxLength(2000)] public string RedirectUri { get; set; } = string.Empty; // validated original post_logout_redirect_uri
+    [MaxLength(400)] public string? State { get; set; } // optional state to echo back
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddMinutes(5);
+    public bool Used { get; set; } = false; // single-use guard
 }

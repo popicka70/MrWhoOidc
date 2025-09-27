@@ -11,6 +11,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MrWhoOidc.WebAuth.Observability;
+using System.Security.Cryptography;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -22,16 +24,12 @@ public sealed class FederatedLogoutOptions
 
 public record FederatedCapability(bool CanFederate, string? ProviderName, string? ProviderDisplayName);
 public record FederatedRedirectResult(bool Success, string? RedirectUrl, string? FailureReason);
-public record FederatedCallbackValidation(bool Valid, string? Reason, string? ReturnUrl);
+public record FederatedCallbackValidation(bool Valid, string? Reason, string? ReturnUrl, string? RefId);
 
 public interface IUpstreamLogoutService
 {
     Task<FederatedCapability> CanFederateAsync(ClaimsPrincipal principal, CancellationToken ct);
-    /// <summary>
-    /// Build redirect to upstream end_session_endpoint. upstreamIdTokenEnc is an encrypted upstream id_token captured at sign-in; may be null.
-    /// upstreamSid optional session identifier extracted from upstream id_token. callbackBase should be scheme://host of current request.
-    /// </summary>
-    Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? returnUrl, CancellationToken ct);
+    Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? localReturnUrl, string? clientId, string? externalPostLogout, CancellationToken ct);
     Task<FederatedCallbackValidation> ValidateCallbackAsync(string? state, CancellationToken ct);
 }
 
@@ -68,27 +66,72 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
         var idpName = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
         if (string.IsNullOrEmpty(idpName)) return new FederatedCapability(false, null, null);
 
-        // Quick existence check in DB; avoid full discovery until needed.
         var provider = await _db.IdentityProviders.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Name == idpName && p.Enabled, ct);
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson)) return new FederatedCapability(false, null, null);
-
-        // Parse config to get Authority (needed for discovery later)
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null) return new FederatedCapability(false, null, null);
 
         return new FederatedCapability(true, provider.Name, provider.DisplayName ?? provider.Name);
     }
 
-    public async Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? returnUrl, CancellationToken ct)
+    public async Task<FederatedRedirectResult> BuildFederatedRedirectAsync(ClaimsPrincipal principal, string? upstreamIdTokenEnc, string? upstreamSid, string callbackBase, string? localReturnUrl, string? clientId, string? externalPostLogout, CancellationToken ct)
     {
-    var idpName = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
-    if (string.IsNullOrEmpty(idpName)) return new FederatedRedirectResult(false, null, "missing_idp");
-    var startTs = DateTimeOffset.UtcNow;
+        var idpName = principal?.Claims.FirstOrDefault(c => c.Type == "idp")?.Value;
+        if (string.IsNullOrEmpty(idpName)) return new FederatedRedirectResult(false, null, "missing_idp");
+        var startTs = DateTimeOffset.UtcNow;
 
         var provider = await _db.IdentityProviders.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Name == idpName && p.Enabled, ct);
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson)) return new FederatedRedirectResult(false, null, "provider_not_found");
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null) return new FederatedRedirectResult(false, null, "invalid_config");
+
+        // Validate externalPostLogout (absolute) & client allow-list -> create opaque reference if valid
+        string? refId = null;
+        if (!string.IsNullOrWhiteSpace(clientId) && !string.IsNullOrWhiteSpace(externalPostLogout))
+        {
+            externalPostLogout = externalPostLogout.Trim();
+            if (Uri.TryCreate(externalPostLogout, UriKind.Absolute, out var extUri))
+            {
+                var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
+                if (client != null && !string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
+                {
+                    try
+                    {
+                        var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>();
+                        var normExternal = externalPostLogout.Trim();
+                        var normExternalNoSlash = normExternal.TrimEnd('/');
+                        bool IsMatch(string? candidateRaw)
+                        {
+                            if (string.IsNullOrWhiteSpace(candidateRaw)) return false;
+                            var cand = candidateRaw.Trim();
+                            if (string.Equals(cand, normExternal, StringComparison.OrdinalIgnoreCase)) return true;
+                            var candNoSlash = cand.TrimEnd('/');
+                            return string.Equals(candNoSlash, normExternalNoSlash, StringComparison.OrdinalIgnoreCase);
+                        }
+                        if (allowedRaw.Any(IsMatch))
+                        {
+                            var idBytes = RandomNumberGenerator.GetBytes(16);
+                            var id = Base64UrlEncoder.Encode(idBytes);
+                            var entity = new LogoutRedirectReference
+                            {
+                                Id = id,
+                                ClientId = clientId,
+                                RedirectUri = externalPostLogout,
+                                State = null,
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                                Used = false
+                            };
+                            _db.LogoutRedirectReferences.Add(entity);
+                            await _db.SaveChangesAsync(ct);
+                            refId = id;
+                            _audit.Emit("logout.redirect.ref.created", new { client_id = clientId, ext_host = extUri.Host });
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
 
         // Get discovery document (cache short-lived)
         var discoKey = DiscoCachePrefix + provider.Id.ToString("N");
@@ -117,15 +160,7 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
                 return new FederatedRedirectResult(false, null, "discovery_exception");
             }
         }
-        try
-        {
-            discoDoc = JsonDocument.Parse(discoJson!);
-        }
-        catch
-        {
-            _audit.Emit("logout.federated.discovery.parsefail", new { provider = idpName });
-            return new FederatedRedirectResult(false, null, "discovery_parse_failed");
-        }
+        try { discoDoc = JsonDocument.Parse(discoJson!); } catch { _audit.Emit("logout.federated.discovery.parsefail", new { provider = idpName }); return new FederatedRedirectResult(false, null, "discovery_parse_failed"); }
 
         using (discoDoc)
         {
@@ -134,24 +169,21 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
             if (root.TryGetProperty("end_session_endpoint", out var ese)) endSession = ese.GetString();
             if (string.IsNullOrWhiteSpace(endSession))
             {
-                // Fallback heuristic: authority + "/v2/logout" then "/logout"
                 var authority = cfg.Authority.TrimEnd('/');
-                var guess1 = authority + "/v2/logout";
-                var guess2 = authority + "/logout";
-                endSession = guess1; // choose first guess; some providers (Auth0) use /v2/logout
-                _logger.LogDebug("end_session_endpoint not published for {Provider}; using heuristic {Guess}", provider.Name, endSession);
+                endSession = authority + "/v2/logout"; // heuristic first
+                _logger.LogDebug("end_session_endpoint not published for {Provider}; heuristic {Guess}", provider.Name, endSession);
                 _audit.Emit("logout.federated.discovery.heuristic", new { provider = idpName, guess = endSession });
             }
 
             var state = Guid.NewGuid().ToString("N");
-            var sanitizedReturn = SanitizeLocalReturn(returnUrl);
-            var model = new { s = state, ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ret = sanitizedReturn };
+            var sanitizedReturn = SanitizeLocalReturn(localReturnUrl); // relative only
+            // State JSON: s=state, ts=time, ret=relative return (optional), r=external ref id (opaque)
+            var model = new { s = state, ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ret = sanitizedReturn, r = refId };
             var json = JsonSerializer.Serialize(model);
             var protectedState = _stateProtector.Protect(json);
             _cache.Set(CachePrefix + state, protectedState, TimeSpan.FromSeconds(_opts.Value.StateTtlSeconds));
 
-            // Build callback URL
-            if (!callbackBase.EndsWith('/')) callbackBase += string.Empty; // ensure no trailing slash assumption
+            if (!callbackBase.EndsWith('/')) callbackBase += string.Empty;
             var callback = callbackBase + "/logout/federated-callback";
 
             var qp = new List<string>
@@ -159,47 +191,28 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
                 "post_logout_redirect_uri=" + Uri.EscapeDataString(callback),
                 "state=" + Uri.EscapeDataString(state)
             };
-
-            // Some providers (e.g., Auth0) require client_id on /v2/logout when no end_session_endpoint published
-            // Heuristic: if endpoint path contains "/v2/logout" and provider config includes a ClientId we append it.
             if (endSession.Contains("/v2/logout", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(cfg.ClientId))
             {
                 qp.Add("client_id=" + Uri.EscapeDataString(cfg.ClientId));
             }
-
-            // Attempt to decrypt upstream id_token for id_token_hint
             if (!string.IsNullOrEmpty(upstreamIdTokenEnc))
             {
-                try
-                {
-                    var raw = _idTokenProtector.Unprotect(upstreamIdTokenEnc);
-                    if (!string.IsNullOrEmpty(raw)) qp.Add("id_token_hint=" + Uri.EscapeDataString(raw));
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Failed to unprotect upstream id_token for provider {Provider}", provider.Name);
-                }
+                try { var raw = _idTokenProtector.Unprotect(upstreamIdTokenEnc); if (!string.IsNullOrEmpty(raw)) qp.Add("id_token_hint=" + Uri.EscapeDataString(raw)); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Failed to unprotect upstream id_token for provider {Provider}", provider.Name); }
             }
-            if (!string.IsNullOrEmpty(upstreamSid))
-            {
-                qp.Add("sid=" + Uri.EscapeDataString(upstreamSid));
-            }
+            if (!string.IsNullOrEmpty(upstreamSid)) qp.Add("sid=" + Uri.EscapeDataString(upstreamSid));
 
             var redirectUrl = endSession + (endSession!.Contains('?') ? '&' : '?') + string.Join('&', qp);
-            _audit.Emit("logout.federated.redirect", new { provider = idpName, has_id_token_hint = qp.Any(q => q.StartsWith("id_token_hint=")), has_sid = qp.Any(q => q.StartsWith("sid=")), state = state, dur_ms = (int)(DateTimeOffset.UtcNow - startTs).TotalMilliseconds });
+            _audit.Emit("logout.federated.redirect", new { provider = idpName, has_id_token_hint = qp.Any(q => q.StartsWith("id_token_hint=")), has_sid = qp.Any(q => q.StartsWith("sid=")), state = state, has_ref = refId != null, dur_ms = (int)(DateTimeOffset.UtcNow - startTs).TotalMilliseconds });
             return new FederatedRedirectResult(true, redirectUrl, null);
         }
     }
 
     public Task<FederatedCallbackValidation> ValidateCallbackAsync(string? state, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(state)) { _audit.Emit("logout.federated.callback.fail", new { reason = "missing_state" }); return Task.FromResult(new FederatedCallbackValidation(false, "missing_state", null)); }
-        if (!_cache.TryGetValue(CachePrefix + state, out string? protectedState))
-        {
-            _audit.Emit("logout.federated.callback.fail", new { reason = "state_not_found" });
-            return Task.FromResult(new FederatedCallbackValidation(false, "state_not_found", null));
-        }
-        _cache.Remove(CachePrefix + state); // single use
+        if (string.IsNullOrEmpty(state)) { _audit.Emit("logout.federated.callback.fail", new { reason = "missing_state" }); return Task.FromResult(new FederatedCallbackValidation(false, "missing_state", null, null)); }
+        if (!_cache.TryGetValue(CachePrefix + state, out string? protectedState)) { _audit.Emit("logout.federated.callback.fail", new { reason = "state_not_found" }); return Task.FromResult(new FederatedCallbackValidation(false, "state_not_found", null, null)); }
+        _cache.Remove(CachePrefix + state);
         try
         {
             var json = _stateProtector.Unprotect(protectedState!);
@@ -207,31 +220,33 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
             if (!doc.RootElement.TryGetProperty("s", out var sEl) || sEl.GetString() != state)
             {
                 _audit.Emit("logout.federated.callback.fail", new { reason = "state_mismatch" });
-                return Task.FromResult(new FederatedCallbackValidation(false, "state_mismatch", null));
+                return Task.FromResult(new FederatedCallbackValidation(false, "state_mismatch", null, null));
             }
-            string? ret = null;
+            string? ret = null; string? refId = null;
             if (doc.RootElement.TryGetProperty("ret", out var retEl))
             {
                 var candidate = retEl.GetString();
-                if (!string.IsNullOrWhiteSpace(candidate) && Uri.TryCreate(candidate, UriKind.Relative, out _))
-                {
-                    ret = candidate; // only relative paths are permitted to prevent open redirects
-                }
+                if (!string.IsNullOrWhiteSpace(candidate) && Uri.TryCreate(candidate, UriKind.Relative, out _)) ret = candidate;
             }
-            _audit.Emit("logout.federated.callback.ok", new { });
-            return Task.FromResult(new FederatedCallbackValidation(true, null, ret));
+            if (doc.RootElement.TryGetProperty("r", out var rEl))
+            {
+                var candidate = rEl.GetString();
+                if (!string.IsNullOrWhiteSpace(candidate)) refId = candidate;
+            }
+            _audit.Emit("logout.federated.callback.ok", new { has_ref = refId != null });
+            return Task.FromResult(new FederatedCallbackValidation(true, null, ret, refId));
         }
         catch
         {
             _audit.Emit("logout.federated.callback.fail", new { reason = "unprotect_failed" });
-            return Task.FromResult(new FederatedCallbackValidation(false, "unprotect_failed", null));
+            return Task.FromResult(new FederatedCallbackValidation(false, "unprotect_failed", null, null));
         }
     }
 
     private static string SanitizeLocalReturn(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return "/";
-        if (Uri.TryCreate(url, UriKind.Relative, out _)) return url; // keep relative
+        if (Uri.TryCreate(url, UriKind.Relative, out _)) return url; // keep relative only
         return "/"; // disallow absolute external
     }
 }

@@ -14,6 +14,7 @@ using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Infrastructure;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -21,11 +22,10 @@ public interface ILogoutHandler
 {
     // Legacy local logout (kept for RP-initiated flows and existing links)
     Task<IResult> LocalLogoutAsync(HttpContext http);
-    // OIDC end session endpoint (RP-initiated logout with front/back-channel to clients)
     Task<IResult> EndSessionAsync(HttpContext http);
-    // New entry point that can present federated option
     Task<IResult> LogoutEntryAsync(HttpContext http);
     Task<IResult> FederatedCallbackAsync(HttpContext http);
+    Task<IResult> FinalRedirectAsync(HttpContext http);
 }
 
 public sealed class LogoutHandler(AuthDbContext db,
@@ -48,6 +48,9 @@ public sealed class LogoutHandler(AuthDbContext db,
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var returnUrl = http.Request.Query["returnUrl"].ToString();
         var style = http.Request.Query["style"].ToString();
+        // Capture potential external redirect inputs for federated flow
+        var clientIdParam = http.Request.Query["client_id"].ToString();
+        var postLogoutExternal = http.Request.Query["post_logout_redirect_uri"].ToString();
         if (!fedOpts.Value.Enabled)
         {
             logger.LogInformation("Federated logout disabled - performing local logout");
@@ -58,21 +61,20 @@ public sealed class LogoutHandler(AuthDbContext db,
         var capability = await upstreamLogoutSvc.CanFederateAsync(http.User, http.RequestAborted);
         if (!capability.CanFederate)
         {
-            // Fall back to legacy local logout
             audit.Emit("logout.federated.prompt.skip_no_capability", new { });
             return await LocalLogoutAsync(http);
         }
 
-        // Redirect to Razor prompt page for consistent styling & schemes
         var idpDisplay = capability.ProviderDisplayName ?? capability.ProviderName;
         var formReturn = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
         audit.Emit("logout.federated.prompt", new { provider = capability.ProviderName });
         metrics.LogoutRequests.Add(1, new KeyValuePair<string, object?>("mode", "prompt"));
         metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "prompt"));
         var qStyle = string.IsNullOrEmpty(style) ? string.Empty : $"&style={System.Web.HttpUtility.UrlEncode(style)}";
-        return Results.Redirect($"/Logout/Prompt?provider={System.Web.HttpUtility.UrlEncode(idpDisplay)}&ret={System.Web.HttpUtility.UrlEncode(formReturn)}{qStyle}");
+        var qClient = string.IsNullOrEmpty(clientIdParam) ? string.Empty : $"&client_id={System.Web.HttpUtility.UrlEncode(clientIdParam)}";
+        var qPlru = string.IsNullOrEmpty(postLogoutExternal) ? string.Empty : $"&post_logout_redirect_uri={System.Web.HttpUtility.UrlEncode(postLogoutExternal)}";
+        return Results.Redirect($"/Logout/Prompt?provider={System.Web.HttpUtility.UrlEncode(idpDisplay)}&ret={System.Web.HttpUtility.UrlEncode(formReturn)}{qStyle}{qClient}{qPlru}");
     }
-
 
     public async Task<IResult> FederatedCallbackAsync(HttpContext http)
     {
@@ -89,10 +91,13 @@ public sealed class LogoutHandler(AuthDbContext db,
             return Results.Redirect($"/Logout/FederatedCallbackError?reason={WebUtility.UrlEncode(reasonParam)}");
         }
         metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback"));
-        audit.Emit("logout.federated.callback.page.ok", new { });
+        audit.Emit("logout.federated.callback.page.ok", new { has_ref = validation.RefId != null });
+        if (!string.IsNullOrWhiteSpace(validation.RefId))
+        {
+            return Results.Redirect($"/logout/final?ref={Uri.EscapeDataString(validation.RefId!)}");
+        }
         if (!string.IsNullOrWhiteSpace(validation.ReturnUrl))
         {
-            // Safe redirect (ValidateCallbackAsync only allows relative paths)
             return Results.Redirect(validation.ReturnUrl);
         }
         // Show standard Razor page (layout includes style scheme)
@@ -124,10 +129,7 @@ public sealed class LogoutHandler(AuthDbContext db,
             if (c.FrontChannelLogoutSessionRequired)
             {
                 var sidValue = !string.IsNullOrEmpty(sid) ? sid : JwtLightParser.TryGetClaim(idTokenHint, "sid");
-                if (!string.IsNullOrEmpty(sidValue))
-                {
-                    url += "&sid=" + Uri.EscapeDataString(sidValue);
-                }
+                if (!string.IsNullOrEmpty(sidValue)) url += "&sid=" + Uri.EscapeDataString(sidValue);
             }
             iframes.Add(url);
         }
@@ -205,6 +207,7 @@ public sealed class LogoutHandler(AuthDbContext db,
 
         // Validate post_logout_redirect_uri against allow-list if a client parameter is present
         var clientId = http.Request.Query["client_id"].ToString();
+        string? refId = null; // opaque reference id to be used on final redirect endpoint
         if (!string.IsNullOrEmpty(postLogout) && !string.IsNullOrEmpty(clientId))
         {
             var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId);
@@ -213,18 +216,61 @@ public sealed class LogoutHandler(AuthDbContext db,
                 try
                 {
                     var allowed = JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson!) ?? Array.Empty<string>();
-                    if (!allowed.Contains(postLogout, StringComparer.Ordinal))
+                    if (allowed.Contains(postLogout, StringComparer.Ordinal))
                     {
-                        postLogout = null; // not allowed
+                        // Create opaque reference (stateful) stored server-side instead of exposing external URL directly
+                        var idBytes = RandomNumberGenerator.GetBytes(16); // 128-bit
+                        var id = Base64UrlEncoder.Encode(idBytes); // url-safe, no padding
+                        var entity = new LogoutRedirectReference
+                        {
+                            Id = id,
+                            ClientId = clientId,
+                            RedirectUri = postLogout,
+                            State = string.IsNullOrEmpty(state) ? null : state,
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                            Used = false
+                        };
+                        db.LogoutRedirectReferences.Add(entity);
+                        await db.SaveChangesAsync();
+                        refId = id;
+                        audit.Emit("logout.redirect.ref.created", new { client_id = clientId, has_state = !string.IsNullOrEmpty(state) });
                     }
                 }
-                catch { postLogout = null; }
+                catch { /* ignore parse failure => treat as not allowed */ }
             }
         }
 
-        // Render HTML page with hidden iframes that trigger front-channel logout on RPs, then redirect if requested
-        var html = BuildFrontChannelPage(iframes, postLogout, state);
+        // Render HTML page with hidden iframes that trigger front-channel logout on RPs, then redirect via opaque ref if available
+        var html = BuildFrontChannelPage(iframes, refId, state);
         return Results.Content(html, "text/html; charset=utf-8");
+    }
+
+    // New final redirect resolution endpoint
+    public async Task<IResult> FinalRedirectAsync(HttpContext http)
+    {
+        var refId = http.Request.Query["ref"].ToString();
+        if (string.IsNullOrWhiteSpace(refId)) return Results.BadRequest();
+        var record = await db.LogoutRedirectReferences.FirstOrDefaultAsync(r => r.Id == refId);
+        if (record is null) return Results.BadRequest();
+        if (record.ExpiresAt < DateTimeOffset.UtcNow || record.Used)
+        {
+            return Results.BadRequest();
+        }
+        record.Used = true;
+        await db.SaveChangesAsync();
+        // Append state if present and not already present
+        var dest = record.RedirectUri;
+        if (!string.IsNullOrEmpty(record.State))
+        {
+            var ub = new UriBuilder(dest);
+            var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
+            if (string.IsNullOrEmpty(q["state"])) q["state"] = record.State;
+            ub.Query = q.ToString();
+            dest = ub.ToString();
+        }
+        audit.Emit("logout.redirect.ref.used", new { client_id = record.ClientId });
+        return Results.Redirect(dest);
     }
 
     private string? CreateLogoutToken(string issuer, string audienceClientId, string idTokenHint, string sidFromQuery)
@@ -265,7 +311,7 @@ public sealed class LogoutHandler(AuthDbContext db,
     }
 
     // Claim extraction moved to JwtLightParser.
-    private static string BuildFrontChannelPage(IEnumerable<string> iframes, string? redirect, string? state)
+    private static string BuildFrontChannelPage(IEnumerable<string> iframes, string? refId, string? state)
     {
         var sb = new System.Text.StringBuilder();
         sb.Append("<!DOCTYPE html><html><head><title>Logout</title><meta http-equiv=\"cache-control\" content=\"no-cache\"/></head><body>");
@@ -275,20 +321,11 @@ public sealed class LogoutHandler(AuthDbContext db,
             sb.Append(System.Web.HttpUtility.HtmlAttributeEncode(src));
             sb.Append("\" style=\"display:none;width:0;height:0;border:0\"></iframe>");
         }
-        if (!string.IsNullOrEmpty(redirect))
+        if (!string.IsNullOrEmpty(refId))
         {
-            // Preserve state if provided
-            var r = redirect;
-            if (!string.IsNullOrEmpty(state))
-            {
-                var ub = new UriBuilder(redirect);
-                var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
-                q["state"] = state;
-                ub.Query = q.ToString();
-                r = ub.ToString();
-            }
+            var finalUrl = "/logout/final?ref=" + System.Web.HttpUtility.UrlEncode(refId);
             sb.Append("<script>setTimeout(function(){ window.location.replace('");
-            sb.Append(System.Web.HttpUtility.JavaScriptStringEncode(r));
+            sb.Append(System.Web.HttpUtility.JavaScriptStringEncode(finalUrl));
             sb.Append("'); }, 200);</script>");
         }
         sb.Append("</body></html>");

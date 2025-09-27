@@ -85,6 +85,7 @@ internal static class EndpointMappingExtensions
            .RequireRateLimiting("rl-authorize");
         app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
         app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
+        app.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx)); // new opaque redirect resolution
         app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
         app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
            .RequireCors("oidc")

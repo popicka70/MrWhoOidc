@@ -87,7 +87,7 @@ public class FederatedLogoutServiceTests
         var db = BuildDb();
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
-    var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = false }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHandler())), new NoopAuditSink());
+        var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = false }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHandler())), new NoopAuditSink());
         var principal = BuildPrincipal("foo");
         var cap = await svc.CanFederateAsync(principal, CancellationToken.None);
         Assert.IsFalse(cap.CanFederate);
@@ -114,7 +114,7 @@ public class FederatedLogoutServiceTests
         var rawIdToken = "header.payload.sig"; // fake structure
         var enc = prot.Protect(rawIdToken);
         var principal = BuildPrincipal("foo");
-        var res = await svc.BuildFederatedRedirectAsync(principal, enc, "mysid", "https://local.app", "/return", CancellationToken.None);
+        var res = await svc.BuildFederatedRedirectAsync(principal, enc, "mysid", "https://local.app", "/return", null, null, CancellationToken.None);
         Assert.IsTrue(res.Success, res.FailureReason);
         StringAssert.Contains(res.RedirectUrl!, "connect/endsession");
         StringAssert.Contains(res.RedirectUrl!, "id_token_hint=");
@@ -128,7 +128,7 @@ public class FederatedLogoutServiceTests
         var disco = "{}"; // no end_session_endpoint
         var (svc, db, _, _) = BuildService(disco, authority, "foo");
         var principal = BuildPrincipal("foo");
-        var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, CancellationToken.None);
+        var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, null, null, CancellationToken.None);
         Assert.IsTrue(res.Success, res.FailureReason);
         // Heuristic chooses /v2/logout first
         StringAssert.Contains(res.RedirectUrl!, "/v2/logout");
@@ -147,7 +147,7 @@ public class FederatedLogoutServiceTests
         var handler = new TestHandler { OnSend = req => new HttpResponseMessage(HttpStatusCode.InternalServerError) };
     var svc = new UpstreamLogoutService(cache, FedOpts(), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(handler)), new NoopAuditSink());
         var principal = BuildPrincipal("foo");
-        var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, CancellationToken.None);
+        var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, null, null, CancellationToken.None);
         Assert.IsFalse(res.Success);
         Assert.AreEqual("discovery_failed", res.FailureReason);
     }
@@ -159,7 +159,7 @@ public class FederatedLogoutServiceTests
         var disco = "{\"end_session_endpoint\":\"https://issuer.test/endsession\"}";
         var (svc, db, _, _) = BuildService(disco, authority, "foo");
         var principal = BuildPrincipal("foo");
-        var ok = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, CancellationToken.None);
+        var ok = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, null, null, CancellationToken.None);
         var bad = await svc.ValidateCallbackAsync("notpresent", CancellationToken.None);
         Assert.IsFalse(bad.Valid);
         // Extract real state from redirect
