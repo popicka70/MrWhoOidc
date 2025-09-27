@@ -65,11 +65,14 @@ builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 
-// Client certificate forwarding (when behind proxy sending base64 cert header)
-builder.Services.AddCertificateForwarding(options =>
+// Redis connection (shared for security core + rate limiting if present)
+var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
+IConnectionMultiplexer? redisMux = null;
+if (!string.IsNullOrWhiteSpace(redisConnection))
 {
-    options.CertificateHeader = "X-Client-Cert";
-});
+    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
+    builder.Services.AddSingleton(redisMux);
+}
 
 // Add services to the container.
 builder.Services.AddRazorPages(options =>
@@ -83,22 +86,17 @@ builder.Services.AddMvc(options =>
     options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
 });
 
-// Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
-builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
-
-// Token-exchange rate limiting (remains local for now; core metrics moved)
-builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
-// Default to in-memory; override with Redis below if available
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
+// Security core (DPoP, JAR replay cache, DataProtection, antiforgery, localization, cert forwarding, TE limiter)
+builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
+// TEMP: explicit auth core registration (defensive – duplicate inside AddMrWhoOidcPersistenceAndCore) pending root-cause of missing services in snapshot host
+builder.Services.AddMrWhoOidcAuthCore();
 // Background cleanup + backchannel feature extracted
 builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
-// TEMP: duplicate core auth registrations to stabilize tests (investigate why extension path not supplying them in snapshot host)
-builder.Services.AddAuthPersistence(builder.Configuration);
-builder.Services.AddMrWhoOidcAuthCore();
+// Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS allow-list for OIDC endpoints (tighten to only required)
 builder.Services.AddCors(options =>
@@ -123,41 +121,7 @@ builder.Services.AddCors(options =>
 
 // (Legacy inline persistence/core registrations removed – now supplied by AddMrWhoOidcPersistenceAndCore)
 
-// DPoP services (use shared Security implementation)
-builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, MrWhoOidc.Security.DPoPValidator>();
-var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
-IConnectionMultiplexer? redisMux = null;
-if (!string.IsNullOrWhiteSpace(redisConnection))
-{
-    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
-    builder.Services.AddSingleton(redisMux);
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, RedisDPoPReplayCache>();
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
-    // JAR replay cache: override in-memory default with Redis when available
-    builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
-    // Override TE rate limiter with Redis implementation when Redis is present
-    builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.RedisTokenExchangeRateLimiter>();
-}
-else
-{
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, MrWhoOidc.Security.InMemoryDPoPNonceStore>();
-}
-
-// Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
-builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AuthDbContext>();
-
-// Antiforgery tokens (used by interactive logout and future forms)
-builder.Services.AddAntiforgery(options =>
-{
-    options.Cookie.Name = ".mrwhooidc.af"; // short, distinct
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Lax; // form posts are same-site
-    options.FormFieldName = "__RequestVerificationToken"; // default; explicit for clarity
-    options.HeaderName = "X-CSRF-TOKEN"; // allow JS-enhanced posts if needed later
-});
+// (Security core block moved to AddMrWhoOidcSecurityCore)
 
 // (Moved above into AddMrWhoOidcBackgroundAndBackchannel)
 
