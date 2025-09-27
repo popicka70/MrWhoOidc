@@ -9,8 +9,6 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Logout.Prompt;
-
-[ValidateAntiForgeryToken]
 public class IndexModel : PageModel
 {
     public string ProviderDisplay { get; set; } = "Provider";
