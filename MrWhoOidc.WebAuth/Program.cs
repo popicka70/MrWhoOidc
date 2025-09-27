@@ -23,6 +23,11 @@ using System.Linq;
 using System.Collections.Generic;
 using MrWhoOidc.WebAuth.Background;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Admin.Dto;
+using MrWhoOidc.WebAuth.Admin.Helpers;
+using MrWhoOidc.WebAuth.Infrastructure.Http;
+using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,8 +51,10 @@ var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ??
 
 builder.Services.AddSingleton(oidcOptions);
 
-// Bind AuthOptions (API audiences)
+// Bind AuthOptions
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+// Auth/admin (Phase 2 extracted extension – limited scope)
+builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
@@ -73,14 +80,8 @@ builder.Services.AddMvc(options =>
 // Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 
-// Metrics
-builder.Services.AddSingleton<OidcMetrics>();
-builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
-// Safety: ensure at least one implementation exists (tests that construct very slim hosts may miss this)
-if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
-{
-    builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
-}
+// Metrics (moved to extension)
+builder.Services.AddMrWhoOidcMetrics();
 // Token-exchange rate limiting
 builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
 // Default to in-memory; override with Redis below if available
@@ -166,35 +167,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Cookies for local login session
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.Name = ".mrwhooidc.auth";
-        options.LoginPath = "/login";
-        options.LogoutPath = "/logout";
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-    })
-    .AddCookie("preauth", options =>
-    {
-        options.Cookie.Name = ".mrwhooidc.preauth";
-        options.LoginPath = "/login";
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
-    });
-
-// Authorization + admin policy
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("admin", policy => policy.Requirements.Add(new AdminRequirement()));
-});
-builder.Services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
+// (Moved cookie auth + admin policy to AddMrWhoOidcAuthAndAdmin extension)
 
 // Wire up Auth persistence (PostgreSQL via Aspire connection)
 builder.Services.AddAuthPersistence(builder.Configuration);
@@ -532,7 +505,7 @@ if (authOptions.Value.ExposeClientJwks)
     app.MapGet("/clients/{clientId}/jwks", async (string clientId, MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
     {
         var (etag, json) = await cache.GetClientAsync(clientId, ct);
-        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
         ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ClientJwksCacheSeconds}";
         ctx.Response.Headers["ETag"] = etag;
         return Results.Text(json, "application/json");
@@ -544,7 +517,7 @@ if (authOptions.Value.ExposeProviderJwks)
     {
         var (etag, json) = await cache.GetProviderAsync(providerName, ct);
         if (json == "__not_found__") return Results.Problem(statusCode:404, title:"Provider not found");
-        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
         ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
         ctx.Response.Headers["ETag"] = etag;
         return Results.Text(json, "application/json");
@@ -555,7 +528,7 @@ if (authOptions.Value.ExposeAggregatedProviderJwks)
     app.MapGet("/providers/jwks", async (MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
     {
         var (etag, json) = await cache.GetAllProvidersAsync(ct);
-        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
         ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
         ctx.Response.Headers["ETag"] = etag;
         return Results.Text(json, "application/json");
@@ -673,14 +646,6 @@ admin.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, Cancel
 // Invalidate JWKS cache when provider keys change (simple hook after existing CRUD operations)
 // NOTE: We piggyback right after SaveChanges in existing endpoints; minimal duplication.
 
-static bool SetConditionalEtag(HttpContext ctx, string etag)
-{
-    if (string.IsNullOrEmpty(etag)) return false;
-    var inm = ctx.Request.Headers.IfNoneMatch.ToString();
-    if (!string.IsNullOrEmpty(inm) && string.Equals(inm, etag, StringComparison.Ordinal))
-        return true;
-    return false;
-}
 
 // Client ? Providers mapping CRUD
 admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
@@ -703,7 +668,7 @@ admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbC
     return Results.Ok(list);
 });
 
-admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
 {
     if (input is null || input.IdentityProviderId == Guid.Empty)
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -748,7 +713,7 @@ admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDb
     return Results.Ok();
 });
 
-admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
 {
     var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -789,7 +754,7 @@ admin.MapGet("/providers/{providerId:guid}/claim-mappings", async (Guid provider
     return Results.Ok(list);
 });
 
-admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
 {
     if (input is null || string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -809,7 +774,7 @@ admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid provide
     return Results.Created($"/admin/api/providers/{providerId}/claim-mappings/{entity.Id}", new { entity.Id });
 });
 
-admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -844,7 +809,7 @@ admin.MapGet("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDb
     return Results.Ok(list);
 });
 
-admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
+admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     if (input is null || string.IsNullOrWhiteSpace(input.JwkJson) || string.IsNullOrWhiteSpace(input.Alg))
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -885,7 +850,7 @@ admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthD
     return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
 });
 
-admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
+admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -948,14 +913,14 @@ admin.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
 });
 
-admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClientKeysInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
+admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ClientKeysInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
     if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
 
     if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
     {
-        var status = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
+    var status = AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
         if (status is { Ok: false })
             return Results.Problem(statusCode: 400, title: "Invalid JWKS", detail: status!.Value.Message);
         client.PublicJwksJson = input.PublicJwksJson;
@@ -964,7 +929,7 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
             ClientId = client.Id,
             JwksJson = client.PublicJwksJson!,
             Source = "manual",
-            Hash = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeSha256Hex(MrWhoOidc.WebAuth.Security.AdminApiHelpers.CompactJson(client.PublicJwksJson!))
+            Hash = AdminApiHelpers.ComputeSha256Hex(AdminApiHelpers.CompactJson(client.PublicJwksJson!))
         });
     }
     else
@@ -1033,94 +998,4 @@ app.MapStaticAssets();
 
 app.Run();
 
-namespace MrWhoOidc.WebAuth.Security
-{
-    public sealed class AdminAuthOptions
-    {
-        public string RealmName { get; set; } = "admin";
-        public string AdminRoleName { get; set; } = "admin";
-    }
-
-    public sealed class AdminRequirement : IAuthorizationRequirement { }
-
-    public sealed class AdminAuthorizationHandler(AuthDbContext db, Microsoft.Extensions.Options.IOptions<AdminAuthOptions> options) : AuthorizationHandler<AdminRequirement>
-    {
-        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, AdminRequirement requirement)
-        {
-            var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(sub, out var userId))
-                return;
-
-            var realmName = options.Value.RealmName;
-            var roleName = options.Value.AdminRoleName;
-
-            // Check active assignment of the admin role in the configured realm
-            var hasAdmin = await db.UserRoleAssignments.AsNoTracking()
-                .Join(db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                .Join(db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
-                .AnyAsync(x => x.a.UserId == userId && x.a.IsActive && x.r.IsActive
-                               && x.r.Name == roleName && x.rl.Name == realmName);
-
-            if (hasAdmin)
-                context.Succeed(requirement);
-        }
-    }
-
-    // Input DTOs and helper methods for admin APIs
-    public sealed record MappingInput(Guid IdentityProviderId, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);
-    public sealed record ClaimMappingInput(string ExternalClaim, string LocalClaim, string? Transform, int Order);
-    public sealed record ProviderKeyInput(MrWhoOidc.Auth.Persistence.IdentityProviderKeyPurpose Purpose, string Alg, string? Kid, bool Active, string JwkJson, DateTimeOffset? ExpiresAt);
-    public sealed record ClientKeysInput(string? PublicJwksJson, string? PublicJwksUri);
-
-    internal static class AdminApiHelpers
-    {
-        public static string CompactJson(string json)
-        {
-            using var doc = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = false });
-        }
-
-        public static string ComputeSha256Hex(string input)
-        {
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
-            return Convert.ToHexString(hash).ToLowerInvariant();
-        }
-
-        public static (bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids)? ComputeJwksStatus(string? jwksJson)
-        {
-            if (string.IsNullOrWhiteSpace(jwksJson)) return null;
-            try
-            {
-                using var doc = JsonDocument.Parse(jwksJson);
-                var keys = new List<JsonElement>();
-                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
-                {
-                    keys = keysArr.EnumerateArray().ToList();
-                }
-                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                {
-                    keys.Add(doc.RootElement);
-                }
-                else
-                {
-                    return (false, "Invalid", "JWKS must be an object with 'keys' array or a single JWK object.", 0, 0, new());
-                }
-
-                var count = keys.Count;
-                var kids = keys.Select(k => k.TryGetProperty("kid", out var kid) ? kid.GetString() : null).ToList();
-                var nonNullKids = kids.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
-                var dup = nonNullKids.GroupBy(k => k, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key!).ToList();
-
-                var ok = dup.Count == 0;
-                var summary = ok ? "Valid JWKS" : "Duplicates";
-                var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : $"Duplicate kid(s): {string.Join(", ", dup)}";
-                return (ok, summary, msg, count, nonNullKids.Distinct(StringComparer.Ordinal).Count(), dup);
-            }
-            catch (Exception ex)
-            {
-                return (false, "Invalid", ex.Message, 0, 0, new());
-            }
-        }
-    }
-}
+// (Admin auth & DTO/helper types extracted to separate files in Phase 1)
