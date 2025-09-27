@@ -356,8 +356,8 @@ Next steps (proposed)
   - [x] Keys UI: PEM import, pretty-print/compact toggle, alg/kty/use validation & thumbprint preview (DONE 2025-09-27). Remaining: enhanced JWKS visual preview.
   - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
   - [x] JAR hardening: Redis-backed replay cache auto-enabled when `ConnectionStrings:redis` present (falls back to in-memory for dev); TTL (`RequestObjectReplayTtlSeconds`) and clock skew (`RequestObjectClockSkewSeconds`) exposed via `AuthOptions` (DONE 2025-09-27 – see `docs/jar-replay-cache.md`).
-  - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
-  - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
+  - [x] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout. (DONE 2025-09-27 – UI updated in Select.cshtml/Select.cshtml.cs + site.css; accessibility & mobile responsive grid; remembered provider banner)
+  - [x] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs. (DONE 2025-09-27 – see ExternalOidcIntegrationTests: 3 new tests; suite now 107 passing)
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
   - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
 - P1 (next 2�4 weeks)
