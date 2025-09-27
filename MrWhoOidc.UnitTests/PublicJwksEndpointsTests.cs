@@ -193,4 +193,165 @@ public class PublicJwksEndpointsTests
         var arr = doc.RootElement.GetProperty("keys").EnumerateArray().ToList();
         Assert.AreEqual(0, arr.Count);
     }
+
+    [TestMethod]
+    public async Task Provider_Jwks_Etag_Changes_When_Publishable_Key_Added()
+    {
+        var env = await CreateAsync();
+        string etag1;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = new IdentityProvider { Name = "etagp1", Enabled = true };
+            db.IdentityProviders.Add(p);
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/etagp1/jwks");
+        etag1 = resp1.Headers.ETag?.Tag ?? ""; // empty set hash
+        Assert.IsFalse(string.IsNullOrEmpty(etag1));
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var provider = db.IdentityProviders.First(p => p.Name == "etagp1");
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "k-et1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"k-et1\"}" });
+            await db.SaveChangesAsync();
+            var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
+            cache.InvalidateProvider("etagp1");
+        }
+        var resp2 = await env.Client.GetAsync("/providers/etagp1/jwks");
+        var etag2 = resp2.Headers.ETag?.Tag;
+        Assert.AreNotEqual(etag1, etag2, "ETag should change after adding a publishable key");
+    }
+
+    [TestMethod]
+    public async Task Provider_Jwks_Etag_Unchanged_When_NonPublishable_Key_Added()
+    {
+        var env = await CreateAsync();
+        string etag1;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = new IdentityProvider { Name = "etagp2", Enabled = true };
+            db.IdentityProviders.Add(p);
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/etagp2/jwks");
+        etag1 = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag1));
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var provider = db.IdentityProviders.First(p => p.Name == "etagp2");
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "k-et2", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"b\",\"e\":\"AQAB\",\"kid\":\"k-et2\"}" });
+            await db.SaveChangesAsync();
+            var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
+            cache.InvalidateProvider("etagp2");
+        }
+        var resp2 = await env.Client.GetAsync("/providers/etagp2/jwks");
+        var etag2 = resp2.Headers.ETag?.Tag;
+        Assert.AreEqual(etag1, etag2, "ETag should not change when a non-publishable key is added");
+    }
+
+    [TestMethod]
+    public async Task Provider_Jwks_Etag_Unchanged_When_Duplicate_Publishable_Key_With_Same_Kid_Added()
+    {
+        var env = await CreateAsync();
+        string etag1;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = new IdentityProvider { Name = "etagp3", Enabled = true };
+            db.IdentityProviders.Add(p);
+            await db.SaveChangesAsync();
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "dup", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"c1\",\"e\":\"AQAB\",\"kid\":\"dup\"}" });
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/etagp3/jwks");
+        etag1 = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag1));
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var provider = db.IdentityProviders.First(p => p.Name == "etagp3");
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "dup", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"c2\",\"e\":\"AQAB\",\"kid\":\"dup\"}" });
+            await db.SaveChangesAsync();
+            var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
+            cache.InvalidateProvider("etagp3");
+        }
+        var resp2 = await env.Client.GetAsync("/providers/etagp3/jwks");
+        var etag2 = resp2.Headers.ETag?.Tag;
+        Assert.AreEqual(etag1, etag2, "ETag should remain the same when a duplicate publishable key with same kid is added");
+    }
+
+    [TestMethod]
+    public async Task Aggregated_Jwks_Etag_Changes_When_Publishable_Key_Added_To_One_Provider()
+    {
+        var env = await CreateAsync();
+        string etag1;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            db.IdentityProviders.Add(new IdentityProvider { Name = "agg-et1", Enabled = true });
+            db.IdentityProviders.Add(new IdentityProvider { Name = "agg-et2", Enabled = true });
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/jwks");
+        etag1 = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag1));
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = db.IdentityProviders.First(x => x.Name == "agg-et1");
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-agg1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"z1\",\"e\":\"AQAB\",\"kid\":\"k-agg1\"}" });
+            await db.SaveChangesAsync();
+            var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
+            cache.InvalidateAllProviders();
+        }
+        var resp2 = await env.Client.GetAsync("/providers/jwks");
+        var etag2 = resp2.Headers.ETag?.Tag;
+        Assert.AreNotEqual(etag1, etag2, "Aggregated ETag should change after adding a publishable key to one provider");
+    }
+
+    [TestMethod]
+    public async Task Aggregated_Jwks_Etag_Unchanged_When_NonPublishable_Key_Added()
+    {
+        var env = await CreateAsync();
+        string etag1;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            db.IdentityProviders.Add(new IdentityProvider { Name = "agg-et3", Enabled = true });
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/jwks");
+        etag1 = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag1));
+
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = db.IdentityProviders.First(x => x.Name == "agg-et3");
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-agg3", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"z3\",\"e\":\"AQAB\",\"kid\":\"k-agg3\"}" });
+            await db.SaveChangesAsync();
+            var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
+            cache.InvalidateAllProviders();
+        }
+        var resp2 = await env.Client.GetAsync("/providers/jwks");
+        var etag2 = resp2.Headers.ETag?.Tag;
+        Assert.AreEqual(etag1, etag2, "Aggregated ETag should not change when only a non-publishable key is added");
+    }
 }
