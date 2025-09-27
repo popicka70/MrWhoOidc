@@ -115,6 +115,63 @@ Security Notes:
 - Prefer PSS algorithms (PS256) or EC (ES256) where ecosystem support exists.
 - Do not reuse the same private key between providers.
 
+### 2.1 Public JWKS Endpoints (Clients & Providers)
+
+The server can optionally expose sanitized public keys for:
+
+| Scope | Endpoint | Description |
+|-------|----------|-------------|
+| Client | `/clients/{clientId}/jwks` | Keys a client has published (for its own consumers validating client-generated artifacts e.g. request objects). |
+| Provider (single) | `/providers/{providerName}/jwks` | Active provider keys (signing only by default) for upstream/federated flows or logout tokens. 404 if provider unknown or disabled. |
+| Providers (aggregate) | `/providers/jwks` | All active provider keys (signing only by default) deduplicated by `kid`. |
+
+Feature flags (appsettings*) under `Auth`:
+```jsonc
+"Auth": {
+  "ExposeClientJwks": true,
+  "ExposeProviderJwks": true,
+  "ExposeAggregatedProviderJwks": true,
+  "ClientJwksCacheSeconds": 120,
+  "ProviderJwksCacheSeconds": 120,
+  "ProviderJwksIncludeEncryption": false
+}
+```
+
+Caching & ETags:
+- Responses carry an `ETag` header derived from sorted `kid` values (stable across key order changes, changes only when membership changes).
+- IMemoryCache TTL = `ClientJwksCacheSeconds` / `ProviderJwksCacheSeconds` (minimum 5s enforced).
+- Consumers should perform conditional GETs with `If-None-Match` for efficient polling.
+
+Sanitization:
+- Private key members are removed: `d,p,q,dp,dq,qi,oth,k` and any property starting with `_`.
+- Ensures `use` is present (`sig` for signing keys, `enc` if encryption flag enabled and purpose is encryption).
+
+Encryption Keys (optional):
+- Disabled by default to reduce exposure surface. Set `ProviderJwksIncludeEncryption=true` to include encryption-purpose keys alongside signing keys.
+
+Rotation Procedure (Providers):
+1. Import new key (Active=true) → now two signing keys are served.
+2. Wait for dependent systems to re-fetch JWKS (>= cache TTL; encourage conditional GETs).
+3. Deactivate old key (Active=false) → endpoint stops including it; ETag changes.
+4. After confirming no tokens refer to old key (for outbound artifacts), optionally delete it.
+
+Rotation Procedure (Clients):
+1. Client updates its own `PublicJwksJson` (admin UI or API) with new key(s) added.
+2. Invalidate cache automatically (future) or rely on TTL; manual invalidation via admin operation if exposed (currently internal API). Tests show explicit invalidation logic exists.
+3. Remove old key after consumers no longer use it for verification.
+
+Operational Tips:
+- Monitor logs for duplicate `kid` warnings (duplicates are skipped during aggregation).
+- Use short TTLs (60–120s) during active rotation phases, longer (5–10m) for steady state.
+- If you see unexpected stale keys, verify cache invalidation triggers on key lifecycle events (future enhancement) or temporarily reduce TTL.
+
+Security Considerations:
+- Avoid exposing encryption keys unless a downstream requirement exists.
+- Do not publish private keys; sanitization enforces this but defense in depth (never store private in `PublicJwksJson`).
+- Consider rate limiting (policy `rl-jwks`) when high-frequency polling is expected (configured in `Program.cs`).
+
+Client Consumption Guidance: see Developer Guide JWKS section.
+
 Tips
 - Keep at least two signing keys to support seamless rotation
 - For request-object signing algs, align with `Auth:RequestObjectAllowedAlgorithms` (see replay cache doc)

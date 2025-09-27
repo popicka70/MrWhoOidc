@@ -14,6 +14,48 @@ This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flow
 
 Cache `.well-known` and JWKS using ETag/Cache-Control.
 
+### 1.1 Optional JWKS Endpoints (Feature-Flagged)
+If enabled by the admin, additional JWKS surfaces exist beyond the discovery `jwks_uri` (the latter represents the authorization server's own signing keys—handled elsewhere):
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/clients/{clientId}/jwks` | Public keys a client has published (e.g. for validating its request objects or future self-issued tokens). Returns `{"keys":[]}` when none. |
+| `/providers/{providerName}/jwks` | Active keys (signing by default) for a specific external provider. 404 if unknown/disabled. |
+| `/providers/jwks` | Aggregate of all active provider keys (deduplicated by `kid`). |
+
+Characteristics
+- Sanitized: private key fields removed (`d,p,q,dp,dq,qi,oth,k,_*`).
+- ETag: hash of sorted `kid` values; stable ordering not required by caller.
+- Cache headers (future): currently rely on ETag + client heuristic caching. Use `If-None-Match` to minimize bandwidth.
+- Encryption keys included only when admin sets `Auth:ProviderJwksIncludeEncryption=true`.
+
+Polling Strategy
+1. Initial GET → cache ETag.
+2. Subsequent GET with `If-None-Match` every TTL period (exposed TTL not returned today; align with admin guidance, e.g. 120s steady-state).
+3. If 304 Not Modified → retain cached keys; if 200 with new body → update local verification store.
+
+Rotation Detection
+- New key addition changes ETag only when a new `kid` appears.
+- Removing a key also changes the ETag.
+- Re-ordering keys without membership change does not alter ETag.
+
+Failure Modes
+- 404 on `/providers/{name}/jwks` means provider disabled or unknown; treat as transient if expecting eventual creation.
+- Empty `{"keys":[]}` is valid; don't treat as error.
+
+Security
+- Never assume encryption keys are present; check `use` or intended algorithm.
+- Validate `kty`, `alg`, and `use` align with your crypto expectations before trusting.
+
+Example (PowerShell):
+```
+$r = Invoke-WebRequest https://as.example.com/providers/jwks
+$etag = $r.Headers.ETag
+# Later conditional fetch
+$r2 = Invoke-WebRequest -Headers @{ 'If-None-Match' = $etag } https://as.example.com/providers/jwks
+if ($r2.StatusCode -eq 304) { 'No change' } else { 'Updated:' + $r2.Content }
+```
+
 ## 2) Authorization Parameters & Provider / UX Hints
 
 Below is a consolidated matrix of supported request parameters for `/authorize` (native + OIDC standard). Parameters marked (JAR-only) must appear inside the request object when JAR is used if you rely on them.

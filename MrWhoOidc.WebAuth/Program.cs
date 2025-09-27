@@ -22,6 +22,7 @@ using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
 using MrWhoOidc.WebAuth.Background;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -387,6 +388,19 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
+    // Public JWKS endpoints (lightweight; allow a bit higher rate)
+    options.AddPolicy("rl-jwks", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
     // Admin endpoints policy (more restrictive by default)
     options.AddPolicy("rl-admin", httpContext =>
     {
@@ -419,6 +433,7 @@ builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
 builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
 // Introspection
 builder.Services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Security.IPublicJwksCache, MrWhoOidc.WebAuth.Security.PublicJwksCache>();
 
 var app = builder.Build();
 
@@ -509,6 +524,43 @@ app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct
     ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
     return Results.Json(new { keys = jwks });
 });
+
+// Conditional JWKS endpoints for clients and providers
+var authOptions = app.Services.GetRequiredService<IOptions<MrWhoOidc.Auth.Services.AuthOptions>>();
+if (authOptions.Value.ExposeClientJwks)
+{
+    app.MapGet("/clients/{clientId}/jwks", async (string clientId, MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+    {
+        var (etag, json) = await cache.GetClientAsync(clientId, ct);
+        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ClientJwksCacheSeconds}";
+        ctx.Response.Headers["ETag"] = etag;
+        return Results.Text(json, "application/json");
+    }).RequireRateLimiting("rl-jwks");
+}
+if (authOptions.Value.ExposeProviderJwks)
+{
+    app.MapGet("/providers/{providerName}/jwks", async (string providerName, MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+    {
+        var (etag, json) = await cache.GetProviderAsync(providerName, ct);
+        if (json == "__not_found__") return Results.Problem(statusCode:404, title:"Provider not found");
+        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
+        ctx.Response.Headers["ETag"] = etag;
+        return Results.Text(json, "application/json");
+    }).RequireRateLimiting("rl-jwks");
+}
+if (authOptions.Value.ExposeAggregatedProviderJwks)
+{
+    app.MapGet("/providers/jwks", async (MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+    {
+        var (etag, json) = await cache.GetAllProvidersAsync(ct);
+        if (SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
+        ctx.Response.Headers["ETag"] = etag;
+        return Results.Text(json, "application/json");
+    }).RequireRateLimiting("rl-jwks");
+}
 app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
    .RequireRateLimiting("rl-authorize");
 // Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
@@ -617,6 +669,18 @@ admin.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, Cancel
     await db.SaveChangesAsync(ct);
     return Results.NoContent();
 });
+
+// Invalidate JWKS cache when provider keys change (simple hook after existing CRUD operations)
+// NOTE: We piggyback right after SaveChanges in existing endpoints; minimal duplication.
+
+static bool SetConditionalEtag(HttpContext ctx, string etag)
+{
+    if (string.IsNullOrEmpty(etag)) return false;
+    var inm = ctx.Request.Headers.IfNoneMatch.ToString();
+    if (!string.IsNullOrEmpty(inm) && string.Equals(inm, etag, StringComparison.Ordinal))
+        return true;
+    return false;
+}
 
 // Client ? Providers mapping CRUD
 admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
