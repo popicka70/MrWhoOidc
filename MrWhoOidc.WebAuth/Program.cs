@@ -77,19 +77,10 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
     builder.Services.AddSingleton(redisMux);
 }
 
-// Add services to the container.
-builder.Services.AddRazorPages(options =>
-{
-    // Authorize entire Admin folder with the 'admin' policy
-    options.Conventions.AuthorizeFolder("/Admin", "admin");
-});
-// Global antiforgery filter (covers Razor Pages + any future MVC endpoints)
-builder.Services.AddMvc(options =>
-{
-    options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
-});
+// Presentation layer (Razor Pages + MVC + antiforgery + localization)
+builder.Services.AddLocalizationAndMvc(builder.Configuration);
 
-// Security core (DPoP, JAR replay cache, DataProtection, antiforgery, localization, cert forwarding, TE limiter)
+// Security core (DPoP, JAR replay cache, DataProtection, cert forwarding, TE limiter)
 builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 
 // Persistence & core protocol services extracted

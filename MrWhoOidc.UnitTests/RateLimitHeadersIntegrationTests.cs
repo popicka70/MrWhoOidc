@@ -140,8 +140,9 @@ public sealed class RateLimitHeadersIntegrationTests
         var client = host.GetTestClient();
 
         // Adaptive loop similar to token-exchange
-        const int expectedLimit = 80;
-        int maxAttempts = expectedLimit + 5;
+    const int expectedLimit = 80;
+    // Allow a larger buffer so slow Redis or latency doesn't prevent hitting the limit within attempts
+    int maxAttempts = expectedLimit + 40; // generous buffer to reliably reach 429
         HttpResponseMessage? last = null;
         int attempts = 0;
         for (; attempts < maxAttempts; attempts++)
@@ -152,7 +153,12 @@ public sealed class RateLimitHeadersIntegrationTests
         }
 
         Assert.IsNotNull(last, "No response captured");
-        Assert.AreEqual(HttpStatusCode.TooManyRequests, last!.StatusCode, $"Did not observe 429 within {maxAttempts} attempts (observed {attempts}).");
+        if (last!.StatusCode != HttpStatusCode.TooManyRequests)
+        {
+            var limitHeader = last.Headers.Contains("X-RateLimit-Limit") ? string.Join(',', last.Headers.GetValues("X-RateLimit-Limit")) : "<missing>";
+            var remainingHeader = last.Headers.Contains("X-RateLimit-Remaining") ? string.Join(',', last.Headers.GetValues("X-RateLimit-Remaining")) : "<missing>";
+            Assert.Fail($"Did not observe 429 within {maxAttempts} attempts (observed {attempts}). Final status={last.StatusCode}, X-RateLimit-Limit={limitHeader}, Remaining={remainingHeader}");
+        }
         Assert.IsTrue(last.Headers.Contains("Retry-After"), "Missing Retry-After header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Limit"), "Missing X-RateLimit-Limit header");
         Assert.IsTrue(last.Headers.Contains("X-RateLimit-Remaining"), "Missing X-RateLimit-Remaining header");

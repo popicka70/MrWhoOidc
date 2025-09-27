@@ -15,7 +15,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 /// <summary>
 /// Extracted security core registration previously in Program.cs.
 /// Contains DPoP, JAR replay cache overrides, token exchange limiter, DataProtection persistence,
-/// antiforgery, localization, certificate forwarding. Pure mechanical move (no behavior change intended).
+/// certificate forwarding. (Antiforgery + localization moved to AddLocalizationAndMvc.) Pure mechanical move (no behavior change intended).
 /// </summary>
 public static class SecurityCoreExtensions
 {
@@ -48,19 +48,7 @@ public static class SecurityCoreExtensions
         // DataProtection -> DB persistence (required for antiforgery stability across restarts)
         services.AddDataProtection().PersistKeysToDbContext<AuthDbContext>();
 
-        // Antiforgery tokens (used by interactive flows)
-        services.AddAntiforgery(options =>
-        {
-            options.Cookie.Name = ".mrwhooidc.af";
-            options.Cookie.HttpOnly = true;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.Cookie.SameSite = SameSiteMode.Lax;
-            options.FormFieldName = "__RequestVerificationToken";
-            options.HeaderName = "X-CSRF-TOKEN";
-        });
-
-        // Localization resources path (Razor & validation messages)
-        services.AddLocalization(o => o.ResourcesPath = "Resources");
+        // (Antiforgery + localization registrations now live in AddLocalizationAndMvc)
 
         // Certificate forwarding (maintains prior header name)
         services.AddCertificateForwarding(o => o.CertificateHeader = "X-Client-Cert");

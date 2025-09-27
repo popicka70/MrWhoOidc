@@ -23,7 +23,7 @@ public class ProgramSurfaceSnapshotTests
     // Updated model captures multiple rate limiter policies & whether CORS/authorization metadata present.
     private record EndpointInfo(string Pattern, string Methods, string[] RateLimiters, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
 
-    [TestMethod, TestCategory("SafetySurface"), Ignore("Pending clean snapshot regeneration after enriched metadata; commit new snapshot then remove Ignore.")]
+    [TestMethod, TestCategory("SafetySurface"), Ignore("Temporarily ignored while snapshot is being regenerated after refactor; re-enable once stabilized.")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
     var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
