@@ -7,20 +7,18 @@ using MrWhoOidc.Auth.Persistence;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Emails;
 
 [Authorize]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db) : UserPageModelBase
 {
     [FromRoute]
     public Guid UserId { get; set; }
 
     public IReadOnlyList<UserAlternativeEmail> Items { get; private set; } = Array.Empty<UserAlternativeEmail>();
-    public string UserHeading { get; private set; } = string.Empty;
 
     public async Task<IActionResult> OnGetAsync()
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
         if (user is null) return RedirectToPage("/Admin/Users/Index");
-        UserHeading = BuildHeading(user.Username, user.Name);
-        ViewData["UserHeading"] = UserHeading;
+        SetHeading(user.Username, user.Name);
         Items = await db.UserAlternativeEmails.AsNoTracking()
             .Where(a => a.UserId == UserId)
             .OrderByDescending(a => a.IsVerified).ThenBy(a => a.Email)
@@ -65,8 +63,4 @@ public class IndexModel(AuthDbContext db) : PageModel
         return RedirectToPage(new { userId = UserId });
     }
 
-    private static string BuildHeading(string username, string? name)
-        => string.IsNullOrWhiteSpace(name) || string.Equals(username, name, StringComparison.OrdinalIgnoreCase)
-            ? username
-            : $"{username} ({name})";
 }
