@@ -1,12 +1,13 @@
-using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace MrWhoOidc.Auth.Migrations
 {
+    /// <inheritdoc />
     public partial class AddPublishableToIdentityProviderKeys : Migration
     {
+        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
@@ -15,20 +16,11 @@ namespace MrWhoOidc.Auth.Migrations
                 type: "boolean",
                 nullable: false,
                 defaultValue: false);
-
-            // Optional performance index combining publish-related filters
-            migrationBuilder.CreateIndex(
-                name: "IX_IdentityProviderKeys_Provider_Active_Publishable",
-                table: "IdentityProviderKeys",
-                columns: new[] { "IdentityProviderId", "Active", "Publishable" });
         }
 
+        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_IdentityProviderKeys_Provider_Active_Publishable",
-                table: "IdentityProviderKeys");
-
             migrationBuilder.DropColumn(
                 name: "Publishable",
                 table: "IdentityProviderKeys");
