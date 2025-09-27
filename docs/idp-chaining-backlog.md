@@ -46,16 +46,30 @@ Epics and stories
 
 - [~] Story: Admin UI pages (Razor Pages)
   - Done:
-    - Providers list/detail/create/edit/delete; config JSON validation with discovery on save.
-    - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
-    - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed.
-    - Claim mapping editor (CRUD) at `/Admin/Providers/ClaimMappings` with transforms help.
-    - Provider keys page: import private JWK JSON, `kid`/`alg`, `Active` toggle, activate/deactivate and delete.
-    - Client keys page: JWKS URI fetch + save, manual JWKS JSON edit, history with hash, duplicates check, basic summary (key count).
-  - Pending:
-    - Keys: richer JWKS preview / UX polish. (PEM import + pretty/compact toggles + alg/kty/use validation + JWK thumbprint preview DONE 2025-09-27)
-    - Logo upload/select; drag/drop ordering polish.
-  - Acceptance: Full CRUD works, validation visible, audit notes recorded.
+    - Providers list/detail/create/edit/delete with validation & discovery test-on-save + error surfacing.
+    - Provider config JSON editor: inline validation + discovery excerpt + retry-safe form post fix.
+    - Client ↔ Providers mapping page: add/update/delete, ordering, default provider toggle, ACR requirement, auto-redirect flag.
+    - Claim mapping editor CRUD with transform selection help + ordering; validation on duplicates.
+    - Provider keys page: import (raw JWK or PEM -> JWK), alg/kty/use validation, pretty/compact toggle, JWK thumbprint preview, activate/deactivate, publish/unpublish (with JAR guard), delete, key list with publishable & active indicators.
+    - Client keys page: JWKS URI fetch & manual JSON entry, history with hash + duplicate detection + key count summary.
+    - Logo upload: image file upload (stored under `/uploads/providers/{fileName}` with cache-busting `?v=` query) + manual URL override support + preview on edit; removal action implemented.
+    - Accessibility pass (2025-09-27): landmark roles, form label associations, button semantics corrected for picker & keys pages; basic keyboard tab order verified.
+  - Pending / Polish:
+    - Advanced JWKS visual preview (structured table: kid / alg / kty / use / expires, highlight inactive & publishable states) replacing current minimal list.
+    - Drag & drop provider ordering UI (currently numeric SortOrder field) with keyboard-accessible reorder (ARIA `aria-grabbed` pattern) + optimistic update & rollback.
+    - Claim mapping UX: inline test mode (enter sample external claim set, preview transformed output) to reduce trial-and-error.
+    - Provider logo management: size/type validation (enforce max 200 KB, MIME whitelist), thumbnail generation (optional), alt text field; graceful fallback when missing.
+    - Form validation consistency: unify ProblemDetails parsing for client keys & provider keys to show field-level errors without page reload flicker.
+    - Global toast/alert component standardization (success/info/error) with auto-dismiss and focus management for screen readers.
+    - Rate limit feedback: display remaining quota headers (if present) on admin key mutation actions for observability.
+  - Deferred (track separately if escalates): dark mode styling parity for keys & mapping pages; bulk import of claim mappings; in-place JSON diff viewer for client JWKS history entries.
+  - Acceptance (updated):
+    - All CRUD flows (providers, mappings, keys, client keys) succeed with clear validation errors for malformed data or conflicts (kid duplicate, invalid alg/kty, mapping duplicate).
+    - Logo upload enforces type/size (once implemented) and cache-busting parameter updates after change.
+    - Provider ordering can be modified without manual numeric entry (drag/drop + keyboard) and persists SortOrder correctly (integration test).
+    - JWKS preview shows sanitized keys and reflects publish/unpublish & activate actions within one refresh cycle (no stale cache beyond configured TTL).
+    - Claim mapping test mode (when implemented) produces deterministic transform output for at least copy/trim/case transforms (unit tests).
+    - Accessibility: axe-core scan (CI) yields no critical violations for admin provider pages and keys page.
 
 3) Authorization pipeline updates (IdP chaining)
 - [x] Story: Authorize endpoint parameterization
