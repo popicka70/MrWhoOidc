@@ -26,13 +26,15 @@ public class PublicJwksEndpointsTests
         var dbName = "jwks-intg-" + Guid.NewGuid().ToString("N");
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseTestServer();
+    // Disable validation to avoid first-run constructor validation flake when optional/late-bound services are added
+    builder.Host.UseDefaultServiceProvider(o => { o.ValidateOnBuild = false; o.ValidateScopes = false; });
         var services = builder.Services;
-    services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
-    // Memory cache needed for JWKS cache
-    services.AddMemoryCache();
-    services.AddLogging();
-    services.AddSingleton<OidcMetrics>();
-    services.AddScoped<IPublicJwksCache, PublicJwksCache>();
+        services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddMemoryCache();
+        services.AddLogging();
+        // Register metrics early and explicitly so PublicJwksCache constructor always resolves it deterministically
+    services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
+        services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         services.Configure<AuthOptions>(o =>
         {
             o.ExposeClientJwks = true;

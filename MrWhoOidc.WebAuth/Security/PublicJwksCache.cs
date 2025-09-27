@@ -21,20 +21,25 @@ public interface IPublicJwksCache
 
 public sealed class PublicJwksCache : IPublicJwksCache
 {
+    private static class EventIds
+    {
+        public static readonly EventId ZeroKeysJarEnabled = new(5100, nameof(ZeroKeysJarEnabled));
+        public static readonly EventId ZeroKeysActiveNonPublishable = new(5101, nameof(ZeroKeysActiveNonPublishable));
+    }
     private readonly IMemoryCache _cache;
     private readonly IDbContextFactory<AuthDbContext> _dbFactory;
     private readonly IOptions<AuthOptions> _options;
     private readonly ILogger<PublicJwksCache> _logger;
-    private readonly Observability.OidcMetrics _metrics;
+    private readonly Observability.IOidcMetrics _metrics;
 
     // metrics parameter made optional to avoid breaking lightweight test hosts that haven't registered OidcMetrics yet
-    public PublicJwksCache(IMemoryCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, Observability.OidcMetrics? metrics, ILogger<PublicJwksCache> logger)
+    public PublicJwksCache(IMemoryCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics)
     {
         _cache = cache;
         _dbFactory = dbFactory;
         _options = options;
-        _metrics = metrics ?? new Observability.OidcMetrics();
         _logger = logger;
+        _metrics = metrics;
     }
 
     public void InvalidateClient(string clientId)
@@ -106,13 +111,18 @@ public sealed class PublicJwksCache : IPublicJwksCache
         if (list.Count == 0)
         {
             _metrics.ProviderJwksZeroKeys.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-            // Warn if provider requires JAR and yet no publishable active keys
             try
             {
                 var jarRequired = provider.ConfigJson != null && Auth.IdentityProviders.OidcProviderConfig.TryParse(provider.ConfigJson, out var parsed).ok && parsed?.UseJAR == true;
                 if (jarRequired)
                 {
-                    _logger.LogWarning("Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
+                    _logger.LogWarning(EventIds.ZeroKeysJarEnabled, "Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
+                }
+                // Additional misconfiguration warning: active signing keys exist but none publishable
+                var hasActiveNonPublishable = await db.IdentityProviderKeys.AsNoTracking().AnyAsync(k => k.IdentityProviderId == provider.Id && k.Active && k.Purpose == IdentityProviderKeyPurpose.Signing && !k.Publishable, ct);
+                if (hasActiveNonPublishable)
+                {
+                    _logger.LogWarning(EventIds.ZeroKeysActiveNonPublishable, "Provider JWKS served zero keys for provider {Provider} but there is at least one ACTIVE non-publishable signing key (likely missing publish step)", providerName);
                 }
             }
             catch { }

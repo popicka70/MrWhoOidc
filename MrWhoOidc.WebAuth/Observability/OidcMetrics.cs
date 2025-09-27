@@ -2,7 +2,68 @@ using System.Diagnostics.Metrics;
 
 namespace MrWhoOidc.WebAuth.Observability;
 
-public sealed class OidcMetrics
+public interface IOidcMetrics
+{
+    Counter<long> AuthorizeRequests { get; }
+    Histogram<double> AuthorizeDurationMs { get; }
+    Histogram<long> AuthorizeRequestSizeBytes { get; }
+    Counter<long> TokenRequests { get; }
+    Counter<long> TokenSuccess { get; }
+    Counter<long> TokenFailures { get; }
+    Histogram<double> TokenDurationMs { get; }
+    Counter<long> TokenExchangeRequests { get; }
+    Counter<long> TokenExchangeSuccess { get; }
+    Counter<long> TokenExchangeFailures { get; }
+    Histogram<double> TokenExchangeDurationMs { get; }
+    Counter<long> TokenExchangeRateLimitAllowed { get; }
+    Counter<long> TokenExchangeRateLimitBlocked { get; }
+    Counter<long> UserInfoRequests { get; }
+    Counter<long> UserInfoSuccess { get; }
+    Counter<long> UserInfoFailures { get; }
+    Histogram<double> UserInfoDurationMs { get; }
+    Counter<long> RevocationRequests { get; }
+    Counter<long> IntrospectionRequests { get; }
+    Counter<long> IntrospectionActiveTrue { get; }
+    Counter<long> IntrospectionActiveFalse { get; }
+    Histogram<double> IntrospectionDurationMs { get; }
+    Counter<long> ParRequests { get; }
+    Counter<long> ParSuccess { get; }
+    Counter<long> ParFailures { get; }
+    Counter<long> ParConsumed { get; }
+    Histogram<long> ParRequestSizeBytes { get; }
+    Counter<long> JarValid { get; }
+    Counter<long> JarInvalid { get; }
+    Histogram<long> JarRequestSizeBytes { get; }
+    Counter<long> ExternalStartRequests { get; }
+    Counter<long> ExternalStartSuccess { get; }
+    Counter<long> ExternalStartFailures { get; }
+    Histogram<double> ExternalStartDurationMs { get; }
+    Counter<long> ExternalCallbackRequests { get; }
+    Counter<long> ExternalCallbackSuccess { get; }
+    Counter<long> ExternalCallbackFailures { get; }
+    Histogram<double> ExternalCallbackDurationMs { get; }
+    Counter<long> BclEmitted { get; }
+    Counter<long> BclDelivered { get; }
+    Counter<long> BclFailed { get; }
+    Histogram<double> BclDeliveryLatencyMs { get; }
+    ObservableGauge<long> BclPendingBacklog { get; }
+    void SetBclBacklog(long value);
+    Counter<long> LogoutRequests { get; }
+    Counter<long> LogoutFederated { get; }
+    Counter<long> LogoutLocal { get; }
+    Counter<long> LogoutFailures { get; }
+    Histogram<double> LogoutDuration { get; }
+    Counter<long> ProviderJwksRequests { get; }
+    Counter<long> ProviderJwksAllRequests { get; }
+    Counter<long> ProviderJwksNotFound { get; }
+    Counter<long> ProviderJwksCacheHit { get; }
+    Counter<long> ProviderJwksCacheMiss { get; }
+    Counter<long> ProviderJwksKeysReturned { get; }
+    Counter<long> ProviderJwksZeroKeys { get; }
+    Counter<long> ProviderJwksEtagChanges { get; }
+}
+
+public sealed class OidcMetrics : IOidcMetrics
 {
     public const string MeterName = "MrWhoOidc.WebAuth";
     private static readonly Meter Meter = new(MeterName);
@@ -90,4 +151,70 @@ public sealed class OidcMetrics
     public Counter<long> ProviderJwksKeysReturned { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.keys.returned");
     public Counter<long> ProviderJwksZeroKeys { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.zero_keys");
     public Counter<long> ProviderJwksEtagChanges { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.etag_changes");
+}
+
+internal sealed class NoOpOidcMetrics : IOidcMetrics
+{
+    private static readonly Meter Meter = new("MrWhoOidc.WebAuth.noop");
+    private static Counter<long> C(string name) => Meter.CreateCounter<long>(name + ".noop");
+    private static Histogram<double> H(string name) => Meter.CreateHistogram<double>(name + ".noop");
+    private static Histogram<long> HL(string name) => Meter.CreateHistogram<long>(name + ".noop");
+    private static readonly ObservableGauge<long> G = Meter.CreateObservableGauge<long>("oidc.noop.g", () => 0L);
+    public Counter<long> AuthorizeRequests { get; } = C("oidc.authorize.requests");
+    public Histogram<double> AuthorizeDurationMs { get; } = H("oidc.authorize.duration.ms");
+    public Histogram<long> AuthorizeRequestSizeBytes { get; } = HL("oidc.authorize.request.size.bytes");
+    public Counter<long> TokenRequests { get; } = C("oidc.token.requests");
+    public Counter<long> TokenSuccess { get; } = C("oidc.token.success");
+    public Counter<long> TokenFailures { get; } = C("oidc.token.failures");
+    public Histogram<double> TokenDurationMs { get; } = H("oidc.token.duration.ms");
+    public Counter<long> TokenExchangeRequests { get; } = C("oidc.token_exchange.requests");
+    public Counter<long> TokenExchangeSuccess { get; } = C("oidc.token_exchange.success");
+    public Counter<long> TokenExchangeFailures { get; } = C("oidc.token_exchange.failures");
+    public Histogram<double> TokenExchangeDurationMs { get; } = H("oidc.token_exchange.duration.ms");
+    public Counter<long> TokenExchangeRateLimitAllowed { get; } = C("oidc.token_exchange.ratelimit.allowed");
+    public Counter<long> TokenExchangeRateLimitBlocked { get; } = C("oidc.token_exchange.ratelimit.blocked");
+    public Counter<long> UserInfoRequests { get; } = C("oidc.userinfo.requests");
+    public Counter<long> UserInfoSuccess { get; } = C("oidc.userinfo.success");
+    public Counter<long> UserInfoFailures { get; } = C("oidc.userinfo.failures");
+    public Histogram<double> UserInfoDurationMs { get; } = H("oidc.userinfo.duration.ms");
+    public Counter<long> RevocationRequests { get; } = C("oidc.revocation.requests");
+    public Counter<long> IntrospectionRequests { get; } = C("oidc.introspection.requests");
+    public Counter<long> IntrospectionActiveTrue { get; } = C("oidc.introspection.active_true");
+    public Counter<long> IntrospectionActiveFalse { get; } = C("oidc.introspection.active_false");
+    public Histogram<double> IntrospectionDurationMs { get; } = H("oidc.introspection.duration.ms");
+    public Counter<long> ParRequests { get; } = C("oidc.par.requests");
+    public Counter<long> ParSuccess { get; } = C("oidc.par.success");
+    public Counter<long> ParFailures { get; } = C("oidc.par.failures");
+    public Counter<long> ParConsumed { get; } = C("oidc.par.consumed");
+    public Histogram<long> ParRequestSizeBytes { get; } = HL("oidc.par.request.size.bytes");
+    public Counter<long> JarValid { get; } = C("oidc.jar.valid");
+    public Counter<long> JarInvalid { get; } = C("oidc.jar.invalid");
+    public Histogram<long> JarRequestSizeBytes { get; } = HL("oidc.jar.request.size.bytes");
+    public Counter<long> ExternalStartRequests { get; } = C("oidc.external.start.requests");
+    public Counter<long> ExternalStartSuccess { get; } = C("oidc.external.start.success");
+    public Counter<long> ExternalStartFailures { get; } = C("oidc.external.start.failures");
+    public Histogram<double> ExternalStartDurationMs { get; } = H("oidc.external.start.duration.ms");
+    public Counter<long> ExternalCallbackRequests { get; } = C("oidc.external.callback.requests");
+    public Counter<long> ExternalCallbackSuccess { get; } = C("oidc.external.callback.success");
+    public Counter<long> ExternalCallbackFailures { get; } = C("oidc.external.callback.failures");
+    public Histogram<double> ExternalCallbackDurationMs { get; } = H("oidc.external.callback.duration.ms");
+    public Counter<long> BclEmitted { get; } = C("oidc.bcl.emitted");
+    public Counter<long> BclDelivered { get; } = C("oidc.bcl.delivered");
+    public Counter<long> BclFailed { get; } = C("oidc.bcl.failed");
+    public Histogram<double> BclDeliveryLatencyMs { get; } = H("oidc.bcl.delivery.ms");
+    public ObservableGauge<long> BclPendingBacklog { get; } = G;
+    public void SetBclBacklog(long value) { }
+    public Counter<long> LogoutRequests { get; } = C("oidc.logout.requests");
+    public Counter<long> LogoutFederated { get; } = C("oidc.logout.federated");
+    public Counter<long> LogoutLocal { get; } = C("oidc.logout.local");
+    public Counter<long> LogoutFailures { get; } = C("oidc.logout.failures");
+    public Histogram<double> LogoutDuration { get; } = H("oidc.logout.duration.ms");
+    public Counter<long> ProviderJwksRequests { get; } = C("oidc.provider_jwks.requests");
+    public Counter<long> ProviderJwksAllRequests { get; } = C("oidc.provider_jwks.aggregated.requests");
+    public Counter<long> ProviderJwksNotFound { get; } = C("oidc.provider_jwks.not_found");
+    public Counter<long> ProviderJwksCacheHit { get; } = C("oidc.provider_jwks.cache.hit");
+    public Counter<long> ProviderJwksCacheMiss { get; } = C("oidc.provider_jwks.cache.miss");
+    public Counter<long> ProviderJwksKeysReturned { get; } = C("oidc.provider_jwks.keys.returned");
+    public Counter<long> ProviderJwksZeroKeys { get; } = C("oidc.provider_jwks.zero_keys");
+    public Counter<long> ProviderJwksEtagChanges { get; } = C("oidc.provider_jwks.etag_changes");
 }
