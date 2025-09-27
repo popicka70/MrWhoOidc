@@ -1,5 +1,9 @@
 # Program.cs Refactor Backlog
 
+> Progress Assessment Date: 2025-09-27
+
+This document has been updated to reflect the current repository state (branch `UserPage`) and to refine the remaining plan toward a slim `Program.cs` (<=150 lines). A phased approach is retained, but statuses and next actions have been tightened for velocity and safety.
+
 Purpose: Reduce `MrWhoOidc.WebAuth/Program.cs` (~1100 lines) into a thin composition root (< ~150 lines) by extracting discrete concerns into feature/service registration & endpoint mapping modules while preserving behavior and existing public surface (routes, policies, options).
 
 Target End State (Definition of Done for Epic):
@@ -38,27 +42,49 @@ Maximum line count goal: <= 150 lines (stretch: <= 120 lines).
 14. Migration / seeding command mode (`--seed`) and ApplicationStarted migration + key generation + default data
 15. Inline helper & nested types: `SetConditionalEtag`, Admin DTO records, `AdminApiHelpers`, `AdminAuthOptions`, `AdminRequirement`, `AdminAuthorizationHandler`.
 
-## High-Level Epics & Phases
-| Phase | Epic | Goal | Output |
-|-------|------|------|--------|
-| 0 | Safety Nets | Freeze observable behavior | Tests + route manifest snapshot |
-| 1 | Extract Nested Types | Move inline admin types to dedicated files | New files under `Security/` or `Admin/` namespace |
-| 2 | Service Registration Modularization | Break out Add* extension methods by concern | `ServiceCollectionExtensions/*` |
-| 3 | Endpoint Mapping Modularization | Group endpoints into `EndpointRouteBuilder` extensions | `EndpointMappings/*` |
-| 4 | Rate Limiting & CORS Consolidation | Single method to register policies, optional config section | `AddOidcRateLimiting()`, `AddOidcCors()` |
-| 5 | Feature Module Interface (Optional) | Introduce `IEndpointModule` pattern for auto-discovery | Lightweight interface + scan registration |
-| 6 | Slim Program.cs | Replace large blocks with extension calls | Final orchestrated file |
-| 7 | Cleanup & Docs | Update developer & admin guide + remove obsolete helpers | Updated docs + ADR |
+## High-Level Epics & Phases (Status)
+| Phase | Epic | Status | Notes / Gaps |
+|-------|------|--------|--------------|
+| 0 | Safety Nets | PARTIAL | Snapshot test exists (`ProgramSurfaceSnapshotTests`) capturing full endpoint manifest, but: (a) rate limiting policy names not asserted, (b) admin policy explicit test missing, (c) negative/positive functional probes (discovery/token/userinfo) absent, (d) `/health/backchannel` shape not golden-checked. Line-count guard present. |
+| 1 | Extract Nested Types | COMPLETE | `AdminAuthOptions`, `AdminRequirement`, `AdminAuthorizationHandler`, DTO records, `AdminApiHelpers`, `EtagHelpers` all extracted. No remaining nested types in `Program.cs` aside from temporary `ProgramEndpointMapping` partial (can be deleted later). |
+| 2 | Service Registration Modularization | PARTIAL | Only narrow `AddMrWhoOidcAuthAndAdmin` extension implemented. Observability, security, persistence + seeding, rate limiting, CORS, antiforgery, PAR, DPoP, external OIDC, backchannel services still inline. |
+| 3 | Endpoint Mapping Modularization | PARTIAL | Core OIDC + some infra moved to `MapMrWhoOidcEndpoints` (internal). Admin CRUD, backchannel health endpoint, and BCL admin endpoints remain inline in `Program.cs`. Migration/seeding logic currently (mis)located inside endpoint mapping extension. |
+| 4 | Rate Limiting & CORS Consolidation | NOT STARTED | Policies still registered inline. No central defaults object or config override tests. CORS logic still inline. |
+| 5 | Feature Module Interface (Optional) | DEFER (TBD) | Value not yet justified—will re‑evaluate after core extraction (Phases 2–4). |
+| 6 | Slim Program.cs | NOT STARTED | Current line count ≈918 (baseline test uses 1036). Major blocks remain. |
+| 7 | Cleanup & Docs | NOT STARTED | Docs not yet updated; ADR absent. |
 
-## Phase 0 – Safety Nets (Highest Priority)
-Tasks:
-1. Add unit test enumerating all current route templates + HTTP verbs + applied rate limit policy names & auth requirements (use reflection over endpoint data sources) – store snapshot JSON under `MrWhoOidc.UnitTests/Baselines/routes.json`.
-2. Add test verifying key OIDC endpoints respond (discovery, jwks, authorize (302), token (400 on empty), userinfo (401)).
-3. Add test asserting admin policy name is `admin` and rate limiting policy names list unchanged.
-4. Add test that `Program.cs` line count > 500 initially (guards that we truly reduce it; will adjust threshold in Phase 6).
-5. (Optional) Introduce simple golden file for `/health/backchannel` response shape keys.
+### Current Program.cs Size Trend
+- Original (estimated): ~1100 lines
+- After Phases 1 + partial 2/3: 918 lines
+- Target after next two PRs (finish Phases 2 & 3 extractions): ~550–600 lines
+- Final target (Phase 6): <=150 (stretch 120)
 
-Acceptance Criteria: All safety tests green pre-refactor; CI baseline created.
+### Key Technical Debts Introduced During Partial Extraction
+- Migration & seeding logic lives inside `EndpointMappingExtensions` (violates separation; should move to dedicated infra extension or startup helper).
+- Rate limiting metadata not reflected in snapshot test (reduces safety net value).
+- Mixed responsibility for option binding (some in Program.cs, others implied for future extraction). Need a consistent rule: bind in Program OR inside feature extension. Recommendation: Keep binding in Program for top-level options, feature-specific (Backchannel, Audit, Alerts, RateLimiting) inside respective Add* methods.
+- Endpoint mapping extension is `internal` and monolithic; should be decomposed into `MapOidcProtocolEndpoints`, `MapAdminApis`, `MapBackchannelHealthEndpoint`, and optional `MapStaticAndRazor` for clarity.
+
+---
+
+## Phase 0 – Safety Nets (Augmented Backlog)
+Status: PARTIAL
+
+Still Needed:
+1. Add focused test capturing rate limiting policy names actually applied to endpoints (parse metadata implementing `IRateLimiterPolicy` or look for `EnableRateLimitingAttribute` & `DisableRateLimitingAttribute`).
+2. Add functional smoke tests (using `WebApplicationFactory<Program>`):
+    - `/.well-known/openid-configuration` returns 200 & JSON with required fields (issuer, authorization_endpoint).
+    - `/jwks` returns 200 & keys array.
+    - `/authorize` without params returns 400 or appropriate error (snapshot expected code now).
+    - `/token` POST empty form returns 400 JSON error.
+    - `/userinfo` without auth returns 401.
+3. Add admin policy test verifying presence of policy name `admin` and that `AdminAuthorizationHandler` is registered as scoped.
+4. Add test enumerating defined rate limiting policy names (e.g., `rl-authorize`, `rl-token`, `rl-token-exchange`, `rl-userinfo`, `rl-par`, `rl-introspect`, `rl-jwks`, `rl-admin`) and asserting exact set.
+5. Add golden contract test for `/health/backchannel` (assert JSON has `enabled`, `backlog`, `openCircuits`).
+6. Adjust route snapshot test to also record (a) CORS enabled flag via metadata, (b) rate limit policy names (not just first), (c) presence of authorization requirement.
+
+Exit Criteria Update: All above tests green; snapshots committed; future diffs fail fast on accidental surface drift.
 
 ## Phase 1 – Extract Nested Types
 Tasks:
@@ -71,79 +97,120 @@ Tasks:
 
 Acceptance Criteria: No behavior change; tests still green; Program.cs shrinks ~150 lines.
 
-## Phase 2 – Modular Service Registration
-Create extension classes under `MrWhoOidc.WebAuth/Extensions` (or `DependencyInjection` for symmetry with Auth project) with focused responsibilities:
-1. `AddObservabilityServices` (metrics, audit sink, alert publisher, alert sampler hosted service, metrics recorder safety fallback).
-2. `AddSecurityServices` (DPoP + JAR replay + antiforgery + DataProtection + claim mapping + external OIDC + PAR + validators + identity provider validator).
-3. `AddBackchannelServices` (BCL dispatcher, runtime state, feature options, alert options binding if not already in observability).
-4. `AddOidcCoreServices` (authorize/token/logout handlers, grant handlers, discovery, userinfo, introspection, revocation, jwks cache, memory cache, federated logout options).
-5. `AddPersistenceAndSeeding` (Auth persistence, seeder registration; migration/seeding will still run in Program until Phase 6 redesign).
-6. `AddAuthenticationAndAuthorization` (cookie schemes, admin policy + handler registration).
-7. `AddLocalizationAndMvc` (RazorPages, antiforgery filter, localization config).
-8. `AddCorsPolicies` (CORS policy named `oidc`).
-9. `AddRateLimitingPolicies` (all RL policies + redis global limiter wiring on supplied connection multiplexer).
+## Phase 2 – Modular Service Registration (Refined Plan)
+Status: PARTIAL
 
-Implementation Notes:
-- Each method returns `IServiceCollection` for chaining.
-- Keep option binding at the top-level or move into relevant method (decide consistency: prefer binding in Program + passing via config? -> choose: binding remains Program for clarity except where logically part of a feature e.g., Backchannel options).
+Planned Extensions (new or expanded):
+1. `AddLocalizationAndMvc()` – Razor Pages, antiforgery filter, localization resources path.
+2. `AddPersistence(this IServiceCollection, IConfiguration)` – AuthDbContext + seeder registration.
+3. `AddObservability(this IServiceCollection, IConfiguration)` – App Insights (conditional), metrics, audit sink, alert publisher & sampler, clock abstraction.
+4. `AddSecurityCore(this IServiceCollection, IConfiguration)` – DPoP validator + replay/nonce stores (conditional Redis upgrade), JAR replay cache, antiforgery, DataProtection persistence, claim mapping, external OIDC handler, client assertion validator, identity provider validator, PAR handler + cleanup, federated logout options binding.
+5. `AddOidcProtocolHandlers()` – discovery, authorize, token, logout, userinfo, revocation, introspection handlers; grant handlers; memory cache; JWKS public cache.
+6. `AddBackchannel(this IServiceCollection, IConfiguration)` – feature + alert options binding, runtime state, dispatcher, dispatch options, alert diagnostics, expired token cleanup.
+7. `AddRateLimitingPolicies(this IServiceCollection, IConfiguration)` – all RL policies (extracted unchanged). Provide optional config binding section `RateLimiting:*` with sensible defaults (fall back to existing constants if absent). Introduce `RateLimitPolicyDefaults` internal static for tests.
+8. `AddCorsPolicies(this IServiceCollection, OidcOptions)` – remain strict; only expose `oidc` policy.
+9. Aggregator method `AddMrWhoOidcWebAuthServices(this IServiceCollection, IConfiguration)` (optional convenience; deferrable until near Phase 6).
 
-Acceptance Criteria: Program.cs reduced by another ~250–300 lines; tests green; new extension methods covered by minimal service registration smoke tests.
+Implementation Guidelines:
+- Avoid side effects (no migrations, no seeding) inside Add* methods.
+- Keep Redis connection acquisition centralized (`AddSecurityCore`), return `IConnectionMultiplexer` singleton if configured.
+- Keep all hosting / pipeline decisions out of service registration.
 
-## Phase 3 – Endpoint Mapping Extraction
-Create static classes with `IEndpointRouteBuilder` extension methods (OR `WebApplication` extensions):
-1. `MapOidcProtocolEndpoints` – discovery, jwks (and conditional variants), authorize, token (+ OPTIONS), revoke, userinfo (+ OPTIONS), introspect, par (+ OPTIONS), external OIDC chaining, logout endpoints.
-2. `MapAdminApis` – all admin groups & CRUD operations (providers, provider keys, claim mappings, client-provider mappings, client keys, BCL outbox, alerts).
-3. `MapBackchannelHealthEndpoint` – `/health/backchannel`.
-4. (Optional) `MapStaticAndRazor` – razor pages + static assets.
+Acceptance Criteria Update:
+- Program.cs loses at least: metrics/audit/alert blocks, antiforgery setup, DataProtection, DPoP/JAR wiring, PAR handler registrations, handler registrations, rate limiting policies, seeder registration, backchannel worker wiring.
+- New tests: simple host build confirming all key service interfaces can be resolved (smoke DI test) without actual DB (using in-memory override flag already present).
 
-Design: Accept required services through DI inside endpoint lambdas as done currently; avoid capturing external state. Preserve rate limiting & authorization decorations.
+Deferred Decision: Whether to split `AddSecurityCore` into narrower (`AddDpop`, `AddPar`) – keep combined for now to reduce call noise.
 
-Acceptance Criteria: Program.cs endpoint section replaced by 3–4 concise calls; route snapshot test unchanged.
+## Phase 3 – Endpoint Mapping Extraction (Refined Plan)
+Status: PARTIAL
 
-## Phase 4 – Rate Limiting & CORS Consolidation
+Current: `MapMrWhoOidcEndpoints()` mixes multiple concerns and embeds migration trigger logic; admin endpoints still inline in `Program.cs`.
+
+Planned Decomposition:
+1. `MapOidcProtocolEndpoints(this IEndpointRouteBuilder endpoints)` – all public OIDC endpoints + JWKS variants + external OIDC chaining + federated logout endpoints.
+2. `MapAdminApis(this IEndpointRouteBuilder endpoints)` – full admin CRUD + BCL admin endpoints (providers, provider keys, claim mappings, client mappings, client keys, BCL outbox & alerts).
+3. `MapBackchannelHealthEndpoint(this IEndpointRouteBuilder endpoints)` – health only.
+4. `MapStaticAndRazor(this IEndpointRouteBuilder endpoints)` – Razor + static assets.
+5. Remove migration/seeding logic from mapping; relocate to Phase 6 extension `RunMigrationsAndSeedAsync` (or `UseAuthMigrationsAndSeeding` hooking `ApplicationStarted`).
+
+Safety Tasks:
+- Add parity test enumerating endpoint -> rate limit policy names before and after extraction (should be identical sets per route).
+- Update snapshot test after mapping extraction; re‑approve only if no semantic differences.
+
+Acceptance Criteria Update:
+- No inline endpoint lambdas remaining in `Program.cs`.
+- `Program.cs` expresses mapping via 4 (or fewer) clearly named calls.
+- Migration/seeding logic no longer lives in mapping extensions.
+
+## Phase 4 – Rate Limiting & CORS Consolidation (Refined)
+Status: NOT STARTED
+
 Tasks:
-1. Ensure `AddRateLimitingPolicies` reads optional configuration (e.g., `RateLimiting:TokenPermitLimit`) with sane defaults.
-2. Introduce object `RateLimitPolicyDefaults` for central tuning & tests.
-3. Add test verifying custom config overrides default.
-4. Confirm RL names remain identical.
+1. Implement `AddRateLimitingPolicies` (see Phase 2) using current numeric constants as defaults.
+2. Introduce `RateLimitPolicyDefaults` (internal static class) to hold numeric defaults; ensure tests reference only that (single source).
+3. Support optional config keys, e.g.:
+    - `RateLimiting:Authorize:PermitLimit`
+    - `RateLimiting:Token:PermitLimit`
+    - `RateLimiting:TokenExchange:PermitLimit`
+    - etc.
+4. Add tests verifying override behavior and fallback to defaults when missing or invalid.
+5. Extract CORS policy into `AddCorsPolicies`; make policy name constant `OidcCorsPolicy = "oidc"`.
+6. Add test that endpoints previously requiring CORS still do so and no additional endpoints gained it unintentionally.
 
-Acceptance Criteria: Single location to change limits; no behavior changes without config modifications.
+Acceptance Criteria: Rate limiting & CORS definitions absent from `Program.cs`; tests guard both policy name stability and override behavior.
 
-## Phase 5 – Optional Endpoint Module Pattern
-If desired for future features / plugin style.
-Interface: `public interface IEndpointModule { void AddServices(IServiceCollection services, IConfiguration config); void MapEndpoints(IEndpointRouteBuilder endpoints); }`
-Implementation Plan:
-1. Create modules for Admin, Core OIDC, Backchannel, External OIDC.
-2. Add scanning extension `AddEndpointModules(this IServiceCollection, Assembly assembly)` and `MapEndpointModules(this WebApplication app)`.
-3. Migrate previous extension mapping methods into modules (or keep mapping methods as wrappers delegating to modules to minimize churn).
-4. Evaluate complexity vs value; if it adds noise, skip or defer.
+## Phase 5 – Optional Endpoint Module Pattern (Re‑Evaluation)
+Status: DEFERRED
 
-Acceptance Criteria: (If adopted) Program.cs loops through discovered modules, no manual Map calls for feature sets.
+Decision Gate: Revisit only after Phases 2–4 complete. Success metric for adopting: net reduction in `Program.cs` + easier feature discovery without adding cognitive overhead. If extension method grouping already yields clarity, skip entirely.
 
-## Phase 6 – Slim Program.cs Finalization
+Lightweight Alternative (preferred): Provide a single aggregator `AddMrWhoOidcWebAuth(this IServiceCollection, IConfiguration)` & `MapMrWhoOidcWebAuth(this WebApplication)` wrapping individual Add*/Map* calls (no reflection / scanning).
+
+## Phase 6 – Slim Program.cs Finalization (Refined)
+Status: NOT STARTED
+
+Updated Task List:
+1. Introduce `UseForwardedHeadersAndCertificates()` (optional) OR inline small helper.
+2. Introduce `UseMrWhoOidcMiddlewarePipeline()` assembling: forwarded headers, HTTPS redirection (conditional), routing, localization, CORS, authentication, authorization, distributed limiter (if Redis), rate limiter.
+3. Extract `--seed` logic to `SeedRunner.RunAsync(args, IServiceProvider root)` in a new `Infrastructure/Seeding` file.
+4. Create `RunMigrationsAndSeedAsync(this WebApplication app, bool runKeyWarmup = true)` extension performing: migrate DB, warm signing keys, seed default data. Move ApplicationStarted registration pattern inside this extension (remove from endpoint mapping).
+5. Remove remaining inline service registrations & endpoint lambdas from Program; switch to:
+   ```csharp
+   builder.Services
+       .AddLocalizationAndMvc()
+       .AddPersistence(builder.Configuration)
+       .AddObservability(builder.Configuration)
+       .AddSecurityCore(builder.Configuration)
+       .AddOidcProtocolHandlers()
+       .AddBackchannel(builder.Configuration)
+       .AddRateLimitingPolicies(builder.Configuration)
+       .AddCorsPolicies(oidcOptions);
+   ```
+6. After each major removal, update line-count test baseline downward (multi‑PR). Final threshold enforcement: `<=150` lines.
+7. Delete transitional `ProgramEndpointMapping` partial.
+
+Acceptance Criteria (Refined): Program.cs ≤150 lines, only orchestration + high-level comments.
+
+## Phase 7 – Documentation & Cleanup (Expanded)
+Status: NOT STARTED
+
 Tasks:
-1. Remove residual helper code & inline logic now moved.
-2. Introduce `app.RunMigrationsAndSeedAsync()` extension encapsulating ApplicationStarted logic.
-3. Keep `--seed` branch but delegate to `SeedRunner.RunAsync(args)` static helper to avoid duplication.
-4. Introduce environment pipeline extension `UseStandardMiddlewarePipeline(this WebApplication app)` bundling forwarded headers, localization, CORS, auth, rate limiting middleware ordering.
-5. Replace long sequence with method calls; add comment block referencing docs for deeper detail.
-6. Adjust line-count test threshold to enforce <= 150 lines.
+1. Update `developer-guide.md`: add section "WebAuth Composition Root" showing before/after diff + extension call ordering rationale.
+2. ADR: `ADR-XX-program-slimming.md` (include context, decision, alternatives rejected, consequences, future simplifications).
+3. Add XML `<summary>` to each public Add*/Map* extension (internal ones may rely on file header comments).
+4. Remove stale comments referencing earlier phases (e.g., "Phase 0 safety refactor step").
+5. Update backlog (this file) with final SHAs, mark completion.
+6. Optional: Add `ArchitectureTests.cs` enforcing: no direct `.MapGet/Post/...` invocations in `Program.cs` (regex or Roslyn) after Phase 6.
 
-Acceptance Criteria: Program.cs readability improvement validated in PR review; tests green; diff shows removal not addition of complexity.
+Acceptance Criteria: Docs & ADR merged in same PR or successive small PRs; build passes with XML doc warnings (if any) addressed.
 
-## Phase 7 – Documentation & Cleanup
-Tasks:
-1. Update `docs/developer-guide.md` with new extension method / module pattern.
-2. Add ADR (e.g., `docs/adr/ADR-XX-program-slimming.md`) summarizing rationale & trade-offs (why not adopt full vertical slice framework, why minimal custom pattern).
-3. Remove any obsolete comments in extracted files.
-4. Ensure XML docs or summaries on public extension methods.
-
-Acceptance Criteria: Docs reflect new structure; onboarding instructions reference extension names.
-
-## Cross-Cutting Tasks & Enhancements
-1. Introduce `InternalsVisibleTo` for unit tests if needed to test internal helpers (ETag, JWKS status) directly.
-2. Add analyzer / Roslyn code-fix (optional future) to prevent adding endpoints directly in Program.
-3. Add architecture test ensuring `Program.cs` has no `Map` method invocations outside a curated allow list (post Phase 6).
+## Cross-Cutting Tasks & Enhancements (Updated)
+1. `InternalsVisibleTo` for UnitTests (consider enabling now to test internal rate limiting extension logic & JWKS cache helpers directly).
+2. Architecture test (post Phase 6) verifying zero `app.Map` calls in `Program.cs` except allowed comment markers.
+3. Optional Roslyn analyzer (future) to warn when `WebApplication` extension mapping is performed outside sanctioned extension classes.
+4. Lightweight perf smoke: measure cold start (host build + first discovery request) before & after; ensure <5% regression.
+5. Consider adding `ILogger` scopes around migration & seeding extension for observability; test ensures log category present.
 
 ## Risk Assessment & Mitigations
 | Risk | Impact | Mitigation |
@@ -155,42 +222,53 @@ Acceptance Criteria: Docs reflect new structure; onboarding instructions referen
 | Redis conditional wiring mistakes | Rate limiting / DPoP replay issues | Add test with in-memory vs simulated redis config toggles |
 | Over-modularization complexity | Slower onboarding | Keep pattern minimal; avoid deep folder nesting |
 
-## Acceptance Criteria (Aggregate)
-- All existing unit/integration tests pass unchanged.
-- Newly added route snapshot & safety tests pass.
-- Program.cs line count threshold enforced (<= 150 lines) after Phase 6.
-- No change in externally observable endpoint list, HTTP verbs, CORS policy name, rate limiting policy names, or authorization policy names.
-- Startup (cold) latency not measurably worse (>5% baseline) – optional perf check.
+## Aggregate Acceptance Criteria (Unchanged + Clarified)
+- All existing unit/integration tests continue to pass throughout refactor PR series.
+- Snapshot & safety tests enhanced (Phase 0 augmented) and stable.
+- Program.cs eventually ≤150 lines (stretch 120) with only orchestration.
+- Endpoint list (patterns + verbs) unchanged unless explicitly versioned and snapshot updated deliberately.
+- CORS policy name `oidc` retained.
+- Rate limiting policy names stable (`rl-*`).
+- Admin policy name remains `admin`.
+- Migration + seeding ordering unchanged (verified by integration test with blank DB + seeding flag).
+- Cold start performance not degraded >5% (informational check).
 
-## Suggested Incremental PR Breakdown
-1. PR #1: Safety tests only.
-2. PR #2: Extract nested admin/security types.
-3. PR #3: Service registration extensions (no endpoints yet).
-4. PR #4: Endpoint mapping extraction.
-5. PR #5: Rate limiting & CORS consolidation.
-6. PR #6: Optional module interface (or skip if decided unnecessary).
-7. PR #7: Final slimming & migration/seed extensions + adjust line-count test.
-8. PR #8: Documentation & ADR.
+## Updated Incremental PR Breakdown (Forward Looking)
+| PR | Objective | Key Diff Impact | Expected Line Reduction |
+|----|-----------|-----------------|-------------------------|
+| 1 (done) | Initial safety net (partial) | Tests added (snapshot, line count) | N/A |
+| 2 (done) | Extract admin types/helpers | New Security/Admin folders | ~ -120 |
+| 3 (next) | Finish Service Registration (Phase 2) | Add 6–8 extensions, remove large blocks | -250 to -300 |
+| 4 | Endpoint Mapping split (Phase 3) | Add Map* extensions, remove inline admin endpoints | -180 to -220 |
+| 5 | Rate Limiting + CORS consolidation (Phase 4) | Add RL/CORS extensions + tests | -130 |
+| 6 | Middleware + migrations/seeding extensions (Phase 6 early) | Add Use*/Run* extensions | -120 |
+| 7 | Final slimming + remove transitional artifacts | Delete old partials; adjust baseline test | -80 (reach target) |
+| 8 | Docs + ADR + architecture test | New docs/ADR/test | N/A |
+| 9 (optional) | Module aggregator (if still desired) | Aggregator methods | Minimal |
+
+Total projected reduction: ~770–820 lines (achieving ≤150).
 
 Each PR should include: updated changelog (if maintained), summary of removed lines from Program.cs, confirmation of unchanged route snapshot diff.
 
 ## Checklists
-Refactor PR Checklist:
-- [ ] Safety tests untouched & green
-- [ ] Route snapshot diff = empty
-- [ ] No new top-level `Map` calls added directly to Program.cs (after Phase 4)
-- [ ] Lifetimes of moved services preserved
-- [ ] Public route names & rate limit policy names unchanged
-- [ ] Added xml summary where introducing new public extensions
-- [ ] Program.cs line count trending downward
+Refactor PR Checklist (Per PR Gate):
+- [ ] All tests green (including augmented safety tests) 
+- [ ] Route snapshot diff empty (or approved & snapshot updated intentionally)
+- [ ] No unauthorized direct `app.Map*` calls added to `Program.cs`
+- [ ] Service lifetimes unchanged (scoped vs singleton parity) 
+- [ ] Rate limit & CORS policy names unchanged
+- [ ] Added XML summary comments for new public extensions
+- [ ] Program.cs line count decreased or unchanged (never increased) 
+- [ ] Migration & seeding behavior unchanged (verified if touched)
 
-## Open Questions / Deferred Items
-1. Do we want to unify option binding into a single `Configure<CompositeOptions>` pattern? (Defer – clarity may suffer.)
-2. Should endpoint modules be discovered via assembly scanning or explicit registration? (Prototype explicit first.)
-3. Introduce source-generated endpoint manifest for compile-time validation? (Future optimization.)
-4. Consider splitting Admin API into its own project (`MrWhoOidc.WebAdmin`) later – out of scope now.
+## Open Questions / Deferred Items (Reviewed)
+1. Unified mega-options object? (Still defer – explicit per-feature binding clearer.)
+2. Endpoint module reflection-based discovery? (Defer; may skip entirely.)
+3. Source-generated endpoint manifest? (Future performance/compile-time safety optimization.)
+4. Separate Admin API project (`MrWhoOidc.WebAdmin`)? (Out of scope; reconsider once code volume of admin endpoints grows again.)
+5. Introduce a minimal `IStartupFilter` to enforce pipeline ordering? (Unnecessary now; extension method suffices.)
 
-## Quick Preview of Desired Final Program.cs Skeleton
+## Quick Preview of Desired Final Program.cs Skeleton (Still Target)
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -217,4 +295,11 @@ app.Run();
 ```
 
 ---
-Maintainer Notes: Keep this backlog updated; mark phases complete with commit SHAs. Adjust tasks if emergent complexity appears during extraction.
+Maintainer Notes:
+- When a phase completes, append a bullet here with commit SHA(s), e.g.: `Phase 2 Complete: abc1234 (service registration extraction)`.
+- If snapshot changes are intentional, include diff summary in PR description for reviewer clarity.
+
+Progress Log (to fill):
+- Phase 1 Complete: <commit-sha>
+- Phase 2 (partial): <commit-sha(s)> – Added Authentication/Authorization extension only.
+
