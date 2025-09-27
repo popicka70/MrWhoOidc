@@ -23,7 +23,7 @@ using System.Security.Cryptography;
 
 namespace MrWhoOidc.UnitTests;
 
-[TestClass]
+[TestClass, TestCategory("RequiresPostgres")]
 public sealed class TokenExchangeIntegrationTests
 {
     private const string Issuer = "https://test";

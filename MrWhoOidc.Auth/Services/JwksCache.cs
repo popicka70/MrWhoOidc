@@ -12,7 +12,9 @@ public interface IJwksCache
 public sealed class JwksCache : IJwksCache
 {
     private sealed record Entry(JsonWebKeySet Set, DateTimeOffset ExpiresAt);
-    private static readonly ConcurrentDictionary<string, Entry> _cache = new();
+    // Instance-level cache so each host/test scope gets an isolated view. A previous static implementation caused
+    // test flakiness when ephemeral upstream signing keys changed while the cached JWKS (same URI) persisted.
+    private readonly ConcurrentDictionary<string, Entry> _cache = new();
 
     public async Task<JsonWebKeySet?> GetAsync(string jwksUri, TimeSpan ttl, IHttpClientFactory httpFactory, CancellationToken ct = default)
     {

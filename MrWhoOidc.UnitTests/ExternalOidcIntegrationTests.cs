@@ -31,6 +31,7 @@ namespace MrWhoOidc.UnitTests;
 /// These run fully in-memory with TestServer and mocked upstream endpoints (/up1, /up2) served by the same host.
 /// </summary>
 [TestClass]
+[DoNotParallelize] // (Will remove after nonce handling refactor if desired)
 public sealed class ExternalOidcIntegrationTests
 {
     private const string ClientPublicId = "webapp";
@@ -180,8 +181,8 @@ public sealed class ExternalOidcIntegrationTests
         var clientId = form["client_id"].ToString();
         var redirectUri = form["redirect_uri"].ToString();
         var codeVerifier = form["code_verifier"].ToString();
-        // We need nonce for replay of state -> not provided here; test injects it via static field after decoding state
-        var nonce = ExternalOidcIntegrationTests._currentNonce ?? Guid.NewGuid().ToString("N");
+        // Use captured nonce from decoded state (set in DecodeState). This mock upstream skips real authorize round-trip.
+        var nonce = _currentNonce ?? Guid.NewGuid().ToString("N");
 
         var now = DateTimeOffset.UtcNow;
         var handler = new JwtSecurityTokenHandler();
@@ -256,9 +257,9 @@ public sealed class ExternalOidcIntegrationTests
         var protector = dp.CreateProtector("ext-oidc-state");
         var raw = Base64UrlDecode(state);
         var json = protector.Unprotect(raw);
-        var model = JsonSerializer.Deserialize<StateModel>(json)!;
-        _currentNonce = model.Nonce;
-        return model;
+    var model = JsonSerializer.Deserialize<StateModel>(json)!;
+    _currentNonce = model.Nonce;
+    return model;
     }
 
     [TestMethod]

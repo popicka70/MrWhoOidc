@@ -840,3 +840,9 @@ public static partial class ProgramEndpointMapping
         // Presence of this method lets tests compile against a stable API surface.
     }
 }
+
+// Expose a public Program class so external assemblies (e.g., test projects, future sample RPs)
+// can reliably construct WebApplicationFactory<Program>. Top-level statements generate an
+// internal Program by default; this explicit public partial keeps that linkage without altering
+// runtime behavior.
+public partial class Program { }

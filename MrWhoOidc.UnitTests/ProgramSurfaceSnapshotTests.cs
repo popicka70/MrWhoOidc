@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Mvc.Testing;
 using MrWhoOidc.WebAuth; // for Program partial
 using Microsoft.Extensions.Configuration;
+using MrWhoOidc.UnitTests.Testing;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -20,30 +21,10 @@ public class ProgramSurfaceSnapshotTests
 {
     private record EndpointInfo(string Pattern, string Methods, string? RateLimiter, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
-        Environment.SetEnvironmentVariable("AUTHDB_INMEMORY", "true");
-        var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(b =>
-            {
-                b.UseEnvironment("Development");
-                b.ConfigureAppConfiguration((ctx, cfg) =>
-                {
-                    var dict = new Dictionary<string, string?>
-                    {
-                        ["Testing:UseInMemoryAuthDb"] = "true",
-                        ["Testing:SkipAuthMigrations"] = "true",
-                        ["Testing:AllowInMemoryFallback"] = "true",
-                        ["Testing:DisableServiceProviderValidation"] = "true",
-                        ["Testing:ValidateAuthCore"] = "true",
-                        ["Testing:DiagnoseAuthCore"] = "false",
-                        ["Testing:InlineAuthCoreSafety"] = "true",
-                        ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake" // fallback path if logic changes
-                    };
-                    cfg.AddInMemoryCollection(dict);
-                });
-            });
+    var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         _ = factory.Server; // ensure boot
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
 
@@ -98,7 +79,7 @@ public class ProgramSurfaceSnapshotTests
         }
     }
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public void Program_LineCount_Has_Not_Grown()
     {
         var solutionRoot = GetSolutionRoot();

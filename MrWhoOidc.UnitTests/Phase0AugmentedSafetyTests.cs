@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using MrWhoOidc.WebAuth; // Program
+using MrWhoOidc.UnitTests.Testing;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -21,36 +22,9 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public class Phase0AugmentedSafetyTests
 {
-    private WebApplicationFactory<Program> CreateFactory() => new WebApplicationFactory<Program>()
-        .WithWebHostBuilder(b =>
-        {
-            b.UseSetting(WebHostDefaults.EnvironmentKey, "Development");
-            // Ensure service provider lifetime validation is disabled early (Program.cs reads this at top)
-            b.UseSetting("Testing:DisableServiceProviderValidation", "true");
-            b.UseSetting("Testing:ValidateAuthCore", "true");
-            // Disable throwing diagnostic by default; rely on safety net unless explicitly re-enabled.
-            b.UseSetting("Testing:DiagnoseAuthCore", "false");
-            b.UseSetting("Testing:InlineAuthCoreSafety", "true");
-            // Add the connection string directly to settings to ensure it's available before configuration is built
-            b.UseSetting("ConnectionStrings:authdb", "Host=localhost;Database=fake;Username=fake;Password=fake");
-            b.ConfigureAppConfiguration((ctx, cfg) =>
-            {
-                var dict = new Dictionary<string, string?>
-                {
-                    ["Testing:UseInMemoryAuthDb"] = "true",
-                    ["Testing:SkipAuthMigrations"] = "true",
-                    ["Testing:AllowInMemoryFallback"] = "true",
-                    ["Testing:DisableServiceProviderValidation"] = "true",
-                    ["Testing:ValidateAuthCore"] = "true",
-                    ["Testing:DiagnoseAuthCore"] = "false",
-                    ["Testing:InlineAuthCoreSafety"] = "true",
-                    ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake"
-                };
-                cfg.AddInMemoryCollection(dict);
-            });
-        });
+    private WebApplicationFactory<Program> CreateFactory() => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public void AdminPolicy_And_Handler_Are_Registered()
     {
         using var factory = CreateFactory();
@@ -63,7 +37,7 @@ public class Phase0AugmentedSafetyTests
             "AdminRequirement not present on 'admin' policy");
     }
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public void RateLimitingPolicy_Names_Are_Stable()
     {
         using var factory = CreateFactory();
@@ -83,7 +57,7 @@ public class Phase0AugmentedSafetyTests
         Assert.IsTrue(hasRlAdmin, "rl-admin policy not applied to admin endpoint group");
     }
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public async Task Core_Oidc_Endpoints_Functional_Probes()
     {
         using var factory = CreateFactory();
@@ -113,7 +87,7 @@ public class Phase0AugmentedSafetyTests
         Assert.AreEqual(HttpStatusCode.Unauthorized, userinfo.StatusCode, "userinfo without auth should 401");
     }
 
-    [TestMethod]
+    [TestMethod, TestCategory("SafetySurface")]
     public async Task BackchannelHealth_Endpoint_Has_Expected_Shape()
     {
         using var factory = CreateFactory();
