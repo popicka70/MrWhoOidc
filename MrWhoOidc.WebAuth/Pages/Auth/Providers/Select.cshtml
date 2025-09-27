@@ -7,7 +7,7 @@
     var scheme = StyleSchemes.Resolve(string.IsNullOrWhiteSpace(Model.StyleKey) ? Model.ClientStyleKey : Model.StyleKey);
 }
 
-<main class="mx-auto @scheme.CssClass provider-picker-container" style="max-width: 640px;" role="main" aria-labelledby="providerPickerHeading">
+<main class="mx-auto @scheme.CssClass provider-picker-container" style="max-width: 720px;" role="main" aria-labelledby="providerPickerHeading">
     @if (!string.IsNullOrEmpty(Model.ClientName))
     {
         <div class="small text-muted text-center mb-1">You are signing in to</div>
@@ -45,7 +45,7 @@
                 }
                 @if (recommended is not null)
                 {
-                    <div class="alert alert-warning py-2 px-3 small d-flex align-items-center" role="status" aria-live="polite">
+                    <div class="alert alert-warning py-2 px-3 small d-flex align-items-center provider-recommendation" role="status" aria-live="polite" id="recommended-provider-banner">
                         <i class="bi bi-star-fill me-2" aria-hidden="true"></i>
                         <div>
                             <span class="fw-semibold">Recommended:</span>
@@ -61,18 +61,22 @@
                         </div>
                     </div>
                 }
-                <div class="d-grid gap-2 provider-list" role="list">
-                    <div class="visually-hidden" id="sr-recommended-text">Recommended based on your previous choice</div>
+                <div class="d-grid gap-2 provider-list" role="list" aria-describedby="@(Model.RecommendationAriaDescription is not null ? "sr-recommended-text" : null)">
+                    @if (Model.RecommendationAriaDescription is not null)
+                    {
+                        <div class="visually-hidden" id="sr-recommended-text">@Model.RecommendationAriaDescription</div>
+                    }
                     @foreach (var p in Model.Providers)
                     {
                         var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
                         var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
-                                <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"
-                                    role="listitem"
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn provider-option @(p.IsRecommended ? "provider-option-recommended" : null)"
+                           role="listitem"
                            href="@url"
                            aria-label="@aria"
                            @(describedBy is null ? null : Html.Raw($"aria-describedby=\"{describedBy}\""))
+                           @(p.IsRecommended ? Html.Raw("data-autofocus=\"true\"") : null)
                            data-provider-name="@p.Name">
                             @if (!string.IsNullOrEmpty(p.LogoUrl))
                             {
@@ -85,9 +89,9 @@
                             <span class="flex-grow-1">@p.Display</span>
                             @if (p.IsRecommended)
                             {
-                                <span class="badge rounded-pill bg-warning-subtle text-dark border border-warning ms-2 d-flex align-items-center">
+                                <span class="badge rounded-pill bg-warning-subtle text-dark border border-warning ms-2 d-flex align-items-center provider-badge" title="Recommended provider" data-source="@Model.RecommendationSource">
                                     <i class="bi bi-star-fill me-1" aria-hidden="true"></i>
-                                    <span>Recommended</span>
+                                    <span class="provider-badge-text">Recommended</span>
                                 </span>
                             }
                         </a>
@@ -110,7 +114,7 @@
 
                 <hr class="my-3" />
 
-                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
+                                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
                     <i class="bi bi-person-plus me-2"></i>
                     Register a new account
                 </a>
@@ -118,4 +122,17 @@
         </div>
     }
 </main>
+
+<script>
+    (function() {
+        // Progressive enhancement: focus recommended provider if present for keyboard users
+        try {
+            var el = document.querySelector('.provider-option[data-autofocus="true"]');
+            if (el) {
+                // Delay focus slightly to allow CSS/layout settle
+                setTimeout(function(){ el.focus(); }, 50);
+            }
+        } catch { /* noop */ }
+    })();
+</script>
 

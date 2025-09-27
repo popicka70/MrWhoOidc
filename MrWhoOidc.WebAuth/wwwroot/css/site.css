@@ -258,3 +258,13 @@ body {
 .provider-list { margin-top: .25rem; }
 .provider-btn { position: relative; }
 .provider-btn .badge { font-size: .65rem; }
+.provider-option-recommended { border-color: #f0ad4e !important; box-shadow: 0 0 0 .15rem rgba(240,173,78,.25); }
+@media (min-width: 600px) {
+  /* Two-column layout for many providers while retaining button semantics */
+  .provider-list { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .provider-list .provider-btn { width: 100%; }
+}
+@media (max-width: 599.98px) {
+  .provider-badge-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  /* keep star only on very small screens to reduce clutter */
+}

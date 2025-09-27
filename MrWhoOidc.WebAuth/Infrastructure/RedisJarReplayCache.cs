@@ -3,7 +3,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
-internal sealed class RedisJarReplayCache : IJarReplayCache
+public sealed class RedisJarReplayCache : IJarReplayCache
 {
     private readonly IConnectionMultiplexer _mux;
     private readonly IDatabase _db;

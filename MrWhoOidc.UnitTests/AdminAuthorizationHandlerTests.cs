@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.WebAuth.Security;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.UnitTests;
 

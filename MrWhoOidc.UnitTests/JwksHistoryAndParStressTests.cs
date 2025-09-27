@@ -5,7 +5,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
-[TestClass]
+[TestClass, TestCategory("RequiresPostgres")]
 public sealed class JwksHistoryAndParStressTests
 {
     [TestMethod]

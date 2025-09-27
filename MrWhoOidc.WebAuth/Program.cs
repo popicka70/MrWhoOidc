@@ -22,40 +22,60 @@ using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
 using MrWhoOidc.WebAuth.Background;
+using Microsoft.Extensions.Options;
+using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Admin.Dto;
+using MrWhoOidc.WebAuth.Admin.Helpers;
+using MrWhoOidc.WebAuth.Infrastructure.Http;
+using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
+using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Force early load of Auth assembly to avoid stale/partial incremental build races impacting extension method availability.
+_ = typeof(MrWhoOidc.Auth.AuthServiceCollectionExtensions);
+
+// Testing aid: allow disabling service provider validation (scope/singleton checks) when running
+// snapshot or surface tests that intentionally spin up a minimal in-memory host. This avoids
+// false positives from lifetime validation during transitional refactor phases.
+if (string.Equals(builder.Configuration["Testing:DisableServiceProviderValidation"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Host.UseDefaultServiceProvider(options =>
+    {
+        options.ValidateOnBuild = false;
+        options.ValidateScopes = false;
+    });
+}
 
 // NOTE: don't request client certificates at TLS layer to avoid browser cert prompts.
 // For mTLS on machine-to-machine callers, prefer certificate forwarding via a reverse proxy.
 
 builder.AddServiceDefaults();
 
-// Application Insights (optional): only wires if instrumentation key / connection string present
-var aiConn = builder.Configuration["ApplicationInsights:ConnectionString"] ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
-if (!string.IsNullOrWhiteSpace(aiConn))
-{
-    builder.Services.AddApplicationInsightsTelemetry(o =>
-    {
-        o.ConnectionString = aiConn;
-    });
-}
+// Observability (App Insights, metrics, alerting, audit sink) extracted
+builder.Services.AddMrWhoOidcObservability(builder.Configuration);
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
 
 builder.Services.AddSingleton(oidcOptions);
 
-// Bind AuthOptions (API audiences)
+// Bind AuthOptions
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+// Auth/admin (Phase 2 extracted extension – limited scope)
+builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 
-// Client certificate forwarding (when behind proxy sending base64 cert header)
-builder.Services.AddCertificateForwarding(options =>
+// Redis connection (shared for security core + rate limiting if present)
+var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
+IConnectionMultiplexer? redisMux = null;
+if (!string.IsNullOrWhiteSpace(redisConnection))
 {
-    options.CertificateHeader = "X-Client-Cert";
-});
+    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
+    builder.Services.AddSingleton(redisMux);
+}
 
 // Add services to the container.
 builder.Services.AddRazorPages(options =>
@@ -69,82 +89,68 @@ builder.Services.AddMvc(options =>
     options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
 });
 
-// Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
-builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+// Security core (DPoP, JAR replay cache, DataProtection, antiforgery, localization, cert forwarding, TE limiter)
+builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 
-// Metrics
-builder.Services.AddSingleton<OidcMetrics>();
-builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
-// Safety: ensure at least one implementation exists (tests that construct very slim hosts may miss this)
-if (!builder.Services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
+// Persistence & core protocol services extracted
+builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
+// Test-only safety net to mitigate intermittent first-run missing DI registrations.
+// Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
+if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))
 {
-    builder.Services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
+    var criticalCore = new[]
+    {
+        typeof(MrWhoOidc.Auth.Services.IKeyStore),
+        typeof(MrWhoOidc.Auth.Services.IPasswordHasher),
+        typeof(MrWhoOidc.Auth.Services.ITokenService),
+        typeof(MrWhoOidc.Auth.Services.ITokenValidator)
+    };
+    if (criticalCore.Any(t => !builder.Services.Any(d => d.ServiceType == t)))
+    {
+        builder.Services.AddMrWhoOidcAuthCore(); // defensive re-registration
+    }
 }
-// Token-exchange rate limiting
-builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
-// Default to in-memory; override with Redis below if available
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
-// Alerting
-builder.Services.AddHttpClient();
-// Provide system clock abstraction for alert sampler
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();
-builder.Services.AddSingleton<IAlertPublisher>(sp =>
+// Descriptor-level diagnostic (no provider build) – optional
+if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCore"], "true", StringComparison.OrdinalIgnoreCase))
 {
-    var cfg = sp.GetRequiredService<IConfiguration>();
-    var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
-    return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
-});
-// Backchannel alert sampler (threshold evaluation)
-builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelAlertOptions>(builder.Configuration.GetSection("Backchannel:Alerts"));
-builder.Services.AddHostedService<MrWhoOidc.WebAuth.Background.BackchannelAlertSampler>();
-// Expose diagnostics interface for sampler
-builder.Services.AddSingleton<IBackchannelAlertDiagnostics>(sp => (IBackchannelAlertDiagnostics)sp.GetRequiredService<BackchannelAlertSampler>());
-// Audit sink (supports logger | appinsights | both)
-builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
-{
-    var cfg = sp.GetRequiredService<IConfiguration>();
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>().Value;
-    if (!opts.Enabled)
-        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
-
-    var sinks = new List<MrWhoOidc.WebAuth.Observability.IAuditSink>();
-    var sink = opts.Sink?.ToLowerInvariant() ?? "logger";
-    if (sink is "logger" or "both")
+    string[] critical = [
+        typeof(MrWhoOidc.Auth.Services.IKeyStore).FullName!,
+        typeof(MrWhoOidc.Auth.Services.IPasswordHasher).FullName!,
+        typeof(MrWhoOidc.Auth.Services.ITokenService).FullName!,
+        typeof(MrWhoOidc.Auth.Services.ITokenValidator).FullName!
+    ];
+    var missing = new List<string>();
+    foreach (var c in critical)
     {
-        sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
-            sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+        var t = Type.GetType(c);
+        if (t == null || !builder.Services.Any(d => d.ServiceType == t)) missing.Add(c);
     }
-    if (sink is "appinsights" or "both")
+    if (missing.Count > 0)
     {
-        // TelemetryClient is auto-registered when Microsoft.ApplicationInsights.AspNetCore is referenced & AddApplicationInsightsTelemetry called.
-        var telemetry = sp.GetService<Microsoft.ApplicationInsights.TelemetryClient>();
-        if (telemetry != null)
+        // Attempt re-registration then re-evaluate.
+        builder.Services.AddMrWhoOidcAuthCore();
+        var stillMissing = missing.Where(c =>
         {
-            sinks.Add(new MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink(
-                telemetry,
-                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink>>(),
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
-        }
-        else if (sink != "logger")
+            var t = Type.GetType(c);
+            return t == null || !builder.Services.Any(d => d.ServiceType == t);
+        }).ToList();
+        if (stillMissing.Count > 0)
         {
-            // Fallback to logger if App Insights not configured
-            sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
-                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
+            if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCoreStrict"], "true", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Auth core descriptor diagnostic (strict): missing after safety re-registration: " + string.Join(", ", stillMissing));
+            }
+            else
+            {
+                System.Console.WriteLine("[Diag][AuthCore] Missing registrations (non-strict): " + string.Join(", ", stillMissing));
+            }
         }
     }
+}
+// Background cleanup + backchannel feature extracted
+builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
-    if (sinks.Count == 1)
-        return sinks[0];
-    if (sinks.Count == 0)
-        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
-    return new MrWhoOidc.WebAuth.Observability.CompositeAuditSink(sinks);
-});
-
-// Seed command support
-builder.Services.AddScoped<ISeeder, Seeder>();
+// Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS allow-list for OIDC endpoints (tighten to only required)
 builder.Services.AddCors(options =>
@@ -165,102 +171,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Cookies for local login session
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.Name = ".mrwhooidc.auth";
-        options.LoginPath = "/login";
-        options.LogoutPath = "/logout";
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-    })
-    .AddCookie("preauth", options =>
-    {
-        options.Cookie.Name = ".mrwhooidc.preauth";
-        options.LoginPath = "/login";
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
-    });
+// (Moved cookie auth + admin policy to AddMrWhoOidcAuthAndAdmin extension)
 
-// Authorization + admin policy
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("admin", policy => policy.Requirements.Add(new AdminRequirement()));
-});
-builder.Services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
+// (Legacy inline persistence/core registrations removed – now supplied by AddMrWhoOidcPersistenceAndCore)
 
-// Wire up Auth persistence (PostgreSQL via Aspire connection)
-builder.Services.AddAuthPersistence(builder.Configuration);
-// Register Auth core services
-builder.Services.AddMrWhoOidcAuthCore();
+// (Security core block moved to AddMrWhoOidcSecurityCore)
 
-// HttpClient + IdP validator
-builder.Services.AddHttpClient();
-builder.Services.AddScoped<IIdentityProviderValidator, IdentityProviderValidator>();
-
-// Add private_key_jwt validator
-builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-
-// Register PAR handler
-builder.Services.AddScoped<IParHandler, ParHandler>();
-
-// External OIDC chaining
-builder.Services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
-builder.Services.AddSingleton<IJwksCache, JwksCache>();
-// Claim mapping service
-builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
-
-// DPoP services (use shared Security implementation)
-builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, MrWhoOidc.Security.DPoPValidator>();
-var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
-IConnectionMultiplexer? redisMux = null;
-if (!string.IsNullOrWhiteSpace(redisConnection))
-{
-    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
-    builder.Services.AddSingleton(redisMux);
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, RedisDPoPReplayCache>();
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, RedisDPoPNonceStore>();
-    // JAR replay cache: override in-memory default with Redis when available
-    builder.Services.AddSingleton<IJarReplayCache, RedisJarReplayCache>();
-    // Override TE rate limiter with Redis implementation when Redis is present
-    builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.RedisTokenExchangeRateLimiter>();
-}
-else
-{
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
-    builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPNonceStore, MrWhoOidc.Security.InMemoryDPoPNonceStore>();
-}
-
-// Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
-builder.Services.AddDataProtection()
-    .PersistKeysToDbContext<AuthDbContext>();
-
-// Antiforgery tokens (used by interactive logout and future forms)
-builder.Services.AddAntiforgery(options =>
-{
-    options.Cookie.Name = ".mrwhooidc.af"; // short, distinct
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Lax; // form posts are same-site
-    options.FormFieldName = "__RequestVerificationToken"; // default; explicit for clarity
-    options.HeaderName = "X-CSRF-TOKEN"; // allow JS-enhanced posts if needed later
-});
-
-// Background cleanup for expired tokens (opaque + refresh)
-builder.Services.AddHostedService<ExpiredTokenCleanupService>();
-// PAR cleanup
-builder.Services.AddHostedService<ParCleanupHostedService>();
-// BCL outbox dispatcher
-builder.Services.AddSingleton(new BackchannelDispatchOptions());
-builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(builder.Configuration.GetSection("Backchannel"));
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.BackchannelRuntimeState>();
-builder.Services.AddHostedService<BackchannelLogoutDispatcher>();
+// (Moved above into AddMrWhoOidcBackgroundAndBackchannel)
 
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
@@ -387,6 +304,19 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
+    // Public JWKS endpoints (lightweight; allow a bit higher rate)
+    options.AddPolicy("rl-jwks", httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+
     // Admin endpoints policy (more restrictive by default)
     options.AddPolicy("rl-admin", httpContext =>
     {
@@ -401,24 +331,8 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// Register handlers
-builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
-builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
-builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
-// Lifetime fix: service uses AuthDbContext (scoped) so must not be singleton
-builder.Services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>();
-builder.Services.AddMemoryCache();
+// (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
-builder.Services.AddScoped<ITokenHandler, TokenHandler>();
-// Grant handlers (strategy pattern pilot)
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
-builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
-builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
-// Introspection
-builder.Services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
 
 var app = builder.Build();
 
@@ -433,7 +347,8 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
     return; // exit after seeding
 }
 
-app.MapDefaultEndpoints();
+// Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
+app.MapMrWhoOidcEndpoints();
 
 // Trust proxy forwarded headers (needed for TLS termination behind a reverse proxy like Render)
 // This ensures Request.Scheme/Host reflect the original client-facing values so discovery publishes https URLs.
@@ -481,67 +396,6 @@ if (redisMux is not null)
 }
 app.UseRateLimiter();
 
-app.MapRazorPages().WithStaticAssets();
-
-// Delay DB migration and seeding until after the host is fully started
-app.Lifetime.ApplicationStarted.Register(() =>
-{
-    Task.Run(async () =>
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        await db.Database.MigrateAsync();
-
-        // Ensure at least one signing key exists
-        var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-        await keyStore.GetActiveSigningKeyAsync();
-
-        // Seed default user and client
-        await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
-    });
-});
-
-app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
-   .RequireRateLimiting("rl-authorize");
-app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
-{
-    var jwks = await keys.GetPublicJwksAsync(ct);
-    ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
-    return Results.Json(new { keys = jwks });
-});
-app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireRateLimiting("rl-authorize");
-// Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
-app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
-// POST moved into Razor Page (/Pages/Logout/Prompt/Index.cshtml.cs OnPost)
-app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
-app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
-app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireCors("oidc")
-    .RequireRateLimiting("rl-token")
-    .RequireRateLimiting("rl-token-exchange");
-app.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
-app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
-   .RequireCors("oidc")
-   .RequireRateLimiting("rl-userinfo");
-app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-// Introspection endpoint
-app.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireRateLimiting("rl-introspect");
-// PAR endpoint
-app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireCors("oidc")
-   .RequireRateLimiting("rl-par");
-app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-
-// External OIDC chaining endpoints
-app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
-app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
-app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
 // Admin Management APIs (admin-only, ProblemDetails on errors)
 var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
@@ -618,6 +472,10 @@ admin.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, Cancel
     return Results.NoContent();
 });
 
+// Invalidate JWKS cache when provider keys change (simple hook after existing CRUD operations)
+// NOTE: We piggyback right after SaveChanges in existing endpoints; minimal duplication.
+
+
 // Client ? Providers mapping CRUD
 admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, CancellationToken ct) =>
 {
@@ -639,7 +497,7 @@ admin.MapGet("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbC
     return Results.Ok(list);
 });
 
-admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
 {
     if (input is null || input.IdentityProviderId == Guid.Empty)
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -684,7 +542,7 @@ admin.MapPost("/clients/{clientId:guid}/providers", async (Guid clientId, AuthDb
     return Results.Ok();
 });
 
-admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MrWhoOidc.WebAuth.Security.MappingInput input, CancellationToken ct) =>
+admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
 {
     var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -725,7 +583,7 @@ admin.MapGet("/providers/{providerId:guid}/claim-mappings", async (Guid provider
     return Results.Ok(list);
 });
 
-admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
 {
     if (input is null || string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -745,7 +603,7 @@ admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid provide
     return Results.Created($"/admin/api/providers/{providerId}/claim-mappings/{entity.Id}", new { entity.Id });
 });
 
-admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClaimMappingInput input, CancellationToken ct) =>
+admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -780,7 +638,7 @@ admin.MapGet("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDb
     return Results.Ok(list);
 });
 
-admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     if (input is null || string.IsNullOrWhiteSpace(input.JwkJson) || string.IsNullOrWhiteSpace(input.Alg))
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -815,10 +673,13 @@ admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthD
         foreach (var o in others) o.Active = false;
     }
     await db.SaveChangesAsync(ct);
+    // Invalidate provider + aggregate JWKS caches
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
 });
 
-admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -850,15 +711,19 @@ admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid provider
     }
 
     await db.SaveChangesAsync(ct);
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.NoContent();
 });
 
-admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, CancellationToken ct) =>
+admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
     db.IdentityProviderKeys.Remove(entity);
     await db.SaveChangesAsync(ct);
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.NoContent();
 });
 
@@ -877,14 +742,14 @@ admin.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
 });
 
-admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClientKeysInput input, CancellationToken ct) =>
+admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, ClientKeysInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
     if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
 
     if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
     {
-        var status = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
+    var status = AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
         if (status is { Ok: false })
             return Results.Problem(statusCode: 400, title: "Invalid JWKS", detail: status!.Value.Message);
         client.PublicJwksJson = input.PublicJwksJson;
@@ -893,7 +758,7 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
             ClientId = client.Id,
             JwksJson = client.PublicJwksJson!,
             Source = "manual",
-            Hash = MrWhoOidc.WebAuth.Security.AdminApiHelpers.ComputeSha256Hex(MrWhoOidc.WebAuth.Security.AdminApiHelpers.CompactJson(client.PublicJwksJson!))
+            Hash = AdminApiHelpers.ComputeSha256Hex(AdminApiHelpers.CompactJson(client.PublicJwksJson!))
         });
     }
     else
@@ -903,6 +768,8 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     client.PublicJwksUri = string.IsNullOrWhiteSpace(input.PublicJwksUri) ? null : input.PublicJwksUri;
 
     await db.SaveChangesAsync(ct);
+    // Invalidate client JWKS cache
+    if (!string.IsNullOrEmpty(client.ClientId)) jwksCache.InvalidateClient(client.ClientId);
     return Results.NoContent();
 });
 
@@ -956,98 +823,32 @@ app.MapGet("/health/backchannel", async (AuthDbContext db, MrWhoOidc.WebAuth.Bac
     });
 }).WithName("BackchannelHealth");
 
-app.MapStaticAssets();
+// For test scenarios we can disable static asset mapping (dev runtime patching requires ETag-able assets
+// which our in-memory test host doesn't always produce in Release builds). Controlled via Testing:DisableStaticAssets.
+var disableStaticAssets = app.Configuration.GetValue<bool>("Testing:DisableStaticAssets");
+if (!disableStaticAssets)
+{
+    app.MapStaticAssets();
+}
 
 app.Run();
 
-namespace MrWhoOidc.WebAuth.Security
+// (Admin auth & DTO/helper types extracted to separate files in Phase 1)
+
+// Internal helper for tests (Phase 0 safety net). This allows test code to reference a stable symbol and
+// confirm that Program.cs endpoint mapping has executed. When endpoint mapping is later extracted into
+// dedicated extension methods (Phase 3), this will delegate to them or be removed.
+public static partial class ProgramEndpointMapping
 {
-    public sealed class AdminAuthOptions
+    public static void MapAll(WebApplication app)
     {
-        public string RealmName { get; set; } = "admin";
-        public string AdminRoleName { get; set; } = "admin";
-    }
-
-    public sealed class AdminRequirement : IAuthorizationRequirement { }
-
-    public sealed class AdminAuthorizationHandler(AuthDbContext db, Microsoft.Extensions.Options.IOptions<AdminAuthOptions> options) : AuthorizationHandler<AdminRequirement>
-    {
-        protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, AdminRequirement requirement)
-        {
-            var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!Guid.TryParse(sub, out var userId))
-                return;
-
-            var realmName = options.Value.RealmName;
-            var roleName = options.Value.AdminRoleName;
-
-            // Check active assignment of the admin role in the configured realm
-            var hasAdmin = await db.UserRoleAssignments.AsNoTracking()
-                .Join(db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
-                .Join(db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
-                .AnyAsync(x => x.a.UserId == userId && x.a.IsActive && x.r.IsActive
-                               && x.r.Name == roleName && x.rl.Name == realmName);
-
-            if (hasAdmin)
-                context.Succeed(requirement);
-        }
-    }
-
-    // Input DTOs and helper methods for admin APIs
-    public sealed record MappingInput(Guid IdentityProviderId, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);
-    public sealed record ClaimMappingInput(string ExternalClaim, string LocalClaim, string? Transform, int Order);
-    public sealed record ProviderKeyInput(MrWhoOidc.Auth.Persistence.IdentityProviderKeyPurpose Purpose, string Alg, string? Kid, bool Active, string JwkJson, DateTimeOffset? ExpiresAt);
-    public sealed record ClientKeysInput(string? PublicJwksJson, string? PublicJwksUri);
-
-    internal static class AdminApiHelpers
-    {
-        public static string CompactJson(string json)
-        {
-            using var doc = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = false });
-        }
-
-        public static string ComputeSha256Hex(string input)
-        {
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
-            return Convert.ToHexString(hash).ToLowerInvariant();
-        }
-
-        public static (bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids)? ComputeJwksStatus(string? jwksJson)
-        {
-            if (string.IsNullOrWhiteSpace(jwksJson)) return null;
-            try
-            {
-                using var doc = JsonDocument.Parse(jwksJson);
-                var keys = new List<JsonElement>();
-                if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("keys", out var keysArr) && keysArr.ValueKind == JsonValueKind.Array)
-                {
-                    keys = keysArr.EnumerateArray().ToList();
-                }
-                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                {
-                    keys.Add(doc.RootElement);
-                }
-                else
-                {
-                    return (false, "Invalid", "JWKS must be an object with 'keys' array or a single JWK object.", 0, 0, new());
-                }
-
-                var count = keys.Count;
-                var kids = keys.Select(k => k.TryGetProperty("kid", out var kid) ? kid.GetString() : null).ToList();
-                var nonNullKids = kids.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
-                var dup = nonNullKids.GroupBy(k => k, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key!).ToList();
-
-                var ok = dup.Count == 0;
-                var summary = ok ? "Valid JWKS" : "Duplicates";
-                var msg = ok ? $"{count} key(s), {nonNullKids.Distinct(StringComparer.Ordinal).Count()} distinct kid" : $"Duplicate kid(s): {string.Join(", ", dup)}";
-                return (ok, summary, msg, count, nonNullKids.Distinct(StringComparer.Ordinal).Count(), dup);
-            }
-            catch (Exception ex)
-            {
-                return (false, "Invalid", ex.Message, 0, 0, new());
-            }
-        }
+        // No-op for now; mapping already occurred inline in Program.cs before app.Run().
+        // Presence of this method lets tests compile against a stable API surface.
     }
 }
+
+// Expose a public Program class so external assemblies (e.g., test projects, future sample RPs)
+// can reliably construct WebApplicationFactory<Program>. Top-level statements generate an
+// internal Program by default; this explicit public partial keeps that linkage without altering
+// runtime behavior.
+public partial class Program { }

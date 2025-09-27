@@ -62,6 +62,19 @@ public sealed class AuthOptions
     // Enable OAuth 2.0 Token Exchange (RFC 8693) at the token endpoint.
     // When disabled, the grant is not accepted and not advertised in discovery.
     public bool EnableTokenExchange { get; set; } = false;
+
+    // === Optional public JWKS exposure ===
+    // Expose per-client JWKS at /clients/{client_id}/jwks (serves PublicJwksJson if present)
+    public bool ExposeClientJwks { get; set; } = false;
+    // Expose per-provider JWKS at /providers/{provider_name}/jwks (active signing keys only)
+    public bool ExposeProviderJwks { get; set; } = false;
+    // Expose aggregated provider JWKS at /providers/jwks (all enabled providers' active signing keys)
+    public bool ExposeAggregatedProviderJwks { get; set; } = false;
+    // Cache lifetimes (seconds) for client/provider JWKS HTTP responses + in-memory cache entries
+    public int ClientJwksCacheSeconds { get; set; } = 300;
+    public int ProviderJwksCacheSeconds { get; set; } = 300;
+    // Include encryption purpose keys when exposing provider JWKS (off by default)
+    public bool ProviderJwksIncludeEncryption { get; set; } = false;
 }
 
 public sealed class OpaqueAccessTokenOptions

@@ -4,11 +4,9 @@
     ViewData["Title"] = "Role assignments";
 }
 
-<h1>Role assignments</h1>
-
-<div class="mb-3">
-    <a class="btn btn-secondary" asp-page="/Admin/Users/Edit" asp-route-id="@Model.UserId">Back to user</a>
-</div>
+@{ ViewData["ActiveUserTab"] = "roles"; }
+<h1 class="mb-3">Role assignments <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
+<partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <div class="row g-3">
     <div class="col-lg-6">

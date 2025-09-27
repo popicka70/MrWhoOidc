@@ -1,6 +1,6 @@
 # Developer guide: Integrating with MrWhoOidc
 
-Updated: 2025-09-25 (first draft)
+Updated: 2025-09-27 (expanded draft)
 
 This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flows, request parameters, JAR/JARM, token exchange (OBO), DPoP, and discovery.
 
@@ -14,27 +14,116 @@ This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flow
 
 Cache `.well-known` and JWKS using ETag/Cache-Control.
 
-## 2) Authorization parameters and provider hints
+### 1.1 Optional JWKS Endpoints (Feature-Flagged)
+If enabled by the admin, additional JWKS surfaces exist beyond the discovery `jwks_uri` (the latter represents the authorization server's own signing keys—handled elsewhere):
 
-To direct users to a specific external IdP or request particular authentication methods:
+| Endpoint | Purpose |
+|----------|---------|
+| `/clients/{clientId}/jwks` | Public keys a client has published (e.g. for validating its request objects or future self-issued tokens). Returns `{"keys":[]}` when none. |
+| `/providers/{providerName}/jwks` | Active keys (signing by default) for a specific external provider. 404 if unknown/disabled. |
+| `/providers/jwks` | Aggregate of all active provider keys (deduplicated by `kid`). |
 
-- `idp` (string): provider key; selects a specific provider on the picker or bypasses it
-- `acr_values` (space-separated): e.g. `urn:mfa` or policy-specific values
-- `prompt`: `login`, `consent`, etc.
-- `login_hint`: an email/username hint (avoid PII where not needed)
+Characteristics
+- Sanitized: private key fields removed (`d,p,q,dp,dq,qi,oth,k,_*`).
+- ETag: hash of sorted `kid` values; stable ordering not required by caller.
+- Cache headers (future): currently rely on ETag + client heuristic caching. Use `If-None-Match` to minimize bandwidth.
+- Encryption keys included only when admin sets `Auth:ProviderJwksIncludeEncryption=true`.
 
-Example authorization request
+Polling Strategy
+1. Initial GET → cache ETag.
+2. Subsequent GET with `If-None-Match` every TTL period (exposed TTL not returned today; align with admin guidance, e.g. 120s steady-state).
+3. If 304 Not Modified → retain cached keys; if 200 with new body → update local verification store.
 
+Rotation Detection
+- New key addition changes ETag only when a new `kid` appears.
+- Removing a key also changes the ETag.
+- Re-ordering keys without membership change does not alter ETag.
+
+Failure Modes
+- 404 on `/providers/{name}/jwks` means provider disabled or unknown; treat as transient if expecting eventual creation.
+- Empty `{"keys":[]}` is valid; don't treat as error.
+
+Security
+- Never assume encryption keys are present; check `use` or intended algorithm.
+- Validate `kty`, `alg`, and `use` align with your crypto expectations before trusting.
+
+Example (PowerShell):
+```
+$r = Invoke-WebRequest https://as.example.com/providers/jwks
+$etag = $r.Headers.ETag
+# Later conditional fetch
+$r2 = Invoke-WebRequest -Headers @{ 'If-None-Match' = $etag } https://as.example.com/providers/jwks
+if ($r2.StatusCode -eq 304) { 'No change' } else { 'Updated:' + $r2.Content }
+```
+
+## 2) Authorization Parameters & Provider / UX Hints
+
+Below is a consolidated matrix of supported request parameters for `/authorize` (native + OIDC standard). Parameters marked (JAR-only) must appear inside the request object when JAR is used if you rely on them.
+
+| Param | Required | Source | Description / Behavior |
+|-------|----------|--------|------------------------|
+| response_type | Yes | Standard | Typically `code`. Supports `code` (MVP). Hybrid & implicit not enabled yet. |
+| client_id | Yes | Standard | Must match registered client. |
+| redirect_uri | Yes* | Standard | Required unless pre-registered and single value (future optimization). Must exactly match allowed list. |
+| scope | Yes | Standard | Space-delimited; must at least include `openid` for OIDC flows. Additional (e.g. profile, email). |
+| state | Recommended | Standard | CSRF + app correlation. Always validated/round-tripped. |
+| nonce | Recommended | Standard | Required for code+ID token/hybrid/JARM responses containing ID token; still stored for upstream correlation. |
+| prompt | Optional | Standard | `login`, `consent`, `none`, etc. Passed through upstream (and into JAR if outbound JAR). |
+| login_hint | Optional | Standard | Hint to upstream (email/username). Sanitized; not persisted. |
+| idp | Optional | Extension | Forces a specific provider (fails if provider not allowed for client). Skips picker when valid. |
+| idp_hint | Optional | Extension | Suggests (but does not force) a provider; picker may highlight it. Ignored if `idp` present. |
+| acr_values | Optional | Standard | Passed through upstream (space-separated). Also influences upstream claim mapping if returned. |
+| max_age | Optional | Standard | Auth freshness requirement. Enforced upstream only (local enforcement TODO). |
+| ui_locales | Optional | Standard | BCP47 language tags, passed upstream as-is. |
+| resource | Optional | RFC8707 | Target resource indicator (single). Mutually exclusive with `audience` (server-enforced). |
+| audience | Optional | Extension | Alternative to `resource`; normalized internally. |
+| code_challenge | PKCE | RFC7636 | Required when PKCE enforced (always for public/hybrid). S256 only. |
+| code_challenge_method | PKCE | RFC7636 | Must be `S256`. |
+| request | Optional | RFC9101 | JAR: signed JWT containing some/all params. Merged per RFC precedence rules. |
+| request_uri | Optional | RFC9101 | JAR via PAR or pre-registered URI. When present, server dereferences & merges. |
+| response_mode | Optional | Standard/JARM | Supports `query`, `form_post`, and JARM forms `query.jwt`, `form_post.jwt`. |
+| claims | Future | OIDC | Not yet implemented; reserved for selective claim requests. |
+
+Resolution / Precedence (RFC 9101): When `request` or dereferenced `request_uri` contains a claim also present in the outer query, JWT value takes precedence (subject to server validation). Conflicts cause `invalid_request`.
+
+Example (plain):
+```
 GET /authorize?response_type=code&client_id=web-client&redirect_uri=https%3A%2F%2Fapp.example.com%2Fcb&scope=openid%20profile%20email&idp=contoso&acr_values=urn%3Amfa&state=xyz&nonce=abc
+```
 
-## 3) JAR and JARM
+Example (JAR embedded):
+```
+GET /authorize?client_id=web-client&request=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...<snip>
+```
 
-- JAR (RFC 9101): send request parameters as a signed JWT in `request` or `request_uri`
-- Replay protection: server caches `iss+aud+jti` (and nonce when applicable). Configure TTL and skew via `Auth` options
-- Allowed request-object algorithms come from `Auth:RequestObjectAllowedAlgorithms` and appear in discovery (`request_object_signing_alg_values_supported`)
-- JARM: responses can be JWT-wrapped when configured (verify signature and claims)
+Server merges request object claims, validates signature (client key), verifies `aud`, `iss`, `exp`, `nbf`, and replays (`jti`/`nonce`).
 
-See: `docs/jar-replay-cache.md`
+## 3) JAR (Request Objects) & JARM (Response Mode JWTs)
+
+- JAR (RFC 9101)
+  - Signed JWT containing authorization parameters (`iss`=client_id, `aud`=authorization endpoint or issuer + `/authorize`).
+  - Must include `exp`; recommended to include `nbf` & `jti`.
+  - Supported algs: surfaced via discovery; actual allowed set configured in `Auth:RequestObjectAllowedAlgorithms`.
+  - Replay cache keyed by (`iss`,`aud`,`jti`) with TTL & skew from `Auth` options; optionally Redis-backed.
+  - Invalid signature / unknown alg → `invalid_request`.
+  - Conflicts between outer query vs JWT → `invalid_request`.
+
+- PAR (Pushed Authorization Request) synergy
+  - When `UsePAR` enabled for a provider, outbound upstream request may first POST parameters (or signed request JWT) to its PAR endpoint, receiving a `request_uri`.
+  - For inbound (client → AS) PAR, future extension will allow POST to AS PAR endpoint and supply `request_uri` at `/authorize`.
+
+- JARM (JWT Secured Authorization Response)
+  - Supported response modes: `query.jwt`, `form_post.jwt` (success & error).
+  - Response object claims (subset): `iss`=issuer, `aud`=client_id, `exp`, `iat`, `nonce` (if provided), plus either `code` or error fields.
+  - Signing alg: server default key (RS256/PS256/ES256 depending on rotation set). Encryption (JWE) optional future.
+  - Clients must validate signature, `aud`, `iss`, `exp`, and correlate `state` externally (state stays in URL/form, not inside JWT). Some ecosystems also embed `state`—we purposely keep it outside for simplicity.
+
+Security Considerations
+- Always verify `exp` on response JWT; keep tolerance small (<= 60s).
+- Protect against mix-up by verifying `iss` matches discovery issuer.
+- For JAR + JARM combined, `nonce` and `state` must align across request and response to mitigate substitution.
+
+Additional detail: `docs/jar-replay-cache.md`
 
 ## 4) Token Exchange (OBO)
 
@@ -67,7 +156,7 @@ Security note: `/token` DPoP proof must include `ath` = base64url(SHA-256(subjec
 
 End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
 
-## 6) Error handling and UX
+## 6) Error Handling & UX
 
 - User flows: cancellation/timeouts/invalid_scope produce friendly error pages; correlate via request IDs in logs
 - API calls: map OAuth error codes to client behavior (retry, prompt, or fail fast)
@@ -76,7 +165,7 @@ End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
   - `insufficient_scope` when scopes are not permitted
   - `dpop_same_key_required` / `dpop_bridging_not_supported` per policy
 
-## 7) Minimal client snippets
+## 7) Minimal Client Snippets
 
 PowerShell example for TE with DPoP (pseudo): see `docs/obo-dpop-requiresamejkt-e2e.md`.
 
@@ -96,7 +185,7 @@ var res = await http.SendAsync(req);
 res.EnsureSuccessStatusCode();
 var json = await res.Content.ReadAsStringAsync();
 
-## 8) Testing and environments
+## 8) Testing & Environments
 
 - Use the provided `.http` files under `docs/http` for quick endpoint testing
 - In CI, spin up Redis to exercise replay cache and rate-limit paths
@@ -109,7 +198,7 @@ Related docs
 - `docs/obo-dpop-requiresamejkt-e2e.md`
 - `docs/jar-replay-cache.md`
 
-## 9) Token Exchange rate limiting & metrics
+## 9) Token Exchange Rate Limiting & Metrics
 
 Per-client Token Exchange requests are rate limited (in-memory by default; Redis-backed when a multiplexer is registered). The limiter enforces a maximum number of TE requests per client per rolling minute (`TokenExchangeRateLimitOptions:PerClientPerMinute`, default 60). When Redis is present, a fixed one‑minute bucket key (`te:rl:{client}:{yyyyMMddHHmm}`) with atomic INCR + TTL is used for horizontal scalability.
 
@@ -167,7 +256,26 @@ Troubleshooting
 - If you never see `ratelimit.blocked` even when intentionally hammering the endpoint, verify that Redis is reachable (if expected) and that `PerClientPerMinute` is not set to zero or a very high value via environment variables.
 
 
-## TLS termination / reverse proxy (Render, Nginx, etc.)
+## 10) TLS Termination / Reverse Proxy (Render, Nginx, etc.)
+
+---
+
+## 11) Quick Reference Cheat Sheet
+
+| Topic | Key Takeaway |
+|-------|--------------|
+| Force provider | Add `idp=providerKey` to /authorize |
+| Suggest provider | Use `idp_hint=providerKey` |
+| Require MFA upstream | Include `acr_values=urn:mfa` |
+| Enable PKCE | Handled automatically (S256) for public flows |
+| Use JAR | Provide `request` (signed JWT) or `request_uri` |
+| JARM success token | Validate response JWT (sig, exp, aud, iss) |
+| Token Exchange | `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` |
+| DPoP bridging same key | Set client OBO policy `RequireSameJkt` |
+| Replay protection tuning | Configure `Auth:RequestObjectReplayTtlSeconds` + `ClockSkew` |
+| Rate limiting TE | `TokenExchangeRateLimit` section in config |
+
+End of expanded draft.
 
 When running behind a reverse proxy that terminates TLS (for example, Render), the app must honor forwarded headers so it can publish https URLs in discovery and redirects.
 

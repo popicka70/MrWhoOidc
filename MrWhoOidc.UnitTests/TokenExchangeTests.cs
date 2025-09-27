@@ -7,7 +7,7 @@ using System.Security.Claims;
 
 namespace MrWhoOidc.UnitTests;
 
-[TestClass]
+[TestClass, TestCategory("RequiresPostgres")]
 public sealed class TokenExchangeTests
 {
     private static AuthDbContext CreateDb()

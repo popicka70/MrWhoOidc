@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Roles;
 
 [Authorize]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db) : UserPageModelBase
 {
     [FromRoute]
     public Guid UserId { get; set; }
@@ -42,8 +42,9 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Id == UserId);
-        if (!exists) return RedirectToPage("/Admin/Users/Index");
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
+    SetHeading(user.Username, user.Name);
 
         Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
 
@@ -138,4 +139,5 @@ public class IndexModel(AuthDbContext db) : PageModel
         }
         return RedirectToPage(new { userId = UserId });
     }
+
 }

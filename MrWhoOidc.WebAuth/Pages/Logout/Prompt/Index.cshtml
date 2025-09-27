@@ -14,21 +14,21 @@
   <div class="alert @alertClass py-2 small mb-3 @(dark ? "text-light" : string.Empty)">
     If you choose <strong>Sign out here and at @Model.ProviderDisplay</strong>, it will also end the session at the external provider and any other apps using it may require you to sign in again.
   </div>
-  <p class="mb-3">You signed in using external provider <strong>@Model.ProviderDisplay</strong>. Choose how you want to sign out:</p>
-  <form method="post">
-    @Html.AntiForgeryToken()
-        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
-    @if(!string.IsNullOrEmpty(Model.Style)) { <input type="hidden" name="style" value="@Model.Style" /> }
-        <div class="form-check mb-2">
-            <input class="form-check-input" type="radio" name="mode" id="modeLocal" value="local" checked />
-            <label class="form-check-label" for="modeLocal">Sign out only from this application</label>
-        </div>
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="radio" name="mode" id="modeFederated" value="federated" />
-            <label class="form-check-label" for="modeFederated">Sign out here and at @Model.ProviderDisplay</label>
-        </div>
-        <p class="text-muted small mb-3">Local-only leaves you signed in at the external provider; other apps using it may remain signed in.</p>
-        <button type="submit" class="btn btn-primary">Continue</button>
-    </form>
+  <p class="mb-3">You signed in using external provider <strong>@Model.ProviderDisplay</strong>. Choose how you want to sign out by selecting one of the options below:</p>
+  <form method="post" class="mb-0">
+  @Html.AntiForgeryToken()
+  <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+  @if(!string.IsNullOrEmpty(Model.Style)) { <input type="hidden" name="style" value="@Model.Style" /> }
+  <div class="d-grid gap-2 mb-2">
+    <button type="submit" name="mode" value="local" class="btn btn-outline-secondary text-start">
+      <div class="fw-semibold">Sign out only from this application</div>
+      <div class="small text-muted">Keeps you signed in at the external provider; other apps may stay signed in.</div>
+    </button>
+    <button type="submit" name="mode" value="federated" class="btn btn-danger text-start">
+      <div class="fw-semibold">Sign out here and at @Model.ProviderDisplay</div>
+      <div class="small opacity-75">Ends the session at the external provider too; other apps may require you to sign in again.</div>
+    </button>
+  </div>
+  </form>
   </div>
 </div>
