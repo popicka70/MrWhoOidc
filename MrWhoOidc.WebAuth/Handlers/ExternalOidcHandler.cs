@@ -775,11 +775,12 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         if (!string.IsNullOrEmpty(state.ClientId))
         {
             var cookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(state.ClientId))).Substring(0, 16);
+            var insecureForTests = http.RequestServices.GetService<IConfiguration>()?.GetValue<bool>("Testing:InsecureCookies") ?? false;
             http.Response.Cookies.Append(cookieName, state.Provider ?? string.Empty, new Microsoft.AspNetCore.Http.CookieOptions
             {
                 Expires = DateTimeOffset.UtcNow.AddDays(90),
                 SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
-                Secure = true,
+                Secure = !insecureForTests, // allow issuance over HTTP in test environments
                 HttpOnly = true,
                 IsEssential = true,
                 Path = "/"

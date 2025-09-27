@@ -25,6 +25,7 @@ internal static class TestWebAppFactory
                 b.UseSetting("Testing:DisableServiceProviderValidation", "true");
                 b.UseSetting("Testing:ValidateAuthCore", "true");
                 b.UseSetting("Testing:DiagnoseAuthCore", "false");
+                b.UseSetting("Testing:DisableStaticAssets", "true");
                 // Provide a fake connection string (will be ignored because of in-memory flag)
                 b.UseSetting("ConnectionStrings:authdb", "Host=localhost;Database=fake;Username=fake;Password=fake");
                 b.ConfigureAppConfiguration((ctx, cfg) =>
@@ -38,6 +39,7 @@ internal static class TestWebAppFactory
                         ["Testing:DisableServiceProviderValidation"] = "true",
                         ["Testing:ValidateAuthCore"] = "true",
                         ["Testing:DiagnoseAuthCore"] = "false",
+                        ["Testing:DisableStaticAssets"] = "true",
                         ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake"
                     };
                     cfg.AddInMemoryCollection(dict);

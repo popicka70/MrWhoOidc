@@ -823,7 +823,13 @@ app.MapGet("/health/backchannel", async (AuthDbContext db, MrWhoOidc.WebAuth.Bac
     });
 }).WithName("BackchannelHealth");
 
-app.MapStaticAssets();
+// For test scenarios we can disable static asset mapping (dev runtime patching requires ETag-able assets
+// which our in-memory test host doesn't always produce in Release builds). Controlled via Testing:DisableStaticAssets.
+var disableStaticAssets = app.Configuration.GetValue<bool>("Testing:DisableStaticAssets");
+if (!disableStaticAssets)
+{
+    app.MapStaticAssets();
+}
 
 app.Run();
 
