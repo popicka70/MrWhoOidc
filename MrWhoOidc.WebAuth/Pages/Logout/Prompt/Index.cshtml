@@ -1,0 +1,34 @@
+@page 
+@model MrWhoOidc.WebAuth.Pages.Logout.Prompt.IndexModel
+@{
+    Layout = "~/Pages/Shared/_AuthLayout.cshtml";
+    ViewData["Title"] = "Sign out";
+}
+@{
+  var dark = (Model.Style ?? string.Empty).Contains("dark", StringComparison.OrdinalIgnoreCase);
+  var alertClass = dark ? "alert-secondary" : "alert-info";
+}
+<div class="card shadow-sm mt-4 @(dark ? "bg-dark text-light" : string.Empty)">
+  <div class="card-body">
+  <h2 class="h4 mb-3"><i class="bi @Model.ProviderIconClass me-1"></i>Sign out</h2>
+  <div class="alert @alertClass py-2 small mb-3 @(dark ? "text-light" : string.Empty)">
+    If you choose <strong>Sign out here and at @Model.ProviderDisplay</strong>, it will also end the session at the external provider and any other apps using it may require you to sign in again.
+  </div>
+  <p class="mb-3">You signed in using external provider <strong>@Model.ProviderDisplay</strong>. Choose how you want to sign out:</p>
+  <form method="post">
+    @Html.AntiForgeryToken()
+        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+    @if(!string.IsNullOrEmpty(Model.Style)) { <input type="hidden" name="style" value="@Model.Style" /> }
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="mode" id="modeLocal" value="local" checked />
+            <label class="form-check-label" for="modeLocal">Sign out only from this application</label>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="radio" name="mode" id="modeFederated" value="federated" />
+            <label class="form-check-label" for="modeFederated">Sign out here and at @Model.ProviderDisplay</label>
+        </div>
+        <p class="text-muted small mb-3">Local-only leaves you signed in at the external provider; other apps using it may remain signed in.</p>
+        <button type="submit" class="btn btn-primary">Continue</button>
+    </form>
+  </div>
+</div>

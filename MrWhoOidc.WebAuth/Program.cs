@@ -63,6 +63,11 @@ builder.Services.AddRazorPages(options =>
     // Authorize entire Admin folder with the 'admin' policy
     options.Conventions.AuthorizeFolder("/Admin", "admin");
 });
+// Global antiforgery filter (covers Razor Pages + any future MVC endpoints)
+builder.Services.AddMvc(options =>
+{
+    options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute());
+});
 
 // Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
@@ -235,6 +240,17 @@ else
 // Persist DataProtection keys to the shared AuthDbContext so antiforgery keys survive restarts
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<AuthDbContext>();
+
+// Antiforgery tokens (used by interactive logout and future forms)
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = ".mrwhooidc.af"; // short, distinct
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax; // form posts are same-site
+    options.FormFieldName = "__RequestVerificationToken"; // default; explicit for clarity
+    options.HeaderName = "X-CSRF-TOKEN"; // allow JS-enhanced posts if needed later
+});
 
 // Background cleanup for expired tokens (opaque + refresh)
 builder.Services.AddHostedService<ExpiredTokenCleanupService>();
@@ -497,7 +513,7 @@ app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync
    .RequireRateLimiting("rl-authorize");
 // Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
 app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
-app.MapPost("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutPostAsync(ctx));
+// POST moved into Razor Page (/Pages/Logout/Prompt/Index.cshtml.cs OnPost)
 app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
 app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
 app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))

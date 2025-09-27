@@ -1,3 +1,4 @@
+@using MrWhoOidc.WebAuth.Services
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,11 +9,11 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
-<body>
+<body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) auth-scheme-body">
     <header>
         <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
+                <!-- Removed brand link (no functional purpose on auth flow pages) -->
             </div>
         </nav>
     </header>

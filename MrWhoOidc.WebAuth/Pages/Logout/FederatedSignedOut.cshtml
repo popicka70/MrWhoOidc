@@ -1,0 +1,13 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Logout.FederatedSignedOutModel
+@{
+    Layout = "~/Pages/Shared/_AuthLayout.cshtml";
+    ViewData["Title"] = "Signed out";
+}
+<div class="card shadow-sm mt-4">
+    <div class="card-body">
+        <h2 class="h4 mb-3">Signed out</h2>
+        <p>You have been signed out from this application and the external identity provider.</p>
+    <a class="btn btn-primary" href="/" asp-route-style="@Model.Style">Return home</a>
+    </div>
+</div>
