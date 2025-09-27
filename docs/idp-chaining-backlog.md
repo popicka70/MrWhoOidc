@@ -355,7 +355,7 @@ Next steps (proposed)
 - P0 (2 weeks)
   - [x] Keys UI: PEM import, pretty-print/compact toggle, alg/kty/use validation & thumbprint preview (DONE 2025-09-27). Remaining: enhanced JWKS visual preview.
   - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
-  - [ ] JAR hardening: enable Redis-backed replay cache in production (already supported via DI when Redis is configured); tune TTL/clock skew via `AuthOptions`.
+  - [x] JAR hardening: Redis-backed replay cache auto-enabled when `ConnectionStrings:redis` present (falls back to in-memory for dev); TTL (`RequestObjectReplayTtlSeconds`) and clock skew (`RequestObjectClockSkewSeconds`) exposed via `AuthOptions` (DONE 2025-09-27 – see `docs/jar-replay-cache.md`).
   - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
   - [ ] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs.
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
