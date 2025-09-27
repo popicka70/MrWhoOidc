@@ -844,7 +844,7 @@ admin.MapGet("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDb
     return Results.Ok(list);
 });
 
-admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     if (input is null || string.IsNullOrWhiteSpace(input.JwkJson) || string.IsNullOrWhiteSpace(input.Alg))
         return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -879,10 +879,13 @@ admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthD
         foreach (var o in others) o.Active = false;
     }
     await db.SaveChangesAsync(ct);
+    // Invalidate provider + aggregate JWKS caches
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
 });
 
-admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, CancellationToken ct) =>
+admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.ProviderKeyInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
@@ -914,15 +917,19 @@ admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid provider
     }
 
     await db.SaveChangesAsync(ct);
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.NoContent();
 });
 
-admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, CancellationToken ct) =>
+admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
     if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
     db.IdentityProviderKeys.Remove(entity);
     await db.SaveChangesAsync(ct);
+    var providerName = await db.IdentityProviders.Where(p=>p.Id==providerId).Select(p=>p.Name).FirstOrDefaultAsync(ct);
+    if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
     return Results.NoContent();
 });
 
@@ -941,7 +948,7 @@ admin.MapGet("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     return Results.Ok(new { client.PublicJwksJson, client.PublicJwksUri, History = history });
 });
 
-admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClientKeysInput input, CancellationToken ct) =>
+admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContext db, MrWhoOidc.WebAuth.Security.ClientKeysInput input, MrWhoOidc.WebAuth.Security.IPublicJwksCache jwksCache, CancellationToken ct) =>
 {
     var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
     if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
@@ -967,6 +974,8 @@ admin.MapPut("/clients/{clientId:guid}/keys", async (Guid clientId, AuthDbContex
     client.PublicJwksUri = string.IsNullOrWhiteSpace(input.PublicJwksUri) ? null : input.PublicJwksUri;
 
     await db.SaveChangesAsync(ct);
+    // Invalidate client JWKS cache
+    if (!string.IsNullOrEmpty(client.ClientId)) jwksCache.InvalidateClient(client.ClientId);
     return Results.NoContent();
 });
 
