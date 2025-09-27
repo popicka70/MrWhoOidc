@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Infrastructure;
@@ -62,14 +63,13 @@ public sealed class LogoutHandler(AuthDbContext db,
             return await LocalLogoutAsync(http);
         }
 
-        // Render simple choice HTML (minimal styling; Razor page could replace later)
-        var idpDisplay = System.Web.HttpUtility.HtmlEncode(capability.ProviderDisplayName ?? capability.ProviderName);
+        // Redirect to Razor prompt page for consistent styling & schemes
+        var idpDisplay = capability.ProviderDisplayName ?? capability.ProviderName;
         var formReturn = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
-        var html = $"<!DOCTYPE html><html><head><title>Sign out</title><meta charset='utf-8'/><meta http-equiv='cache-control' content='no-cache' /></head><body>\n<h2>Sign out</h2>\n<p>You signed in using external provider <strong>{idpDisplay}</strong>. Choose how you want to sign out:</p>\n<form method='post' action='/logout'>\n  <input type='hidden' name='returnUrl' value='{System.Web.HttpUtility.HtmlAttributeEncode(formReturn)}' />\n  <div><label><input type='radio' name='mode' value='local' checked /> Sign out only from this application</label></div>\n  <div><label><input type='radio' name='mode' value='federated' /> Sign out here and at {idpDisplay}</label></div>\n  <p style='font-size:smaller;color:#555'>Local-only leaves you signed in at the external provider; other apps using it may remain signed in.</p>\n  <button type='submit'>Continue</button>\n</form>\n</body></html>";
         audit.Emit("logout.federated.prompt", new { provider = capability.ProviderName });
         metrics.LogoutRequests.Add(1, new KeyValuePair<string, object?>("mode", "prompt"));
         metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "prompt"));
-        return Results.Content(html, "text/html; charset=utf-8");
+        return Results.Redirect($"/Logout/Prompt?provider={System.Web.HttpUtility.UrlEncode(idpDisplay)}&ret={System.Web.HttpUtility.UrlEncode(formReturn)}");
     }
 
     public async Task<IResult> LogoutPostAsync(HttpContext http)
@@ -143,14 +143,20 @@ public sealed class LogoutHandler(AuthDbContext db,
         {
             metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", validation.Reason ?? "invalid_state"));
             metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback_fail"));
-            var htmlBad = "<!DOCTYPE html><html><body><h2>Logout complete (local)</h2><p>The external logout response could not be validated. You are signed out locally.</p></body></html>";
             audit.Emit("logout.federated.callback.page.fail", new { reason = validation.Reason });
-            return Results.Content(htmlBad, "text/html; charset=utf-8");
+            // Show Razor error page with reason parameter
+            var reasonParam = validation.Reason ?? "invalid_state";
+            return Results.Redirect($"/Logout/FederatedCallbackError?reason={WebUtility.UrlEncode(reasonParam)}");
         }
         metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback"));
         audit.Emit("logout.federated.callback.page.ok", new { });
-        var html = "<!DOCTYPE html><html><body><h2>Signed out</h2><p>You have been signed out from this application and the external provider.</p></body></html>";
-        return Results.Content(html, "text/html; charset=utf-8");
+        if (!string.IsNullOrWhiteSpace(validation.ReturnUrl))
+        {
+            // Safe redirect (ValidateCallbackAsync only allows relative paths)
+            return Results.Redirect(validation.ReturnUrl);
+        }
+        // Show standard Razor page (layout includes style scheme)
+        return Results.Redirect("/Logout/FederatedSignedOut");
     }
 
     public async Task<IResult> EndSessionAsync(HttpContext http)

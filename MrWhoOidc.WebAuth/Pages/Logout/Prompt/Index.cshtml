@@ -1,0 +1,25 @@
+@page 
+@model MrWhoOidc.WebAuth.Pages.Logout.Prompt.IndexModel
+@{
+    Layout = "~/Pages/Shared/_AuthLayout.cshtml";
+    ViewData["Title"] = "Sign out";
+}
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Sign out</h2>
+    <p class="mb-3">You signed in using external provider <strong>@Model.ProviderDisplay</strong>. Choose how you want to sign out:</p>
+  <form method="post" action="/logout">
+        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="mode" id="modeLocal" value="local" checked />
+            <label class="form-check-label" for="modeLocal">Sign out only from this application</label>
+        </div>
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="radio" name="mode" id="modeFederated" value="federated" />
+            <label class="form-check-label" for="modeFederated">Sign out here and at @Model.ProviderDisplay</label>
+        </div>
+        <p class="text-muted small mb-3">Local-only leaves you signed in at the external provider; other apps using it may remain signed in.</p>
+        <button type="submit" class="btn btn-primary">Continue</button>
+    </form>
+  </div>
+</div>

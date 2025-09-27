@@ -1,0 +1,14 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Logout.FederatedCallbackErrorModel
+@{
+    Layout = "~/Pages/Shared/_AuthLayout.cshtml";
+    ViewData["Title"] = "Logout issue";
+}
+<div class="card border-danger shadow-sm mt-4">
+    <div class="card-body">
+        <h2 class="h5 text-danger mb-3">Logout Completed Locally</h2>
+        <p>The external provider's logout response could not be validated. You are signed out locally.</p>
+        @if (!string.IsNullOrEmpty(Model.Reason)) { <p class="small text-muted">Reason: <code>@Model.Reason</code></p>; }
+        <a class="btn btn-secondary" href="/" asp-route-style="@Model.Style">Return home</a>
+    </div>
+</div>

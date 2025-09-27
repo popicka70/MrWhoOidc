@@ -22,7 +22,7 @@ public sealed class FederatedLogoutOptions
 
 public record FederatedCapability(bool CanFederate, string? ProviderName, string? ProviderDisplayName);
 public record FederatedRedirectResult(bool Success, string? RedirectUrl, string? FailureReason);
-public record FederatedCallbackValidation(bool Valid, string? Reason);
+public record FederatedCallbackValidation(bool Valid, string? Reason, string? ReturnUrl);
 
 public interface IUpstreamLogoutService
 {
@@ -193,11 +193,11 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
 
     public Task<FederatedCallbackValidation> ValidateCallbackAsync(string? state, CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(state)) { _audit.Emit("logout.federated.callback.fail", new { reason = "missing_state" }); return Task.FromResult(new FederatedCallbackValidation(false, "missing_state")); }
+        if (string.IsNullOrEmpty(state)) { _audit.Emit("logout.federated.callback.fail", new { reason = "missing_state" }); return Task.FromResult(new FederatedCallbackValidation(false, "missing_state", null)); }
         if (!_cache.TryGetValue(CachePrefix + state, out string? protectedState))
         {
             _audit.Emit("logout.federated.callback.fail", new { reason = "state_not_found" });
-            return Task.FromResult(new FederatedCallbackValidation(false, "state_not_found"));
+            return Task.FromResult(new FederatedCallbackValidation(false, "state_not_found", null));
         }
         _cache.Remove(CachePrefix + state); // single use
         try
@@ -207,15 +207,24 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
             if (!doc.RootElement.TryGetProperty("s", out var sEl) || sEl.GetString() != state)
             {
                 _audit.Emit("logout.federated.callback.fail", new { reason = "state_mismatch" });
-                return Task.FromResult(new FederatedCallbackValidation(false, "state_mismatch"));
+                return Task.FromResult(new FederatedCallbackValidation(false, "state_mismatch", null));
+            }
+            string? ret = null;
+            if (doc.RootElement.TryGetProperty("ret", out var retEl))
+            {
+                var candidate = retEl.GetString();
+                if (!string.IsNullOrWhiteSpace(candidate) && Uri.TryCreate(candidate, UriKind.Relative, out _))
+                {
+                    ret = candidate; // only relative paths are permitted to prevent open redirects
+                }
             }
             _audit.Emit("logout.federated.callback.ok", new { });
-            return Task.FromResult(new FederatedCallbackValidation(true, null));
+            return Task.FromResult(new FederatedCallbackValidation(true, null, ret));
         }
         catch
         {
             _audit.Emit("logout.federated.callback.fail", new { reason = "unprotect_failed" });
-            return Task.FromResult(new FederatedCallbackValidation(false, "unprotect_failed"));
+            return Task.FromResult(new FederatedCallbackValidation(false, "unprotect_failed", null));
         }
     }
 
