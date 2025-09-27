@@ -7,6 +7,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
+using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,8 @@ builder.AddServiceDefaults();
 
 // Observability (App Insights, metrics, alerting, audit sink) extracted
 builder.Services.AddMrWhoOidcObservability(builder.Configuration);
+// Ensure IOidcMetrics is always available (NoOp fallback if concrete not registered elsewhere)
+builder.Services.AddOidcMetricsIfMissing();
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
