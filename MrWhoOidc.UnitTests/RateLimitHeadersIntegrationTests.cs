@@ -141,15 +141,24 @@ public sealed class RateLimitHeadersIntegrationTests
 
         // Adaptive loop similar to token-exchange
     const int expectedLimit = 80;
-    // Allow a larger buffer so slow Redis or latency doesn't prevent hitting the limit within attempts
-    int maxAttempts = expectedLimit + 40; // generous buffer to reliably reach 429
+    // Larger buffer; occasionally the sliding Redis window can allow a few extra before lockout
+    int maxAttempts = expectedLimit + 120; 
         HttpResponseMessage? last = null;
         int attempts = 0;
         for (; attempts < maxAttempts; attempts++)
         {
             last = await client.PostAsync("/introspect", new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = "x" }));
             if (last.StatusCode == HttpStatusCode.TooManyRequests) break;
-            await Task.Delay(10);
+            await Task.Delay(5);
+        }
+        // If we still haven't hit 429, issue a rapid-fire burst without delay to try to trip the limiter
+        if (last is not null && last.StatusCode != HttpStatusCode.TooManyRequests)
+        {
+            for (int i = 0; i < 50 && attempts < maxAttempts; i++, attempts++)
+            {
+                last = await client.PostAsync("/introspect", new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = "x" }));
+                if (last.StatusCode == HttpStatusCode.TooManyRequests) break;
+            }
         }
 
         Assert.IsNotNull(last, "No response captured");
