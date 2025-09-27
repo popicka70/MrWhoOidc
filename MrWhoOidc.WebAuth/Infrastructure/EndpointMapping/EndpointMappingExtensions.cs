@@ -9,6 +9,7 @@ using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.WebAuth.Infrastructure.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -42,12 +43,7 @@ internal static class EndpointMappingExtensions
 
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
            .RequireRateLimiting("rl-authorize");
-        app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
-        {
-            var jwks = await keys.GetPublicJwksAsync(ct);
-            ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
-            return Results.Json(new { keys = jwks });
-        });
+        app.MapGet("/jwks", GetServerJwks);
 
         var authOptions = app.Services.GetRequiredService<IOptions<AuthOptions>>();
         if (authOptions.Value.ExposeClientJwks)
@@ -119,4 +115,12 @@ internal static class EndpointMappingExtensions
         // NOTE: For brevity, admin endpoints not yet extracted in detail for snapshot step; keeping manifest stability focus.
         // (Retain existing admin endpoints inline in Program for now to reduce patch size.)
     }
+
+        // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
+        private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, CancellationToken ct)
+        {
+            var jwks = await keyStore.GetPublicJwksAsync(ct);
+            ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
+            return Results.Json(new { keys = jwks });
+        }
 }

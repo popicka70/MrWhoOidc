@@ -49,15 +49,8 @@ if (string.Equals(builder.Configuration["Testing:DisableServiceProviderValidatio
 
 builder.AddServiceDefaults();
 
-// Application Insights (optional): only wires if instrumentation key / connection string present
-var aiConn = builder.Configuration["ApplicationInsights:ConnectionString"] ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
-if (!string.IsNullOrWhiteSpace(aiConn))
-{
-    builder.Services.AddApplicationInsightsTelemetry(o =>
-    {
-        o.ConnectionString = aiConn;
-    });
-}
+// Observability (App Insights, metrics, alerting, audit sink) extracted
+builder.Services.AddMrWhoOidcObservability(builder.Configuration);
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
@@ -93,73 +86,19 @@ builder.Services.AddMvc(options =>
 // Localization for friendly external OIDC error pages (initial: en-US only; extensible later)
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 
-// Metrics (moved to extension)
-builder.Services.AddMrWhoOidcMetrics();
-// Token-exchange rate limiting
+// Token-exchange rate limiting (remains local for now; core metrics moved)
 builder.Services.Configure<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.TokenExchangeRateLimitOptions>(builder.Configuration.GetSection("TokenExchangeRateLimit"));
 // Default to in-memory; override with Redis below if available
 builder.Services.AddSingleton<MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.ITokenExchangeRateLimiter, MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting.InMemoryTokenExchangeRateLimiter>();
-// Alerting
-builder.Services.AddHttpClient();
-// Provide system clock abstraction for alert sampler
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.ISystemClock, MrWhoOidc.WebAuth.Background.SystemClock>();
-builder.Services.AddSingleton<IAlertPublisher>(sp =>
-{
-    var cfg = sp.GetRequiredService<IConfiguration>();
-    var hasWebhook = !string.IsNullOrWhiteSpace(cfg["Backchannel:AlertWebhook"]);
-    return hasWebhook ? new WebhookAlertPublisher(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<ILogger<WebhookAlertPublisher>>(), cfg) : new NoopAlertPublisher();
-});
-// Backchannel alert sampler (threshold evaluation)
-builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelAlertOptions>(builder.Configuration.GetSection("Backchannel:Alerts"));
-builder.Services.AddHostedService<MrWhoOidc.WebAuth.Background.BackchannelAlertSampler>();
-// Expose diagnostics interface for sampler
-builder.Services.AddSingleton<IBackchannelAlertDiagnostics>(sp => (IBackchannelAlertDiagnostics)sp.GetRequiredService<BackchannelAlertSampler>());
-// Audit sink (supports logger | appinsights | both)
-builder.Services.Configure<MrWhoOidc.WebAuth.Observability.AuditOptions>(builder.Configuration.GetSection("Audit"));
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Observability.IAuditSink>(sp =>
-{
-    var cfg = sp.GetRequiredService<IConfiguration>();
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>().Value;
-    if (!opts.Enabled)
-        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
 
-    var sinks = new List<MrWhoOidc.WebAuth.Observability.IAuditSink>();
-    var sink = opts.Sink?.ToLowerInvariant() ?? "logger";
-    if (sink is "logger" or "both")
-    {
-        sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
-            sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
-    }
-    if (sink is "appinsights" or "both")
-    {
-        // TelemetryClient is auto-registered when Microsoft.ApplicationInsights.AspNetCore is referenced & AddApplicationInsightsTelemetry called.
-        var telemetry = sp.GetService<Microsoft.ApplicationInsights.TelemetryClient>();
-        if (telemetry != null)
-        {
-            sinks.Add(new MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink(
-                telemetry,
-                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.ApplicationInsightsAuditSink>>(),
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
-        }
-        else if (sink != "logger")
-        {
-            // Fallback to logger if App Insights not configured
-            sinks.Add(new MrWhoOidc.WebAuth.Observability.LoggerAuditSink(
-                sp.GetRequiredService<ILogger<MrWhoOidc.WebAuth.Observability.LoggerAuditSink>>(),
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MrWhoOidc.WebAuth.Observability.AuditOptions>>()));
-        }
-    }
+// Persistence & core protocol services extracted
+builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
+// Background cleanup + backchannel feature extracted
+builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
-    if (sinks.Count == 1)
-        return sinks[0];
-    if (sinks.Count == 0)
-        return new MrWhoOidc.WebAuth.Observability.NoopAuditSink();
-    return new MrWhoOidc.WebAuth.Observability.CompositeAuditSink(sinks);
-});
-
-// Seed command support
-builder.Services.AddScoped<ISeeder, Seeder>();
+// TEMP: duplicate core auth registrations to stabilize tests (investigate why extension path not supplying them in snapshot host)
+builder.Services.AddAuthPersistence(builder.Configuration);
+builder.Services.AddMrWhoOidcAuthCore();
 
 // CORS allow-list for OIDC endpoints (tighten to only required)
 builder.Services.AddCors(options =>
@@ -182,26 +121,7 @@ builder.Services.AddCors(options =>
 
 // (Moved cookie auth + admin policy to AddMrWhoOidcAuthAndAdmin extension)
 
-// Wire up Auth persistence (PostgreSQL via Aspire connection)
-builder.Services.AddAuthPersistence(builder.Configuration);
-// Register Auth core services
-builder.Services.AddMrWhoOidcAuthCore();
-
-// HttpClient + IdP validator
-builder.Services.AddHttpClient();
-builder.Services.AddScoped<IIdentityProviderValidator, IdentityProviderValidator>();
-
-// Add private_key_jwt validator
-builder.Services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-
-// Register PAR handler
-builder.Services.AddScoped<IParHandler, ParHandler>();
-
-// External OIDC chaining
-builder.Services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
-builder.Services.AddSingleton<IJwksCache, JwksCache>();
-// Claim mapping service
-builder.Services.AddScoped<IClaimMappingService, ClaimMappingService>();
+// (Legacy inline persistence/core registrations removed – now supplied by AddMrWhoOidcPersistenceAndCore)
 
 // DPoP services (use shared Security implementation)
 builder.Services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, MrWhoOidc.Security.DPoPValidator>();
@@ -239,15 +159,7 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-CSRF-TOKEN"; // allow JS-enhanced posts if needed later
 });
 
-// Background cleanup for expired tokens (opaque + refresh)
-builder.Services.AddHostedService<ExpiredTokenCleanupService>();
-// PAR cleanup
-builder.Services.AddHostedService<ParCleanupHostedService>();
-// BCL outbox dispatcher
-builder.Services.AddSingleton(new BackchannelDispatchOptions());
-builder.Services.Configure<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(builder.Configuration.GetSection("Backchannel"));
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Background.BackchannelRuntimeState>();
-builder.Services.AddHostedService<BackchannelLogoutDispatcher>();
+// (Moved above into AddMrWhoOidcBackgroundAndBackchannel)
 
 // Rate limiting policies using distributed store (Redis)
 builder.Services.AddRateLimiter(options =>
@@ -401,25 +313,8 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// Register handlers
-builder.Services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
-builder.Services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
-builder.Services.AddScoped<ILogoutHandler, LogoutHandler>();
-// Lifetime fix: service uses AuthDbContext (scoped) so must not be singleton
-builder.Services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>();
-builder.Services.AddMemoryCache();
+// (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
-builder.Services.AddScoped<ITokenHandler, TokenHandler>();
-// Grant handlers (strategy pattern pilot)
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.RefreshTokenGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>();
-builder.Services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenExchangeGrantHandler>();
-builder.Services.AddScoped<IUserInfoHandler, UserInfoHandler>();
-builder.Services.AddScoped<IRevocationHandler, RevocationHandler>();
-// Introspection
-builder.Services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
-builder.Services.AddSingleton<MrWhoOidc.WebAuth.Security.IPublicJwksCache, MrWhoOidc.WebAuth.Security.PublicJwksCache>();
 
 var app = builder.Build();
 

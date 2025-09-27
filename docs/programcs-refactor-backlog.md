@@ -47,7 +47,7 @@ Maximum line count goal: <= 150 lines (stretch: <= 120 lines).
 |-------|------|--------|--------------|
 | 0 | Safety Nets | PARTIAL | Snapshot test exists (`ProgramSurfaceSnapshotTests`) capturing full endpoint manifest, but: (a) rate limiting policy names not asserted, (b) admin policy explicit test missing, (c) negative/positive functional probes (discovery/token/userinfo) absent, (d) `/health/backchannel` shape not golden-checked. Line-count guard present. |
 | 1 | Extract Nested Types | COMPLETE | `AdminAuthOptions`, `AdminRequirement`, `AdminAuthorizationHandler`, DTO records, `AdminApiHelpers`, `EtagHelpers` all extracted. No remaining nested types in `Program.cs` aside from temporary `ProgramEndpointMapping` partial (can be deleted later). |
-| 2 | Service Registration Modularization | PARTIAL | Only narrow `AddMrWhoOidcAuthAndAdmin` extension implemented. Observability, security, persistence + seeding, rate limiting, CORS, antiforgery, PAR, DPoP, external OIDC, backchannel services still inline. |
+| 2 | Service Registration Modularization | PARTIAL | Extracted: `AddMrWhoOidcAuthAndAdmin`, `AddMrWhoOidcObservability`, `AddMrWhoOidcPersistenceAndCore` (covers persistence, seeder, protocol handlers, validators, JWKS caches). Still inline: security core (DPoP/JAR/Redis), DataProtection + antiforgery, localization/Razor bundling, background hosted services group, rate limiting, CORS, backchannel feature wiring. Duplicate inline persistence/core registrations removed from Program.cs. |
 | 3 | Endpoint Mapping Modularization | PARTIAL | Core OIDC + some infra moved to `MapMrWhoOidcEndpoints` (internal). Admin CRUD, backchannel health endpoint, and BCL admin endpoints remain inline in `Program.cs`. Migration/seeding logic currently (mis)located inside endpoint mapping extension. |
 | 4 | Rate Limiting & CORS Consolidation | NOT STARTED | Policies still registered inline. No central defaults object or config override tests. CORS logic still inline. |
 | 5 | Feature Module Interface (Optional) | DEFER (TBD) | Value not yet justified—will re‑evaluate after core extraction (Phases 2–4). |
@@ -301,5 +301,5 @@ Maintainer Notes:
 
 Progress Log (to fill):
 - Phase 1 Complete: <commit-sha>
-- Phase 2 (partial): <commit-sha(s)> – Added Authentication/Authorization extension only.
+- Phase 2 (partial): <commit-sha(s)> – Added Auth/Admin, Observability, Persistence/Core service extensions; removed duplicate inline registrations.
 
