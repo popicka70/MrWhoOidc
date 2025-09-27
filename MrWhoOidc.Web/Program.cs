@@ -261,40 +261,33 @@ app.MapGet("/login", async ctx =>
     });
 }).ExcludeFromDescription();
 
-// Option A (Federated Logout integration): redirect user to Authorization Server /logout
-// instead of invoking OIDC end_session directly. This lets the AS present the local vs
-// federated choice page and (if selected) propagate logout upstream. We still clear the
-// local RP cookie first.
 app.MapGet("/logout", async ctx =>
 {
-    // 1. Clear local relying party session
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-    // 2. Determine desired return path (relative) AFTER AS logout completes.
-    // We only forward a relative path because the AS sanitizes it.
     var requested = ctx.Request.Query["returnUrl"].FirstOrDefault()
                    ?? ctx.Request.Query["redirectUri"].FirstOrDefault()
                    ?? "/";
     if (!requested.StartsWith('/')) requested = "/" + requested;
 
-    // 3. Resolve authority (mirror normalization done in OIDC setup).
-    var authorityCfg = ctx.RequestServices.GetRequiredService<IConfiguration>();
-    var authorityRaw = authorityCfg["Oidc:Authority"] ?? authorityCfg["OIDC:Authority"];
-    if (string.IsNullOrWhiteSpace(authorityRaw))
+    var cfg = ctx.RequestServices.GetRequiredService<IConfiguration>();
+    var authorityRaw = cfg["Oidc:Authority"] ?? cfg["OIDC:Authority"];
+    var clientId = cfg["Oidc:ClientId"] ?? cfg["OIDC:ClientId"] ?? "blazor-web";
+
+    if (string.IsNullOrWhiteSpace(authorityRaw) || !Uri.TryCreate(authorityRaw, UriKind.Absolute, out var authUri))
     {
-        // Fallback: if authority missing, just do a local cookie sign-out redirect.
-        ctx.Response.Redirect(requested);
-        return;
-    }
-    if (!Uri.TryCreate(authorityRaw, UriKind.Absolute, out var authUri))
-    {
-        ctx.Response.Redirect(requested);
-        return;
+        ctx.Response.Redirect(requested); return;
     }
     var normalizedAuthority = authUri.GetLeftPart(UriPartial.Authority) + authUri.AbsolutePath.TrimEnd('/') + "/";
 
-    // 4. Build AS /logout URL with returnUrl (relative). Example: https://auth.example.com/logout?returnUrl=%2F
-    var target = normalizedAuthority + "logout?returnUrl=" + Uri.EscapeDataString(requested);
+    // Absolute post-logout redirect back to this RP (must be in client's AllowedLogoutRedirectUrisJson)
+    var rpBase = ctx.Request.Scheme + "://" + ctx.Request.Host;
+    var absoluteReturn = rpBase + requested; // e.g. https://localhost:7180/
+
+    var target = normalizedAuthority + "logout?returnUrl=" + Uri.EscapeDataString(requested)
+        + "&client_id=" + Uri.EscapeDataString(clientId)
+        + "&post_logout_redirect_uri=" + Uri.EscapeDataString(absoluteReturn);
+
     ctx.Response.Redirect(target);
 }).ExcludeFromDescription();
 

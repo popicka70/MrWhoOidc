@@ -7,6 +7,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Pages.Logout.Prompt;
 public class IndexModel : PageModel
@@ -54,6 +55,10 @@ public class IndexModel : PageModel
         if (!string.IsNullOrEmpty(style)) Style = style;
         if (string.IsNullOrEmpty(returnUrl) || !Uri.TryCreate(returnUrl, UriKind.Relative, out _)) returnUrl = "/";
 
+        // Capture potential external redirect inputs (optional)
+        var clientId = Request.Query["client_id"].ToString(); // GET param propagation
+        var externalPostLogout = Request.Query["post_logout_redirect_uri"].ToString();
+
         if (mode == "local")
         {
             _metrics.LogoutLocal.Add(1);
@@ -84,7 +89,7 @@ public class IndexModel : PageModel
                 upstreamSid = authResult?.Properties?.Items?.TryGetValue("UpstreamSid", out var sidVal) == true ? sidVal : null;
             }
             var callbackBase = $"{Request.Scheme}://{Request.Host}";
-            var redirectModel = await _upstream.BuildFederatedRedirectAsync(User ?? new ClaimsPrincipal(), encIdToken, upstreamSid, callbackBase, returnUrl, HttpContext.RequestAborted);
+            var redirectModel = await _upstream.BuildFederatedRedirectAsync(User ?? new ClaimsPrincipal(), encIdToken, upstreamSid, callbackBase, returnUrl, clientId, externalPostLogout, HttpContext.RequestAborted);
             if (!redirectModel.Success)
             {
                 _logger.LogWarning("Failed to build federated logout redirect: {Reason}", redirectModel.FailureReason);
