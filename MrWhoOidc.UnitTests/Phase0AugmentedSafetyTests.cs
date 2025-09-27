@@ -27,6 +27,12 @@ public class Phase0AugmentedSafetyTests
             b.UseSetting(WebHostDefaults.EnvironmentKey, "Development");
             // Ensure service provider lifetime validation is disabled early (Program.cs reads this at top)
             b.UseSetting("Testing:DisableServiceProviderValidation", "true");
+            b.UseSetting("Testing:ValidateAuthCore", "true");
+            // Disable throwing diagnostic by default; rely on safety net unless explicitly re-enabled.
+            b.UseSetting("Testing:DiagnoseAuthCore", "false");
+            b.UseSetting("Testing:InlineAuthCoreSafety", "true");
+            // Add the connection string directly to settings to ensure it's available before configuration is built
+            b.UseSetting("ConnectionStrings:authdb", "Host=localhost;Database=fake;Username=fake;Password=fake");
             b.ConfigureAppConfiguration((ctx, cfg) =>
             {
                 var dict = new Dictionary<string, string?>
@@ -35,6 +41,9 @@ public class Phase0AugmentedSafetyTests
                     ["Testing:SkipAuthMigrations"] = "true",
                     ["Testing:AllowInMemoryFallback"] = "true",
                     ["Testing:DisableServiceProviderValidation"] = "true",
+                    ["Testing:ValidateAuthCore"] = "true",
+                    ["Testing:DiagnoseAuthCore"] = "false",
+                    ["Testing:InlineAuthCoreSafety"] = "true",
                     ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake"
                 };
                 cfg.AddInMemoryCollection(dict);

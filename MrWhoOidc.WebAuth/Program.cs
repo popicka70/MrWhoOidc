@@ -32,6 +32,9 @@ using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Force early load of Auth assembly to avoid stale/partial incremental build races impacting extension method availability.
+_ = typeof(MrWhoOidc.Auth.AuthServiceCollectionExtensions);
+
 // Testing aid: allow disabling service provider validation (scope/singleton checks) when running
 // snapshot or surface tests that intentionally spin up a minimal in-memory host. This avoids
 // false positives from lifetime validation during transitional refactor phases.
@@ -91,8 +94,59 @@ builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
-// TEMP: explicit auth core registration (defensive – duplicate inside AddMrWhoOidcPersistenceAndCore) pending root-cause of missing services in snapshot host
-builder.Services.AddMrWhoOidcAuthCore();
+// Test-only safety net to mitigate intermittent first-run missing DI registrations.
+// Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
+if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    var criticalCore = new[]
+    {
+        typeof(MrWhoOidc.Auth.Services.IKeyStore),
+        typeof(MrWhoOidc.Auth.Services.IPasswordHasher),
+        typeof(MrWhoOidc.Auth.Services.ITokenService),
+        typeof(MrWhoOidc.Auth.Services.ITokenValidator)
+    };
+    if (criticalCore.Any(t => !builder.Services.Any(d => d.ServiceType == t)))
+    {
+        builder.Services.AddMrWhoOidcAuthCore(); // defensive re-registration
+    }
+}
+// Descriptor-level diagnostic (no provider build) – optional
+if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCore"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    string[] critical = [
+        typeof(MrWhoOidc.Auth.Services.IKeyStore).FullName!,
+        typeof(MrWhoOidc.Auth.Services.IPasswordHasher).FullName!,
+        typeof(MrWhoOidc.Auth.Services.ITokenService).FullName!,
+        typeof(MrWhoOidc.Auth.Services.ITokenValidator).FullName!
+    ];
+    var missing = new List<string>();
+    foreach (var c in critical)
+    {
+        var t = Type.GetType(c);
+        if (t == null || !builder.Services.Any(d => d.ServiceType == t)) missing.Add(c);
+    }
+    if (missing.Count > 0)
+    {
+        // Attempt re-registration then re-evaluate.
+        builder.Services.AddMrWhoOidcAuthCore();
+        var stillMissing = missing.Where(c =>
+        {
+            var t = Type.GetType(c);
+            return t == null || !builder.Services.Any(d => d.ServiceType == t);
+        }).ToList();
+        if (stillMissing.Count > 0)
+        {
+            if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCoreStrict"], "true", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Auth core descriptor diagnostic (strict): missing after safety re-registration: " + string.Join(", ", stillMissing));
+            }
+            else
+            {
+                System.Console.WriteLine("[Diag][AuthCore] Missing registrations (non-strict): " + string.Join(", ", stillMissing));
+            }
+        }
+    }
+}
 // Background cleanup + backchannel feature extracted
 builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 

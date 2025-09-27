@@ -25,6 +25,8 @@ public static class PersistenceAndCoreExtensions
 
         // Core auth/domain services (moved from Program.cs via AddMrWhoOidcAuthCore)
         services.AddMrWhoOidcAuthCore();
+        // Diagnostic marker (used only in tests if validation flag set)
+    services.AddSingleton(new AuthCoreRegistrationMarker(DateTime.UtcNow));
 
         // Core protocol services & validators
         services.AddHttpClient(); // IdP validator + external calls (idempotent)
@@ -51,6 +53,40 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
         services.AddSingleton<IPublicJwksCache, PublicJwksCache>();
 
+        // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)
+        services.AddHostedService<AuthCoreValidationHostedService>();
         return services;
     }
+}
+
+internal sealed record AuthCoreRegistrationMarker(DateTime When);
+
+internal sealed class AuthCoreValidationHostedService(
+    IServiceProvider sp,
+    ILogger<AuthCoreValidationHostedService> logger,
+    IConfiguration config) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        if (!string.Equals(config["Testing:ValidateAuthCore"], "true", StringComparison.OrdinalIgnoreCase))
+            return Task.CompletedTask;
+        using var scope = sp.CreateScope();
+        var required = new[]
+        {
+            typeof(IKeyStore),
+            typeof(IPasswordHasher),
+            typeof(ITokenService),
+            typeof(ITokenValidator)
+        };
+        var missing = required.Where(t => scope.ServiceProvider.GetService(t) is null).Select(t => t.Name).ToList();
+        if (missing.Count > 0)
+        {
+            var msg = "AuthCoreValidationHostedService detected missing: " + string.Join(", ", missing);
+            logger.LogError(msg);
+            throw new InvalidOperationException(msg);
+        }
+        logger.LogInformation("AuthCoreValidationHostedService: all core services present.");
+        return Task.CompletedTask;
+    }
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
