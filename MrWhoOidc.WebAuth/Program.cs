@@ -68,14 +68,8 @@ builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 
-// Redis connection (shared for security core + rate limiting if present)
-var redisConnection = builder.Configuration.GetConnectionString("redis") ?? builder.Configuration["ConnectionStrings:redis"];
-IConnectionMultiplexer? redisMux = null;
-if (!string.IsNullOrWhiteSpace(redisConnection))
-{
-    redisMux = await ConnectionMultiplexer.ConnectAsync(redisConnection);
-    builder.Services.AddSingleton(redisMux);
-}
+// Redis (distributed features) extracted
+var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 
 // Presentation layer (Razor Pages + MVC + antiforgery + localization)
 builder.Services.AddLocalizationAndMvc(builder.Configuration);
@@ -143,24 +137,8 @@ builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
 // Duplicate core auth registrations removed (extensions now responsible)
 
-// CORS allow-list for OIDC endpoints (tighten to only required)
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("oidc", policy =>
-    {
-        if (oidcOptions.AllowedCorsOrigins is { Length: > 0 })
-        {
-            policy.WithOrigins(oidcOptions.AllowedCorsOrigins)
-                  .WithMethods("POST", "OPTIONS")
-                  .WithHeaders("authorization", "content-type")
-                  .DisallowCredentials();
-        }
-        else
-        {
-            policy.SetIsOriginAllowed(_ => false);
-        }
-    });
-});
+// CORS policy extracted
+builder.Services.AddOidcCorsPolicy(oidcOptions);
 
 // (Moved cookie auth + admin policy to AddMrWhoOidcAuthAndAdmin extension)
 
@@ -170,157 +148,8 @@ builder.Services.AddCors(options =>
 
 // (Moved above into AddMrWhoOidcBackgroundAndBackchannel)
 
-// Rate limiting policies using distributed store (Redis)
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    if (redisMux is not null)
-    {
-        var limiterOptions = new RedisFixedWindowRateLimiterOptions { PermitLimit = 1000, Window = TimeSpan.FromMinutes(1), Prefix = "rl" };
-        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        {
-            var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
-            {
-                TokenLimit = limiterOptions.PermitLimit,
-                QueueLimit = 0,
-                TokensPerPeriod = limiterOptions.PermitLimit,
-                ReplenishmentPeriod = limiterOptions.Window,
-                AutoReplenishment = true
-            });
-        });
-    }
-
-    options.AddPolicy("rl-authorize", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    options.AddPolicy("rl-token", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 30,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    // Dedicated policy for Token Exchange requests (can be tuned separately)
-    options.AddPolicy("rl-token-exchange", httpContext =>
-    {
-        // Partition by client_id when present to avoid penalizing all clients by IP
-        string key = "unknown";
-        if (httpContext.Request.HasFormContentType)
-        {
-            try
-            {
-                var form = httpContext.Request.ReadFormAsync().GetAwaiter().GetResult();
-                string? cidFromHeader = null;
-                var header = httpContext.Request.Headers.Authorization.ToString();
-                if (!string.IsNullOrEmpty(header) && header.StartsWith("Basic ", StringComparison.Ordinal))
-                {
-                    try
-                    {
-                        var raw = header.Substring("Basic ".Length).Trim();
-                        var bytes = Convert.FromBase64String(raw);
-                        var pair = Encoding.UTF8.GetString(bytes);
-                        var idx = pair.IndexOf(':');
-                        if (idx >= 0) cidFromHeader = pair[..idx];
-                    }
-                    catch { }
-                }
-                var cid = !string.IsNullOrEmpty(cidFromHeader) ? cidFromHeader : form["client_id"].ToString();
-                key = !string.IsNullOrEmpty(cid) ? cid : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-            }
-            catch { key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"; }
-        }
-        else
-        {
-            key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        }
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    options.AddPolicy("rl-userinfo", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 120,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    options.AddPolicy("rl-par", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    // Introspection is similar sensitivity to token; rate limit appropriately
-    options.AddPolicy("rl-introspect", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 60,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    // Public JWKS endpoints (lightweight; allow a bit higher rate)
-    options.AddPolicy("rl-jwks", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 300,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-
-    // Admin endpoints policy (more restrictive by default)
-    options.AddPolicy("rl-admin", httpContext =>
-    {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 20, // adjust per environment
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
-        });
-    });
-});
+// Rate limiting policies extracted
+builder.Services.AddRateLimitingPolicies(redisMux is not null);
 
 // (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
