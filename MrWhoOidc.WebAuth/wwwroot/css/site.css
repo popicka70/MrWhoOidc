@@ -268,3 +268,6 @@ body {
   .provider-badge-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
   /* keep star only on very small screens to reduce clutter */
 }
+
+/* Override: force single column provider buttons */
+.provider-list { grid-template-columns: 1fr !important; }
