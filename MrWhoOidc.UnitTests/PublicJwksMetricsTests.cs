@@ -23,6 +23,7 @@ public class PublicJwksMetricsTests
         public MeterCapture()
         {
             _listener = new MeterListener();
+            // Signature in current target: Action<Instrument, MeterListener>
             _listener.InstrumentPublished = (instrument, listener) =>
             {
                 if (instrument.Meter.Name == OidcMetrics.MeterName && instrument.Name == "oidc.provider_jwks.zero_keys")
@@ -61,19 +62,20 @@ public class PublicJwksMetricsTests
     }
 
     [TestMethod]
-    public async Task ZeroKeysMetric_Increments_When_Active_NonPublishable_Key_Only()
+    public void ZeroKeysMetric_Increments_When_Active_NonPublishable_Key_Only()
     {
         using var capture = new MeterCapture();
-    var (cache, db) = Create();
+        var (cache, db) = Create();
         var provider = new IdentityProvider { Name = "m1", Enabled = true };
         db.IdentityProviders.Add(provider);
-        await db.SaveChangesAsync();
+        db.SaveChanges();
         db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "kid1", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"kid1\"}" });
-        await db.SaveChangesAsync();
-        var (_, json) = await cache.GetProviderAsync("m1", default);
+        db.SaveChanges();
+        var task = cache.GetProviderAsync("m1", default);
+        task.GetAwaiter().GetResult();
+        var (_, json) = task.Result;
         Assert.AreNotEqual("__not_found__", json);
         Assert.IsTrue(json.Contains("\"keys\":[]"));
-        // Allow brief time for listener to process (listener callback is sync but publish path may be async flush)
         Assert.IsTrue(capture.ZeroKeys >= 1, $"Expected zero_keys metric >=1, got {capture.ZeroKeys}");
     }
 }

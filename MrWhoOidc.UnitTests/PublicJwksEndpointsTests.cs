@@ -61,13 +61,15 @@ public class PublicJwksEndpointsTests
         {
             var (etag, json) = await cache.GetProviderAsync(name, ctx.RequestAborted);
             if (json == "__not_found__") return Results.NotFound();
-            ctx.Response.Headers.ETag = etag;
+            var notModified = MrWhoOidc.WebAuth.Infrastructure.Http.EtagHelpers.SetConditionalEtag(ctx, etag);
+            if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
             return Results.Text(json, "application/json");
         });
         app.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx) =>
         {
             var (etag, json) = await cache.GetAllProvidersAsync(ctx.RequestAborted);
-            ctx.Response.Headers.ETag = etag;
+            var notModified = MrWhoOidc.WebAuth.Infrastructure.Http.EtagHelpers.SetConditionalEtag(ctx, etag);
+            if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
             return Results.Text(json, "application/json");
         });
 
@@ -355,5 +357,55 @@ public class PublicJwksEndpointsTests
         var resp2 = await env.Client.GetAsync("/providers/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
         Assert.AreEqual(etag1, etag2, "Aggregated ETag should not change when only a non-publishable key is added");
+    }
+
+    [TestMethod]
+    public async Task Provider_Jwks_Conditional_304_When_Etag_Matches()
+    {
+        var env = await CreateAsync();
+        string etag;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = new IdentityProvider { Name = "condp1", Enabled = true };
+            db.IdentityProviders.Add(p);
+            await db.SaveChangesAsync();
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-cond1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"k-cond1\"}" });
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/condp1/jwks");
+        etag = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag));
+        var req = new HttpRequestMessage(HttpMethod.Get, "/providers/condp1/jwks");
+        req.Headers.TryAddWithoutValidation("If-None-Match", etag);
+        var resp2 = await env.Client.SendAsync(req);
+        Assert.AreEqual(HttpStatusCode.NotModified, resp2.StatusCode);
+        Assert.AreEqual(etag, resp2.Headers.ETag?.Tag, "ETag header should echo original on 304");
+    }
+
+    [TestMethod]
+    public async Task Aggregated_Jwks_Conditional_304_When_Etag_Matches()
+    {
+        var env = await CreateAsync();
+        string etag;
+        using (var scope = env.Host.Services.CreateScope())
+        {
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+            await using var db = await factory.CreateDbContextAsync();
+            var p = new IdentityProvider { Name = "condagg1", Enabled = true };
+            db.IdentityProviders.Add(p);
+            await db.SaveChangesAsync();
+            db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-agg-cond1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"b\",\"e\":\"AQAB\",\"kid\":\"k-agg-cond1\"}" });
+            await db.SaveChangesAsync();
+        }
+        var resp1 = await env.Client.GetAsync("/providers/jwks");
+        etag = resp1.Headers.ETag?.Tag ?? "";
+        Assert.IsFalse(string.IsNullOrEmpty(etag));
+        var req = new HttpRequestMessage(HttpMethod.Get, "/providers/jwks");
+        req.Headers.TryAddWithoutValidation("If-None-Match", etag);
+        var resp2 = await env.Client.SendAsync(req);
+        Assert.AreEqual(HttpStatusCode.NotModified, resp2.StatusCode);
+        Assert.AreEqual(etag, resp2.Headers.ETag?.Tag, "ETag header should echo original on 304");
     }
 }

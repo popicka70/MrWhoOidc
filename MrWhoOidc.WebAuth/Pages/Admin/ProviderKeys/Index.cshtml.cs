@@ -113,13 +113,20 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
         if (string.IsNullOrWhiteSpace(Input.Kid))
             Input.Kid = Guid.NewGuid().ToString("N");
 
-        // kid uniqueness per provider
-        var kidExists = await db.IdentityProviderKeys.AnyAsync(k => k.IdentityProviderId == providerId && k.Kid == Input.Kid);
-        if (kidExists)
+        // kid uniqueness per provider (case-insensitive + robust against InMemory provider translation quirks)
+        var normalizedKid = Input.Kid?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedKid))
         {
-            ModelState.AddModelError("Input.Kid", "Key ID (kid) already exists for this provider.");
-            await LoadAsync();
-            return Page();
+            var existingKids = await db.IdentityProviderKeys
+                .Where(k => k.IdentityProviderId == providerId)
+                .Select(k => k.Kid)
+                .ToListAsync();
+            if (existingKids.Any(k => k is not null && string.Equals(k.Trim(), normalizedKid, StringComparison.OrdinalIgnoreCase)))
+            {
+                ModelState.AddModelError("Input.Kid", "Key ID (kid) already exists for this provider.");
+                await LoadAsync();
+                return Page();
+            }
         }
 
         // Validate algorithm/kty/use consistency and compute preview

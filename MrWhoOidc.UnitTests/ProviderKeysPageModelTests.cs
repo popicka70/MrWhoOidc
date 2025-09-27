@@ -13,22 +13,23 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public class ProviderKeysPageModelTests
 {
+    private sealed class DummyJwksCache : IPublicJwksCache
+    {
+        public Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
+        public void InvalidateClient(string clientId) { }
+        public void InvalidateProvider(string providerName) { }
+        public void InvalidateAllProviders() { }
+    }
+
     private (AuthDbContext db, IndexModel model) Create()
     {
-        var services = new ServiceCollection();
-        services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase("pk-page-" + Guid.NewGuid().ToString("N")));
-        services.AddLogging();
-        services.AddMemoryCache();
-        services.AddOptions();
-        services.Configure<MrWhoOidc.Auth.Services.AuthOptions>(_ => { });
-        services.AddOidcMetricsIfMissing();
-        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
-        services.AddScoped<IPublicJwksCache, PublicJwksCache>();
-        var sp = services.BuildServiceProvider();
-        var dbFactory = sp.GetRequiredService<IDbContextFactory<AuthDbContext>>();
-        var db = dbFactory.CreateDbContext();
-        var cache = sp.GetRequiredService<IPublicJwksCache>();
-        var model = new IndexModel(db, cache);
+        var options = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase("pk-page-" + Guid.NewGuid().ToString("N"))
+            .Options;
+        var db = new AuthDbContext(options);
+        var model = new IndexModel(db, new DummyJwksCache());
         return (db, model);
     }
 
