@@ -1,0 +1,53 @@
+@page "{userId:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Users.Linked.IndexModel
+@{
+    ViewData["Title"] = "Linked accounts";
+    ViewData["ActiveUserTab"] = "linked";
+}
+
+<h1 class="mb-3">Linked accounts</h1>
+
+<partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
+
+<p class="text-muted">External identity providers linked to this user. Removing a link prevents sign-in via that external account until re-established.</p>
+
+<table class="table table-striped align-middle">
+    <thead>
+    <tr>
+        <th>Provider</th>
+        <th>Issuer</th>
+        <th>Subject</th>
+        <th>Created</th>
+        <th>Last seen</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @if (Model.Items.Count == 0)
+    {
+        <tr><td colspan="6" class="text-muted">No linked accounts.</td></tr>
+    }
+    else
+    {
+        foreach (var l in Model.Items)
+        {
+            <tr>
+                <td>@l.ProviderName</td>
+                <td class="text-break" style="max-width:320px">@l.Issuer</td>
+                <td class="text-break" style="max-width:260px">@l.Subject</td>
+                <td>@l.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td>@l.LastSeenAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <form method="post" asp-page-handler="Delete" asp-route-linkId="@l.Id" class="d-inline" onsubmit="return confirm('Remove this linked account?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        }
+    }
+    </tbody>
+</table>
+
+@section Scripts{
+    <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+}

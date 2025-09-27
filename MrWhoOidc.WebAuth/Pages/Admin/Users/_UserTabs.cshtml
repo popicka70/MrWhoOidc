@@ -1,0 +1,29 @@
+@* Shared user management tab navigation *@
+@{
+    var rd = ViewContext?.RouteData?.Values;
+    string? idVal = null;
+    if (rd is not null)
+    {
+        if (rd.ContainsKey("id")) idVal = rd["id"]?.ToString();
+        else if (rd.ContainsKey("userId")) idVal = rd["userId"]?.ToString();
+    }
+    Guid.TryParse(idVal, out var userId);
+    var active = (string?)ViewData["ActiveUserTab"] ?? string.Empty;
+}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(active=="edit"?"active":"")" asp-page="/Admin/Users/Edit" asp-route-id="@userId">Profile</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="emails"?"active":"")" asp-page="/Admin/Users/Emails/Index" asp-route-userId="@userId">Emails</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="clients"?"active":"")" asp-page="/Admin/Users/Clients/Index" asp-route-userId="@userId">Clients</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="roles"?"active":"")" asp-page="/Admin/Users/Roles/Index" asp-route-userId="@userId">Roles</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="linked"?"active":"")" asp-page="/Admin/Users/Linked/Index" asp-route-userId="@userId">Linked accounts</a>
+    </li>
+</ul>
