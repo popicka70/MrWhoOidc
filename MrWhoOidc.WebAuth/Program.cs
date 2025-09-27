@@ -29,6 +29,7 @@ using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Infrastructure.Http;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
+using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -170,63 +171,14 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
 app.MapMrWhoOidcEndpoints();
 
-// Trust proxy forwarded headers (needed for TLS termination behind a reverse proxy like Render)
-// This ensures Request.Scheme/Host reflect the original client-facing values so discovery publishes https URLs.
-var fwdOptions = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-};
-// When running behind a managed proxy (IPs may change), clear KnownNetworks/Proxies to accept the headers.
-// IMPORTANT: Only do this when the app isn't directly internet-exposed without a reverse proxy.
-fwdOptions.KnownNetworks.Clear();
-fwdOptions.KnownProxies.Clear();
-app.UseForwardedHeaders(fwdOptions);
-
-// Forward client certificates from proxy header if present
-app.UseCertificateForwarding();
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
-    app.UseHttpsRedirection();
-}
-else
-{
-    // Enable HTTPS redirection optionally for dev if desired
-    // app.UseHttpsRedirection();
-}
-
-app.UseRouting();
-// Request localization (default culture en-US; future: read from configuration or user preference)
-var supportedCultures = new[] { "en-US" };
-var localizationOptions = new RequestLocalizationOptions()
-    .SetDefaultCulture(supportedCultures[0])
-    .AddSupportedCultures(supportedCultures)
-    .AddSupportedUICultures(supportedCultures);
-app.UseRequestLocalization(localizationOptions);
-app.UseCors();
-app.UseAuthentication();
-app.UseAuthorization();
-// Distributed limiter (Redis-backed) to add Retry-After and shared limits
-if (redisMux is not null)
-{
-    app.UseMiddleware<DistributedRateLimiterMiddleware>();
-}
-app.UseRateLimiter();
+// Standard pipeline (forwarded headers, exception handling, localization, authz, rate limiting, static assets)
+app.UseMrWhoOidcPipeline(redisMux);
 
 
 // Admin + health endpoints (extracted)
 app.MapMrWhoAdminApiEndpoints();
 
-// For test scenarios we can disable static asset mapping (dev runtime patching requires ETag-able assets
-// which our in-memory test host doesn't always produce in Release builds). Controlled via Testing:DisableStaticAssets.
-var disableStaticAssets = app.Configuration.GetValue<bool>("Testing:DisableStaticAssets");
-if (!disableStaticAssets)
-{
-    app.MapStaticAssets();
-}
+// (Static assets mapping handled inside UseMrWhoOidcPipeline)
 
 app.Run();
 
