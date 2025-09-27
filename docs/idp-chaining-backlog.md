@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth � IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-25
+Updated: 2025-09-27
 
 Status legend
 - [x] Done
@@ -53,7 +53,7 @@ Epics and stories
     - Provider keys page: import private JWK JSON, `kid`/`alg`, `Active` toggle, activate/deactivate and delete.
     - Client keys page: JWKS URI fetch + save, manual JWKS JSON edit, history with hash, duplicates check, basic summary (key count).
   - Pending:
-    - Keys: PEM import (convert to JWK), nicer pretty-print/compact toggles, richer JWKS preview.
+    - Keys: richer JWKS preview / UX polish. (PEM import + pretty/compact toggles + alg/kty/use validation + JWK thumbprint preview DONE 2025-09-27)
     - Logo upload/select; drag/drop ordering polish.
   - Acceptance: Full CRUD works, validation visible, audit notes recorded.
 
@@ -109,13 +109,13 @@ Epics and stories
   - Implemented: Default mappings fallback via `AuthOptions.DefaultClaimMappings` when a provider has no explicit mappings.
   - Implemented: Mapping source now includes upstream `acr` and aggregated `amr` (space-delimited) alongside common claims; used during external provisioning.
   - Implemented: Include `idp` and `acr` from the upstream provider in issued tokens; propagate `auth_time` from the upstream sign-in when available.
-  - Pending: Emit `amr` consistently (and map where applicable); extend mapped claim propagation into issued tokens where policy allows (wire via `AuthorizationCodeMetadataStore`).
+  - Pending: Emit `amr` consistently for all relevant flows (current: upstream + mapped merged and emitted when `AuthOptions.EmitAmr*` flags true); extend mapped claim propagation into issued tokens where policy allows (additional allow-list wiring via `AuthorizationCodeMetadataStore` for non-default claims).
   - Acceptance: Downstream clients can consume upstream metadata.
 
 7) Login UI changes (Razor Pages end-user flow)
 - [~] Story: Provider picker page
-  - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider; honors `idp_hint` and remembers last provider per client.
-  - Pending: a11y/design polish, mobile improvements.
+  - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider; honors `idp_hint` and remembers last provider per client. Re-ordering logic covered by `ProviderPickerTests` (last provider cookie + idp_hint recommendation).
+  - Pending: a11y/design polish (focus management, semantic buttons), mobile layout improvements, visual recommendation badge styling.
   - Acceptance: Works across themes/branding.
 
 - [~] Story: Error/edge cases
@@ -136,10 +136,11 @@ Epics and stories
 
 9) Telemetry, security, resilience
 - [~] Story: Auditing & logging
-  - Structured logs for provider selection, upstream start/finish, errors, claim mappings applied; correlation IDs.
-  - Redact secrets; PII handling policy.
-  - Status: Metrics and correlation IDs used in `/authorize` (duration, request/JAR sizes, mode buckets, PAR consumption). Expand across external flow and admin APIs.
-  - Acceptance: Logs useful for troubleshooting and pass security review.
+  - Structured logs for provider selection, token exchange (TE), rate limit outcomes; partial coverage for upstream external flow.
+  - Correlation IDs: implemented for `/token` (TE) via `X-Correlation-Id` fallback to `TraceIdentifier`; basic correlation in authorize handler. Pending: propagate correlation across external start/callback and admin APIs.
+  - Redact secrets; PII handling policy in place (no raw tokens logged).
+  - Status: Metrics + structured logs in `/authorize` and `/token` TE path; missing: external callback duration metrics, upstream cancel telemetry, richer error taxonomy for external OIDC.
+  - Acceptance: Extend logging to external OIDC callbacks + admin CRUD before marking done.
 
 - [x] Story: Rate limiting & protections
   - Apply rate limits to authorize, callback, token, userinfo, introspection, and PAR paths; CSRF protections on local UI; strict referrer policy.
@@ -147,10 +148,10 @@ Epics and stories
 
 10) Testing and documentation
 - [~] Story: Automated tests
-  - Unit present: config validation, claim mapping transforms, JAR parsing/validation, client assertion, PAR store, auth code, key rotation, token service, admin providers API, realm/role assignments.
-  - Integration: multi-provider mapping logic tests; PAR stress tests exist; add two OIDC providers E2E when feasible.
-  - E2E: TODO for two upstream OIDC test providers (e.g., Azure AD, Auth0/Okta dev tenants).
-  - Acceptance: CI green on .NET 9; critical paths covered.
+  - Unit present: config validation, claim mapping transforms, JAR parsing/validation, client assertion, PAR store, auth code, key rotation, token service, admin providers API, realm/role assignments, provider picker ordering (`ProviderPickerTests`), OBO policy scenarios.
+  - Integration: multi-provider mapping logic (picker ordering) covered; PAR stress tests exist; still pending: full external OIDC multi-provider round-trip + cancel/error paths.
+  - E2E: TODO for two upstream OIDC test providers (e.g., Azure AD + Auth0/Okta dev tenants) including JAR + PAR permutations.
+  - Acceptance: CI green on .NET 9; expand with external OIDC dual-provider and discovery doc verification before marking done.
 
 - [ ] Story: Documentation
   - Admin guide for configuring providers and client mappings; examples for common IdPs.
@@ -352,7 +353,7 @@ Non-functional requirements
 Next steps (proposed)
 - Target milestone: Phase 3 (Multi-provider GA)
 - P0 (2 weeks)
-  - [ ] Keys UI: PEM import (convert to JWK), pretty-print/compact toggle; strengthen JWKS validation (alg/kty/use checks).
+  - [x] Keys UI: PEM import, pretty-print/compact toggle, alg/kty/use validation & thumbprint preview (DONE 2025-09-27). Remaining: enhanced JWKS visual preview.
   - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
   - [ ] JAR hardening: enable Redis-backed replay cache in production (already supported via DI when Redis is configured); tune TTL/clock skew via `AuthOptions`.
   - [ ] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout.
