@@ -50,6 +50,7 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     public string? LastProvider { get; private set; }
     public string? RecommendationSource { get; private set; }
+    public string? RecommendationAriaDescription { get; private set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -121,6 +122,17 @@ public class SelectModel(AuthDbContext db) : PageModel
                 .OrderByDescending(p => p.IsRecommended)
                 .ThenBy(p => p.Display)
                 .ToList();
+
+            // Build SR-friendly description summarizing why it is recommended
+            if (!string.IsNullOrWhiteSpace(RecommendationSource))
+            {
+                RecommendationAriaDescription = RecommendationSource switch
+                {
+                    "last" => "Recommended based on your last sign-in choice.",
+                    "hint" => "Recommended based on a provided sign-in hint.",
+                    _ => "Recommended provider"
+                };
+            }
         }
 
         Providers = providerLinks;
