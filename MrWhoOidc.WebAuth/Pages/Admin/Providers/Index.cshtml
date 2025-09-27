@@ -15,37 +15,177 @@
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Display Name</th>
-                <th>Type</th>
-                <th>Enabled</th>
-                <th>Default</th>
-                <th>Order</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div><strong>Drag & reorder providers</strong></div>
+        <div class="small text-muted">Keyboard: Up/Down to move; Space to toggle grab; Enter to commit.</div>
+    </div>
+    <ul id="provider-list" class="list-group mb-3" role="list" aria-label="Providers reorder list">
         @foreach (var p in Model.Providers)
         {
-            <tr>
-                <td>@p.Name</td>
-                <td>@p.DisplayName</td>
-                <td>@p.Type</td>
-                <td>@(p.Enabled ? "Yes" : "No")</td>
-                <td>@(p.IsDefault ? "Yes" : "No")</td>
-                <td>@p.SortOrder</td>
-                <td>
-                    <a asp-page="Details" asp-route-id="@p.Id">View</a> |
-                    <a asp-page="Edit" asp-route-id="@p.Id">Edit</a> |
-                    <a asp-page="ClaimMappings" asp-route-id="@p.Id">Claim mappings</a> |
-                    <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@p.Id">Keys</a> |
-                    <a asp-page="Delete" asp-route-id="@p.Id">Delete</a>
-                </td>
-            </tr>
+            <li class="list-group-item d-flex justify-content-between align-items-center provider-item"
+                data-id="@p.Id"
+                draggable="true"
+                tabindex="0"
+                role="listitem"
+                aria-grabbed="false">
+                <div class="flex-grow-1">
+                    <span class="fw-semibold">@p.DisplayName</span><br />
+                    <span class="text-muted small">@p.Name • @p.Type • @(p.Enabled ? "Enabled" : "Disabled") @(p.IsDefault ? "• Default" : string.Empty)</span>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <a asp-page="Details" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="View">View</a>
+                    <a asp-page="Edit" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                    <a asp-page="ClaimMappings" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
+                    <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
+                    <a asp-page="Delete" asp-route-id="@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                </div>
+                <span class="drag-handle ms-3 text-muted" aria-hidden="true" title="Drag to reorder">☰</span>
+            </li>
         }
-        </tbody>
-    </table>
+    </ul>
+    <div class="d-flex gap-2">
+        <button id="save-order" class="btn btn-primary btn-sm" disabled>Save order</button>
+        <button id="reset-order" class="btn btn-outline-secondary btn-sm" disabled>Reset</button>
+        <div id="reorder-status" class="ms-3 small" role="status" aria-live="polite"></div>
+    </div>
 }
+
+<style>
+    #provider-list .provider-item { cursor: grab; }
+    #provider-list .provider-item[aria-grabbed="true"] { outline: 2px dashed #0d6efd; cursor: grabbing; }
+    #provider-list .placeholder { border: 2px dashed #999; min-height: 48px; background: #f8f9fa; }
+    .drag-handle { cursor: grab; }
+    .provider-item.dragging { opacity: .5; }
+    @@media (prefers-reduced-motion: no-preference) { .provider-item { transition: background-color .15s ease; } }
+</style>
+
+<script>
+(() => {
+    const list = document.getElementById('provider-list');
+    if (!list) return;
+    let originalOrder = Array.from(list.children).map(li => li.getAttribute('data-id'));
+    let currentOrder = [...originalOrder];
+    let grabbed = null;
+    let dirty = false;
+    const saveBtn = document.getElementById('save-order');
+    const resetBtn = document.getElementById('reset-order');
+    const statusEl = document.getElementById('reorder-status');
+
+    function markDirty() {
+        dirty = JSON.stringify(originalOrder) !== JSON.stringify(currentOrder);
+        saveBtn.disabled = !dirty;
+        resetBtn.disabled = !dirty;
+    }
+
+    function announce(msg) { if (statusEl) statusEl.textContent = msg; }
+
+    function reorderDom(fromIdx, toIdx) {
+        if (toIdx < 0 || toIdx >= list.children.length) return;
+        const node = list.children[fromIdx];
+        if (fromIdx < toIdx) {
+            list.insertBefore(node, list.children[toIdx].nextSibling);
+        } else {
+            list.insertBefore(node, list.children[toIdx]);
+        }
+        currentOrder = Array.from(list.children).map(li => li.getAttribute('data-id'));
+        markDirty();
+    }
+
+    list.addEventListener('dragstart', e => {
+        const li = e.target.closest('.provider-item');
+        if (!li) return;
+        grabbed = li;
+        li.classList.add('dragging');
+        li.setAttribute('aria-grabbed', 'true');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    list.addEventListener('dragend', e => {
+        if (grabbed) {
+            grabbed.classList.remove('dragging');
+            grabbed.setAttribute('aria-grabbed', 'false');
+        }
+        grabbed = null;
+    });
+    list.addEventListener('dragover', e => {
+        e.preventDefault();
+        const after = e.target.closest('.provider-item');
+        if (!after || after === grabbed) return;
+        const items = Array.from(list.children);
+        const fromIdx = items.indexOf(grabbed);
+        const toIdx = items.indexOf(after);
+        if (fromIdx !== toIdx) reorderDom(fromIdx, toIdx);
+    });
+
+    list.addEventListener('keydown', e => {
+        const li = e.target.closest('.provider-item');
+        if (!li) return;
+        const items = Array.from(list.children);
+        const idx = items.indexOf(li);
+        if (e.code === 'Space') {
+            e.preventDefault();
+            const isGrabbed = li.getAttribute('aria-grabbed') === 'true';
+            if (isGrabbed) {
+                li.setAttribute('aria-grabbed', 'false');
+                grabbed = null;
+                announce('Item released.');
+            } else {
+                items.forEach(x => x.setAttribute('aria-grabbed', 'false'));
+                li.setAttribute('aria-grabbed', 'true');
+                grabbed = li;
+                announce('Item grabbed. Use up/down to move.');
+            }
+        } else if (grabbed && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            const delta = e.key === 'ArrowUp' ? -1 : 1;
+            const fromIdx = items.indexOf(grabbed);
+            const toIdx = fromIdx + delta;
+            reorderDom(fromIdx, toIdx);
+            grabbed.focus();
+            announce(`Moved to position ${toIdx + 1}.`);
+        } else if (e.key === 'Enter' && grabbed) {
+            e.preventDefault();
+            grabbed.setAttribute('aria-grabbed', 'false');
+            grabbed = null;
+            announce('Order adjustment complete. Save to persist.');
+        }
+    });
+
+    saveBtn?.addEventListener('click', async () => {
+        if (!dirty) return;
+        const body = JSON.stringify({ providerIds: currentOrder });
+        saveBtn.disabled = true;
+        resetBtn.disabled = true;
+        announce('Saving...');
+        try {
+            const resp = await fetch('?handler=Reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body
+            });
+            if (!resp.ok) throw new Error('Failed');
+            const json = await resp.json();
+            if (!json.ok) throw new Error('Server error');
+            originalOrder = [...currentOrder];
+            announce('Order saved.');
+        } catch (err) {
+            // Roll back DOM to original order
+            announce('Save failed. Reverting.');
+            const map = new Map(Array.from(list.children).map(li => [li.getAttribute('data-id'), li]));
+            list.innerHTML = '';
+            originalOrder.forEach(id => { const node = map.get(id); if (node) list.appendChild(node); });
+            currentOrder = [...originalOrder];
+        } finally {
+            markDirty();
+        }
+    });
+
+    resetBtn?.addEventListener('click', () => {
+        const map = new Map(Array.from(list.children).map(li => [li.getAttribute('data-id'), li]));
+        list.innerHTML = '';
+        originalOrder.forEach(id => { const node = map.get(id); if (node) list.appendChild(node); });
+        currentOrder = [...originalOrder];
+        markDirty();
+        announce('Order reset.');
+    });
+})();
+</script>

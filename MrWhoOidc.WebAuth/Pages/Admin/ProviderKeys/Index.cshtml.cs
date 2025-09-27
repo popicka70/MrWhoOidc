@@ -291,7 +291,10 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
         // Fetch then parse JWK shape to extract kty/use (use may be absent; derive from Purpose)
         var entities = await db.IdentityProviderKeys.AsNoTracking()
             .Where(k => k.IdentityProviderId == ProviderId)
-            .OrderByDescending(k => k.CreatedAt)
+            // Order: active & publishable first, then active non-publishable, then inactive publishable (staged), then inactive non-publishable, within each by newest
+            .OrderByDescending(k => k.Active)
+            .ThenByDescending(k => k.Publishable)
+            .ThenByDescending(k => k.CreatedAt)
             .ToListAsync();
 
         var rows = new List<Row>(entities.Count);

@@ -6,17 +6,23 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "admin")]
-public class ClaimMappingsModel(AuthDbContext db) : PageModel
+public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, ILogger<ClaimMappingsModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
     public List<Item> Mappings { get; private set; } = new();
 
     [BindProperty] public EditorInput? Input { get; set; }
+
+    // Inline test mode input (raw JSON) and output
+    [BindProperty] public string? SourceJson { get; set; }
+    public Dictionary<string, string>? TestOutput { get; private set; }
+    public string? ResultJson { get; private set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -68,6 +74,47 @@ public class ClaimMappingsModel(AuthDbContext db) : PageModel
         db.IdentityProviderClaimMappings.Remove(e);
         await db.SaveChangesAsync();
         return RedirectToPage(new { id = Id });
+    }
+
+    public async Task<IActionResult> OnPostTestAsync()
+    {
+        // Re-load mappings for display regardless of success
+        await OnGetAsync();
+        if (string.IsNullOrWhiteSpace(SourceJson))
+        {
+            TestOutput = new();
+            return Page();
+        }
+        Dictionary<string, string?> sourceClaims;
+        try
+        {
+            using var doc = JsonDocument.Parse(SourceJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                ModelState.AddModelError(nameof(SourceJson), "Root must be a JSON object.");
+                return Page();
+            }
+            sourceClaims = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.String)
+                    sourceClaims[prop.Name] = prop.Value.GetString();
+                else if (prop.Value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                    sourceClaims[prop.Name] = prop.Value.ToString();
+                // Ignore null/arrays/objects for simplicity in test UX.
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Claim mapping test JSON parse failed for provider {ProviderId}", Id);
+            ModelState.AddModelError(nameof(SourceJson), "Invalid JSON: " + ex.Message);
+            return Page();
+        }
+
+        TestOutput = await mapper.ApplyAsync(Id, sourceClaims);
+        // Pre-serialize result for copy button (compact JSON)
+        ResultJson = System.Text.Json.JsonSerializer.Serialize(TestOutput, new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+        return Page();
     }
 
     public sealed record Item(Guid Id, string External, string Local, string? Transform, int Order);

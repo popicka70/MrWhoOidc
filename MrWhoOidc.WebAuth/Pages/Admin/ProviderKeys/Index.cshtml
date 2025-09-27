@@ -108,19 +108,19 @@ else
                 <td>
                     @if (r.Active)
                     {
-                        <span class="badge bg-success" title="Active key">active</span>
+                        <span class="badge bg-success" title="Active: currently selected for its purpose" aria-label="active key">active</span>
                     }
                     else
                     {
-                        <span class="badge bg-secondary" title="Inactive (staged or retired)">inactive</span>
+                        <span class="badge bg-secondary" title="Inactive: staged or retired" aria-label="inactive key">inactive</span>
                     }
                     @if (r.Publishable)
                     {
-                        <span class="badge bg-primary ms-1" title="Will appear in public JWKS (if endpoint enabled)">pub</span>
+                        <span class="badge bg-primary ms-1" title="Publishable: will be exposed via provider JWKS if enabled" aria-label="publishable">pub</span>
                     }
                     else
                     {
-                        <span class="badge bg-dark ms-1" title="Not publishable">priv</span>
+                        <span class="badge bg-dark ms-1" title="Private only: will NOT appear in provider JWKS" aria-label="private only">priv</span>
                     }
                 </td>
                 <td>@r.Purpose</td>
@@ -164,6 +164,15 @@ else
         </tbody>
     </table>
 }
+<div class="mt-3 small" aria-describedby="jwks-legend-heading">
+    <strong id="jwks-legend-heading">Legend:</strong>
+    <ul class="list-inline mb-0">
+        <li class="list-inline-item"><span class="badge bg-success">active</span> = currently selected key for its purpose</li>
+        <li class="list-inline-item"><span class="badge bg-secondary">inactive</span> = staged / retired (not used)</li>
+        <li class="list-inline-item"><span class="badge bg-primary">pub</span> = publishable (in provider JWKS)</li>
+        <li class="list-inline-item"><span class="badge bg-dark">priv</span> = private only (excluded from provider JWKS)</li>
+    </ul>
+</div>
 
 <style>
     /* Advanced JWKS visual preview styling */
