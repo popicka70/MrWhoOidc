@@ -60,3 +60,113 @@
         }
     </tbody>
 </table>
+
+<section class="card p-3 mb-3">
+    <h3 class="h5">Test mappings</h3>
+    <p class="text-muted small mb-2">Enter a sample external claim set (JSON object). Primitive values (string/number/bool) are used. Nested object fields are supported via dotted paths (e.g. a JSON source <code>{ "profile": { "name": "Alice" } }</code> becomes external claim <code>profile.name</code>). Arrays and nulls are ignored. Leave blank for an empty source.</p>
+    <form method="post" asp-page-handler="Test" class="mb-2">
+        <input type="hidden" asp-for="Id" />
+        <div class="mb-2">
+            <textarea asp-for="SourceJson" class="form-control" rows="5" placeholder='{"given_name":"Alice","family_name":"Smith","profile":{"name":"Alice"}}'></textarea>
+            <div id="jsonStatus" class="form-text small"></div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-outline-primary">Run test</button>
+            <button type="reset" class="btn btn-outline-secondary" onclick="this.form.querySelector('textarea').value='';">Clear</button>
+        </div>
+    </form>
+    @if (Model.TestOutput != null)
+    {
+        if (Model.TestOutput.Count == 0)
+        {
+            <div class="alert alert-info py-2 mb-0">No mapped output (empty result).</div>
+        }
+        else
+        {
+            <div class="mb-2 d-flex justify-content-end">
+                <button id="copyResultBtn" type="button" class="btn btn-sm btn-outline-secondary" data-copy-target="resultJson">Copy result JSON</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Local claim</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var kvp in Model.TestOutput)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@kvp.Key</td>
+                            <td><code class="text-break">@kvp.Value</code></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+            @if (Model.ResultJson != null)
+            {
+                <script id="resultJson" type="application/json">@Html.Raw(Model.ResultJson)</script>
+            }
+        }
+    }
+    else if (!string.IsNullOrWhiteSpace(Model.SourceJson))
+    {
+        // Source JSON provided but parsing failed -> ModelState error displayed via validation summary if present
+    }
+</section>
+
+<script>
+// Session storage key scoped by provider id
+(function(){
+  const providerId = '@Model.Id';
+  const ta = document.querySelector('textarea[name="SourceJson"]');
+  const status = document.getElementById('jsonStatus');
+  const ssKey = 'claimMapTest_' + providerId;
+  if (sessionStorage.getItem(ssKey) && !ta.value) {
+     ta.value = sessionStorage.getItem(ssKey);
+  }
+  function validate(){
+    const val = ta.value.trim();
+    if (!val){
+       status.textContent = 'Empty input (treats as no external claims).';
+       status.className = 'form-text small text-muted';
+       ta.classList.remove('is-invalid','is-valid');
+       sessionStorage.removeItem(ssKey);
+       return;
+    }
+    try {
+       JSON.parse(val);
+       status.textContent = 'Valid JSON';
+       status.className = 'form-text small text-success';
+       ta.classList.remove('is-invalid');
+       ta.classList.add('is-valid');
+       sessionStorage.setItem(ssKey, val);
+    } catch(e){
+       status.textContent = 'Invalid JSON: ' + e.message.split('\n')[0];
+       status.className = 'form-text small text-danger';
+       ta.classList.add('is-invalid');
+       ta.classList.remove('is-valid');
+    }
+  }
+  ta.addEventListener('input', validate);
+  validate();
+
+  const copyBtn = document.getElementById('copyResultBtn');
+  if (copyBtn){
+    copyBtn.addEventListener('click', () => {
+      const scriptEl = document.getElementById(copyBtn.dataset.copyTarget);
+      if(!scriptEl){return;}
+      const json = scriptEl.textContent.trim();
+      navigator.clipboard.writeText(json).then(()=>{
+        copyBtn.textContent='Copied!';
+        setTimeout(()=>copyBtn.textContent='Copy result JSON',1500);
+      }).catch(()=>{
+        copyBtn.textContent='Copy failed';
+        setTimeout(()=>copyBtn.textContent='Copy result JSON',2000);
+      });
+    });
+  }
+})();
+</script>

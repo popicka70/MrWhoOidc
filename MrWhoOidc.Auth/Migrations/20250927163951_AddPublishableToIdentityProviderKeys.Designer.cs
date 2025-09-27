@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MrWhoOidc.Auth.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MrWhoOidc.Auth.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    partial class AuthDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250927163951_AddPublishableToIdentityProviderKeys")]
+    partial class AddPublishableToIdentityProviderKeys
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -635,8 +638,7 @@ namespace MrWhoOidc.Auth.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IdentityProviderId", "Kid")
-                        .HasDatabaseName("IX_IdentityProviderKeys_Provider_Kid_CI");
+                    b.HasIndex("IdentityProviderId");
 
                     b.ToTable("IdentityProviderKeys");
                 });

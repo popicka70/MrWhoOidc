@@ -51,9 +51,9 @@ internal static class EndpointMappingExtensions
             app.MapGet("/clients/{clientId}/jwks", async (string clientId, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
             {
                 var (etag, json) = await cache.GetClientAsync(clientId, ct);
-                if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+                var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ClientJwksCacheSeconds}";
-                ctx.Response.Headers["ETag"] = etag;
+                if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
@@ -63,9 +63,9 @@ internal static class EndpointMappingExtensions
             {
                 var (etag, json) = await cache.GetProviderAsync(providerName, ct);
                 if (json == "__not_found__") return Results.Problem(statusCode: 404, title: "Provider not found");
-                if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+                var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
-                ctx.Response.Headers["ETag"] = etag;
+                if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
@@ -74,9 +74,9 @@ internal static class EndpointMappingExtensions
             app.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
             {
                 var (etag, json) = await cache.GetAllProvidersAsync(ct);
-                if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
+                var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
                 ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
-                ctx.Response.Headers["ETag"] = etag;
+                if (notModified) return Results.StatusCode(StatusCodes.Status304NotModified);
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }

@@ -8,13 +8,16 @@ using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using MrWhoOidc.Auth.Crypto;
 using System.Text;
+using MrWhoOidc.Auth.IdentityProviders;
+using MrWhoOidc.WebAuth.Security;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
 
 [Authorize(Policy = "admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageModel
 {
-    public sealed record Row(Guid Id, string Purpose, string Alg, string? Kid, bool Active, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt);
+    // Extended to include parsed kty/use for advanced JWKS visual preview
+    public sealed record Row(Guid Id, string Purpose, string Alg, string? Kid, bool Active, bool Publishable, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, string? Kty, string Use);
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -111,13 +114,20 @@ public class IndexModel(AuthDbContext db) : PageModel
         if (string.IsNullOrWhiteSpace(Input.Kid))
             Input.Kid = Guid.NewGuid().ToString("N");
 
-        // kid uniqueness per provider
-        var kidExists = await db.IdentityProviderKeys.AnyAsync(k => k.IdentityProviderId == providerId && k.Kid == Input.Kid);
-        if (kidExists)
+        // kid uniqueness per provider (case-insensitive + robust against InMemory provider translation quirks)
+        var normalizedKid = Input.Kid?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedKid))
         {
-            ModelState.AddModelError("Input.Kid", "Key ID (kid) already exists for this provider.");
-            await LoadAsync();
-            return Page();
+            var existingKids = await db.IdentityProviderKeys
+                .Where(k => k.IdentityProviderId == providerId)
+                .Select(k => k.Kid)
+                .ToListAsync();
+            if (existingKids.Any(k => k is not null && string.Equals(k.Trim(), normalizedKid, StringComparison.OrdinalIgnoreCase)))
+            {
+                ModelState.AddModelError("Input.Kid", "Key ID (kid) already exists for this provider.");
+                await LoadAsync();
+                return Page();
+            }
         }
 
         // Validate algorithm/kty/use consistency and compute preview
@@ -137,6 +147,7 @@ public class IndexModel(AuthDbContext db) : PageModel
             Jwk = Input.JwkJson!,
             Alg = Input.Alg ?? InferAlgFromJwk(Input.JwkJson!),
             Active = Input.Active,
+            Publishable = Input.Publishable,
             Kid = string.IsNullOrWhiteSpace(Input.Kid) ? null : Input.Kid,
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = Input.ExpiresAt
@@ -204,6 +215,9 @@ public class IndexModel(AuthDbContext db) : PageModel
         var others = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId && k.Purpose == entity.Purpose && k.Id != entity.Id).ToListAsync();
         foreach (var o in others) o.Active = false;
         entity.Active = true;
+        // Invalidate provider cache so new active key appears (if publishable) or old ETag changes
+        jwksCache.InvalidateProvider(providerId.ToString());
+        jwksCache.InvalidateAllProviders();
         await db.SaveChangesAsync();
         Message = "Key activated.";
         await LoadAsync();
@@ -224,13 +238,84 @@ public class IndexModel(AuthDbContext db) : PageModel
         return Page();
     }
 
+    public async Task<IActionResult> OnPostPublishAsync(Guid id, Guid providerId)
+    {
+        ProviderId = providerId;
+        var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId);
+        if (entity is null) return NotFound();
+        if (!entity.Publishable)
+        {
+            entity.Publishable = true;
+            await db.SaveChangesAsync();
+            jwksCache.InvalidateProvider(providerId.ToString());
+            jwksCache.InvalidateAllProviders();
+            Message = "Key marked publishable.";
+        }
+        await LoadAsync();
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostUnpublishAsync(Guid id, Guid providerId)
+    {
+        ProviderId = providerId;
+        var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId);
+        if (entity is null) return NotFound();
+
+        // Guard: if this is the active signing key and provider requires JAR, block unpublish to avoid breaking request signing.
+        if (entity.Publishable && entity.Active && entity.Purpose == IdentityProviderKeyPurpose.Signing)
+        {
+            var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == providerId);
+            if (provider is not null && !string.IsNullOrWhiteSpace(provider.ConfigJson) && OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok && cfg is not null && cfg.UseJAR)
+            {
+                // Currently active signing key is the only active one (activation logic enforces single active). Reject.
+                Error = "Cannot unpublish the active signing key while JAR is enabled. Import and publish a replacement (then activate) or disable JAR first.";
+                await LoadAsync();
+                return Page();
+            }
+        }
+
+        if (entity.Publishable)
+        {
+            entity.Publishable = false;
+            await db.SaveChangesAsync();
+            jwksCache.InvalidateProvider(providerId.ToString());
+            jwksCache.InvalidateAllProviders();
+            Message = "Key unpublished.";
+        }
+        await LoadAsync();
+        return Page();
+    }
+
     private async Task LoadAsync()
     {
-        Rows = await db.IdentityProviderKeys.AsNoTracking()
+        // Fetch then parse JWK shape to extract kty/use (use may be absent; derive from Purpose)
+        var entities = await db.IdentityProviderKeys.AsNoTracking()
             .Where(k => k.IdentityProviderId == ProviderId)
-            .OrderByDescending(k => k.CreatedAt)
-            .Select(k => new Row(k.Id, k.Purpose.ToString(), k.Alg, k.Kid, k.Active, k.CreatedAt, k.ExpiresAt))
+            // Order: active & publishable first, then active non-publishable, then inactive publishable (staged), then inactive non-publishable, within each by newest
+            .OrderByDescending(k => k.Active)
+            .ThenByDescending(k => k.Publishable)
+            .ThenByDescending(k => k.CreatedAt)
             .ToListAsync();
+
+        var rows = new List<Row>(entities.Count);
+        foreach (var k in entities)
+        {
+            string? kty = null;
+            string use = k.Purpose == IdentityProviderKeyPurpose.Encryption ? "enc" : "sig";
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(k.Jwk))
+                {
+                    using var doc = JsonDocument.Parse(k.Jwk);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("kty", out var ktyEl)) kty = ktyEl.GetString();
+                    if (root.TryGetProperty("use", out var useEl) && !string.IsNullOrWhiteSpace(useEl.GetString())) use = useEl.GetString()!;
+                }
+            }
+            catch { /* ignore parse errors; keep defaults */ }
+            rows.Add(new Row(k.Id, k.Purpose.ToString(), k.Alg, k.Kid, k.Active, k.Publishable, k.CreatedAt, k.ExpiresAt, kty, use));
+        }
+        Rows = rows;
     }
 
     private static string InferAlgFromJwk(string jwkJson)
@@ -300,6 +385,7 @@ public class IndexModel(AuthDbContext db) : PageModel
         [StringLength(200)]
         public string? Kid { get; set; }
         public bool Active { get; set; } = true;
+        public bool Publishable { get; set; } = true; // default: publish new key unless explicitly staged
         [Required]
         public string JwkJson { get; set; } = string.Empty; // private JWK JSON or PEM
         public DateTimeOffset? ExpiresAt { get; set; }

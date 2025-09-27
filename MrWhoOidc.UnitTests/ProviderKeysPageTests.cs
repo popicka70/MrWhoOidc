@@ -8,12 +8,22 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
+using MrWhoOidc.WebAuth.Security;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public class ProviderKeysPageTests
 {
+    private sealed class NoopJwksCache : IPublicJwksCache
+    {
+        public void InvalidateAllProviders() { }
+        public void InvalidateClient(string clientId) { }
+        public void InvalidateProvider(string providerName) { }
+        public Task<(string etag, string json)> GetAllProvidersAsync(System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetClientAsync(string clientId, System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetProviderAsync(string providerName, System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
+    }
     static AuthDbContext NewDb(string name)
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -61,7 +71,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportRsaPem_Signing_SetsSigUseAndStores));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -88,7 +98,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportEcPem_Encryption_SetsEncUseAndStores));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -116,7 +126,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(InvalidPem_ReturnsModelError_NoInsert));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -139,7 +149,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(AlgKtyMismatch_EcPemWithRsAlg_Errors));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -175,7 +185,7 @@ public class ProviderKeysPageTests
         });
         db.SaveChanges();
 
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -199,7 +209,7 @@ public class ProviderKeysPageTests
         using var db = NewDb(nameof(ExpiresAt_PersistsToDatabase));
         var providerId = SeedProvider(db);
         var expires = DateTimeOffset.UtcNow.AddDays(30).ToOffset(TimeSpan.Zero); // normalize for deterministic compare
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -224,7 +234,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(EcCurveMismatch_WithAlg_ES384_OnP256_Errors));
         var providerId = SeedProvider(db);
-        var page = new IndexModel(db)
+    var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {

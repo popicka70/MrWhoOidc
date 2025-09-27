@@ -46,16 +46,30 @@ Epics and stories
 
 - [~] Story: Admin UI pages (Razor Pages)
   - Done:
-    - Providers list/detail/create/edit/delete; config JSON validation with discovery on save.
-    - Client ? Providers mapping page: add/update/delete links; order/default/ACR/auto-redirect flags.
-    - Edit page: explicit "Test connection" button with discovery excerpt; form posting fixed.
-    - Claim mapping editor (CRUD) at `/Admin/Providers/ClaimMappings` with transforms help.
-    - Provider keys page: import private JWK JSON, `kid`/`alg`, `Active` toggle, activate/deactivate and delete.
-    - Client keys page: JWKS URI fetch + save, manual JWKS JSON edit, history with hash, duplicates check, basic summary (key count).
-  - Pending:
-    - Keys: richer JWKS preview / UX polish. (PEM import + pretty/compact toggles + alg/kty/use validation + JWK thumbprint preview DONE 2025-09-27)
-    - Logo upload/select; drag/drop ordering polish.
-  - Acceptance: Full CRUD works, validation visible, audit notes recorded.
+    - Providers list/detail/create/edit/delete with validation & discovery test-on-save + error surfacing.
+    - Provider config JSON editor: inline validation + discovery excerpt + retry-safe form post fix.
+    - Client ↔ Providers mapping page: add/update/delete, ordering, default provider toggle, ACR requirement, auto-redirect flag.
+    - Claim mapping editor CRUD with transform selection help + ordering; validation on duplicates.
+    - Provider keys page: import (raw JWK or PEM -> JWK), alg/kty/use validation, pretty/compact toggle, JWK thumbprint preview, activate/deactivate, publish/unpublish (with JAR guard), delete, key list with publishable & active indicators.
+    - Client keys page: JWKS URI fetch & manual JSON entry, history with hash + duplicate detection + key count summary.
+    - Logo upload: image file upload (stored under `/uploads/providers/{fileName}` with cache-busting `?v=` query) + manual URL override support + preview on edit; removal action implemented.
+    - Accessibility pass (2025-09-27): landmark roles, form label associations, button semantics corrected for picker & keys pages; basic keyboard tab order verified.
+  - Pending / Polish:
+    - Advanced JWKS visual preview (structured table: kid / alg / kty / use / expires, highlight inactive & publishable states) replacing current minimal list.
+    - Drag & drop provider ordering UI (currently numeric SortOrder field) with keyboard-accessible reorder (ARIA `aria-grabbed` pattern) + optimistic update & rollback.
+    - Claim mapping UX: inline test mode (enter sample external claim set, preview transformed output) to reduce trial-and-error.
+    - Provider logo management: size/type validation (enforce max 200 KB, MIME whitelist), thumbnail generation (optional), alt text field; graceful fallback when missing.
+    - Form validation consistency: unify ProblemDetails parsing for client keys & provider keys to show field-level errors without page reload flicker.
+    - Global toast/alert component standardization (success/info/error) with auto-dismiss and focus management for screen readers.
+    - Rate limit feedback: display remaining quota headers (if present) on admin key mutation actions for observability.
+  - Deferred (track separately if escalates): dark mode styling parity for keys & mapping pages; bulk import of claim mappings; in-place JSON diff viewer for client JWKS history entries.
+  - Acceptance (updated):
+    - All CRUD flows (providers, mappings, keys, client keys) succeed with clear validation errors for malformed data or conflicts (kid duplicate, invalid alg/kty, mapping duplicate).
+    - Logo upload enforces type/size (once implemented) and cache-busting parameter updates after change.
+    - Provider ordering can be modified without manual numeric entry (drag/drop + keyboard) and persists SortOrder correctly (integration test).
+    - JWKS preview shows sanitized keys and reflects publish/unpublish & activate actions within one refresh cycle (no stale cache beyond configured TTL).
+    - Claim mapping test mode (when implemented) produces deterministic transform output for at least copy/trim/case transforms (unit tests).
+    - Accessibility: axe-core scan (CI) yields no critical violations for admin provider pages and keys page.
 
 3) Authorization pipeline updates (IdP chaining)
 - [x] Story: Authorize endpoint parameterization
@@ -130,17 +144,86 @@ Epics and stories
   - Status: Storage + admin UI are present; expiry detection/alerts pending.
   - Acceptance: Rollover without downtime.
 
-- [ ] Story: JWKS endpoints (if needed)
-  - Optional public JWKS exposure per provider/client scope for interoperability.
-  - Acceptance: JWKS fetch and cache behaviors verified.
+- [ ] Story: JWKS endpoints (optional, scoped)
+  Summary / Rationale:
+  - Upstream external IdPs that require outbound JAR need a trusted way to obtain our per-provider signing keys (today assumed to be exchanged out-of-band). Exposing a minimal, cache-friendly JWKS per provider reduces manual coordination and enables seamless `kid` rotation.
+  - A per-client JWKS publication is less critical (clients already register keys with us for inbound JAR) and is DEFERRED unless a downstream scenario emerges (e.g., other internal services needing a synchronized view). Focus first on provider JWKS.
+  Scope (Phase 1 – Provider JWKS Publication):
+  - Endpoint: `/providers/{providerName}/jwks` (decision: do NOT use a `/.well-known/` templated variant). Returns only ACTIVE signing keys (Purpose=Signing, Active=true) for that provider that are marked Publishable.
+  - Data model: add nullable boolean column `Publishable` to `IdentityProviderKeys` (default false). Only keys where `Active && Publishable` are emitted. (Prevents accidental exposure of staging/rollover keys before ready.)
+  - Response shaping: strip private key params; include required JWK members (`kty`, `kid`, `use=sign`, `alg`, curve/RSA modulus/exponents as applicable). Exclude `exp` unless needed; rotation logic documented instead.
+  - Caching: Add `Cache-Control: public, max-age=300`, `ETag` (hash of concatenated sorted `kid` + alg). Support conditional requests (If-None-Match) to return 304 quickly.
+  - Logging/metrics: counter for `oidc.provider_jwks.requests` + gauge for keys exposed; warn if zero keys served for an enabled provider with `UseJAR=true`.
+  - Rotation policy: Admin guidance to overlap old + new key for configurable grace window (e.g., 24h) before deactivating/removing old key. Document procedure.
+  - Security: Public, read-only; rate limit via existing global anonymous limiter bucket (low priority). No listing of provider names (404 for unknown provider).
+  - Tests: Unit (serialization shape, ETag changes on key add/remove, publishable filter) + integration (happy path, 304 on If-None-Match, no leakage of inactive/private fields).
+  - Acceptance: Upstream IdP can fetch JWKS and verify outbound JAR after rotation with no downtime; test suite green.
+  Scope (Phase 2 – Optional Client JWKS Publication) [Deferred]
+  - Only if a requirement to externally expose registered client public keys emerges (e.g., ecosystem tools). Would require opt-in per client to avoid leaking internal infra details.
+  Out of scope (explicitly): dynamic signing key generation, mTLS-protected JWKS, aggregated multi-provider JWKS.
+  Open Questions:
+  - Whether to advertise per-provider JWKS locations in discovery (decision leaning: NO; document separately; avoid discovery bloat.)
+  - Whether to include an `x5t`/`x5c` chain if keys are backed by certificates (future when mTLS/JAR w/ x5c required).
+  Task Breakdown:
+  - [~] Migration: `Publishable` column added (migration: AddPublishableToIdentityProviderKeys 20250927). Pending: add composite index on `(IdentityProviderId, Active, Publishable, Purpose)` (or at least `(IdentityProviderId, Active, Publishable)`) to optimize filtered lookups in `PublicJwksCache` (follow-up migration required).
+  - [x] Model & UI: admin provider keys page exposes Publish/Unpublish actions with guard preventing unpublishing active signing key while JAR enabled; table shows Publishable state.
+  - [x] Endpoints + caching/ETag: `/providers/{providerName}/jwks` implemented (conditional on `AuthOptions.ExposeProviderJwks`); plus aggregated `/providers/jwks` (behind `ExposeAggregatedProviderJwks`) and optional client JWKS `/clients/{clientId}/jwks` (behind `ExposeClientJwks`). All return sanitized keys, emit `Cache-Control` and strong `ETag`, support `If-None-Match` 304.
+  - [x] Logging & metrics: warning events `ZeroKeysJarEnabled`, `ZeroKeysActiveNonPublishable`; metrics emitted (requests, cache hit/miss, zero keys, keys returned, ETag changes) via `IOidcMetrics` fields (`ProviderJwksRequests`, `ProviderJwksCacheHit/Miss`, `ProviderJwksZeroKeys`, `ProviderJwksKeysReturned`, `ProviderJwksEtagChanges`, `ProviderJwksNotFound`).
+  - [x] Tests: `PublicJwksEndpointsTests` cover not found, publishable filtering, duplicate kid dedup, aggregated listing, ETag change on publishable add vs stability on non-publishable/duplicate, conditional 304 (provider + aggregated), client JWKS sanitation.
+  - [ ] Docs: rotation playbook & endpoint usage (publishing workflow, overlap strategy, cache/ETag semantics) still pending; add examples for curl and guidance when to enable aggregated JWKS.
+  - [ ] ADR: per-provider vs aggregated JWKS decision (implementation now contains both; ADR should capture rationale for disabling discovery advertisement and requiring explicit feature flags) — pending.
+  Scope Adjustment (implemented vs original plan): Aggregated provider JWKS and optional client JWKS endpoints were implemented earlier than planned (originally out-of-scope Phase 1). Story acceptance should now include verifying both remain behind feature flags and are not advertised in OIDC discovery.
+  Remaining Gaps Before Marking Story Done:
+  - Add index migration for Publishable lookup.
+  - Author docs + ADR.
+  - Validate production metric names and ensure dashboard queries documented.
+  - Confirm rate limiting policy `rl-jwks` is applied in production config (already on endpoints) and document recommended limits.
 
 9) Telemetry, security, resilience
 - [~] Story: Auditing & logging
   - Structured logs for provider selection, token exchange (TE), rate limit outcomes; partial coverage for upstream external flow.
-  - Correlation IDs: implemented for `/token` (TE) via `X-Correlation-Id` fallback to `TraceIdentifier`; basic correlation in authorize handler. Pending: propagate correlation across external start/callback and admin APIs.
+  - Correlation IDs: implemented for `/token` (TE) via `X-Correlation-Id` (falls back to ASP.NET `TraceIdentifier` when absent) and basic correlation in `/authorize` handler (root activity). Detailed external IdP chaining propagation moved to its own story below.
   - Redact secrets; PII handling policy in place (no raw tokens logged).
   - Status: Metrics + structured logs in `/authorize` and `/token` TE path; missing: external callback duration metrics, upstream cancel telemetry, richer error taxonomy for external OIDC.
   - Acceptance: Extend logging to external OIDC callbacks + admin CRUD before marking done.
+
+- [ ] Story: Correlation propagation (external IdP chaining + admin APIs)
+  Summary / Goal:
+  Ensure a single stable correlation identifier (CID) created (or accepted) at the initial `/authorize` request is available and logged across: provider picker, external OIDC outbound redirect, upstream IdP callback, local token exchange (upstream ID token -> local session), subsequent `/token` grant(s), and privileged admin API calls initiated in the same browser flow (e.g., troubleshooting). This enables full-path tracing, latency breakdowns, and incident triage without leaking identifiers to third parties or inflating state size.
+  Scope (Phase 1 – External OIDC happy path + error/cancel):
+  - Generation: If header `X-Correlation-Id` present and <= 64 chars (RFC 8941 token-ish), validate ([A-Za-z0-9-_]) and use; else generate 128-bit random (Base32 Crockford, 26 chars) `CID`.
+  - Persistence (front-channel safe): Do NOT emit raw CID directly in query parameters. Embed an opaque handle inside `state` JSON/JWT (`cid_ref`) that maps server-side to actual CID via a short-lived cache (Memory + optional Redis) keyed by handle (e.g., 96-bit random Base64Url, TTL 10 min). If PAR/JAR in use, ensure `cid_ref` present in the resolved authorization state object after merging.
+  - State format: Existing state envelope gains field `v` (version int) and `cid_ref`; size budget target < 512 bytes post-Base64Url to avoid upstream URL length issues.
+  - Callback extraction: On external callback, resolve `cid_ref` -> CID, attach to Activity/Baggage + `HttpContext.Items` and enrich logger scope.
+  - Logging enrichment: Add structured field `correlation_id` to all logs in external start + callback + local provisioning path; ensure no duplication when already present.
+  - Metrics tags: Add `correlation_present` (true/false) and reuse existing provider tag for callback duration histogram.
+  - Admin APIs: Accept/propagate `X-Correlation-Id` (read only; do not generate). Add middleware to attach to logging scope and current Activity.
+  - Privacy: CID treated as non-PII but still excluded from user-visible error pages (internal only). Document retention expectations (ephemeral; not stored in DB except maybe audit table optional later).
+  Scope (Phase 2 – Advanced telemetry & cross-service):
+  - W3C Trace Context bridge: Map CID into `ActivityTraceId` when absent; add baggage item `cid` for downstream exporters.
+  - Optional propagation to downstream sample API via header injection (config flag) for full E2E.
+  - Admin UI diagnostic panel to display current CID when troubleshooting.
+  Out of scope (now): Persisting CID in long-lived token claims; multi-hop cross-service correlation beyond provided sample API.
+  Tasks (Phase 1):
+  - [ ] Middleware: early CID capture/generation on `/authorize`.
+  - [ ] State builder update: include `cid_ref` handle; secure cache mapping (Memory + Redis abstraction) with TTL & eviction metrics.
+  - [ ] External start handler: ensure `cid_ref` injected post-PAR/JAR merge; sign/encode state.
+  - [ ] External callback handler: resolve `cid_ref`, enrich Activity + logs, emit duration + outcome metric (success/cancel/error/timeout).
+  - [ ] Admin API middleware: adopt header, attach scope.
+  - [ ] Logger scope helper + unit tests (valid/invalid header, regeneration, state round-trip, cache miss -> `invalid_request` graceful failure with new CID logged).
+  - [ ] Metrics: histogram `oidc.external_callback.duration.ms` (tags: provider, outcome), counter `oidc.external_callback.outcomes`.
+  - [ ] Documentation: update developer guide (how to pass CID) + short ADR summarizing design (no raw CID in front-channel; handle indirection; rationale vs embedding raw).
+  - [ ] Security review: confirm no correlation to user PII; ensure handle unpredictability (>= 96 bits entropy).
+  Acceptance (Phase 1):
+  - Single CID visible across authorize -> external start -> callback -> local sign-in logs for a test flow (assert via integration test capturing log scopes).
+  - State size < 512 bytes; handle not reversible to CID without cache.
+  - Metrics recorded with matching counts for outcomes (success + simulated cancel/error).
+  - Admin API log entries (sample call) show injected CID when header supplied.
+  Risks / Mitigations:
+  - Cache eviction before callback: treat as soft failure; generate new CID but log warning `cid_ref_stale` with handle hash prefix.
+  - State tampering: existing state signature/JWT validation rejects modifications; add explicit validation error code `invalid_state`.
+  - Header abuse (very large / injection): enforce length & charset; drop invalid with warning.
+  Future Enhancements (Phase 2+): integrate into distributed tracing exporters; add user-session correlation bridging with configurable sampling.
 
 - [x] Story: Rate limiting & protections
   - Apply rate limits to authorize, callback, token, userinfo, introspection, and PAR paths; CSRF protections on local UI; strict referrer policy.
@@ -360,14 +443,22 @@ Next steps (proposed)
   - [x] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs. (DONE 2025-09-27 – see ExternalOidcIntegrationTests: 3 new tests; suite now 107 passing)
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
   - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
+  - [ ] Correlation propagation: carry correlation ID from initial `/authorize` through external redirect & callback (state param embedding + log enrichment) + admin APIs.
+  - [ ] Correlation propagation (see new Story: Correlation propagation) – implement Phase 1 tasks (CID generation, state handle indirection, callback + admin enrichment, metrics) and mark story complete.
+  - [ ] External callback metrics: duration histogram + outcome counters (success/cancel/error/timeout) with provider tag.
 - P1 (next 2�4 weeks)
-  - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
-  - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
+  - [ ] Provider JWKS endpoint (see Story: JWKS endpoints subtasks) – move to P0 if external partner dependency emerges.
+  - [ ] External flow telemetry expansion: provider selection latency, upstream token exchange latency, cancellation taxonomy; structured log events with event IDs & stable schema.
   - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
   - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
   - [x] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; single-hop only. (Done; extended with DPoP bridging modes and `ath` enforcement.)
   - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
+  - [ ] Key expiry monitor: background service scanning `IdentityProviderKeys` & client keys for upcoming expiry (< N days) emitting structured warning & metric; integration test with simulated near-expiry.
+  - [ ] Rotation playbook docs + sample timeline (T-7 generate, T-2 publish new, T+0 switch active, T+2 retire old).
+  - [ ] ADR: Correlation & telemetry model for external IdP chaining (fields, sampling, PII policy).
+  - [ ] Admin UI polish: provider logo upload & ordering drag/drop accessibility improvements.
+  - [ ] Emit consistent `amr` claim across all flows (see Claim mapping pending item) + tests.
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
@@ -375,6 +466,7 @@ Risks and decisions
 - Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
 - OBO: Decide on DPoP bridging semantics (deny vs require proof and carry `cnf`), max delegation depth, and whether ID tokens are accepted as `subject_token`.
 - M2M: Decide on `audience` vs `resource` param, single vs multiple audiences, `sub` value (client_id vs URN), required auth methods (secret vs `private_key_jwt`), and mTLS policy.
+ - JWKS endpoints: Confirm path strategy (`/.well-known/providers/{name}/jwks` vs `/providers/{name}/jwks`) and whether to surface locations in discovery (leaning: document-only, no discovery bloat). Decide on `Publishable` flag vs implicit Active exposure (decided: explicit flag for safety). Consider minimum overlap window policy.
 
 Test matrix (Phase 3)
 - Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.

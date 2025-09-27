@@ -405,6 +405,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Active).HasDefaultValue(true);
             b.Property(x => x.Kid).HasMaxLength(200);
             b.Property(x => x.CreatedAt).IsRequired();
+            // Uniqueness: providerId + lower(kid) (null kids allowed multiple). Implemented via filtered index expression.
+            // Note: Requires manual migration: b.HasIndex(e => new { e.IdentityProviderId, e.Kid }) with custom annotation
+            // or raw SQL in migration using: CREATE UNIQUE INDEX ... ON "IdentityProviderKeys" ("IdentityProviderId", lower("Kid")) WHERE "Kid" IS NOT NULL;
+            b.HasIndex(x => new { x.IdentityProviderId, x.Kid })
+                .HasDatabaseName("IX_IdentityProviderKeys_Provider_Kid_CI");
         });
 
         // New: ExternalIdentity linkage
@@ -818,6 +823,8 @@ public class IdentityProviderKey
     [MaxLength(20)]
     public string Alg { get; set; } = "RS256";
     public bool Active { get; set; } = true;
+    // New: whether this active key is eligible for public JWKS publication (provider JWKS endpoint)
+    public bool Publishable { get; set; } = false;
     [MaxLength(200)]
     public string? Kid { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
