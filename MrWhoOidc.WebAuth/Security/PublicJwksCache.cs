@@ -25,12 +25,15 @@ public sealed class PublicJwksCache : IPublicJwksCache
     private readonly IDbContextFactory<AuthDbContext> _dbFactory;
     private readonly IOptions<AuthOptions> _options;
     private readonly ILogger<PublicJwksCache> _logger;
+    private readonly Observability.OidcMetrics _metrics;
 
-    public PublicJwksCache(IMemoryCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger)
+    // metrics parameter made optional to avoid breaking lightweight test hosts that haven't registered OidcMetrics yet
+    public PublicJwksCache(IMemoryCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, Observability.OidcMetrics? metrics, ILogger<PublicJwksCache> logger)
     {
         _cache = cache;
         _dbFactory = dbFactory;
         _options = options;
+        _metrics = metrics ?? new Observability.OidcMetrics();
         _logger = logger;
     }
 
@@ -50,7 +53,11 @@ public sealed class PublicJwksCache : IPublicJwksCache
     public async Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct)
     {
         var cacheKey = ClientKey(clientId);
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached)) return cached;
+        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
+        {
+            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "client"));
+            return cached;
+        }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
@@ -66,6 +73,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         var etag = ComputeEtag(json);
         var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ClientJwksCacheSeconds));
         var tuple = (etag, json);
+        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "client"));
         _cache.Set(cacheKey, tuple, ttl);
         return tuple;
     }
@@ -73,12 +81,18 @@ public sealed class PublicJwksCache : IPublicJwksCache
     public async Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct)
     {
         var cacheKey = ProviderKey(providerName);
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached)) return cached;
+        _metrics.ProviderJwksRequests.Add(1, new KeyValuePair<string, object?>("provider", providerName));
+        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
+        {
+            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
+            return cached;
+        }
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, ct);
         if (provider is null)
         {
             // Distinguish 404 vs empty caller side; return special marker
+            _metrics.ProviderJwksNotFound.Add(1);
             return ("", "__not_found__");
         }
         var keysQuery = db.IdentityProviderKeys.AsNoTracking()
@@ -89,9 +103,29 @@ public sealed class PublicJwksCache : IPublicJwksCache
         }
         var list = await keysQuery.ToListAsync(ct);
         string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
+        if (list.Count == 0)
+        {
+            _metrics.ProviderJwksZeroKeys.Add(1, new KeyValuePair<string, object?>("provider", providerName));
+            // Warn if provider requires JAR and yet no publishable active keys
+            try
+            {
+                var jarRequired = provider.ConfigJson != null && Auth.IdentityProviders.OidcProviderConfig.TryParse(provider.ConfigJson, out var parsed).ok && parsed?.UseJAR == true;
+                if (jarRequired)
+                {
+                    _logger.LogWarning("Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
+                }
+            }
+            catch { }
+        }
         var etag = ComputeEtag(json);
+        if (!_cache.TryGetValue<(string etag, string json)>(cacheKey, out var existing) || existing.etag != etag)
+        {
+            _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", providerName));
+        }
+        _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", providerName));
         var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ProviderJwksCacheSeconds));
         var tuple = (etag, json);
+        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
         _cache.Set(cacheKey, tuple, ttl);
         return tuple;
     }
@@ -99,7 +133,12 @@ public sealed class PublicJwksCache : IPublicJwksCache
     public async Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct)
     {
         var cacheKey = AllProvidersKey();
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached)) return cached;
+        _metrics.ProviderJwksAllRequests.Add(1);
+        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
+        {
+            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
+            return cached;
+        }
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(ct);
     var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
@@ -108,8 +147,14 @@ public sealed class PublicJwksCache : IPublicJwksCache
         var list = await keysQuery.ToListAsync(ct);
         string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
         var etag = ComputeEtag(json);
+        if (!_cache.TryGetValue<(string etag, string json)>(cacheKey, out var existingAll) || existingAll.etag != etag)
+        {
+            _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", "__all__"));
+        }
+        _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", "__all__"));
         var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ProviderJwksCacheSeconds));
         var tuple = (etag, json);
+        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
         _cache.Set(cacheKey, tuple, ttl);
         return tuple;
     }

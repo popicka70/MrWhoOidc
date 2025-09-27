@@ -80,4 +80,14 @@ public sealed class OidcMetrics
     public Counter<long> LogoutLocal { get; } = Meter.CreateCounter<long>("oidc.logout.local");
     public Counter<long> LogoutFailures { get; } = Meter.CreateCounter<long>("oidc.logout.failures");
     public Histogram<double> LogoutDuration { get; } = Meter.CreateHistogram<double>("oidc.logout.duration.ms");
+
+    // Provider JWKS metrics
+    public Counter<long> ProviderJwksRequests { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.requests");
+    public Counter<long> ProviderJwksAllRequests { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.aggregated.requests");
+    public Counter<long> ProviderJwksNotFound { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.not_found");
+    public Counter<long> ProviderJwksCacheHit { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.cache.hit");
+    public Counter<long> ProviderJwksCacheMiss { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.cache.miss");
+    public Counter<long> ProviderJwksKeysReturned { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.keys.returned");
+    public Counter<long> ProviderJwksZeroKeys { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.zero_keys");
+    public Counter<long> ProviderJwksEtagChanges { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.etag_changes");
 }

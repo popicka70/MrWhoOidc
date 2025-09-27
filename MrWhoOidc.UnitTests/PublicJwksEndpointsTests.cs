@@ -11,10 +11,12 @@ using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.WebAuth.Security;
 using System.Net;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public class PublicJwksEndpointsTests
 {
     private sealed record TestEnv(IHost Host, HttpClient Client);
@@ -29,6 +31,7 @@ public class PublicJwksEndpointsTests
     // Memory cache needed for JWKS cache
     services.AddMemoryCache();
     services.AddLogging();
+    services.AddSingleton<OidcMetrics>();
     services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         services.Configure<AuthOptions>(o =>
         {
