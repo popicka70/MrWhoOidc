@@ -818,6 +818,8 @@ public class IdentityProviderKey
     [MaxLength(20)]
     public string Alg { get; set; } = "RS256";
     public bool Active { get; set; } = true;
+    // New: whether this active key is eligible for public JWKS publication (provider JWKS endpoint)
+    public bool Publishable { get; set; } = false;
     [MaxLength(200)]
     public string? Kid { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

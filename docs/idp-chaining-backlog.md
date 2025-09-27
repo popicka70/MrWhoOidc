@@ -130,9 +130,34 @@ Epics and stories
   - Status: Storage + admin UI are present; expiry detection/alerts pending.
   - Acceptance: Rollover without downtime.
 
-- [ ] Story: JWKS endpoints (if needed)
-  - Optional public JWKS exposure per provider/client scope for interoperability.
-  - Acceptance: JWKS fetch and cache behaviors verified.
+- [ ] Story: JWKS endpoints (optional, scoped)
+  Summary / Rationale:
+  - Upstream external IdPs that require outbound JAR need a trusted way to obtain our per-provider signing keys (today assumed to be exchanged out-of-band). Exposing a minimal, cache-friendly JWKS per provider reduces manual coordination and enables seamless `kid` rotation.
+  - A per-client JWKS publication is less critical (clients already register keys with us for inbound JAR) and is DEFERRED unless a downstream scenario emerges (e.g., other internal services needing a synchronized view). Focus first on provider JWKS.
+  Scope (Phase 1 – Provider JWKS Publication):
+  - Endpoint: `/providers/{providerName}/jwks` (decision: do NOT use a `/.well-known/` templated variant). Returns only ACTIVE signing keys (Purpose=Signing, Active=true) for that provider that are marked Publishable.
+  - Data model: add nullable boolean column `Publishable` to `IdentityProviderKeys` (default false). Only keys where `Active && Publishable` are emitted. (Prevents accidental exposure of staging/rollover keys before ready.)
+  - Response shaping: strip private key params; include required JWK members (`kty`, `kid`, `use=sign`, `alg`, curve/RSA modulus/exponents as applicable). Exclude `exp` unless needed; rotation logic documented instead.
+  - Caching: Add `Cache-Control: public, max-age=300`, `ETag` (hash of concatenated sorted `kid` + alg). Support conditional requests (If-None-Match) to return 304 quickly.
+  - Logging/metrics: counter for `oidc.provider_jwks.requests` + gauge for keys exposed; warn if zero keys served for an enabled provider with `UseJAR=true`.
+  - Rotation policy: Admin guidance to overlap old + new key for configurable grace window (e.g., 24h) before deactivating/removing old key. Document procedure.
+  - Security: Public, read-only; rate limit via existing global anonymous limiter bucket (low priority). No listing of provider names (404 for unknown provider).
+  - Tests: Unit (serialization shape, ETag changes on key add/remove, publishable filter) + integration (happy path, 304 on If-None-Match, no leakage of inactive/private fields).
+  - Acceptance: Upstream IdP can fetch JWKS and verify outbound JAR after rotation with no downtime; test suite green.
+  Scope (Phase 2 – Optional Client JWKS Publication) [Deferred]
+  - Only if a requirement to externally expose registered client public keys emerges (e.g., ecosystem tools). Would require opt-in per client to avoid leaking internal infra details.
+  Out of scope (explicitly): dynamic signing key generation, mTLS-protected JWKS, aggregated multi-provider JWKS.
+  Open Questions:
+  - Whether to advertise per-provider JWKS locations in discovery (decision leaning: NO; document separately; avoid discovery bloat.)
+  - Whether to include an `x5t`/`x5c` chain if keys are backed by certificates (future when mTLS/JAR w/ x5c required).
+  Task Breakdown:
+  - [ ] Migration: add `Publishable` column (default false) + index on `(IdentityProviderId, Active, Publishable)`.
+  - [ ] Model & API: extend admin provider keys page with Publish toggle + validation (cannot unpublish last active publishable key if provider `UseJAR=true`).
+  - [ ] Endpoint implementation + caching/ETag.
+  - [ ] Logging & metrics additions.
+  - [ ] Unit tests (serialization, filtering, ETag) + integration tests.
+  - [ ] Docs update (rotation playbook + endpoint usage) and backlog risk review.
+  - [ ] ADR (short) documenting decision to provide per-provider JWKS vs global aggregation.
 
 9) Telemetry, security, resilience
 - [~] Story: Auditing & logging
@@ -360,14 +385,21 @@ Next steps (proposed)
   - [x] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs. (DONE 2025-09-27 – see ExternalOidcIntegrationTests: 3 new tests; suite now 107 passing)
   - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
   - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
+  - [ ] Correlation propagation: carry correlation ID from initial `/authorize` through external redirect & callback (state param embedding + log enrichment) + admin APIs.
+  - [ ] External callback metrics: duration histogram + outcome counters (success/cancel/error/timeout) with provider tag.
 - P1 (next 2�4 weeks)
-  - [ ] JWKS endpoints (optional) for provider/client scopes; caching and `kid` rotation story.
-  - [ ] Telemetry: structured logging and basic metrics (start/callback durations, errors, cancellations) across external flow and admin APIs; redact PII.
+  - [ ] Provider JWKS endpoint (see Story: JWKS endpoints subtasks) – move to P0 if external partner dependency emerges.
+  - [ ] External flow telemetry expansion: provider selection latency, upstream token exchange latency, cancellation taxonomy; structured log events with event IDs & stable schema.
   - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
   - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
   - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
   - [x] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; single-hop only. (Done; extended with DPoP bridging modes and `ath` enforcement.)
   - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
+  - [ ] Key expiry monitor: background service scanning `IdentityProviderKeys` & client keys for upcoming expiry (< N days) emitting structured warning & metric; integration test with simulated near-expiry.
+  - [ ] Rotation playbook docs + sample timeline (T-7 generate, T-2 publish new, T+0 switch active, T+2 retire old).
+  - [ ] ADR: Correlation & telemetry model for external IdP chaining (fields, sampling, PII policy).
+  - [ ] Admin UI polish: provider logo upload & ordering drag/drop accessibility improvements.
+  - [ ] Emit consistent `amr` claim across all flows (see Claim mapping pending item) + tests.
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
@@ -375,6 +407,7 @@ Risks and decisions
 - Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
 - OBO: Decide on DPoP bridging semantics (deny vs require proof and carry `cnf`), max delegation depth, and whether ID tokens are accepted as `subject_token`.
 - M2M: Decide on `audience` vs `resource` param, single vs multiple audiences, `sub` value (client_id vs URN), required auth methods (secret vs `private_key_jwt`), and mTLS policy.
+ - JWKS endpoints: Confirm path strategy (`/.well-known/providers/{name}/jwks` vs `/providers/{name}/jwks`) and whether to surface locations in discovery (leaning: document-only, no discovery bloat). Decide on `Publishable` flag vs implicit Active exposure (decided: explicit flag for safety). Consider minimum overlap window policy.
 
 Test matrix (Phase 3)
 - Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.

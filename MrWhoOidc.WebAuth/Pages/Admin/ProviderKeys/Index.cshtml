@@ -32,9 +32,13 @@
             <label asp-for="Input.Kid" class="form-label">Key ID (kid)</label>
             <input asp-for="Input.Kid" class="form-control" placeholder="auto if blank" />
         </div>
-        <div class="col-md-3 form-check mt-4">
+        <div class="col-md-2 form-check mt-4">
             <input asp-for="Input.Active" class="form-check-input" />
             <label asp-for="Input.Active" class="form-check-label">Set active</label>
+        </div>
+        <div class="col-md-2 form-check mt-4">
+            <input asp-for="Input.Publishable" class="form-check-input" />
+            <label asp-for="Input.Publishable" class="form-check-label">Publishable</label>
         </div>
         <div class="col-md-3">
             <label asp-for="Input.ExpiresAt" class="form-label">Expires at (optional)</label>
@@ -87,6 +91,7 @@ else
                 <th>Alg</th>
                 <th>KID</th>
                 <th>Active</th>
+                <th>Publishable</th>
                 <th>Created</th>
                 <th>Expires</th>
                 <th></th>
@@ -100,6 +105,7 @@ else
                 <td>@r.Alg</td>
                 <td>@r.Kid</td>
                 <td>@(r.Active ? "Yes" : "No")</td>
+                <td>@(r.Publishable ? "Yes" : "No")</td>
                 <td>@r.CreatedAt.ToString("u")</td>
                 <td>@(r.ExpiresAt?.ToString("u"))</td>
                 <td class="text-end">
@@ -108,6 +114,20 @@ else
                         <form method="post" asp-page-handler="Activate" class="d-inline">
                             <input type="hidden" name="id" value="@r.Id" />
                             <button class="btn btn-sm btn-success">Activate</button>
+                        </form>
+                    }
+                    @if (!r.Publishable)
+                    {
+                        <form method="post" asp-page-handler="Publish" class="d-inline">
+                            <input type="hidden" name="id" value="@r.Id" />
+                            <button class="btn btn-sm btn-outline-primary">Publish</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form method="post" asp-page-handler="Unpublish" class="d-inline">
+                            <input type="hidden" name="id" value="@r.Id" />
+                            <button class="btn btn-sm btn-outline-warning">Unpublish</button>
                         </form>
                     }
                     <form method="post" asp-page-handler="Delete" class="d-inline" onsubmit="return confirm('Delete this key?');">

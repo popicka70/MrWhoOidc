@@ -82,7 +82,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
             return ("", "__not_found__");
         }
         var keysQuery = db.IdentityProviderKeys.AsNoTracking()
-            .Where(k => k.IdentityProviderId == provider.Id && k.Active);
+            .Where(k => k.IdentityProviderId == provider.Id && k.Active && k.Publishable);
         if (!_options.Value.ProviderJwksIncludeEncryption)
         {
             keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
@@ -102,7 +102,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached)) return cached;
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(ct);
-        var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active);
+    var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
         if (!_options.Value.ProviderJwksIncludeEncryption)
             keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
         var list = await keysQuery.ToListAsync(ct);
