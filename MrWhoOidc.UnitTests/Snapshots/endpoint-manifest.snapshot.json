@@ -1,0 +1,4637 @@
+[
+  {
+    "Pattern": "",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "{**path:file}",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/.well-known/openid-configuration",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/bcl/alerts/snapshot",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/bcl/outbox",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/bcl/outbox/{id:guid}/retry",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/keys",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/keys",
+    "Methods": "PUT",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/providers",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/providers",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/providers/{identityProviderId:guid}",
+    "Methods": "DELETE",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/providers/{identityProviderId:guid}",
+    "Methods": "PUT",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{id:guid}",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/claim-mappings",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/claim-mappings",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/claim-mappings/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/claim-mappings/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/keys",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/keys",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/keys/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{providerId:guid}/keys/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/alive",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/Auth/External/Callback",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/Auth/External/Confirm",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/Auth/External/Start",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/authorize",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/clients/{clientId}/jwks",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/connect/endsession",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/health",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/health/backchannel",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/introspect",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/jwks",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/logout",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/logout/federated-callback",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/par",
+    "Methods": "OPTIONS",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/par",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/providers/{providerName}/jwks",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/providers/jwks",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/revoke",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/token",
+    "Methods": "OPTIONS",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/token",
+    "Methods": "POST",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/userinfo",
+    "Methods": "GET",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/userinfo",
+    "Methods": "OPTIONS",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Backchannel",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Backchannel/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ClientKeys/{clientId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ClientKeys/Index/{clientId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Clients",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Clients/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Clients/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Clients/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderClaimMappings/{providerId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderClaimMappings/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderClaimMappings/Index/{providerId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderKeys/{providerId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderKeys/Index/{providerId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderMappings",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/ProviderMappings/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/ClaimMappings/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/Delete/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/Details/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Providers/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Realms",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Realms/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Realms/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Realms/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Registrations",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Registrations/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": "admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Roles",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Roles/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Roles/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Roles/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Scopes",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Scopes/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Scopes/Edit/{name}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Scopes/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Add",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Clients/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Clients/Index/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Emails/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Emails/Index/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Linked/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Linked/Index/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Roles/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Users/Roles/Index/{userId:guid}",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Auth/External/Error",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Auth/Providers/Select",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Auth/Qr",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "consent",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.wyusvsumrj.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.wyusvsumrj.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "css/site.wyusvsumrj.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Error",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.61n19gt1b8.ico",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.61n19gt1b8.ico",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.61n19gt1b8.ico.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.ico",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.ico",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "favicon.ico.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/AuthMrWho.8diukpo8hm.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/AuthMrWho.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/BlackAndWhiteMrWho.cga0qs3aa2.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/BlackAndWhiteMrWho.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Confused.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Confused.xszjvlto68.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Icon.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Icon.t8akq13sae.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Logo.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/Logo.yzpoffq34x.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWho.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWho.xwgc01hmjb.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoAdmin.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoAdmin.taf1l7k1g1.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoBlue.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoBlue.w44pf8jh60.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoInColor.0l31rqwvoe.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/MrWhoInColor.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/shape.e8hlyd86vv.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "images/shape.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.xtxxf3hu2r.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.xtxxf3hu2r.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "js/site.xtxxf3hu2r.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.bqjiyaj88i.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.bqjiyaj88i.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.bqjiyaj88i.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.c2jlpeoesf.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.c2jlpeoesf.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.c2jlpeoesf.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.aexeepp0ev.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.aexeepp0ev.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.aexeepp0ev.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.erw9l3u2r3.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.erw9l3u2r3.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.min.erw9l3u2r3.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.ausgxo2sd3.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.ausgxo2sd3.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.ausgxo2sd3.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.d7shbmvgxk.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.d7shbmvgxk.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.d7shbmvgxk.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.cosvhxvwiu.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.cosvhxvwiu.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.cosvhxvwiu.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.k8d9w2qqmf.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.k8d9w2qqmf.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-grid.rtl.min.k8d9w2qqmf.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.fvhpjtyr6v.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.fvhpjtyr6v.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.fvhpjtyr6v.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.b7pk76d08c.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.b7pk76d08c.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.b7pk76d08c.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.fsbi9cje9m.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.fsbi9cje9m.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.fsbi9cje9m.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.ee0r1s7dh0.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.ee0r1s7dh0.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.ee0r1s7dh0.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.jd9uben2k1.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.jd9uben2k1.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.jd9uben2k1.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.dxx9fxp4il.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.dxx9fxp4il.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.min.dxx9fxp4il.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.rzd6atqjts.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.rzd6atqjts.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.rtl.rzd6atqjts.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.ub07r2b239.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.ub07r2b239.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-reboot.ub07r2b239.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.r4e9w2rdcm.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.r4e9w2rdcm.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.css.r4e9w2rdcm.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.khv3u5hwcm.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.khv3u5hwcm.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.khv3u5hwcm.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.c2oey78nd0.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.c2oey78nd0.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.c2oey78nd0.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.lcd1t2u6c8.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.lcd1t2u6c8.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.min.lcd1t2u6c8.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.j5mq2jizvt.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.j5mq2jizvt.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.j5mq2jizvt.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.06098lyss8.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.06098lyss8.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.06098lyss8.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.nvvlpmu67g.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.nvvlpmu67g.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.min.css.nvvlpmu67g.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.tdbxkamptv.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.tdbxkamptv.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap-utilities.rtl.tdbxkamptv.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.pj5nd1wqec.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.pj5nd1wqec.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.css.pj5nd1wqec.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.46ein0sx1k.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.46ein0sx1k.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.46ein0sx1k.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.v0zj4ognzu.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.v0zj4ognzu.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.min.css.v0zj4ognzu.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.37tfw0ft22.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.37tfw0ft22.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.37tfw0ft22.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.hrwsygsryq.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.hrwsygsryq.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.hrwsygsryq.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.ft3s53vfgj.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.ft3s53vfgj.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.ft3s53vfgj.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.css.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.pk9g2wxc8p.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.pk9g2wxc8p.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.rtl.min.pk9g2wxc8p.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.s35ty4nyc5.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.s35ty4nyc5.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/css/bootstrap.s35ty4nyc5.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.6cfz1n2cew.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.6cfz1n2cew.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.6cfz1n2cew.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.6pdc2jztkx.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.6pdc2jztkx.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.6pdc2jztkx.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.493y06b0oq.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.493y06b0oq.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.493y06b0oq.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.iovd86k7lj.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.iovd86k7lj.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.iovd86k7lj.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.bundle.min.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.kbrnm935zg.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.kbrnm935zg.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.kbrnm935zg.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.jj8uyg4cgr.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.jj8uyg4cgr.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.jj8uyg4cgr.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.y7v9cxd14o.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.y7v9cxd14o.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.min.js.y7v9cxd14o.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.vr1egmr9el.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.vr1egmr9el.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.esm.vr1egmr9el.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.h1s4sie4z3.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.h1s4sie4z3.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.h1s4sie4z3.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.63fj8s7r0e.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.63fj8s7r0e.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.63fj8s7r0e.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.0j3bgjxly4.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.0j3bgjxly4.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.0j3bgjxly4.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.min.js.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.notf2xhcfb.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.notf2xhcfb.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/dist/js/bootstrap.notf2xhcfb.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/LICENSE",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/bootstrap/LICENSE.81b7ukuj9c",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.47otxtyo56.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.47otxtyo56.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.47otxtyo56.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.4v8eqarkd7.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.4v8eqarkd7.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.4v8eqarkd7.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/dist/jquery.validate.unobtrusive.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.356vix0kms.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.356vix0kms.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.356vix0kms.txt.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation-unobtrusive/LICENSE.txt.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.83jwlth58m.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.83jwlth58m.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.83jwlth58m.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.mrlpezrjn3.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.mrlpezrjn3.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/additional-methods.min.mrlpezrjn3.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.lzl9nlhx6b.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.lzl9nlhx6b.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.lzl9nlhx6b.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.ag7o75518u.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.ag7o75518u.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.ag7o75518u.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/dist/jquery.validate.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.md",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.md",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.md.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.x0q3zqp4vz.md",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.x0q3zqp4vz.md",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery-validation/LICENSE.x0q3zqp4vz.md.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.0i3buxo5is.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.0i3buxo5is.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.0i3buxo5is.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.o1o13a6vjx.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.o1o13a6vjx.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.o1o13a6vjx.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.ttgo8qnofa.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.ttgo8qnofa.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.min.ttgo8qnofa.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.2z0ns9nrw6.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.2z0ns9nrw6.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.2z0ns9nrw6.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.87fc7y1x7t.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.87fc7y1x7t.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.87fc7y1x7t.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.map",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.map.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.muycvpuwrr.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.muycvpuwrr.js",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/dist/jquery.slim.min.muycvpuwrr.js.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.mlv21k5csn.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.mlv21k5csn.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.mlv21k5csn.txt.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.txt",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "lib/jquery/LICENSE.txt.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "login",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "LoginTotp",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "Logout/FederatedCallbackError",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Logout/FederatedSignedOut",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Logout/Prompt",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Logout/Prompt/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Mfa",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.12ncgwjsgx.styles.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.12ncgwjsgx.styles.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.12ncgwjsgx.styles.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.styles.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.styles.css",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "MrWhoOidc.WebAuth.styles.css.gz",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Password",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Password/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Privacy",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Registrations",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "Registrations/Index",
+    "Methods": "",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
+    "Pattern": "uploads/providers/607c5a81-2670-43a6-a57a-315ac812e1b2.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "uploads/providers/607c5a81-2670-43a6-a57a-315ac812e1b2.taf1l7k1g1.jpeg",
+    "Methods": "GET,HEAD",
+    "RateLimiter": null,
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  }
+]

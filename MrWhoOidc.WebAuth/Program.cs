@@ -28,6 +28,7 @@ using MrWhoOidc.WebAuth.Admin.Dto;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Infrastructure.Http;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
+using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -421,7 +422,8 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
     return; // exit after seeding
 }
 
-app.MapDefaultEndpoints();
+// Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
+app.MapMrWhoOidcEndpoints();
 
 // Trust proxy forwarded headers (needed for TLS termination behind a reverse proxy like Render)
 // This ensures Request.Scheme/Host reflect the original client-facing values so discovery publishes https URLs.
@@ -469,104 +471,6 @@ if (redisMux is not null)
 }
 app.UseRateLimiter();
 
-app.MapRazorPages().WithStaticAssets();
-
-// Delay DB migration and seeding until after the host is fully started
-app.Lifetime.ApplicationStarted.Register(() =>
-{
-    Task.Run(async () =>
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        await db.Database.MigrateAsync();
-
-        // Ensure at least one signing key exists
-        var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-        await keyStore.GetActiveSigningKeyAsync();
-
-        // Seed default user and client
-        await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
-    });
-});
-
-app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
-   .RequireRateLimiting("rl-authorize");
-app.MapGet("/jwks", async (HttpContext ctx, IKeyStore keys, CancellationToken ct) =>
-{
-    var jwks = await keys.GetPublicJwksAsync(ct);
-    ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
-    return Results.Json(new { keys = jwks });
-});
-
-// Conditional JWKS endpoints for clients and providers
-var authOptions = app.Services.GetRequiredService<IOptions<MrWhoOidc.Auth.Services.AuthOptions>>();
-if (authOptions.Value.ExposeClientJwks)
-{
-    app.MapGet("/clients/{clientId}/jwks", async (string clientId, MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
-    {
-        var (etag, json) = await cache.GetClientAsync(clientId, ct);
-    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
-        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ClientJwksCacheSeconds}";
-        ctx.Response.Headers["ETag"] = etag;
-        return Results.Text(json, "application/json");
-    }).RequireRateLimiting("rl-jwks");
-}
-if (authOptions.Value.ExposeProviderJwks)
-{
-    app.MapGet("/providers/{providerName}/jwks", async (string providerName, MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
-    {
-        var (etag, json) = await cache.GetProviderAsync(providerName, ct);
-        if (json == "__not_found__") return Results.Problem(statusCode:404, title:"Provider not found");
-    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
-        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
-        ctx.Response.Headers["ETag"] = etag;
-        return Results.Text(json, "application/json");
-    }).RequireRateLimiting("rl-jwks");
-}
-if (authOptions.Value.ExposeAggregatedProviderJwks)
-{
-    app.MapGet("/providers/jwks", async (MrWhoOidc.WebAuth.Security.IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
-    {
-        var (etag, json) = await cache.GetAllProvidersAsync(ct);
-    if (EtagHelpers.SetConditionalEtag(ctx, etag)) return Results.StatusCode(StatusCodes.Status304NotModified);
-        ctx.Response.Headers["Cache-Control"] = $"public, max-age={authOptions.Value.ProviderJwksCacheSeconds}";
-        ctx.Response.Headers["ETag"] = etag;
-        return Results.Text(json, "application/json");
-    }).RequireRateLimiting("rl-jwks");
-}
-app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireRateLimiting("rl-authorize");
-// Federated logout entry (GET displays choice; POST processes; fallback to local if disabled)
-app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
-// POST moved into Razor Page (/Pages/Logout/Prompt/Index.cshtml.cs OnPost)
-app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
-app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
-app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireCors("oidc")
-    .RequireRateLimiting("rl-token")
-    .RequireRateLimiting("rl-token-exchange");
-app.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
-app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
-   .RequireCors("oidc")
-   .RequireRateLimiting("rl-userinfo");
-app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-// Introspection endpoint
-app.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireRateLimiting("rl-introspect");
-// PAR endpoint
-app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-   .RequireCors("oidc")
-   .RequireRateLimiting("rl-par");
-app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
-   .RequireCors("oidc");
-
-// External OIDC chaining endpoints
-app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
-app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
-app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
 // Admin Management APIs (admin-only, ProblemDetails on errors)
 var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
@@ -999,3 +903,15 @@ app.MapStaticAssets();
 app.Run();
 
 // (Admin auth & DTO/helper types extracted to separate files in Phase 1)
+
+// Internal helper for tests (Phase 0 safety net). This allows test code to reference a stable symbol and
+// confirm that Program.cs endpoint mapping has executed. When endpoint mapping is later extracted into
+// dedicated extension methods (Phase 3), this will delegate to them or be removed.
+public static partial class ProgramEndpointMapping
+{
+    public static void MapAll(WebApplication app)
+    {
+        // No-op for now; mapping already occurred inline in Program.cs before app.Run().
+        // Presence of this method lets tests compile against a stable API surface.
+    }
+}
