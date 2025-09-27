@@ -10,25 +10,18 @@
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
 <body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) auth-scheme-body">
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <!-- Removed brand link (no functional purpose on auth flow pages) -->
+    <div class="d-flex flex-column min-vh-100">
+        <main role="main" class="flex-grow-1 d-flex align-items-center justify-content-center py-4">
+            <div class="w-100 px-3" style="max-width: 420px;">
+                @RenderBody()
             </div>
-        </nav>
-    </header>
-
-    <div class="container d-flex justify-content-center">
-        <main role="main" class="w-100" style="max-width: 420px;">
-            @RenderBody()
         </main>
+        <footer class="border-top footer text-muted small py-2">
+            <div class="container text-center">
+                &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
+            </div>
+        </footer>
     </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
-        </div>
-    </footer>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
