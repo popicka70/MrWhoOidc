@@ -1,32 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using MrWhoOidc.Auth; // Add extension methods namespace
+using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.WebAuth.Handlers;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
-using System.Text;
-using MrWhoOidc.WebAuth.Observability;
-using Microsoft.AspNetCore.HttpOverrides;
-using StackExchange.Redis;
-using MrWhoOidc.WebAuth.Infrastructure;
-using MrWhoOidc.Security;
-using Microsoft.AspNetCore.Authorization;
-using MrWhoOidc.WebAuth.Security;
-using System.Text.Json;
-using System.Linq;
-using System.Collections.Generic;
-using MrWhoOidc.WebAuth.Background;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Security.Admin;
-using MrWhoOidc.WebAuth.Admin.Dto;
-using MrWhoOidc.WebAuth.Admin.Helpers;
-using MrWhoOidc.WebAuth.Infrastructure.Http;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
@@ -47,9 +24,6 @@ if (string.Equals(builder.Configuration["Testing:DisableServiceProviderValidatio
         options.ValidateScopes = false;
     });
 }
-
-// NOTE: don't request client certificates at TLS layer to avoid browser cert prompts.
-// For mTLS on machine-to-machine callers, prefer certificate forwarding via a reverse proxy.
 
 builder.AddServiceDefaults();
 
@@ -140,14 +114,6 @@ builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
 // CORS policy extracted
 builder.Services.AddOidcCorsPolicy(oidcOptions);
-
-// (Moved cookie auth + admin policy to AddMrWhoOidcAuthAndAdmin extension)
-
-// (Legacy inline persistence/core registrations removed – now supplied by AddMrWhoOidcPersistenceAndCore)
-
-// (Security core block moved to AddMrWhoOidcSecurityCore)
-
-// (Moved above into AddMrWhoOidcBackgroundAndBackchannel)
 
 // Rate limiting policies extracted
 builder.Services.AddRateLimitingPolicies(redisMux is not null);
