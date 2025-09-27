@@ -32,6 +32,18 @@ using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Testing aid: allow disabling service provider validation (scope/singleton checks) when running
+// snapshot or surface tests that intentionally spin up a minimal in-memory host. This avoids
+// false positives from lifetime validation during transitional refactor phases.
+if (string.Equals(builder.Configuration["Testing:DisableServiceProviderValidation"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Host.UseDefaultServiceProvider(options =>
+    {
+        options.ValidateOnBuild = false;
+        options.ValidateScopes = false;
+    });
+}
+
 // NOTE: don't request client certificates at TLS layer to avoid browser cert prompts.
 // For mTLS on machine-to-machine callers, prefer certificate forwarding via a reverse proxy.
 

@@ -35,6 +35,7 @@ public class ProgramSurfaceSnapshotTests
                         ["Testing:UseInMemoryAuthDb"] = "true",
                         ["Testing:SkipAuthMigrations"] = "true",
                         ["Testing:AllowInMemoryFallback"] = "true",
+                        ["Testing:DisableServiceProviderValidation"] = "true",
                         ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake" // fallback path if logic changes
                     };
                     cfg.AddInMemoryCollection(dict);
