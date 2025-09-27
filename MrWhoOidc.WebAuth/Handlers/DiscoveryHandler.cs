@@ -66,7 +66,10 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             request_uri_parameter_supported = true,
             request_object_signing_alg_values_supported = (authOptions.Value.RequestObjectAllowedAlgorithms is { Length: > 0 }
                 ? authOptions.Value.RequestObjectAllowedAlgorithms
-                : new[] { "RS256", "ES256" }),
+                : new[] { "RS256", "PS256", "ES256", "ES384", "ES512" })
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(a => a)
+                .ToArray(),
             // JARM support
             response_modes_supported = new[] { "query", "fragment", "form_post", "query.jwt", "form_post.jwt" },
             authorization_response_iss_parameter_supported = true,

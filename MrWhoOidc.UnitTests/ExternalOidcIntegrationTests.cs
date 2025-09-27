@@ -316,6 +316,9 @@ public sealed class ExternalOidcIntegrationTests
         Assert.IsTrue(root.GetProperty("response_modes_supported").EnumerateArray().Any(x => x.GetString() == "query.jwt"));
         Assert.IsTrue(root.GetProperty("response_modes_supported").EnumerateArray().Any(x => x.GetString() == "form_post.jwt"));
         Assert.IsTrue(root.GetProperty("grant_types_supported").EnumerateArray().Any(x => x.GetString() == "urn:ietf:params:oauth:grant-type:token-exchange"));
-        Assert.IsTrue(root.GetProperty("request_object_signing_alg_values_supported").EnumerateArray().Any(x => x.GetString() == "RS256"));
+    var algs = root.GetProperty("request_object_signing_alg_values_supported").EnumerateArray().Select(x => x.GetString()).ToArray();
+    var expected = new[] { "ES256", "PS256", "RS256" }; // configured in test harness AuthOptions override
+    CollectionAssert.AreEquivalent(expected, algs, "Discovery should advertise configured JAR alg set");
+    CollectionAssert.AreEqual(expected.OrderBy(a => a).ToArray(), algs.OrderBy(a => a).ToArray(), "Alg list deterministic ordering");
     }
 }
