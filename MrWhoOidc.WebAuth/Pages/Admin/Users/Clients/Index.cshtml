@@ -5,7 +5,7 @@
 }
 
 @{ ViewData["ActiveUserTab"] = "clients"; }
-<h1 class="mb-3">Client assignments</h1>
+<h1 class="mb-3">Client assignments <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="Add">

@@ -13,11 +13,14 @@ public class IndexModel(AuthDbContext db) : PageModel
     public Guid UserId { get; set; }
 
     public IReadOnlyList<ExternalIdentity> Items { get; private set; } = Array.Empty<ExternalIdentity>();
+    public string UserHeading { get; private set; } = string.Empty;
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Id == UserId);
-        if (!exists) return RedirectToPage("/Admin/Users/Index");
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
+        UserHeading = BuildHeading(user.Username, user.Name);
+        ViewData["UserHeading"] = UserHeading;
         Items = await db.ExternalIdentities.AsNoTracking()
             .Where(e => e.UserId == UserId)
             .OrderBy(e => e.ProviderName).ThenBy(e => e.Issuer).ThenBy(e => e.Subject)
@@ -35,4 +38,9 @@ public class IndexModel(AuthDbContext db) : PageModel
         }
         return RedirectToPage(new { userId = UserId });
     }
+
+    private static string BuildHeading(string username, string? name)
+        => string.IsNullOrWhiteSpace(name) || string.Equals(username, name, StringComparison.OrdinalIgnoreCase)
+            ? username
+            : $"{username} ({name})";
 }

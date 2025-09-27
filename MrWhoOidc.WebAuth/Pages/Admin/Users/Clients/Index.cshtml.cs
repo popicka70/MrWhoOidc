@@ -24,14 +24,17 @@ public class IndexModel(AuthDbContext db) : PageModel
     public IReadOnlyList<AssignmentVm> Assignments { get; private set; } = Array.Empty<AssignmentVm>();
     public IReadOnlyList<ClientVm> Clients { get; private set; } = Array.Empty<ClientVm>();
     public IReadOnlyList<Realm> Realms { get; private set; } = Array.Empty<Realm>();
+    public string UserHeading { get; private set; } = string.Empty;
 
     public record AssignmentVm(Guid ClientGuid, string ClientId, string? ClientName, Guid RealmId, string RealmName, bool IsActive);
     public record ClientVm(Guid Id, string ClientId, string RealmName);
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var exists = await db.Users.AsNoTracking().AnyAsync(u => u.Id == UserId);
-        if (!exists) return RedirectToPage("/Admin/Users/Index");
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
+        UserHeading = BuildHeading(user.Username, user.Name);
+    ViewData["UserHeading"] = UserHeading;
 
         Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
 
@@ -75,4 +78,9 @@ public class IndexModel(AuthDbContext db) : PageModel
         }
         return RedirectToPage(new { userId = UserId });
     }
+
+    private static string BuildHeading(string username, string? name)
+        => string.IsNullOrWhiteSpace(name) || string.Equals(username, name, StringComparison.OrdinalIgnoreCase)
+            ? username
+            : $"{username} ({name})";
 }

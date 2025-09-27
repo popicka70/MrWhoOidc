@@ -5,7 +5,7 @@
 }
 
 @{ ViewData["ActiveUserTab"] = "edit"; }
-<h1 class="mb-3">Edit user</h1>
+<h1 class="mb-3">Edit user <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
 
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 

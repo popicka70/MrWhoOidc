@@ -5,7 +5,7 @@
 }
 
 @{ ViewData["ActiveUserTab"] = "emails"; }
-<h1 class="mb-3">Alternative emails</h1>
+<h1 class="mb-3">Alternative emails <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <form method="post" class="row g-2 mb-3" asp-page-handler="Add">
