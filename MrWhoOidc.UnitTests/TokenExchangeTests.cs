@@ -35,7 +35,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api", "api2");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-    var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -85,7 +85,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-    var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;

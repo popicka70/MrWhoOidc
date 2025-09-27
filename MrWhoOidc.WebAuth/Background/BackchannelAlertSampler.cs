@@ -36,9 +36,9 @@ public sealed record BackchannelAlertSamplerSnapshot(
     DateTimeOffset CapturedAt,
     int RequiredSamples,
     int CooldownSeconds,
-    IReadOnlyDictionary<string,int> BreachSamples,
-    IReadOnlyDictionary<string,DateTimeOffset> FirstBreachAt,
-    IReadOnlyDictionary<string,DateTimeOffset> LastEmitAt);
+    IReadOnlyDictionary<string, int> BreachSamples,
+    IReadOnlyDictionary<string, DateTimeOffset> FirstBreachAt,
+    IReadOnlyDictionary<string, DateTimeOffset> LastEmitAt);
 
 public interface IBackchannelAlertDiagnostics
 {
@@ -287,9 +287,9 @@ public sealed class BackchannelAlertSampler(
                 CapturedAt: now,
                 RequiredSamples: requiredSamples,
                 CooldownSeconds: cfg.CooldownSeconds,
-                BreachSamples: new Dictionary<string,int>(_breachSamples),
-                FirstBreachAt: new Dictionary<string,DateTimeOffset>(_firstBreachAt),
-                LastEmitAt: new Dictionary<string,DateTimeOffset>(_lastEmitAt));
+                BreachSamples: new Dictionary<string, int>(_breachSamples),
+                FirstBreachAt: new Dictionary<string, DateTimeOffset>(_firstBreachAt),
+                LastEmitAt: new Dictionary<string, DateTimeOffset>(_lastEmitAt));
         }
     }
 }

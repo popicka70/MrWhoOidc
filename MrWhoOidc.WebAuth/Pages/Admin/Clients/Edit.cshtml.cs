@@ -759,11 +759,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             }
         }
 
-    var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
+        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
         if (client is null) return NotFound();
-    // Capture old values for audit comparison
-    var oldBclUri = client.BackChannelLogoutUri;
-    var oldBclSess = client.BackChannelLogoutSessionRequired;
+        // Capture old values for audit comparison
+        var oldBclUri = client.BackChannelLogoutUri;
+        var oldBclSess = client.BackChannelLogoutSessionRequired;
 
         // If client id changed, enforce uniqueness
         if (!string.Equals(client.ClientId, Input.ClientId, StringComparison.Ordinal))
@@ -873,7 +873,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         {
             client.BackChannelLogoutUri = null;
         }
-    client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
+        client.BackChannelLogoutSessionRequired = Input.BackChannelLogoutSessionRequired;
 
         // M2M: allowed audiences
         if (!string.IsNullOrWhiteSpace(Input.M2MAllowedAudiences))
@@ -1278,10 +1278,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         [Display(Name = "Allowed logout redirect URIs (comma-separated)")]
         public string? AllowedLogoutRedirectUris { get; set; }
 
-    [Display(Name = "Back-channel logout URI")] 
-    public string? BackChannelLogoutUri { get; set; }
-    [Display(Name = "Back-channel logout session required")] 
-    public bool BackChannelLogoutSessionRequired { get; set; } = true;
+        [Display(Name = "Back-channel logout URI")]
+        public string? BackChannelLogoutUri { get; set; }
+        [Display(Name = "Back-channel logout session required")]
+        public bool BackChannelLogoutSessionRequired { get; set; } = true;
 
         // New: login method toggles
         [Display(Name = "Allow local username/password login")]

@@ -15,9 +15,9 @@ public class ProviderKeysPageModelTests
 {
     private sealed class DummyJwksCache : IPublicJwksCache
     {
-        public Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
-        public Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
-        public Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct) => Task.FromResult(("etag","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
         public void InvalidateClient(string clientId) { }
         public void InvalidateProvider(string providerName) { }
         public void InvalidateAllProviders() { }

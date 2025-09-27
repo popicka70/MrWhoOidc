@@ -139,13 +139,13 @@ public class FederatedLogoutServiceTests
     {
         var authority = "https://bad.test";
         var db = BuildDb();
-    var cfgJson = $"{{\"Authority\":\"{authority}\",\"ClientId\":\"abc\"}}";
-    db.IdentityProviders.Add(new IdentityProvider { Name = "foo", ConfigJson = cfgJson });
+        var cfgJson = $"{{\"Authority\":\"{authority}\",\"ClientId\":\"abc\"}}";
+        db.IdentityProviders.Add(new IdentityProvider { Name = "foo", ConfigJson = cfgJson });
         db.SaveChanges();
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
         var handler = new TestHandler { OnSend = req => new HttpResponseMessage(HttpStatusCode.InternalServerError) };
-    var svc = new UpstreamLogoutService(cache, FedOpts(), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(handler)), new NoopAuditSink());
+        var svc = new UpstreamLogoutService(cache, FedOpts(), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(handler)), new NoopAuditSink());
         var principal = BuildPrincipal("foo");
         var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, null, null, CancellationToken.None);
         Assert.IsFalse(res.Success);

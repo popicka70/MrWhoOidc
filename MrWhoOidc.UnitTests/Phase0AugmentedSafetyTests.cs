@@ -78,7 +78,7 @@ public class Phase0AugmentedSafetyTests
         Assert.IsTrue(authorize.StatusCode == HttpStatusCode.BadRequest || (int)authorize.StatusCode == 302, $"Unexpected authorize status {(int)authorize.StatusCode}");
 
         // Token (empty POST)
-        var token = await client.PostAsync("/token", new FormUrlEncodedContent(new Dictionary<string,string>()));
+        var token = await client.PostAsync("/token", new FormUrlEncodedContent(new Dictionary<string, string>()));
         // Expecting 400 invalid_request
         Assert.AreEqual(HttpStatusCode.BadRequest, token.StatusCode, "token empty form should 400");
 

@@ -70,8 +70,8 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         _dbFactory = dbFactory;
         _httpFactory = httpFactory;
         _logger = logger;
-    _metrics = metrics;
-    _alerts = alerts;
+        _metrics = metrics;
+        _alerts = alerts;
         _audit = audit;
         _options = options;
         _feature = feature;

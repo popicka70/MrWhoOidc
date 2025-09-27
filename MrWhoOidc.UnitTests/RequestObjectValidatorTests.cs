@@ -74,9 +74,9 @@ public sealed class RequestObjectValidatorTests
 
         var cache = new InMemoryJarReplayCache();
         var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), cache);
-    // Sanity: JWT contains the expected jti
-    var parsed = new JwtSecurityTokenHandler().ReadJwtToken(jwt);
-    Assert.AreEqual(jti, parsed.Claims.First(c => c.Type == JwtRegisteredClaimNames.Jti).Value);
+        // Sanity: JWT contains the expected jti
+        var parsed = new JwtSecurityTokenHandler().ReadJwtToken(jwt);
+        Assert.AreEqual(jti, parsed.Claims.First(c => c.Type == JwtRegisteredClaimNames.Jti).Value);
         var ok = await validator.ValidateAsync(jwt, aud);
         Assert.IsTrue(ok.IsValid);
         // Second validation with same JWT should be rejected as replay
@@ -92,23 +92,23 @@ public sealed class RequestObjectValidatorTests
         var opts = Microsoft.Extensions.Options.Options.Create(new AuthOptions { RequestObjectClockSkewSeconds = 120 });
 
         // Build a JWT that expires now - but within skew window it should pass
-    using var rsa = System.Security.Cryptography.RSA.Create(2048);
-    var parameters = rsa.ExportParameters(true);
-    var n = Base64UrlEncoder.Encode(parameters.Modulus);
-    var e = Base64UrlEncoder.Encode(parameters.Exponent);
-    var d = Base64UrlEncoder.Encode(parameters.D);
-    var p = Base64UrlEncoder.Encode(parameters.P);
-    var q = Base64UrlEncoder.Encode(parameters.Q);
-    var dp = Base64UrlEncoder.Encode(parameters.DP);
-    var dq = Base64UrlEncoder.Encode(parameters.DQ);
-    var qi = Base64UrlEncoder.Encode(parameters.InverseQ);
-    var kid = Guid.NewGuid().ToString("N");
-    var jwkJson = $"{{\"kty\":\"RSA\",\"alg\":\"RS256\",\"kid\":\"{kid}\",\"n\":\"{n}\",\"e\":\"{e}\",\"d\":\"{d}\",\"p\":\"{p}\",\"q\":\"{q}\",\"dp\":\"{dp}\",\"dq\":\"{dq}\",\"qi\":\"{qi}\"}}";
-    var jwk = new JsonWebKey(jwkJson);
-    var creds = new SigningCredentials(jwk, SecurityAlgorithms.RsaSha256);
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var parameters = rsa.ExportParameters(true);
+        var n = Base64UrlEncoder.Encode(parameters.Modulus);
+        var e = Base64UrlEncoder.Encode(parameters.Exponent);
+        var d = Base64UrlEncoder.Encode(parameters.D);
+        var p = Base64UrlEncoder.Encode(parameters.P);
+        var q = Base64UrlEncoder.Encode(parameters.Q);
+        var dp = Base64UrlEncoder.Encode(parameters.DP);
+        var dq = Base64UrlEncoder.Encode(parameters.DQ);
+        var qi = Base64UrlEncoder.Encode(parameters.InverseQ);
+        var kid = Guid.NewGuid().ToString("N");
+        var jwkJson = $"{{\"kty\":\"RSA\",\"alg\":\"RS256\",\"kid\":\"{kid}\",\"n\":\"{n}\",\"e\":\"{e}\",\"d\":\"{d}\",\"p\":\"{p}\",\"q\":\"{q}\",\"dp\":\"{dp}\",\"dq\":\"{dq}\",\"qi\":\"{qi}\"}}";
+        var jwk = new JsonWebKey(jwkJson);
+        var creds = new SigningCredentials(jwk, SecurityAlgorithms.RsaSha256);
         var aud = "https://as/authorize";
         var clientId = "c2";
-    db.Clients.Add(new Client { ClientId = clientId, PublicJwksJson = jwkJson });
+        db.Clients.Add(new Client { ClientId = clientId, PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
         var now = DateTime.UtcNow;

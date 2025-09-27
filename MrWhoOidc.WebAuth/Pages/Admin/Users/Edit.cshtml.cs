@@ -39,8 +39,8 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
         var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (entity is null) return RedirectToPage("Index");
 
-    // Initialize heading from current entity state for validation error scenarios.
-    SetHeading(entity.Username, entity.Name);
+        // Initialize heading from current entity state for validation error scenarios.
+        SetHeading(entity.Username, entity.Name);
 
         var newUsername = Input.Username.Trim();
         if (!string.Equals(entity.Username, newUsername, StringComparison.Ordinal))

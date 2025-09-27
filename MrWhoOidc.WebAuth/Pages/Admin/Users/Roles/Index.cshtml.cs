@@ -44,7 +44,7 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
         if (user is null) return RedirectToPage("/Admin/Users/Index");
-    SetHeading(user.Username, user.Name);
+        SetHeading(user.Username, user.Name);
 
         Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
 

@@ -45,7 +45,7 @@ public sealed class AuthorizeHandler(
 
         // Compute initial client bucket from query (may be refined later for JAR/PAR)
         string rawClientId = http.Request.Query["client_id"].ToString();
-    string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
+        string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
         string mode = "query";
 
         // Record approximate request size (encoded query string length)

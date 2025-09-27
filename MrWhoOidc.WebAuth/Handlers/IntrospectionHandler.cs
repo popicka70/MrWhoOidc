@@ -399,8 +399,8 @@ public sealed class IntrospectionHandler(
             }
         }
 
-    // Privacy shaping
-    responseOpaque = ShapeResponseForClient(responseOpaque, client);
+        // Privacy shaping
+        responseOpaque = ShapeResponseForClient(responseOpaque, client);
 
         metrics.IntrospectionActiveTrue.Add(1, tags);
         LogAudit(logger, clientId, http.Connection.RemoteIpAddress?.ToString(), outcome: "active", aud: entity.Audience);

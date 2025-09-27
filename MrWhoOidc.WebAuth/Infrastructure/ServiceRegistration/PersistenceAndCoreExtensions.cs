@@ -26,7 +26,7 @@ public static class PersistenceAndCoreExtensions
         // Core auth/domain services (moved from Program.cs via AddMrWhoOidcAuthCore)
         services.AddMrWhoOidcAuthCore();
         // Diagnostic marker (used only in tests if validation flag set)
-    services.AddSingleton(new AuthCoreRegistrationMarker(DateTime.UtcNow));
+        services.AddSingleton(new AuthCoreRegistrationMarker(DateTime.UtcNow));
 
         // Core protocol services & validators
         services.AddHttpClient(); // IdP validator + external calls (idempotent)

@@ -25,7 +25,7 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
         }
 
         var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
-    (bool ok, object? payload, string? _, int status) = await context.Tokens.ExchangeRefreshTokenAsync(refresh, context.ClientId, issuer, context.DPoPJkt);
+        (bool ok, object? payload, string? _, int status) = await context.Tokens.ExchangeRefreshTokenAsync(refresh, context.ClientId, issuer, context.DPoPJkt);
         if (!ok)
         {
             logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));

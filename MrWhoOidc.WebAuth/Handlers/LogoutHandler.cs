@@ -146,62 +146,62 @@ public sealed class LogoutHandler(AuthDbContext db,
             }
             else
             {
-            // Enqueue into outbox for background delivery
-            foreach (var c in backChannelClients)
-            {
-                var token = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
-                if (token is null) continue;
-
-                // Allow/block list by host (optional via config)
-                if (Uri.TryCreate(c.BackChannelLogoutUri, UriKind.Absolute, out var target))
+                // Enqueue into outbox for background delivery
+                foreach (var c in backChannelClients)
                 {
-                    var cfg = http.RequestServices.GetRequiredService<IConfiguration>();
-                    var allowList = cfg.GetSection("Backchannel:AllowHosts").Get<string[]>() ?? Array.Empty<string>();
-                    var blockList = cfg.GetSection("Backchannel:BlockHosts").Get<string[]>() ?? Array.Empty<string>();
-                    var host = target.Host;
-                    if (blockList.Contains(host, StringComparer.OrdinalIgnoreCase))
+                    var token = CreateLogoutToken(issuer, c.ClientId, idTokenHint, sid);
+                    if (token is null) continue;
+
+                    // Allow/block list by host (optional via config)
+                    if (Uri.TryCreate(c.BackChannelLogoutUri, UriKind.Absolute, out var target))
                     {
-                        logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} is blocked", c.ClientId, host);
-                        continue;
+                        var cfg = http.RequestServices.GetRequiredService<IConfiguration>();
+                        var allowList = cfg.GetSection("Backchannel:AllowHosts").Get<string[]>() ?? Array.Empty<string>();
+                        var blockList = cfg.GetSection("Backchannel:BlockHosts").Get<string[]>() ?? Array.Empty<string>();
+                        var host = target.Host;
+                        if (blockList.Contains(host, StringComparer.OrdinalIgnoreCase))
+                        {
+                            logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} is blocked", c.ClientId, host);
+                            continue;
+                        }
+                        if (allowList.Length > 0 && !allowList.Contains(host, StringComparer.OrdinalIgnoreCase))
+                        {
+                            logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} not in allow-list", c.ClientId, host);
+                            continue;
+                        }
                     }
-                    if (allowList.Length > 0 && !allowList.Contains(host, StringComparer.OrdinalIgnoreCase))
+
+                    var entity = new BackchannelLogoutNotification
                     {
-                        logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} not in allow-list", c.ClientId, host);
-                        continue;
-                    }
+                        ClientDbId = c.Id,
+                        ClientId = c.ClientId,
+                        TargetUri = c.BackChannelLogoutUri!,
+                        LogoutToken = token,
+                        Sid = string.IsNullOrEmpty(sid) ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : sid,
+                        Sub = JwtLightParser.TryGetClaim(idTokenHint, "sub"),
+                        Status = "pending",
+                        AttemptCount = 0,
+                        MaxAttempts = 5,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    db.BackchannelLogoutNotifications.Add(entity);
+                    // Audit-like info in logs for enqueue (PII minimized): who/what/when
+                    logger.LogInformation("BCL enqueue: client={ClientId} target={TargetHost} sid={HasSid} sub={HasSub}",
+                        entity.ClientId, new Uri(entity.TargetUri).Host, !string.IsNullOrEmpty(entity.Sid), !string.IsNullOrEmpty(entity.Sub));
+                    metrics.BclEmitted.Add(1, new KeyValuePair<string, object?>("client_id", entity.ClientId));
+                    // Audit event (no raw tokens)
+                    var httpIp = http.Connection.RemoteIpAddress?.ToString();
+                    audit.Emit("bcl.enqueue", new
+                    {
+                        client_id = entity.ClientId,
+                        target = new Uri(entity.TargetUri).Host,
+                        sid_hash = audit.HashValue(entity.Sid),
+                        sub_hash = audit.HashValue(entity.Sub),
+                        created_at = entity.CreatedAt,
+                        ip = httpIp
+                    });
                 }
-
-                var entity = new BackchannelLogoutNotification
-                {
-                    ClientDbId = c.Id,
-                    ClientId = c.ClientId,
-                    TargetUri = c.BackChannelLogoutUri!,
-                    LogoutToken = token,
-                    Sid = string.IsNullOrEmpty(sid) ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : sid,
-                    Sub = JwtLightParser.TryGetClaim(idTokenHint, "sub"),
-                    Status = "pending",
-                    AttemptCount = 0,
-                    MaxAttempts = 5,
-                    CreatedAt = DateTimeOffset.UtcNow
-                };
-                db.BackchannelLogoutNotifications.Add(entity);
-                // Audit-like info in logs for enqueue (PII minimized): who/what/when
-                logger.LogInformation("BCL enqueue: client={ClientId} target={TargetHost} sid={HasSid} sub={HasSub}",
-                    entity.ClientId, new Uri(entity.TargetUri).Host, !string.IsNullOrEmpty(entity.Sid), !string.IsNullOrEmpty(entity.Sub));
-                metrics.BclEmitted.Add(1, new KeyValuePair<string, object?>("client_id", entity.ClientId));
-                // Audit event (no raw tokens)
-                var httpIp = http.Connection.RemoteIpAddress?.ToString();
-                audit.Emit("bcl.enqueue", new
-                {
-                    client_id = entity.ClientId,
-                    target = new Uri(entity.TargetUri).Host,
-                    sid_hash = audit.HashValue(entity.Sid),
-                    sub_hash = audit.HashValue(entity.Sub),
-                    created_at = entity.CreatedAt,
-                    ip = httpIp
-                });
-            }
-            await db.SaveChangesAsync();
+                await db.SaveChangesAsync();
             }
         }
 
@@ -286,8 +286,8 @@ public sealed class LogoutHandler(AuthDbContext db,
             { "events", new Dictionary<string, object> { { "http://schemas.openid.net/event/backchannel-logout", new Dictionary<string, object>() } } }
         };
 
-    var sub = JwtLightParser.TryGetClaim(idTokenHint, "sub");
-    var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : JwtLightParser.TryGetClaim(idTokenHint, "sid");
+        var sub = JwtLightParser.TryGetClaim(idTokenHint, "sub");
+        var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : JwtLightParser.TryGetClaim(idTokenHint, "sid");
         if (!string.IsNullOrEmpty(sub)) payload["sub"] = sub;
         if (!string.IsNullOrEmpty(sid)) payload["sid"] = sid;
         if (string.IsNullOrEmpty(sub) && string.IsNullOrEmpty(sid))

@@ -26,14 +26,14 @@ public class PublicJwksEndpointsTests
         var dbName = "jwks-intg-" + Guid.NewGuid().ToString("N");
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseTestServer();
-    // Disable validation to avoid first-run constructor validation flake when optional/late-bound services are added
-    builder.Host.UseDefaultServiceProvider(o => { o.ValidateOnBuild = false; o.ValidateScopes = false; });
+        // Disable validation to avoid first-run constructor validation flake when optional/late-bound services are added
+        builder.Host.UseDefaultServiceProvider(o => { o.ValidateOnBuild = false; o.ValidateScopes = false; });
         var services = builder.Services;
         services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddMemoryCache();
         services.AddLogging();
         // Register metrics early and explicitly so PublicJwksCache constructor always resolves it deterministically
-    services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
+        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
         services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         services.Configure<AuthOptions>(o =>
         {
@@ -81,11 +81,11 @@ public class PublicJwksEndpointsTests
     public async Task Client_Jwks_Empty_When_No_Configured_Keys()
     {
         var env = await CreateAsync();
-    using var scope = env.Host.Services.CreateScope();
-    var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
-    await using var db = await factory.CreateDbContextAsync();
-    db.Clients.Add(new Client { ClientId = "c1", ClientName = "Test" });
-    await db.SaveChangesAsync();
+        using var scope = env.Host.Services.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
+        await using var db = await factory.CreateDbContextAsync();
+        db.Clients.Add(new Client { ClientId = "c1", ClientName = "Test" });
+        await db.SaveChangesAsync();
 
         var json = await env.Client.GetStringAsync("/clients/c1/jwks");
         using var doc = JsonDocument.Parse(json);

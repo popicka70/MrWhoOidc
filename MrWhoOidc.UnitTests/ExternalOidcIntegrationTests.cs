@@ -48,7 +48,7 @@ public sealed class ExternalOidcIntegrationTests
         var up2 = CreateRsa("up2");
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
-        ((IConfigurationBuilder)builder.Configuration).AddInMemoryCollection(new Dictionary<string,string?>
+        ((IConfigurationBuilder)builder.Configuration).AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Testing:InsecureCookies"] = "true"
         });
@@ -57,10 +57,10 @@ public sealed class ExternalOidcIntegrationTests
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddMrWhoOidcAuthCore();
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
-    // Inject a deferred IHttpClientFactory that returns the TestServer client once the app is built.
-    Func<HttpClient>? deferred = null;
-    services.AddSingleton<IHttpClientFactory>(sp => new DeferredHttpClientFactory(() => deferred!()));
-    services.AddSingleton<OidcMetrics>();
+        // Inject a deferred IHttpClientFactory that returns the TestServer client once the app is built.
+        Func<HttpClient>? deferred = null;
+        services.AddSingleton<IHttpClientFactory>(sp => new DeferredHttpClientFactory(() => deferred!()));
+        services.AddSingleton<OidcMetrics>();
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
         services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
@@ -93,14 +93,38 @@ public sealed class ExternalOidcIntegrationTests
             var client = new Client { ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
             db.Clients.Add(client);
             db.IdentityProviders.AddRange(
-                new IdentityProvider { Name = "up1", DisplayName = "Upstream One", Enabled = true, ConfigJson = JsonSerializer.Serialize(new
+                new IdentityProvider
                 {
-                    Authority = "http://localhost/up1", ClientId = "c1", ClientSecret = "s1", ResponseType = "code", Scopes = new[] { "openid", "profile", "email" }, UsePKCE = true, UseJAR = false, UsePAR = false
-                }) },
-                new IdentityProvider { Name = "up2", DisplayName = "Upstream Two", Enabled = true, ConfigJson = JsonSerializer.Serialize(new
+                    Name = "up1",
+                    DisplayName = "Upstream One",
+                    Enabled = true,
+                    ConfigJson = JsonSerializer.Serialize(new
+                    {
+                        Authority = "http://localhost/up1",
+                        ClientId = "c1",
+                        ClientSecret = "s1",
+                        ResponseType = "code",
+                        Scopes = new[] { "openid", "profile", "email" },
+                        UsePKCE = true,
+                        UseJAR = false,
+                        UsePAR = false
+                    })
+                },
+                new IdentityProvider
                 {
-                    Authority = "http://localhost/up2", ClientId = "c2", ClientSecret = "s2", ResponseType = "code", Scopes = new[] { "openid", "profile" }, UsePKCE = true
-                }) }
+                    Name = "up2",
+                    DisplayName = "Upstream Two",
+                    Enabled = true,
+                    ConfigJson = JsonSerializer.Serialize(new
+                    {
+                        Authority = "http://localhost/up2",
+                        ClientId = "c2",
+                        ClientSecret = "s2",
+                        ResponseType = "code",
+                        Scopes = new[] { "openid", "profile" },
+                        UsePKCE = true
+                    })
+                }
             );
             db.SaveChanges();
             var up1Id = db.IdentityProviders.First(p => p.Name == "up1").Id;
@@ -112,13 +136,13 @@ public sealed class ExternalOidcIntegrationTests
             db.SaveChanges();
         }
 
-    // Discovery (downstream)
+        // Discovery (downstream)
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx));
         app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
         app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
 
         // In-memory upstream code->nonce store (simulates upstream authorization server transient storage)
-        var codeNonceStore = new ConcurrentDictionary<string,string>(StringComparer.Ordinal);
+        var codeNonceStore = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
 
         // Fake upstream #1
         app.MapGet("/up1/.well-known/openid-configuration", (HttpContext ctx) => Results.Json(new
@@ -147,10 +171,10 @@ public sealed class ExternalOidcIntegrationTests
         app.MapPost("/up2/token", (HttpContext ctx) => IssueIdTokenAsync(ctx, up2, codeNonceStore, sub: "user-up2"));
 
         // Ensure routing middleware is in pipeline (minimal hosting normally wires this during Run())
-    app.UseRouting();
-    app.UseAuthentication();
-    app.UseAuthorization();
-    app.UseEndpoints(_ => { });
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseEndpoints(_ => { });
 
         await app.StartAsync();
         var clientHttp = app.GetTestClient();
@@ -183,7 +207,7 @@ public sealed class ExternalOidcIntegrationTests
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(jwk));
     }
 
-    private static async Task IssueIdTokenAsync(HttpContext ctx, RsaBundle key, ConcurrentDictionary<string,string> codeNonceStore, string sub = "user-up1")
+    private static async Task IssueIdTokenAsync(HttpContext ctx, RsaBundle key, ConcurrentDictionary<string, string> codeNonceStore, string sub = "user-up1")
     {
         var form = await ctx.Request.ReadFormAsync();
         var code = form["code"].ToString();
@@ -244,7 +268,8 @@ public sealed class ExternalOidcIntegrationTests
         s = s.Replace('-', '+').Replace('_', '/');
         switch (s.Length % 4)
         {
-            case 2: s += "=="; break; case 3: s += "="; break;
+            case 2: s += "=="; break;
+            case 3: s += "="; break;
         }
         return Convert.FromBase64String(s);
     }
@@ -270,7 +295,7 @@ public sealed class ExternalOidcIntegrationTests
         return JsonSerializer.Deserialize<StateModel>(json)!;
     }
 
-    private static IResult UpstreamAuthorizeAsync(HttpContext ctx, ConcurrentDictionary<string,string> codeNonceStore)
+    private static IResult UpstreamAuthorizeAsync(HttpContext ctx, ConcurrentDictionary<string, string> codeNonceStore)
     {
         var q = ctx.Request.Query;
         var redirectUri = q["redirect_uri"].ToString();
@@ -283,7 +308,7 @@ public sealed class ExternalOidcIntegrationTests
         return Results.Redirect(location);
     }
 
-    [TestMethod, Ignore("Pending redirect debug in Release build - path variance")] 
+    [TestMethod, Ignore("Pending redirect debug in Release build - path variance")]
     public async Task External_TwoProviders_HappyPath_Provider1()
     {
         var env = await CreateAsync();
@@ -297,18 +322,18 @@ public sealed class ExternalOidcIntegrationTests
         var uri = new Uri(location);
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         var state = qs["state"]!;
-    var decoded = DecodeState(env.Host, state);
-    Assert.AreEqual("up1", decoded.Provider);
-    // Follow the upstream authorize redirect (simulate browser to upstream authorize, then back to callback)
-    var upstreamAuth = await client.GetAsync(location);
-    Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize should redirect to callback with code");
-    var callbackLocation = upstreamAuth.Headers.Location!.ToString();
-    Assert.IsTrue(callbackLocation.StartsWith("/Auth/External/Callback", StringComparison.OrdinalIgnoreCase));
-    var cb = await client.GetAsync(callbackLocation);
+        var decoded = DecodeState(env.Host, state);
+        Assert.AreEqual("up1", decoded.Provider);
+        // Follow the upstream authorize redirect (simulate browser to upstream authorize, then back to callback)
+        var upstreamAuth = await client.GetAsync(location);
+        Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize should redirect to callback with code");
+        var callbackLocation = upstreamAuth.Headers.Location!.ToString();
+        Assert.IsTrue(callbackLocation.StartsWith("/Auth/External/Callback", StringComparison.OrdinalIgnoreCase));
+        var cb = await client.GetAsync(callbackLocation);
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
-    var final = cb.Headers.Location!.ToString();
-    Console.WriteLine($"DEBUG final redirect: {final}");
-    Assert.IsTrue(final.Contains("/authorize", StringComparison.OrdinalIgnoreCase), $"Final redirect '{final}' should contain /authorize");
+        var final = cb.Headers.Location!.ToString();
+        Console.WriteLine($"DEBUG final redirect: {final}");
+        Assert.IsTrue(final.Contains("/authorize", StringComparison.OrdinalIgnoreCase), $"Final redirect '{final}' should contain /authorize");
         var expectedCookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(ClientPublicId))).Substring(0, 16);
         var setCookie = cb.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join(";", cookies) : string.Empty;
         if (!setCookie.Contains(expectedCookieName))
@@ -354,9 +379,9 @@ public sealed class ExternalOidcIntegrationTests
         Assert.IsTrue(root.GetProperty("response_modes_supported").EnumerateArray().Any(x => x.GetString() == "query.jwt"));
         Assert.IsTrue(root.GetProperty("response_modes_supported").EnumerateArray().Any(x => x.GetString() == "form_post.jwt"));
         Assert.IsTrue(root.GetProperty("grant_types_supported").EnumerateArray().Any(x => x.GetString() == "urn:ietf:params:oauth:grant-type:token-exchange"));
-    var algs = root.GetProperty("request_object_signing_alg_values_supported").EnumerateArray().Select(x => x.GetString()).ToArray();
-    var expected = new[] { "ES256", "PS256", "RS256" }; // configured in test harness AuthOptions override
-    CollectionAssert.AreEquivalent(expected, algs, "Discovery should advertise configured JAR alg set");
-    CollectionAssert.AreEqual(expected.OrderBy(a => a).ToArray(), algs.OrderBy(a => a).ToArray(), "Alg list deterministic ordering");
+        var algs = root.GetProperty("request_object_signing_alg_values_supported").EnumerateArray().Select(x => x.GetString()).ToArray();
+        var expected = new[] { "ES256", "PS256", "RS256" }; // configured in test harness AuthOptions override
+        CollectionAssert.AreEquivalent(expected, algs, "Discovery should advertise configured JAR alg set");
+        CollectionAssert.AreEqual(expected.OrderBy(a => a).ToArray(), algs.OrderBy(a => a).ToArray(), "Alg list deterministic ordering");
     }
 }

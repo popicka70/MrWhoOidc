@@ -121,7 +121,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         sw.Stop();
         var outcome = result.ok ? "success" : "failure";
         var targetBucket = string.IsNullOrWhiteSpace(target) ? "none" : Bucketization.BucketizeAudience(target);
-    var sourceTokenType = InferSourceTokenType(subjectTokenType, subjectToken);
+        var sourceTokenType = InferSourceTokenType(subjectTokenType, subjectToken);
         var dpopMode = client?.OboDpopMode?.ToString() ?? "unknown";
         metrics.RecordTokenExchange(outcome, clientBucket, targetBucket, dpopMode, sourceTokenType, sw.Elapsed.TotalMilliseconds);
 

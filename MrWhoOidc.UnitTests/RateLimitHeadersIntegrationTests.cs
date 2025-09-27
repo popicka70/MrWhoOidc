@@ -140,9 +140,9 @@ public sealed class RateLimitHeadersIntegrationTests
         var client = host.GetTestClient();
 
         // Adaptive loop similar to token-exchange
-    const int expectedLimit = 80;
-    // Larger buffer; occasionally the sliding Redis window can allow a few extra before lockout
-    int maxAttempts = expectedLimit + 120; 
+        const int expectedLimit = 80;
+        // Larger buffer; occasionally the sliding Redis window can allow a few extra before lockout
+        int maxAttempts = expectedLimit + 120;
         HttpResponseMessage? last = null;
         int attempts = 0;
         for (; attempts < maxAttempts; attempts++)

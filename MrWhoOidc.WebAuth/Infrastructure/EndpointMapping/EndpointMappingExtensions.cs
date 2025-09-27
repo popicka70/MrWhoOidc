@@ -117,11 +117,11 @@ internal static class EndpointMappingExtensions
         // (Retain existing admin endpoints inline in Program for now to reduce patch size.)
     }
 
-        // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
-        private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, CancellationToken ct)
-        {
-            var jwks = await keyStore.GetPublicJwksAsync(ct);
-            ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
-            return Results.Json(new { keys = jwks });
-        }
+    // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
+    private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, CancellationToken ct)
+    {
+        var jwks = await keyStore.GetPublicJwksAsync(ct);
+        ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
+        return Results.Json(new { keys = jwks });
+    }
 }

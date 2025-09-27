@@ -69,9 +69,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         }
 
         // Pre-generate correlation id for observability and friendly errors
-    var corr = string.IsNullOrWhiteSpace(inboundCorr) ? Guid.NewGuid().ToString("N") : inboundCorr;
-    using var _ = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = corr, ["provider"] = providerName, ["clientId"] = clientId });
-    _logger.LogInformation("External OIDC start: initiating discovery and redirect.");
+        var corr = string.IsNullOrWhiteSpace(inboundCorr) ? Guid.NewGuid().ToString("N") : inboundCorr;
+        using var _ = _logger.BeginScope(new Dictionary<string, object?> { ["cid"] = corr, ["provider"] = providerName, ["clientId"] = clientId });
+        _logger.LogInformation("External OIDC start: initiating discovery and redirect.");
 
         // Discovery
         var httpc = httpFactory.CreateClient();
@@ -316,9 +316,9 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
     public async Task<IResult> CallbackAsync(HttpContext http)
     {
-    var cbStart = DateTime.UtcNow;
-    _metrics.ExternalCallbackRequests.Add(1);
-    var idTokenFromAuth = http.Request.Query["id_token"].ToString();
+        var cbStart = DateTime.UtcNow;
+        _metrics.ExternalCallbackRequests.Add(1);
+        var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
         var error = http.Request.Query["error"].ToString();
         var errorDescription = http.Request.Query["error_description"].ToString();
@@ -329,8 +329,8 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         {
             var bytes = _protector.Unprotect(Base64UrlDecode(stateRaw));
             state = JsonSerializer.Deserialize<StateModel>(bytes)!;
-    }
-    catch { return Results.BadRequest("Invalid state"); }
+        }
+        catch { return Results.BadRequest("Invalid state"); }
 
         // Upstream error/cancel handling -> friendly page with correlation id and reselect link
         if (!string.IsNullOrEmpty(error))
@@ -392,7 +392,7 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             RecordExternalCallback(false, cbStart, state.Provider, state.ClientId, codeCb);
             return res;
         }
-    using var docLease = doc;
+        using var docLease = doc;
         var root = doc.RootElement;
         var tokenEndpoint = root.GetProperty("token_endpoint").GetString()!;
         var userinfoEndpoint = root.TryGetProperty("userinfo_endpoint", out var ue) ? ue.GetString() : null;
@@ -714,10 +714,10 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
         db.ExternalIdentities.Add(ext);
         await db.SaveChangesAsync();
 
-    var confirmRes = await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>());
-    // Treat confirmation as part of callback success
-    RecordExternalCallback(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
-    return confirmRes;
+        var confirmRes = await SignInAndRedirectAsync(http, user.Id, new StateModel { ReturnUrl = model.ReturnUrl, ClientId = model.ClientId, Provider = model.Provider }, model.Name, model.Email, model.Subject, model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>());
+        // Treat confirmation as part of callback success
+        RecordExternalCallback(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
+        return confirmRes;
     }
 
     private async Task<IResult> SignInAndRedirectAsync(HttpContext http, Guid userId, StateModel state, string? name, string? email, string? sub, string? idp, string? acr, string[] amrs, IReadOnlyDictionary<string, string> mapped)

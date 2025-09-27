@@ -26,7 +26,7 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IClientIdGenerator, ClientIdGenerator>();
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.AddSingleton<ITotpService, TotpService>();
-    services.AddScoped<IOboPolicyService, OboPolicyService>();
+        services.AddScoped<IOboPolicyService, OboPolicyService>();
 
         // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();

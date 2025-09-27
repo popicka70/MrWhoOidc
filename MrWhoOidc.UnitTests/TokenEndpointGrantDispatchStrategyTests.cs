@@ -86,8 +86,8 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
     {
         var dbName = "rt-dispatch-" + Guid.NewGuid().ToString("N");
         var clientId = "c1"; var clientSecret = "secret";
-    var host = await CreateHostAsync(dbName, clientId, clientSecret);
-    using var hostRef = host;
+        var host = await CreateHostAsync(dbName, clientId, clientSecret);
+        using var hostRef = host;
 
         string rawRt;
         using (var scope = host.Services.CreateScope())
@@ -118,8 +118,8 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
     {
         var dbName = "rt-dispatch-missing-" + Guid.NewGuid().ToString("N");
         var clientId = "c2"; var clientSecret = "secret";
-    var host = await CreateHostAsync(dbName, clientId, clientSecret);
-    using var hostRef = host;
+        var host = await CreateHostAsync(dbName, clientId, clientSecret);
+        using var hostRef = host;
 
         var client = host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(clientId, clientSecret);

@@ -57,7 +57,7 @@ public class ProgramEndpointsSnapshotTests
             .Select(e => new
             {
                 Route = (e as RouteEndpoint)?.RoutePattern.RawText,
-                Methods = e.Metadata.OfType<Microsoft.AspNetCore.Routing.HttpMethodMetadata>().FirstOrDefault()?.HttpMethods?.OrderBy(m=>m).ToArray() ?? Array.Empty<string>(),
+                Methods = e.Metadata.OfType<Microsoft.AspNetCore.Routing.HttpMethodMetadata>().FirstOrDefault()?.HttpMethods?.OrderBy(m => m).ToArray() ?? Array.Empty<string>(),
                 RequiresAuthorization = e.Metadata.Any(m => m is Microsoft.AspNetCore.Authorization.IAuthorizeData),
                 RateLimitPolicies = e.Metadata.Where(m => m.GetType().FullName?.Contains("RateLimiter") == true).Select(m => m.ToString()).ToList()
             })

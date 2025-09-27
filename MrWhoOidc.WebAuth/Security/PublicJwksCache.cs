@@ -151,7 +151,7 @@ public sealed class PublicJwksCache : IPublicJwksCache
         }
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(ct);
-    var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
+        var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
         if (!_options.Value.ProviderJwksIncludeEncryption)
             keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
         var list = await keysQuery.ToListAsync(ct);

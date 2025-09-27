@@ -46,19 +46,19 @@ public class LogoutPromptFlowTests
         db.SaveChanges();
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
-    var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
-    var keyStore = new KeyStore(db); // uses in-memory DB
-    var handler = new LogoutHandler(db, keyStore, new NullLogger<LogoutHandler>(), new OidcMetrics(), new NoopAuditSink(), svc, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }));
+        var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
+        var keyStore = new KeyStore(db); // uses in-memory DB
+        var handler = new LogoutHandler(db, keyStore, new NullLogger<LogoutHandler>(), new OidcMetrics(), new NoopAuditSink(), svc, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }));
         var ctx = new DefaultHttpContext();
         ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("idp", "google") }, "cookie"));
         ctx.Request.QueryString = new QueryString("?returnUrl=%2Fhome&style=dark");
         var result = await handler.LogoutEntryAsync(ctx);
-    // Generic redirect result (Status 302) -> reflectively check Url via pattern matching
-    Assert.IsTrue(result is Microsoft.AspNetCore.Http.IResult);
-    var rdProp = result.GetType().GetProperty("Url");
-    Assert.IsNotNull(rdProp, "Redirect result missing Url property");
-    var url = rdProp!.GetValue(result) as string;
-    StringAssert.Contains(url!, "/Logout/Prompt");
-    StringAssert.Contains(url!, "style=dark");
+        // Generic redirect result (Status 302) -> reflectively check Url via pattern matching
+        Assert.IsTrue(result is Microsoft.AspNetCore.Http.IResult);
+        var rdProp = result.GetType().GetProperty("Url");
+        Assert.IsNotNull(rdProp, "Redirect result missing Url property");
+        var url = rdProp!.GetValue(result) as string;
+        StringAssert.Contains(url!, "/Logout/Prompt");
+        StringAssert.Contains(url!, "style=dark");
     }
 }

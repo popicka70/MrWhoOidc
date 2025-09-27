@@ -38,7 +38,7 @@ public class TokenExchangeRateLimiterTests
     [TestMethod]
     public async Task InMemory_Disabled_Bypasses()
     {
-        var limiter = new InMemoryTokenExchangeRateLimiter(Opts(1, enabled:false));
+        var limiter = new InMemoryTokenExchangeRateLimiter(Opts(1, enabled: false));
         for (int i = 0; i < 10; i++)
         {
             var r = await limiter.ShouldAllowAsync("clientA");

@@ -20,9 +20,9 @@ public class ProviderKeysPageTests
         public void InvalidateAllProviders() { }
         public void InvalidateClient(string clientId) { }
         public void InvalidateProvider(string providerName) { }
-        public Task<(string etag, string json)> GetAllProvidersAsync(System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
-        public Task<(string etag, string json)> GetClientAsync(string clientId, System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
-        public Task<(string etag, string json)> GetProviderAsync(string providerName, System.Threading.CancellationToken ct) => Task.FromResult(("","{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetAllProvidersAsync(System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetClientAsync(string clientId, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
+        public Task<(string etag, string json)> GetProviderAsync(string providerName, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
     }
     static AuthDbContext NewDb(string name)
     {
@@ -54,16 +54,16 @@ public class ProviderKeysPageTests
     {
         using var rsa = RSA.Create(2048);
         var der = rsa.ExportPkcs8PrivateKey();
-    var pem = PemEncoding.Write("PRIVATE KEY", der);
-    return new string(pem);
+        var pem = PemEncoding.Write("PRIVATE KEY", der);
+        return new string(pem);
     }
 
     static string EcPkcs8Pem()
     {
         using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var der = ec.ExportPkcs8PrivateKey();
-    var pem = PemEncoding.Write("PRIVATE KEY", der);
-    return new string(pem);
+        var pem = PemEncoding.Write("PRIVATE KEY", der);
+        return new string(pem);
     }
 
     [TestMethod]
@@ -71,7 +71,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportRsaPem_Signing_SetsSigUseAndStores));
         var providerId = SeedProvider(db);
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -83,8 +83,8 @@ public class ProviderKeysPageTests
             }
         };
 
-    var result = await page.OnPostAddAsync(providerId);
-    Assert.IsNotNull(result);
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
 
         var saved = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId).SingleAsync();
         Assert.AreEqual("RS256", saved.Alg);
@@ -98,7 +98,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(ImportEcPem_Encryption_SetsEncUseAndStores));
         var providerId = SeedProvider(db);
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -110,8 +110,8 @@ public class ProviderKeysPageTests
             }
         };
 
-    var result = await page.OnPostAddAsync(providerId);
-    Assert.IsNotNull(result);
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
 
         var saved = await db.IdentityProviderKeys.Where(k => k.IdentityProviderId == providerId).SingleAsync();
         Assert.AreEqual("ECDH-ES", saved.Alg);
@@ -126,7 +126,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(InvalidPem_ReturnsModelError_NoInsert));
         var providerId = SeedProvider(db);
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -138,8 +138,8 @@ public class ProviderKeysPageTests
             }
         };
 
-    var result = await page.OnPostAddAsync(providerId);
-    Assert.IsNotNull(result);
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
         Assert.IsTrue(page.ModelState.ContainsKey("Input.JwkJson"), "Expected model error for invalid PEM");
         Assert.AreEqual(0, db.IdentityProviderKeys.Count());
     }
@@ -149,7 +149,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(AlgKtyMismatch_EcPemWithRsAlg_Errors));
         var providerId = SeedProvider(db);
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -161,8 +161,8 @@ public class ProviderKeysPageTests
             }
         };
 
-    var result = await page.OnPostAddAsync(providerId);
-    Assert.IsNotNull(result);
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
         Assert.IsTrue(page.ModelState.ContainsKey("Input.Alg"), "Expected model error for alg/kty mismatch");
         Assert.AreEqual(0, db.IdentityProviderKeys.Count());
     }
@@ -185,7 +185,7 @@ public class ProviderKeysPageTests
         });
         db.SaveChanges();
 
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -197,8 +197,8 @@ public class ProviderKeysPageTests
             }
         };
 
-    var result = await page.OnPostAddAsync(providerId);
-    Assert.IsNotNull(result);
+        var result = await page.OnPostAddAsync(providerId);
+        Assert.IsNotNull(result);
         Assert.IsTrue(page.ModelState.ContainsKey("Input.Kid"), "Expected model error for duplicate kid");
         Assert.AreEqual(1, db.IdentityProviderKeys.Count());
     }
@@ -209,7 +209,7 @@ public class ProviderKeysPageTests
         using var db = NewDb(nameof(ExpiresAt_PersistsToDatabase));
         var providerId = SeedProvider(db);
         var expires = DateTimeOffset.UtcNow.AddDays(30).ToOffset(TimeSpan.Zero); // normalize for deterministic compare
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {
@@ -234,7 +234,7 @@ public class ProviderKeysPageTests
     {
         using var db = NewDb(nameof(EcCurveMismatch_WithAlg_ES384_OnP256_Errors));
         var providerId = SeedProvider(db);
-    var page = new IndexModel(db, new NoopJwksCache())
+        var page = new IndexModel(db, new NoopJwksCache())
         {
             Input = new IndexModel.InputModel
             {

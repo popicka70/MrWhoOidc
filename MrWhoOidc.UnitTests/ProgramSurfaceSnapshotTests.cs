@@ -26,7 +26,7 @@ public class ProgramSurfaceSnapshotTests
     [TestMethod, TestCategory("SafetySurface"), Ignore("Temporarily ignored while snapshot is being regenerated after refactor; re-enable once stabilized.")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
-    var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         _ = factory.Server; // ensure boot
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
 
@@ -74,7 +74,7 @@ public class ProgramSurfaceSnapshotTests
             bool anon = e.Metadata.OfType<AllowAnonymousAttribute>().Any();
             bool anti = e.Metadata.Any(m => m.GetType().Name.Contains("Antiforgery", StringComparison.OrdinalIgnoreCase));
             bool cors = e.Metadata.Any(m => m.GetType().Name.Contains("Cors", StringComparison.OrdinalIgnoreCase));
-            list.Add(new EndpointInfo(pattern, methods, rlPolicies.Distinct().OrderBy(x=>x).ToArray(), authz, anti, cors, anon));
+            list.Add(new EndpointInfo(pattern, methods, rlPolicies.Distinct().OrderBy(x => x).ToArray(), authz, anti, cors, anon));
         }
         // Sort for deterministic snapshot
         list = list.OrderBy(l => l.Pattern).ThenBy(l => l.Methods).ToList();
@@ -231,7 +231,7 @@ public class ProgramSurfaceSnapshotTests
         Assert.IsTrue(File.Exists(programPath), "Program.cs not found");
         var lines = File.ReadAllLines(programPath).Length;
         // Baseline captured now (after Phase 1 & partial Phase 2). We assert it does not exceed this by > 5 lines.
-    const int baseline = 855; // updated baseline after Phase 1 & partial Phase 2 extractions (2025-09-27)
+        const int baseline = 855; // updated baseline after Phase 1 & partial Phase 2 extractions (2025-09-27)
         Assert.IsTrue(lines <= baseline + 5, $"Program.cs line count grew unexpectedly: {lines} > {baseline}+5");
     }
 
@@ -256,10 +256,10 @@ public class ProgramSurfaceSnapshotTests
            a.RateLimiters.SequenceEqual(b.RateLimiters);
 
     private static string Describe(EndpointInfo o)
-        => $"{o.Pattern} [{o.Methods}] authz={o.Authz ?? "-"} anti={(o.HasAntiforgery ? "Y" : "N")} cors={(o.HasCors ? "Y" : "N")} anon={(o.IsAnonymous ? "Y" : "N")} limiters={(o.RateLimiters.Length==0?"-":string.Join('|', o.RateLimiters))}";
+        => $"{o.Pattern} [{o.Methods}] authz={o.Authz ?? "-"} anti={(o.HasAntiforgery ? "Y" : "N")} cors={(o.HasCors ? "Y" : "N")} anon={(o.IsAnonymous ? "Y" : "N")} limiters={(o.RateLimiters.Length == 0 ? "-" : string.Join('|', o.RateLimiters))}";
 
     private static EndpointInfo NormalizeExisting(EndpointInfo e)
-        => new EndpointInfo(e.Pattern, e.Methods, e.RateLimiters?.Distinct().OrderBy(x=>x).ToArray() ?? Array.Empty<string>(), e.Authz, e.HasAntiforgery, e.HasCors, e.IsAnonymous);
+        => new EndpointInfo(e.Pattern, e.Methods, e.RateLimiters?.Distinct().OrderBy(x => x).ToArray() ?? Array.Empty<string>(), e.Authz, e.HasAntiforgery, e.HasCors, e.IsAnonymous);
 
     [TestMethod, TestCategory("SafetySurface")]
     public void Defined_Rate_Limiting_Policy_Names_Are_Exact_Set()
@@ -287,8 +287,8 @@ public class ProgramSurfaceSnapshotTests
                 }
             }
         }
-        var namesOrdered = names.OrderBy(x=>x, StringComparer.Ordinal).ToArray();
-        var expected = new[] { "rl-admin", "rl-authorize", "rl-introspect", "rl-jwks", "rl-par", "rl-token", "rl-token-exchange", "rl-userinfo" }.OrderBy(x=>x, StringComparer.Ordinal).ToArray();
+        var namesOrdered = names.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var expected = new[] { "rl-admin", "rl-authorize", "rl-introspect", "rl-jwks", "rl-par", "rl-token", "rl-token-exchange", "rl-userinfo" }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(expected, namesOrdered, "Rate limiting policy name set drifted.");
     }
 

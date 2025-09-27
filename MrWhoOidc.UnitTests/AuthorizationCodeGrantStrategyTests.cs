@@ -94,7 +94,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                 });
             });
 
-    var host = await builder.StartAsync();
+        var host = await builder.StartAsync();
         // Simpler: open scope and fetch directly from db
         string actualCode;
         using (var scope2 = host.Services.CreateScope())

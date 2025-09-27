@@ -40,8 +40,8 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
             return Page();
         }
 
-    // Try username first; fallback to email/alternative email match.
-    var user = await users.FindByUsernameAsync(Username) ?? await users.FindByUsernameOrEmailAsync(Username);
+        // Try username first; fallback to email/alternative email match.
+        var user = await users.FindByUsernameAsync(Username) ?? await users.FindByUsernameOrEmailAsync(Username);
         if (user is null || !await users.VerifyPasswordAsync(user, Password))
         {
             RegisterFailedAttempt(HttpContext, Username);

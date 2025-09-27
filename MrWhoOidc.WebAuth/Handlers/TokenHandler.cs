@@ -97,8 +97,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 if (!clientEntity.AllowPrivateKeyJwt)
                 {
                     logger.LogWarning("/token unauthorized_client: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                        _metrics.RecordTokenRequest(grantType, "failure");
-                        _metrics.RecordTokenFailure(grantType);
+                    _metrics.RecordTokenRequest(grantType, "failure");
+                    _metrics.RecordTokenFailure(grantType);
                     return ErrorResults.UnauthorizedClient();
                 }
                 usedPrivateKeyJwt = true;

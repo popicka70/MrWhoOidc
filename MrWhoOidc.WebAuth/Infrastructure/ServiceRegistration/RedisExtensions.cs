@@ -13,7 +13,7 @@ public static class RedisExtensions
 {
     public static IConnectionMultiplexer? AddMrWhoOidcRedis(this IServiceCollection services, IConfiguration configuration)
     {
-        var redisConnection = configuration.GetConnectionString("redis") ?? configuration["ConnectionStrings:redis"];   
+        var redisConnection = configuration.GetConnectionString("redis") ?? configuration["ConnectionStrings:redis"];
         if (string.IsNullOrWhiteSpace(redisConnection)) return null;
         var mux = ConnectionMultiplexer.Connect(redisConnection); // fail fast if invalid
         services.AddSingleton<IConnectionMultiplexer>(mux);

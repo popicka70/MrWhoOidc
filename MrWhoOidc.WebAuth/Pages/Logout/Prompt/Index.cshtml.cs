@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Pages.Logout.Prompt;
+
 public class IndexModel : PageModel
 {
     public string ProviderDisplay { get; set; } = "Provider";

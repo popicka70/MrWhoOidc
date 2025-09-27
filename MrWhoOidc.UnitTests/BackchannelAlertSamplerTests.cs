@@ -46,8 +46,8 @@ public class BackchannelAlertSamplerTests
         var alerts = new CollectingAlertPublisher();
         var clock = new TestClock();
 
-    var dbName = Guid.NewGuid().ToString();
-    await using var ctx = CreateContext(dbName);
+        var dbName = Guid.NewGuid().ToString();
+        await using var ctx = CreateContext(dbName);
 
         // Insert failures over time
         for (int i = 0; i < 5; i++)
@@ -56,7 +56,7 @@ public class BackchannelAlertSamplerTests
         }
         await ctx.SaveChangesAsync();
 
-    var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
+        var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
         var metrics = new OidcMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
@@ -89,8 +89,8 @@ public class BackchannelAlertSamplerTests
         var alerts = new CollectingAlertPublisher();
         var clock = new TestClock();
 
-    var dbName = Guid.NewGuid().ToString();
-    await using var ctx = CreateContext(dbName);
+        var dbName = Guid.NewGuid().ToString();
+        await using var ctx = CreateContext(dbName);
 
         // Insert some succeeded items so emitted count non-zero
         for (int i = 0; i < 10; i++)
@@ -99,7 +99,7 @@ public class BackchannelAlertSamplerTests
         }
         await ctx.SaveChangesAsync();
 
-    var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
+        var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
         var metrics = new OidcMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
