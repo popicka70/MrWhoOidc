@@ -7,6 +7,9 @@
 <div class="card shadow-sm mt-4">
   <div class="card-body">
     <h2 class="h4 mb-3">Sign out</h2>
+    <div class="alert alert-info py-2 small mb-3">
+        If you choose <strong>Sign out here and at @Model.ProviderDisplay</strong>, you'll also end the session at the external provider and any other apps using it may require you to sign in again.
+    </div>
     <p class="mb-3">You signed in using external provider <strong>@Model.ProviderDisplay</strong>. Choose how you want to sign out:</p>
   <form method="post" action="/logout">
         <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
