@@ -84,11 +84,14 @@
 }
 else
 {
-    <table class="table table-striped">
+    <table class="table table-sm align-middle jwks-preview-table">
         <thead>
             <tr>
+                <th>Status</th>
                 <th>Purpose</th>
                 <th>Alg</th>
+                <th>KTY</th>
+                <th>use</th>
                 <th>KID</th>
                 <th>Active</th>
                 <th>Publishable</th>
@@ -100,15 +103,36 @@ else
         <tbody>
         @foreach (var r in Model.Rows)
         {
-            <tr>
+            var rowClass = r.Active ? (r.Publishable ? "table-success" : "table-warning") : "table-secondary";
+            <tr class="@rowClass">
+                <td>
+                    @if (r.Active)
+                    {
+                        <span class="badge bg-success" title="Active key">active</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary" title="Inactive (staged or retired)">inactive</span>
+                    }
+                    @if (r.Publishable)
+                    {
+                        <span class="badge bg-primary ms-1" title="Will appear in public JWKS (if endpoint enabled)">pub</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-dark ms-1" title="Not publishable">priv</span>
+                    }
+                </td>
                 <td>@r.Purpose</td>
-                <td>@r.Alg</td>
-                <td>@r.Kid</td>
+                <td><code>@r.Alg</code></td>
+                <td>@r.Kty</td>
+                <td>@r.Use</td>
+                <td><code>@r.Kid</code></td>
                 <td>@(r.Active ? "Yes" : "No")</td>
                 <td>@(r.Publishable ? "Yes" : "No")</td>
-                <td>@r.CreatedAt.ToString("u")</td>
-                <td>@(r.ExpiresAt?.ToString("u"))</td>
-                <td class="text-end">
+                <td class="text-nowrap" title="@r.CreatedAt.ToString("O")">@r.CreatedAt.ToString("u")</td>
+                <td class="text-nowrap" title="@r.ExpiresAt?.ToString("O")">@(r.ExpiresAt?.ToString("u"))</td>
+                <td class="text-end text-nowrap">
                     @if (!r.Active)
                     {
                         <form method="post" asp-page-handler="Activate" class="d-inline">
@@ -140,3 +164,15 @@ else
         </tbody>
     </table>
 }
+
+<style>
+    /* Advanced JWKS visual preview styling */
+    .jwks-preview-table code { font-size: .85rem; }
+    .jwks-preview-table td, .jwks-preview-table th { vertical-align: middle; }
+    .jwks-preview-table tr.table-secondary { opacity: 0.75; }
+    .jwks-preview-table tr.table-warning { /* active but not publishable scenario shouldn't happen often */ }
+    @@media (max-width: 992px) {
+        .jwks-preview-table { font-size: .8rem; }
+        .jwks-preview-table .badge { font-size: .55rem; }
+    }
+</style>
