@@ -20,9 +20,10 @@ namespace MrWhoOidc.UnitTests;
 [DoNotParallelize]
 public class ProgramSurfaceSnapshotTests
 {
-    private record EndpointInfo(string Pattern, string Methods, string? RateLimiter, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
+    // Updated model captures multiple rate limiter policies & whether CORS/authorization metadata present.
+    private record EndpointInfo(string Pattern, string Methods, string[] RateLimiters, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
 
-    [TestMethod, TestCategory("SafetySurface"), Ignore("Temporarily disabled: snapshot file corruption; re-enable after clean regeneration.")]
+    [TestMethod, TestCategory("SafetySurface"), Ignore("Pending clean snapshot regeneration after enriched metadata; commit new snapshot then remove Ignore.")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
     var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
@@ -53,12 +54,27 @@ public class ProgramSurfaceSnapshotTests
             var pattern = e.RoutePattern.RawText ?? string.Join('/', e.RoutePattern.PathSegments.Select(s => string.Concat(s.Parts.Select(p => p.ToString()))));
             if (ShouldIgnorePattern(pattern, string.Empty)) continue;
             var methods = string.Join(',', e.Metadata.OfType<HttpMethodMetadata>().FirstOrDefault()?.HttpMethods ?? Array.Empty<string>());
-            string? rateLimiter = e.Metadata.FirstOrDefault(m => m.GetType().FullName?.Contains("RateLimiter") == true)?.GetType().Name;
-            string? authz = e.Metadata.OfType<AuthorizeAttribute>().FirstOrDefault()?.Policy;
+            // Collect all rate limiting policy names applied (could be multiple per endpoint)
+            var rlPolicies = new List<string>();
+            foreach (var md in e.Metadata)
+            {
+                var t = md.GetType();
+                if (t.FullName?.Contains("RateLimiting") == true || t.FullName?.Contains("RateLimiter") == true)
+                {
+                    var nameProp = t.GetProperty("PolicyName") ?? t.GetProperty("PolicyNames");
+                    if (nameProp != null)
+                    {
+                        var val = nameProp.GetValue(md);
+                        if (val is string s && !string.IsNullOrWhiteSpace(s)) rlPolicies.Add(s);
+                        else if (val is IEnumerable<string> arr) rlPolicies.AddRange(arr.Where(x => !string.IsNullOrWhiteSpace(x))!);
+                    }
+                }
+            }
+            var authz = e.Metadata.OfType<AuthorizeAttribute>().FirstOrDefault()?.Policy;
             bool anon = e.Metadata.OfType<AllowAnonymousAttribute>().Any();
             bool anti = e.Metadata.Any(m => m.GetType().Name.Contains("Antiforgery", StringComparison.OrdinalIgnoreCase));
-            bool cors = e.Metadata.Any(m => m.GetType().Name.Contains("EnableCors", StringComparison.OrdinalIgnoreCase));
-            list.Add(new EndpointInfo(pattern, methods, rateLimiter, authz, anti, cors, anon));
+            bool cors = e.Metadata.Any(m => m.GetType().Name.Contains("Cors", StringComparison.OrdinalIgnoreCase));
+            list.Add(new EndpointInfo(pattern, methods, rlPolicies.Distinct().OrderBy(x=>x).ToArray(), authz, anti, cors, anon));
         }
         // Sort for deterministic snapshot
         list = list.OrderBy(l => l.Pattern).ThenBy(l => l.Methods).ToList();
@@ -123,9 +139,8 @@ public class ProgramSurfaceSnapshotTests
                 // Normalize existing snapshot by applying same ignore rules & sorting
                 existingList = existingList
                     .Where(e => !ShouldIgnorePattern(e.Pattern, e.Methods))
-                    // De-duplicate by Pattern+Methods (dirty legacy snapshots may have repeated entries)
                     .GroupBy(e => e.Pattern + "|" + e.Methods)
-                    .Select(g => g.First())
+                    .Select(g => NormalizeExisting(g.First()))
                     .OrderBy(l => l.Pattern).ThenBy(l => l.Methods).ToList();
                 var existingJsonNormalized = JsonSerializer.Serialize(existingList, new JsonSerializerOptions { WriteIndented = true });
                 if (existingJsonNormalized != json)
@@ -216,7 +231,7 @@ public class ProgramSurfaceSnapshotTests
         Assert.IsTrue(File.Exists(programPath), "Program.cs not found");
         var lines = File.ReadAllLines(programPath).Length;
         // Baseline captured now (after Phase 1 & partial Phase 2). We assert it does not exceed this by > 5 lines.
-    const int baseline = 1036; // update if file intentionally shrinks later; failing if grows unexpectedly
+    const int baseline = 855; // updated baseline after Phase 1 & partial Phase 2 extractions (2025-09-27)
         Assert.IsTrue(lines <= baseline + 5, $"Program.cs line count grew unexpectedly: {lines} > {baseline}+5");
     }
 
@@ -235,10 +250,64 @@ public class ProgramSurfaceSnapshotTests
     }
     // Local helpers
     private static bool Equivalent(EndpointInfo a, EndpointInfo b)
-        => a.Pattern == b.Pattern && a.Methods == b.Methods && a.RateLimiter == b.RateLimiter && a.Authz == b.Authz && a.HasAntiforgery == b.HasAntiforgery && a.HasCors == b.HasCors && a.IsAnonymous == b.IsAnonymous;
+        => a.Pattern == b.Pattern && a.Methods == b.Methods &&
+           a.Authz == b.Authz && a.HasAntiforgery == b.HasAntiforgery &&
+           a.HasCors == b.HasCors && a.IsAnonymous == b.IsAnonymous &&
+           a.RateLimiters.SequenceEqual(b.RateLimiters);
 
     private static string Describe(EndpointInfo o)
-        => $"{o.Pattern} [{o.Methods}] authz={o.Authz ?? "-"} anti={(o.HasAntiforgery ? "Y" : "N")} cors={(o.HasCors ? "Y" : "N")} anon={(o.IsAnonymous ? "Y" : "N")} limiter={o.RateLimiter ?? "-"}";
+        => $"{o.Pattern} [{o.Methods}] authz={o.Authz ?? "-"} anti={(o.HasAntiforgery ? "Y" : "N")} cors={(o.HasCors ? "Y" : "N")} anon={(o.IsAnonymous ? "Y" : "N")} limiters={(o.RateLimiters.Length==0?"-":string.Join('|', o.RateLimiters))}";
+
+    private static EndpointInfo NormalizeExisting(EndpointInfo e)
+        => new EndpointInfo(e.Pattern, e.Methods, e.RateLimiters?.Distinct().OrderBy(x=>x).ToArray() ?? Array.Empty<string>(), e.Authz, e.HasAntiforgery, e.HasCors, e.IsAnonymous);
+
+    [TestMethod, TestCategory("SafetySurface")]
+    public void Defined_Rate_Limiting_Policy_Names_Are_Exact_Set()
+    {
+        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var e in dataSource.Endpoints.OfType<RouteEndpoint>())
+        {
+            foreach (var md in e.Metadata)
+            {
+                var t = md.GetType();
+                if (t.FullName?.Contains("RateLimiting") == true || t.FullName?.Contains("RateLimiter") == true)
+                {
+                    var nameProp = t.GetProperty("PolicyName") ?? t.GetProperty("PolicyNames");
+                    if (nameProp != null)
+                    {
+                        var val = nameProp.GetValue(md);
+                        if (val is string s && !string.IsNullOrWhiteSpace(s)) names.Add(s);
+                        else if (val is IEnumerable<string> arr)
+                        {
+                            foreach (var x in arr) if (!string.IsNullOrWhiteSpace(x)) names.Add(x);
+                        }
+                    }
+                }
+            }
+        }
+        var namesOrdered = names.OrderBy(x=>x, StringComparer.Ordinal).ToArray();
+        var expected = new[] { "rl-admin", "rl-authorize", "rl-introspect", "rl-jwks", "rl-par", "rl-token", "rl-token-exchange", "rl-userinfo" }.OrderBy(x=>x, StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(expected, namesOrdered, "Rate limiting policy name set drifted.");
+    }
+
+    [TestMethod, TestCategory("SafetySurface")]
+    public void AdminAuthorizationHandler_Is_Scoped()
+    {
+        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        using var scope1 = factory.Services.CreateScope();
+        var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name.Contains("AdminAuthorizationHandler")).ToList();
+        Assert.IsTrue(handlers1.Count == 1, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
+        var h1a = handlers1[0];
+        var h1b = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name.Contains("AdminAuthorizationHandler"));
+        // Scoped => same instance within scope
+        Assert.AreSame(h1a, h1b, "AdminAuthorizationHandler not scoped (different instances within one scope)");
+        using var scope2 = factory.Services.CreateScope();
+        var h2 = scope2.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name.Contains("AdminAuthorizationHandler"));
+        // Scoped => different instance across scopes
+        Assert.AreNotSame(h1a, h2, "AdminAuthorizationHandler appears singleton (same instance across scopes)");
+    }
 
     // Trims any trailing garbage after the first well-formed top-level JSON array.
     private static string SanitizeSnapshot(string raw, TestContext ctx)
