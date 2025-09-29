@@ -1,7 +1,1 @@
-﻿namespace MrWhoOidc.Client
-{
-    public class Class1
-    {
-
-    }
-}
+﻿// This file is intentionally left blank. Legacy placeholder removed.

@@ -19,7 +19,7 @@ public sealed class AuthorizeServiceTests
     public async Task ValidateAsync_RequiresOpenIdScope_AndPkceWhenEnabled()
     {
         using var db = CreateDb();
-        var client = new Client
+    var client = new ClientEntity
         {
             ClientId = "spa",
             RequirePkce = true,
@@ -60,7 +60,7 @@ public sealed class AuthorizeServiceTests
     public async Task ValidateAsync_Succeeds_ForMinimalValidRequest()
     {
         using var db = CreateDb();
-        var client = new Client
+    var client = new ClientEntity
         {
             ClientId = "spa",
             RequirePkce = true,
@@ -96,7 +96,7 @@ public sealed class AuthorizeServiceTests
     public async Task ValidateAsync_Fails_WhenRequestedScopesNotAllowed()
     {
         using var db = CreateDb();
-        var client = new Client
+    var client = new ClientEntity
         {
             ClientId = "spa",
             RequirePkce = true,
@@ -133,7 +133,7 @@ public sealed class AuthorizeServiceTests
     public async Task ValidateAsync_Fails_WhenRedirectUriNotAllowListed()
     {
         using var db = CreateDb();
-        var client = new Client
+    var client = new ClientEntity
         {
             ClientId = "spa",
             RequirePkce = true,

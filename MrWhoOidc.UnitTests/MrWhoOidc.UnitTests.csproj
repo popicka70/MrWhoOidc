@@ -11,6 +11,7 @@
     <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
     <ProjectReference Include="..\MrWhoOidc.WebAuth\MrWhoOidc.WebAuth.csproj" />
     <ProjectReference Include="..\MrWhoOidc.Security\MrWhoOidc.Security.csproj" />
+    <ProjectReference Include="..\MrWhoOidc.Client\MrWhoOidc.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

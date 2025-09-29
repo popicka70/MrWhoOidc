@@ -19,7 +19,7 @@ public sealed class ClientAssertionValidatorTests
     public async Task ValidateAsync_Fails_WhenNoJwks()
     {
         using var db = CreateDb();
-        db.Clients.Add(new Client { ClientId = "c1" });
+    db.Clients.Add(new ClientEntity { ClientId = "c1" });
         await db.SaveChangesAsync();
         var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
         var (assertion, jwkJson) = CreateClientAssertion("c1", "https://as/connect/token");
@@ -32,7 +32,7 @@ public sealed class ClientAssertionValidatorTests
     {
         using var db = CreateDb();
         var (assertion, jwkJson) = CreateClientAssertion("c1", "https://as/connect/token");
-        db.Clients.Add(new Client { ClientId = "c1", PublicJwksJson = jwkJson });
+    db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
         var validator = new ClientAssertionValidator(db, new ConfigurationBuilder().Build());
         var ok = await validator.ValidateAsync("c1", assertion, "https://as/connect/token");

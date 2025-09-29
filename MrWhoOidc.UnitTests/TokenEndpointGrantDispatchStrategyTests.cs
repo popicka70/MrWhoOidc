@@ -62,7 +62,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     var hasher = new Argon2PasswordHasher();
                     var realm = new Realm { Name = "default" };
                     db.Realms.Add(realm);
-                    db.Clients.Add(new Client
+                    db.Clients.Add(new ClientEntity
                     {
                         ClientId = clientId,
                         ClientSecretHash = hasher.Hash(clientSecret),

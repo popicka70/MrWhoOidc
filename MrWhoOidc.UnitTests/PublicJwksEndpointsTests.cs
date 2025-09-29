@@ -84,7 +84,7 @@ public class PublicJwksEndpointsTests
         using var scope = env.Host.Services.CreateScope();
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
         await using var db = await factory.CreateDbContextAsync();
-        db.Clients.Add(new Client { ClientId = "c1", ClientName = "Test" });
+    db.Clients.Add(new ClientEntity { ClientId = "c1", ClientName = "Test" });
         await db.SaveChangesAsync();
 
         var json = await env.Client.GetStringAsync("/clients/c1/jwks");
@@ -101,7 +101,7 @@ public class PublicJwksEndpointsTests
         {
             var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
             await using var db = await factory.CreateDbContextAsync();
-            db.Clients.Add(new Client { ClientId = "c2", ClientName = "C2", PublicJwksJson = "{\"kty\":\"RSA\",\"n\":\"x\",\"e\":\"AQAB\",\"d\":\"secret\",\"kid\":\"k1\"}" });
+            db.Clients.Add(new ClientEntity { ClientId = "c2", ClientName = "C2", PublicJwksJson = "{\"kty\":\"RSA\",\"n\":\"x\",\"e\":\"AQAB\",\"d\":\"secret\",\"kid\":\"k1\"}" });
             await db.SaveChangesAsync();
         }
         var resp1 = await env.Client.GetAsync("/clients/c2/jwks");
