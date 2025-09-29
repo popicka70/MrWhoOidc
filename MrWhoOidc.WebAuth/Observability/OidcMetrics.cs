@@ -42,6 +42,7 @@ public interface IOidcMetrics
     Counter<long> ExternalCallbackSuccess { get; }
     Counter<long> ExternalCallbackFailures { get; }
     Histogram<double> ExternalCallbackDurationMs { get; }
+    Counter<long> ExternalCallbackOutcomes { get; }
     Counter<long> BclEmitted { get; }
     Counter<long> BclDelivered { get; }
     Counter<long> BclFailed { get; }
@@ -61,6 +62,10 @@ public interface IOidcMetrics
     Counter<long> ProviderJwksKeysReturned { get; }
     Counter<long> ProviderJwksZeroKeys { get; }
     Counter<long> ProviderJwksEtagChanges { get; }
+    Counter<long> CorrelationCacheWrites { get; }
+    Counter<long> CorrelationCacheHits { get; }
+    Counter<long> CorrelationCacheMisses { get; }
+    Counter<long> CorrelationCacheStale { get; }
 }
 
 public sealed class OidcMetrics : IOidcMetrics
@@ -119,6 +124,7 @@ public sealed class OidcMetrics : IOidcMetrics
     public Counter<long> ExternalCallbackSuccess { get; } = Meter.CreateCounter<long>("oidc.external.callback.success");
     public Counter<long> ExternalCallbackFailures { get; } = Meter.CreateCounter<long>("oidc.external.callback.failures");
     public Histogram<double> ExternalCallbackDurationMs { get; } = Meter.CreateHistogram<double>("oidc.external.callback.duration.ms");
+    public Counter<long> ExternalCallbackOutcomes { get; } = Meter.CreateCounter<long>("oidc.external.callback.outcomes");
 
     // Back-channel logout metrics
     public Counter<long> BclEmitted { get; } = Meter.CreateCounter<long>("oidc.bcl.emitted");
@@ -151,6 +157,10 @@ public sealed class OidcMetrics : IOidcMetrics
     public Counter<long> ProviderJwksKeysReturned { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.keys.returned");
     public Counter<long> ProviderJwksZeroKeys { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.zero_keys");
     public Counter<long> ProviderJwksEtagChanges { get; } = Meter.CreateCounter<long>("oidc.provider_jwks.etag_changes");
+    public Counter<long> CorrelationCacheWrites { get; } = Meter.CreateCounter<long>("oidc.correlation.cache.writes");
+    public Counter<long> CorrelationCacheHits { get; } = Meter.CreateCounter<long>("oidc.correlation.cache.hits");
+    public Counter<long> CorrelationCacheMisses { get; } = Meter.CreateCounter<long>("oidc.correlation.cache.misses");
+    public Counter<long> CorrelationCacheStale { get; } = Meter.CreateCounter<long>("oidc.correlation.cache.stale");
 }
 
 internal sealed class NoOpOidcMetrics : IOidcMetrics
@@ -198,6 +208,7 @@ internal sealed class NoOpOidcMetrics : IOidcMetrics
     public Counter<long> ExternalCallbackSuccess { get; } = C("oidc.external.callback.success");
     public Counter<long> ExternalCallbackFailures { get; } = C("oidc.external.callback.failures");
     public Histogram<double> ExternalCallbackDurationMs { get; } = H("oidc.external.callback.duration.ms");
+    public Counter<long> ExternalCallbackOutcomes { get; } = C("oidc.external.callback.outcomes");
     public Counter<long> BclEmitted { get; } = C("oidc.bcl.emitted");
     public Counter<long> BclDelivered { get; } = C("oidc.bcl.delivered");
     public Counter<long> BclFailed { get; } = C("oidc.bcl.failed");
@@ -217,4 +228,8 @@ internal sealed class NoOpOidcMetrics : IOidcMetrics
     public Counter<long> ProviderJwksKeysReturned { get; } = C("oidc.provider_jwks.keys.returned");
     public Counter<long> ProviderJwksZeroKeys { get; } = C("oidc.provider_jwks.zero_keys");
     public Counter<long> ProviderJwksEtagChanges { get; } = C("oidc.provider_jwks.etag_changes");
+    public Counter<long> CorrelationCacheWrites { get; } = C("oidc.correlation.cache.writes");
+    public Counter<long> CorrelationCacheHits { get; } = C("oidc.correlation.cache.hits");
+    public Counter<long> CorrelationCacheMisses { get; } = C("oidc.correlation.cache.misses");
+    public Counter<long> CorrelationCacheStale { get; } = C("oidc.correlation.cache.stale");
 }

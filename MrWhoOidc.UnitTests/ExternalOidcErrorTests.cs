@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.DataProtection;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -20,15 +22,45 @@ public class ExternalOidcErrorTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDataProtection();
+        services.AddMemoryCache();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase("ext-err"));
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
-        services.AddSingleton(new OidcMetrics());
+        services.AddSingleton<OidcMetrics>();
+        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+        services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
         services.AddHttpClient();
         services.AddSingleton<IJwksCache, JwksCache>();
+        services.AddHttpContextAccessor();
+        services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
+        services.AddScoped<ICorrelationContextAccessor, CorrelationContextAccessor>();
+        services.AddSingleton<ICorrelationStateCache>(sp =>
+        {
+            var memory = sp.GetRequiredService<IMemoryCache>();
+            var metrics = sp.GetRequiredService<IOidcMetrics>();
+            var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
+            return new CorrelationStateCache(memory, null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
+        });
         var sp = services.BuildServiceProvider();
-        var db = sp.GetRequiredService<AuthDbContext>();
-        var handler = new ExternalOidcHandler(db, sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<IDataProtectionProvider>(), sp.GetRequiredService<IJwksCache>(), sp.GetRequiredService<IClaimMappingService>(), sp.GetRequiredService<OidcMetrics>(), new NullLogger<ExternalOidcHandler>());
-        var ctx = new DefaultHttpContext();
+        var scope = sp.CreateScope();
+        var scoped = scope.ServiceProvider;
+        var db = scoped.GetRequiredService<AuthDbContext>();
+        var handler = new ExternalOidcHandler(
+            db,
+            scoped.GetRequiredService<IHttpClientFactory>(),
+            scoped.GetRequiredService<IDataProtectionProvider>(),
+            scoped.GetRequiredService<IJwksCache>(),
+            scoped.GetRequiredService<IClaimMappingService>(),
+            scoped.GetRequiredService<ICorrelationContextAccessor>(),
+            scoped.GetRequiredService<ICorrelationStateCache>(),
+            scoped.GetRequiredService<ICorrelationIdGenerator>(),
+            scoped.GetRequiredService<OidcMetrics>(),
+            new NullLogger<ExternalOidcHandler>());
+        var ctx = new DefaultHttpContext
+        {
+            RequestServices = scoped
+        };
+        scoped.GetRequiredService<IHttpContextAccessor>().HttpContext = ctx;
+        ctx.Items["__scope"] = scope; // keep scope alive for test duration
         return (handler, ctx);
     }
 

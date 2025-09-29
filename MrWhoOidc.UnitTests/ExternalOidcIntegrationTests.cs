@@ -18,12 +18,15 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -48,12 +51,19 @@ public sealed class ExternalOidcIntegrationTests
         var up2 = CreateRsa("up2");
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
+        builder.Host.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateOnBuild = false;
+            options.ValidateScopes = false;
+        });
         ((IConfigurationBuilder)builder.Configuration).AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Testing:InsecureCookies"] = "true"
         });
         builder.WebHost.UseTestServer();
         var services = builder.Services;
+        services.AddLogging();
+        services.AddMemoryCache();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddMrWhoOidcAuthCore();
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
@@ -61,12 +71,24 @@ public sealed class ExternalOidcIntegrationTests
         Func<HttpClient>? deferred = null;
         services.AddSingleton<IHttpClientFactory>(sp => new DeferredHttpClientFactory(() => deferred!()));
         services.AddSingleton<OidcMetrics>();
+        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
         services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
+        services.AddHttpContextAccessor();
+        services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
+        services.AddScoped<ICorrelationContextAccessor, CorrelationContextAccessor>();
+        services.AddSingleton<ICorrelationStateCache>(sp =>
+        {
+            var memory = sp.GetRequiredService<IMemoryCache>();
+            var logger = sp.GetRequiredService<ILogger<CorrelationStateCache>>();
+            var metrics = sp.GetRequiredService<IOidcMetrics>();
+            var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
+            return new CorrelationStateCache(memory, null, logger, metrics, generator);
+        });
         services.AddSingleton(new OidcOptions { Issuer = "http://localhost" });
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
         {

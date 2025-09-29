@@ -1,8 +1,10 @@
+using System;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 
@@ -33,6 +35,12 @@ public static class PipelineExtensions
             app.UseHttpsRedirection();
         }
         // In development we intentionally skip automatic HTTPS redirect to allow http callbacks during local dev.
+
+        app.UseMiddleware<CorrelationTrackingMiddleware>();
+        app.UseWhen(static ctx => ctx.Request.Path.StartsWithSegments("/admin/api", StringComparison.OrdinalIgnoreCase), branch =>
+        {
+            branch.UseMiddleware<AdminCorrelationMiddleware>();
+        });
 
         app.UseRouting();
 
