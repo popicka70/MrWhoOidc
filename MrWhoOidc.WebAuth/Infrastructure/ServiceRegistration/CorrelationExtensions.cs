@@ -12,8 +12,8 @@ public static class CorrelationExtensions
     public static IServiceCollection AddMrWhoOidcCorrelation(this IServiceCollection services, IConfiguration configuration, IConnectionMultiplexer? redisMux)
     {
         services.AddHttpContextAccessor();
-        services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
-        services.AddScoped<ICorrelationContextAccessor, CorrelationContextAccessor>();
+    services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
+    services.AddSingleton<ICorrelationContextAccessor, CorrelationContextAccessor>();
         services.AddSingleton<ICorrelationStateCache>(sp =>
         {
             var memory = sp.GetRequiredService<IMemoryCache>();

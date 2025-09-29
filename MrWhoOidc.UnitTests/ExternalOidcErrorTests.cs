@@ -11,6 +11,8 @@ using MrWhoOidc.WebAuth.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -30,16 +32,7 @@ public class ExternalOidcErrorTests
         services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
         services.AddHttpClient();
         services.AddSingleton<IJwksCache, JwksCache>();
-        services.AddHttpContextAccessor();
-        services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
-        services.AddScoped<ICorrelationContextAccessor, CorrelationContextAccessor>();
-        services.AddSingleton<ICorrelationStateCache>(sp =>
-        {
-            var memory = sp.GetRequiredService<IMemoryCache>();
-            var metrics = sp.GetRequiredService<IOidcMetrics>();
-            var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
-            return new CorrelationStateCache(memory, null, NullLogger<CorrelationStateCache>.Instance, metrics, generator);
-        });
+        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();
         var scoped = scope.ServiceProvider;

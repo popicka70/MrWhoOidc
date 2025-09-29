@@ -78,17 +78,7 @@ public sealed class ExternalOidcIntegrationTests
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
-        services.AddHttpContextAccessor();
-        services.AddSingleton<ICorrelationIdGenerator, CorrelationIdGenerator>();
-        services.AddScoped<ICorrelationContextAccessor, CorrelationContextAccessor>();
-        services.AddSingleton<ICorrelationStateCache>(sp =>
-        {
-            var memory = sp.GetRequiredService<IMemoryCache>();
-            var logger = sp.GetRequiredService<ILogger<CorrelationStateCache>>();
-            var metrics = sp.GetRequiredService<IOidcMetrics>();
-            var generator = sp.GetRequiredService<ICorrelationIdGenerator>();
-            return new CorrelationStateCache(memory, null, logger, metrics, generator);
-        });
+        services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux: null);
         services.AddSingleton(new OidcOptions { Issuer = "http://localhost" });
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
         {
