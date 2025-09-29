@@ -8,6 +8,9 @@ Status legend
 Scope
 Implement user management with primary/alternative emails, per-client user assignment, realms and roles, role exposure in userinfo/tokens, and client-assigned scopes with enforcement. Target runtime: .NET 9.
 
+Related backlogs
+- [MrWhoOidc.Client NuGet Backlog](./mrwhooidc-client-nuget-backlog.md)
+
 Note: Admin management UI now lives in `MrWhoOidc.WebAuth` (the OIDC server). Previous references to `MrWhoOidc.Web` for admin UI have been moved to `MrWhoOidc.WebAuth`.
 
 ## Project health snapshot (2025-09-29)
