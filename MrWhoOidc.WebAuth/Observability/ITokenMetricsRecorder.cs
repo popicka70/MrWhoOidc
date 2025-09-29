@@ -24,7 +24,7 @@ public interface ITokenMetricsRecorder
     void RecordTokenExchangeRateLimitBlocked(string clientBucket, int? retryAfterSeconds);
 }
 
-public sealed class DefaultTokenMetricsRecorder(OidcMetrics metrics) : ITokenMetricsRecorder
+public sealed class DefaultTokenMetricsRecorder(IOidcMetrics metrics) : ITokenMetricsRecorder
 {
     public void RecordTokenRequest(string grantType, string outcome)
         => metrics.TokenRequests.Add(1, new KeyValuePair<string, object?>[] { new("grant_type", grantType), new("outcome", outcome) });

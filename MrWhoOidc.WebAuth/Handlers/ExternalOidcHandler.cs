@@ -39,12 +39,12 @@ public sealed class ExternalOidcHandler(
     ICorrelationContextAccessor correlationContext,
     ICorrelationStateCache correlationCache,
     ICorrelationIdGenerator correlationGenerator,
-    OidcMetrics metrics,
+    IOidcMetrics metrics,
     ILogger<ExternalOidcHandler> logger) : IExternalOidcHandler
 {
     private readonly IDataProtector _protector = dp.CreateProtector("ext-oidc-state");
     private readonly IDataProtector _confirmProtector = dp.CreateProtector("ext-oidc-confirm");
-    private readonly OidcMetrics _metrics = metrics;
+    private readonly IOidcMetrics _metrics = metrics;
     private readonly ILogger<ExternalOidcHandler> _logger = logger;
     private readonly ICorrelationContextAccessor _correlationContext = correlationContext;
     private readonly ICorrelationStateCache _correlationCache = correlationCache;

@@ -125,7 +125,24 @@ Security Considerations
 
 Additional detail: `docs/jar-replay-cache.md`
 
-## 4) Token Exchange (OBO)
+## 4) Correlation IDs and `cid_ref` Handles
+
+- Every call to `/authorize`, `/token`, `/admin/api/*`, and external OIDC handlers participates in the correlation pipeline.
+- Clients may supply `X-Correlation-Id` (<= 64 chars, characters `[A-Za-z0-9-_]`). Invalid values are ignored and a new ID is generated.
+- The server echoes the chosen ID back on `X-Correlation-Id` in the response for downstream logging; logs include `correlation_id` in their structured scope.
+- For the browser flow, the correlation ID is never embedded directly on the front channel. Instead a short-lived opaque handle (`cid_ref`) is carried inside the `state` payload (and appended to return URLs) and maps to the actual CID via an in-memory/Redis cache (TTL 10 minutes).
+- On callback, the handle is resolved and the same CID is reattached; stale handles fall back to a new CID and emit `oidc.correlation.cache.misses` for observability.
+- Admin APIs only read `X-Correlation-Id`; callers should supply the value they receive from `/authorize` when reproducing issues end-to-end.
+- Design rationale, trade-offs, and future work live in [ADR-0008](./adr/ADR-0008-correlation-handles.md).
+
+Example (PowerShell) propagating the header:
+
+```powershell
+$cid = [System.Guid]::NewGuid().ToString('N').Substring(0,26)
+Invoke-WebRequest -Headers @{ 'X-Correlation-Id' = $cid } "https://as.example.com/authorize?client_id=web&response_type=code"
+```
+
+## 5) Token Exchange (OBO)
 
 Use OAuth 2.0 Token Exchange to obtain a token for a downstream audience on behalf of a user.
 
@@ -144,7 +161,7 @@ Server behavior (summary)
 
 Reference policy fields and examples: `docs/obo-client-policy.md`
 
-## 5) DPoP and bridging modes
+## 6) DPoP and bridging modes
 
 If the subject token is DPoP-bound (`cnf.jkt`), the server enforces a bridging policy per client.
 
@@ -156,7 +173,7 @@ Security note: `/token` DPoP proof must include `ath` = base64url(SHA-256(subjec
 
 End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
 
-## 6) Error Handling & UX
+## 7) Error Handling & UX
 
 - User flows: cancellation/timeouts/invalid_scope produce friendly error pages; correlate via request IDs in logs
 - API calls: map OAuth error codes to client behavior (retry, prompt, or fail fast)
@@ -165,7 +182,7 @@ End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
   - `insufficient_scope` when scopes are not permitted
   - `dpop_same_key_required` / `dpop_bridging_not_supported` per policy
 
-## 7) Minimal Client Snippets
+## 8) Minimal Client Snippets
 
 PowerShell example for TE with DPoP (pseudo): see `docs/obo-dpop-requiresamejkt-e2e.md`.
 
@@ -185,7 +202,7 @@ var res = await http.SendAsync(req);
 res.EnsureSuccessStatusCode();
 var json = await res.Content.ReadAsStringAsync();
 
-## 8) Testing & Environments
+## 9) Testing & Environments
 
 - Use the provided `.http` files under `docs/http` for quick endpoint testing
 - In CI, spin up Redis to exercise replay cache and rate-limit paths
@@ -197,6 +214,7 @@ Related docs
 - `docs/obo-client-policy.md`
 - `docs/obo-dpop-requiresamejkt-e2e.md`
 - `docs/jar-replay-cache.md`
+- `docs/adr/ADR-0008-correlation-handles.md`
 
 ## 9) Token Exchange Rate Limiting & Metrics
 

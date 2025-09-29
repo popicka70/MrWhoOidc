@@ -49,6 +49,7 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddMrWhoOidcAuthCore();
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
+                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();

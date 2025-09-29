@@ -48,7 +48,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
     private readonly IDbContextFactory<AuthDbContext> _dbFactory;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<BackchannelLogoutDispatcher> _logger;
-    private readonly OidcMetrics _metrics;
+    private readonly IOidcMetrics _metrics;
     private readonly IAlertPublisher _alerts;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit;
     private readonly BackchannelDispatchOptions _options;
@@ -60,7 +60,7 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         IDbContextFactory<AuthDbContext> dbFactory,
         IHttpClientFactory httpFactory,
         ILogger<BackchannelLogoutDispatcher> logger,
-    OidcMetrics metrics,
+    IOidcMetrics metrics,
     IAlertPublisher alerts,
         MrWhoOidc.WebAuth.Observability.IAuditSink audit,
         BackchannelDispatchOptions options,

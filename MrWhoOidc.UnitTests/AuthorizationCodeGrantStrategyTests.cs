@@ -45,6 +45,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     services.AddMrWhoOidcAuthCore();
                     services.AddSingleton<OidcMetrics>();
+                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();

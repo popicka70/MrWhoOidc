@@ -42,12 +42,12 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         // Per-client sliding window limiter
         if (!string.IsNullOrEmpty(clientIdForRate))
         {
-            var now = DateTimeOffset.UtcNow;
-            _clientWindows.AddOrUpdate(clientBucket, _ => (1, now), (_, cur) =>
+            var nowRL = DateTimeOffset.UtcNow;
+            _clientWindows.AddOrUpdate(clientBucket, _ => (1, nowRL), (_, cur) =>
             {
-                if (now - cur.WindowStart >= TimeSpan.FromMinutes(1))
+                if (nowRL - cur.WindowStart >= TimeSpan.FromMinutes(1))
                 {
-                    return (1, now);
+                    return (1, nowRL);
                 }
                 if (cur.Count + 1 > ClientRateLimitPerMinute)
                 {
@@ -56,7 +56,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
                 return (cur.Count + 1, cur.WindowStart);
             });
             var snapshot = _clientWindows[clientBucket];
-            if (snapshot.Count > ClientRateLimitPerMinute && now - snapshot.WindowStart < TimeSpan.FromMinutes(1))
+            if (snapshot.Count > ClientRateLimitPerMinute && nowRL - snapshot.WindowStart < TimeSpan.FromMinutes(1))
             {
                 metrics.ParFailures.Add(1);
                 logger.LogWarning("/par 429: per-client window exceeded corr={Corr} client={Client}", corr, clientBucket);
@@ -72,7 +72,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         }
 
         // Client authentication: private_key_jwt, basic, or post
-        var (clientId, clientSecret) = ReadClientCredentials(http);
+        var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
         if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
         if (string.IsNullOrWhiteSpace(clientId)) { metrics.ParFailures.Add(1); return Results.Json(new { error = "invalid_request", error_description = "Missing client_id", correlation_id = corr }, statusCode: 400); }
 
@@ -81,17 +81,48 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         var parEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/par";
 
         bool authenticated = false;
+        string authAttemptMode;
+        string? authFailureDetail = null; // will be set if authentication ultimately fails
+
         if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
         {
-            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, parEndpoint);
+            authAttemptMode = "private_key_jwt";
+            authenticated = await assertions.ValidateAsync(clientId, clientAssertion, parEndpoint).ConfigureAwait(false);
+            if (!authenticated)
+            {
+                authFailureDetail = "invalid_private_key_jwt"; // signature / claims / audience / key mismatch
+            }
         }
         else
         {
-            if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
-            authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecret);
+            // Distinguish between basic and post usage
+            string? clientSecretFinal = clientSecretFromHeader;
+            bool usedBasic = !string.IsNullOrEmpty(clientSecretFromHeader);
+            if (string.IsNullOrEmpty(clientSecretFinal))
+            {
+                clientSecretFinal = form["client_secret"].ToString();
+            }
+            bool usedPost = !usedBasic && !string.IsNullOrEmpty(clientSecretFinal);
+            authAttemptMode = usedBasic ? "client_secret_basic" : usedPost ? "client_secret_post" : "no_credentials";
+            authenticated = await clients.ValidateClientSecretAsync(clientId, clientSecretFinal).ConfigureAwait(false);
+            if (!authenticated)
+            {
+                authFailureDetail = authAttemptMode switch
+                {
+                    "client_secret_basic" => string.IsNullOrEmpty(clientSecretFinal) ? "missing_basic_secret" : "invalid_basic_secret",
+                    "client_secret_post" => string.IsNullOrEmpty(clientSecretFinal) ? "missing_post_secret" : "invalid_post_secret",
+                    "no_credentials" => "missing_credentials",
+                    _ => "secret_validation_failed"
+                };
+            }
         }
 
-        if (!authenticated) { metrics.ParFailures.Add(1); return Results.Json(new { error = "unauthorized_client", correlation_id = corr }, statusCode: 400); }
+        if (!authenticated)
+        {
+            metrics.ParFailures.Add(1);
+            logger.LogWarning("/par 400 unauthorized_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
+            return Results.Json(new { error = "unauthorized_client", correlation_id = corr }, statusCode: 400);
+        }
 
         // Optional: object size limit
         var maxBytes = authOptions.Value.RequestObjectMaxBytes;
@@ -107,7 +138,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         {
             var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
             var aud = issuer.TrimEnd('/') + "/authorize";
-            var validation = await requestObjects.ValidateAsync(roJwtRaw, aud);
+            var validation = await requestObjects.ValidateAsync(roJwtRaw, aud).ConfigureAwait(false);
             if (!validation.IsValid)
             {
                 metrics.ParFailures.Add(1);
@@ -140,11 +171,11 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             };
         }
 
-        var result = await authorize.ValidateAsync(req);
+        var result = await authorize.ValidateAsync(req).ConfigureAwait(false);
         if (!result.IsValid)
         {
             metrics.ParFailures.Add(1);
-            logger.LogWarning("/par 400: validation failed corr={Corr} client={Client}", corr, BucketizeClientId(clientId));
+            logger.LogWarning("/par 400: validation failed corr={Corr} client={Client} err={Err} desc={Desc}", corr, BucketizeClientId(clientId), result.Error, result.ErrorDescription);
             return Results.Json(new { error = result.Error, error_description = result.ErrorDescription, correlation_id = corr }, statusCode: 400);
         }
 

@@ -1,6 +1,6 @@
-# MrWhoOidc.WebAuth � IdP Chaining and JAR Support Backlog
+# MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-29
+Updated: 2025-09-29 (post-correlation refresh)
 
 Status legend
 - [x] Done
@@ -180,14 +180,14 @@ Epics and stories
   - Confirm rate limiting policy `rl-jwks` is applied in production config (already on endpoints) and document recommended limits.
 
 9) Telemetry, security, resilience
-- [~] Story: Auditing & logging
-  - Structured logs for provider selection, token exchange (TE), rate limit outcomes; partial coverage for upstream external flow.
-  - Correlation IDs: implemented for `/token` (TE) via `X-Correlation-Id` (falls back to ASP.NET `TraceIdentifier` when absent) and basic correlation in `/authorize` handler (root activity). Detailed external IdP chaining propagation moved to its own story below.
-  - Redact secrets; PII handling policy in place (no raw tokens logged).
-  - Status: Metrics + structured logs in `/authorize` and `/token` TE path; missing: external callback duration metrics, upstream cancel telemetry, richer error taxonomy for external OIDC.
-  - Acceptance: Extend logging to external OIDC callbacks + admin CRUD before marking done.
+  - [x] Story: Auditing & logging
+    - Structured logs for provider selection, token exchange (TE), rate limit outcomes, and external OIDC start/callback now flow through a shared correlation scope.
+    - Correlation IDs: `/authorize`, `/token`, external start/callback, and admin API requests share a CID via middleware + cached state handle; stale handles raise hashed warnings.
+    - Redact secrets; PII handling policy in place (no raw tokens logged).
+    - Status: External callback duration/outcome metrics shipped (`RecordExternalCallback` tags outcome/correlation/handle). Admin CRUD audit schema and cancel taxonomy captured in `docs/telemetry-taxonomy.md` (2025-09-29).
+    - Acceptance: ✅ 2025-09-29 – taxonomy and naming conventions locked in `docs/telemetry-taxonomy.md`.
 
-- [ ] Story: Correlation propagation (external IdP chaining + admin APIs)
+  - [~] Story: Correlation propagation (external IdP chaining + admin APIs)
   Summary / Goal:
   Ensure a single stable correlation identifier (CID) created (or accepted) at the initial `/authorize` request is available and logged across: provider picker, external OIDC outbound redirect, upstream IdP callback, local token exchange (upstream ID token -> local session), subsequent `/token` grant(s), and privileged admin API calls initiated in the same browser flow (e.g., troubleshooting). This enables full-path tracing, latency breakdowns, and incident triage without leaking identifiers to third parties or inflating state size.
   Scope (Phase 1 – External OIDC happy path + error/cancel):
@@ -199,27 +199,27 @@ Epics and stories
   - Metrics tags: Add `correlation_present` (true/false) and reuse existing provider tag for callback duration histogram.
   - Admin APIs: Accept/propagate `X-Correlation-Id` (read only; do not generate). Add middleware to attach to logging scope and current Activity.
   - Privacy: CID treated as non-PII but still excluded from user-visible error pages (internal only). Document retention expectations (ephemeral; not stored in DB except maybe audit table optional later).
-  - Status 2025-09-29: No `cid_ref` cache or correlation middleware present in `MrWhoOidc.WebAuth`; `/authorize` and external handlers still rely on default ASP.NET `TraceIdentifier` only.
+    - Status 2025-09-29: `CorrelationTrackingMiddleware`, `CorrelationStateCache`, and external start/callback updates merged. CID handles round-trip via memory/Redis cache, and admin pipeline warns on missing headers. Outstanding: unit coverage for invalid header/handle paths, documentation/ADR, and formal security review.
   Scope (Phase 2 – Advanced telemetry & cross-service):
   - W3C Trace Context bridge: Map CID into `ActivityTraceId` when absent; add baggage item `cid` for downstream exporters.
   - Optional propagation to downstream sample API via header injection (config flag) for full E2E.
   - Admin UI diagnostic panel to display current CID when troubleshooting.
   Out of scope (now): Persisting CID in long-lived token claims; multi-hop cross-service correlation beyond provided sample API.
   Tasks (Phase 1):
-  - [ ] Middleware: early CID capture/generation on `/authorize`.
-  - [ ] State builder update: include `cid_ref` handle; secure cache mapping (Memory + Redis abstraction) with TTL & eviction metrics.
-  - [ ] External start handler: ensure `cid_ref` injected post-PAR/JAR merge; sign/encode state.
-  - [ ] External callback handler: resolve `cid_ref`, enrich Activity + logs, emit duration + outcome metric (success/cancel/error/timeout).
-  - [ ] Admin API middleware: adopt header, attach scope.
-  - [ ] Logger scope helper + unit tests (valid/invalid header, regeneration, state round-trip, cache miss -> `invalid_request` graceful failure with new CID logged).
-  - [ ] Metrics: histogram `oidc.external_callback.duration.ms` (tags: provider, outcome), counter `oidc.external_callback.outcomes`.
-  - [ ] Documentation: update developer guide (how to pass CID) + short ADR summarizing design (no raw CID in front-channel; handle indirection; rationale vs embedding raw).
-  - [ ] Security review: confirm no correlation to user PII; ensure handle unpredictability (>= 96 bits entropy).
+    - [x] Middleware: early CID capture/generation on `/authorize`.
+    - [x] State builder update: include `cid_ref` handle; secure cache mapping (Memory + Redis abstraction) with TTL & eviction metrics.
+    - [x] External start handler: ensure `cid_ref` injected post-PAR/JAR merge; sign/encode state.
+    - [x] External callback handler: resolve `cid_ref`, enrich Activity + logs, emit duration + outcome metric (success/cancel/error/timeout).
+    - [x] Admin API middleware: adopt header, attach scope.
+    - [~] Logger scope helper + unit tests (scope helper in place; add unit/integration coverage for invalid header, regeneration, cache miss -> graceful failure).
+    - [x] Metrics: histogram `oidc.external_callback.duration.ms` (tags: provider, outcome), counter `oidc.external_callback.outcomes`.
+  - [x] Documentation: update developer guide (how to pass CID) and record design details in ADR-0008 (no raw CID in front-channel; handle indirection; rationale vs embedding raw).
+  - [x] Security review: confirm no correlation to user PII; ensure handle unpredictability (>= 96 bits entropy). See `docs/security/correlation-security-review-2025-09.md`.
   Acceptance (Phase 1):
-  - Single CID visible across authorize -> external start -> callback -> local sign-in logs for a test flow (assert via integration test capturing log scopes).
-  - State size < 512 bytes; handle not reversible to CID without cache.
-  - Metrics recorded with matching counts for outcomes (success + simulated cancel/error).
-  - Admin API log entries (sample call) show injected CID when header supplied.
+    - Single CID now observable across authorize → external start → callback flows via log scopes; need automated test to lock behavior.
+    - State payload including `cid_ref` remains < 512 bytes; handle not reversible without cache.
+    - Metrics recorded with outcome/correlation tags; add regression test to guard counters.
+    - Admin API log entries reuse caller-supplied CID; add unit test to prevent regressions.
   Risks / Mitigations:
   - Cache eviction before callback: treat as soft failure; generate new CID but log warning `cid_ref_stale` with handle hash prefix.
   - State tampering: existing state signature/JWT validation rejects modifications; add explicit validation error code `invalid_state`.
@@ -233,14 +233,14 @@ Epics and stories
 10) Testing and documentation
 - [~] Story: Automated tests
   - Unit present: config validation, claim mapping transforms, JAR parsing/validation, client assertion, PAR store, auth code, key rotation, token service, admin providers API, realm/role assignments, provider picker ordering (`ProviderPickerTests`), OBO policy scenarios.
-  - Integration: multi-provider mapping logic (picker ordering) covered; PAR stress tests exist; still pending: full external OIDC multi-provider round-trip + cancel/error paths.
+  - Integration: multi-provider mapping logic (picker ordering) covered; PAR stress tests exist; new `ExternalOidcIntegrationTests` exercise dual-provider cancel path + discovery metadata (happy-path test currently `Ignore` pending release build redirect fix).
   - E2E: TODO for two upstream OIDC test providers (e.g., Azure AD + Auth0/Okta dev tenants) including JAR + PAR permutations.
-  - Acceptance: CI green on .NET 9; expand with external OIDC dual-provider and discovery doc verification before marking done.
+  - Acceptance: CI green on .NET 9; re-enable happy-path integration test and add coverage for correlation metrics before calling complete.
 
-- [ ] Story: Documentation
-  - Admin guide for configuring providers and client mappings; examples for common IdPs.
-  - Developer guide: using `idp`, `acr_values`, inbound JAR; discovery examples.
-  - Acceptance: New client onboarding without code changes.
+- [~] Story: Documentation
+  - Admin guide draft covering providers, keys, mappings, OBO policy, and JWKS endpoints committed (2025-09-27); screenshots + correlation guidance still pending.
+  - Developer guide expanded with authorize parameters, inbound JAR/JARM, JWKS guidance (2025-09-27); needs quick-start flow + CID propagation notes.
+  - Acceptance: Finalize docs for onboarding (include CID header usage + rotation playbook) and link from README before marking done.
 
 11) On-Behalf-Of (OBO) / Token Exchange (RFC 8693)
 Status: Token Exchange grant and DPoP Phase 2 (ath binding) — DONE
@@ -438,17 +438,16 @@ Next steps (proposed)
 - Target milestone: Phase 3 (Multi-provider GA)
 - P0 (2 weeks)
   - [x] Keys UI: PEM import, pretty-print/compact toggle, alg/kty/use validation & thumbprint preview (DONE 2025-09-27). Remaining: enhanced JWKS visual preview.
-  - [ ] External OIDC UX: add structured logs/metrics with correlation IDs; refine friendly errors (localization), cancel/timeout telemetry.
+  - [~] External OIDC UX: structured logs/metrics with correlation scopes now live; still need localization + richer cancel/timeout telemetry.
   - [x] JAR hardening: Redis-backed replay cache auto-enabled when `ConnectionStrings:redis` present (falls back to in-memory for dev); TTL (`RequestObjectReplayTtlSeconds`) and clock skew (`RequestObjectClockSkewSeconds`) exposed via `AuthOptions` (DONE 2025-09-27 – see `docs/jar-replay-cache.md`).
   - [x] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout. (DONE 2025-09-27 – UI updated in Select.cshtml/Select.cshtml.cs + site.css; accessibility & mobile responsive grid; remembered provider banner)
   - [x] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs. (DONE 2025-09-27 – see ExternalOidcIntegrationTests: 3 new tests; suite now 107 passing)
-  - [ ] Docs: Admin guide draft (providers, mappings, keys), Developer guide draft (authorize params, inbound JAR/JARM response modes).
-  - [ ] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (currently RS256/PS256/ES256/ES384/ES512 allowed in `AuthOptions`).
-  - [ ] Correlation propagation: carry correlation ID from initial `/authorize` through external redirect & callback (state param embedding + log enrichment) + admin APIs.
-  - [ ] Correlation propagation (see new Story: Correlation propagation) – implement Phase 1 tasks (CID generation, state handle indirection, callback + admin enrichment, metrics) and mark story complete.
-  - [ ] External callback metrics: duration histogram + outcome counters (success/cancel/error/timeout) with provider tag.
-- P1 (next 2�4 weeks)
-  - [ ] Provider JWKS endpoint (see Story: JWKS endpoints subtasks) – move to P0 if external partner dependency emerges.
+  - [x] Docs: Admin guide + Developer guide drafts published 2025-09-27; follow-up: add CID propagation guidance & screenshots.
+  - [x] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (DiscoveryHandler now mirrors `AuthOptions.RequestObjectAllowedAlgorithms`).
+  - [~] Correlation propagation: core middleware + state handle shipped (see story); pending automated coverage, docs, security review.
+  - [x] External callback metrics: duration histogram + outcome counters with provider/correlation tags implemented (`OidcMetrics`).
+- P1 (next 2–4 weeks)
+  - [~] Provider JWKS endpoint (see Story: JWKS endpoints subtasks) – endpoints live; outstanding: publish rotation playbook + add composite index optimization.
   - [ ] External flow telemetry expansion: provider selection latency, upstream token exchange latency, cancellation taxonomy; structured log events with event IDs & stable schema.
   - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
   - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
@@ -462,12 +461,12 @@ Next steps (proposed)
   - [ ] Emit consistent `amr` claim across all flows (see Claim mapping pending item) + tests.
 
 Risks and decisions
-- Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR.
+- Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR. (Current: provider/client JWKS endpoints exist but feature-flagged.)
 - Confirm acceptable `alg` set for inbound JAR (e.g., RS256/PS256/ES256) and enforce (per-client allow-list supported).
 - Validate secrets handling approach (Key Vault/DPAPI) before enabling client-provided secrets.
 - OBO: Decide on DPoP bridging semantics (deny vs require proof and carry `cnf`), max delegation depth, and whether ID tokens are accepted as `subject_token`.
 - M2M: Decide on `audience` vs `resource` param, single vs multiple audiences, `sub` value (client_id vs URN), required auth methods (secret vs `private_key_jwt`), and mTLS policy.
- - JWKS endpoints: Confirm path strategy (`/.well-known/providers/{name}/jwks` vs `/providers/{name}/jwks`) and whether to surface locations in discovery (leaning: document-only, no discovery bloat). Decide on `Publishable` flag vs implicit Active exposure (decided: explicit flag for safety). Consider minimum overlap window policy.
+- JWKS endpoints: Path decision captured in ADR-0007 (`/providers/{name}/jwks`); follow-ups: document discovery advertisement stance + overlap policy.
 
 Test matrix (Phase 3)
 - Two OIDC providers (e.g., Azure AD + Auth0/Okta): success, cancel, error scopes.

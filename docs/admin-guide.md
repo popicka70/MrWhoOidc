@@ -246,9 +246,13 @@ When enabled with Redis, endpoints like /token and /introspect return appropriat
 
 ## 9) Troubleshooting
 
-- External OIDC UX
-  - Correlation IDs flow from start → callback in structured logs
-  - Friendly error pages for cancel/timeout/invalid_scope (localization-ready)
+- External OIDC UX & correlation
+  - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed back on every response and surfaces in structured logs/telemetry.
+  - Browser hops use opaque `cid_ref` handles embedded in the state payload; stale handles trigger a friendly error and emit `oidc.correlation.cache.misses`.
+  - Friendly error pages for cancel/timeout/invalid_scope (localization-ready) display a shortened correlation handle so support can cross-reference logs.
+  - See [ADR-0008](./adr/ADR-0008-correlation-handles.md) for the full design rationale, cache policy, and future enhancements.
+- Admin APIs
+  - Missing `X-Correlation-Id` headers are logged as warnings via `AdminCorrelationMiddleware`; attach the correlation value from the problematic `/authorize` or admin UI action when filing tickets.
 - Token Exchange
   - `invalid_target`, `insufficient_scope`, DPoP errors (`dpop_same_key_required`, `dpop_bridging_not_supported`)
 - Keys

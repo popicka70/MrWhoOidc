@@ -21,12 +21,12 @@ public class IndexModel : PageModel
     private readonly IUpstreamLogoutService _upstream;
     private readonly AuthDbContext _db;
     private readonly IKeyStore _keyStore; // currently not required directly but left for future UI decisions
-    private readonly OidcMetrics _metrics;
+    private readonly IOidcMetrics _metrics;
     private readonly IAuditSink _audit;
     private readonly ILogger<IndexModel> _logger;
     private readonly FederatedLogoutOptions _fedOpts;
 
-    public IndexModel(IUpstreamLogoutService upstream, AuthDbContext db, IKeyStore keyStore, OidcMetrics metrics, IAuditSink audit, ILogger<IndexModel> logger, IOptions<FederatedLogoutOptions> fedOpts)
+    public IndexModel(IUpstreamLogoutService upstream, AuthDbContext db, IKeyStore keyStore, IOidcMetrics metrics, IAuditSink audit, ILogger<IndexModel> logger, IOptions<FederatedLogoutOptions> fedOpts)
     {
         _upstream = upstream; _db = db; _keyStore = keyStore; _metrics = metrics; _audit = audit; _logger = logger; _fedOpts = fedOpts.Value;
     }

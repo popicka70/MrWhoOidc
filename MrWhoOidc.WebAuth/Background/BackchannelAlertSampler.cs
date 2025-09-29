@@ -50,7 +50,7 @@ public sealed class SystemClock : ISystemClock { public DateTimeOffset UtcNow =>
 
 public sealed class BackchannelAlertSampler(
     IDbContextFactory<AuthDbContext> dbFactory,
-    OidcMetrics metrics,
+    IOidcMetrics metrics,
     ILogger<BackchannelAlertSampler> logger,
     IAlertPublisher alerts,
     IOptionsMonitor<BackchannelAlertOptions> options,
@@ -58,7 +58,7 @@ public sealed class BackchannelAlertSampler(
     ISystemClock clock) : BackgroundService, IBackchannelAlertDiagnostics
 {
     private readonly IDbContextFactory<AuthDbContext> _dbFactory = dbFactory;
-    private readonly OidcMetrics _metrics = metrics;
+    private readonly IOidcMetrics _metrics = metrics;
     private readonly ILogger<BackchannelAlertSampler> _logger = logger;
     private readonly IAlertPublisher _alerts = alerts;
     private readonly IOptionsMonitor<BackchannelAlertOptions> _options = options;

@@ -13,7 +13,7 @@ public interface ISeeder
 public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
 {
     // Initial constant secret for the blazor-web client (development only)
-    private const string InitialBlazorWebClientSecret = "blazor-web-initial-secret";
+    private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
 
     // PoC M2M client id/secret (intentionally hard-coded)
     private const string M2MClientId = "m2m-test-client";

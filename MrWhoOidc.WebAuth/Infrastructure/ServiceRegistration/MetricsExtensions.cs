@@ -14,6 +14,7 @@ public static class MetricsExtensions
     public static IServiceCollection AddMrWhoOidcMetrics(this IServiceCollection services)
     {
         services.AddSingleton<OidcMetrics>();
+        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         if (!services.Any(d => d.ServiceType == typeof(ITokenMetricsRecorder)))
         {
