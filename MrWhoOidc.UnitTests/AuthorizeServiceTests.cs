@@ -92,6 +92,78 @@ public sealed class AuthorizeServiceTests
         CollectionAssert.Contains(res.Scopes, "openid");
     }
 
+    [TestMethod]
+    public async Task ValidateAsync_Fails_WhenRequestedScopesNotAllowed()
+    {
+        using var db = CreateDb();
+        var client = new Client
+        {
+            ClientId = "spa",
+            RequirePkce = true,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]"
+        };
+        db.Clients.Add(client);
+        db.Scopes.Add(new Scope { Name = "openid" });
+        await db.SaveChangesAsync();
+
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
+        await db.SaveChangesAsync();
+
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
+        {
+            response_type = "code",
+            client_id = "spa",
+            redirect_uri = "https://app.example.com/callback",
+            scope = "openid profile",
+            code_challenge = new string('p', 43),
+            code_challenge_method = "S256",
+            nonce = "n"
+        };
+
+        var res = await svc.ValidateAsync(req);
+
+        Assert.IsFalse(res.IsValid);
+        Assert.AreEqual("invalid_scope", res.Error);
+        StringAssert.Contains(res.ErrorDescription!, "profile");
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Fails_WhenRedirectUriNotAllowListed()
+    {
+        using var db = CreateDb();
+        var client = new Client
+        {
+            ClientId = "spa",
+            RequirePkce = true,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]"
+        };
+        db.Clients.Add(client);
+        db.Scopes.Add(new Scope { Name = "openid" });
+        db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
+        await db.SaveChangesAsync();
+
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
+        {
+            response_type = "code",
+            client_id = "spa",
+            redirect_uri = "https://evil.example.com/callback",
+            scope = "openid",
+            code_challenge = new string('r', 43),
+            code_challenge_method = "S256",
+            nonce = "n"
+        };
+
+        var res = await svc.ValidateAsync(req);
+
+        Assert.IsFalse(res.IsValid);
+        Assert.AreEqual("invalid_request", res.Error);
+        StringAssert.Contains(res.ErrorDescription!, "redirect_uri");
+    }
+
     private sealed class NoopHasher : IPasswordHasher
     {
         public string Hash(string password) => password;
