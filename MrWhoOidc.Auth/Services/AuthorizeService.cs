@@ -1,8 +1,7 @@
-using System.Text.RegularExpressions;
+using System.Text.Json;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -31,15 +30,23 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         if (!IsValidAbsoluteUri(request.redirect_uri))
             return Error("invalid_request", "redirect_uri must be absolute");
 
-        // Enforce per-client login redirect allow-list when configured
+        // Prepare normalized redirect (strip query + fragment, normalize scheme/host casing, trim trailing slash except root)
+        var requestedRedirectNormalized = NormalizeRedirectForComparison(request.redirect_uri);
+
+        // Enforce per-client login redirect allow-list when configured (comparison uses normalized form without query)
         if (!string.IsNullOrWhiteSpace(client.AllowedLoginRedirectUrisJson))
         {
             try
             {
-                var allowed = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
-                if (allowed.Length > 0 && !allowed.Contains(request.redirect_uri, StringComparer.Ordinal))
+                var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
+                if (allowedRaw.Length > 0)
                 {
-                    return Error("invalid_request", "redirect_uri is not allowed for this client");
+                    var allowedNormalized = new HashSet<string>(allowedRaw
+                        .Where(a => !string.IsNullOrWhiteSpace(a) && IsValidAbsoluteUri(a))
+                        .Select(NormalizeRedirectForComparison), StringComparer.Ordinal);
+
+                    if (!allowedNormalized.Contains(requestedRedirectNormalized))
+                        return Error("invalid_request", "redirect_uri is not allowed for this client");
                 }
             }
             catch
@@ -96,7 +103,7 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         {
             IsValid = true,
             ClientId = client.ClientId,
-            RedirectUri = request.redirect_uri,
+            RedirectUri = request.redirect_uri, // keep original (with query) for downstream use
             Scopes = scopes,
             Nonce = request.nonce,
             CodeChallenge = request.code_challenge,
@@ -109,6 +116,19 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
 
     static bool IsValidAbsoluteUri(string uri)
         => Uri.TryCreate(uri, UriKind.Absolute, out _);
+
+    // Normalization used only for allow-list comparison
+    static string NormalizeRedirectForComparison(string uri)
+    {
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return uri; // fallback to raw
+        var scheme = u.Scheme.ToLowerInvariant();
+        var host = u.Host.ToLowerInvariant();
+        var portPart = u.IsDefaultPort ? string.Empty : $":{u.Port}";
+        var path = string.IsNullOrEmpty(u.AbsolutePath) ? "/" : u.AbsolutePath;
+        if (!path.StartsWith('/')) path = "/" + path; // ensure leading slash
+        if (path.Length > 1 && path.EndsWith('/')) path = path.TrimEnd('/'); // trim trailing slash except root
+        return scheme + "://" + host + portPart + path; // query + fragment intentionally excluded
+    }
 
     static AuthorizeValidationResult Error(string code, string description) => new()
     {

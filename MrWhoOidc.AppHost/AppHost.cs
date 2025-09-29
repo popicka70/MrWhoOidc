@@ -20,4 +20,6 @@ builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
     .WaitFor(authDb);
 
+builder.AddProject<Projects.MrWhoOidc_RazorClient>("razorclient");
+
 builder.Build().Run();

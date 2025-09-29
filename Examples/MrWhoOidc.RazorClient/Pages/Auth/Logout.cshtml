@@ -1,0 +1,11 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.Auth.LogoutModel
+@{
+    ViewData["Title"] = "Sign out";
+}
+
+<form method="post">
+    <p>Are you sure you want to sign out?</p>
+    <button type="submit">Sign out</button>
+    <a asp-page="/Index">Cancel</a>
+</form>

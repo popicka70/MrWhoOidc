@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - MrWhoOidc Razor Client</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <header>
+        <div class="navbar">
+            <div class="navbar-brand">MrWhoOidc Razor Client</div>
+            <nav>
+                <a asp-page="/Index">Home</a>
+                <a asp-page="/Secure">Secure Area</a>
+            </nav>
+            <div class="navbar-auth">
+                @if (User.Identity?.IsAuthenticated ?? false)
+                {
+                    <form asp-page="/Auth/Logout" method="post">
+                        <span>@User.Identity?.Name</span>
+                        <button type="submit">Sign out</button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-page="/Auth/Login">Sign in</a>
+                }
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        @RenderBody()
+    </main>
+
+    <footer>
+        <p>&copy; @DateTimeOffset.UtcNow.Year - MrWhoOidc Razor Client</p>
+    </footer>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
