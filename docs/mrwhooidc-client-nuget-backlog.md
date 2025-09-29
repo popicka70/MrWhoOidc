@@ -33,37 +33,37 @@ Status legend
 - Story 0.1: Finalize package naming, icons, tags, README template
   - AC: [ ] Align with corporate NuGet gallery guidelines; [ ] Reserve namespace on internal feed
 - Story 0.2: Project audit & clean-up
-  - AC: [ ] Remove placeholder `Class1.cs`; [ ] Adjust `MrWhoOidc.Client.csproj` with PackageId, metadata, SourceLink, nullable settings, analyzers
+  - AC: [~] Remove placeholder `Class1.cs`; [x] Adjust `MrWhoOidc.Client.csproj` with PackageId, metadata, SourceLink, nullable settings, analyzers
 - Story 0.3: Build scripts & CI
   - AC: [ ] Add `dotnet pack` task; [ ] Integrate versioning (GitHeight/MinVer); [ ] Validate pack succeeds in CI
 
 ## Epic 1 – Configuration Model
 - Story 1.1: Define `MrWhoOidcClientOptions`
-  - AC: [ ] Issuer, DiscoveryUri, ClientId, Secret/Assertion, Scopes, Resource/Audience, PKCE, DPoP toggles; [ ] Data annotations/Fluent validation
+  - AC: [x] Issuer, DiscoveryUri, ClientId, Secret/Assertion, Scopes, Resource/Audience, PKCE, DPoP toggles; [x] Data annotations/Fluent validation
 - Story 1.2: Configuration binding helpers
-  - AC: [ ] `services.ConfigureMrWhoOidcClient(Configuration, sectionName)` extension; [ ] Support for multiple named clients; [ ] Configuration reload support
+  - AC: [x] `services.ConfigureMrWhoOidcClient(Configuration, sectionName)` extension; [ ] Support for multiple named clients; [x] Configuration reload support
 - Story 1.3: Options validation & diagnostics
-  - AC: [ ] `IValidateOptions` implementation; [ ] Log-friendly validation failures; [ ] Unit tests covering missing issuer/redirect URIs/secret combos
+  - AC: [x] `IValidateOptions` implementation; [x] Log-friendly validation failures; [x] Unit tests covering missing issuer/redirect URIs/secret combos
 
 ## Epic 2 – Discovery & Metadata Bootstrap
 - Story 2.1: Discovery client helper
-  - AC: [ ] Typed service that downloads and caches `.well-known/openid-configuration`; [ ] Respects ETag/Cache-Control; [ ] Handles transient failures with retry/backoff
+  - AC: [x] Typed service that downloads and caches `.well-known/openid-configuration`; [x] Respects ETag/Cache-Control; [~] Handles transient failures with retry/backoff
 - Story 2.2: JWKS cache integration
-  - AC: [ ] Provide `IJwksCache` abstraction; [ ] Cache invalidation per `kid`; [ ] Hook into consumer token validation APIs
+  - AC: [x] Provide `IJwksCache` abstraction; [~] Cache invalidation per `kid`; [~] Hook into consumer token validation APIs
 - Story 2.3: Developer ergonomics
-  - AC: [ ] `services.AddMrWhoOidcDiscovery()` extension wiring HttpClientFactory; [ ] Telemetry (meter + activity) for discovery fetches
+  - AC: [x] `services.AddMrWhoOidcDiscovery()` extension wiring HttpClientFactory; [~] Telemetry (meter + activity) for discovery fetches
 
 ## Epic 3 – Authentication Flow Helpers
 - Story 3.1: Authorization code flow scaffolding
-  - AC: [ ] Helper to build authorize URL with PKCE & correlation state; [ ] Round-trip validator to parse callback and surface tokens/errors; [ ] Tests covering nonce/state mismatches
+  - AC: [x] Helper to build authorize URL with PKCE & correlation state; [x] Round-trip validator to parse callback and surface tokens/errors; [x] Tests covering nonce/state mismatches
 - Story 3.2: Token endpoint client
-  - AC: [ ] `IMrWhoOidcTokenClient` with methods for code exchange, refresh token, client credentials, token exchange (OBO); [ ] Support DPoP proof attachment
+  - AC: [x] `IMrWhoOidcTokenClient` with methods for code exchange, refresh token, client credentials, token exchange (OBO); [x] Support DPoP proof attachment
 - Story 3.3: Token storage abstraction
   - AC: [ ] Optional interface for persisting refresh tokens securely (consumer-provided implementation); [ ] Provide in-memory sample implementation for quick starts
 
 ## Epic 4 – Security & Hardening
 - Story 4.1: PKCE + DPoP enforcement defaults
-  - AC: [ ] Public clients auto-enforce PKCE; [ ] When DPoP configured, ensure proof builder validates method/uri/nonce; [ ] Include replay protection guidance
+  - AC: [x] Public clients auto-enforce PKCE; [x] When DPoP configured, ensure proof builder validates method/uri/nonce; [~] Include replay protection guidance
 - Story 4.2: Secret management guidance
   - AC: [ ] Document best practices (Azure Key Vault, AWS Secrets Manager); [ ] Provide interface hooks for late-binding client secrets/assertions
 - Story 4.3: Threat modeling checklist
@@ -71,23 +71,23 @@ Status legend
 
 ## Epic 5 – Observability & Diagnostics
 - Story 5.1: Logging primitives
-  - AC: [ ] Structured logging for request/response (redacting secrets); [ ] Correlation ID propagation; [ ] Integration with `ILogger<M>`
+  - AC: [~] Structured logging for request/response (redacting secrets); [~] Correlation ID propagation; [x] Integration with `ILogger<M>`
 - Story 5.2: Metrics
-  - AC: [ ] Counters for token requests (success/failure) and latency histogram; [ ] Expose meter name `MrWhoOidc.Client`
+  - AC: [x] Counters for token requests (success/failure) and latency histogram; [x] Expose meter name `MrWhoOidc.Client`
 - Story 5.3: Health checks
   - AC: [ ] Optional `IHealthCheck` verifying discovery + token endpoint reachability; [ ] Document wiring
 
 ## Epic 6 – Samples & Tests
 - Story 6.1: Unit tests
-  - AC: [ ] Coverage for options validation, discovery caching, token client error handling; [ ] Use MSTest to match repo
+  - AC: [x] Coverage for options validation, discovery caching, token client error handling; [x] Use MSTest to match repo
 - Story 6.2: Integration samples
-  - AC: [ ] Minimal console app using client credentials; [ ] ASP.NET Core web app sample performing auth code flow; [ ] Both reference package
+  - AC: [ ] Minimal console app using client credentials; [x] ASP.NET Core web app sample performing auth code flow; [~] Both reference package
 - Story 6.3: Automated smoke tests
   - AC: [ ] Pipeline job running samples against local AppHost (Aspire); [ ] Validate token acquisition & userinfo call succeeds
 
 ## Epic 7 – Documentation & Adoption
 - Story 7.1: Package README + docs
-  - AC: [ ] Usage overview, configuration matrix, troubleshooting; [ ] Link back to `docs/developer-guide.md`
+  - AC: [x] Usage overview, configuration matrix, troubleshooting; [~] Link back to `docs/developer-guide.md`
 - Story 7.2: Migration guide
   - AC: [ ] Steps to move from manual configuration to package; [ ] Highlight breaking changes (if any)
 - Story 7.3: Adoption checklist
@@ -101,17 +101,26 @@ Status legend
 - Story 8.3: Support plan
   - AC: [ ] Define SLA owners; [ ] Set up monitoring for download stats; [ ] Schedule quarterly review of backlog
 
+## Epic 9 – JAR & JARM Enhancements
+- Story 9.1: Signed authorization requests (JAR)
+  - AC: [ ] Introduce request-object builder that creates and signs JWT payloads using configured client keys; [ ] Support both symmetric (client secret) and asymmetric signing with key rotation hooks; [ ] Add validator tests covering required claims and audience/nonce handling
+- Story 9.2: JWT-secured authorization responses (JARM)
+  - AC: [ ] Extend callback processing to detect and validate JARM responses; [ ] Leverage JWKS cache for issuer response signing keys; [ ] Surface detailed error states when validation fails
+- Story 9.3: Documentation & samples for JAR/JARM
+  - AC: [ ] Update README/backlog docs with configuration walkthrough; [ ] Add Razor sample toggle showing JAR/JARM usage; [ ] Provide troubleshooting section for common validation errors
+
 ---
 
 ## Open Questions
 - Should package expose typed HTTP handlers for backchannel logout notifications or keep those server-side only?
 - Do we require multi-tenant awareness (issuer per tenant) in v1, or can we assume single issuer with environment overrides?
-- Is DPoP proof generation expected client-side, or do we provide helper utilities (key management, rotation)?
+- How should we distribute and rotate client signing keys for outbound JAR (config-based vs managed store), and what defaults make sense for partner apps?
 
 ## Dependencies & Risks
 - Requires `MrWhoOidc.ServiceDefaults` stable interfaces for telemetry; coordinate with service defaults team if breaking changes planned.
 - Token exchange flows depend on server-side policy endpoints; ensure docs/tests updated if APIs change.
 - Risk of duplicating logic already in `MrWhoOidc.Security` (DPoP). Mitigation: share common components or move to shared project.
+- JAR/JARM support depends on availability and lifecycle of client signing keys; coordinate with security team on recommended storage and rotation approach.
 
 ## Tracking & Reporting
 - Establish GitHub milestone `mrwhooidc-client-1.0` with issues per story.
