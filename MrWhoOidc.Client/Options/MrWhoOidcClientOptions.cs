@@ -73,4 +73,14 @@ public sealed class MrWhoOidcClientOptions
     /// Optional name for correlating multiple client registrations.
     /// </summary>
     public string Name { get; set; } = "default";
+
+    /// <summary>
+    /// On-behalf-of token exchange registrations keyed by logical downstream API name.
+    /// </summary>
+    public IDictionary<string, OnBehalfOfRegistration> OnBehalfOf { get; } = new Dictionary<string, OnBehalfOfRegistration>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Machine-to-machine client credentials registrations keyed by logical service name.
+    /// </summary>
+    public IDictionary<string, ClientCredentialsRegistration> ClientCredentials { get; } = new Dictionary<string, ClientCredentialsRegistration>(StringComparer.OrdinalIgnoreCase);
 }

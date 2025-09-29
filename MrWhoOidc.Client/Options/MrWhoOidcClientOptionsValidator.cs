@@ -78,6 +78,50 @@ internal sealed class MrWhoOidcClientOptionsValidator : IValidateOptions<MrWhoOi
             failures.Add("BackchannelTimeout must be at least 5 seconds.");
         }
 
+        foreach (var registration in options.OnBehalfOf)
+        {
+            if (registration.Value is null)
+            {
+                failures.Add($"On-behalf-of registration '{registration.Key}' must be defined.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(registration.Value.SubjectTokenType))
+            {
+                failures.Add($"On-behalf-of registration '{registration.Key}' must specify SubjectTokenType.");
+            }
+
+            if (string.IsNullOrWhiteSpace(registration.Value.Scope) && string.IsNullOrWhiteSpace(registration.Value.Resource) && string.IsNullOrWhiteSpace(registration.Value.Audience))
+            {
+                failures.Add($"On-behalf-of registration '{registration.Key}' must configure Scope, Resource, or Audience.");
+            }
+
+            if (registration.Value.CacheLifetime is TimeSpan cacheLifetime && cacheLifetime <= TimeSpan.Zero)
+            {
+                failures.Add($"On-behalf-of registration '{registration.Key}' CacheLifetime must be positive when specified.");
+            }
+        }
+
+        foreach (var registration in options.ClientCredentials)
+        {
+            if (registration.Value is null)
+            {
+                failures.Add($"Client credentials registration '{registration.Key}' must be defined.");
+                continue;
+            }
+
+            var hasScopes = registration.Value.Scopes.Count > 0;
+            if (!hasScopes && string.IsNullOrWhiteSpace(registration.Value.Resource) && string.IsNullOrWhiteSpace(registration.Value.Audience))
+            {
+                failures.Add($"Client credentials registration '{registration.Key}' must configure Scopes, Resource, or Audience.");
+            }
+
+            if (registration.Value.CacheLifetime is TimeSpan cacheLifetime && cacheLifetime <= TimeSpan.Zero)
+            {
+                failures.Add($"Client credentials registration '{registration.Key}' CacheLifetime must be positive when specified.");
+            }
+        }
+
         return failures.Count > 0 ? ValidateOptionsResult.Fail(failures) : ValidateOptionsResult.Success;
     }
 }

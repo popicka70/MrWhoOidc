@@ -54,4 +54,40 @@ public class MrWhoOidcClientOptionsValidatorTests
         Assert.IsFalse(result.Succeeded);
         StringAssert.Contains(string.Join(';', result.Failures!), "Issuer must be an absolute HTTPS URI");
     }
+
+    [TestMethod]
+    public void Validate_Fails_ForInvalidOnBehalfOfRegistration()
+    {
+        var options = new MrWhoOidcClientOptions
+        {
+            Issuer = "https://issuer.example.com",
+            ClientId = "client",
+            ClientSecret = "secret"
+        };
+
+        options.OnBehalfOf["api"] = new OnBehalfOfRegistration { SubjectTokenType = string.Empty };
+
+        var result = _validator.Validate(Options.DefaultName, options);
+
+        Assert.IsFalse(result.Succeeded);
+        StringAssert.Contains(string.Join(';', result.Failures!), "On-behalf-of registration 'api' must specify SubjectTokenType.");
+    }
+
+    [TestMethod]
+    public void Validate_Fails_ForInvalidClientCredentialsRegistration()
+    {
+        var options = new MrWhoOidcClientOptions
+        {
+            Issuer = "https://issuer.example.com",
+            ClientId = "client",
+            ClientSecret = "secret"
+        };
+
+        options.ClientCredentials["service"] = new ClientCredentialsRegistration();
+
+        var result = _validator.Validate(Options.DefaultName, options);
+
+        Assert.IsFalse(result.Succeeded);
+        StringAssert.Contains(string.Join(';', result.Failures!), "Client credentials registration 'service' must configure Scopes, Resource, or Audience.");
+    }
 }

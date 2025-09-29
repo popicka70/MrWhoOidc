@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Client.Discovery;
@@ -64,13 +65,51 @@ internal sealed class MrWhoTokenClient : IMrWhoTokenClient
 
     public ValueTask<TokenResult> ClientCredentialsAsync(IEnumerable<string>? scopes = null, CancellationToken cancellationToken = default)
     {
-        var scopeValue = scopes is null ? string.Join(' ', _options.CurrentValue.Scopes) : string.Join(' ', scopes);
+        var scopeList = scopes?.ToArray();
+        if (scopeList is null || scopeList.Length == 0)
+        {
+            scopeList = _options.CurrentValue.Scopes.ToArray();
+        }
+
+        var request = new ClientCredentialsRequest
+        {
+            Scopes = scopeList
+        };
+
+        return ClientCredentialsAsync(request, cancellationToken);
+    }
+
+    public ValueTask<TokenResult> ClientCredentialsAsync(ClientCredentialsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
 
         var parameters = new Dictionary<string, string?>
         {
-            ["grant_type"] = "client_credentials",
-            ["scope"] = scopeValue
+            ["grant_type"] = "client_credentials"
         };
+
+        if (request.Scopes is { Count: > 0 })
+        {
+            parameters["scope"] = string.Join(' ', request.Scopes);
+        }
+
+        if (!string.IsNullOrEmpty(request.Resource))
+        {
+            parameters["resource"] = request.Resource;
+        }
+
+        if (!string.IsNullOrEmpty(request.Audience))
+        {
+            parameters["audience"] = request.Audience;
+        }
+
+        foreach (var kv in request.AdditionalParameters)
+        {
+            if (!string.IsNullOrWhiteSpace(kv.Key))
+            {
+                parameters[kv.Key] = kv.Value;
+            }
+        }
 
         return SendAsync(parameters, cancellationToken);
     }
