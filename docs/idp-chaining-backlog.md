@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth � IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-27
+Updated: 2025-09-29
 
 Status legend
 - [x] Done
@@ -199,6 +199,7 @@ Epics and stories
   - Metrics tags: Add `correlation_present` (true/false) and reuse existing provider tag for callback duration histogram.
   - Admin APIs: Accept/propagate `X-Correlation-Id` (read only; do not generate). Add middleware to attach to logging scope and current Activity.
   - Privacy: CID treated as non-PII but still excluded from user-visible error pages (internal only). Document retention expectations (ephemeral; not stored in DB except maybe audit table optional later).
+  - Status 2025-09-29: No `cid_ref` cache or correlation middleware present in `MrWhoOidc.WebAuth`; `/authorize` and external handlers still rely on default ASP.NET `TraceIdentifier` only.
   Scope (Phase 2 – Advanced telemetry & cross-service):
   - W3C Trace Context bridge: Map CID into `ActivityTraceId` when absent; add baggage item `cid` for downstream exporters.
   - Optional propagation to downstream sample API via header injection (config flag) for full E2E.

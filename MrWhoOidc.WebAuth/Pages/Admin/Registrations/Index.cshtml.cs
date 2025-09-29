@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -44,9 +45,36 @@ public class IndexModel(AuthDbContext db) : PageModel
         if (reg is null) return RedirectToPage();
         if (!string.Equals(reg.State, "pending", StringComparison.OrdinalIgnoreCase)) return RedirectToPage();
 
-        // Prevent duplicates: if user exists now, reject with warning
-        var email = reg.Email.Trim().ToLowerInvariant();
-        var existing = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+        // Normalize email and prevent duplicates
+        var normalized = reg.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(reg.Email) ?? string.Empty;
+        if (string.IsNullOrEmpty(normalized))
+        {
+            reg.State = "rejected";
+            reg.RejectedAt = DateTimeOffset.UtcNow;
+            reg.RejectedByUserId = GetCurrentUserId();
+            await db.SaveChangesAsync();
+            TempData["Error"] = "Registration rejected because the email is invalid.";
+            return RedirectToPage();
+        }
+
+        string emailForUser;
+        try
+        {
+            emailForUser = EmailNormalizer.FormatForStorage(reg.Email, required: true, out var normalizedFromFormat)
+                ?? throw new ValidationException("Email is required.");
+            normalized = normalizedFromFormat ?? normalized;
+        }
+        catch (ValidationException ex)
+        {
+            reg.State = "rejected";
+            reg.RejectedAt = DateTimeOffset.UtcNow;
+            reg.RejectedByUserId = GetCurrentUserId();
+            await db.SaveChangesAsync();
+            TempData["Error"] = ex.Message;
+            return RedirectToPage();
+        }
+
+        var existing = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized);
         if (existing is not null)
         {
             reg.State = "rejected";
@@ -60,8 +88,8 @@ public class IndexModel(AuthDbContext db) : PageModel
         // Create user
         var user = new User
         {
-            Username = email,
-            Email = email,
+            Username = normalized,
+            Email = emailForUser,
             EmailVerified = false,
             Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
             HashAlgorithm = "argon2id",

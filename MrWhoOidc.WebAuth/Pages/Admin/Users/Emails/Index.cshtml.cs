@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -28,14 +29,40 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostAddAsync(string email)
     {
-        if (string.IsNullOrWhiteSpace(email)) return await OnGetAsync();
-        email = email.Trim().ToLowerInvariant();
-        var dup = await db.UserAlternativeEmails.AnyAsync(a => a.UserId == UserId && a.Email == email);
-        if (!dup)
+        if (string.IsNullOrWhiteSpace(email))
         {
-            db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = UserId, Email = email, IsVerified = false });
-            await db.SaveChangesAsync();
+            return RedirectToPage(new { userId = UserId });
         }
+
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        if (user is null)
+        {
+            return RedirectToPage("/Admin/Users/Index");
+        }
+
+        try
+        {
+            var formatted = EmailNormalizer.FormatForStorage(email, required: true, out var normalized)
+                ?? throw new ValidationException("Email is required.");
+            var normalizedValue = normalized ?? string.Empty;
+
+            if (string.Equals(user.NormalizedEmail, normalizedValue, StringComparison.Ordinal))
+            {
+                return RedirectToPage(new { userId = UserId });
+            }
+
+            var duplicate = await db.UserAlternativeEmails.AnyAsync(a => a.NormalizedEmail == normalizedValue);
+            if (!duplicate)
+            {
+                db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = UserId, Email = formatted, IsVerified = false });
+                await db.SaveChangesAsync();
+            }
+        }
+        catch (ValidationException)
+        {
+            // Invalid email format; ignore and reload page without changes.
+        }
+
         return RedirectToPage(new { userId = UserId });
     }
 

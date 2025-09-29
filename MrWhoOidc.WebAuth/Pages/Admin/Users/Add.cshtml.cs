@@ -32,8 +32,9 @@ public class AddModel(AuthDbContext db) : PageModel
             ModelState.AddModelError("Input.Username", "Username already exists.");
             return Page();
         }
-        var email = Input.Email?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrEmpty(email) && await db.Users.AnyAsync(u => u.Email == email))
+        var email = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
+        var normalized = EmailNormalizer.NormalizeForLookup(email);
+        if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.NormalizedEmail == normalized))
         {
             ModelState.AddModelError("Input.Email", "Email already exists.");
             return Page();

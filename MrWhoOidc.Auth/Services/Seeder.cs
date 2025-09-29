@@ -70,7 +70,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // Seed default admin user (idempotent)
-        var adminUser = await db.Users.FirstOrDefaultAsync(u => u.Username == AdminUsername || u.Email == AdminEmail, ct).ConfigureAwait(false);
+    var normalizedAdminEmail = EmailNormalizer.NormalizeForLookup(AdminEmail);
+    var adminUser = await db.Users.FirstOrDefaultAsync(u => u.Username == AdminUsername || u.NormalizedEmail == normalizedAdminEmail, ct).ConfigureAwait(false);
         if (adminUser is null)
         {
             adminUser = new User

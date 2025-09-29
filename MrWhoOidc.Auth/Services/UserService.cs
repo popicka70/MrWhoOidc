@@ -28,13 +28,15 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher) : IU
         bool looksEmail = usernameOrEmail.Contains('@');
         if (!looksEmail) return null; // do not treat arbitrary strings as email for perf
 
-        var email = usernameOrEmail.Trim().ToLowerInvariant();
-        user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct).ConfigureAwait(false);
+        var email = EmailNormalizer.NormalizeForLookup(usernameOrEmail);
+        if (string.IsNullOrEmpty(email)) return null;
+
+        user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.NormalizedEmail == email, ct).ConfigureAwait(false);
         if (user != null) return user;
 
         // Alternative emails (only consider verified to reduce enumeration attacks)
         var alt = await db.UserAlternativeEmails.AsNoTracking()
-            .Where(a => a.Email == email && a.IsVerified)
+            .Where(a => a.NormalizedEmail == email && a.IsVerified)
             .Select(a => a.UserId)
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);

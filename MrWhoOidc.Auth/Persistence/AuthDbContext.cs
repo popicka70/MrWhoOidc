@@ -45,6 +45,24 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        NormalizeEmailFields();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        NormalizeEmailFields();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        NormalizeEmailFields();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(b =>
@@ -52,9 +70,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.Username).IsRequired().HasMaxLength(200);
             b.Property(x => x.Email).HasMaxLength(256);
+            b.Property(x => x.NormalizedEmail).HasMaxLength(256);
             b.Property(x => x.Name).HasMaxLength(200);
             b.HasIndex(x => x.Username).IsUnique();
-            b.HasIndex(x => x.Email).IsUnique();
+            b.HasIndex(x => x.NormalizedEmail).IsUnique();
             b.HasMany(x => x.AlternativeEmails)
                 .WithOne()
                 .HasForeignKey(x => x.UserId)
@@ -185,7 +204,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Email).IsRequired().HasMaxLength(256);
-            b.HasIndex(x => new { x.UserId, x.Email }).IsUnique();
+            b.Property(x => x.NormalizedEmail).IsRequired().HasMaxLength(256);
+            b.HasIndex(x => new { x.UserId, x.NormalizedEmail }).IsUnique();
+            b.HasIndex(x => x.NormalizedEmail).IsUnique();
         });
 
         // New: User-client assignment (optionally realm-bound)
@@ -269,12 +290,13 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Email).IsRequired().HasMaxLength(256);
+            b.Property(x => x.NormalizedEmail).IsRequired().HasMaxLength(256);
             b.Property(x => x.FirstName).HasMaxLength(100);
             b.Property(x => x.LastName).HasMaxLength(100);
             b.Property(x => x.PasswordHash).HasMaxLength(500);
             b.Property(x => x.State).IsRequired().HasMaxLength(20);
             b.Property(x => x.CreatedAt).IsRequired();
-            b.HasIndex(x => x.Email);
+            b.HasIndex(x => x.NormalizedEmail);
             b.HasOne<Client>()
                 .WithMany()
                 .HasForeignKey(x => x.ClientId)
@@ -470,6 +492,49 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.ExpiresAt);
         });
     }
+
+    void NormalizeEmailFields()
+    {
+        foreach (var entry in ChangeTracker.Entries<User>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                if (entry.State == EntityState.Added || entry.Property(nameof(User.Email)).IsModified)
+                {
+                    entry.Entity.Email = EmailNormalizer.FormatForStorage(entry.Entity.Email, required: false, out var normalized);
+                    entry.Entity.NormalizedEmail = normalized;
+                }
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<UserAlternativeEmail>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                if (entry.State == EntityState.Added || entry.Property(nameof(UserAlternativeEmail.Email)).IsModified)
+                {
+                    var formatted = EmailNormalizer.FormatForStorage(entry.Entity.Email, required: true, out var normalized)
+                        ?? throw new ValidationException("Alternative email normalization returned null.");
+                    entry.Entity.Email = formatted;
+                    entry.Entity.NormalizedEmail = normalized ?? string.Empty;
+                }
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<Registration>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                if (entry.State == EntityState.Added || entry.Property(nameof(Registration.Email)).IsModified)
+                {
+                    var formatted = EmailNormalizer.FormatForStorage(entry.Entity.Email, required: true, out var normalized)
+                        ?? throw new ValidationException("Registration email normalization returned null.");
+                    entry.Entity.Email = formatted;
+                    entry.Entity.NormalizedEmail = normalized ?? string.Empty;
+                }
+            }
+        }
+    }
 }
 
 public class User
@@ -482,6 +547,8 @@ public class User
     public string HashAlgorithm { get; set; } = "argon2id";
     [MaxLength(256)]
     public string? Email { get; set; }
+    [MaxLength(256)]
+    public string? NormalizedEmail { get; set; }
     public bool EmailVerified { get; set; }
     public DateTimeOffset? EmailVerifiedAt { get; set; }
     [MaxLength(200)]
@@ -622,6 +689,8 @@ public class UserAlternativeEmail
     public Guid UserId { get; set; }
     [MaxLength(256)]
     public string Email { get; set; } = string.Empty;
+    [MaxLength(256)]
+    public string NormalizedEmail { get; set; } = string.Empty;
     public bool IsVerified { get; set; }
     public DateTimeOffset? VerifiedAt { get; set; }
 }
@@ -753,6 +822,8 @@ public class Registration
     public Guid Id { get; set; } = Guid.NewGuid();
     [MaxLength(256)]
     public string Email { get; set; } = string.Empty; // mandatory
+    [MaxLength(256)]
+    public string NormalizedEmail { get; set; } = string.Empty;
     [MaxLength(100)]
     public string? FirstName { get; set; }
     [MaxLength(100)]

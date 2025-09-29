@@ -33,10 +33,16 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
             return Page();
         }
 
-        var email = Input.Email.Trim().ToLowerInvariant();
+        var email = Input.Email.Trim();
+        var normalized = EmailNormalizer.NormalizeForLookup(email);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            ModelState.AddModelError(nameof(Input.Email), "Invalid email address.");
+            return Page();
+        }
 
         // If user exists already, reject with a warning
-        var userExists = await db.Users.AsNoTracking().AnyAsync(u => u.Email == email);
+        var userExists = await db.Users.AsNoTracking().AnyAsync(u => u.NormalizedEmail == normalized);
         if (userExists)
         {
             ModelState.AddModelError(string.Empty, "A user with this email already exists. Registration rejected.");
@@ -44,7 +50,7 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         }
 
         // If there's already a pending registration for this email, skip creating a duplicate
-        var pending = await db.Set<Registration>().AsNoTracking().FirstOrDefaultAsync(r => r.Email == email && r.State == "pending");
+        var pending = await db.Set<Registration>().AsNoTracking().FirstOrDefaultAsync(r => r.NormalizedEmail == normalized && r.State == "pending");
         if (pending is not null)
         {
             InfoMessage = "A pending registration already exists for this email.";

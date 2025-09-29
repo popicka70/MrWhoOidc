@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography;
 using System.Text;
@@ -625,11 +626,38 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
             // Auto-provision new user when allowed
             if (allowAutoProvision)
             {
-                var username = !string.IsNullOrEmpty(userEmail) ? userEmail : $"{state.Provider}:{sub}";
-                var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username || (!string.IsNullOrEmpty(userEmail) && u.Email == userEmail), http.RequestAborted);
+                var baseUsername = !string.IsNullOrEmpty(userEmail) ? userEmail : $"{state.Provider}:{sub}";
+                var normalizedEmail = EmailNormalizer.NormalizeForLookup(userEmail);
+                var usernameCandidate = normalizedEmail ?? baseUsername;
+
+                var user = await db.Users.FirstOrDefaultAsync(
+                    u => u.Username == usernameCandidate || (normalizedEmail != null && u.NormalizedEmail == normalizedEmail),
+                    http.RequestAborted);
                 if (user is null)
                 {
-                    user = new User { Username = username, Email = userEmail, Name = userName ?? username, PasswordHash = string.Empty, HashAlgorithm = "external" };
+                    string? emailForUser = userEmail;
+                    if (!string.IsNullOrEmpty(userEmail))
+                    {
+                        try
+                        {
+                            emailForUser = EmailNormalizer.FormatForStorage(userEmail, required: true, out var normalizedFromFormat);
+                            normalizedEmail = normalizedFromFormat ?? normalizedEmail;
+                            usernameCandidate = normalizedEmail ?? usernameCandidate;
+                        }
+                        catch (ValidationException)
+                        {
+                            emailForUser = null;
+                        }
+                    }
+
+                    user = new User
+                    {
+                        Username = usernameCandidate,
+                        Email = emailForUser,
+                        Name = userName ?? (emailForUser ?? baseUsername),
+                        PasswordHash = string.Empty,
+                        HashAlgorithm = "external"
+                    };
                     db.Users.Add(user);
                     await db.SaveChangesAsync(http.RequestAborted);
                 }
@@ -807,11 +835,13 @@ public sealed class ExternalOidcHandler(AuthDbContext db, IHttpClientFactory htt
 
     private async Task<User?> FindUserByEmailAsync(string email, CancellationToken ct)
     {
-        email = email.Trim();
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+    var normalized = EmailNormalizer.NormalizeForLookup(email);
+    if (string.IsNullOrEmpty(normalized)) return null;
+
+    var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized, ct);
         if (user is not null) return user;
         // Alternative emails
-        var alt = await db.UserAlternativeEmails.AsNoTracking().FirstOrDefaultAsync(a => a.Email == email && a.IsVerified, ct);
+    var alt = await db.UserAlternativeEmails.AsNoTracking().FirstOrDefaultAsync(a => a.NormalizedEmail == normalized && a.IsVerified, ct);
         if (alt is not null)
         {
             return await db.Users.FirstOrDefaultAsync(u => u.Id == alt.UserId, ct);

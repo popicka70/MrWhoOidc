@@ -1,4 +1,4 @@
-# MrWhoOidc – User Management and OIDC Enhancements Backlog
+# MrWhoOidc ï¿½ User Management and OIDC Enhancements Backlog
 
 Status legend
 - [ ] Not started
@@ -10,10 +10,18 @@ Implement user management with primary/alternative emails, per-client user assig
 
 Note: Admin management UI now lives in `MrWhoOidc.WebAuth` (the OIDC server). Previous references to `MrWhoOidc.Web` for admin UI have been moved to `MrWhoOidc.WebAuth`.
 
+## Project health snapshot (2025-09-29)
+- Build: `dotnet build` succeeds on Windows with the current .NET 9 preview SDK.
+- Tests: `dotnet test` completes green (MrWhoOidc.UnitTests); coverage is strong for JWKS and token exchange but misses scope-enforcement and realm/role emission scenarios.
+- Key findings:
+  - Stored emails are not normalized before insert/update; only lookups lowercase input. Duplicate addresses with casing variants can slip past the unique index once moved to PostgreSQL.
+  - `AuthorizeService` enforces per-client scopes at runtime, yet no test exercises the rejection path when a disallowed scope is requested.
+  - `TokenService` unions realm/client role assignments when `roles` scope is granted, but there are no assertions ensuring role filters or `roles` scope gating remain intact.
+
 Milestones (suggested order)
 0 ? 1 ? 5/3/4 ? 6 ? 7 ? 8/9 ? 10/11 ? 12 ? 13/14
 
-Epic 0 – Baseline and decisions
+Epic 0 ï¿½ Baseline and decisions
 - Story 0.1: Document current OIDC stack and flows
   - AC:
     - [ ] Architecture doc created (projects, OpenIddict/Auth pipeline, Identity usage, DB schema)
@@ -21,7 +29,7 @@ Epic 0 – Baseline and decisions
     - [ ] Token and userinfo current shape captured
   - Target: `MrWhoOidc.Auth`
 
-Epic 1 – Data model and migrations
+Epic 1 ï¿½ Data model and migrations
 - Story 1.1: Add core entities and relationships
   - Entities:
     - Realm(Id, Name, Slug, IsActive)
@@ -39,12 +47,13 @@ Epic 1 – Data model and migrations
     - [x] Seeds: default realm, admin role, common scopes (openid, profile, email, offline_access, roles)
   - Target: `MrWhoOidc.Auth`
 
-Epic 2 – Identity model extensions
+Epic 2 ï¿½ Identity model extensions
 - Story 2.1: Extend user model with primary/alternative emails
   - AC:
     - [x] `ApplicationUser` has `PrimaryEmail`, `EmailVerifiedAt`
     - [x] Navigation and CRUD for alternative emails
-    - [~] Email normalization/validation in place
+    - [ ] Email normalization/validation in place
+      - 2025-09-29: Lookups lowercase user-supplied email, but inserts/updates persist raw casing; add normalization/validation at write-time plus database constraint (citext or normalized column) and cover with tests.
     - [x] Migration applied
   - Target: `MrWhoOidc.Auth`
 - Story 2.2: Email verification for all emails
@@ -54,7 +63,7 @@ Epic 2 – Identity model extensions
     - [ ] Status updates for primary/alternative emails
   - Target: `MrWhoOidc.Auth`, `MrWhoOidc.ApiService`, `MrWhoOidc.Web`
 
-Epic 3 – Client and scope management
+Epic 3 ï¿½ Client and scope management
 - Story 3.1: CRUD for scopes
   - AC:
     - [x] Create/update/delete/list scopes
@@ -70,9 +79,10 @@ Epic 3 – Client and scope management
   - AC:
     - [x] Authorization requests fail with invalid_scope when requesting disallowed scopes
     - [ ] Unit tests for scope enforcement
+      - Add regression tests in `AuthorizeServiceTests` to assert the ClientScope allow-list rejection path (disallowed scope, missing allow-list entry).
   - Target: `MrWhoOidc.Auth`
 
-Epic 4 – Role and realm management
+Epic 4 ï¿½ Role and realm management
 - Story 4.1: CRUD roles per realm
   - AC:
     - [~] Create/update/delete/list roles scoped to realm (UI in WebAuth)
@@ -84,7 +94,7 @@ Epic 4 – Role and realm management
     - [ ] Cannot delete realm in use
   - Target: `MrWhoOidc.WebAuth`
 
-Epic 5 – Assignments and enforcement
+Epic 5 ï¿½ Assignments and enforcement
 - Story 5.1: Assign users to clients (optionally per realm)
   - AC:
     - [x] UI to add/remove user-client (+realm) assignments
@@ -94,10 +104,11 @@ Epic 5 – Assignments and enforcement
   - AC:
     - [~] UI for assigning roles separately as realm-role and client-role (bulk ops TBD)
   - Target: `MrWhoOidc.WebAuth`
-- Story 5.3: Enforce “user can only log into assigned clients”
+- Story 5.3: Enforce ï¿½user can only log into assigned clientsï¿½
   - AC:
     - [x] During auth flow, requests for unassigned client (and realm, if applicable) are rejected consistently (pre-consent)
     - [ ] Tests for allowed vs disallowed login
+      - Cover `UserClientAssignment` gating in unit/integration tests (authorized vs unauthorized client/realm combos) to prevent regressions.
   - Target: `MrWhoOidc.Auth`
 - Story 5.4: Realm awareness in auth flow
   - AC:
@@ -105,7 +116,7 @@ Epic 5 – Assignments and enforcement
     - [~] Error states handled (realm inactive/unknown)
   - Target: `MrWhoOidc.Auth`, `MrWhoOidc.WebAuth`
 
-Epic 6 – Claims, tokens, and userinfo
+Epic 6 ï¿½ Claims, tokens, and userinfo
 - Story 6.1: Define supported scopes and claims
   - AC:
     - [x] Discovery document advertises `openid profile email offline_access roles`
@@ -116,6 +127,7 @@ Epic 6 – Claims, tokens, and userinfo
     - [~] Roles limited to current client+realm
     - [~] Claim `roles` issued only when scope granted (update TokenService to union realm-role and client-role assignments)
     - [ ] Unit tests
+      - Add coverage ensuring `TokenService` only emits roles when assignments exist and when the `roles` scope is present (JWT + opaque paths, realm vs client roles).
   - Target: `MrWhoOidc.Auth`
 - Story 6.3: Add emails to userinfo
   - AC:
@@ -127,7 +139,7 @@ Epic 6 – Claims, tokens, and userinfo
     - [x] `realm` claim added to tokens/userinfo reflecting active realm
   - Target: `MrWhoOidc.Auth`
 
-Epic 7 – Admin API / backend
+Epic 7 ï¿½ Admin API / backend
 - Story 7.1: Users CRUD + email management
 - Story 7.2: Clients CRUD + scope assignments
 - Story 7.3: Roles CRUD (per realm)
@@ -140,7 +152,7 @@ Epic 7 – Admin API / backend
     - [x] RBAC-protected admin UI (WebAuth `"admin"` policy)
   - Target: `MrWhoOidc.WebAuth` (UI-first; APIs optional)
 
-Epic 8 – Admin UI
+Epic 8 ï¿½ Admin UI
 - Story 8.1: Users pages (primary/alternate emails, verification, assignments)
 - Story 8.2: Clients pages (assign scopes; view users with access)
 - Story 8.3: Roles pages (per realm)
@@ -151,13 +163,13 @@ Epic 8 – Admin UI
     - [ ] Success/error toasts; guards against losing unsaved changes
   - Target: `MrWhoOidc.WebAuth`
 
-Epic 9 – Auth UI updates
+Epic 9 ï¿½ Auth UI updates
 - Story 9.1: Optional realm selection or display
   - AC:
     - [ ] If realm not inferable, allow selecting a realm; else show inferred realm; handle errors gracefully
   - Target: `MrWhoOidc.WebAuth`
 
-Epic 10 – Security, auditing, and policies
+Epic 10 ï¿½ Security, auditing, and policies
 - Story 10.1: Audit log
   - AC:
     - [ ] Persist who changed what (users, roles, assignments, scopes) with timestamps
@@ -172,14 +184,14 @@ Epic 10 – Security, auditing, and policies
     - [ ] Admin API endpoints (if exposed) protected by RBAC
   - Target: `MrWhoOidc.WebAuth`, `MrWhoOidc.ApiService`
 
-Epic 11 – Tests
+Epic 11 ï¿½ Tests
 - Story 11.1: Unit tests for handlers and claim issuance
 - Story 11.2: Integration tests for auth flows
   - AC:
     - [ ] End-to-end: user assigned vs not assigned; scope enforcement; role claims in userinfo/tokens; realm validation
   - Target: All server projects
 
-Epic 12 – Migrations, seeding, and data upgrade
+Epic 12 ï¿½ Migrations, seeding, and data upgrade
 - Story 12.1: Seed defaults
   - AC:
     - [x] Default realm, scopes, admin role, admin user; sample client with scopes
@@ -188,14 +200,14 @@ Epic 12 – Migrations, seeding, and data upgrade
     - [x] Attach existing users/clients to default realm; safe rollout plan
   - Target: `MrWhoOidc.Auth`
 
-Epic 13 – Observability and ops
+Epic 13 ï¿½ Observability and ops
 - Story 13.1: Structured logging and metrics
   - AC:
     - [ ] Logs around authorization decisions (no PII)
     - [ ] Metrics for rejected auths due to assignment/scope
   - Target: `MrWhoOidc.Auth`
 
-Epic 14 – Documentation
+Epic 14 ï¿½ Documentation
 - Story 14.1: Admin guide
   - AC:
     - [ ] How to create realms/roles/scopes, assign users; how roles appear in userinfo

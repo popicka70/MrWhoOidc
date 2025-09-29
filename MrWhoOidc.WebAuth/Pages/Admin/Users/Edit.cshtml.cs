@@ -54,10 +54,11 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
             entity.Username = newUsername;
         }
 
-        var newEmail = Input.Email?.Trim().ToLowerInvariant();
-        if (!string.Equals(entity.Email, newEmail, StringComparison.Ordinal))
+        var newEmail = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
+        var normalized = EmailNormalizer.NormalizeForLookup(newEmail);
+        if (!string.Equals(entity.NormalizedEmail, normalized, StringComparison.Ordinal))
         {
-            if (!string.IsNullOrEmpty(newEmail) && await db.Users.AnyAsync(u => u.Email == newEmail && u.Id != id))
+            if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.NormalizedEmail == normalized && u.Id != id))
             {
                 ModelState.AddModelError("Input.Email", "Email already exists.");
                 return Page();
@@ -67,7 +68,7 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
             entity.EmailVerifiedAt = null;
         }
 
-        entity.Name = Input.Name;
+        entity.Name = string.IsNullOrWhiteSpace(Input.Name) ? null : Input.Name.Trim();
         await db.SaveChangesAsync();
         SetHeading(entity.Username, entity.Name);
         return RedirectToPage("Index");
