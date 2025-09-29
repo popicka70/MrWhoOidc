@@ -60,6 +60,10 @@ Status legend
   - AC: [x] `IMrWhoOidcTokenClient` with methods for code exchange, refresh token, client credentials, token exchange (OBO); [x] Support DPoP proof attachment
 - Story 3.3: Token storage abstraction
   - AC: [ ] Optional interface for persisting refresh tokens securely (consumer-provided implementation); [ ] Provide in-memory sample implementation for quick starts
+- Story 3.4: On-behalf-of helpers
+  - AC: [ ] Extend options with downstream API registrations (audience/resource → scope mapping, cache hints); [ ] Provide `IMrWhoOnBehalfOfManager` that wraps token exchange using configured mappings; [ ] Supply delegating handler/extension to attach OBO access tokens to `HttpClient`
+- Story 3.5: Machine-to-machine token helpers
+  - AC: [ ] Add configuration model for service principals (client credentials) with default scopes/audiences; [ ] Provide `IMrWhoClientCredentialsManager` that caches M2M access tokens per registration; [ ] Offer HttpClient handler/extension that injects the cached M2M token for background services
 
 ## Epic 4 – Security & Hardening
 - Story 4.1: PKCE + DPoP enforcement defaults
