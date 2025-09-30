@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Client.Authorization;
@@ -15,7 +16,7 @@ public class LoginModel : PageModel
         _logger = logger;
     }
 
-    public async Task<IActionResult> OnGetAsync(string? returnUrl = null)
+    public async Task<IActionResult> OnGetAsync(string? returnUrl = null, string? mode = null)
     {
         returnUrl ??= Url.Content("~/");
         var callbackUrl = Url.Page("/Auth/Callback", pageHandler: null, values: new { returnUrl }, protocol: Request.Scheme, host: Request.Host.ToString());
@@ -25,7 +26,23 @@ public class LoginModel : PageModel
             return BadRequest("Callback URL could not be resolved.");
         }
 
-        var context = await _authorizationManager.BuildAuthorizeRequestAsync(new Uri(callbackUrl, UriKind.Absolute), cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
+        var useJarFlow = string.Equals(mode, "jar", StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(mode))
+        {
+            ViewData["AuthMode"] = mode;
+        }
+
+        var context = await _authorizationManager.BuildAuthorizeRequestAsync(
+            new Uri(callbackUrl, UriKind.Absolute),
+            options =>
+            {
+                if (useJarFlow)
+                {
+                    options.UseJar = true;
+                    options.UseJarm = true;
+                }
+            },
+            HttpContext.RequestAborted).ConfigureAwait(false);
 
         _logger.LogInformation("Redirecting to authorization server for state {State}", context.State);
         return Redirect(context.RequestUri.ToString());

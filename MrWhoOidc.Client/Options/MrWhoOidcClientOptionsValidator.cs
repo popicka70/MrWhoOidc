@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Client.Options;
@@ -119,6 +120,33 @@ internal sealed class MrWhoOidcClientOptionsValidator : IValidateOptions<MrWhoOi
             if (registration.Value.CacheLifetime is TimeSpan cacheLifetime && cacheLifetime <= TimeSpan.Zero)
             {
                 failures.Add($"Client credentials registration '{registration.Key}' CacheLifetime must be positive when specified.");
+            }
+        }
+
+        if (options.Jar.Enabled)
+        {
+            if (options.Jar.Lifetime <= TimeSpan.Zero)
+            {
+                failures.Add("Jar.Lifetime must be positive when enabled.");
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Jar.SigningAlgorithm))
+            {
+                failures.Add("Jar.SigningAlgorithm must be provided when JAR is enabled.");
+            }
+
+            if (options.Jar.SigningCredentialsResolver is null && string.IsNullOrWhiteSpace(options.ClientSecret))
+            {
+                failures.Add("Jar requires either ClientSecret or Jar.SigningCredentialsResolver to supply signing credentials.");
+            }
+        }
+
+        if (options.Jarm.Enabled)
+        {
+            if (!string.Equals(options.Jarm.ResponseMode, "query.jwt", StringComparison.Ordinal) &&
+                !string.Equals(options.Jarm.ResponseMode, "form_post.jwt", StringComparison.Ordinal))
+            {
+                failures.Add("Jarm.ResponseMode must be 'query.jwt' or 'form_post.jwt'.");
             }
         }
 

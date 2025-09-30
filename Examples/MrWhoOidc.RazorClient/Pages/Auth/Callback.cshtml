@@ -16,6 +16,10 @@ else
     {
         <p>@Model.ErrorDescription</p>
     }
+    @if (ViewData["ErrorUri"] is string errorUri && !string.IsNullOrEmpty(errorUri))
+    {
+        <p>More info: <a href="@errorUri" target="_blank" rel="noopener noreferrer">@errorUri</a></p>
+    }
     <p>
         <a asp-page="/Index">Return home</a>
     </p>

@@ -4,4 +4,15 @@
     ViewData["Title"] = "Sign in";
 }
 
-<p>Redirecting to MrWhoOidc for authentication...</p>
+@{
+    var mode = (ViewData["AuthMode"] as string) ?? string.Empty;
+}
+
+@if (string.Equals(mode, "jar", System.StringComparison.OrdinalIgnoreCase))
+{
+    <p>Redirecting to MrWhoOidc using a signed request object with JARM response...</p>
+}
+else
+{
+    <p>Redirecting to MrWhoOidc for authentication...</p>
+}

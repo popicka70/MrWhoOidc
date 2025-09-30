@@ -107,11 +107,11 @@ Status legend
 
 ## Epic 9 – JAR & JARM Enhancements
 - Story 9.1: Signed authorization requests (JAR)
-  - AC: [ ] Introduce request-object builder that creates and signs JWT payloads using configured client keys; [ ] Support both symmetric (client secret) and asymmetric signing with key rotation hooks; [ ] Add validator tests covering required claims and audience/nonce handling
+  - AC: [x] Introduce request-object builder that creates and signs JWT payloads using configured client keys; [x] Support both symmetric (client secret) and asymmetric signing with key rotation hooks; [x] Add validator tests covering required claims and audience/nonce handling
 - Story 9.2: JWT-secured authorization responses (JARM)
-  - AC: [ ] Extend callback processing to detect and validate JARM responses; [ ] Leverage JWKS cache for issuer response signing keys; [ ] Surface detailed error states when validation fails
+  - AC: [x] Extend callback processing to detect and validate JARM responses; [x] Leverage JWKS cache for issuer response signing keys; [x] Surface detailed error states when validation fails
 - Story 9.3: Documentation & samples for JAR/JARM
-  - AC: [ ] Update README/backlog docs with configuration walkthrough; [ ] Add Razor sample toggle showing JAR/JARM usage; [ ] Provide troubleshooting section for common validation errors
+  - AC: [x] Update README/backlog docs with configuration walkthrough; [x] Add Razor sample toggle showing JAR/JARM usage; [x] Provide troubleshooting section for common validation errors
 
 ---
 

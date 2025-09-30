@@ -83,4 +83,8 @@ public sealed class MrWhoOidcClientOptions
     /// Machine-to-machine client credentials registrations keyed by logical service name.
     /// </summary>
     public IDictionary<string, ClientCredentialsRegistration> ClientCredentials { get; } = new Dictionary<string, ClientCredentialsRegistration>(StringComparer.OrdinalIgnoreCase);
+
+    public JarOptions Jar { get; } = new();
+
+    public JarmOptions Jarm { get; } = new();
 }

@@ -34,8 +34,11 @@
 {
     <section>
         <h2>You are not signed in</h2>
-        <p>Use the button below to start an authorization code flow with PKCE.</p>
-        <a class="cta" asp-page="/Auth/Login" asp-route-returnUrl="/">Sign in with MrWhoOidc</a>
+        <p>Pick a flow to start an authorization code exchange. The JAR/JARM variant signs the request object and expects a JWT-wrapped authorization response.</p>
+        <div class="cta-group">
+            <a class="cta" asp-page="/Auth/Login" asp-route-returnUrl="/">Standard sign-in</a>
+            <a class="cta secondary" asp-page="/Auth/Login" asp-route-returnUrl="/" asp-route-mode="jar">Sign in (JAR + JARM)</a>
+        </div>
     </section>
 }
 else

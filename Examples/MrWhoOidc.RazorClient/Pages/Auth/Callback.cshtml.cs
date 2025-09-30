@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Client.Authorization;
 using MrWhoOidc.Client.Tokens;
 
@@ -26,7 +27,7 @@ public class CallbackModel : PageModel
     public string? Error { get; private set; }
     public string? ErrorDescription { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(string state, string? code = null, string? error = null, string? error_description = null, string? returnUrl = null)
+    public async Task<IActionResult> OnGetAsync(string state, string? code = null, string? error = null, string? error_description = null, string? response = null, string? returnUrl = null)
     {
         returnUrl ??= Url.Content("~/");
 
@@ -37,12 +38,25 @@ public class CallbackModel : PageModel
             return Page();
         }
 
-        var validation = await _authorizationManager.ValidateCallbackAsync(state, code, error, HttpContext.RequestAborted).ConfigureAwait(false);
+        var validation = await _authorizationManager.ValidateCallbackAsync(state, code, error, response, HttpContext.RequestAborted).ConfigureAwait(false);
         if (validation.IsError)
         {
             Error = validation.Error ?? error;
             ErrorDescription = validation.ErrorDescription ?? error_description;
+            if (!string.IsNullOrEmpty(validation.ErrorUri))
+            {
+                ViewData["ErrorUri"] = validation.ErrorUri;
+            }
+            if (validation.IsJarmResponse && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Received JARM error response: {Jwt}", validation.ResponseJwt);
+            }
             return Page();
+        }
+
+        if (validation.IsJarmResponse && _logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Validated JARM success response: {Jwt}", validation.ResponseJwt);
         }
 
         if (string.IsNullOrEmpty(validation.Code))
