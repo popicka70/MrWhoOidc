@@ -1,0 +1,69 @@
+services:
+  webauth:
+    build:
+      context: .
+      dockerfile: MrWhoOidc.WebAuth/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: https://+:8443
+      ASPNETCORE_HTTPS_PORTS: 8443
+      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
+      ConnectionStrings__redis: redis:6379,abortConnect=false
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./certs:/https:ro
+    restart: unless-stopped
+    networks:
+      - internal
+      - edge
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: oidc
+      POSTGRES_PASSWORD: oidcPass!
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  redis:
+    image: redis:7.2-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  edge:
+    driver: bridge
