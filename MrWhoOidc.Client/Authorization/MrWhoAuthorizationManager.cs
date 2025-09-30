@@ -389,18 +389,71 @@ internal sealed class MrWhoAuthorizationManager : IMrWhoAuthorizationManager
 
         if (!string.IsNullOrEmpty(opts.ClientSecret))
         {
-            var bytes = Encoding.UTF8.GetBytes(opts.ClientSecret);
-            var key = new SymmetricSecurityKey(bytes)
-            {
-                KeyId = opts.Jar.SigningKeyId
-            };
             var algorithm = string.IsNullOrEmpty(opts.Jar.SigningAlgorithm)
                 ? SecurityAlgorithms.HmacSha256
                 : opts.Jar.SigningAlgorithm;
+
+            var keyBytes = Encoding.UTF8.GetBytes(opts.ClientSecret);
+            var requiredLength = GetMinimumSymmetricKeySizeInBytes(algorithm);
+
+            if (keyBytes.Length < requiredLength)
+            {
+                keyBytes = DeriveSymmetricKeyMaterial(keyBytes, algorithm, requiredLength);
+            }
+
+            var key = new SymmetricSecurityKey(keyBytes)
+            {
+                KeyId = opts.Jar.SigningKeyId
+            };
+
             return new SigningCredentials(key, algorithm);
         }
 
         throw new InvalidOperationException("JAR is enabled but no signing credentials are configured. Provide Jar.SigningCredentialsResolver or ClientSecret.");
+    }
+
+    private static int GetMinimumSymmetricKeySizeInBytes(string algorithm) => algorithm switch
+    {
+        SecurityAlgorithms.HmacSha512 => 64,
+        SecurityAlgorithms.HmacSha384 => 48,
+        SecurityAlgorithms.HmacSha256 => 32,
+        SecurityAlgorithms.HmacSha256Signature => 32,
+        SecurityAlgorithms.HmacSha384Signature => 48,
+        SecurityAlgorithms.HmacSha512Signature => 64,
+        _ => 16
+    };
+
+    private static byte[] DeriveSymmetricKeyMaterial(byte[] secretBytes, string algorithm, int requiredLength)
+    {
+        // Derive deterministic key material with a hash sized for the requested HMAC algorithm
+        byte[] derived = algorithm switch
+        {
+            SecurityAlgorithms.HmacSha512 or SecurityAlgorithms.HmacSha512Signature => SHA512.HashData(secretBytes),
+            SecurityAlgorithms.HmacSha384 or SecurityAlgorithms.HmacSha384Signature => SHA384.HashData(secretBytes),
+            _ => SHA256.HashData(secretBytes)
+        };
+
+        if (derived.Length == requiredLength)
+        {
+            return derived;
+        }
+
+        if (derived.Length > requiredLength)
+        {
+            return derived.AsSpan(0, requiredLength).ToArray();
+        }
+
+        var expanded = new byte[requiredLength];
+        var offset = 0;
+        while (offset < requiredLength)
+        {
+            var remaining = requiredLength - offset;
+            var toCopy = Math.Min(derived.Length, remaining);
+            Buffer.BlockCopy(derived, 0, expanded, offset, toCopy);
+            offset += toCopy;
+        }
+
+        return expanded;
     }
 
     private TokenValidationParameters CreateJarmValidationParameters(MrWhoOidcClientOptions opts, JsonWebKeySet jwks)
