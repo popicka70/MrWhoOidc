@@ -16,6 +16,9 @@ public sealed class MrWhoDiscoveryDocument
     [JsonPropertyName("userinfo_endpoint")]
     public string? UserInfoEndpoint { get; init; }
 
+    [JsonPropertyName("end_session_endpoint")]
+    public string? EndSessionEndpoint { get; init; }
+
     [JsonPropertyName("jwks_uri")]
     public string? JwksUri { get; init; }
 

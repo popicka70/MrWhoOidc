@@ -15,6 +15,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Infrastructure;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
+using MrWhoOidc.Auth.Utils; // added
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -208,15 +209,38 @@ public sealed class LogoutHandler(AuthDbContext db,
         // Validate post_logout_redirect_uri against allow-list if a client parameter is present
         var clientId = http.Request.Query["client_id"].ToString();
         string? refId = null; // opaque reference id to be used on final redirect endpoint
+
+        if (!string.IsNullOrEmpty(postLogout) && string.IsNullOrEmpty(clientId))
+        {
+            var host = TryGetHost(postLogout);
+            audit.Emit("logout.redirect.rejected_missing_client", new { post_logout_host = host, post_logout_hash = audit.HashValue(postLogout) });
+            metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_missing_client"));
+            logger.LogWarning("Rejecting post_logout_redirect_uri without client_id. host={Host}", host ?? "unknown");
+        }
+
         if (!string.IsNullOrEmpty(postLogout) && !string.IsNullOrEmpty(clientId))
         {
             var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId);
-            if (client is not null && !string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
+            if (client is null)
+            {
+                var host = TryGetHost(postLogout);
+                audit.Emit("logout.redirect.rejected_client_not_found", new { client_id = clientId, post_logout_host = host, post_logout_hash = audit.HashValue(postLogout) });
+                metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "client_not_found"));
+                logger.LogWarning("Rejecting post_logout_redirect_uri because client {ClientId} was not found. host={Host}", clientId, host ?? "unknown");
+            }
+            else if (string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
+            {
+                var host = TryGetHost(postLogout);
+                audit.Emit("logout.redirect.rejected_missing_allowlist", new { client_id = clientId, post_logout_host = host, post_logout_hash = audit.HashValue(postLogout) });
+                metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "no_allow_list"));
+                logger.LogInformation("Rejecting post_logout_redirect_uri for client {ClientId}: no allowed logout URIs configured. host={Host}", clientId, host ?? "unknown");
+            }
+            else
             {
                 try
                 {
                     var allowed = JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson!) ?? Array.Empty<string>();
-                    if (allowed.Contains(postLogout, StringComparer.Ordinal))
+                    if (UrlComparison.IsAllowed(postLogout, allowed))
                     {
                         // Create opaque reference (stateful) stored server-side instead of exposing external URL directly
                         var idBytes = RandomNumberGenerator.GetBytes(16); // 128-bit
@@ -236,8 +260,21 @@ public sealed class LogoutHandler(AuthDbContext db,
                         refId = id;
                         audit.Emit("logout.redirect.ref.created", new { client_id = clientId, has_state = !string.IsNullOrEmpty(state) });
                     }
+                    else
+                    {
+                        var host = TryGetHost(postLogout);
+                        audit.Emit("logout.redirect.rejected_not_allowed", new { client_id = clientId, post_logout_host = host, post_logout_hash = audit.HashValue(postLogout) });
+                        metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_not_allowed"));
+                        logger.LogInformation("Rejecting post_logout_redirect_uri for client {ClientId}: value not on allow list. host={Host}", clientId, host ?? "unknown");
+                    }
                 }
-                catch { /* ignore parse failure => treat as not allowed */ }
+                catch (JsonException ex)
+                {
+                    var host = TryGetHost(postLogout);
+                    audit.Emit("logout.redirect.rejected_invalid_allowlist", new { client_id = clientId, post_logout_host = host, post_logout_hash = audit.HashValue(postLogout) });
+                    metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "invalid_allow_list"));
+                    logger.LogWarning(ex, "Rejecting post_logout_redirect_uri for client {ClientId}: allow list JSON malformed. host={Host}", clientId, host ?? "unknown");
+                }
             }
         }
 
@@ -336,4 +373,14 @@ public sealed class LogoutHandler(AuthDbContext db,
         => (http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions)?.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
 
     // Sid extraction now uses JwtLightParser.
+
+    private static string? TryGetHost(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            return null;
+        }
+
+        return Uri.TryCreate(uri, UriKind.Absolute, out var parsed) ? parsed.Host : null;
+    }
 }

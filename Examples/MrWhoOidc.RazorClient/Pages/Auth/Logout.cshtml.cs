@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Client.Logout;
 using MrWhoOidc.Client.Options;
 
 namespace MrWhoOidc.RazorClient.Pages.Auth;
@@ -14,11 +13,13 @@ public class LogoutModel : PageModel
 {
     private readonly IOptionsMonitor<MrWhoOidcClientOptions> _options;
     private readonly ILogger<LogoutModel> _logger;
+    private readonly IMrWhoLogoutManager _logoutManager;
 
-    public LogoutModel(IOptionsMonitor<MrWhoOidcClientOptions> options, ILogger<LogoutModel> logger)
+    public LogoutModel(IOptionsMonitor<MrWhoOidcClientOptions> options, ILogger<LogoutModel> logger, IMrWhoLogoutManager logoutManager)
     {
         _options = options;
         _logger = logger;
+        _logoutManager = logoutManager;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -56,48 +57,21 @@ public class LogoutModel : PageModel
     {
         try
         {
-            var opts = _options.CurrentValue;
-            if (string.IsNullOrWhiteSpace(opts.Issuer) || string.IsNullOrWhiteSpace(opts.ClientId))
-            {
-                _logger.LogWarning("Federated logout not available due to missing issuer or client identifier.");
-                return null;
-            }
+            var idToken = await HttpContext.GetTokenAsync("id_token").ConfigureAwait(false);
+            var sid = User?.FindFirst("sid")?.Value;
+            var absoluteReturn = new Uri($"{Request.Scheme}://{Request.Host}{returnUrl}");
 
-            if (!Uri.TryCreate(opts.Issuer, UriKind.Absolute, out var issuer))
+            var options = new FrontChannelLogoutOptions
             {
-                _logger.LogWarning("Federated logout not available because issuer '{Issuer}' is not a valid absolute URI.", opts.Issuer);
-                return null;
-            }
-
-            var authority = issuer.GetLeftPart(UriPartial.Authority) + issuer.AbsolutePath.TrimEnd('/');
-            if (!authority.EndsWith("/", StringComparison.Ordinal))
-            {
-                authority += "/";
-            }
-
-            var logoutEndpoint = authority + "logout";
-            var absoluteReturn = $"{Request.Scheme}://{Request.Host}{returnUrl}";
-
-            var query = new Dictionary<string, string?>
-            {
-                ["returnUrl"] = returnUrl,
-                ["client_id"] = opts.ClientId,
-                ["post_logout_redirect_uri"] = absoluteReturn
+                PostLogoutRedirectUri = absoluteReturn,
+                IdTokenHint = string.IsNullOrEmpty(idToken) ? null : idToken,
+                Sid = sid
             };
 
-            var idToken = await HttpContext.GetTokenAsync("id_token").ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(idToken))
-            {
-                query["id_token_hint"] = idToken;
-            }
+            options.AdditionalParameters["returnUrl"] = returnUrl;
 
-            var sid = User?.FindFirst("sid")?.Value;
-            if (!string.IsNullOrEmpty(sid))
-            {
-                query["sid"] = sid;
-            }
-
-            return QueryHelpers.AddQueryString(logoutEndpoint, query);
+            var request = await _logoutManager.BuildFrontChannelLogoutAsync(options).ConfigureAwait(false);
+            return request.LogoutUri.ToString();
         }
         catch (Exception ex)
         {
@@ -110,6 +84,11 @@ public class LogoutModel : PageModel
     {
         var opts = _options.CurrentValue;
         if (User?.Identity?.IsAuthenticated != true)
+        {
+            return false;
+        }
+
+        if (!opts.Logout.EnableFrontChannel)
         {
             return false;
         }

@@ -7,6 +7,7 @@ Client SDK for integrating .NET applications with the MrWhoOidc authorization se
 - JWKS cache utilities ready for token validation scenarios.
 - Token client supporting authorization code, client credentials, refresh tokens, token exchange, and JARM validation.
 - Authorization helper capable of emitting JAR request objects (signed with client secret or custom credentials).
+- Logout manager that builds front-channel logout URLs and validates back-channel logout tokens (with replay protection).
 - Optional PKCE builder, state/nonce helpers, and DPoP proof generation hooks.
 
 ## Getting started
@@ -35,9 +36,53 @@ var app = builder.Build();
 	"Jarm": {
 		"Enabled": true,
 		"ResponseMode": "query.jwt"
+		},
+		"Logout": {
+			"EnableBackchannel": true,
+			"BackchannelReplayCacheDuration": "00:05:00"
 	}
 }
 ```
+
+	### Front-channel logout helper
+
+	```csharp
+	public class LogoutController(IMrWhoLogoutManager logoutManager)
+	{
+		[HttpGet("/signout")] 
+		public async Task<IActionResult> SignOutAsync([FromQuery] string? returnUrl)
+		{
+			var callback = new Uri("https://app.example.com/signed-out");
+			var request = await logoutManager.BuildFrontChannelLogoutAsync(new FrontChannelLogoutOptions
+			{
+				PostLogoutRedirectUri = callback,
+				IdTokenHint = await HttpContext.GetTokenAsync("id_token"),
+				Sid = User.FindFirst("sid")?.Value
+			});
+
+			await HttpContext.SignOutAsync();
+			return Redirect(request.LogoutUri.ToString());
+		}
+	}
+	```
+
+	### Back-channel logout validation
+
+	```csharp
+	[HttpPost("/backchannel-logout")]
+	public async Task<IActionResult> ReceiveLogoutAsync([FromForm(Name = "logout_token")] string logoutToken,
+		IMrWhoLogoutManager logoutManager, IDistributedCache replayCache)
+	{
+		var result = await logoutManager.ValidateBackchannelLogoutAsync(logoutToken);
+		if (!result.Success)
+		{
+			return BadRequest(result.Error);
+		}
+
+		await _sessionStore.RevokeBySidAsync(result.Sid);
+		return Ok();
+	}
+	```
 
 ### Troubleshooting JAR/JARM
 

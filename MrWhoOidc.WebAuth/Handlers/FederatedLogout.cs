@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using MrWhoOidc.WebAuth.Observability;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Utils; // added
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -98,17 +99,7 @@ internal sealed class UpstreamLogoutService : IUpstreamLogoutService
                     try
                     {
                         var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>();
-                        var normExternal = externalPostLogout.Trim();
-                        var normExternalNoSlash = normExternal.TrimEnd('/');
-                        bool IsMatch(string? candidateRaw)
-                        {
-                            if (string.IsNullOrWhiteSpace(candidateRaw)) return false;
-                            var cand = candidateRaw.Trim();
-                            if (string.Equals(cand, normExternal, StringComparison.OrdinalIgnoreCase)) return true;
-                            var candNoSlash = cand.TrimEnd('/');
-                            return string.Equals(candNoSlash, normExternalNoSlash, StringComparison.OrdinalIgnoreCase);
-                        }
-                        if (allowedRaw.Any(IsMatch))
+                        if (UrlComparison.IsAllowed(externalPostLogout, allowedRaw))
                         {
                             var idBytes = RandomNumberGenerator.GetBytes(16);
                             var id = Base64UrlEncoder.Encode(idBytes);

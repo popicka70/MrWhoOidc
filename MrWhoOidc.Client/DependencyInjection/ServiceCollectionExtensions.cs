@@ -11,6 +11,7 @@ using MrWhoOidc.Client.Authorization;
 using MrWhoOidc.Client.Discovery;
 using MrWhoOidc.Client.Http;
 using MrWhoOidc.Client.Jwks;
+using MrWhoOidc.Client.Logout;
 using MrWhoOidc.Client.Options;
 using MrWhoOidc.Client.Tokens;
 using MrWhoOidc.Security;
@@ -53,6 +54,7 @@ public static class ServiceCollectionExtensions
     services.TryAddSingleton<IMrWhoAuthorizationManager, MrWhoAuthorizationManager>();
     services.TryAddSingleton<IMrWhoOnBehalfOfManager, MrWhoOnBehalfOfManager>();
     services.TryAddSingleton<IMrWhoClientCredentialsManager, MrWhoClientCredentialsManager>();
+    services.TryAddSingleton<IMrWhoLogoutManager, MrWhoLogoutManager>();
 
         var httpClientBuilder = services.AddHttpClient(MrWhoOidcClientDefaults.DefaultHttpClientName);
         httpClientBuilder.AddStandardResilienceHandler();

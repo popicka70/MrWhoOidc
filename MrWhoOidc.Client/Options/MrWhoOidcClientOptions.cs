@@ -87,4 +87,6 @@ public sealed class MrWhoOidcClientOptions
     public JarOptions Jar { get; } = new();
 
     public JarmOptions Jarm { get; } = new();
+
+    public LogoutClientOptions Logout { get; } = new();
 }

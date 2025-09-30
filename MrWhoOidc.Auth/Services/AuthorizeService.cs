@@ -2,6 +2,7 @@ using System.Text.Json;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -27,32 +28,24 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         if (string.IsNullOrWhiteSpace(request.redirect_uri))
             return Error("invalid_request", "Missing redirect_uri");
 
-        if (!IsValidAbsoluteUri(request.redirect_uri))
+        if (!UrlComparison.IsValidAbsolute(request.redirect_uri))
             return Error("invalid_request", "redirect_uri must be absolute");
 
-        // Prepare normalized redirect (strip query + fragment, normalize scheme/host casing, trim trailing slash except root)
-        var requestedRedirectNormalized = NormalizeRedirectForComparison(request.redirect_uri);
+        // Normalized value for comparison (query + fragment removed, path normalized)
+        var requestedRedirectNormalized = UrlComparison.NormalizeForAllowList(request.redirect_uri);
 
-        // Enforce per-client login redirect allow-list when configured (comparison uses normalized form without query)
+        // Enforce per-client login redirect allow-list when configured
         if (!string.IsNullOrWhiteSpace(client.AllowedLoginRedirectUrisJson))
         {
             try
             {
                 var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
-                if (allowedRaw.Length > 0)
+                if (allowedRaw.Length > 0 && !UrlComparison.IsAllowed(request.redirect_uri, allowedRaw))
                 {
-                    var allowedNormalized = new HashSet<string>(allowedRaw
-                        .Where(a => !string.IsNullOrWhiteSpace(a) && IsValidAbsoluteUri(a))
-                        .Select(NormalizeRedirectForComparison), StringComparer.Ordinal);
-
-                    if (!allowedNormalized.Contains(requestedRedirectNormalized))
-                        return Error("invalid_request", "redirect_uri is not allowed for this client");
+                    return Error("invalid_request", "redirect_uri is not allowed for this client");
                 }
             }
-            catch
-            {
-                // If parsing fails, behave as if no allow-list was set to avoid blocking all clients unintentionally
-            }
+            catch { /* ignore parse errors */ }
         }
 
         if (client.RequirePkce)
@@ -85,7 +78,7 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
-        if (!string.IsNullOrEmpty(request.resource) && !IsValidAbsoluteUri(request.resource))
+        if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
             return Error("invalid_target", "resource must be an absolute URI");
 
         // response_mode (optional): support default (null), query.jwt, form_post.jwt
@@ -103,7 +96,7 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         {
             IsValid = true,
             ClientId = client.ClientId,
-            RedirectUri = request.redirect_uri, // keep original (with query) for downstream use
+            RedirectUri = request.redirect_uri, // keep original (with query)
             Scopes = scopes,
             Nonce = request.nonce,
             CodeChallenge = request.code_challenge,
@@ -112,22 +105,6 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
             Resource = request.resource,
             ResponseMode = responseMode
         };
-    }
-
-    static bool IsValidAbsoluteUri(string uri)
-        => Uri.TryCreate(uri, UriKind.Absolute, out _);
-
-    // Normalization used only for allow-list comparison
-    static string NormalizeRedirectForComparison(string uri)
-    {
-        if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return uri; // fallback to raw
-        var scheme = u.Scheme.ToLowerInvariant();
-        var host = u.Host.ToLowerInvariant();
-        var portPart = u.IsDefaultPort ? string.Empty : $":{u.Port}";
-        var path = string.IsNullOrEmpty(u.AbsolutePath) ? "/" : u.AbsolutePath;
-        if (!path.StartsWith('/')) path = "/" + path; // ensure leading slash
-        if (path.Length > 1 && path.EndsWith('/')) path = path.TrimEnd('/'); // trim trailing slash except root
-        return scheme + "://" + host + portPart + path; // query + fragment intentionally excluded
     }
 
     static AuthorizeValidationResult Error(string code, string description) => new()
