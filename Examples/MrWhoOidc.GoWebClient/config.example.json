@@ -1,0 +1,23 @@
+{
+  "issuer": "https://localhost:7208",
+  "client_id": "mrwho-go-web",
+  "client_secret": "",
+  "redirect_url": "http://localhost:5080/callback",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "api.read"
+  ],
+  "use_pkce": true,
+  "listen_addr": ":5080",
+  "api_base_url": "https://localhost:7149",
+  "obo": {
+    "client_id": "mrwho-go-obo",
+    "client_secret": "SET-ME",
+    "scope": "api.read",
+    "audience": "api",
+    "cache_lifetime": "5m"
+  }
+}

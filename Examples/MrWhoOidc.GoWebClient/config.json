@@ -1,0 +1,23 @@
+{
+  "issuer": "https://localhost:7208",
+  "client_id": "blazor-web",
+  "client_secret": "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG",
+  "redirect_url": "http://localhost:5080/callback",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "api.read"
+  ],
+  "use_pkce": true,
+  "listen_addr": ":5080",
+  "api_base_url": "https://localhost:7149",
+  "obo": {
+    "client_id": "blazor-web",
+    "client_secret": "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG",
+    "scope": "api.read",
+    "audience": "api",
+    "cache_lifetime": "5m"
+  }
+}
