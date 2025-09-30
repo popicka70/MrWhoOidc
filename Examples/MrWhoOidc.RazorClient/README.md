@@ -18,6 +18,7 @@ This Razor Pages sample shows how to authenticate an interactive web application
     ```
 
 3. Navigate to `https://localhost:5003` and choose **Sign in with MrWhoOidc**. You should be redirected to the MrWhoOidc login page and, after authenticating, back to the sample where issued tokens and claims are displayed.
+4. Visit the **Secure** page to trigger an on-behalf-of exchange. The page uses a typed `HttpClient` with `AddMrWhoOnBehalfOfTokenHandler` to call the sample API (`MrWhoOidc.TestApi`) and renders the returned subject/actor data.
 
 ## How it works
 
@@ -25,5 +26,6 @@ This Razor Pages sample shows how to authenticate an interactive web application
 - The `/Auth/Login` page uses `IMrWhoAuthorizationManager` to produce an authorization request with PKCE and caches the verifier in-memory.
 - `/Auth/Callback` exchanges the authorization code through `IMrWhoTokenClient`, validates the nonce, and signs the user into a local cookie.
 - The home page reads cached discovery metadata and displays the stored tokens/claims to prove the flow succeeded.
+- The secure page injects `TestApiClient`, which relies on the `IMrWhoOnBehalfOfManager` helper to exchange the signed-in user's access token for one targeted at the downstream API. The resulting access token is attached automatically to the outgoing HTTP request.
 
 Adjust the configuration in `appsettings.json` if you register a different client or change the issuer URL.

@@ -61,9 +61,9 @@ Status legend
 - Story 3.3: Token storage abstraction
   - AC: [ ] Optional interface for persisting refresh tokens securely (consumer-provided implementation); [ ] Provide in-memory sample implementation for quick starts
 - Story 3.4: On-behalf-of helpers
-  - AC: [ ] Extend options with downstream API registrations (audience/resource → scope mapping, cache hints); [ ] Provide `IMrWhoOnBehalfOfManager` that wraps token exchange using configured mappings; [ ] Supply delegating handler/extension to attach OBO access tokens to `HttpClient`
+  - AC: [x] Extend options with downstream API registrations (audience/resource → scope mapping, cache hints); [x] Provide `IMrWhoOnBehalfOfManager` that wraps token exchange using configured mappings; [x] Supply delegating handler/extension to attach OBO access tokens to `HttpClient`
 - Story 3.5: Machine-to-machine token helpers
-  - AC: [ ] Add configuration model for service principals (client credentials) with default scopes/audiences; [ ] Provide `IMrWhoClientCredentialsManager` that caches M2M access tokens per registration; [ ] Offer HttpClient handler/extension that injects the cached M2M token for background services
+  - AC: [x] Add configuration model for service principals (client credentials) with default scopes/audiences; [x] Provide `IMrWhoClientCredentialsManager` that caches M2M access tokens per registration; [x] Offer HttpClient handler/extension that injects the cached M2M token for background services
 
 ## Epic 4 – Security & Hardening
 - Story 4.1: PKCE + DPoP enforcement defaults
@@ -85,7 +85,7 @@ Status legend
 - Story 6.1: Unit tests
   - AC: [x] Coverage for options validation, discovery caching, token client error handling; [x] Use MSTest to match repo
 - Story 6.2: Integration samples
-  - AC: [ ] Minimal console app using client credentials; [x] ASP.NET Core web app sample performing auth code flow; [~] Both reference package
+  - AC: [ ] Minimal console app using client credentials; [x] ASP.NET Core web app sample performing auth code flow; [x] Web API sample validating OBO tokens with `MrWhoOidc.Client`
 - Story 6.3: Automated smoke tests
   - AC: [ ] Pipeline job running samples against local AppHost (Aspire); [ ] Validate token acquisition & userinfo call succeeds
 

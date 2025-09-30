@@ -16,10 +16,18 @@ builder.AddProject<Projects.MrWhoOidc_Web>("webfrontend")
     .WithReference(apiService)
     .WaitFor(apiService);
 
-builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
+var webAuth = builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
     .WaitFor(authDb);
 
-builder.AddProject<Projects.MrWhoOidc_RazorClient>("razorclient");
+var examplesApi = builder.AddProject<Projects.MrWhoOidc_TestApi>("examples-testapi")
+    .WithExternalHttpEndpoints()
+    .WithHttpHealthCheck("/health")
+    .WaitFor(webAuth);
+
+builder.AddProject<Projects.MrWhoOidc_RazorClient>("razorclient")
+    .WithReference(examplesApi)
+    .WaitFor(examplesApi)
+    .WaitFor(webAuth);
 
 builder.Build().Run();
