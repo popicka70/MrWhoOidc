@@ -30,7 +30,7 @@ public sealed class TokenExchangeIntegrationTests
 
     private sealed record TestHostBundle(IHost Host, string ClientId, string ClientSecret, Guid UserId);
 
-    private static async Task<TestHostBundle> CreateHostAsync(Action<Client>? configureClient = null, Action<AuthOptions>? configureOptions = null)
+    private static async Task<TestHostBundle> CreateHostAsync(Action<ClientEntity>? configureClient = null, Action<AuthOptions>? configureOptions = null)
     {
         var dbName = "te-integ-" + Guid.NewGuid().ToString("N");
         var clientId = "app1";
@@ -79,7 +79,7 @@ public sealed class TokenExchangeIntegrationTests
                         var hasher = new Argon2PasswordHasher();
                         var realm = new Realm { Name = "default" };
                         db.Realms.Add(realm);
-                        var client = new Client
+                        var client = new ClientEntity
                         {
                             ClientId = clientId,
                             ClientName = "App1",

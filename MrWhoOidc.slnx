@@ -8,9 +8,12 @@
   <Project Path="MrWhoOidc.ApiService/MrWhoOidc.ApiService.csproj" />
   <Project Path="MrWhoOidc.AppHost/MrWhoOidc.AppHost.csproj" />
   <Project Path="MrWhoOidc.Auth/MrWhoOidc.Auth.csproj" />
+  <Project Path="MrWhoOidc.Client/MrWhoOidc.Client.csproj" Id="e7e5fba1-f81b-4ab8-a56d-1079e8fa61ff" />
   <Project Path="MrWhoOidc.Security/MrWhoOidc.Security.csproj" />
   <Project Path="MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj" />
   <Project Path="MrWhoOidc.UnitTests/MrWhoOidc.UnitTests.csproj" Id="4329f1b0-f23a-43e8-aaeb-d88cf2c00793" />
   <Project Path="MrWhoOidc.Web/MrWhoOidc.Web.csproj" />
   <Project Path="MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" />
+  <Project Path="Examples/MrWhoOidc.RazorClient/MrWhoOidc.RazorClient.csproj" />
+  <Project Path="Examples/MrWhoOidc.TestApi/MrWhoOidc.TestApi.csproj" />
 </Solution>

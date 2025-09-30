@@ -1,0 +1,70 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<section>
+    <h1>MrWhoOidc Razor Client</h1>
+    <p>This Razor Pages sample demonstrates how to authenticate against <code>MrWhoOidc.WebAuth</code> using the <code>MrWhoOidc.Client</code> NuGet package.</p>
+</section>
+
+<section>
+    <h2>Discovery snapshot</h2>
+    @if (Model.Discovery is null)
+    {
+        <p>Discovery metadata could not be loaded. Check network connectivity.</p>
+    }
+    else
+    {
+        <dl class="discovery">
+            <dt>Issuer</dt>
+            <dd>@Model.Discovery.Issuer</dd>
+            <dt>Authorization endpoint</dt>
+            <dd>@Model.Discovery.AuthorizationEndpoint</dd>
+            <dt>Token endpoint</dt>
+            <dd>@Model.Discovery.TokenEndpoint</dd>
+            <dt>JWKS URI</dt>
+            <dd>@Model.Discovery.JwksUri</dd>
+        </dl>
+    }
+</section>
+
+@if (!Model.IsAuthenticated)
+{
+    <section>
+        <h2>You are not signed in</h2>
+        <p>Pick a flow to start an authorization code exchange. The JAR/JARM variant signs the request object and expects a JWT-wrapped authorization response.</p>
+        <div class="cta-group">
+            <a class="cta" asp-page="/Auth/Login" asp-route-returnUrl="/">Standard sign-in</a>
+            <a class="cta secondary" asp-page="/Auth/Login" asp-route-returnUrl="/" asp-route-mode="jar">Sign in (JAR + JARM)</a>
+        </div>
+    </section>
+}
+else
+{
+    <section>
+        <h2>Authenticated user</h2>
+        <p>Welcome, <strong>@Model.UserName</strong>.</p>
+
+        <h3>Tokens</h3>
+        @if (Model.Tokens.Count == 0)
+        {
+            <p>No tokens were captured in the authentication cookie.</p>
+        }
+        else
+        {
+            <pre>@string.Join("\n", Model.Tokens.Select(t => $"{t.Key}: {t.Value}"))</pre>
+        }
+
+        <h3>Claims</h3>
+        @if (Model.Claims.Count == 0)
+        {
+            <p>No claims available.</p>
+        }
+        else
+        {
+            <pre>@string.Join("\n", Model.Claims.Select(c => $"{c.Key}: {c.Value}"))</pre>
+        }
+    </section>
+}

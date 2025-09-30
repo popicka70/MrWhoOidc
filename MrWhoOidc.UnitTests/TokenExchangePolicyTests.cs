@@ -30,9 +30,9 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client with OboDpopMode.RequireSameJkt
-        var callerClient = new Client { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboDpopMode = OboDpopMode.RequireSameJkt };
+    var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboDpopMode = OboDpopMode.RequireSameJkt };
         db.Clients.Add(callerClient);
-        await db.SaveChangesAsync();
+    await db.SaveChangesAsync();
 
         var keyStore = new KeyStore(db);
         var jwt = new JwtService(keyStore);
@@ -72,9 +72,9 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client with max depth = 1
-        var callerClient = new Client { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboMaxDelegationDepth = 1 };
+    var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboMaxDelegationDepth = 1 };
         db.Clients.Add(callerClient);
-        await db.SaveChangesAsync();
+    await db.SaveChangesAsync();
 
         // Seed an opaque subject token with DelegationDepth = 1 (already used once)
         var userId = Guid.NewGuid();
@@ -116,7 +116,7 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client with allowed target audiences = ["api-b"] only
-        var callerClient = new Client
+        var callerClient = new ClientEntity
         {
             ClientId = "caller-app",
             RealmId = Guid.NewGuid(),
@@ -148,7 +148,7 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client allowing only source audience = api-x
-        var callerClient = new Client
+        var callerClient = new ClientEntity
         {
             ClientId = "caller-app",
             RealmId = Guid.NewGuid(),
@@ -180,7 +180,7 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client allowed scopes = ["write"]
-        var callerClient = new Client
+        var callerClient = new ClientEntity
         {
             ClientId = "caller-app",
             RealmId = Guid.NewGuid(),
@@ -211,7 +211,7 @@ public sealed class TokenExchangePolicyTests
     {
         using var db = CreateDb();
         // Seed caller client with lifetime cap 3 minutes
-        var callerClient = new Client
+        var callerClient = new ClientEntity
         {
             ClientId = "caller-app",
             RealmId = Guid.NewGuid(),

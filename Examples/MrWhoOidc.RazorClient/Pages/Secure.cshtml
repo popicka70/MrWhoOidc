@@ -1,0 +1,62 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.SecureModel
+@{
+    ViewData["Title"] = "Secure area";
+}
+
+<h1>Secure area</h1>
+<p>If you can read this, you authenticated through MrWhoOidc.WebAuth.</p>
+
+<section>
+    <h2>Downstream API Call (On-Behalf-Of)</h2>
+    @if (Model.ApiCallSucceeded && Model.Profile is not null)
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <tbody>
+                    <tr>
+                        <th scope="row">Subject</th>
+                        <td>@Model.Profile.Subject</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Name</th>
+                        <td>@Model.Profile.Name</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Email</th>
+                        <td>@Model.Profile.Email</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Audience</th>
+                        <td>@Model.Profile.Audience</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Delegating Client</th>
+                        <td>@Model.Profile.ActorClient</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Scopes</th>
+                        <td>
+                            @{ var scopesText = Model.Profile.Scopes is { } scopes ? string.Join(" ", scopes) : "(none)"; }
+                            @scopesText
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Issued</th>
+                        <td>@Model.Profile.IssuedAt</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Expires</th>
+                        <td>@Model.Profile.ExpiresAt</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning" role="alert">
+            <strong>API call failed.</strong> @Model.ErrorMessage
+        </div>
+    }
+</section>

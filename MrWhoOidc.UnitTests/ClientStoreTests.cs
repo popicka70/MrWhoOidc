@@ -19,7 +19,7 @@ public sealed class ClientStoreTests
     public async Task ValidateClientSecret_PublicClient_AllowsNoSecret()
     {
         using var db = CreateDb();
-        db.Clients.Add(new Client { ClientId = "public-app", RequirePkce = true, RequireConsent = false });
+    db.Clients.Add(new ClientEntity { ClientId = "public-app", RequirePkce = true, RequireConsent = false });
         await db.SaveChangesAsync();
 
         var store = new ClientStore(db, new DummyHasher());
@@ -35,7 +35,7 @@ public sealed class ClientStoreTests
     {
         using var db = CreateDb();
         var hasher = new DummyHasher(correct: "top-secret");
-        db.Clients.Add(new Client { ClientId = "conf-app", ClientSecretHash = hasher.Hash("top-secret") });
+    db.Clients.Add(new ClientEntity { ClientId = "conf-app", ClientSecretHash = hasher.Hash("top-secret") });
         await db.SaveChangesAsync();
 
         var store = new ClientStore(db, hasher);

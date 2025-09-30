@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using System.Linq;
 using System.Text.Json;
 
 namespace MrWhoOidc.Auth.Services;
@@ -18,6 +19,10 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
     // PoC M2M client id/secret (intentionally hard-coded)
     private const string M2MClientId = "m2m-test-client";
     private const string M2MClientSecret = "m2m-test-secret";
+
+    // Example downstream API client for on-behalf-of demo
+    private const string TestApiClientId = "test-api";
+    private const string TestApiClientSecret = "T3stApiSecret!";
 
     // Admin seeded identities
     private const string AdminUsername = "admin";
@@ -39,7 +44,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // Seed default scopes
-        string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles"];
+    string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
         foreach (var s in defaultScopes)
         {
             if (!await db.Scopes.AnyAsync(x => x.Name == s, ct).ConfigureAwait(false))
@@ -99,7 +104,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 RequirePkce = true,
                 ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
                 RealmId = adminRealm.Id,
-                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
+                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                OboEnabled = true,
+                OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" }),
+                OboMaxDelegationDepth = 1,
+                OboMaxLifetimeMinutes = 15
             };
             db.Clients.Add(blazorWebClient);
         }
@@ -116,6 +126,19 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 // Enable introspection against default API audience
                 blazorWebClient.IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
             }
+
+            // Enable on-behalf-of for the demo Razor client
+            blazorWebClient.OboEnabled ??= true;
+            if (string.IsNullOrEmpty(blazorWebClient.OboAllowedTargetAudiencesJson))
+            {
+                blazorWebClient.OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+            }
+            if (string.IsNullOrEmpty(blazorWebClient.OboAllowedScopesJson))
+            {
+                blazorWebClient.OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" });
+            }
+            blazorWebClient.OboMaxDelegationDepth ??= 1;
+            blazorWebClient.OboMaxLifetimeMinutes ??= 15;
         }
 
         // Seed dedicated admin client (separate from demo blazor-web)
@@ -167,27 +190,44 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
+        // Seed example API confidential client (used for demonstrations and validation)
+        var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId, ct).ConfigureAwait(false);
+        if (testApiClient is null)
+        {
+            testApiClient = new Client
+            {
+                ClientId = TestApiClientId,
+                ClientName = "Examples Test API",
+                RequirePkce = false,
+                RequireConsent = false,
+                ClientSecretHash = hasher.Hash(TestApiClientSecret),
+                RealmId = adminRealm.Id,
+                IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
+            };
+            db.Clients.Add(testApiClient);
+        }
+        else if (string.IsNullOrEmpty(testApiClient.ClientSecretHash))
+        {
+            testApiClient.ClientSecretHash = hasher.Hash(TestApiClientSecret);
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
         // Assign default standard scopes to blazor-web client if none exist
         var existingClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == blazorWebClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
-        if (existingClientScopes.Count == 0)
+        foreach (var scope in defaultScopes.Except(existingClientScopes, StringComparer.Ordinal))
         {
-            foreach (var s in defaultScopes)
-            {
-                db.ClientScopes.Add(new ClientScope { ClientId = blazorWebClient.Id, ScopeName = s });
-            }
+            db.ClientScopes.Add(new ClientScope { ClientId = blazorWebClient.Id, ScopeName = scope });
         }
 
         // Assign default scopes to admin client as well
         var adminClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == adminClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
-        if (adminClientScopes.Count == 0)
+        foreach (var scope in defaultScopes.Except(adminClientScopes, StringComparer.Ordinal))
         {
-            foreach (var s in defaultScopes)
-            {
-                db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = s });
-            }
+            db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = scope });
         }
 
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Optionally assign alice to blazor-web client in admin realm
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice", ct).ConfigureAwait(false);

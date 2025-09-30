@@ -15,7 +15,7 @@ public sealed class IdpProviderMappingTests
         // Realms and client
         var realm = new Realm { Name = "r", DisplayName = "R" };
         db.Realms.Add(realm);
-        var client = new Client { ClientId = "cli", RealmId = realm.Id, AllowedLoginRedirectUrisJson = "[\"https://cb\"]" };
+    var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id, AllowedLoginRedirectUrisJson = "[\"https://cb\"]" };
         db.Clients.Add(client);
 
         // Providers

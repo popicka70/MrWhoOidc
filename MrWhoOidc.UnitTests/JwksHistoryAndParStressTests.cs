@@ -14,7 +14,7 @@ public sealed class JwksHistoryAndParStressTests
         using var db = TestDataSeeder.CreateInMemoryDb();
         var realm = new Realm { Name = "r", DisplayName = "R" };
         db.Realms.Add(realm);
-        var client = new Client { ClientId = "cli", RealmId = realm.Id };
+    var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 

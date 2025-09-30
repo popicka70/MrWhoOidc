@@ -102,7 +102,7 @@ public sealed class ExternalOidcIntegrationTests
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
             var realm = new Realm { Name = "default" }; db.Realms.Add(realm);
             var hasher = new Argon2PasswordHasher();
-            var client = new Client { ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
+            var client = new ClientEntity { ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
             db.Clients.Add(client);
             db.IdentityProviders.AddRange(
                 new IdentityProvider

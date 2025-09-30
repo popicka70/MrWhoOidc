@@ -1,0 +1,12 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<h1>Something went wrong</h1>
+@if (Model.ShowRequestId)
+{
+    <p>Request ID: <code>@Model.RequestId</code></p>
+}
+<p>Check the server logs for more details.</p>

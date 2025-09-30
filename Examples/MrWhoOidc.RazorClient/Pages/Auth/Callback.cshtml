@@ -1,0 +1,26 @@
+@page
+@model MrWhoOidc.RazorClient.Pages.Auth.CallbackModel
+@{
+    ViewData["Title"] = "Authentication callback";
+}
+
+@if (Model.Error is null)
+{
+    <p>Signing you in...</p>
+}
+else
+{
+    <h1>Sign-in failed</h1>
+    <p><strong>@Model.Error</strong></p>
+    @if (!string.IsNullOrEmpty(Model.ErrorDescription))
+    {
+        <p>@Model.ErrorDescription</p>
+    }
+    @if (ViewData["ErrorUri"] is string errorUri && !string.IsNullOrEmpty(errorUri))
+    {
+        <p>More info: <a href="@errorUri" target="_blank" rel="noopener noreferrer">@errorUri</a></p>
+    }
+    <p>
+        <a asp-page="/Index">Return home</a>
+    </p>
+}
