@@ -4,8 +4,32 @@
     ViewData["Title"] = "Sign out";
 }
 
-<form method="post">
-    <p>Are you sure you want to sign out?</p>
-    <button type="submit">Sign out</button>
-    <a asp-page="/Index">Cancel</a>
-</form>
+<section class="logout-card">
+    <h1>Sign out</h1>
+    <p class="logout-subtitle">Choose how you want to finish your session.</p>
+    <form method="post" class="logout-form">
+        <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+        <div class="logout-options">
+            <button class="logout-option" type="submit" name="mode" value="local">
+                <span class="option-title">Sign out here only</span>
+                <span class="option-copy">Stay signed in at the identity provider.</span>
+            </button>
+            @if (Model.CanFederatedSignOut)
+            {
+                <button class="logout-option danger" type="submit" name="mode" value="federated">
+                    <span class="option-title">Sign out everywhere</span>
+                    <span class="option-copy">Also end your identity provider session.</span>
+                </button>
+            }
+        </div>
+        @if (!Model.CanFederatedSignOut)
+        {
+            <div class="logout-hint" role="note">
+                Remote sign-out isn't available right now, but you can still sign out locally.
+            </div>
+        }
+        <div class="logout-footer">
+            <a class="logout-cancel" asp-page="/Index">Cancel</a>
+        </div>
+    </form>
+</section>

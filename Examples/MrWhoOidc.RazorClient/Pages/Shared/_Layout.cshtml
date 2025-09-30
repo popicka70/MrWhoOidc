@@ -17,10 +17,8 @@
             <div class="navbar-auth">
                 @if (User.Identity?.IsAuthenticated ?? false)
                 {
-                    <form asp-page="/Auth/Logout" method="post">
-                        <span>@User.Identity?.Name</span>
-                        <button type="submit">Sign out</button>
-                    </form>
+                    <span>@User.Identity?.Name</span>
+                    <a asp-page="/Auth/Logout">Sign out</a>
                 }
                 else
                 {
