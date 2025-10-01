@@ -40,7 +40,19 @@ public static class PersistenceAndCoreExtensions
         // Protocol endpoint handlers (discovery, token, etc.)
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
-        services.AddScoped<ILogoutHandler, LogoutHandler>();
+        
+        // Logout services (refactored)
+        services.AddScoped<Handlers.Logout.ILogoutHandler, Handlers.Logout.LogoutHandler>();
+        services.AddScoped<Handlers.Logout.LocalLogoutHandler>();
+        services.AddScoped<Handlers.Logout.FederatedLogoutEntryHandler>();
+        services.AddScoped<Handlers.Logout.FederatedCallbackHandler>();
+        services.AddScoped<Handlers.Logout.EndSessionHandler>();
+        services.AddScoped<Handlers.Logout.LogoutRedirectResolver>();
+        services.AddScoped<Handlers.Logout.FrontChannelLogoutNotifier>();
+        services.AddScoped<Handlers.Logout.BackChannelLogoutEnqueuer>();
+        services.AddScoped<Handlers.Logout.PostLogoutRedirectValidator>();
+        services.AddScoped<Handlers.Logout.LogoutTokenBuilder>();
+        
         services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>(); // uses DbContext (scoped)
         services.AddMemoryCache();
         services.AddScoped<ITokenHandler, TokenHandler>();

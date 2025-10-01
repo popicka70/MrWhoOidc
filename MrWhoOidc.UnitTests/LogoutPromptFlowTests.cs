@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Handlers.Logout;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.DataProtection;
@@ -13,6 +14,7 @@ using MrWhoOidc.WebAuth.Observability;
 using System;
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Services;
+using Microsoft.Extensions.Configuration;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -38,6 +40,14 @@ public class LogoutPromptFlowTests
         public HttpClient CreateClient(string name = null!) => _client;
     }
 
+    private sealed class TestOptionsMonitor<T> : IOptionsMonitor<T>
+    {
+        public TestOptionsMonitor(T currentValue) => CurrentValue = currentValue;
+        public T CurrentValue { get; }
+        public T Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
     [TestMethod]
     public async Task LogoutEntry_RedirectsToPrompt_WithStyle()
     {
@@ -47,8 +57,29 @@ public class LogoutPromptFlowTests
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
         var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
-        var keyStore = new KeyStore(db); // uses in-memory DB
-        var handler = new LogoutHandler(db, keyStore, new NullLogger<LogoutHandler>(), new OidcMetrics(), new NoopAuditSink(), svc, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }));
+        
+        // Create refactored handler dependencies
+        var metrics = new OidcMetrics();
+        var audit = new NoopAuditSink();
+        var localLogout = new LocalLogoutHandler();
+        var federatedEntry = new FederatedLogoutEntryHandler(
+            svc,
+            Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }),
+            new NullLogger<FederatedLogoutEntryHandler>(),
+            audit,
+            metrics,
+            localLogout);
+        var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
+        var frontChannel = new FrontChannelLogoutNotifier(db);
+        var keyStore = new KeyStore(db);
+        var tokenBuilder = new LogoutTokenBuilder(keyStore);
+        var config = new ConfigurationBuilder().Build();
+        var backChannel = new BackChannelLogoutEnqueuer(db, tokenBuilder, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
+        var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, new NullLogger<PostLogoutRedirectValidator>());
+        var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, audit, metrics, new NullLogger<EndSessionHandler>());
+        var redirectResolver = new LogoutRedirectResolver(db, audit);
+        var handler = new LogoutHandler(localLogout, federatedEntry, federatedCallback, endSession, redirectResolver);
+        
         var ctx = new DefaultHttpContext();
         ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("idp", "google") }, "cookie"));
         ctx.Request.QueryString = new QueryString("?returnUrl=%2Fhome&style=dark");

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using Microsoft.EntityFrameworkCore;
