@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.IdentityProviders;
 using System.IO;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
@@ -16,6 +17,9 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
 {
     [BindProperty]
     public InputModel? Input { get; set; }
+
+    [BindProperty]
+    public OidcConfigForm? OidcConfig { get; set; }
 
     [BindProperty]
     public IFormFile? Logo { get; set; }
@@ -45,6 +49,13 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
             LogoUrl = entity.LogoUrl,
             ConfigJson = entity.ConfigJson
         };
+
+        // Parse JSON to form if OIDC
+        if (entity.Type == IdentityProviderType.Oidc && !string.IsNullOrWhiteSpace(entity.ConfigJson))
+        {
+            OidcConfig = JsonToForm(entity.ConfigJson);
+        }
+
         return Page();
     }
 
@@ -59,6 +70,19 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
         {
             ModelState.AddModelError(string.Empty, "Mismatched id.");
             return Page();
+        }
+
+        // If OIDC and form is populated, convert form to JSON
+        // Note: Both form and JSON are submitted, but form takes precedence if populated
+        if (Input.Type == IdentityProviderType.Oidc && OidcConfig != null && !string.IsNullOrWhiteSpace(OidcConfig.Authority))
+        {
+            var json = FormToJson(OidcConfig);
+            if (json is null)
+            {
+                ModelState.AddModelError(string.Empty, "Failed to serialize configuration from form.");
+                return Page();
+            }
+            Input.ConfigJson = json;
         }
 
         // Basic JSON validation
@@ -294,6 +318,91 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
         return Task.CompletedTask;
     }
 
+    private OidcConfigForm? JsonToForm(string json)
+    {
+        try
+        {
+            var cfg = JsonSerializer.Deserialize<OidcProviderConfig>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+            if (cfg is null) return null;
+
+            return new OidcConfigForm
+            {
+                Authority = cfg.Authority,
+                DiscoveryUrl = cfg.DiscoveryUrl,
+                ClientId = cfg.ClientId,
+                ClientSecret = cfg.ClientSecret,
+                ResponseType = cfg.ResponseType,
+                ScopesString = string.Join(" ", cfg.Scopes ?? Array.Empty<string>()),
+                UsePKCE = cfg.UsePKCE,
+                UseJAR = cfg.UseJAR,
+                UsePAR = cfg.UsePAR,
+                RequestedAcrValues = cfg.RequestedAcrValues,
+                Prompt = cfg.Prompt,
+                ResponseMode = cfg.ResponseMode,
+                ClockSkewSeconds = cfg.ClockSkewSeconds,
+                ValidateIssuer = cfg.TokenValidation?.ValidateIssuer ?? true,
+                ValidateAudience = cfg.TokenValidation?.ValidateAudience ?? false,
+                ValidateLifetime = cfg.TokenValidation?.ValidateLifetime ?? true,
+                BackChannelLogout = cfg.BackChannelLogout,
+                ExtraAuthParamsJson = cfg.ExtraAuthParams != null ? JsonSerializer.Serialize(cfg.ExtraAuthParams) : null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string? FormToJson(OidcConfigForm form)
+    {
+        try
+        {
+            var scopes = string.IsNullOrWhiteSpace(form.ScopesString)
+                ? new[] { "openid", "profile", "email" }
+                : form.ScopesString.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            Dictionary<string, string>? extraParams = null;
+            if (!string.IsNullOrWhiteSpace(form.ExtraAuthParamsJson))
+            {
+                extraParams = JsonSerializer.Deserialize<Dictionary<string, string>>(form.ExtraAuthParamsJson);
+            }
+
+            var cfg = new OidcProviderConfig
+            {
+                Authority = form.Authority,
+                DiscoveryUrl = string.IsNullOrWhiteSpace(form.DiscoveryUrl) ? null : form.DiscoveryUrl,
+                ClientId = form.ClientId,
+                ClientSecret = string.IsNullOrWhiteSpace(form.ClientSecret) ? null : form.ClientSecret,
+                ResponseType = form.ResponseType,
+                Scopes = scopes,
+                UsePKCE = form.UsePKCE,
+                UseJAR = form.UseJAR,
+                UsePAR = form.UsePAR,
+                RequestedAcrValues = string.IsNullOrWhiteSpace(form.RequestedAcrValues) ? null : form.RequestedAcrValues,
+                Prompt = string.IsNullOrWhiteSpace(form.Prompt) ? null : form.Prompt,
+                ResponseMode = string.IsNullOrWhiteSpace(form.ResponseMode) ? null : form.ResponseMode,
+                ClockSkewSeconds = form.ClockSkewSeconds,
+                TokenValidation = new TokenValidationOptions
+                {
+                    ValidateIssuer = form.ValidateIssuer,
+                    ValidateAudience = form.ValidateAudience,
+                    ValidateLifetime = form.ValidateLifetime
+                },
+                BackChannelLogout = form.BackChannelLogout,
+                ExtraAuthParams = extraParams
+            };
+
+            return JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public sealed class InputModel
     {
         public Guid Id { get; set; }
@@ -308,5 +417,66 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
         [Url]
         public string? LogoUrl { get; set; }
         public string? ConfigJson { get; set; }
+    }
+
+    public sealed class OidcConfigForm
+    {
+        [Required, Url]
+        [Display(Name = "Authority")]
+        public string Authority { get; set; } = string.Empty;
+
+        [Url]
+        [Display(Name = "Discovery URL (optional)")]
+        public string? DiscoveryUrl { get; set; }
+
+        [Required]
+        [Display(Name = "Client ID")]
+        public string ClientId { get; set; } = string.Empty;
+
+        [Display(Name = "Client Secret")]
+        public string? ClientSecret { get; set; }
+
+        [Display(Name = "Response Type")]
+        public string ResponseType { get; set; } = "code";
+
+        [Display(Name = "Scopes (space-separated)")]
+        public string ScopesString { get; set; } = "openid profile email";
+
+        [Display(Name = "Use PKCE")]
+        public bool UsePKCE { get; set; } = true;
+
+        [Display(Name = "Use JAR (JWT-secured Authorization Request)")]
+        public bool UseJAR { get; set; } = false;
+
+        [Display(Name = "Use PAR (Pushed Authorization Request)")]
+        public bool UsePAR { get; set; } = false;
+
+        [Display(Name = "ACR Values (optional)")]
+        public string? RequestedAcrValues { get; set; }
+
+        [Display(Name = "Prompt (optional)")]
+        public string? Prompt { get; set; }
+
+        [Display(Name = "Response Mode (optional)")]
+        public string? ResponseMode { get; set; }
+
+        [Display(Name = "Clock Skew (seconds)")]
+        [Range(0, 600)]
+        public int ClockSkewSeconds { get; set; } = 120;
+
+        [Display(Name = "Validate Issuer")]
+        public bool ValidateIssuer { get; set; } = true;
+
+        [Display(Name = "Validate Audience")]
+        public bool ValidateAudience { get; set; } = false;
+
+        [Display(Name = "Validate Lifetime")]
+        public bool ValidateLifetime { get; set; } = true;
+
+        [Display(Name = "Back-Channel Logout")]
+        public bool BackChannelLogout { get; set; } = true;
+
+        [Display(Name = "Extra Auth Params (JSON object, optional)")]
+        public string? ExtraAuthParamsJson { get; set; }
     }
 }
