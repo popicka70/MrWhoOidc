@@ -160,11 +160,20 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var correlationResolution = await _correlationManager.ResolveCorrelationAsync(http, state);
         if (!correlationResolution.Success)
         {
+            // Handle stale/invalid correlation by generating a new one
+            var newCorrelation = await _correlationManager.EnsureCorrelationAsync(http, null, null);
+            state.CorrelationId = newCorrelation.CorrelationId;
+            state.CorrelationHandle = newCorrelation.Handle;
+            if (!string.IsNullOrEmpty(state.ReturnUrl))
+            {
+                state.ReturnUrl = ExternalOidcUrlHelpers.EnsureCidRef(state.ReturnUrl, newCorrelation.Handle);
+            }
+            
             _logger.LogWarning("Correlation handle stale during callback handleHash={Handle}", 
                 ExternalOidcCorrelationManager.HashHandleForLog(correlationResolution.Handle));
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
                 "cid_ref_stale", correlationPresent: false, handleStale: true);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, newCorrelation.Handle, 
                 "Your sign-in session expired. Please start again.", "cid_ref_stale");
         }
 
