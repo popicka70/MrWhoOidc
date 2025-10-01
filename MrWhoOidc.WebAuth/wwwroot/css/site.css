@@ -32,8 +32,14 @@ body {
 
 /* Shared auth layout helpers */
 .auth-card { overflow: hidden; background-clip: padding-box; }
-.auth-card .list-group-flush .auth-option:first-child { border-top-left-radius: 14px; border-top-right-radius: 14px; }
-.auth-card .list-group-flush .auth-option:last-child { border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
+.auth-card .list-group-flush .auth-option:first-child { 
+  border-top-left-radius: var(--card-radius, 14px); 
+  border-top-right-radius: var(--card-radius, 14px); 
+}
+.auth-card .list-group-flush .auth-option:last-child { 
+  border-bottom-left-radius: var(--card-radius, 14px); 
+  border-bottom-right-radius: var(--card-radius, 14px); 
+}
 
 /* New unified auth button style */
 .auth-btn {
@@ -45,33 +51,52 @@ body {
 
 /* Style schemes for Auth/Providers/Select */
 
+/* OCEAN: Modern, rounded, tech-forward with bold typography */
 .scheme-ocean {
   --accent: #0dcaf0;
   --accent-soft: rgba(13, 202, 240, 0.08);
   --bg-grad-from: #f0fbff;
   --bg-grad-to: #ffffff;
-  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  --heading-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --card-radius: 20px;
+  --btn-radius: 12px;
+  --card-border: 2px;
 }
+
+/* FOREST: Organic, softer corners, nature-inspired with serif headers */
 .scheme-forest {
   --accent: #198754;
   --accent-soft: rgba(25, 135, 84, 0.08);
   --bg-grad-from: #f6fff8;
   --bg-grad-to: #ffffff;
-  --heading-font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial;
+  --heading-font: Georgia, "Times New Roman", serif;
+  --card-radius: 16px;
+  --btn-radius: 24px;
+  --card-border: 1px;
 }
+
+/* PLUM: Geometric, sharp angles, premium feel with distinct typography */
 .scheme-plum {
   --accent: #6f42c1;
   --accent-soft: rgba(111, 66, 193, 0.08);
   --bg-grad-from: #faf5ff;
   --bg-grad-to: #ffffff;
-  --heading-font: "Poppins", "Segoe UI", system-ui, Arial;
+  --heading-font: "Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", sans-serif;
+  --card-radius: 4px;
+  --btn-radius: 4px;
+  --card-border: 2px;
 }
+
+/* CONTRAST: Brutalist, minimal, high-contrast with monospace accents */
 .scheme-contrast {
   --accent: #212529;
   --accent-soft: rgba(33, 37, 41, 0.06);
   --bg-grad-from: #f8f9fa;
   --bg-grad-to: #ffffff;
-  --heading-font: "Segoe UI", system-ui, Arial;
+  --heading-font: "Courier New", Courier, monospace;
+  --card-radius: 0px;
+  --btn-radius: 0px;
+  --card-border: 3px;
 }
 
 /* Shared auth page styling using CSS variables */
@@ -79,8 +104,8 @@ body {
 .scheme-forest .auth-card,
 .scheme-plum .auth-card,
 .scheme-contrast .auth-card {
-  border: 1px solid var(--accent);
-  border-radius: 14px;
+  border: var(--card-border) solid var(--accent);
+  border-radius: var(--card-radius);
   box-shadow: 0 8px 24px rgba(0,0,0,.06);
   background: linear-gradient(180deg, var(--bg-grad-from), var(--bg-grad-to));
 }
@@ -92,6 +117,36 @@ body {
   font-family: var(--heading-font);
   font-weight: 700;
   letter-spacing: .2px;
+}
+
+/* OCEAN: Bold, modern typography with extra letter spacing */
+.scheme-ocean .auth-heading {
+  font-size: 2rem;
+  letter-spacing: -0.5px;
+  font-weight: 800;
+}
+
+/* FOREST: Elegant serif with refined spacing */
+.scheme-forest .auth-heading {
+  font-size: 1.85rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* PLUM: Geometric, uppercase headers for premium feel */
+.scheme-plum .auth-heading {
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+}
+
+/* CONTRAST: Brutalist monospace with wide spacing */
+.scheme-contrast .auth-heading {
+  font-size: 1.75rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 700;
 }
 
 .scheme-ocean .auth-option:hover,
@@ -138,12 +193,48 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   background-color: transparent;
+  border-radius: var(--btn-radius);
 }
 .scheme-ocean .auth-btn:hover,
 .scheme-forest .auth-btn:hover,
 .scheme-plum .auth-btn:hover,
 .scheme-contrast .auth-btn:hover {
   background-color: var(--accent-soft);
+}
+
+/* OCEAN: Smooth slide-in animation */
+.scheme-ocean .auth-btn:hover {
+  transform: translateX(4px);
+  transition: all 0.2s ease;
+}
+
+/* FOREST: Gentle scale with soft shadow */
+.scheme-forest .auth-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(25, 135, 84, 0.15);
+  transition: all 0.25s ease;
+}
+
+/* PLUM: Sharp border highlight */
+.scheme-plum .auth-btn {
+  border-width: 2px;
+}
+.scheme-plum .auth-btn:hover {
+  border-width: 3px;
+  margin: -1px;
+  transition: all 0.15s ease;
+}
+
+/* CONTRAST: Bold underline effect */
+.scheme-contrast .auth-btn {
+  border-width: 0 0 3px 0;
+  border-radius: 0;
+  padding-bottom: 0.75rem;
+}
+.scheme-contrast .auth-btn:hover {
+  border-bottom-width: 5px;
+  padding-bottom: 0.65rem;
+  transition: all 0.1s ease;
 }
 
 /* Subtle page background under the centered container */
@@ -159,38 +250,42 @@ body {
   background-size: cover;
 }
 
-/* Ocean: airy cyan gradients with soft radial accents */
+/* Ocean: Modern wave pattern with flowing gradients */
 .scheme-ocean {
   --ocean-base: #f0fbff;
   background-image:
-    radial-gradient(circle at 85% 18%, rgba(13,202,240,.28), transparent 60%),
-    radial-gradient(circle at 12% 88%, rgba(13,202,240,.20), transparent 70%),
+    radial-gradient(circle at 85% 18%, rgba(13,202,240,.35), transparent 60%),
+    radial-gradient(circle at 12% 88%, rgba(13,202,240,.25), transparent 70%),
+    repeating-linear-gradient(90deg, transparent, transparent 80px, rgba(13,202,240,.03) 80px, rgba(13,202,240,.03) 160px),
     linear-gradient(135deg, var(--ocean-base) 0%, #ffffff 45%, #e3f8ff 100%);
 }
 
-/* Forest: gentle green mist with diagonal light */
+/* Forest: Organic leaf texture with natural gradients */
 .scheme-forest {
   --forest-base: #f6fff8;
   background-image:
-    radial-gradient(circle at 88% 20%, rgba(25,135,84,.20), transparent 55%),
-    radial-gradient(circle at 15% 85%, rgba(25,135,84,.18), transparent 65%),
+    radial-gradient(ellipse at 88% 20%, rgba(25,135,84,.25), transparent 55%),
+    radial-gradient(ellipse at 15% 85%, rgba(25,135,84,.22), transparent 65%),
+    repeating-linear-gradient(45deg, transparent, transparent 100px, rgba(25,135,84,.02) 100px, rgba(25,135,84,.02) 200px),
     linear-gradient(140deg, var(--forest-base) 0%, #ffffff 50%, #ebfff2 100%);
 }
 
-/* Plum: subtle purple haze with tonal layering */
+/* Plum: Sharp geometric pattern with angular design */
 .scheme-plum {
   --plum-base: #faf5ff;
   background-image:
-    radial-gradient(circle at 80% 15%, rgba(111,66,193,.25), transparent 55%),
-    radial-gradient(circle at 18% 90%, rgba(111,66,193,.20), transparent 65%),
+    repeating-linear-gradient(45deg, rgba(111,66,193,.08) 0px, rgba(111,66,193,.08) 2px, transparent 2px, transparent 40px),
+    repeating-linear-gradient(-45deg, rgba(111,66,193,.05) 0px, rgba(111,66,193,.05) 2px, transparent 2px, transparent 40px),
+    radial-gradient(circle at 80% 15%, rgba(111,66,193,.15), transparent 50%),
     linear-gradient(145deg, var(--plum-base) 0%, #ffffff 52%, #f3e9ff 100%);
 }
 
-/* Contrast: crisp light surface with a faint grid pattern */
+/* Contrast: Bold grid pattern with brutalist aesthetic */
 .scheme-contrast {
   --contrast-base: #f8f9fa;
   background-image:
-    repeating-linear-gradient(45deg, rgba(33,37,41,.04) 0 12px, rgba(33,37,41,0) 12px 24px),
+    repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(33,37,41,.12) 49px, rgba(33,37,41,.12) 50px),
+    repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(33,37,41,.12) 49px, rgba(33,37,41,.12) 50px),
     linear-gradient(120deg, var(--contrast-base) 0%, #ffffff 55%, #f1f3f5 100%);
 }
 
@@ -209,10 +304,25 @@ body {
 }
 
 /* Elevation tweak so cards stand out on richer backgrounds */
-.scheme-ocean .auth-card,
-.scheme-forest .auth-card,
-.scheme-plum .auth-card,
-.scheme-contrast .auth-card { box-shadow: 0 10px 28px -6px rgba(0,0,0,.12), 0 4px 12px -2px rgba(0,0,0,.06); }
+/* OCEAN: Soft, floating shadow */
+.scheme-ocean .auth-card { 
+  box-shadow: 0 12px 32px -8px rgba(13, 202, 240, 0.25), 0 6px 16px -4px rgba(0,0,0,.08); 
+}
+
+/* FOREST: Organic, layered shadow */
+.scheme-forest .auth-card { 
+  box-shadow: 0 8px 24px -6px rgba(25, 135, 84, 0.2), 0 4px 12px -2px rgba(0,0,0,.05); 
+}
+
+/* PLUM: Sharp, geometric shadow */
+.scheme-plum .auth-card { 
+  box-shadow: 8px 8px 0px rgba(111, 66, 193, 0.15), 0 4px 12px rgba(0,0,0,.08); 
+}
+
+/* CONTRAST: Harsh, brutalist shadow */
+.scheme-contrast .auth-card { 
+  box-shadow: 12px 12px 0px rgba(33, 37, 41, 0.8), 0 0 0 3px rgba(33, 37, 41, 1); 
+}
 
 /* Accessible focus ring contrast on colored patterns */
 .auth-scheme-body :focus-visible { outline: 3px solid var(--accent, #0d6efd); outline-offset: 2px; }
