@@ -91,7 +91,7 @@ else
 
             <div class="mb-3">
                 <label class="form-label">Logo</label>
-                @if (!string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
+                @if (Model.Input is not null && !string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
                 {
                     <div class="mb-2">
                         <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height:64px" />
