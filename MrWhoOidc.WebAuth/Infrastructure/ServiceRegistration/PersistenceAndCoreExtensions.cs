@@ -50,7 +50,17 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
-        services.AddScoped<IIntrospectionHandler, IntrospectionHandler>();
+        
+        // Introspection services
+        services.AddScoped<IIntrospectionHandler, Handlers.Introspection.IntrospectionHandler>();
+        services.AddScoped<Handlers.Introspection.ClientAuthenticator>();
+        services.AddScoped<Handlers.Introspection.DPoPValidator>();
+        services.AddScoped<Handlers.Introspection.AudiencePolicy>();
+        services.AddScoped<Handlers.Introspection.ResponseShaper>();
+        services.AddScoped<Handlers.Introspection.JwtTokenIntrospector>();
+        services.AddScoped<Handlers.Introspection.OpaqueTokenIntrospector>();
+        services.AddScoped<Handlers.Introspection.RefreshTokenIntrospector>();
+        
         services.AddSingleton<IPublicJwksCache, PublicJwksCache>();
 
         // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)

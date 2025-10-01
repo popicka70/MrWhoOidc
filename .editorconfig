@@ -60,3 +60,12 @@ dotnet_diagnostic.CA2007.severity = none
 # CA2007: Do not directly await a Task without ConfigureAwait
 # Set to warning to guide contributors without breaking builds.
 dotnet_diagnostic.CA2007.severity = warning
+
+[MrWhoOidc.WebAuth/**/*.cs]
+dotnet_diagnostic.CA2007.severity = warning
+
+[MrWhoOidc.Client/**/*.cs]
+dotnet_diagnostic.CA2007.severity = warning
+
+[MrWhoOidc.Security/**/*.cs]
+dotnet_diagnostic.CA2007.severity = warning
