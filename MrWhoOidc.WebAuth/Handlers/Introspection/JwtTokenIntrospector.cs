@@ -48,7 +48,7 @@ public sealed class JwtTokenIntrospector(
                 context.Endpoint,
                 context.Request.Token,
                 cnfJkt
-            );
+            ).ConfigureAwait(false);
 
             if (errorResult is not null)
             {

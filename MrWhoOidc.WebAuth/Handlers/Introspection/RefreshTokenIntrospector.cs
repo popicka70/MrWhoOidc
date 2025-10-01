@@ -30,7 +30,7 @@ public sealed class RefreshTokenIntrospector(
             .FirstOrDefaultAsync(
                 t => t.Type == "refresh" && t.TokenHash == tokenHash,
                 context.HttpContext.RequestAborted
-            );
+            ).ConfigureAwait(false);
 
         if (entity is null)
         {
@@ -77,7 +77,7 @@ public sealed class RefreshTokenIntrospector(
         };
 
         // Apply privacy shaping
-        var client = await clientStore.FindByClientIdAsync(context.Request.ClientId);
+        var client = await clientStore.FindByClientIdAsync(context.Request.ClientId).ConfigureAwait(false);
         if (client is not null)
         {
             response = responseShaper.ShapeResponse(response, client);

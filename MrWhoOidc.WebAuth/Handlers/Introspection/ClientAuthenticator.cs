@@ -36,7 +36,7 @@ public sealed class ClientAuthenticator(
                 request.ClientId,
                 request.ClientAssertion!,
                 context.Endpoint
-            );
+            ).ConfigureAwait(false);
 
             if (!authenticated)
             {
@@ -52,7 +52,7 @@ public sealed class ClientAuthenticator(
             return (false, Results.BadRequest(new { error = "unauthorized_client" }));
         }
 
-        var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret);
+        var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret).ConfigureAwait(false);
         if (!secretValid)
         {
             return (false, Results.BadRequest(new { error = "unauthorized_client" }));

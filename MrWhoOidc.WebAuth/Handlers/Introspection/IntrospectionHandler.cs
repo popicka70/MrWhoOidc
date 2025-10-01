@@ -22,7 +22,7 @@ public sealed class IntrospectionHandler(
         var metrics = new IntrospectionMetrics(oidcMetrics);
 
         // Parse request
-        var (request, parseError) = await IntrospectionRequestParser.ParseAsync(http);
+        var (request, parseError) = await IntrospectionRequestParser.ParseAsync(http).ConfigureAwait(false);
         if (parseError is not null)
         {
             var unknownTags = "unknown".BucketizeClientId().CreateMetricTags();
@@ -35,7 +35,7 @@ public sealed class IntrospectionHandler(
         metrics.RecordRequest(tags);
 
         // Load client
-        var client = await clientStore.FindByClientIdAsync(request.ClientId);
+        var client = await clientStore.FindByClientIdAsync(request.ClientId).ConfigureAwait(false);
         if (client is null)
         {
             metrics.RecordActiveFalse(tags);
@@ -57,7 +57,7 @@ public sealed class IntrospectionHandler(
         };
 
         // Authenticate client
-        var (authenticated, authError) = await authenticator.AuthenticateAsync(context);
+        var (authenticated, authError) = await authenticator.AuthenticateAsync(context).ConfigureAwait(false);
         if (!authenticated)
         {
             metrics.RecordActiveFalse(tags);
@@ -67,7 +67,7 @@ public sealed class IntrospectionHandler(
         // Handle refresh token hint first if specified
         if (string.Equals(request.TokenTypeHint, "refresh_token", StringComparison.Ordinal))
         {
-            var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context);
+            var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context).ConfigureAwait(false);
             if (refreshError is not null)
             {
                 metrics.RecordActiveFalse(tags);
@@ -83,7 +83,7 @@ public sealed class IntrospectionHandler(
         }
 
         // Try JWT introspection
-        var (jwtResponse, jwtError) = await jwtIntrospector.IntrospectAsync(context);
+        var (jwtResponse, jwtError) = await jwtIntrospector.IntrospectAsync(context).ConfigureAwait(false);
         if (jwtError is not null)
         {
             metrics.RecordActiveFalse(tags);
@@ -97,7 +97,7 @@ public sealed class IntrospectionHandler(
         }
 
         // Try opaque token introspection
-        var (opaqueResponse, opaqueError) = await opaqueIntrospector.IntrospectAsync(context);
+        var (opaqueResponse, opaqueError) = await opaqueIntrospector.IntrospectAsync(context).ConfigureAwait(false);
         if (opaqueError is not null)
         {
             metrics.RecordActiveFalse(tags);
@@ -113,7 +113,7 @@ public sealed class IntrospectionHandler(
         // Try refresh token as fallback if hint was access_token
         if (string.Equals(request.TokenTypeHint, "access_token", StringComparison.Ordinal))
         {
-            var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context);
+            var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context).ConfigureAwait(false);
             if (refreshError is not null)
             {
                 metrics.RecordActiveFalse(tags);

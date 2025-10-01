@@ -15,7 +15,7 @@ internal static class IntrospectionRequestParser
         }
 
         var (clientIdHeader, clientSecretHeader) = ReadClientCredentials(http);
-        var form = await http.Request.ReadFormAsync();
+        var form = await http.Request.ReadFormAsync().ConfigureAwait(false);
 
         var token = form["token"].ToString();
         var hint = form["token_type_hint"].ToString();

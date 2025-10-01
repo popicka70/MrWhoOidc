@@ -23,7 +23,7 @@ public sealed class OpaqueTokenIntrospector(
             .FirstOrDefaultAsync(
                 t => t.Type == "access" && t.TokenHash == tokenHash,
                 context.HttpContext.RequestAborted
-            );
+            ).ConfigureAwait(false);
 
         if (entity is null)
         {
@@ -65,7 +65,7 @@ public sealed class OpaqueTokenIntrospector(
                 context.Endpoint,
                 context.Request.Token,
                 entity.CnfJkt
-            );
+            ).ConfigureAwait(false);
 
             if (errorResult is not null)
             {

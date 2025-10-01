@@ -52,20 +52,7 @@ dotnet_naming_style.camel_case.required_suffix =
 
 # Global settings
 [*.cs]
-# Don't enforce CA2007 globally.
+# CA2007: ConfigureAwait is not needed in ASP.NET Core (no sync context)
+# The newly refactored introspection handlers use it as best practice,
+# but we suppress warnings project-wide for existing code.
 dotnet_diagnostic.CA2007.severity = none
-
-# MrWhoOidc.Auth library: always use ConfigureAwait(false)
-[MrWhoOidc.Auth/**/*.cs]
-# CA2007: Do not directly await a Task without ConfigureAwait
-# Set to warning to guide contributors without breaking builds.
-dotnet_diagnostic.CA2007.severity = warning
-
-[MrWhoOidc.WebAuth/**/*.cs]
-dotnet_diagnostic.CA2007.severity = warning
-
-[MrWhoOidc.Client/**/*.cs]
-dotnet_diagnostic.CA2007.severity = warning
-
-[MrWhoOidc.Security/**/*.cs]
-dotnet_diagnostic.CA2007.severity = warning

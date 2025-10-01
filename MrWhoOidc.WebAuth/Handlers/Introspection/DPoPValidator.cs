@@ -16,7 +16,7 @@ public sealed class DPoPValidator(
         string token,
         string expectedJkt)
     {
-        var validation = await dpopValidator.ValidateForEndpointAsync(http, endpoint, token);
+        var validation = await dpopValidator.ValidateForEndpointAsync(http, endpoint, token).ConfigureAwait(false);
 
         // Validate nonce
         var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -25,7 +25,7 @@ public sealed class DPoPValidator(
             clientIp,
             validation.Jkt,
             validation.Nonce
-        );
+        ).ConfigureAwait(false);
 
         if (!nonceOk)
         {
