@@ -17,6 +17,8 @@ public class IndexModel : PageModel
     public string ProviderIconClass { get; set; } = "bi-box-arrow-right"; // default icon
     public string ReturnUrl { get; set; } = "/";
     public string? Style { get; set; }
+    public string? ClientId { get; set; }
+    public string? PostLogoutRedirectUri { get; set; }
 
     private readonly IUpstreamLogoutService _upstream;
     private readonly AuthDbContext _db;
@@ -31,7 +33,7 @@ public class IndexModel : PageModel
         _upstream = upstream; _db = db; _keyStore = keyStore; _metrics = metrics; _audit = audit; _logger = logger; _fedOpts = fedOpts.Value;
     }
 
-    public void OnGet(string? provider, string? ret, string? style)
+    public void OnGet(string? provider, string? ret, string? style, string? client_id, string? post_logout_redirect_uri)
     {
         // Ensure logout prompt is not cached by browsers or intermediate proxies
         Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0";
@@ -44,9 +46,11 @@ public class IndexModel : PageModel
         }
         if (!string.IsNullOrEmpty(ret) && Uri.TryCreate(ret, UriKind.Relative, out _)) ReturnUrl = ret;
         if (!string.IsNullOrWhiteSpace(style)) Style = style;
+        if (!string.IsNullOrWhiteSpace(client_id)) ClientId = client_id;
+        if (!string.IsNullOrWhiteSpace(post_logout_redirect_uri)) PostLogoutRedirectUri = post_logout_redirect_uri;
     }
 
-    public async Task<IActionResult> OnPostAsync(string mode, string returnUrl, string? style)
+    public async Task<IActionResult> OnPostAsync(string mode, string returnUrl, string? style, string? client_id, string? post_logout_redirect_uri)
     {
         Response.Headers["Cache-Control"] = "no-store, no-cache, max-age=0";
         Response.Headers["Pragma"] = "no-cache";
@@ -56,9 +60,9 @@ public class IndexModel : PageModel
         if (!string.IsNullOrEmpty(style)) Style = style;
         if (string.IsNullOrEmpty(returnUrl) || !Uri.TryCreate(returnUrl, UriKind.Relative, out _)) returnUrl = "/";
 
-        // Capture potential external redirect inputs (optional)
-        var clientId = Request.Query["client_id"].ToString(); // GET param propagation
-        var externalPostLogout = Request.Query["post_logout_redirect_uri"].ToString();
+        // Capture potential external redirect inputs (optional) - now from form fields
+        var clientId = client_id ?? string.Empty;
+        var externalPostLogout = post_logout_redirect_uri ?? string.Empty;
 
         if (mode == "local")
         {

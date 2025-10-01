@@ -284,8 +284,8 @@ app.MapGet("/logout", async ctx =>
     var rpBase = ctx.Request.Scheme + "://" + ctx.Request.Host;
     var absoluteReturn = rpBase + requested; // e.g. https://localhost:7180/
 
-    var target = normalizedAuthority + "logout?returnUrl=" + Uri.EscapeDataString(requested)
-        + "&client_id=" + Uri.EscapeDataString(clientId)
+    // Use standard OIDC RP-initiated logout (end_session_endpoint)
+    var target = normalizedAuthority + "connect/endsession?client_id=" + Uri.EscapeDataString(clientId)
         + "&post_logout_redirect_uri=" + Uri.EscapeDataString(absoluteReturn);
 
     ctx.Response.Redirect(target);
