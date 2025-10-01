@@ -6,19 +6,35 @@
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome to MrWho OIDC</h1>
-    <img src="~/images/shape.jpeg" asp-append-version="true" class="img-fluid mt-3" alt="Decorative shape" style="max-width: 50%;"/>
+    <h1 class="display-4 mb-3">Welcome to MrWho OIDC</h1>
+    <p class="lead text-muted mb-4">Modern OpenID Connect Authentication Server</p>
+    
+    <img src="~/images/shape.jpeg" asp-append-version="true" class="img-fluid mt-3 mb-4" alt="Decorative shape" style="max-width: 50%;"/>
 
     @if (User?.Identity?.IsAuthenticated ?? false)
     {
         <div class="alert alert-success mt-4" role="alert">
-            You are signed in as <strong>@User.Identity!.Name</strong>.
+            <i class="bi bi-check-circle-fill me-2"></i>
+            You are signed in as <strong>@User.Identity!.Name</strong>
+        </div>
+        <div class="mt-4 d-flex gap-3 justify-content-center flex-wrap">
+            <a class="btn btn-primary" asp-page="/Admin/Clients/Index">
+                <i class="bi bi-grid-3x3-gap"></i> Dashboard
+            </a>
+            <a class="btn btn-outline-secondary" href="/.well-known/openid-configuration" target="_blank">
+                <i class="bi bi-file-earmark-code"></i> OIDC Discovery
+            </a>
         </div>
     }
     else
     {
-        <div class="mt-4">
-            <a class="btn btn-primary" asp-page="/Login">Log in</a>
+        <div class="mt-4 d-flex gap-3 justify-content-center flex-wrap">
+            <a class="btn btn-primary btn-lg" asp-page="/Login">
+                <i class="bi bi-box-arrow-in-right"></i> Log in
+            </a>
+            <a class="btn btn-outline-secondary btn-lg" asp-page="/Registrations/Index">
+                <i class="bi bi-person-plus"></i> Register
+            </a>
         </div>
     }
 </div>

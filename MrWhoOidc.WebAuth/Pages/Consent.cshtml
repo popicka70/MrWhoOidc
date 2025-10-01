@@ -4,22 +4,44 @@
     ViewData["Title"] = "Consent";
 }
 
-<h2>Consent</h2>
-<p>Application <strong>@Model.ClientId</strong> is requesting access to:</p>
-<ul>
-@foreach (var scope in Model.Scopes)
-{
-    <li>@scope</li>
-}
-</ul>
+<div class="card">
+    <div class="card-body p-4">
+        <h2 class="card-title mb-4">
+            <i class="bi bi-shield-check text-primary me-2"></i>
+            Authorization Request
+        </h2>
+        
+        <div class="alert alert-info mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            Application <strong>@Model.ClientId</strong> is requesting access to your account.
+        </div>
 
-<form method="post" action="/consent" asp-antiforgery="true">
-    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
-    <input type="hidden" name="ClientId" value="@Model.ClientId" />
-    @foreach (var scope in Model.Scopes)
-    {
-        <input type="hidden" name="Scopes" value="@scope" />
-    }
-    <button type="submit" class="btn btn-primary">Allow</button>
-    <a class="btn btn-secondary" href="@Model.CancelUrl">Deny</a>
-</form>
+        <h5 class="mb-3">Requested Permissions:</h5>
+        <ul class="list-group mb-4">
+        @foreach (var scope in Model.Scopes)
+        {
+            <li class="list-group-item d-flex align-items-center">
+                <i class="bi bi-check2 text-success me-2"></i>
+                <span>@scope</span>
+            </li>
+        }
+        </ul>
+
+        <form method="post" action="/consent" asp-antiforgery="true">
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+            <input type="hidden" name="ClientId" value="@Model.ClientId" />
+            @foreach (var scope in Model.Scopes)
+            {
+                <input type="hidden" name="Scopes" value="@scope" />
+            }
+            <div class="d-flex gap-3">
+                <button type="submit" class="btn btn-success flex-fill">
+                    <i class="bi bi-check-lg"></i> Allow Access
+                </button>
+                <a class="btn btn-outline-danger flex-fill" href="@Model.CancelUrl">
+                    <i class="bi bi-x-lg"></i> Deny
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
