@@ -320,7 +320,7 @@ public sealed class ExternalOidcIntegrationTests
         return Results.Redirect(location);
     }
 
-    [TestMethod, Ignore("Pending redirect debug in Release build - path variance")]
+    [TestMethod]
     public async Task External_TwoProviders_HappyPath_Provider1()
     {
         var env = await CreateAsync();
@@ -329,23 +329,32 @@ public sealed class ExternalOidcIntegrationTests
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
         var start = await client.GetAsync($"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode);
-        var location = start.Headers.Location!.ToString();
-        Assert.IsTrue(location.Contains("/up1/authorize"), "Redirect should target upstream /up1/authorize");
-        var uri = new Uri(location);
+        var upstreamLocation = start.Headers.Location;
+        Assert.IsNotNull(upstreamLocation, "Start redirect is missing location header");
+        Assert.IsTrue(upstreamLocation!.ToString().Contains("/up1/authorize"), "Redirect should target upstream /up1/authorize");
+        var uri = upstreamLocation.IsAbsoluteUri ? upstreamLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), upstreamLocation);
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         var state = qs["state"]!;
         var decoded = DecodeState(env.Host, state);
         Assert.AreEqual("up1", decoded.Provider);
         // Follow the upstream authorize redirect (simulate browser to upstream authorize, then back to callback)
-        var upstreamAuth = await client.GetAsync(location);
+        var upstreamAuth = await client.GetAsync(uri);
         Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize should redirect to callback with code");
-        var callbackLocation = upstreamAuth.Headers.Location!.ToString();
-        Assert.IsTrue(callbackLocation.StartsWith("/Auth/External/Callback", StringComparison.OrdinalIgnoreCase));
-        var cb = await client.GetAsync(callbackLocation);
+        var callbackLocation = upstreamAuth.Headers.Location;
+        Assert.IsNotNull(callbackLocation, "Callback redirect missing location header");
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
+        Assert.AreEqual("/Auth/External/Callback", callbackUri.AbsolutePath, "Callback should redirect to external callback endpoint");
+        var cb = await client.GetAsync(callbackUri);
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
-        var final = cb.Headers.Location!.ToString();
-        Console.WriteLine($"DEBUG final redirect: {final}");
-        Assert.IsTrue(final.Contains("/authorize", StringComparison.OrdinalIgnoreCase), $"Final redirect '{final}' should contain /authorize");
+        var finalLocation = cb.Headers.Location;
+        Assert.IsNotNull(finalLocation, "Final redirect missing location header");
+        var finalUri = finalLocation!.IsAbsoluteUri ? finalLocation : new Uri(baseUri, finalLocation);
+        Console.WriteLine($"DEBUG final redirect: {finalUri}");
+        Assert.AreEqual("/authorize", finalUri.AbsolutePath, "Final redirect path should be /authorize");
+        var finalQuery = System.Web.HttpUtility.ParseQueryString(finalUri.Query);
+        Assert.AreEqual(ClientPublicId, finalQuery["client_id"], "client_id should flow through returnUrl");
+        Assert.IsFalse(string.IsNullOrEmpty(finalQuery["cid_ref"]), "cid_ref should be present to maintain correlation");
         var expectedCookieName = ".mrwhooidc.lastidp." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(ClientPublicId))).Substring(0, 16);
         var setCookie = cb.Headers.TryGetValues("Set-Cookie", out var cookies) ? string.Join(";", cookies) : string.Empty;
         if (!setCookie.Contains(expectedCookieName))
