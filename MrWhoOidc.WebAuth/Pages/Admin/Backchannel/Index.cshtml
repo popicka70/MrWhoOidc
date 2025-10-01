@@ -4,90 +4,256 @@
     ViewData["Title"] = "Back-channel logout outbox";
 }
 
-<div class="d-flex align-items-center justify-content-between mb-3">
-    <h2 class="mb-0">Back-channel logout outbox</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="bi bi-plug text-primary me-2"></i>
+            Back-channel Logout Outbox
+        </h1>
+        <p class="text-muted mb-0">Monitor and manage backchannel logout requests</p>
+    </div>
     <form method="get" class="d-flex gap-2">
-        <select class="form-select" name="status" onchange="this.form.submit()">
-            <option value="" selected="@(Model.Status is null)">All</option>
+        <select class="form-select" name="status" onchange="this.form.submit()" style="width: auto;">
+            <option value="" selected="@(Model.Status is null)">All Statuses</option>
             <option value="pending" selected="@(Model.Status=="pending")">Pending</option>
             <option value="succeeded" selected="@(Model.Status=="succeeded")">Succeeded</option>
             <option value="failed" selected="@(Model.Status=="failed")">Failed</option>
             <option value="dead_letter" selected="@(Model.Status=="dead_letter")">Dead-letter</option>
         </select>
-        <button type="submit" class="btn btn-outline-secondary">Refresh</button>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
     </form>
-}
-
-<div class="alert alert-info">
-    <div><strong>Backlog:</strong> @Model.Backlog</div>
-    <div><strong>Feature enabled:</strong> @(Model.Enabled ? "Yes" : "No")</div>
 </div>
 
-<table class="table table-sm table-striped align-middle">
-    <thead>
-        <tr>
-            <th>Created</th>
-            <th>Client</th>
-            <th>Target</th>
-            <th>Status</th>
-            <th>Attempts</th>
-            <th>Last HTTP</th>
-            <th>Last error</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    @foreach (var item in Model.Items)
-    {
-        <tr>
-            <td>@item.CreatedAt.ToLocalTime().ToString("G")</td>
-            <td><code>@item.ClientId</code></td>
-            <td style="max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><code>@item.TargetUri</code></td>
-            <td>
-                @switch(item.Status)
-                {
-                    case "pending": <span class="badge text-bg-warning">pending</span>; break;
-                    case "succeeded": <span class="badge text-bg-success">succeeded</span>; break;
-                    case "failed": <span class="badge text-bg-danger">failed</span>; break;
-                    case "dead_letter": <span class="badge text-bg-secondary">dead-letter</span>; break;
-                    default: <span class="badge text-bg-light">@item.Status</span>; break;
-                }
-            </td>
-            <td>@item.AttemptCount/@item.MaxAttempts</td>
-            <td>@item.LastHttpStatus</td>
-            <td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="@item.LastError">@item.LastError</td>
-            <td class="text-end">
-                @if(item.Status != "succeeded")
-                {
-                    <form method="post">
-                        <input type="hidden" name="id" value="@item.Id" />
-                        <button class="btn btn-sm btn-outline-primary" formaction="@Url.Page(null, "Retry")">Retry</button>
-                    </form>
-                }
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="bi bi-inbox me-1"></i>Backlog
+                </h6>
+                <h3 class="card-title mb-0">@Model.Backlog</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="bi bi-toggle-on me-1"></i>Feature Status
+                </h6>
+                <h3 class="card-title mb-0">
+                    @if (Model.Enabled)
+                    {
+                        <span class="badge text-bg-success">
+                            <i class="bi bi-check-circle"></i> Enabled
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary">
+                            <i class="bi bi-x-circle"></i> Disabled
+                        </span>
+                    }
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
 
-<h3 class="mt-4">Open circuits</h3>
-@if (Model.OpenCircuits.Count == 0)
-{
-    <p class="text-muted">None</p>
-}
-else
-{
-    <table class="table table-sm table-striped align-middle">
-        <thead><tr><th>Client</th><th>Failures</th><th>Open until</th></tr></thead>
-        <tbody>
-        @foreach (var c in Model.OpenCircuits)
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-list-ul me-2"></i>Logout Requests
+        </h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th style="min-width: 160px;">
+                        <i class="bi bi-calendar me-1"></i>Created
+                    </th>
+                    <th style="min-width: 120px;">
+                        <i class="bi bi-key me-1"></i>Client
+                    </th>
+                    <th style="min-width: 200px;">
+                        <i class="bi bi-link-45deg me-1"></i>Target
+                    </th>
+                    <th style="min-width: 100px;">
+                        <i class="bi bi-info-circle me-1"></i>Status
+                    </th>
+                    <th style="min-width: 80px;">Attempts</th>
+                    <th style="min-width: 80px;">Last HTTP</th>
+                    <th style="min-width: 150px;">Last Error</th>
+                    <th class="text-end" style="min-width: 100px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>
+                        <small>@item.CreatedAt.ToLocalTime().ToString("g")</small>
+                    </td>
+                    <td>
+                        <code class="small">@item.ClientId</code>
+                    </td>
+                    <td>
+                        <div style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@item.TargetUri">
+                            <code class="small">@item.TargetUri</code>
+                        </div>
+                    </td>
+                    <td>
+                        @switch(item.Status)
+                        {
+                            case "pending": 
+                                <span class="badge text-bg-warning">
+                                    <i class="bi bi-clock"></i> Pending
+                                </span>
+                                break;
+                            case "succeeded": 
+                                <span class="badge text-bg-success">
+                                    <i class="bi bi-check-circle"></i> Succeeded
+                                </span>
+                                break;
+                            case "failed": 
+                                <span class="badge text-bg-danger">
+                                    <i class="bi bi-x-circle"></i> Failed
+                                </span>
+                                break;
+                            case "dead_letter": 
+                                <span class="badge text-bg-secondary">
+                                    <i class="bi bi-archive"></i> Dead-letter
+                                </span>
+                                break;
+                            default: 
+                                <span class="badge text-bg-light">@item.Status</span>
+                                break;
+                        }
+                    </td>
+                    <td>
+                        <span class="badge text-bg-secondary">@item.AttemptCount / @item.MaxAttempts</span>
+                    </td>
+                    <td>
+                        @if (item.LastHttpStatus.HasValue)
+                        {
+                            if (item.LastHttpStatus >= 200 && item.LastHttpStatus < 300)
+                            {
+                                <span class="badge text-bg-success">@item.LastHttpStatus</span>
+                            }
+                            else if (item.LastHttpStatus >= 400)
+                            {
+                                <span class="badge text-bg-danger">@item.LastHttpStatus</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">@item.LastHttpStatus</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(item.LastError))
+                        {
+                            <div style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="@item.LastError">
+                                <small class="text-danger">@item.LastError</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="text-end">
+                        @if(item.Status != "succeeded")
+                        {
+                            <form method="post" class="d-inline">
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button class="btn btn-sm btn-outline-primary" formaction="@Url.Page(null, "Retry")">
+                                    <i class="bi bi-arrow-clockwise"></i> Retry
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="text-muted small">—</span>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (Model.Items.Count == 0)
+            {
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">No logout requests found</p>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-exclamation-triangle me-2"></i>Open Circuits
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (Model.OpenCircuits.Count == 0)
         {
-            <tr>
-                <td><code>@c.ClientId</code></td>
-                <td>@c.Failures</td>
-                <td>@c.OpenUntil?.ToLocalTime().ToString("G")</td>
-            </tr>
+            <div class="text-center text-muted py-3">
+                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                <p class="mb-0 mt-2">No open circuits - all systems operational</p>
+            </div>
         }
-        </tbody>
-    </table>
-}
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>
+                                <i class="bi bi-key me-1"></i>Client
+                            </th>
+                            <th>
+                                <i class="bi bi-exclamation-circle me-1"></i>Failures
+                            </th>
+                            <th>
+                                <i class="bi bi-clock me-1"></i>Open Until
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var c in Model.OpenCircuits)
+                    {
+                        <tr>
+                            <td><code>@c.ClientId</code></td>
+                            <td>
+                                <span class="badge text-bg-danger">@c.Failures</span>
+                            </td>
+                            <td>
+                                @if (c.OpenUntil.HasValue)
+                                {
+                                    <small>@c.OpenUntil.Value.ToLocalTime().ToString("g")</small>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
