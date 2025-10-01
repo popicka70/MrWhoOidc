@@ -19,7 +19,7 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public class ExternalOidcErrorTests
 {
-    private static (ExternalOidcHandler handler, DefaultHttpContext ctx) Create()
+    private static (IExternalOidcHandler handler, DefaultHttpContext ctx) Create()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -33,21 +33,11 @@ public class ExternalOidcErrorTests
         services.AddHttpClient();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        services.AddExternalOidcHandler(); // Use DI registration
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();
         var scoped = scope.ServiceProvider;
-        var db = scoped.GetRequiredService<AuthDbContext>();
-        var handler = new ExternalOidcHandler(
-            db,
-            scoped.GetRequiredService<IHttpClientFactory>(),
-            scoped.GetRequiredService<IDataProtectionProvider>(),
-            scoped.GetRequiredService<IJwksCache>(),
-            scoped.GetRequiredService<IClaimMappingService>(),
-            scoped.GetRequiredService<ICorrelationContextAccessor>(),
-            scoped.GetRequiredService<ICorrelationStateCache>(),
-            scoped.GetRequiredService<ICorrelationIdGenerator>(),
-            scoped.GetRequiredService<OidcMetrics>(),
-            new NullLogger<ExternalOidcHandler>());
+        var handler = scoped.GetRequiredService<IExternalOidcHandler>();
         var ctx = new DefaultHttpContext
         {
             RequestServices = scoped

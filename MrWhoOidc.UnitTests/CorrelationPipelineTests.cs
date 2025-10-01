@@ -116,7 +116,7 @@ public sealed class CorrelationPipelineTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(scope.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>().CorrelationId));
     }
 
-    private static IServiceScope CreateServiceScope(out ExternalOidcHandler handler, out RecordingOidcMetrics metrics)
+    private static IServiceScope CreateServiceScope(out IExternalOidcHandler handler, out RecordingOidcMetrics metrics)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -132,22 +132,12 @@ public sealed class CorrelationPipelineTests
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        services.AddExternalOidcHandler(); // Use DI registration
 
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateScope();
 
-        handler = new ExternalOidcHandler(
-            scope.ServiceProvider.GetRequiredService<AuthDbContext>(),
-            scope.ServiceProvider.GetRequiredService<IHttpClientFactory>(),
-            scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>(),
-            scope.ServiceProvider.GetRequiredService<IJwksCache>(),
-            scope.ServiceProvider.GetRequiredService<IClaimMappingService>(),
-            scope.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>(),
-            scope.ServiceProvider.GetRequiredService<ICorrelationStateCache>(),
-            scope.ServiceProvider.GetRequiredService<ICorrelationIdGenerator>(),
-            scope.ServiceProvider.GetRequiredService<IOidcMetrics>(),
-            NullLogger<ExternalOidcHandler>.Instance);
-
+        handler = scope.ServiceProvider.GetRequiredService<IExternalOidcHandler>();
         metrics = scope.ServiceProvider.GetRequiredService<RecordingOidcMetrics>();
 
         return new RootedScope(provider, scope);

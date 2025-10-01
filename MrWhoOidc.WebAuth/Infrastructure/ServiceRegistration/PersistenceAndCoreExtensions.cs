@@ -33,7 +33,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IIdentityProviderValidator, IdentityProviderValidator>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
         services.AddScoped<IParHandler, ParHandler>();
-        services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
+        services.AddExternalOidcHandler(); // External OIDC handler with refactored services
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
 

@@ -74,7 +74,7 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-        services.AddScoped<IExternalOidcHandler, ExternalOidcHandler>();
+        services.AddExternalOidcHandler(); // Use DI registration
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
