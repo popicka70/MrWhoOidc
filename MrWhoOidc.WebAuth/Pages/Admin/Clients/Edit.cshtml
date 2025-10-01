@@ -16,6 +16,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="redirect-uris-tab" data-bs-toggle="tab" data-bs-target="#tab-redirect-uris" type="button" role="tab" aria-controls="tab-redirect-uris" aria-selected="false">
+                <i class="bi bi-arrow-left-right me-1"></i> Redirect URIs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="providers-tab" data-bs-toggle="tab" data-bs-target="#tab-providers" type="button" role="tab" aria-controls="tab-providers" aria-selected="false">
                 <i class="bi bi-people me-1"></i> Providers
             </button>
@@ -70,19 +75,7 @@
                     <select asp-for="Input.RealmId" asp-items="Model.RealmOptions" class="form-select"></select>
                     <span asp-validation-for="Input.RealmId" class="text-danger"></span>
                 </div>
-                <div class="col-md-3 form-check mt-4">
-                    <input asp-for="Input.RequirePkce" class="form-check-input" />
-                    <label asp-for="Input.RequirePkce" class="form-check-label"></label>
-                </div>
-                <div class="col-md-3 form-check mt-4">
-                    <input asp-for="Input.RequireConsent" class="form-check-input" />
-                    <label asp-for="Input.RequireConsent" class="form-check-label"></label>
-                </div>
-                <div class="col-md-3 form-check mt-2">
-                    <input asp-for="Input.RequirePar" class="form-check-input" />
-                    <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label" for="Input_LoginStyleKey">Login style scheme</label>
                     <select class="form-select" id="Input_LoginStyleKey" name="Input.LoginStyleKey">
                         <option value="" selected="@(string.IsNullOrWhiteSpace(Model.Input.LoginStyleKey) ? "selected" : null)">Default</option>
@@ -95,20 +88,33 @@
                     <small class="form-text text-muted">Overrides page style for login/provider selection screens.</small>
                 </div>
                 <div class="col-12">
-                    <label asp-for="Input.AllowedLoginRedirectUris" class="form-label"></label>
-                    <input asp-for="Input.AllowedLoginRedirectUris" class="form-control" placeholder="https://app.example.com/signin-oidc, https://app2.example.com/callback" />
-                    <small class="form-text text-muted">Comma-separated absolute URLs accepted as redirect_uri during login.</small>
-                    <span asp-validation-for="Input.AllowedLoginRedirectUris" class="text-danger"></span>
-                </div>
-                <div class="col-12">
-                    <label asp-for="Input.AllowedLogoutRedirectUris" class="form-label"></label>
-                    <input asp-for="Input.AllowedLogoutRedirectUris" class="form-control" placeholder="https://app.example.com/signout-callback-oidc" />
-                    <small class="form-text text-muted">Comma-separated absolute URLs accepted as post_logout_redirect_uri during logout.</small>
-                    <span asp-validation-for="Input.AllowedLogoutRedirectUris" class="text-danger"></span>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-gear-fill me-2"></i>Client Settings
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4 form-check">
+                                    <input asp-for="Input.RequirePkce" class="form-check-input" />
+                                    <label asp-for="Input.RequirePkce" class="form-check-label"></label>
+                                </div>
+                                <div class="col-md-4 form-check">
+                                    <input asp-for="Input.RequireConsent" class="form-check-input" />
+                                    <label asp-for="Input.RequireConsent" class="form-check-label"></label>
+                                </div>
+                                <div class="col-md-4 form-check">
+                                    <input asp-for="Input.RequirePar" class="form-check-input" />
+                                    <label asp-for="Input.RequirePar" class="form-check-label">Require PAR for this client</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header">Login methods</div>
+                        <div class="card-header">
+                            <i class="bi bi-door-open me-2"></i>Login methods
+                        </div>
                         <div class="card-body row g-3">
                             <div class="col-md-4 form-check">
                                 <input asp-for="Input.AllowLocalLogin" class="form-check-input" />
@@ -138,6 +144,58 @@
                     </div>
                     <small class="form-text text-muted">Set to rotate/change secret; leave blank to keep current</small>
                     <span asp-validation-for="Input.ClientSecret" class="text-danger"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-redirect-uris" role="tabpanel" aria-labelledby="redirect-uris-tab" tabindex="0">
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> Enter one URL per line. These URLs must match exactly during the OAuth2/OIDC flow.
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.AllowedLoginRedirectUris" class="form-label">
+                        <i class="bi bi-arrow-right-circle me-1"></i>
+                        Allowed Login Redirect URIs
+                    </label>
+                    <textarea asp-for="Input.AllowedLoginRedirectUris" class="form-control" rows="6" 
+                              placeholder="https://app.example.com/signin-oidc&#10;https://app2.example.com/callback&#10;https://localhost:5001/signin-oidc"
+                              style="font-family: 'Courier New', monospace; font-size: 0.9rem;"></textarea>
+                    <small class="form-text text-muted">
+                        <strong>One URL per line.</strong> These absolute URLs are accepted as <code>redirect_uri</code> during login/authorization flow.
+                    </small>
+                    <span asp-validation-for="Input.AllowedLoginRedirectUris" class="text-danger d-block mt-1"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.AllowedLogoutRedirectUris" class="form-label">
+                        <i class="bi bi-arrow-left-circle me-1"></i>
+                        Allowed Logout Redirect URIs
+                    </label>
+                    <textarea asp-for="Input.AllowedLogoutRedirectUris" class="form-control" rows="6" 
+                              placeholder="https://app.example.com/signout-callback-oidc&#10;https://app2.example.com/logout-callback&#10;https://localhost:5001/signout-callback-oidc"
+                              style="font-family: 'Courier New', monospace; font-size: 0.9rem;"></textarea>
+                    <small class="form-text text-muted">
+                        <strong>One URL per line.</strong> These absolute URLs are accepted as <code>post_logout_redirect_uri</code> during logout flow.
+                    </small>
+                    <span asp-validation-for="Input.AllowedLogoutRedirectUris" class="text-danger d-block mt-1"></span>
+                </div>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-lightbulb me-2"></i>Tips
+                        </div>
+                        <div class="card-body">
+                            <ul class="mb-0">
+                                <li>URLs must be <strong>absolute</strong> and use <code>https://</code> (or <code>http://localhost</code> for development)</li>
+                                <li>Wildcards are <strong>not supported</strong> - each URL must be listed explicitly</li>
+                                <li>The redirect URIs are case-sensitive</li>
+                                <li>Query parameters in URIs are typically not recommended</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -104,11 +104,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         string? loginUris = null, logoutUris = null;
         if (!string.IsNullOrEmpty(client.AllowedLoginRedirectUrisJson))
         {
-            try { loginUris = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
+            try { loginUris = string.Join("\n", JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
         }
         if (!string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson))
         {
-            try { logoutUris = string.Join(", ", JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
+            try { logoutUris = string.Join("\n", JsonSerializer.Deserialize<string[]>(client.AllowedLogoutRedirectUrisJson) ?? Array.Empty<string>()); } catch { }
         }
 
         // M2M fields
@@ -1013,16 +1013,20 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         return RedirectToPage("Index");
     }
 
-    private static string? NormalizeUrlsToJson(string? csv)
+    private static string? NormalizeUrlsToJson(string? input)
     {
-        if (string.IsNullOrWhiteSpace(csv)) return null;
-        var list = csv
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        
+        // Split by newlines first (for textarea input), then fallback to comma-separated for backward compatibility
+        var list = input
+            .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .SelectMany(line => line.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Distinct(StringComparer.Ordinal)
             .Select(s => s.Trim())
             .ToArray();
+        
         return list.Length == 0 ? null : JsonSerializer.Serialize(list);
     }
 

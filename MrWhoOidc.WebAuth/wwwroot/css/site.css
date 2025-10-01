@@ -858,3 +858,56 @@ code {
   font-size: 0.875em;
   color: #d63384;
 }
+
+/* TEXTAREA FOR URLs */
+textarea[style*="monospace"] {
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* TAB CONTENT */
+.tab-content {
+  background: white;
+}
+
+.nav-tabs {
+  border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+  border: none;
+  color: #6c757d;
+  font-weight: 500;
+  padding: 0.75rem 1.25rem;
+  transition: var(--transition-fast);
+}
+
+.nav-tabs .nav-link:hover {
+  color: var(--primary-color);
+  border-color: transparent;
+  background-color: rgba(13, 110, 253, 0.05);
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--primary-color);
+  background-color: white;
+  border-color: transparent;
+  border-bottom: 3px solid var(--primary-color);
+  margin-bottom: -2px;
+}
+
+/* FORM CHECKBOXES IN CARDS */
+.card-body .form-check {
+  padding-top: 0.5rem;
+  padding-left: 1.75rem;
+}
+
+.card-body .form-check-input {
+  margin-top: 0.35rem;
+}
+
+.card-body .form-check-label {
+  font-weight: 500;
+  color: var(--dark-color);
+}
+
