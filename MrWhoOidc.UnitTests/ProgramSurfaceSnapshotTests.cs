@@ -23,7 +23,7 @@ public class ProgramSurfaceSnapshotTests
     // Updated model captures multiple rate limiter policies & whether CORS/authorization metadata present.
     private record EndpointInfo(string Pattern, string Methods, string[] RateLimiters, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
 
-    [TestMethod, TestCategory("SafetySurface"), Ignore("Temporarily ignored while snapshot is being regenerated after refactor; re-enable once stabilized.")]
+    [TestMethod, TestCategory("SafetySurface")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
         var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
@@ -86,6 +86,18 @@ public class ProgramSurfaceSnapshotTests
 
         // Baseline snapshot path (committed file under UnitTests/Snapshots)
         var snapshotDir = Path.Combine(GetSolutionRoot(), "MrWhoOidc.UnitTests", "Snapshots");
+        var diffFile = Path.Combine(snapshotDir, "endpoint-manifest.diff.json");
+        if (File.Exists(diffFile))
+        {
+            try
+            {
+                File.Delete(diffFile);
+            }
+            catch
+            {
+                // best effort cleanup; ignore if locked
+            }
+        }
         Directory.CreateDirectory(snapshotDir);
         var snapshotFile = Path.Combine(snapshotDir, "endpoint-manifest.snapshot.json");
         var isPlaceholder = false;
