@@ -164,6 +164,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             AllowExternalIdp = client.AllowExternalIdp,
             AllowQrLogin = client.AllowQrLogin,
             LoginStyleKey = client.LoginStyleKey,
+            AutoApprovalMode = client.AutoApprovalMode,
             // M2M
             M2MAllowedAudiences = m2mAudiences,
             M2MAccessTokenLifetimeSeconds = client.M2MAccessTokenLifetimeSeconds,
@@ -790,6 +791,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         client.AllowExternalIdp = Input.AllowExternalIdp;
         client.AllowQrLogin = Input.AllowQrLogin;
         client.LoginStyleKey = string.IsNullOrWhiteSpace(Input.LoginStyleKey) ? null : Input.LoginStyleKey.Trim();
+        client.AutoApprovalMode = Input.AutoApprovalMode;
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
@@ -1298,6 +1300,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         // New: login UI style scheme
         [StringLength(50)]
         public string? LoginStyleKey { get; set; }
+
+        // New: Auto-approval for new registrations
+        [Display(Name = "Auto-approve new registrations")]
+        public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
 
         // New: M2M policy fields
         [Display(Name = "M2M allowed audiences (comma-separated)")]

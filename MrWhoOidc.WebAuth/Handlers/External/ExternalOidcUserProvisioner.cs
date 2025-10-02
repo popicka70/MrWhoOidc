@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -45,13 +46,16 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 {
     private readonly AuthDbContext _db;
     private readonly ILogger<ExternalOidcUserProvisioner> _logger;
+    private readonly IRegistrationService _registrationService;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
-        ILogger<ExternalOidcUserProvisioner> logger)
+        ILogger<ExternalOidcUserProvisioner> logger,
+        IRegistrationService registrationService)
     {
         _db = db;
         _logger = logger;
+        _registrationService = registrationService;
     }
 
     public async Task<UserProvisioningResult> ProvisionOrLinkUserAsync(
@@ -149,11 +153,65 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (allowAutoProvision)
         {
-            var userId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, cancellationToken);
+            // Check client's auto-approval setting
+            var autoApprovalMode = clientEntity?.AutoApprovalMode ?? AutoApprovalMode.No;
+            var shouldAutoApprove = autoApprovalMode == AutoApprovalMode.All || autoApprovalMode == AutoApprovalMode.OnlyExternalIdp;
+
+            if (shouldAutoApprove)
+            {
+                // Create registration and auto-approve it
+                try
+                {
+                    var userId = await _registrationService.CreateAndMaybeApproveRegistrationAsync(
+                        userEmail ?? $"{provider}:{subject}",
+                        null, // firstName - can be parsed from name if needed
+                        null, // lastName
+                        clientEntity?.Id,
+                        null, // no password for external IdP users
+                        isExternalIdp: true,
+                        autoApprove: true,
+                        cancellationToken);
+
+                    if (userId.HasValue)
+                    {
+                        // Link external identity to the newly created and approved user
+                        var newExt = new ExternalIdentity
+                        {
+                            Issuer = issuer,
+                            Subject = subject,
+                            UserId = userId.Value,
+                            ProviderName = provider,
+                            ClaimsJson = BuildClaimsJson(userEmail, userName),
+                            CreatedAt = DateTimeOffset.UtcNow,
+                            LastSeenAt = DateTimeOffset.UtcNow
+                        };
+                        _db.ExternalIdentities.Add(newExt);
+                        await _db.SaveChangesAsync(cancellationToken);
+
+                        _logger.LogInformation("Auto-approved registration for external IdP user {Email} from provider {Provider}",
+                            userEmail, provider);
+
+                        return new UserProvisioningResult
+                        {
+                            Success = true,
+                            UserId = userId.Value,
+                            Outcome = "auto_approved"
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Auto-approval failed for {Email}, falling back to standard provisioning", userEmail);
+                    // Fall through to standard auto-provisioning if something goes wrong
+                }
+            }
+
+            // Standard auto-provisioning (no registration record, direct user creation)
+            var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, cancellationToken);
             return new UserProvisioningResult
             {
                 Success = true,
-                UserId = userId,
+                UserId = autoProvisionedUserId,
                 Outcome = "auto_provisioned"
             };
         }

@@ -674,6 +674,13 @@ public class Client
     public OboDpopMode? OboDpopMode { get; set; }
     [MaxLength(2000)]
     public string? OboAllowedCallersJson { get; set; }
+
+    // New: Auto-approval for new user registrations
+    /// <summary>
+    /// Controls whether new user registrations from this client are automatically approved.
+    /// No = manual approval required (default), OnlyExternalIdp = auto-approve external IdP logins only, All = auto-approve all registrations.
+    /// </summary>
+    public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
 }
 
 public class ClientScope

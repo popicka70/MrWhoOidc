@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.WebAuth.Handlers.External;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -27,6 +28,9 @@ public static class ExternalOidcServiceCollectionExtensions
         services.AddScoped<IExternalOidcSessionManager, ExternalOidcSessionManager>();
         services.AddScoped<IExternalOidcErrorHandler, ExternalOidcErrorHandler>();
         services.AddScoped<IExternalOidcMetricsRecorder, ExternalOidcMetricsRecorder>();
+
+        // Registration service for auto-approval support
+        services.AddScoped<IRegistrationService, RegistrationService>();
 
         return services;
     }
