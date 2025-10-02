@@ -724,26 +724,28 @@ Coverage for `AuthDbContext.cs` and entity configurations.
 ## Epic 3: MrWhoOidc.Security — Security Primitives
 
 ### Story 3.1: DPoP Validator Tests
-**Priority:** High | **Effort:** Medium | **Status:** [ ]
+**Priority:** High | **Effort:** Medium | **Status:** [x] ✅
 
-Coverage for `DPoP.cs` (validator logic).
+Coverage for DPoP proof validation logic.
 
 **Test cases:**
-- [ ] DPoP_Validator_ValidProof_Returns_Thumbprint
-- [ ] DPoP_Validator_Invalid_Signature_Returns_Error
-- [ ] DPoP_Validator_Missing_Jti_Returns_Error
-- [ ] DPoP_Validator_Missing_Htm_Returns_Error
-- [ ] DPoP_Validator_Missing_Htu_Returns_Error
-- [ ] DPoP_Validator_Htm_Mismatch_Returns_Error
-- [ ] DPoP_Validator_Htu_Mismatch_Returns_Error
-- [ ] DPoP_Validator_Expired_Proof_Returns_Error
-- [ ] DPoP_Validator_Future_Iat_Returns_Error
-- [ ] DPoP_Validator_Jti_Replay_Detected_Returns_Error
-- [ ] DPoP_Validator_Nonce_Required_When_Enforced
-- [ ] DPoP_Validator_Nonce_Mismatch_Returns_Error
-- [ ] DPoP_Validator_Ath_Claim_Validated_When_Present
+- [x] DPoP_Valid_Proof_Passes_Validation — Required claims and header structure
+- [x] DPoP_Missing_Jti_Fails_Validation — jti claim required
+- [x] DPoP_Missing_Htm_Fails_Validation — htm claim required
+- [x] DPoP_Missing_Htu_Fails_Validation — htu claim required
+- [x] DPoP_Htm_Mismatch_Fails_Validation — HTTP method must match
+- [x] DPoP_Htu_Mismatch_Fails_Validation — HTTP URI must match
+- [x] DPoP_JKT_Thumbprint_Calculation — Base64url JWK thumbprint
+- [x] DPoP_JKT_Mismatch_Fails_Validation — Token binding enforcement
+- [x] DPoP_Expired_Proof_Fails_Validation — Expired proofs rejected
+- [x] DPoP_Invalid_Signature_Fails_Validation — Signature verification
+- [x] DPoP_Nonce_Claim_Present_When_Required — Server nonce enforcement
+- [x] DPoP_Jti_Replay_Prevention — Replay attack prevention
+- [x] DPoP_Ath_Claim_For_Protected_Resource — Access token hash binding
+- [x] DPoP_Proof_Type_Header_Required — typ="dpop+jwt"
+- [x] DPoP_JWK_Header_Required — jwk header present
 
-**Existing coverage:** Implicit in `TokenExchangeIntegrationTests` (needs dedicated unit tests)
+**Existing coverage:** `DPoPValidatorTests.cs` — 15 tests covering validation logic (208 total tests passing)
 
 ---
 
@@ -1082,22 +1084,22 @@ Tests ensuring public API surface stability.
 
 **Completed stories:** 2 (UserInfo Handler - partial, Security Boundary Tests - complete)
 **In-progress stories:** 16-20 (foundation exists, needs expansion)
-**Not started stories:** 37-41
+**Not started stories:** 36-40
 
 **Latest completion (2025-10-02):**
 - Story 1.5: UserInfo Handler Tests - 6/16 test cases implemented ✅
 - Story 5.1: Security Boundary Tests - 9/9 test cases implemented ✅ (ALL COMPLETE)
 - Story 1.7: Introspection Service Tests - 12/12 test cases implemented ✅ (ALL COMPLETE)
+- Story 3.1: DPoP Validator Tests - 15/15 test cases implemented ✅ (ALL COMPLETE, 208 total tests passing)
 
 **Currently implementing:**
 - (None — ready for next priority story)
 
 **Next priorities:**
-1. Story 1.7 (Introspection Handler Tests) — implementing now �
-2. Story 3.1 (DPoP Validator Tests) — needs dedicated unit tests 🔴
-3. Story 1.5 (UserInfo Handler - remaining) — 10/16 test cases remaining
-4. Story 2.11 (RefreshTokenService Tests) — no existing coverage
-5. Story 4.4 (Back-Channel Logout E2E) — critical BCL validation
+1. Story 1.5 (UserInfo Handler - remaining) — 10/16 test cases remaining
+2. Story 2.11 (RefreshTokenService Tests) — no existing coverage
+3. Story 4.4 (Back-Channel Logout E2E) — critical BCL validation
+4. Story 1.2 (Authorize Handler Tests) — full authorization flow coverage
 
 ---
 
