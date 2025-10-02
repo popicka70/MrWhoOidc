@@ -133,7 +133,7 @@ Coverage for `ParHandler.cs` — Pushed Authorization Request endpoint.
 ---
 
 ### Story 1.5: UserInfo Handler Tests
-**Priority:** High | **Effort:** Medium | **Status:** [~]
+**Priority:** High | **Effort:** Medium | **Status:** [x] ✅
 
 Coverage for `UserInfoHandler.cs` — UserInfo endpoint with DPoP.
 
@@ -144,18 +144,18 @@ Coverage for `UserInfoHandler.cs` — UserInfo endpoint with DPoP.
 - [x] UserInfo_Valid_Token_Returns_Claims (completed 2025-10-02)
 - [x] UserInfo_Sub_Claim_Always_Present (completed 2025-10-02)
 - [x] UserInfo_DPoP_Bound_Token_Requires_Valid_Proof (completed 2025-10-02)
-- [ ] UserInfo_Access_Token_Expired_Returns_401
-- [ ] UserInfo_Access_Token_Revoked_Returns_401
-- [ ] UserInfo_DPoP_Proof_Jkt_Mismatch_Returns_Error
-- [ ] UserInfo_DPoP_Nonce_Enforced_After_Initial_Error
-- [ ] UserInfo_Claims_Filtered_By_Scope
-- [ ] UserInfo_Email_Claim_Returned_With_Email_Scope
-- [ ] UserInfo_Profile_Claims_Returned_With_Profile_Scope
-- [ ] UserInfo_Roles_Claim_Returned_With_Roles_Scope
-- [ ] UserInfo_Address_Claim_Not_Leaked_Without_Scope
-- [ ] UserInfo_Metrics_Recorded
+- [x] UserInfo_Access_Token_Expired_Returns_401 (completed 2025-10-02)
+- [x] UserInfo_Access_Token_Revoked_Returns_401 (completed 2025-10-02)
+- [x] UserInfo_DPoP_Proof_Jkt_Mismatch_Returns_Error (completed 2025-10-02)
+- [x] UserInfo_DPoP_Nonce_Enforced_After_Initial_Error (completed 2025-10-02)
+- [x] UserInfo_Claims_Filtered_By_Scope (completed 2025-10-02)
+- [x] UserInfo_Email_Claim_Returned_With_Email_Scope (completed 2025-10-02)
+- [x] UserInfo_Profile_Claims_Returned_With_Profile_Scope (completed 2025-10-02)
+- [x] UserInfo_Roles_Claim_Returned_With_Roles_Scope (completed 2025-10-02)
+- [x] UserInfo_Address_Claim_Not_Leaked_Without_Scope (completed 2025-10-02)
+- [x] UserInfo_Metrics_Recorded (completed 2025-10-02)
 
-**Existing coverage:** Basic tests implemented (6/16 test cases) in `UserInfoHandlerTests.cs`
+**Existing coverage:** All tests implemented (16/16 test cases) in `UserInfoHandlerTests.cs` ✅
 
 ---
 
@@ -1082,24 +1082,24 @@ Tests ensuring public API surface stability.
 **Total stories:** ~60
 **Estimated effort:** ~120-150 developer days
 
-**Completed stories:** 2 (UserInfo Handler - partial, Security Boundary Tests - complete)
+**Completed stories:** 4 (UserInfo Handler, Security Boundary Tests, Introspection Service, DPoP Validator)
 **In-progress stories:** 16-20 (foundation exists, needs expansion)
-**Not started stories:** 36-40
+**Not started stories:** 34-38
 
 **Latest completion (2025-10-02):**
-- Story 1.5: UserInfo Handler Tests - 6/16 test cases implemented ✅
 - Story 5.1: Security Boundary Tests - 9/9 test cases implemented ✅ (ALL COMPLETE)
 - Story 1.7: Introspection Service Tests - 12/12 test cases implemented ✅ (ALL COMPLETE)
-- Story 3.1: DPoP Validator Tests - 15/15 test cases implemented ✅ (ALL COMPLETE, 208 total tests passing)
+- Story 3.1: DPoP Validator Tests - 15/15 test cases implemented ✅ (ALL COMPLETE)
+- Story 1.5: UserInfo Handler Tests - 16/16 test cases implemented ✅ (ALL COMPLETE, 218 total tests passing)
 
 **Currently implementing:**
 - (None — ready for next priority story)
 
 **Next priorities:**
-1. Story 1.5 (UserInfo Handler - remaining) — 10/16 test cases remaining
-2. Story 2.11 (RefreshTokenService Tests) — no existing coverage
-3. Story 4.4 (Back-Channel Logout E2E) — critical BCL validation
-4. Story 1.2 (Authorize Handler Tests) — full authorization flow coverage
+1. Story 2.11 (RefreshTokenService Tests) — no existing coverage, high priority
+2. Story 4.4 (Back-Channel Logout E2E) — critical BCL validation
+3. Story 1.2 (Authorize Handler Tests) — full authorization flow coverage
+4. Story 1.6 (Revocation Handler Tests) — token revocation endpoint
 
 ---
 
