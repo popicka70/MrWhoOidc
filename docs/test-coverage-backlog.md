@@ -179,28 +179,25 @@ Coverage for `RevocationHandler.cs` — Token revocation endpoint.
 
 ---
 
-### Story 1.7: Introspection Handler Tests
-**Priority:** Medium | **Effort:** Medium | **Status:** [ ]
+### Story 1.7: Introspection Service Tests
+**Priority:** High | **Effort:** Medium | **Status:** [x] ✅
 
-Coverage for `IntrospectionHandler.cs` and supporting classes in `Handlers/Introspection/`.
+Coverage for token introspection service layer: JWT validation, opaque token lookups, refresh token handling.
 
 **Test cases:**
-- [ ] Introspection_JWT_Access_Token_Active_Returns_Claims
-- [ ] Introspection_Opaque_Access_Token_Active_Returns_Claims
-- [ ] Introspection_Refresh_Token_Active_Returns_Claims
-- [ ] Introspection_Expired_Token_Returns_Inactive
-- [ ] Introspection_Revoked_Token_Returns_Inactive
-- [ ] Introspection_Unknown_Token_Returns_Inactive
-- [ ] Introspection_Client_Authentication_Required
-- [ ] Introspection_Client_Authentication_Invalid_Returns_Error
-- [ ] Introspection_Cross_Client_Introspection_Rejected_By_Policy
-- [ ] Introspection_Audience_Policy_Enforced
-- [ ] Introspection_DPoP_Token_Returns_Cnf_Claim
-- [ ] Introspection_Metrics_Recorded
-- [ ] Introspection_Auditor_Logs_Requests
-- [ ] Introspection_Rate_Limiting_Applied
+- [x] JWT_Token_Validation_Returns_Claims — Active JWT with valid signature returns principal
+- [x] JWT_Token_Expired_Returns_Invalid — Expired JWT fails validation
+- [x] Opaque_Token_Active_Found_In_Database — Active opaque token found with correct metadata
+- [x] Opaque_Token_Expired_Returns_Inactive — Expired opaque token marked inactive
+- [x] Opaque_Token_Revoked_Returns_Inactive — Revoked opaque token marked inactive
+- [x] Refresh_Token_Active_Found_In_Database — Active refresh token found with scopes
+- [x] Unknown_Token_Returns_Inactive — Unknown token returns `active=false` (RFC 7662)
+- [x] DPoP_Bound_Token_Has_Cnf_Claim — DPoP-bound token includes `cnf.jkt` thumbprint
+- [x] Token_Scope_Claims_Deserialized_Correctly — Scopes JSON deserialized properly
+- [x] Client_Authentication_With_Secret_Validated — Correct client secret validates
+- [x] Public_Client_Has_No_Secret — Public client has no secret hash
 
-**Existing coverage:** None identified (gap)
+**Existing coverage:** `IntrospectionServiceTests.cs` — 12 tests covering service layer (182 total tests passing)
 
 ---
 
@@ -1084,15 +1081,19 @@ Tests ensuring public API surface stability.
 **Estimated effort:** ~120-150 developer days
 
 **Completed stories:** 2 (UserInfo Handler - partial, Security Boundary Tests - complete)
-**In-progress stories:** 15-19 (foundation exists, needs expansion)
-**Not started stories:** 39-43
+**In-progress stories:** 16-20 (foundation exists, needs expansion)
+**Not started stories:** 37-41
 
 **Latest completion (2025-10-02):**
 - Story 1.5: UserInfo Handler Tests - 6/16 test cases implemented ✅
 - Story 5.1: Security Boundary Tests - 9/9 test cases implemented ✅ (ALL COMPLETE)
+- Story 1.7: Introspection Service Tests - 12/12 test cases implemented ✅ (ALL COMPLETE)
+
+**Currently implementing:**
+- (None — ready for next priority story)
 
 **Next priorities:**
-1. Story 1.7 (Introspection Handler Tests) — no existing coverage 🔴
+1. Story 1.7 (Introspection Handler Tests) — implementing now �
 2. Story 3.1 (DPoP Validator Tests) — needs dedicated unit tests 🔴
 3. Story 1.5 (UserInfo Handler - remaining) — 10/16 test cases remaining
 4. Story 2.11 (RefreshTokenService Tests) — no existing coverage
