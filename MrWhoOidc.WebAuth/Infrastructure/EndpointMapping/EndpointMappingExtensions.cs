@@ -64,13 +64,13 @@ internal static class EndpointMappingExtensions
                         logger.LogInformation("Database seeding completed.");
                         
                         // Signal that migrations are complete
-                        _migrationCompletionSource.SetResult(true);
+                        _migrationCompletionSource.TrySetResult(true);
                     }
                     catch (Exception ex)
                     {
                         var logger = app.Services.GetRequiredService<ILogger<WebApplication>>();
                         logger.LogCritical(ex, "Fatal error during database migration/seeding. Application cannot start.");
-                        _migrationCompletionSource.SetException(ex);
+                        _migrationCompletionSource.TrySetException(ex);
                         // Allow the exception to propagate - app should fail to start properly
                         throw;
                     }
@@ -80,7 +80,7 @@ internal static class EndpointMappingExtensions
         else
         {
             // If migrations are skipped, signal completion immediately
-            _migrationCompletionSource.SetResult(true);
+            _migrationCompletionSource.TrySetResult(true);
         }
 
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
