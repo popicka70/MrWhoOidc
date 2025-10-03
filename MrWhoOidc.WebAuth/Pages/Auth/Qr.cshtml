@@ -2,15 +2,11 @@
 @model MrWhoOidc.WebAuth.Pages.Auth.QrModel
 @{
     ViewData["Title"] = "QR Code Login";
-    // Try HttpContext.Items first (direct call), then session (after redirect)
-    var qrCodeDataUri = HttpContext.Items["QrCodeDataUri"]?.ToString() 
-        ?? HttpContext.Session.GetString("qr_code_data_uri") ?? "";
-    var sessionToken = HttpContext.Items["SessionToken"]?.ToString() 
-        ?? HttpContext.Session.GetString("qr_session_token") ?? "";
-    var pollInterval = HttpContext.Items["PollInterval"]?.ToString() 
-        ?? HttpContext.Session.GetInt32("qr_poll_interval")?.ToString() ?? "2";
-    var returnUrl = HttpContext.Items["ReturnUrl"]?.ToString() 
-        ?? HttpContext.Session.GetString("qr_return_url") ?? "/";
+    // Read from query parameters
+    var qrCodeDataUri = HttpContext.Request.Query["qr"].ToString();
+    var sessionToken = HttpContext.Request.Query["token"].ToString();
+    var pollInterval = HttpContext.Request.Query["interval"].ToString();
+    if (string.IsNullOrEmpty(pollInterval)) pollInterval = "2";
 }
 
 <div class="container mt-5">
@@ -170,7 +166,7 @@
                     console.error('Error cancelling QR login:', error);
                 }
 
-                window.location.href = '/Auth/Providers/Select?returnUrl=' + encodeURIComponent('@returnUrl');
+                window.location.href = '/';
             }
 
             cancelBtn.addEventListener('click', cancelLogin);

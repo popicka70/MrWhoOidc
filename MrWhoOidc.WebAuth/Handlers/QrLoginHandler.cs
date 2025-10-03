@@ -191,14 +191,11 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 expiry = opts.SessionLifetimeSeconds
             });
 
-            // Store QR data in session for the Razor page to retrieve after redirect
-            http.Session.SetString("qr_code_data_uri", qrCodeDataUri);
-            http.Session.SetString("qr_session_token", sessionToken);
-            http.Session.SetInt32("qr_poll_interval", opts.PollIntervalSeconds);
-            http.Session.SetString("qr_return_url", returnUrl);
-
-            _logger.LogDebug("Redirecting to /Auth/Qr Razor page (data stored in session)");
-            return Results.Redirect("/Auth/Qr");
+            // Pass data via query parameters to the Razor page
+            var qrPageUrl = $"/Auth/Qr?token={Uri.EscapeDataString(sessionToken)}&qr={Uri.EscapeDataString(qrCodeDataUri)}&interval={opts.PollIntervalSeconds}";
+            
+            _logger.LogDebug("Redirecting to /Auth/Qr Razor page with QR data in query");
+            return Results.Redirect(qrPageUrl);
         }
         catch (Exception ex)
         {
