@@ -1,5 +1,6 @@
 using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -34,7 +35,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             }
 
             var token = auth.Substring("Bearer ".Length).Trim();
-            var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+            var issuer = http.GetIssuer(options);
 
             var (ok, principal, _) = validator.Validate(token, issuer);
             if (!ok || principal is not { })
@@ -71,7 +72,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
                 }
 
-                var endpointUrl = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}")!.TrimEnd('/') + "/userinfo";
+                var endpointUrl = http.GetIssuer(options).TrimEnd('/') + "/userinfo";
                 var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
 
                 // Nonce challenge support

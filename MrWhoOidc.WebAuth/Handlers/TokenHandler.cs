@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 using System.Net.Http.Headers;
 using System.Text;
@@ -54,7 +55,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
             var clientAssertionType = form["client_assertion_type"].ToString();
             var clientAssertion = form["client_assertion"].ToString();
-            var tokenEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/token";
+            var tokenEndpoint = http.GetIssuer(options) + "/token";
 
             // Fetch client once for policy checks
             var clientEntity = await clients.FindByClientIdAsync(clientId!);
@@ -152,7 +153,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
-            var authzUrl = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+            var authzUrl = http.GetIssuer(options);
             var endpointUrl = authzUrl.TrimEnd('/') + "/token";
             if (!string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
             {

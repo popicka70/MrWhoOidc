@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
@@ -82,7 +83,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
 
         // DPoP ATH validation for token-exchange
         string? dpopJkt = context.DPoPJkt; // earlier early validation if any (should have been skipped for TE)
-        var endpointUrl = (context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/') + "/token";
+        var endpointUrl = http.GetIssuer(context.Options).TrimEnd('/') + "/token";
         if (http.Request.Headers.ContainsKey("DPoP"))
         {
             var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, subjectToken, logger);
@@ -95,7 +96,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
             dpopJkt = jkt;
         }
 
-        var issuer = context.Options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+        var issuer = http.GetIssuer(context.Options);
         var sw = Stopwatch.StartNew();
         var result = await context.Tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId, issuer, dpopJkt);
         if (!result.ok && string.Equals(result.error, "invalid_request", StringComparison.Ordinal) && result.payload is not null)

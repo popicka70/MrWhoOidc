@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
@@ -43,7 +44,7 @@ public sealed class IntrospectionHandler(
         }
 
         // Build context
-        var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+        var issuer = http.GetIssuer(options);
         var endpoint = issuer + "/introspect";
         var context = new IntrospectionContext
         {

@@ -1,5 +1,6 @@
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Net.Http.Headers;
 using System.Text;
@@ -78,7 +79,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
 
         var clientAssertionType = form["client_assertion_type"].ToString();
         var clientAssertion = form["client_assertion"].ToString();
-        var parEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/par";
+        var parEndpoint = http.GetIssuer(options) + "/par";
 
         bool authenticated = false;
         string authAttemptMode;
@@ -136,7 +137,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         AuthorizeRequest req;
         if (!string.IsNullOrEmpty(roJwtRaw))
         {
-            var issuer = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+            var issuer = http.GetIssuer(options);
             var aud = issuer.TrimEnd('/') + "/authorize";
             var validation = await requestObjects.ValidateAsync(roJwtRaw, aud).ConfigureAwait(false);
             if (!validation.IsValid)
@@ -189,7 +190,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
                     .Replace('+', '-').Replace('/', '_');
         }
 
-        var issuer2 = options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+        var issuer2 = http.GetIssuer(options);
         var requestUri = issuer2.TrimEnd('/') + "/par/" + id;
 
         try

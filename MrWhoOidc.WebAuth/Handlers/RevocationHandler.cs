@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -31,7 +32,7 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
         // private_key_jwt support
         var clientAssertionType = form["client_assertion_type"].ToString();
         var clientAssertion = form["client_assertion"].ToString();
-        var revocationEndpoint = (options.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}") + "/revoke";
+        var revocationEndpoint = http.GetIssuer(options) + "/revoke";
 
         bool authenticated = false;
         if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
