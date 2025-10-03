@@ -36,7 +36,7 @@
 </div>
 
 <div class="card">
-    <div class="table-responsive">
+    <div class="table-responsive table-responsive-cards">
         <table class="table table-hover align-middle mb-0">
             <thead>
                 <tr>
@@ -46,10 +46,10 @@
                     <th>
                         <i class="bi bi-envelope me-1"></i>Email
                     </th>
-                    <th>
+                    <th class="d-none d-md-table-cell">
                         <i class="bi bi-card-text me-1"></i>Name
                     </th>
-                    <th>
+                    <th class="d-none d-md-table-cell">
                         <i class="bi bi-calendar me-1"></i>Created
                     </th>
                     <th class="text-end">Actions</th>
@@ -59,11 +59,11 @@
             @foreach (var u in Model.Users)
             {
                 <tr>
-                    <td><strong>@u.Username</strong></td>
-                    <td>@u.Email</td>
-                    <td>@u.Name</td>
-                    <td>@u.CreatedAt.ToLocalTime().ToString("g")</td>
-                    <td class="text-end">
+                    <td data-label="Username"><strong>@u.Username</strong></td>
+                    <td data-label="Email">@u.Email</td>
+                    <td data-label="Name" class="d-none d-md-table-cell">@u.Name</td>
+                    <td data-label="Created" class="d-none d-md-table-cell">@u.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td data-label="Actions" class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@u.Id">
                             <i class="bi bi-pencil"></i> Edit
                         </a>

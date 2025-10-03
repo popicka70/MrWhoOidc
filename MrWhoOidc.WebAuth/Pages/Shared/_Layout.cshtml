@@ -17,21 +17,47 @@
         <header>
             <nav class="navbar navbar-light bg-white border-bottom box-shadow mb-0">
                 <div class="container-fluid">
+                    @if (User?.Identity?.IsAuthenticated ?? false)
+                    {
+                        <button class="navbar-toggler d-md-none border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarNav" aria-controls="sidebarNav" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                    }
                     <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
-                    <div class="d-flex align-items-center gap-3">
-                        <a class="nav-link" asp-page="/Registrations/Index">Register</a>
-                        @if (User?.Identity?.IsAuthenticated ?? false)
-                        {
+                    
+                    @if (User?.Identity?.IsAuthenticated ?? false)
+                    {
+                        <!-- Desktop Navigation -->
+                        <div class="d-none d-md-flex align-items-center gap-3">
+                            <a class="nav-link" asp-page="/Registrations/Index">Register</a>
                             <a class="nav-link" asp-page="/Password/Index">Change password</a>
                             <a class="nav-link" asp-page="/Mfa/Index">Two-factor (TOTP)</a>
                             <span class="navbar-text">Hello, @User.Identity!.Name</span>
                             <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
-                        }
-                        else
-                        {
+                        </div>
+                        <!-- Mobile Navigation Dropdown -->
+                        <div class="dropdown d-md-none">
+                            <button class="btn btn-link nav-link dropdown-toggle p-2" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                                <li><h6 class="dropdown-header">@User.Identity!.Name</h6></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" asp-page="/Registrations/Index"><i class="bi bi-person-plus me-2"></i>Register</a></li>
+                                <li><a class="dropdown-item" asp-page="/Password/Index"><i class="bi bi-key me-2"></i>Change password</a></li>
+                                <li><a class="dropdown-item" asp-page="/Mfa/Index"><i class="bi bi-shield-lock me-2"></i>Two-factor (TOTP)</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
+                            </ul>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex align-items-center gap-3">
+                            <a class="nav-link" asp-page="/Registrations/Index">Register</a>
                             <a class="nav-link" asp-page="/Login">Log in</a>
-                        }
-                    </div>
+                        </div>
+                    }
                 </div>
             </nav>
         </header>
@@ -41,25 +67,32 @@
     {
         <div class="container-fluid">
             <div class="row">
-                <aside class="col-12 col-md-3 col-lg-2 border-end min-vh-100 p-0" id="sidebar">
-                    <div class="list-group list-group-flush rounded-0">
-                        <a class="list-group-item list-group-item-action" asp-page="/Index"><i class="bi bi-house-door me-2"></i>Home</a>
-                        <a class="list-group-item list-group-item-action" href="/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
-                        <a class="list-group-item list-group-item-action" href="/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
-                        <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index"><i class="bi bi-people me-2"></i>Clients</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Providers/Index"><i class="bi bi-shield-lock me-2"></i>Providers</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/ProviderMappings/Index"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Scopes/Index"><i class="bi bi-tags me-2"></i>Scopes</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Roles/Index"><i class="bi bi-person-badge me-2"></i>Roles</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Users/Index"><i class="bi bi-people-fill me-2"></i>Users</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Registrations/Index"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
-                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Backchannel/Index"><i class="bi bi-plug me-2"></i>BCL outbox</a>
+                <!-- Sidebar: Offcanvas on mobile, always visible on desktop -->
+                <aside class="offcanvas-md offcanvas-start col-md-3 col-lg-2 border-end p-0" id="sidebarNav" tabindex="-1" aria-labelledby="sidebarNavLabel">
+                    <div class="offcanvas-header d-md-none">
+                        <h5 class="offcanvas-title" id="sidebarNavLabel">Navigation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebarNav" aria-label="Close"></button>
+                    </div>
+                    <div class="offcanvas-body p-0">
+                        <div class="list-group list-group-flush rounded-0">
+                            <a class="list-group-item list-group-item-action" asp-page="/Index"><i class="bi bi-house-door me-2"></i>Home</a>
+                            <a class="list-group-item list-group-item-action" href="/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
+                            <a class="list-group-item list-group-item-action" href="/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
+                            <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index"><i class="bi bi-people me-2"></i>Clients</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Providers/Index"><i class="bi bi-shield-lock me-2"></i>Providers</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/ProviderMappings/Index"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Scopes/Index"><i class="bi bi-tags me-2"></i>Scopes</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Roles/Index"><i class="bi bi-person-badge me-2"></i>Roles</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Users/Index"><i class="bi bi-people-fill me-2"></i>Users</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Registrations/Index"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
+                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Backchannel/Index"><i class="bi bi-plug me-2"></i>BCL outbox</a>
+                        </div>
                     </div>
                 </aside>
-                <main role="main" class="col">
-                    <div class="container py-3">
+                <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4">
+                    <div class="py-3">
                         @if (TempData.ContainsKey("Error"))
                         {
                             <div class="alert alert-danger">@TempData["Error"]</div>

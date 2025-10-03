@@ -18,7 +18,7 @@
 </div>
 
 <div class="card">
-    <div class="table-responsive">
+    <div class="table-responsive table-responsive-cards">
         <table class="table table-hover align-middle mb-0">
             <thead>
                 <tr>
@@ -28,7 +28,7 @@
                     <th>
                         <i class="bi bi-card-heading me-1"></i>Display Name
                     </th>
-                    <th>
+                    <th class="d-none d-md-table-cell">
                         <i class="bi bi-calendar me-1"></i>Created
                     </th>
                     <th class="text-end">Actions</th>
@@ -38,10 +38,10 @@
             @foreach (var r in Model.Realms)
             {
                 <tr>
-                    <td><code>@r.Name</code></td>
-                    <td><strong>@r.DisplayName</strong></td>
-                    <td>@r.CreatedAt.ToLocalTime().ToString("g")</td>
-                    <td class="text-end">
+                    <td data-label="Name"><code>@r.Name</code></td>
+                    <td data-label="Display Name"><strong>@r.DisplayName</strong></td>
+                    <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td data-label="Actions" class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@r.Id">
                             <i class="bi bi-pencil"></i> Edit
                         </a>

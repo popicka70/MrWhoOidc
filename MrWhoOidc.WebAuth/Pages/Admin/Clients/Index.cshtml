@@ -18,7 +18,7 @@
 </div>
 
 <div class="card">
-    <div class="table-responsive">
+    <div class="table-responsive table-responsive-cards">
         <table class="table table-hover align-middle mb-0">
             <thead>
                 <tr>
@@ -28,12 +28,12 @@
                     <th>
                         <i class="bi bi-tag me-1"></i>Name
                     </th>
-                    <th>
+                    <th class="d-none d-md-table-cell">
                         <i class="bi bi-diagram-3 me-1"></i>Realm
                     </th>
-                    <th>PKCE</th>
-                    <th>Consent</th>
-                    <th>
+                    <th class="d-none d-md-table-cell">PKCE</th>
+                    <th class="d-none d-md-table-cell">Consent</th>
+                    <th class="d-none d-md-table-cell">
                         <i class="bi bi-gear me-1"></i>Status
                     </th>
                     <th class="text-end">Actions</th>
@@ -43,12 +43,12 @@
             @foreach (var c in Model.Clients)
             {
                 <tr>
-                    <td><code>@c.ClientId</code></td>
-                    <td><strong>@c.ClientName</strong></td>
-                    <td>
+                    <td data-label="Client ID"><code>@c.ClientId</code></td>
+                    <td data-label="Name"><strong>@c.ClientName</strong></td>
+                    <td data-label="Realm" class="d-none d-md-table-cell">
                         <span class="badge text-bg-secondary">@c.RealmName</span>
                     </td>
-                    <td>
+                    <td data-label="PKCE" class="d-none d-md-table-cell">
                         @if (c.RequirePkce)
                         {
                             <span class="badge text-bg-success">
@@ -60,7 +60,7 @@
                             <span class="badge text-bg-secondary">No</span>
                         }
                     </td>
-                    <td>
+                    <td data-label="Consent" class="d-none d-md-table-cell">
                         @if (c.RequireConsent)
                         {
                             <span class="badge text-bg-success">
@@ -72,7 +72,7 @@
                             <span class="badge text-bg-secondary">No</span>
                         }
                     </td>
-                    <td>
+                    <td data-label="Status" class="d-none d-md-table-cell">
                         @if (c.HasJwks)
                         {
                             <span class="badge text-bg-success">
@@ -90,7 +90,7 @@
                             </span>
                         }
                     </td>
-                    <td class="text-end">
+                    <td data-label="Actions" class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@c.Id">
                             <i class="bi bi-pencil"></i> Edit
                         </a>
