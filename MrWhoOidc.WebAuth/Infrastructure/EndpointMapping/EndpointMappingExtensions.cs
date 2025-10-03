@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -16,6 +17,8 @@ namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
 internal static class EndpointMappingExtensions
 {
+    private static readonly TaskCompletionSource<bool> _migrationCompletionSource = new();
+
     public static void MapMrWhoOidcEndpoints(this WebApplication app)
     {
         // This method is a straight extraction of the mapping logic from Program.cs (Phase 0 safety refactor step).
@@ -24,22 +27,60 @@ internal static class EndpointMappingExtensions
         app.MapDefaultEndpoints();
         app.MapRazorPages().WithStaticAssets();
 
-        // Delay DB migration & seeding (unchanged)
+        // Run DB migration & seeding asynchronously but gate requests until complete
         var skipMigrations = app.Configuration["Testing:SkipAuthMigrations"];
         if (!string.Equals(skipMigrations, "true", StringComparison.OrdinalIgnoreCase))
         {
+            // Add middleware to wait for migrations before processing requests
+            app.Use(async (context, next) =>
+            {
+                // Wait for migrations to complete (will be instant after first completion)
+                await _migrationCompletionSource.Task;
+                await next(context);
+            });
+
+            // Start migrations asynchronously on ApplicationStarted
             app.Lifetime.ApplicationStarted.Register(() =>
             {
                 Task.Run(async () =>
                 {
-                    using var scope = app.Services.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-                    await db.Database.MigrateAsync();
-                    var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-                    await keyStore.GetActiveSigningKeyAsync();
-                    await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
+                    try
+                    {
+                        using var scope = app.Services.CreateScope();
+                        var logger = scope.ServiceProvider.GetRequiredService<ILogger<WebApplication>>();
+                        
+                        logger.LogInformation("Starting database migrations...");
+                        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+                        await db.Database.MigrateAsync();
+                        logger.LogInformation("Database migrations completed successfully.");
+                        
+                        logger.LogInformation("Initializing signing keys...");
+                        var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
+                        await keyStore.GetActiveSigningKeyAsync();
+                        logger.LogInformation("Signing keys initialized.");
+                        
+                        logger.LogInformation("Seeding database...");
+                        await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
+                        logger.LogInformation("Database seeding completed.");
+                        
+                        // Signal that migrations are complete
+                        _migrationCompletionSource.SetResult(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        var logger = app.Services.GetRequiredService<ILogger<WebApplication>>();
+                        logger.LogCritical(ex, "Fatal error during database migration/seeding. Application cannot start.");
+                        _migrationCompletionSource.SetException(ex);
+                        // Allow the exception to propagate - app should fail to start properly
+                        throw;
+                    }
                 });
             });
+        }
+        else
+        {
+            // If migrations are skipped, signal completion immediately
+            _migrationCompletionSource.SetResult(true);
         }
 
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
