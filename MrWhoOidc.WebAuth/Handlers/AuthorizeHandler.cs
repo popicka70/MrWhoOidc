@@ -49,7 +49,7 @@ public sealed class AuthorizeHandler(
         string outcome = "redirect";
 
         // Compute initial client bucket from query (may be refined later for JAR/PAR)
-        string rawClientId = http.Request.Query["client_id"].ToString();
+        string rawClientId = http.Request.Query[OAuthConstants.Parameters.ClientId].ToString();
         string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
         string mode = "query";
 
@@ -61,7 +61,7 @@ public sealed class AuthorizeHandler(
         try
         {
             // If request_uri is provided, sanitize the address bar by keeping only request_uri and selected safe hints
-            string? requestUriRaw = http.Request.Query["request_uri"];
+            string? requestUriRaw = http.Request.Query[OAuthConstants.Parameters.RequestUri];
             if (!string.IsNullOrEmpty(requestUriRaw))
             {
                 var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -102,7 +102,7 @@ public sealed class AuthorizeHandler(
             }
 
             // Optional: max request object size for query param 'request'
-            var roJwtFromQuery = http.Request.Query["request"].ToString();
+            var roJwtFromQuery = http.Request.Query[OAuthConstants.Parameters.Request].ToString();
             var maxBytes = authOptions.Value.RequestObjectMaxBytes;
             if (!string.IsNullOrEmpty(roJwtFromQuery))
             {
@@ -170,7 +170,7 @@ public sealed class AuthorizeHandler(
                 }
                 if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
                 effectiveReq = entry.Request;
-                var stateFromQuery = http.Request.Query["state"].ToString();
+                var stateFromQuery = http.Request.Query[OAuthConstants.Parameters.State].ToString();
                 if (!string.IsNullOrEmpty(stateFromQuery)) effectiveReq.state = stateFromQuery;
             }
             else if (jarRequest is not null)
@@ -178,16 +178,16 @@ public sealed class AuthorizeHandler(
                 // Merge query params into jarRequest, enforcing immutability (query cannot conflict with values inside request object)
                 var qp = new AuthorizeRequest
                 {
-                    response_type = http.Request.Query["response_type"],
-                    client_id = http.Request.Query["client_id"],
-                    redirect_uri = http.Request.Query["redirect_uri"],
-                    scope = http.Request.Query["scope"],
-                    state = http.Request.Query["state"],
-                    nonce = http.Request.Query["nonce"],
-                    code_challenge = http.Request.Query["code_challenge"],
-                    code_challenge_method = http.Request.Query["code_challenge_method"],
-                    resource = http.Request.Query["resource"],
-                    response_mode = http.Request.Query["response_mode"]
+                    response_type = http.Request.Query[OAuthConstants.Parameters.ResponseType],
+                    client_id = http.Request.Query[OAuthConstants.Parameters.ClientId],
+                    redirect_uri = http.Request.Query[OAuthConstants.Parameters.RedirectUri],
+                    scope = http.Request.Query[OAuthConstants.Parameters.Scope],
+                    state = http.Request.Query[OAuthConstants.Parameters.State],
+                    nonce = http.Request.Query[OAuthConstants.Parameters.Nonce],
+                    code_challenge = http.Request.Query[OAuthConstants.Parameters.CodeChallenge],
+                    code_challenge_method = http.Request.Query[OAuthConstants.Parameters.CodeChallengeMethod],
+                    resource = http.Request.Query[OAuthConstants.Parameters.Resource],
+                    response_mode = http.Request.Query[OAuthConstants.Parameters.ResponseMode]
                 };
 
                 // client_id must match
@@ -221,16 +221,16 @@ public sealed class AuthorizeHandler(
             {
                 effectiveReq = new AuthorizeRequest
                 {
-                    response_type = http.Request.Query["response_type"],
-                    client_id = http.Request.Query["client_id"],
-                    redirect_uri = http.Request.Query["redirect_uri"],
-                    scope = http.Request.Query["scope"],
-                    state = http.Request.Query["state"],
-                    nonce = http.Request.Query["nonce"],
-                    code_challenge = http.Request.Query["code_challenge"],
-                    code_challenge_method = http.Request.Query["code_challenge_method"],
-                    resource = http.Request.Query["resource"],
-                    response_mode = http.Request.Query["response_mode"]
+                    response_type = http.Request.Query[OAuthConstants.Parameters.ResponseType],
+                    client_id = http.Request.Query[OAuthConstants.Parameters.ClientId],
+                    redirect_uri = http.Request.Query[OAuthConstants.Parameters.RedirectUri],
+                    scope = http.Request.Query[OAuthConstants.Parameters.Scope],
+                    state = http.Request.Query[OAuthConstants.Parameters.State],
+                    nonce = http.Request.Query[OAuthConstants.Parameters.Nonce],
+                    code_challenge = http.Request.Query[OAuthConstants.Parameters.CodeChallenge],
+                    code_challenge_method = http.Request.Query[OAuthConstants.Parameters.CodeChallengeMethod],
+                    resource = http.Request.Query[OAuthConstants.Parameters.Resource],
+                    response_mode = http.Request.Query[OAuthConstants.Parameters.ResponseMode]
                 };
             }
 
@@ -432,7 +432,7 @@ public sealed class AuthorizeHandler(
                     uri.Query = query.ToString();
                     return Results.Redirect(uri.ToString());
                 }
-                return Results.Json(new { error = "access_denied" }, statusCode: 403);
+                return ErrorResults.AccessDenied($"User is not assigned to this client (corr={corr})");
             }
 
             if (validationResult.RequireConsent && !await consents.HasConsentAsync(userId, validationResult.ClientId!, validationResult.Scopes))
@@ -444,7 +444,7 @@ public sealed class AuthorizeHandler(
             }
 
             var (ok, _, redirect, code) = await codes.IssueAsync(validationResult, userId);
-            if (!ok || redirect is null) return Results.Json(new { error = "server_error" }, statusCode: 500);
+            if (!ok || redirect is null) return ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
 
             // Now that authorization succeeded, consume PAR if used
             if (isPar)

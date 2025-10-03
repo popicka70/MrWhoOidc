@@ -30,14 +30,14 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (!http.Request.HasFormContentType)
         {
             metrics.ParFailures.Add(1);
-            return Results.Json(new { error = "invalid_request", error_description = "Form content expected", correlation_id = corr }, statusCode: 400);
+            return ErrorResults.InvalidRequest("Form content expected", correlationId: corr);
         }
 
         var form = await http.Request.ReadFormAsync();
 
         // Client id for partitioning (from header or form)
         var (clientIdHeader, _) = ReadClientCredentials(http);
-        var clientIdForRate = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form["client_id"].ToString();
+        var clientIdForRate = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form[OAuthConstants.Parameters.ClientId].ToString();
         var clientBucket = !string.IsNullOrEmpty(clientIdForRate) ? BucketizeClientId(clientIdForRate) : "unknown";
 
         // Per-client sliding window limiter
@@ -61,7 +61,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             {
                 metrics.ParFailures.Add(1);
                 logger.LogWarning("/par 429: per-client window exceeded corr={Corr} client={Client}", corr, clientBucket);
-                return Results.Json(new { error = "rate_limit_exceeded", error_description = "Too many requests", correlation_id = corr }, statusCode: 429);
+                return ErrorResults.RateLimitExceeded("Too many requests", correlationId: corr);
             }
         }
 
@@ -74,18 +74,22 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
 
         // Client authentication: private_key_jwt, basic, or post
         var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
-        if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
-        if (string.IsNullOrWhiteSpace(clientId)) { metrics.ParFailures.Add(1); return Results.Json(new { error = "invalid_request", error_description = "Missing client_id", correlation_id = corr }, statusCode: 400); }
+        if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
+        if (string.IsNullOrWhiteSpace(clientId)) 
+        { 
+            metrics.ParFailures.Add(1); 
+            return ErrorResults.InvalidRequest("Missing client_id", correlationId: corr);
+        }
 
-        var clientAssertionType = form["client_assertion_type"].ToString();
-        var clientAssertion = form["client_assertion"].ToString();
+        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
+        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
         var parEndpoint = http.GetIssuer(options) + "/par";
 
         bool authenticated = false;
         string authAttemptMode;
         string? authFailureDetail = null; // will be set if authentication ultimately fails
 
-        if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
         {
             authAttemptMode = "private_key_jwt";
             authenticated = await assertions.ValidateAsync(clientId, clientAssertion, parEndpoint).ConfigureAwait(false);
@@ -101,7 +105,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             bool usedBasic = !string.IsNullOrEmpty(clientSecretFromHeader);
             if (string.IsNullOrEmpty(clientSecretFinal))
             {
-                clientSecretFinal = form["client_secret"].ToString();
+                clientSecretFinal = form[OAuthConstants.Parameters.ClientSecret].ToString();
             }
             bool usedPost = !usedBasic && !string.IsNullOrEmpty(clientSecretFinal);
             authAttemptMode = usedBasic ? "client_secret_basic" : usedPost ? "client_secret_post" : "no_credentials";
@@ -122,7 +126,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         {
             metrics.ParFailures.Add(1);
             logger.LogWarning("/par 400 unauthorized_client corr={Corr} client_hash={ClientHash} mode={Mode} reason={Reason}", corr, BucketizeClientId(clientId), authAttemptMode, authFailureDetail ?? "auth_failed");
-            return Results.Json(new { error = "unauthorized_client", correlation_id = corr }, statusCode: 400);
+            return ErrorResults.UnauthorizedClient(correlationId: corr);
         }
 
         // Optional: object size limit
@@ -130,7 +134,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         if (maxBytes > 0 && !string.IsNullOrEmpty(roJwtRaw) && Encoding.UTF8.GetByteCount(roJwtRaw) > maxBytes)
         {
             metrics.ParFailures.Add(1);
-            return Results.Json(new { error = "invalid_request_object", error_description = "request object too large", correlation_id = corr }, statusCode: 400);
+            return ErrorResults.InvalidRequestObject("request object too large", correlationId: corr);
         }
 
         // Build/validate request
@@ -150,7 +154,7 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             {
                 metrics.ParFailures.Add(1);
                 logger.LogWarning("/par 400: client_id mismatch corr={Corr} client={Client}", corr, BucketizeClientId(clientId));
-                return Results.Json(new { error = "invalid_request", error_description = "client_id mismatch between auth and request object", correlation_id = corr }, statusCode: 400);
+                return ErrorResults.InvalidRequest("client_id mismatch between auth and request object", correlationId: corr);
             }
             req = validation.Request!;
             var stateOverride = form["state"].ToString();
@@ -160,15 +164,15 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         {
             req = new AuthorizeRequest
             {
-                response_type = form["response_type"],
+                response_type = form[OAuthConstants.Parameters.ResponseType],
                 client_id = clientId,
-                redirect_uri = form["redirect_uri"],
-                scope = form["scope"],
-                state = form["state"],
-                nonce = form["nonce"],
-                code_challenge = form["code_challenge"],
-                code_challenge_method = form["code_challenge_method"],
-                resource = form["resource"],
+                redirect_uri = form[OAuthConstants.Parameters.RedirectUri],
+                scope = form[OAuthConstants.Parameters.Scope],
+                state = form[OAuthConstants.Parameters.State],
+                nonce = form[OAuthConstants.Parameters.Nonce],
+                code_challenge = form[OAuthConstants.Parameters.CodeChallenge],
+                code_challenge_method = form[OAuthConstants.Parameters.CodeChallengeMethod],
+                resource = form[OAuthConstants.Parameters.Resource],
             };
         }
 

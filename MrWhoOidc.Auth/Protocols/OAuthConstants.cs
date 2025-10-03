@@ -39,6 +39,10 @@ public static class OAuthConstants
         public const string Error = "error";
         public const string ErrorDescription = "error_description";
         public const string ErrorUri = "error_uri";
+        
+        // JAR/PAR parameters (RFC 9101, RFC 9126)
+        public const string Request = "request";
+        public const string RequestUri = "request_uri";
     }
 
     /// <summary>

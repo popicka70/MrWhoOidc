@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 using System.Net.Http.Headers;
@@ -40,10 +41,10 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             }
 
             var form = await http.Request.ReadFormAsync();
-            grantType = form["grant_type"].ToString();
+            grantType = form[OAuthConstants.Parameters.GrantType].ToString();
 
             var (clientId, clientSecret) = ReadClientCredentials(http);
-            if (string.IsNullOrEmpty(clientId)) clientId = form["client_id"].ToString();
+            if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
 
             if (string.IsNullOrWhiteSpace(clientId))
             {
@@ -53,8 +54,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 return ErrorResults.InvalidRequest("Missing client_id");
             }
 
-            var clientAssertionType = form["client_assertion_type"].ToString();
-            var clientAssertion = form["client_assertion"].ToString();
+            var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
+            var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
             var tokenEndpoint = http.GetIssuer(options) + "/token";
 
             // Fetch client once for policy checks
@@ -67,7 +68,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             }
 
             // mTLS check for client_credentials when configured
-            if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
+            if (string.Equals(grantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
             {
                 string?[] allowedThumbprints = Array.Empty<string?>();
                 if (!string.IsNullOrWhiteSpace(clientEntity.M2MMtlsThumbprintsJson))
@@ -93,7 +94,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
             bool authenticated = false;
             bool usedPrivateKeyJwt = false;
-            if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+            if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
             {
                 if (!clientEntity.AllowPrivateKeyJwt)
                 {

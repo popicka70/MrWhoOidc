@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
@@ -26,15 +27,16 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
         {
             metrics.UserInfoRequests.Add(1);
             var auth = http.Request.Headers.Authorization.ToString();
-            if (string.IsNullOrEmpty(auth) || !auth.StartsWith("Bearer ", StringComparison.Ordinal))
+            var bearerPrefix = OAuthConstants.TokenTypes.Bearer + " ";
+            if (string.IsNullOrEmpty(auth) || !auth.StartsWith(bearerPrefix, StringComparison.Ordinal))
             {
                 outcome = "failure";
                 logger.LogWarning("/userinfo 401: missing or invalid Authorization header from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
-                return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
-            var token = auth.Substring("Bearer ".Length).Trim();
+            var token = auth.Substring(bearerPrefix.Length).Trim();
             var issuer = http.GetIssuer(options);
 
             var (ok, principal, _) = validator.Validate(token, issuer);
@@ -43,7 +45,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 outcome = "failure";
                 logger.LogWarning("/userinfo 401: token validation failed from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
-                return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
             // If token is DPoP-bound (has cnf.jkt), require and validate DPoP proof
@@ -69,7 +71,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     outcome = "failure";
                     logger.LogWarning("/userinfo 401: cnf claim present without jkt from {IP}", http.Connection.RemoteIpAddress?.ToString());
                     metrics.UserInfoFailures.Add(1);
-                    return WithWwwAuthenticate(Results.Json(new { error = "invalid_token" }, statusCode: 401));
+                    return WithWwwAuthenticate(ErrorResults.InvalidToken());
                 }
 
                 var endpointUrl = http.GetIssuer(options).TrimEnd('/') + "/userinfo";
@@ -92,7 +94,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     logger.LogWarning("/userinfo 401: invalid DPoP proof reason={Reason} from {IP}", validation.Error ?? "unknown", clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
-                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                    return ErrorResults.InvalidToken();
                 }
 
                 if (string.IsNullOrEmpty(validation.Jkt) || !string.Equals(validation.Jkt, cnfJkt, StringComparison.Ordinal))
@@ -101,7 +103,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     logger.LogWarning("/userinfo 401: cnf.jkt mismatch from {IP}", clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
-                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                    return ErrorResults.InvalidToken();
                 }
 
                 // Replay protection: DPoP jti must not repeat within window
@@ -111,7 +113,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     logger.LogWarning("/userinfo 401: DPoP missing jti/iat from {IP}", clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
-                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                    return ErrorResults.InvalidToken();
                 }
                 var key = $"{validation.Jkt}:{validation.Jti}";
                 var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
@@ -121,7 +123,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     logger.LogWarning("/userinfo 401: DPoP replay detected for {Key} from {IP}", key, clientIp);
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=replay";
-                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                    return ErrorResults.InvalidToken();
                 }
             }
 
@@ -135,16 +137,16 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             };
 
             // Only include claims permitted by scopes
-            if (scopes.Contains("profile"))
+            if (scopes.Contains(OidcConstants.Scopes.Profile))
             {
-                var name = principal.FindFirstValue("name");
-                if (!string.IsNullOrEmpty(name)) payload["name"] = name;
+                var name = principal.FindFirstValue(OidcConstants.Claims.Name);
+                if (!string.IsNullOrEmpty(name)) payload[OidcConstants.Claims.Name] = name;
             }
-            if (scopes.Contains("email"))
+            if (scopes.Contains(OidcConstants.Scopes.Email))
             {
-                var email = principal.FindFirstValue("email");
-                if (!string.IsNullOrEmpty(email)) payload["email"] = email;
-                var emailVerified = principal.FindFirst("email_verified")?.Value;
+                var email = principal.FindFirstValue(OidcConstants.Claims.Email);
+                if (!string.IsNullOrEmpty(email)) payload[OidcConstants.Claims.Email] = email;
+                var emailVerified = principal.FindFirst(OidcConstants.Claims.EmailVerified)?.Value;
                 if (!string.IsNullOrEmpty(emailVerified) && bool.TryParse(emailVerified, out var b))
                     payload["email_verified"] = b;
 

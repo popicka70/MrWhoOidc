@@ -117,20 +117,56 @@
 - **Changes**:
   - Fixed method calls from `UnsupportedGrant()` to `UnsupportedGrantType()`
 
+#### 13. **ParHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/ParHandler.cs`
+- **Changes**:
+  - Migrated 7+ inline error JSONs to ErrorResults methods
+  - Uses OAuthConstants.Parameters for all parameter access
+  - Uses OAuthConstants.ErrorCodes for error types
+  - Improved consistency with protocol error handling
+
+#### 14. **UserInfoHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`
+- **Changes**:
+  - Replaced 5 invalid_token error responses with ErrorResults.InvalidToken()
+  - Uses OAuthConstants.TokenTypes.Bearer for token type checking
+  - Uses OidcConstants.Scopes.Profile/Email for scope validation
+  - Uses OidcConstants.Claims.* for all claim names
+  - Improved WWW-Authenticate header handling
+
+#### 15. **DiscoveryHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs`
+- **Changes**:
+  - Replaced hardcoded scope array with OidcConstants.Scopes.AllStandardScopes
+  - Migrated grant types list to use OAuthConstants.GrantTypes.*
+  - Replaced all JWT algorithm strings with SecurityConstants.JwtAlgorithms.*
+  - Uses OAuthConstants.ResponseTypes.Code
+  - Uses OAuthConstants.CodeChallengeMethods.S256
+  - Uses OAuthConstants.TokenTypes.AccessToken/RefreshToken for introspection hints
+  - Fully protocol-compliant discovery metadata with constants
+
+#### 16. **AuthorizeHandler.cs** ✅ (Partial)
+- **File**: `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs`
+- **Changes**:
+  - Replaced 3 inline error JSONs with ErrorResults.AccessDenied() and ErrorResults.ServerError()
+  - Migrated critical parameter accesses to OAuthConstants.Parameters.* (ClientId, RequestUri, Request, State, ResponseType, RedirectUri, Scope, Nonce, CodeChallenge, CodeChallengeMethod, Resource, ResponseMode)
+  - Added Request and RequestUri constants to OAuthConstants.Parameters
+  - Improved consistency in error handling and parameter reading
+
 ---
 
 ## 📊 Impact Summary
 
-### Files Modified: 12
+### Files Modified: 17
 ### Files Created: 4
-### Lines of Duplicate Code Eliminated: ~60+
-### Constants Centralized: 80+
+### Lines of Duplicate Code Eliminated: ~100+
+### Constants Centralized: 110+
 
 ### Build Status: ✅ **Passing**
 ```
 Build: SUCCESS
 Tests: 306/309 passed (3 skipped)
-Time: ~42 seconds
+Time: ~43 seconds
 ```
 
 ---
@@ -150,25 +186,20 @@ Time: ~42 seconds
 
 ### High Priority Remaining:
 
-1. **TokenExchangeGrantHandler.cs** - migrate to constants
-2. **ParHandler.cs** - migrate to constants and use ErrorResults methods
-3. **TokenHandler.cs** - migrate parameter reading to constants
-4. **AuthorizeHandler.cs** - migrate to constants
-5. **UserInfoHandler.cs** - migrate to constants
-6. **DiscoveryHandler.cs** - migrate default scopes to OidcConstants
-7. **RevocationHandler.cs** - migrate to constants
-8. **Introspection handlers** - migrate to constants
+1. **AuthorizeHandler.cs** - large handler, migrate to constants and ErrorResults
+2. **RevocationHandler.cs** - migrate to constants
+3. **Introspection handlers** - migrate to constants
 
 ### Medium Priority:
 
-9. **Admin Pages** - migrate hardcoded algorithms (RS256, ES256, etc.)
-10. **External OIDC handlers** - migrate to constants
-11. **QrLoginHandler.cs** - use default scopes constant
+4. **Admin Pages** - migrate hardcoded algorithms (RS256, ES256, etc.)
+5. **External OIDC handlers** - migrate to constants
+6. **QrLoginHandler.cs** - use default scopes constant
 
 ### Low Priority:
 
-12. **Registration/Password pages** - use SecurityConstants.HashAlgorithms.Argon2id
-13. **Client authentication extractio** - consider creating `IClientAuthenticationService`
+7. **Registration/Password pages** - use SecurityConstants.HashAlgorithms.Argon2id
+8. **Client authentication extraction** - consider creating `IClientAuthenticationService`
 
 ---
 
