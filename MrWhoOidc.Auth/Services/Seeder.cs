@@ -105,6 +105,22 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
                 RealmId = adminRealm.Id,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
+                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                    "https://localhost:7181/signin-oidc",
+                    "http://localhost:7181/signin-oidc",
+                    "https://localhost:5001/signin-oidc",
+                    "http://localhost:5001/signin-oidc"
+                }),
+                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                    "https://localhost:7181/signout-callback-oidc",
+                    "https://localhost:7181/",
+                    "http://localhost:7181/signout-callback-oidc",
+                    "http://localhost:7181/",
+                    "https://localhost:5001/signout-callback-oidc",
+                    "https://localhost:5001/",
+                    "http://localhost:5001/signout-callback-oidc",
+                    "http://localhost:5001/"
+                }),
                 OboEnabled = true,
                 OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
                 OboAllowedScopesJson = JsonSerializer.Serialize(new[] { "api.read" }),
@@ -125,6 +141,30 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             {
                 // Enable introspection against default API audience
                 blazorWebClient.IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" });
+            }
+
+            // Backfill redirect URIs if missing
+            if (string.IsNullOrEmpty(blazorWebClient.AllowedLoginRedirectUrisJson))
+            {
+                blazorWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                    "https://localhost:7181/signin-oidc",
+                    "http://localhost:7181/signin-oidc",
+                    "https://localhost:5001/signin-oidc",
+                    "http://localhost:5001/signin-oidc"
+                });
+            }
+            if (string.IsNullOrEmpty(blazorWebClient.AllowedLogoutRedirectUrisJson))
+            {
+                blazorWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                    "https://localhost:7181/signout-callback-oidc",
+                    "https://localhost:7181/",
+                    "http://localhost:7181/signout-callback-oidc",
+                    "http://localhost:7181/",
+                    "https://localhost:5001/signout-callback-oidc",
+                    "https://localhost:5001/",
+                    "http://localhost:5001/signout-callback-oidc",
+                    "http://localhost:5001/"
+                });
             }
 
             // Enable on-behalf-of for the demo Razor client

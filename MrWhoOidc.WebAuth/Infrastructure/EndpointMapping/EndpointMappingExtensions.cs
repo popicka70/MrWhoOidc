@@ -112,6 +112,17 @@ internal static class EndpointMappingExtensions
         app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
         app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
+        // QR login endpoints
+        app.MapGet("/Auth/Qr", (IQrLoginHandler h, HttpContext ctx) => h.InitiateAsync(ctx));
+        app.MapGet("/Auth/QrMobile", (IQrLoginHandler h, HttpContext ctx) => h.MobileLandingAsync(ctx));
+        app.MapGet("/Auth/QrConfirm", (IQrLoginHandler h, HttpContext ctx) => h.ConfirmPageAsync(ctx));
+        app.MapGet("/api/qr/status/{sessionToken}", (IQrLoginHandler h, HttpContext ctx, string sessionToken) => h.GetStatusAsync(ctx, sessionToken))
+           .RequireRateLimiting("rl-qr-poll");
+        app.MapPost("/api/qr/confirm", (IQrLoginHandler h, HttpContext ctx) => h.ConfirmAsync(ctx))
+           .RequireRateLimiting("rl-qr-confirm");
+        app.MapPost("/api/qr/cancel", (IQrLoginHandler h, HttpContext ctx) => h.CancelAsync(ctx))
+           .RequireRateLimiting("rl-qr-cancel");
+
         var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
 
         // NOTE: For brevity, admin endpoints not yet extracted in detail for snapshot step; keeping manifest stability focus.

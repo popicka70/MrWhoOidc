@@ -105,7 +105,13 @@
                     }
                     @if (Model.AllowQrLogin)
                     {
-                        var qrUrl = "/Auth/Qr?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
+                        // The ReturnUrl is like: /authorize?request_uri=...
+                        // We need to append &qr to the actual query string, not the encoded part
+                        // Since ReturnUrl already has "?", we append "&qr" directly (no encoding needed for our parameter)
+                        var qrUrl = Model.ReturnUrl + "&qr";
+                        // DEBUG
+                        System.Console.WriteLine($"[QR Button] Original ReturnUrl='{Model.ReturnUrl}'");
+                        System.Console.WriteLine($"[QR Button] Final qrUrl='{qrUrl}'");
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@qrUrl" role="listitem" aria-label="Sign in with QR code" data-provider-name="_qr">
                             <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
                         </a>

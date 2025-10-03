@@ -9,7 +9,7 @@ public class AuthDbContextFactory : IDesignTimeDbContextFactory<AuthDbContext>
     {
         // Use an environment override if provided, otherwise a sensible local default
         var cs = Environment.GetEnvironmentVariable("AUTHDB_MIGRATIONS_CS")
-                 ?? "Host=localhost;Port=5432;Database=authdb;Username=postgres;Password=postgres";
+                 ?? "Host=localhost;Port=55309;Username=postgres;Password=m_Zw+m.heJSeweFsa82*!R;Database=authdb";
 
         var optionsBuilder = new DbContextOptionsBuilder<AuthDbContext>()
             .UseNpgsql(cs);

@@ -127,6 +127,45 @@ public static class RateLimitingExtensions
                     AutoReplenishment = true
                 });
             });
+
+            // QR login rate limiting policies
+            options.AddPolicy("rl-qr-poll", httpContext =>
+            {
+                // Partition by session token to prevent cross-session abuse
+                var sessionToken = httpContext.Request.RouteValues["sessionToken"]?.ToString() ?? "unknown";
+                return RateLimitPartition.GetSlidingWindowLimiter(sessionToken, _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    SegmentsPerWindow = 6,
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
+            options.AddPolicy("rl-qr-confirm", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
+            options.AddPolicy("rl-qr-cancel", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
         });
         return services;
 

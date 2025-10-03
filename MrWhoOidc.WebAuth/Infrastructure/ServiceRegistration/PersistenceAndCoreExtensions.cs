@@ -8,6 +8,7 @@ using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Handlers; // handlers & related interfaces live here
 using Microsoft.Extensions.Caching.Memory;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -74,6 +75,11 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<Handlers.Introspection.RefreshTokenIntrospector>();
         
         services.AddSingleton<IPublicJwksCache, PublicJwksCache>();
+
+        // QR login services
+        services.AddScoped<IQrLoginService, QrLoginService>();
+        services.AddScoped<IQrCodeGenerator, QrCodeGenerator>();
+        services.AddScoped<IQrLoginHandler, QrLoginHandler>();
 
         // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)
         services.AddHostedService<AuthCoreValidationHostedService>();

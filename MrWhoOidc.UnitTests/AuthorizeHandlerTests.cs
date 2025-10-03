@@ -36,7 +36,8 @@ public sealed class AuthorizeHandlerTests
         IRequestObjectValidator? requestObjects = null,
         IOptions<AuthOptions>? authOptions = null,
         IJwtService? jwt = null,
-        IClientStore? clients = null)
+        IClientStore? clients = null,
+        IQrLoginHandler? qrLoginHandler = null)
     {
         var metrics = new OidcMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
@@ -50,8 +51,9 @@ public sealed class AuthorizeHandlerTests
         authOptions ??= Options.Create(new AuthOptions());
         jwt ??= new StubJwtService();
         clients ??= new StubClientStore();
+        qrLoginHandler ??= new StubQrLoginHandler();
 
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db);
+        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -744,7 +746,7 @@ public sealed class AuthorizeHandlerTests
             {
                 redirectUrl += $"&response_mode={valid.ResponseMode}";
             }
-            return Task.FromResult((true, (string?)null, redirectUrl, _code));
+            return Task.FromResult((true, (string?)null, (string?)redirectUrl, (string?)_code));
         }
     }
 
@@ -960,6 +962,44 @@ public sealed class AuthorizeHandlerTests
         public IQueryable<MrWhoOidc.Auth.Persistence.Client> QueryClients(CancellationToken ct = default)
         {
             return Array.Empty<MrWhoOidc.Auth.Persistence.Client>().AsQueryable();
+        }
+    }
+
+    private sealed class StubQrLoginHandler : IQrLoginHandler
+    {
+        public Task<IResult> InitiateAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok(new { message = "QR login initiated" }) as IResult);
+        }
+
+        public Task<IResult> InitiateAsync(HttpContext http, AuthorizeValidationResult validationResult, AuthorizeRequest request)
+        {
+            return Task.FromResult(Results.Ok(new { message = "QR login initiated from authorize", clientId = validationResult.ClientId }) as IResult);
+        }
+
+        public Task<IResult> GetStatusAsync(HttpContext http, string sessionToken)
+        {
+            return Task.FromResult(Results.Ok(new { status = "pending" }) as IResult);
+        }
+
+        public Task<IResult> ConfirmAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok(new { success = true }) as IResult);
+        }
+
+        public Task<IResult> CancelAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok(new { success = true }) as IResult);
+        }
+
+        public Task<IResult> MobileLandingAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok() as IResult);
+        }
+
+        public Task<IResult> ConfirmPageAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok() as IResult);
         }
     }
 }
