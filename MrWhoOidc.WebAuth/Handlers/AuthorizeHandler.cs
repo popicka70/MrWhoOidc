@@ -459,6 +459,11 @@ public sealed class AuthorizeHandler(
             {
                 meta.SetAuthTime(code!, DateTimeOffset.FromUnixTimeSeconds(seconds));
             }
+            else if (!string.IsNullOrEmpty(code))
+            {
+                // Fallback: if auth_time not in cookie, use current time (user is authenticated NOW)
+                meta.SetAuthTime(code!, DateTimeOffset.UtcNow);
+            }
 
             // Persist RFC 8707 resource indicator with the code (if present)
             if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(validationResult.Resource))

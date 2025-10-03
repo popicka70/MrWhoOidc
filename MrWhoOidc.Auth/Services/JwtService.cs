@@ -19,7 +19,7 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
-        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
 
         // Required by OIDC: iat (issued at)
@@ -48,7 +48,7 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
-        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
+        if (authTime.HasValue) list.Add(new Claim("auth_time", ((DateTimeOffset)authTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
         if (!string.IsNullOrEmpty(accessTokenHash)) list.Add(new Claim("at_hash", accessTokenHash));
 
         // Required by OIDC: iat (issued at)
