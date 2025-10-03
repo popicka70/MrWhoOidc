@@ -126,6 +126,16 @@ Epics and stories
   - Pending: Emit `amr` consistently for all relevant flows (current: upstream + mapped merged and emitted when `AuthOptions.EmitAmr*` flags true); extend mapped claim propagation into issued tokens where policy allows (additional allow-list wiring via `AuthorizationCodeMetadataStore` for non-default claims).
   - Acceptance: Downstream clients can consume upstream metadata.
 
+- [x] Story: Multi-level IdP chaining client configuration
+  - Issue #1: When chaining two IdPs (IdP #1 → IdP #2), the second IdP may bypass the provider picker if the client representing IdP #1 has restrictive login method settings.
+  - Solution #1: The client in IdP #2 that represents IdP #1 must have `AllowLocalLogin`, `AllowExternalIdp`, and `AllowQrLogin` configured appropriately, plus provider mappings if external IdPs should be available.
+  - Issue #2 (BUG): The authorize handler only showed the provider picker when external IdPs were mapped, completely ignoring `AllowQrLogin`. This meant clients with QR enabled but no external providers would skip the picker and go directly to local login.
+  - Solution #2 (FIX): Modified `AuthorizeHandler.cs` line ~325 to evaluate `shouldShowPicker = providerLinks.Count > 0 || allowQr`, ensuring the provider picker appears when QR is enabled even without external IdPs. Also updated auto-redirect logic to prevent auto-redirect when QR is enabled.
+  - Documentation: Created `docs/idp-chaining-client-configuration.md` with detailed configuration guide and troubleshooting.
+  - UI Enhancement: Added info alert in Admin → Clients → Edit page to remind admins about IdP chaining requirements.
+  - Code Fix: `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs` lines 325-376 refactored to properly consider QR login when deciding to show provider picker.
+  - Acceptance: Multi-level IdP chains properly show all configured login options at each level based on client configuration. QR-only configurations (no external IdPs) now show the provider picker with QR and local login options.
+
 7) Login UI changes (Razor Pages end-user flow)
 - [~] Story: Provider picker page
   - Implemented: Minimal provider picker with links to external start; auto-redirect if single provider; honors `idp_hint` and remembers last provider per client. Re-ordering logic covered by `ProviderPickerTests` (last provider cookie + idp_hint recommendation).

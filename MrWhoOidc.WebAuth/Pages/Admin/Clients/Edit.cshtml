@@ -129,7 +129,16 @@
                                 <input asp-for="Input.AllowQrLogin" class="form-check-input" />
                                 <label asp-for="Input.AllowQrLogin" class="form-check-label"></label>
                             </div>
-                            <div class="col-12 small text-muted">Use these toggles to control which login options are shown/enforced for this client.</div>
+                            <div class="col-12 small text-muted">
+                                Use these toggles to control which login options are shown/enforced for this client.
+                            </div>
+                            <div class="col-12">
+                                <div class="alert alert-info small mb-0" role="alert">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>IdP Chaining:</strong> If this client represents an upstream IdP in a chaining scenario, enable the login methods you want available when users are redirected here from that upstream IdP. 
+                                    See <a href="/docs/idp-chaining-client-configuration.md" target="_blank" class="alert-link">IdP Chaining Configuration Guide</a> for details.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
