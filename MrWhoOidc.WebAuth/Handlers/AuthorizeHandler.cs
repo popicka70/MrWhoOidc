@@ -322,56 +322,63 @@ public sealed class AuthorizeHandler(
                     return Results.Redirect(url);
                 }
 
-                // Otherwise, evaluate client mappings if external allowed
+                // Otherwise, evaluate client mappings if external allowed OR if QR is enabled
                 Guid? clientGuid = null;
-                if (!string.IsNullOrEmpty(validationResult.ClientId) && allowExternal)
+                if (!string.IsNullOrEmpty(validationResult.ClientId) && (allowExternal || allowQr))
                 {
                     clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
                 }
+                
+                // Load provider links if external IdPs are allowed
+                var providerLinks = new List<dynamic>();
                 if (allowExternal && clientGuid is Guid cg)
                 {
-                    var providerLinks = await db.ClientIdentityProviders.AsNoTracking()
+                    providerLinks = await db.ClientIdentityProviders.AsNoTracking()
                         .Where(m => m.ClientId == cg && m.Enabled)
                         .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
                         .OrderBy(x => x.m.Order)
                         .Select(x => new { x.p.Name, Display = x.p.DisplayName ?? x.p.Name, x.m.IsDefaultForClient, x.m.AutoRedirectIfSingle })
-                        .ToListAsync();
+                        .ToListAsync<dynamic>();
+                }
 
-                    if (providerLinks.Count > 0)
+                // Decide whether to show provider picker: if we have external providers OR QR is enabled
+                bool shouldShowPicker = providerLinks.Count > 0 || allowQr;
+
+                if (shouldShowPicker)
+                {
+                    // If idp_hint matches an available provider and account selection not forced, use it
+                    if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && !allowLocal && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
                     {
-                        // If idp_hint matches an available provider and account selection not forced, use it
-                        if (!string.IsNullOrEmpty(idpHint) && !forceAccountSelection && !allowLocal && providerLinks.Any(pl => string.Equals(pl.Name, idpHint, StringComparison.Ordinal)))
-                        {
-                            var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
-                            var hintUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpHint)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retUrlHint)}";
-                            return Results.Redirect(hintUrl);
-                        }
-
-                        // If single provider and local not allowed, auto-redirect
-                        if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && !allowLocal && !forceAccountSelection)
-                        {
-                            var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            SetLastProviderCookie(http, validationResult.ClientId!, providerLinks[0].Name);
-                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
-                            return Results.Redirect(url);
-                        }
-
-                        // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
-                        var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
-                        if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection && !allowLocal)
-                        {
-                            var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                            var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
-                            return Results.Redirect(url);
-                        }
-
-                        // Otherwise render provider picker
-                        var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                        var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
-                        if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
-                        return Results.Redirect(url2);
+                        var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
+                        var hintUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpHint)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retUrlHint)}";
+                        return Results.Redirect(hintUrl);
                     }
+
+                    // If single provider and local not allowed, auto-redirect
+                    if (providerLinks.Count == 1 && providerLinks[0].AutoRedirectIfSingle && !allowLocal && !allowQr && !forceAccountSelection)
+                    {
+                        var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        SetLastProviderCookie(http, validationResult.ClientId!, providerLinks[0].Name);
+                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                        return Results.Redirect(url);
+                    }
+
+                    // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
+                    var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
+                    if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection && !allowLocal && !allowQr)
+                    {
+                        var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
+                        return Results.Redirect(url);
+                    }
+
+                    // Show provider picker (includes QR option if allowQr is true)
+                    var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
+                    var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+                    if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
+                    logger.LogInformation("Redirecting to provider picker (allowQr={AllowQr}, providerCount={Count})", allowQr, providerLinks.Count);
+                    return Results.Redirect(url2);
                 }
 
                 logger.LogDebug("QR login not triggered: allowQr={AllowQr}, hasQrParam={HasQr}", allowQr, http.Request.Query.ContainsKey("qr"));
