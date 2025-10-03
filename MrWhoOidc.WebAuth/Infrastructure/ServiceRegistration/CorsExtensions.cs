@@ -17,7 +17,7 @@ public static class CorsExtensions
                 if (oidcOptions.AllowedCorsOrigins is { Length: > 0 })
                 {
                     policy.WithOrigins(oidcOptions.AllowedCorsOrigins)
-                          .WithMethods("POST", "OPTIONS")
+                          .WithMethods("GET", "POST", "OPTIONS")
                           .WithHeaders("authorization", "content-type")
                           .DisallowCredentials();
                 }

@@ -497,16 +497,17 @@ public sealed class AuthorizeHandler(
                 return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarm);
             }
 
+            // RFC 9207: Add issuer identification parameter to prevent mix-up attacks
+            var iss = GetIssuer(http);
+            var uri2 = new UriBuilder(redirect);
+            var query2 = System.Web.HttpUtility.ParseQueryString(uri2.Query);
+            query2["iss"] = iss;
             if (!string.IsNullOrEmpty(effectiveReq.state))
             {
-                var uri = new UriBuilder(redirect);
-                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                query["state"] = effectiveReq.state;
-                uri.Query = query.ToString();
-                return Results.Redirect(uri.ToString());
+                query2["state"] = effectiveReq.state;
             }
-
-            return Results.Redirect(redirect);
+            uri2.Query = query2.ToString();
+            return Results.Redirect(uri2.ToString());
         }
         finally
         {

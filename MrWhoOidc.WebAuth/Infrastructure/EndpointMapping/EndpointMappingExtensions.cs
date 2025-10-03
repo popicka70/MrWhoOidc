@@ -84,8 +84,10 @@ internal static class EndpointMappingExtensions
         }
 
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
+           .RequireCors("oidc")
            .RequireRateLimiting("rl-authorize");
-        app.MapGet("/jwks", GetServerJwks);
+        app.MapGet("/jwks", GetServerJwks)
+           .RequireCors("oidc");
 
         var authOptions = app.Services.GetRequiredService<IOptions<AuthOptions>>();
         if (authOptions.Value.ExposeClientJwks)

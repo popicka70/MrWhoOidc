@@ -202,7 +202,12 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             var expiresAt = parStore.Create(id, req, clientId!, TimeSpan.FromMinutes(5), requestUri);
             var expiresIn = (int)Math.Max(0, (expiresAt - DateTimeOffset.UtcNow).TotalSeconds);
             metrics.ParSuccess.Add(1);
-            return Results.Json(new { request_uri = requestUri, expires_in = expiresIn, correlation_id = corr });
+            logger.LogInformation("/par 201: success corr={Corr} client={Client} uri={Uri}", corr, BucketizeClientId(clientId!), requestUri);
+            // RFC 9126 Section 2.2: PAR success response MUST be HTTP 201 Created with Cache-Control: no-store
+            http.Response.StatusCode = 201;
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.Headers.ContentType = "application/json";
+            return Results.Json(new { request_uri = requestUri, expires_in = expiresIn });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("pending limit", StringComparison.OrdinalIgnoreCase))
         {
