@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
+using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -10,19 +12,20 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// </summary>
 public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrantHandler> logger) : ITokenGrantHandler
 {
-    public string GrantType => "authorization_code";
+    public string GrantType => OAuthConstants.GrantTypes.AuthorizationCode;
 
     public async Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
     {
         if (!string.Equals(context.GrantType, GrantType, StringComparison.Ordinal))
             return new GrantExecutionResult(false, false, null);
 
-        var code = context.Form["code"].ToString();
-        var redirectUri = context.Form["redirect_uri"].ToString();
-        var codeVerifier = context.Form["code_verifier"].ToString();
+        var code = context.Form[OAuthConstants.Parameters.Code].ToString();
+        var redirectUri = context.Form[OAuthConstants.Parameters.RedirectUri].ToString();
+        var codeVerifier = context.Form[OAuthConstants.Parameters.CodeVerifier].ToString();
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
         {
-            logger.LogWarning("/token invalid_request: missing code or redirect_uri for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
+            logger.LogWarning("/token {ErrorCode}: missing code or redirect_uri for client {ClientIdHash}", 
+                OAuthConstants.ErrorCodes.InvalidRequest, Infrastructure.Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest());
         }
 

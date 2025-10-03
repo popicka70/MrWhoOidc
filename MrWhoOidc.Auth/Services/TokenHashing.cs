@@ -1,24 +1,27 @@
-using System.Security.Cryptography;
-using System.Text;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Token hashing utilities.
+/// </summary>
 public static class TokenHashing
 {
+    /// <summary>
+    /// Compute SHA-256 hash of token value and return as Base64 string.
+    /// Used for storing token hashes in database.
+    /// </summary>
     public static string Compute(string value)
     {
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value));
-        return Convert.ToBase64String(bytes);
+        return CryptoHelper.ComputeSha256Base64(value);
     }
 
-    // Compute left-most half of SHA-256 and return base64url string, as required for at_hash/c_hash/s_hash
+    /// <summary>
+    /// Compute left-most half of SHA-256 and return base64url string.
+    /// Used for at_hash, c_hash, and s_hash in ID tokens per OIDC spec.
+    /// </summary>
     public static string ComputeLeftHalfBase64Url(string value)
     {
-        var bytes = SHA256.HashData(Encoding.ASCII.GetBytes(value));
-        // left-most half (16 bytes)
-        var half = new byte[16];
-        Array.Copy(bytes, half, 16);
-        return Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(half);
+        return CryptoHelper.ComputeLeftHalfSha256Base64Url(value);
     }
 }

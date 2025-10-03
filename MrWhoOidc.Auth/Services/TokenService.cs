@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -37,20 +38,20 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     {
         var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
         if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
-            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
         if (!string.Equals(entity.RedirectUri, redirectUri, StringComparison.Ordinal))
-            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
         if (!string.Equals(entity.ClientId, clientId, StringComparison.Ordinal))
-            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
         // Validate PKCE S256
         if (!string.IsNullOrEmpty(entity.CodeChallenge))
         {
-            var s256 = ComputeS256(codeVerifier);
+            var s256 = CryptoHelper.ComputePkceS256(codeVerifier);
             if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
-                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+                return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
         }
 
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
@@ -472,30 +473,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
-    static string ComputeS256(string verifier)
-    {
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(verifier));
-        // PKCE S256 is full base64url-encoded SHA-256 without padding
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
-    }
-
-    static string ComputeAtHash(string accessToken)
-    {
-        using var sha = SHA256.Create();
-        var bytes = sha.ComputeHash(Encoding.ASCII.GetBytes(accessToken));
-        var left = bytes.Take(16).ToArray();
-        return Convert.ToBase64String(left).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
-
-    static string Hash(string value)
-    {
-        using var sha = SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
-    }
+    // Legacy helper methods kept for compatibility - delegate to CryptoHelper
+    static string ComputeS256(string verifier) => CryptoHelper.ComputePkceS256(verifier);
+    static string ComputeAtHash(string accessToken) => CryptoHelper.ComputeLeftHalfSha256Base64Url(accessToken);
+    static string Hash(string value) => CryptoHelper.ComputeSha256Base64(value);
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,

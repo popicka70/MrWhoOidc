@@ -37,7 +37,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         // Feature flag
         if (!authOptions.Value.EnableTokenExchange)
         {
-            return new(true, false, ErrorResults.UnsupportedGrant());
+            return new(true, false, ErrorResults.UnsupportedGrantType());
         }
 
         if (!usedPrivateKeyJwt && string.IsNullOrEmpty(client?.ClientSecretHash))

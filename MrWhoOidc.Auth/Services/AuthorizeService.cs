@@ -15,21 +15,21 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
 {
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
-        if (!string.Equals(request.response_type, "code", StringComparison.Ordinal))
-            return Error("unsupported_response_type", "Only response_type=code is supported");
+        if (!string.Equals(request.response_type, OAuthConstants.ResponseTypes.Code, StringComparison.Ordinal))
+            return Error(OAuthConstants.ErrorCodes.UnsupportedResponseType, "Only response_type=code is supported");
 
         if (string.IsNullOrWhiteSpace(request.client_id))
-            return Error("invalid_request", "Missing client_id");
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing client_id");
 
         var client = await clients.FindByClientIdAsync(request.client_id, ct).ConfigureAwait(false);
         if (client is null)
-            return Error("unauthorized_client", "Unknown client_id");
+            return Error(OAuthConstants.ErrorCodes.UnauthorizedClient, "Unknown client_id");
 
         if (string.IsNullOrWhiteSpace(request.redirect_uri))
-            return Error("invalid_request", "Missing redirect_uri");
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing redirect_uri");
 
         if (!UrlComparison.IsValidAbsolute(request.redirect_uri))
-            return Error("invalid_request", "redirect_uri must be absolute");
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri must be absolute");
 
         // Normalized value for comparison (query + fragment removed, path normalized)
         var requestedRedirectNormalized = UrlComparison.NormalizeForAllowList(request.redirect_uri);
@@ -42,7 +42,7 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
                 var allowedRaw = JsonSerializer.Deserialize<string[]>(client.AllowedLoginRedirectUrisJson) ?? Array.Empty<string>();
                 if (allowedRaw.Length > 0 && !UrlComparison.IsAllowed(request.redirect_uri, allowedRaw))
                 {
-                    return Error("invalid_request", "redirect_uri is not allowed for this client");
+                    return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri is not allowed for this client");
                 }
             }
             catch { /* ignore parse errors */ }
@@ -50,16 +50,16 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
 
         if (client.RequirePkce)
         {
-            if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, "S256", StringComparison.Ordinal))
-                return Error("invalid_request", "PKCE S256 is required for this client");
+            if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
         }
 
         if (string.IsNullOrWhiteSpace(request.nonce))
-            return Error("invalid_request", "Missing nonce");
+            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing nonce");
 
-        var scopes = (request.scope ?? "openid").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (!scopes.Contains("openid"))
-            return Error("invalid_scope", "scope must include 'openid'");
+        var scopes = (request.scope ?? OidcConstants.Scopes.OpenId).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!scopes.Contains(OidcConstants.Scopes.OpenId))
+            return Error(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
 
         // Enforce requested scopes ? assigned client scopes (if any assigned)
         var allowedScopes = await db.ClientScopes
@@ -73,22 +73,22 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
             var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
             if (invalid.Length > 0)
             {
-                return Error("invalid_scope", $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
+                return Error(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
             }
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
         if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
-            return Error("invalid_target", "resource must be an absolute URI");
+            return Error(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
 
         // response_mode (optional): support default (null), query.jwt, form_post.jwt
         string? responseMode = request.response_mode;
         if (!string.IsNullOrEmpty(responseMode))
         {
-            if (!string.Equals(responseMode, "query.jwt", StringComparison.Ordinal) &&
-                !string.Equals(responseMode, "form_post.jwt", StringComparison.Ordinal))
+            if (!string.Equals(responseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) &&
+                !string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
             {
-                return Error("unsupported_response_mode", "Only response_mode=query.jwt or form_post.jwt is supported");
+                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, "Only response_mode=query.jwt or form_post.jwt is supported");
             }
         }
 

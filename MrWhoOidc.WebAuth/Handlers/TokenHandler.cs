@@ -191,7 +191,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
             logger.LogWarning("/token unsupported_grant: {GrantType}", grantType);
             _metrics.RecordTokenRequest(grantType, "failure");
             _metrics.RecordTokenFailure(grantType);
-            return ErrorResults.UnsupportedGrant();
+            return ErrorResults.UnsupportedGrantType();
         }
         finally
         {

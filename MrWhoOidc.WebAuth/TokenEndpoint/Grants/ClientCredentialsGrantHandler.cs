@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
+using MrWhoOidc.Auth.Protocols;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -11,7 +12,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// </summary>
 public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrantHandler> logger) : ITokenGrantHandler
 {
-    public string GrantType => "client_credentials";
+    public string GrantType => OAuthConstants.GrantTypes.ClientCredentials;
 
     public async Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
     {
@@ -19,8 +20,8 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
             return new GrantExecutionResult(false, false, null);
 
         var form = context.Form;
-        var aud = form["audience"].ToString();
-        var resource = form["resource"].ToString();
+        var aud = form[OAuthConstants.Parameters.Audience].ToString();
+        var resource = form[OAuthConstants.Parameters.Resource].ToString();
         if (!string.IsNullOrEmpty(aud) && !string.IsNullOrEmpty(resource) && !string.Equals(aud, resource, StringComparison.Ordinal))
         {
             logger.LogWarning("/token invalid_request: audience/resource conflict for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
@@ -28,7 +29,7 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         }
         var audience = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(aud) ? aud : "api");
 
-        var scopeParam = form["scope"].ToString();
+        var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
 
         var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");

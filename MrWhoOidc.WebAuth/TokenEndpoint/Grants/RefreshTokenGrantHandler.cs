@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -10,14 +11,14 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// </summary>
 public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> logger) : ITokenGrantHandler
 {
-    public string GrantType => "refresh_token";
+    public string GrantType => OAuthConstants.GrantTypes.RefreshToken;
 
     public async Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
     {
         if (!string.Equals(context.GrantType, GrantType, StringComparison.Ordinal))
             return new GrantExecutionResult(false, false, null);
 
-        var refresh = context.Form["refresh_token"].ToString();
+        var refresh = context.Form[OAuthConstants.Parameters.RefreshToken].ToString();
         if (string.IsNullOrWhiteSpace(refresh))
         {
             logger.LogWarning("/token invalid_request: missing refresh_token for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
