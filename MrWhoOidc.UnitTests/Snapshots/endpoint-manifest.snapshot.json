@@ -16,7 +16,7 @@
     ],
     "Authz": null,
     "HasAntiforgery": false,
-    "HasCors": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -405,7 +405,7 @@
     "RateLimiters": [],
     "Authz": null,
     "HasAntiforgery": false,
-    "HasCors": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
