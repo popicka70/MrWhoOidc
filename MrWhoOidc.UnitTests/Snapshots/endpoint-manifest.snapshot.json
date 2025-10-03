@@ -271,6 +271,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/api/qr/cancel",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-qr-cancel"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/qr/confirm",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-qr-confirm"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/qr/status/{sessionToken}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-qr-poll"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/Auth/External/Callback",
     "Methods": "GET",
     "RateLimiters": [],
@@ -290,6 +323,24 @@
   },
   {
     "Pattern": "/Auth/External/Start",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/Auth/QrConfirm",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/Auth/QrMobile",
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,
@@ -943,6 +994,24 @@
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": true
+  },
+  {
+    "Pattern": "Auth/QrConfirm",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Auth/QrMobile",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
   },
   {
     "Pattern": "consent",

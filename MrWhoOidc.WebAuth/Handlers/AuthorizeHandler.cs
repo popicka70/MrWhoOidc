@@ -32,13 +32,18 @@ public sealed class AuthorizeHandler(
     ILogger<AuthorizeHandler> logger,
     IJwtService jwt,
     IClientStore clients,
-    AuthDbContext db
+    AuthDbContext db,
+    IQrLoginHandler qrLoginHandler
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        logger.LogInformation("⚡ AuthorizeHandler.HandleAsync called, Path={Path}, QueryString={QueryString}",
+            http.Request.Path,
+            http.Request.QueryString.Value ?? "(empty)");
+        
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         string outcome = "redirect";
@@ -65,6 +70,7 @@ public sealed class AuthorizeHandler(
                     "state",       // allowed by RFC 9101
                     "idp",         // our custom provider selector
                     "idp_hint",    // our custom hint
+                    "qr",          // QR login flow hint
                     "login_hint",  // standard hints we want to preserve visually
                     "acr_values",
                     "prompt",
@@ -276,6 +282,27 @@ public sealed class AuthorizeHandler(
             bool allowExternal = clientEntity?.AllowExternalIdp ?? true;
             bool allowQr = clientEntity?.AllowQrLogin ?? false;
 
+            // DEBUG: Check QR parameter
+            bool hasQrParam = http.Request.Query.ContainsKey("qr");
+            logger.LogInformation("🔍 QR Check: allowQr={AllowQr}, hasQrParam={HasQr}, QueryString={QueryString}",
+                allowQr, hasQrParam, http.Request.QueryString.Value ?? "(empty)");
+
+            // QR login: if allowed and hint present, initiate QR flow BEFORE provider selection
+            if (allowQr && http.Request.Query.ContainsKey("qr"))
+            {
+                logger.LogInformation("Routing to QR login for client {ClientId}, allowQr={AllowQr}", validationResult.ClientId, allowQr);
+                logger.LogInformation("QR routing details: validationResult.IsValid={IsValid}, ClientId={ClientId}, RedirectUri={RedirectUri}, Scopes={Scopes}, CodeChallenge={HasChallenge}, effectiveReq.state={State}",
+                    validationResult.IsValid,
+                    validationResult.ClientId ?? "(null)",
+                    validationResult.RedirectUri ?? "(null)",
+                    string.Join(",", validationResult.Scopes ?? Array.Empty<string>()),
+                    !string.IsNullOrEmpty(validationResult.CodeChallenge),
+                    effectiveReq.state ?? "(null)");
+                outcome = "qr_initiate";
+                logger.LogInformation("Calling qrLoginHandler.InitiateAsync with 3 parameters (http, validationResult, effectiveReq)");
+                return await qrLoginHandler.InitiateAsync(http, validationResult, effectiveReq);
+            }
+
             // Provider resolution for unauthenticated users
             if (!http.User.Identity?.IsAuthenticated ?? true)
             {
@@ -347,12 +374,7 @@ public sealed class AuthorizeHandler(
                     }
                 }
 
-                // QR login placeholder: if allowed and hint present, route to QR page (to be implemented)
-                if (allowQr && http.Request.Query.ContainsKey("qr"))
-                {
-                    var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                    return Results.Redirect($"/Auth/Qr?ReturnUrl={Uri.EscapeDataString(ret)}");
-                }
+                logger.LogDebug("QR login not triggered: allowQr={AllowQr}, hasQrParam={HasQr}", allowQr, http.Request.Query.ContainsKey("qr"));
 
                 // Fallback: local login if allowed
                 outcome = "login";

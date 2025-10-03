@@ -41,6 +41,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<BackchannelLogoutNotification> BackchannelLogoutNotifications => Set<BackchannelLogoutNotification>();
     // New: Opaque logout redirect references (post_logout_redirect_uri indirection)
     public DbSet<LogoutRedirectReference> LogoutRedirectReferences => Set<LogoutRedirectReference>();
+    // New: QR code login sessions
+    public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -449,14 +451,6 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Optional explicit mapping for DataProtectionKeys (matches provider defaults)
-        modelBuilder.Entity<DataProtectionKey>(b =>
-        {
-            b.HasKey(x => x.Id);
-            b.Property(x => x.FriendlyName).HasMaxLength(200);
-            b.Property(x => x.Xml).IsRequired();
-        });
-
         // New: Back-channel logout outbox
         modelBuilder.Entity<BackchannelLogoutNotification>(b =>
         {
@@ -490,6 +484,33 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.ExpiresAt).IsRequired();
             b.Property(x => x.Used).HasDefaultValue(false);
             b.HasIndex(x => x.ExpiresAt);
+        });
+
+        // New: QR login sessions
+        modelBuilder.Entity<QrLoginSession>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.SessionToken).IsRequired().HasMaxLength(128);
+            b.Property(x => x.SessionTokenHash).HasMaxLength(64);
+            b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
+            b.Property(x => x.ReturnUrl).IsRequired().HasMaxLength(2000);
+            b.Property(x => x.CodeChallenge).IsRequired().HasMaxLength(128);
+            b.Property(x => x.CodeChallengeMethod).IsRequired().HasMaxLength(10);
+            b.Property(x => x.State).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.Nonce).HasMaxLength(200);
+            b.Property(x => x.Scope).IsRequired().HasMaxLength(1000);
+            b.Property(x => x.Status).IsRequired();
+            b.Property(x => x.UserId);
+            b.Property(x => x.AuthorizationCode).HasMaxLength(200);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.Property(x => x.ScannedAt);
+            b.Property(x => x.AuthenticatedAt);
+            b.Property(x => x.MobileUserAgent).HasMaxLength(500);
+            b.Property(x => x.MobileIpAddress).HasMaxLength(100);
+            b.HasIndex(x => x.SessionToken).IsUnique();
+            b.HasIndex(x => x.SessionTokenHash);
+            b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
     }
 
@@ -989,4 +1010,40 @@ public class LogoutRedirectReference
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddMinutes(5);
     public bool Used { get; set; } = false; // single-use guard
+}
+
+// New: QR code login session entity
+public class QrLoginSession
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    [MaxLength(128)]
+    public string SessionToken { get; set; } = string.Empty; // unique, indexed
+    [MaxLength(64)]
+    public string? SessionTokenHash { get; set; } // SHA256 hash for lookup
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+    [MaxLength(2000)]
+    public string ReturnUrl { get; set; } = string.Empty;
+    [MaxLength(128)]
+    public string CodeChallenge { get; set; } = string.Empty;
+    [MaxLength(10)]
+    public string CodeChallengeMethod { get; set; } = "S256";
+    [MaxLength(1000)]
+    public string State { get; set; } = string.Empty;
+    [MaxLength(200)]
+    public string? Nonce { get; set; }
+    [MaxLength(1000)]
+    public string Scope { get; set; } = string.Empty;
+    public QrSessionStatus Status { get; set; } = QrSessionStatus.Pending;
+    public Guid? UserId { get; set; }
+    [MaxLength(200)]
+    public string? AuthorizationCode { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ScannedAt { get; set; }
+    public DateTimeOffset? AuthenticatedAt { get; set; }
+    [MaxLength(500)]
+    public string? MobileUserAgent { get; set; }
+    [MaxLength(100)]
+    public string? MobileIpAddress { get; set; }
 }

@@ -2,7 +2,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var postgres = builder.AddPostgres("postgres")
     .WithDataVolume()
-    .WithLifetime(ContainerLifetime.Persistent);
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithPgAdmin();
 var authDb = postgres.AddDatabase("authdb");
 
 var apiService = builder.AddProject<Projects.MrWhoOidc_ApiService>("apiservice")

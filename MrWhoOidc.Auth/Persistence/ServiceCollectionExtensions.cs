@@ -51,6 +51,7 @@ public static class PersistenceServiceCollectionExtensions
         {
             options.UseNpgsql(cs, npgsql =>
             {
+                var x = cs;
                 npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
                 npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(2), errorCodesToAdd: null);
             });

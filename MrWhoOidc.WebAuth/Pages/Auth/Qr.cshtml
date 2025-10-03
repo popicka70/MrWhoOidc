@@ -1,9 +1,197 @@
 @page
 @model MrWhoOidc.WebAuth.Pages.Auth.QrModel
 @{
-    ViewData["Title"] = "QR Login";
+    ViewData["Title"] = "QR Code Login";
+    // Read from query parameters
+    var qrCodeDataUri = HttpContext.Request.Query["qr"].ToString();
+    var sessionToken = HttpContext.Request.Query["token"].ToString();
+    var pollInterval = HttpContext.Request.Query["interval"].ToString();
+    if (string.IsNullOrEmpty(pollInterval)) pollInterval = "2";
 }
 
-<h2>QR code login</h2>
-<p class="text-muted">Placeholder page. Future: display a QR code to pair a device and complete login.</p>
-<p>Return to: <a href="@Model.ReturnUrl">@Model.ReturnUrl</a></p>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-body text-center p-5">
+                    <h2 class="mb-4">
+                        <i class="bi bi-qr-code me-2"></i>
+                        Scan to Login
+                    </h2>
+                    
+                    <div class="qr-code-container mb-4" role="img" aria-label="QR code for mobile authentication">
+                        @if (!string.IsNullOrEmpty(qrCodeDataUri))
+                        {
+                            <img src="@qrCodeDataUri" alt="QR Code" class="img-fluid" style="max-width: 300px;" id="qrCodeImage" />
+                        }
+                        else
+                        {
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading QR code...</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div id="statusMessage" class="alert alert-info" role="status" aria-live="polite">
+                        <i class="bi bi-hourglass-split me-2"></i>
+                        <span id="statusText">Waiting for mobile device to scan...</span>
+                    </div>
+
+                    <div class="instructions mb-4">
+                        <p class="text-muted mb-2">
+                            <i class="bi bi-phone me-2"></i>
+                            Scan this QR code with your mobile device camera
+                        </p>
+                        <ol class="text-start text-muted small">
+                            <li>Open your phone's camera app</li>
+                            <li>Point it at the QR code above</li>
+                            <li>Tap the notification to open the link</li>
+                            <li>Complete authentication on your phone</li>
+                        </ol>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
+                            <i class="bi bi-x-circle me-2"></i>
+                            Cancel and choose different login
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-shield-check me-1"></i>
+                    Secure authentication via your mobile device
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function() {
+            const sessionToken = '@sessionToken';
+            const pollInterval = parseInt('@pollInterval') * 1000;
+            const maxAttempts = 150;
+            let attempts = 0;
+            let pollTimer = null;
+
+            const statusMessage = document.getElementById('statusMessage');
+            const statusText = document.getElementById('statusText');
+            const cancelBtn = document.getElementById('cancelBtn');
+
+            function updateStatus(status, message, alertClass) {
+                statusMessage.className = `alert alert-${alertClass}`;
+                statusText.textContent = message;
+            }
+
+            async function checkStatus() {
+                if (attempts >= maxAttempts) {
+                    updateStatus('expired', 'Polling timeout. Please refresh the page.', 'warning');
+                    stopPolling();
+                    return;
+                }
+
+                attempts++;
+
+                try {
+                    const response = await fetch(`/api/qr/status/${encodeURIComponent(sessionToken)}`);
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            updateStatus('not_found', 'Session not found. Please refresh the page.', 'danger');
+                            stopPolling();
+                            return;
+                        }
+                        throw new Error('Failed to check status');
+                    }
+
+                    const data = await response.json();
+
+                    switch(data.status) {
+                        case 'pending':
+                            updateStatus('pending', data.message || 'Waiting for mobile device to scan...', 'info');
+                            break;
+                        case 'scanned':
+                            updateStatus('scanned', data.message || 'QR code scanned. Complete authentication on your mobile device.', 'primary');
+                            break;
+                        case 'authenticated':
+                            updateStatus('authenticated', data.message || 'Authentication successful! Redirecting...', 'success');
+                            stopPolling();
+                            if (data.redirectUrl) {
+                                setTimeout(() => {
+                                    window.location.href = data.redirectUrl;
+                                }, 1000);
+                            }
+                            break;
+                        case 'expired':
+                            updateStatus('expired', 'QR code expired. Refreshing...', 'warning');
+                            stopPolling();
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                            break;
+                        case 'cancelled':
+                            updateStatus('cancelled', 'Login cancelled.', 'secondary');
+                            stopPolling();
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error checking QR status:', error);
+                    // Continue polling on network errors
+                }
+            }
+
+            function stopPolling() {
+                if (pollTimer) {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                }
+            }
+
+            async function cancelLogin() {
+                stopPolling();
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('sessionToken', sessionToken);
+                    
+                    await fetch('/api/qr/cancel', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } catch (error) {
+                    console.error('Error cancelling QR login:', error);
+                }
+
+                window.location.href = '/';
+            }
+
+            cancelBtn.addEventListener('click', cancelLogin);
+
+            // Start polling
+            pollTimer = setInterval(checkStatus, pollInterval);
+            checkStatus(); // Initial check
+        })();
+    </script>
+}
+
+<style>
+    .qr-code-container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        display: inline-block;
+    }
+
+    #statusMessage {
+        transition: all 0.3s ease;
+    }
+
+    .instructions ol {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+</style>

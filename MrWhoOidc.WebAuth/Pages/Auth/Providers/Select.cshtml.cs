@@ -54,6 +54,9 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnGetAsync()
     {
+        // DEBUG: Log ReturnUrl for QR troubleshooting
+        Console.WriteLine($"[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}");
+        
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
             // Auto-fallback to admin client when client_id is not specified
@@ -65,6 +68,9 @@ public class SelectModel(AuthDbContext db) : PageModel
             }
             Client_Id = defCid;
         }
+
+        // DEBUG: Log ReturnUrl for QR troubleshooting
+        Console.WriteLine($"[ProviderSelect] ReturnUrl={ReturnUrl}, Client_Id={Client_Id}");
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == Client_Id);
         if (client is null)

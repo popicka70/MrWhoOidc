@@ -23,6 +23,9 @@ public static class BackgroundAndBackchannelExtensions
         services.AddSingleton<BackchannelRuntimeState>();
         services.AddHostedService<BackchannelLogoutDispatcher>();
 
+        // QR login cleanup service
+        services.AddHostedService<QrLoginCleanupService>();
+
         return services;
     }
 }

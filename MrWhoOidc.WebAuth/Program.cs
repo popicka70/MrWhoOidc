@@ -40,6 +40,10 @@ builder.Services.AddSingleton(oidcOptions);
 
 // Bind AuthOptions
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
+
+// Bind QrLoginOptions
+builder.Services.Configure<QrLoginOptions>(builder.Configuration.GetSection("QrLogin"));
+
 // Auth/admin (Phase 2 extracted extension – limited scope)
 builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 

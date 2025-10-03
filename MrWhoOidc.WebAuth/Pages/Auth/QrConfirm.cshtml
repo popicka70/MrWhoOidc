@@ -1,0 +1,163 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Auth.QrConfirmModel
+@{
+    ViewData["Title"] = "Confirm Login";
+    var sessionToken = HttpContext.Items["SessionToken"]?.ToString() ?? "";
+    var clientName = HttpContext.Items["ClientName"]?.ToString() ?? "Application";
+    var timestamp = HttpContext.Items["Timestamp"]?.ToString() ?? "";
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-shield-check text-primary" style="font-size: 3rem;"></i>
+                        <h2 class="mt-3">Confirm Login</h2>
+                    </div>
+
+                    <div class="alert alert-info mb-4">
+                        <h5 class="alert-heading">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Login Request
+                        </h5>
+                        <p class="mb-2">You are logging in to:</p>
+                        <p class="mb-2"><strong>@clientName</strong></p>
+                        <p class="mb-0 small text-muted">
+                            <i class="bi bi-clock me-1"></i>
+                            Requested at: @timestamp
+                        </p>
+                    </div>
+
+                    <div class="mb-4">
+                        <p class="text-muted">
+                            <i class="bi bi-laptop me-2"></i>
+                            A desktop browser is waiting for your confirmation to complete the login.
+                        </p>
+                    </div>
+
+                    <form id="confirmForm" method="post">
+                        <input type="hidden" name="sessionToken" value="@sessionToken" />
+                        
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary btn-lg" id="confirmBtn">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Confirm Login
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
+                                <i class="bi bi-x-circle me-2"></i>
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="resultMessage" class="mt-3" style="display: none;" role="status" aria-live="polite"></div>
+                </div>
+            </div>
+
+            <div class="text-center mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-shield-lock me-1"></i>
+                    This is a secure authentication request
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        border: none;
+    }
+
+    .btn-lg {
+        padding: 1rem;
+        font-size: 1.1rem;
+    }
+
+    @@media (max-width: 576px) {
+        .container {
+            padding: 0.5rem;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script>
+        (function() {
+            const sessionToken = '@sessionToken';
+            const confirmBtn = document.getElementById('confirmBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const resultMessage = document.getElementById('resultMessage');
+
+            function showMessage(message, type) {
+                resultMessage.className = `alert alert-${type} mt-3`;
+                resultMessage.textContent = message;
+                resultMessage.style.display = 'block';
+            }
+
+            function disableButtons() {
+                confirmBtn.disabled = true;
+                cancelBtn.disabled = true;
+            }
+
+            async function confirmLogin() {
+                disableButtons();
+                confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Confirming...';
+
+                try {
+                    const formData = new FormData();
+                    formData.append('sessionToken', sessionToken);
+                    
+                    const response = await fetch('/api/qr/confirm', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        showMessage(data.message || 'Authentication confirmed! You may close this page.', 'success');
+                        confirmBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirmed';
+                    } else {
+                        showMessage(data.message || 'Failed to confirm authentication.', 'danger');
+                        confirmBtn.innerHTML = '<i class="bi bi-x-circle me-2"></i>Failed';
+                        // Re-enable cancel button
+                        cancelBtn.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error confirming QR login:', error);
+                    showMessage('Network error. Please try again.', 'danger');
+                    confirmBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirm Login';
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                }
+            }
+
+            async function cancelLogin() {
+                disableButtons();
+                cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...';
+
+                try {
+                    const formData = new FormData();
+                    formData.append('sessionToken', sessionToken);
+                    
+                    await fetch('/api/qr/cancel', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    showMessage('Login cancelled. You may close this page.', 'secondary');
+                    cancelBtn.innerHTML = '<i class="bi bi-x-circle me-2"></i>Cancelled';
+                } catch (error) {
+                    console.error('Error cancelling QR login:', error);
+                    showMessage('Failed to cancel. You may close this page.', 'warning');
+                }
+            }
+
+            confirmBtn.addEventListener('click', confirmLogin);
+            cancelBtn.addEventListener('click', cancelLogin);
+        })();
+    </script>
+}
