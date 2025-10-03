@@ -379,47 +379,53 @@ public sealed class QrLoginHandler : IQrLoginHandler
     public async Task<IResult> MobileLandingAsync(HttpContext http)
     {
         var sessionToken = http.Request.Query["session"].ToString();
-        _logger.LogInformation("QR mobile landing from {IP}, session={HasSession}",
+        var requestUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}{http.Request.QueryString}";
+        
+        _logger.LogInformation("🔍 [QR Mobile Landing] Request from {IP}, Full URL: {Url}", 
             http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            !string.IsNullOrEmpty(sessionToken));
+            requestUrl);
+        _logger.LogInformation("🔍 [QR Mobile Landing] Session token present: {HasSession}, Length: {Length}", 
+            !string.IsNullOrEmpty(sessionToken),
+            sessionToken?.Length ?? 0);
 
         if (string.IsNullOrEmpty(sessionToken))
         {
-            _logger.LogWarning("QR mobile landing rejected: missing session parameter");
+            _logger.LogWarning("❌ [QR Mobile Landing] REJECTED: missing session parameter. Query string: {QueryString}", 
+                http.Request.QueryString.Value);
             return Results.BadRequest("Missing session parameter");
         }
 
-        _logger.LogDebug("Looking up QR session with hash {Hash}", ComputeHash(sessionToken));
+        _logger.LogDebug("🔍 [QR Mobile Landing] Looking up QR session with hash {Hash}", ComputeHash(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
         
         if (session is null)
         {
-            _logger.LogWarning("QR mobile landing: session not found for hash {Hash}", ComputeHash(sessionToken));
+            _logger.LogWarning("❌ [QR Mobile Landing] Session not found for hash {Hash}", ComputeHash(sessionToken));
             return Results.NotFound("QR session not found");
         }
 
         if (session.ExpiresAt < DateTimeOffset.UtcNow)
         {
-            _logger.LogWarning("QR mobile landing: session expired for client {ClientId}", session.ClientId);
+            _logger.LogWarning("❌ [QR Mobile Landing] Session expired for client {ClientId}", session.ClientId);
             return Results.BadRequest("This QR code has expired. Please scan a new code.");
         }
 
         if (session.Status == QrSessionStatus.Consumed)
         {
-            _logger.LogWarning("QR mobile landing: session already consumed for client {ClientId}", session.ClientId);
+            _logger.LogWarning("❌ [QR Mobile Landing] Session already consumed for client {ClientId}", session.ClientId);
             return Results.BadRequest("This QR code has already been used.");
         }
 
         if (session.Status == QrSessionStatus.Cancelled)
         {
-            _logger.LogWarning("QR mobile landing: session cancelled for client {ClientId}", session.ClientId);
+            _logger.LogWarning("❌ [QR Mobile Landing] Session cancelled for client {ClientId}", session.ClientId);
             return Results.BadRequest("Login cancelled. You may close this page.");
         }
 
         // Mark as scanned
         var mobileIp = http.Connection.RemoteIpAddress?.ToString();
         var mobileUserAgent = http.Request.Headers.UserAgent.ToString();
-        _logger.LogDebug("Marking QR session as scanned for client {ClientId}", session.ClientId);
+        _logger.LogInformation("✅ [QR Mobile Landing] Marking session as scanned for client {ClientId}", session.ClientId);
         await _qrService.MarkScannedAsync(sessionToken, mobileIp, mobileUserAgent);
 
         _audit.Emit("qr.session.scanned", new { 
@@ -429,54 +435,33 @@ public sealed class QrLoginHandler : IQrLoginHandler
         });
 
         // Check if user is authenticated
-        if (!http.User.Identity?.IsAuthenticated ?? true)
+        var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
+        _logger.LogInformation("🔍 [QR Mobile Landing] User authenticated: {IsAuthenticated}", isAuthenticated);
+        
+        if (!isAuthenticated)
         {
             // Redirect to login with return URL
             var returnUrl = $"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}";
-            return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}");
+            var loginUrl = $"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}";
+            _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to LOGIN. ReturnUrl: {ReturnUrl}, Full login URL: {LoginUrl}", 
+                returnUrl, loginUrl);
+            return Results.Redirect(loginUrl);
         }
 
         // User is authenticated, redirect to confirmation page
-        return Results.Redirect($"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}");
+        var confirmUrl = $"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}";
+        _logger.LogInformation("➡️ [QR Mobile Landing] User already authenticated, redirecting to CONFIRM: {ConfirmUrl}", confirmUrl);
+        return Results.Redirect(confirmUrl);
     }
 
-    public async Task<IResult> ConfirmPageAsync(HttpContext http)
+    /// <summary>
+    /// NOTE: This method is no longer used - the Razor Page at /Auth/QrConfirm handles requests directly.
+    /// It's kept here for interface compatibility but should not be called.
+    /// </summary>
+    public Task<IResult> ConfirmPageAsync(HttpContext http)
     {
-        var sessionToken = http.Request.Query["session"].ToString();
-
-        if (string.IsNullOrEmpty(sessionToken))
-        {
-            return Results.BadRequest("Missing session parameter");
-        }
-
-        var session = await _qrService.GetSessionAsync(sessionToken);
-        
-        if (session is null)
-        {
-            return Results.NotFound("QR session not found");
-        }
-
-        if (session.ExpiresAt < DateTimeOffset.UtcNow)
-        {
-            return Results.BadRequest("This QR code has expired.");
-        }
-
-        // Get client info
-        var client = await _db.Clients
-            .Where(c => c.ClientId == session.ClientId)
-            .Select(c => new { c.ClientName, c.ClientId })
-            .FirstOrDefaultAsync();
-
-        if (client is null)
-        {
-            return Results.BadRequest("Invalid client");
-        }
-
-        http.Items["SessionToken"] = sessionToken;
-        http.Items["ClientName"] = client.ClientName ?? client.ClientId;
-        http.Items["Timestamp"] = session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
-
-        return Results.Redirect("/Auth/QrConfirm");
+        _logger.LogWarning("⚠️ ConfirmPageAsync called but is deprecated - Razor Page should handle /Auth/QrConfirm directly");
+        return Task.FromResult(Results.Redirect("/Auth/QrConfirm") as IResult);
     }
 
     private string BuildCallbackUrl(QrLoginSession session)

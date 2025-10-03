@@ -26,7 +26,7 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
 
     public void OnGet()
     {
-        // Intentionally left blank
+        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}", ReturnUrl ?? "(null)");
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -79,13 +79,15 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
         ClearAttempts(HttpContext, Username);
-        logger.LogInformation("User {User} signed in", Username);
+        logger.LogInformation("✅ [Login] User {User} signed in successfully", Username);
 
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
         {
+            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", ReturnUrl);
             return LocalRedirect(ReturnUrl);
         }
 
+        logger.LogInformation("➡️ [Login] No valid ReturnUrl, redirecting to /Index");
         return RedirectToPage("/Index");
     }
 

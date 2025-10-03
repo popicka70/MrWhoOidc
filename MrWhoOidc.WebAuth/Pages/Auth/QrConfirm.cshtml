@@ -2,9 +2,9 @@
 @model MrWhoOidc.WebAuth.Pages.Auth.QrConfirmModel
 @{
     ViewData["Title"] = "Confirm Login";
-    var sessionToken = HttpContext.Items["SessionToken"]?.ToString() ?? "";
-    var clientName = HttpContext.Items["ClientName"]?.ToString() ?? "Application";
-    var timestamp = HttpContext.Items["Timestamp"]?.ToString() ?? "";
+    var sessionToken = Model.SessionToken ?? "";
+    var clientName = Model.ClientName ?? "Application";
+    var timestamp = Model.Timestamp ?? "";
 }
 
 <div class="container mt-4">

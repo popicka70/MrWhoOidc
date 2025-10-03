@@ -13,7 +13,7 @@
     <div class="row justify-content-center">
         <div class="col-md-8 col-lg-6">
             <div class="card shadow">
-                <div class="card-body text-center p-5">
+                <div class="card-body text-center p-4">
                     <h2 class="mb-4">
                         <i class="bi bi-qr-code me-2"></i>
                         Scan to Login
@@ -49,6 +49,20 @@
                             <li>Complete authentication on your phone</li>
                         </ol>
                     </div>
+
+                    <!-- TEMP: Testing section - Remove in production -->
+                    <div class="testing-section mb-4 p-3 bg-light border rounded">
+                        <p class="small text-muted mb-2"><strong>🧪 Testing Only:</strong> Copy URL to test manually</p>
+                        <div class="input-group">
+                            <input type="text" class="form-control form-control-sm font-monospace" id="qrUrlInput" readonly value="" />
+                            <button class="btn btn-sm btn-outline-primary" type="button" id="copyUrlBtn">
+                                <i class="bi bi-clipboard me-1"></i>
+                                Copy
+                            </button>
+                        </div>
+                        <small class="text-success d-none" id="copySuccess">✓ Copied to clipboard!</small>
+                    </div>
+                    <!-- END TEMP -->
 
                     <div class="d-grid gap-2">
                         <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
@@ -171,6 +185,37 @@
 
             cancelBtn.addEventListener('click', cancelLogin);
 
+            // TEMP: Testing functionality - populate QR URL
+            const qrUrlInput = document.getElementById('qrUrlInput');
+            const copyUrlBtn = document.getElementById('copyUrlBtn');
+            const copySuccess = document.getElementById('copySuccess');
+            
+            // Get base URL from window location
+            const baseUrl = window.location.origin;
+            const qrUrl = `${baseUrl}/Auth/QrMobile?session=${encodeURIComponent(sessionToken)}`;
+            qrUrlInput.value = qrUrl;
+            
+            copyUrlBtn.addEventListener('click', async function() {
+                try {
+                    await navigator.clipboard.writeText(qrUrl);
+                    copySuccess.classList.remove('d-none');
+                    copyUrlBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copied!';
+                    copyUrlBtn.classList.remove('btn-outline-primary');
+                    copyUrlBtn.classList.add('btn-success');
+                    
+                    setTimeout(() => {
+                        copySuccess.classList.add('d-none');
+                        copyUrlBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy';
+                        copyUrlBtn.classList.remove('btn-success');
+                        copyUrlBtn.classList.add('btn-outline-primary');
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                    alert('Failed to copy to clipboard. Please copy manually.');
+                }
+            });
+            // END TEMP
+
             // Start polling
             pollTimer = setInterval(checkStatus, pollInterval);
             checkStatus(); // Initial check
@@ -181,9 +226,13 @@
 <style>
     .qr-code-container {
         background: white;
-        padding: 20px;
+        padding: 15px;
         border-radius: 8px;
-        display: inline-block;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto;
+        max-width: 330px;
     }
 
     #statusMessage {
@@ -194,4 +243,23 @@
         max-width: 400px;
         margin: 0 auto;
     }
+
+    /* TEMP: Testing section styles */
+    .testing-section {
+        border: 2px dashed #ffc107 !important;
+        background-color: #fff3cd !important;
+    }
+    
+    .testing-section input {
+        font-size: 0.85rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    #copySuccess {
+        display: block;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+    /* END TEMP */
 </style>

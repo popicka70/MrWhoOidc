@@ -331,15 +331,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/Auth/QrConfirm",
-    "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/Auth/QrMobile",
     "Methods": "GET",
     "RateLimiters": [],
@@ -1002,7 +993,7 @@
     "Authz": null,
     "HasAntiforgery": true,
     "HasCors": false,
-    "IsAnonymous": false
+    "IsAnonymous": true
   },
   {
     "Pattern": "Auth/QrMobile",
