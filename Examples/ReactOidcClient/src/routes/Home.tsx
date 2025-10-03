@@ -31,13 +31,13 @@ export function Home() {
         <h1 className="text-3xl font-bold">Welcome, {user.name ?? user.preferred_username ?? user.sub}</h1>
         <div className="rounded-xl border border-slate-800 p-4 bg-slate-800/30">
           <h2 className="font-semibold mb-2">User Claims</h2>
-          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(user, null, 2)}</pre>
+          <pre className="text-xs whitespace-pre-wrap break-all overflow-auto">{JSON.stringify(user, null, 2)}</pre>
         </div>
       </div>
       <div className="space-y-4">
         <h2 className="font-semibold">Tokens</h2>
         <div className="rounded-xl border border-slate-800 p-4 bg-slate-800/30">
-          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(tokens, null, 2)}</pre>
+          <pre className="text-xs whitespace-pre-wrap break-all overflow-auto">{JSON.stringify(tokens, null, 2)}</pre>
         </div>
       </div>
     </div>
