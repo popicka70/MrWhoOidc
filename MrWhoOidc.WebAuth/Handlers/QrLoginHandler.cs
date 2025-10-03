@@ -97,13 +97,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
         if (string.IsNullOrEmpty(codeChallengeMethodStr))
         {
             _logger.LogDebug("Using default code challenge method: S256");
-            codeChallengeMethodStr = "S256";
+            codeChallengeMethodStr = OAuthConstants.CodeChallengeMethods.S256;
         }
 
         if (string.IsNullOrEmpty(scopeStr))
         {
-            _logger.LogDebug("Using default scope: openid");
-            scopeStr = "openid";
+            _logger.LogDebug("Using default scope: {Scope}", OidcConstants.Scopes.OpenId);
+            scopeStr = OidcConstants.Scopes.OpenId;
         }
 
         // Generate PKCE if not present
@@ -140,7 +140,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
             string.Join(" ", validationResult.Scopes ?? Array.Empty<string>()),
             validationResult.Nonce ?? "(null)");
 
-        var scope = string.Join(" ", validationResult.Scopes ?? new[] { "openid" });
+        var scope = string.Join(" ", validationResult.Scopes ?? new[] { OidcConstants.Scopes.OpenId });
         var state = request.state ?? string.Empty;
 
         return await InitiateCoreAsync(

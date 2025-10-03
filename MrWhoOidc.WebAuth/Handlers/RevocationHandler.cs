@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 
@@ -16,26 +17,26 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
         metrics.RevocationRequests.Add(1);
 
         if (!http.Request.HasFormContentType)
-            return Results.BadRequest(new { error = "invalid_request" });
+            return ErrorResults.InvalidRequest("Content-Type must be application/x-www-form-urlencoded");
 
         var (clientIdHeader, clientSecretHeader) = ReadClientCredentials(http);
 
         var form = await http.Request.ReadFormAsync();
-        var token = form["token"].ToString();
-        var hint = form["token_type_hint"].ToString();
-        var clientId = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form["client_id"].ToString();
-        var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form["client_secret"].ToString();
+        var token = form[OAuthConstants.Parameters.Token].ToString();
+        var hint = form[OAuthConstants.Parameters.TokenTypeHint].ToString();
+        var clientId = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form[OAuthConstants.Parameters.ClientId].ToString();
+        var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form[OAuthConstants.Parameters.ClientSecret].ToString();
 
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(clientId))
-            return Results.BadRequest(new { error = "invalid_request" });
+            return ErrorResults.InvalidRequest("token and client_id are required");
 
         // private_key_jwt support
-        var clientAssertionType = form["client_assertion_type"].ToString();
-        var clientAssertion = form["client_assertion"].ToString();
+        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
+        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
         var revocationEndpoint = http.GetIssuer(options) + "/revoke";
 
         bool authenticated = false;
-        if (string.Equals(clientAssertionType, "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
         {
             authenticated = await assertions.ValidateAsync(clientId, clientAssertion, revocationEndpoint);
         }
@@ -45,7 +46,7 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
         }
 
         if (!authenticated)
-            return Results.BadRequest(new { error = "unauthorized_client" });
+            return ErrorResults.UnauthorizedClient("Client authentication failed");
 
         var ip = http.Connection.RemoteIpAddress?.ToString();
         await revocations.RevokeAsync(token, hint, clientId, ip);

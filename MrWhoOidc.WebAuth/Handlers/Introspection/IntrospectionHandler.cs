@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
 
@@ -40,7 +41,7 @@ public sealed class IntrospectionHandler(
         if (client is null)
         {
             metrics.RecordActiveFalse(tags);
-            return Results.BadRequest(new { error = "unauthorized_client" });
+            return ErrorResults.UnauthorizedClient("Unknown client");
         }
 
         // Build context
@@ -66,7 +67,7 @@ public sealed class IntrospectionHandler(
         }
 
         // Handle refresh token hint first if specified
-        if (string.Equals(request.TokenTypeHint, "refresh_token", StringComparison.Ordinal))
+        if (string.Equals(request.TokenTypeHint, OAuthConstants.TokenTypes.RefreshToken, StringComparison.Ordinal))
         {
             var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context).ConfigureAwait(false);
             if (refreshError is not null)
@@ -112,7 +113,7 @@ public sealed class IntrospectionHandler(
         }
 
         // Try refresh token as fallback if hint was access_token
-        if (string.Equals(request.TokenTypeHint, "access_token", StringComparison.Ordinal))
+        if (string.Equals(request.TokenTypeHint, OAuthConstants.TokenTypes.AccessToken, StringComparison.Ordinal))
         {
             var (refreshResponse, refreshError) = await refreshIntrospector.IntrospectAsync(context).ConfigureAwait(false);
             if (refreshError is not null)

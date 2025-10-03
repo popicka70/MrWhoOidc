@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
 
@@ -63,18 +64,18 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         string returnUrl)
     {
         var callback = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
-        var responseType = string.IsNullOrWhiteSpace(config.ResponseType) ? "code" : config.ResponseType.Trim();
+        var responseType = string.IsNullOrWhiteSpace(config.ResponseType) ? OAuthConstants.ResponseTypes.Code : config.ResponseType.Trim();
 
         var query = new Dictionary<string, string?>
         {
-            ["response_type"] = responseType,
-            ["client_id"] = config.ClientId,
-            ["redirect_uri"] = callback,
-            ["scope"] = string.Join(' ', config.Scopes ?? new[] { "openid", "profile", "email" }),
-            ["state"] = state,
-            ["nonce"] = nonce,
-            ["code_challenge"] = codeChallenge,
-            ["code_challenge_method"] = "S256"
+            [OAuthConstants.Parameters.ResponseType] = responseType,
+            [OAuthConstants.Parameters.ClientId] = config.ClientId,
+            [OAuthConstants.Parameters.RedirectUri] = callback,
+            [OAuthConstants.Parameters.Scope] = string.Join(' ', config.Scopes ?? new[] { OidcConstants.Scopes.OpenId, OidcConstants.Scopes.Profile, OidcConstants.Scopes.Email }),
+            [OAuthConstants.Parameters.State] = state,
+            [OAuthConstants.Parameters.Nonce] = nonce,
+            [OAuthConstants.Parameters.CodeChallenge] = codeChallenge,
+            [OAuthConstants.Parameters.CodeChallengeMethod] = OAuthConstants.CodeChallengeMethods.S256
         };
 
         if (!string.IsNullOrWhiteSpace(config.ResponseMode))

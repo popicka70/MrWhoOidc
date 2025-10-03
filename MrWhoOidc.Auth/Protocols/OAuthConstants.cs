@@ -43,6 +43,10 @@ public static class OAuthConstants
         // JAR/PAR parameters (RFC 9101, RFC 9126)
         public const string Request = "request";
         public const string RequestUri = "request_uri";
+        
+        // Revocation parameters (RFC 7009)
+        public const string Token = "token";
+        public const string TokenTypeHint = "token_type_hint";
     }
 
     /// <summary>

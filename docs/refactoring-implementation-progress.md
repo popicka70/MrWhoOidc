@@ -153,20 +153,58 @@
   - Added Request and RequestUri constants to OAuthConstants.Parameters
   - Improved consistency in error handling and parameter reading
 
+#### 17. **RevocationHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/RevocationHandler.cs`
+- **Changes**:
+  - Replaced 3 inline error JSONs with ErrorResults.InvalidRequest() and ErrorResults.UnauthorizedClient()
+  - Migrated all parameter accesses to OAuthConstants.Parameters.* (Token, TokenTypeHint, ClientId, ClientSecret, ClientAssertionType, ClientAssertion)
+  - Uses OAuthConstants.ClientAssertionTypes.JwtBearer for private_key_jwt validation
+  - Added Token and TokenTypeHint constants to OAuthConstants.Parameters (RFC 7009)
+
+#### 18. **IntrospectionHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/Introspection/IntrospectionHandler.cs`
+- **Changes**:
+  - Replaced unauthorized_client error with ErrorResults.UnauthorizedClient()
+  - Uses OAuthConstants.TokenTypes.RefreshToken/AccessToken for token type hint comparison
+  - Improved error consistency
+
+#### 19. **IntrospectionRequestParser.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/Introspection/IntrospectionRequestParser.cs`
+- **Changes**:
+  - Replaced 2 inline invalid_request errors with ErrorResults.InvalidRequest()
+  - Migrated all parameter accesses to OAuthConstants.Parameters.* (Token, TokenTypeHint, ClientId, ClientSecret, ClientAssertionType, ClientAssertion)
+  - Improved error messages with descriptive text
+
+#### 20. **QrLoginHandler.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/QrLoginHandler.cs`
+- **Changes**:
+  - Replaced hardcoded "openid" with OidcConstants.Scopes.OpenId (2 locations)
+  - Uses OAuthConstants.CodeChallengeMethods.S256 for PKCE challenge method
+  - Default scope now uses centralized constant
+
+#### 21. **ExternalOidcRequestBuilder.cs** ✅
+- **File**: `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcRequestBuilder.cs`
+- **Changes**:
+  - Replaced hardcoded "code" response type with OAuthConstants.ResponseTypes.Code
+  - Replaced default scope array ["openid", "profile", "email"] with OidcConstants.Scopes constants
+  - Migrated query dictionary to use OAuthConstants.Parameters.* for all OAuth parameter names
+  - Uses OAuthConstants.CodeChallengeMethods.S256 for PKCE
+  - Consistent parameter naming across external OIDC flows
+
 ---
 
 ## 📊 Impact Summary
 
-### Files Modified: 17
+### Files Modified: 23
 ### Files Created: 4
-### Lines of Duplicate Code Eliminated: ~100+
-### Constants Centralized: 110+
+### Lines of Duplicate Code Eliminated: ~150+
+### Constants Centralized: 115+
 
 ### Build Status: ✅ **Passing**
 ```
 Build: SUCCESS
 Tests: 306/309 passed (3 skipped)
-Time: ~43 seconds
+Time: ~42 seconds
 ```
 
 ---
@@ -184,22 +222,18 @@ Time: ~43 seconds
 
 ## 📝 Next Steps (Phase 2 Continuation)
 
-### High Priority Remaining:
+### High Priority: ✅ **COMPLETE**
 
-1. **AuthorizeHandler.cs** - large handler, migrate to constants and ErrorResults
-2. **RevocationHandler.cs** - migrate to constants
-3. **Introspection handlers** - migrate to constants
+All high-priority handlers have been migrated!
 
-### Medium Priority:
+### Medium Priority Remaining:
 
-4. **Admin Pages** - migrate hardcoded algorithms (RS256, ES256, etc.)
-5. **External OIDC handlers** - migrate to constants
-6. **QrLoginHandler.cs** - use default scopes constant
+1. **Admin Pages** - migrate JWT algorithm dropdowns to SecurityConstants
 
 ### Low Priority:
 
-7. **Registration/Password pages** - use SecurityConstants.HashAlgorithms.Argon2id
-8. **Client authentication extraction** - consider creating `IClientAuthenticationService`
+2. **Registration/Password pages** - use SecurityConstants.HashAlgorithms.Argon2id
+3. **Client authentication extraction** - consider creating `IClientAuthenticationService`
 
 ---
 

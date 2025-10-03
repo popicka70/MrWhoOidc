@@ -1,4 +1,5 @@
 using System.Text;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 
@@ -11,22 +12,22 @@ internal static class IntrospectionRequestParser
     {
         if (!http.Request.HasFormContentType)
         {
-            return (null, Results.BadRequest(new { error = "invalid_request" }));
+            return (null, ErrorResults.InvalidRequest("Content-Type must be application/x-www-form-urlencoded"));
         }
 
         var (clientIdHeader, clientSecretHeader) = ReadClientCredentials(http);
         var form = await http.Request.ReadFormAsync().ConfigureAwait(false);
 
-        var token = form["token"].ToString();
-        var hint = form["token_type_hint"].ToString();
-        var clientId = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form["client_id"].ToString();
-        var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form["client_secret"].ToString();
-        var clientAssertionType = form["client_assertion_type"].ToString();
-        var clientAssertion = form["client_assertion"].ToString();
+        var token = form[OAuthConstants.Parameters.Token].ToString();
+        var hint = form[OAuthConstants.Parameters.TokenTypeHint].ToString();
+        var clientId = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form[OAuthConstants.Parameters.ClientId].ToString();
+        var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form[OAuthConstants.Parameters.ClientSecret].ToString();
+        var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
+        var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
 
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(clientId))
         {
-            return (null, Results.BadRequest(new { error = "invalid_request" }));
+            return (null, ErrorResults.InvalidRequest("token and client_id are required"));
         }
 
         var request = new IntrospectionRequest(
