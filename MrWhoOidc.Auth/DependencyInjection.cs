@@ -30,6 +30,7 @@ public static class AuthServiceCollectionExtensions
         
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
+        services.AddScoped<IIssuerBuilder, IssuerBuilder>();
 
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();

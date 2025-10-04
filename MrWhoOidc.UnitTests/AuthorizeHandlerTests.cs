@@ -9,8 +9,10 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.UnitTests.Helpers;
 using System.Security.Claims;
 
 namespace MrWhoOidc.UnitTests;
@@ -63,6 +65,12 @@ public sealed class AuthorizeHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions();
+        
+        // Register mock multi-tenancy services required by issuer builder
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
+        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
+        services.AddScoped<IIssuerBuilder, IssuerBuilder>();
+        
         var serviceProvider = services.BuildServiceProvider();
         
         var context = new DefaultHttpContext();

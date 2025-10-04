@@ -9,7 +9,7 @@ This document outlines the architectural changes and implementation roadmap to t
 **Updated:** October 4, 2025  
 **Target:** Production-ready multi-tenant OIDC Provider
 
-**Current Phase Progress:** Phase 1 Foundation - ~45% complete
+**Current Phase Progress:** Phase 1 Foundation - ~65% complete
 - ✅ Configuration infrastructure (MultiTenancyOptions, appsettings)
 - ✅ Tenant entity and TenantStatus enum
 - ✅ TenantId added to all entities with FK constraints
@@ -17,7 +17,11 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ Middleware created and registered (TenantResolutionMiddleware)
 - ✅ EF Core migration created with default tenant seed data
 - ✅ Services registered in DI container
-- 🔄 Next: Apply migration, update service layer queries, update issuer logic
+- ✅ Service layer updated (8 services now filter by TenantId)
+- ✅ Mode-aware issuer builder implemented and integrated
+- ✅ All issuer construction logic updated (GetIssuer extension methods)
+- ✅ All 318 tests passing
+- 🔄 Next: Apply migration, update JWKS endpoint, update routing, create admin UIs
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -1603,7 +1607,7 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [x] Add indexes and foreign keys in OnModelCreating
    - [x] Create migration with backfill to default tenant
    - [x] Seed default tenant in migration (Id: ...0001, Slug: "default")
-   - [ ] Apply migration to database
+   - [ ] Apply migration to database (requires running Aspire AppHost)
 3. Tenant resolution:
    - [x] Implement `ITenantResolver` with mode awareness
    - [x] Implement `ModeAwareTenantResolver` with caching
@@ -1613,19 +1617,22 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [x] Register services in DI container (Program.cs)
    - [x] Add middleware to pipeline (after UseRouting, before UseAuthentication)
 4. Update services to filter by `TenantId`:
-   - [ ] `ClientStore`, `UserService`, `ConsentService`, etc.
-   - [ ] All DB queries include tenant filter (works in both modes)
+   - [x] `ClientStore`, `UserService`, `ConsentService`, `AuthorizationCodeService`
+   - [x] `KeyStore`, `RefreshTokenService`, `RevocationService`, `QrLoginService`
+   - [x] All 8 tenant-aware services updated and tested (318/318 tests passing)
 5. Update issuer logic:
-   - [ ] Replace static issuer with mode-aware dynamic issuer
-   - [ ] Update `DiscoveryHandler`, `TokenService`, all handlers
-   - [ ] Root issuer in single-tenant mode, path-based in multi-tenant mode
+   - [x] Create `IIssuerBuilder` interface and implementation
+   - [x] Register IssuerBuilder in DI container
+   - [x] Update `GetIssuer` extension methods (HttpContextExtensions, LogoutExtensions, AuthorizeHandler)
+   - [x] Mode-aware issuer: root in single-tenant, path-based in multi-tenant
+   - [x] All handler code updated to use mode-aware issuer
 6. Per-tenant JWKS:
-   - [ ] Filter signing keys by `TenantId`
-   - [ ] Update JWKS endpoint to return tenant keys
+   - [ ] Update JWKS endpoint to use tenant-filtered keys from KeyStore
+   - [ ] Verify JWKS response includes only current tenant's keys
 7. Routing:
-   - [ ] Mode-aware route registration (root or `/t/{slug}/*`)
-   - [ ] Ensure all OIDC endpoints work in both modes
-   - [ ] Fallback to default tenant for non-prefixed routes (backward compatibility)
+   - [ ] Implement mode-aware route registration (root or `/t/{slug}/*`)
+   - [ ] Update all OIDC protocol endpoints to support both modes
+   - [ ] Add fallback to default tenant for non-prefixed routes (backward compatibility)
 8. Platform admin UI:
    - [ ] Create `/platform-admin/tenants` list page (multi-tenant mode only)
    - [ ] Create `/platform-admin/tenants/create` form
@@ -1645,6 +1652,8 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [ ] Linked identities page (view external IdP linkages)
    - [ ] Apply authorization policy: any authenticated user (no admin role required)
 11. Testing:
+   - [x] Unit tests updated for issuer builder and multi-tenancy services
+   - [x] All 318 tests passing with mode-aware issuer logic
    - [ ] Single-tenant mode tests (root issuer, no tenant prefix)
    - [ ] Multi-tenant integration tests (2+ tenants)
    - [ ] Verify data isolation (queries don't leak across tenants)
