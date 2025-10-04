@@ -727,32 +727,108 @@ After tenant creation, guide tenant admin through setup:
 4. **Users**: Invite initial users or configure user registration settings
 5. **Settings**: Review OIDC policies (PKCE, PAR, consent, etc.)
 
-### 5.3 Tenant Administration
+### 5.3 User Self-Service Portal
+
+**Separate from Admin UI**: Regular users access their own self-service portal, not admin functions.
 
 **Multi-Tenant Mode:**
-- Each tenant has its own admin portal at `/t/{slug}/admin`
-- Full tenant management capabilities
+- User portal at `/t/{slug}/account` or `/t/{slug}/profile`
 
 **Single-Tenant Mode:**
-- Admin portal at `/admin` (no tenant prefix)
-- Platform admin features disabled/hidden
-- Simplified UI (no tenant selection, no platform-level controls)
+- User portal at `/account` or `/profile`
 
-**Tenant Admin Capabilities:**
-- Manage clients (CRUD, view secrets, configure policies)
-- Manage users (CRUD, reset passwords, assign roles)
-- Manage realms and roles
-- Configure identity providers
+**User Self-Service Capabilities (non-admin users):**
+- View and edit profile (name, email, alternative emails)
+- Change password
+- Enable/disable MFA (TOTP)
+- Manage TOTP devices (view QR code, regenerate secret)
+- View active sessions
+- Revoke sessions/tokens
+- View consent history (apps they've authorized)
+- Revoke consent for specific clients
+- View linked external identities (Google, Azure AD, etc.)
+- Unlink external identities (if allowed by policy)
+- Delete account (if allowed by policy)
+
+**Access Control:**
+- Any authenticated user can access their own profile
+- Users can only see/modify their own data
+- No access to other users, clients, realms, or admin functions
+
+**UI Location:**
+- Completely separate from admin UI (different route prefix)
+- Lighter theme/simpler navigation (user-focused, not administrative)
+
+### 5.4 Tenant Administration
+
+**Separate from User Portal**: Tenant admins access administrative functions for managing the tenant.
+
+**Multi-Tenant Mode:**
+- Admin portal at `/t/{slug}/admin` (protected by admin role check)
+
+**Single-Tenant Mode:**
+- Admin portal at `/admin` (protected by admin role check)
+
+**Access Control:**
+- **Role-based**: User must have `tenant-admin` role in the tenant's `default` realm
+- Middleware enforces role check before rendering admin UI
+- Unauthorized users redirected to `/account` (their profile) or login
+
+**Tenant Admin Capabilities (admin users only):**
+
+**User Management:**
+- View all users in tenant
+- Create new users (invite via email or direct creation)
+- Edit user profiles (name, email, roles, realm assignments)
+- Reset user passwords
+- Suspend/unsuspend users
+- Delete users
+- Assign roles to users
+- View user audit logs
+
+**Client Management:**
+- View all clients (OIDC/OAuth2 applications)
+- Create new clients (wizard or advanced form)
+- Edit client settings (redirect URIs, policies, secrets, JWKS, etc.)
+- View client secrets (with "show" toggle)
+- Regenerate client secrets
+- Delete clients
+- View client usage metrics (token issuance, active users)
+
+**Realm and Role Management:**
+- View all realms in tenant
+- Create new realms
+- Edit realm settings
+- Create/edit/delete roles (realm-scoped or client-scoped)
+- Assign roles to users
+
+**Identity Provider Management:**
+- Configure external IdPs (Google, Azure AD, SAML, etc.)
+- Test IdP connections
+- View IdP claim mappings
+- Enable/disable IdPs
+
+**Settings and Configuration:**
+- Customize branding (logo, colors, login page text) - multi-tenant mode only
+- Configure OIDC policies (PKCE, consent, PAR, etc.)
+- Configure authentication policies (password strength, MFA requirements)
+- Configure user registration settings (open/closed, email verification)
+
+**Audit and Monitoring:**
 - View audit logs (tenant-scoped)
-- Customize branding and UI (multi-tenant mode only)
 - View usage metrics (active users, token issuance, API calls)
+- View recent logins, failed attempts
+- Export audit logs
 
 **Tenant Admin Users:**
-- New entity: `TenantAdministrator` OR use role-based access
-- Role: `tenant-admin` in the tenant's `default` realm
-- Special middleware checks for tenant admin role before allowing access to admin UI
+- **Role-based approach** (recommended): Use existing role system
+  - Role: `tenant-admin` in the tenant's `default` realm
+  - Check via `User.Roles.Any(r => r.Name == "tenant-admin" && r.RealmId == defaultRealmId)`
+- **Alternative**: Add `IsTenantAdmin` boolean flag to `User` entity
+  - Simpler but less flexible (can't grant admin to specific realms)
+- **Middleware**: `RequireTenantAdminAttribute` or policy check before admin routes
 
-### 5.4 Tenant Suspension and Deletion
+### 5.5 Tenant Suspension and Deletion
 
 **Suspension** (reversible):
 - Triggered by billing failure, abuse, or admin action
@@ -849,9 +925,8 @@ All endpoints at root level (no tenant prefix):
 Platform routes:
   GET  /health                        Health check (global)
   GET  /metrics                       Metrics (auth required)
-  GET  /admin/*                       Admin UI (no platform admin)
 
-OIDC routes (root level):
+OIDC protocol routes:
   GET  /.well-known/openid-configuration   Discovery
   GET  /.well-known/jwks.json              JWKS
   GET  /authorize                          Authorization endpoint
@@ -862,10 +937,22 @@ OIDC routes (root level):
   POST /par                                PAR endpoint
   GET  /logout                             Logout (RP-initiated)
   GET  /connect/endsession                 Logout (alternative)
-  
+
+User-facing UI routes:
   GET  /login                              Login page
   GET  /consent                            Consent page
   GET  /register                           User registration (if enabled)
+  GET  /account/*                          User self-service portal (profile, MFA, etc.)
+  GET  /profile                            User profile (alias for /account)
+
+Admin UI routes (tenant admin only):
+  GET  /admin/*                            Tenant admin UI (role-protected)
+  GET  /admin/users                        User management
+  GET  /admin/clients                      Client management
+  GET  /admin/realms                       Realm management
+  GET  /admin/providers                    Identity provider configuration
+  GET  /admin/settings                     Tenant settings
+  GET  /admin/audit                        Audit logs
 ```
 
 **Multi-Tenant Mode** (`MultiTenancy:Enabled = true`):
@@ -874,12 +961,12 @@ All tenant-specific endpoints prefixed with `/t/{slug}`:
 
 ```
 Platform routes (no tenant context):
-  GET  /platform-admin/*              Platform admin UI (multi-tenant only)
+  GET  /platform-admin/*              Platform admin UI (platform admin only)
   GET  /health                        Health check (global)
   GET  /metrics                       Metrics (aggregated, auth required)
   GET  /                              Landing page (tenant selector or marketing)
 
-Tenant routes (prefixed with /t/{slug}):
+OIDC protocol routes (tenant-scoped):
   GET  /t/{slug}/.well-known/openid-configuration   Discovery
   GET  /t/{slug}/.well-known/jwks.json              JWKS
   GET  /t/{slug}/authorize                          Authorization endpoint
@@ -890,20 +977,117 @@ Tenant routes (prefixed with /t/{slug}):
   POST /t/{slug}/par                                PAR endpoint
   GET  /t/{slug}/logout                             Logout (RP-initiated)
   GET  /t/{slug}/connect/endsession                 Logout (alternative)
-  
+
+User-facing UI routes (tenant-scoped):
   GET  /t/{slug}/login                              Login page
   GET  /t/{slug}/consent                            Consent page
   GET  /t/{slug}/register                           User registration (if enabled)
-  GET  /t/{slug}/admin/*                            Tenant admin UI
+  GET  /t/{slug}/account/*                          User self-service portal
+  GET  /t/{slug}/profile                            User profile (alias)
 
-Backward compatibility (fallback to default tenant):
-  GET  /.well-known/openid-configuration   → Uses default tenant (deprecated)
-  GET  /authorize                          → Uses default tenant (deprecated)
-  POST /token                              → Uses default tenant (deprecated)
+Admin UI routes (tenant admin only, role-protected):
+  GET  /t/{slug}/admin/*                            Tenant admin UI
+  GET  /t/{slug}/admin/users                        User management
+  GET  /t/{slug}/admin/clients                      Client management
+  GET  /t/{slug}/admin/realms                       Realm management
+  GET  /t/{slug}/admin/providers                    Identity provider configuration
+  GET  /t/{slug}/admin/settings                     Tenant settings
+  GET  /t/{slug}/admin/branding                     Branding customization
+  GET  /t/{slug}/admin/audit                        Audit logs
+
+Backward compatibility (fallback to default tenant, deprecated):
+  GET  /.well-known/openid-configuration   → Uses default tenant
+  GET  /authorize                          → Uses default tenant
+  POST /token                              → Uses default tenant
+  GET  /account/*                          → Uses default tenant
+  GET  /admin/*                            → Uses default tenant (if admin)
   ...
 ```
 
-**Route Registration Strategy:**
+### 7.2 Access Control Summary
+
+**Three Levels of Access:**
+
+1. **Regular Users** (authenticated):
+   - OIDC protocol endpoints (authorize, token, userinfo, etc.)
+   - User self-service portal: `/account/*` or `/t/{slug}/account/*`
+   - Can only access their own data
+   - No access to admin UI
+
+2. **Tenant Administrators** (authenticated + `tenant-admin` role):
+   - Everything regular users can access
+   - Tenant admin UI: `/admin/*` or `/t/{slug}/admin/*`
+   - Can manage users, clients, realms, IdPs within their tenant
+   - Cannot access other tenants or platform admin
+
+3. **Platform Administrators** (separate entity, multi-tenant mode only):
+   - Platform admin UI: `/platform-admin/*`
+   - Can manage all tenants, view cross-tenant metrics
+   - Can impersonate tenant admins for support
+   - Not scoped to any specific tenant
+
+**Middleware Stack:**
+
+```csharp
+// User self-service routes
+app.MapGroup("/account")
+   .RequireAuthorization(); // Any authenticated user
+
+// Tenant admin routes
+app.MapGroup("/admin")
+   .RequireAuthorization("TenantAdminPolicy"); // Requires tenant-admin role
+
+// Platform admin routes (multi-tenant mode only)
+app.MapGroup("/platform-admin")
+   .RequireAuthorization("PlatformAdminPolicy"); // Requires platform admin
+```
+
+### 7.3 Authorization Policies
+
+**TenantAdminPolicy:**
+```csharp
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("TenantAdminPolicy", policy => 
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole("tenant-admin"); // Or custom claim check
+    });
+```
+
+**PlatformAdminPolicy:**
+```csharp
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("PlatformAdminPolicy", policy => 
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("is_platform_admin", "true"); // Or check PlatformAdministrator table
+    });
+```
+
+### 7.4 Future: Subdomain-Based Routing (Not in Current Scope)
+
+If subdomain-based routing is added in the future:
+
+```
+Example: acme-corp.auth.example.com
+
+User routes (any authenticated user):
+  GET  /account/*                     User self-service portal
+  GET  /profile                       User profile
+
+Admin routes (tenant admin only):
+  GET  /admin/*                       Tenant admin UI
+  
+OIDC protocol routes:
+  GET  /.well-known/openid-configuration   Discovery
+  GET  /authorize                          Authorization endpoint
+  POST /token                              Token endpoint
+  ...
+```
+
+Tenant is resolved from subdomain instead of path prefix.
+
+### 7.5 Route Registration Strategy
 
 ```csharp
 var app = builder.Build();
@@ -912,22 +1096,37 @@ var multiTenancyOptions = app.Services.GetRequiredService<IMultiTenancyOptions>(
 
 if (multiTenancyOptions.Enabled)
 {
-    // Multi-tenant mode: register both /t/{slug} and root (fallback) routes
-    app.MapGroup("/t/{slug}").MapOidcEndpoints();
-    app.MapGroup("").MapOidcEndpoints(); // Fallback to default tenant
-    app.MapGroup("/platform-admin").MapPlatformAdminEndpoints();
+    // Multi-tenant mode: register tenant-prefixed routes
+    var tenantGroup = app.MapGroup("/t/{slug}");
+    tenantGroup.MapOidcEndpoints();
+    tenantGroup.MapGroup("/account").MapUserSelfServiceEndpoints()
+        .RequireAuthorization(); // Any authenticated user
+    tenantGroup.MapGroup("/admin").MapTenantAdminEndpoints()
+        .RequireAuthorization("TenantAdminPolicy"); // Tenant admin only
+    
+    // Fallback to default tenant for backward compatibility
+    app.MapGroup("").MapOidcEndpoints(); 
+    app.MapGroup("/account").MapUserSelfServiceEndpoints()
+        .RequireAuthorization();
+    app.MapGroup("/admin").MapTenantAdminEndpoints()
+        .RequireAuthorization("TenantAdminPolicy");
+    
+    // Platform admin (multi-tenant mode only)
+    app.MapGroup("/platform-admin").MapPlatformAdminEndpoints()
+        .RequireAuthorization("PlatformAdminPolicy");
 }
 else
 {
     // Single-tenant mode: register only root routes
-    app.MapGroup("").MapOidcEndpoints();
-    app.MapGroup("/admin").MapTenantAdminEndpoints();
+    app.MapOidcEndpoints();
+    app.MapGroup("/account").MapUserSelfServiceEndpoints()
+        .RequireAuthorization(); // Any authenticated user
+    app.MapGroup("/admin").MapTenantAdminEndpoints()
+        .RequireAuthorization("TenantAdminPolicy"); // Tenant admin only
 }
 ```
 
-### 7.2 Future: Subdomain-Based Routing (Not in Current Scope)
-
-Remove `/t/{slug}` prefix when subdomain is used:
+---
 
 ```
 Example: acme-corp.auth.example.com
@@ -1419,17 +1618,30 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [ ] Move existing admin UI to `/t/{slug}/admin` (multi) or `/admin` (single)
    - [ ] Add tenant context awareness to admin pages
    - [ ] Simplified UI in single-tenant mode (no tenant branding, no platform features)
-10. Testing:
+10. User self-service portal:
+   - [ ] Create `/account/*` routes (separate from admin UI)
+   - [ ] Profile management page (view/edit name, email, alternative emails)
+   - [ ] Password change page
+   - [ ] MFA management page (enable/disable TOTP, view QR code)
+   - [ ] Active sessions page (view and revoke)
+   - [ ] Consent history page (view and revoke app authorizations)
+   - [ ] Linked identities page (view external IdP linkages)
+   - [ ] Apply authorization policy: any authenticated user (no admin role required)
+11. Testing:
    - [ ] Single-tenant mode tests (root issuer, no tenant prefix)
    - [ ] Multi-tenant integration tests (2+ tenants)
    - [ ] Verify data isolation (queries don't leak across tenants)
    - [ ] E2E test: create tenant, create client, issue token, validate issuer
    - [ ] Mode switching tests (single → multi, multi → single)
+   - [ ] User self-service tests (non-admin user can access /account, cannot access /admin)
+   - [ ] Admin UI protection tests (non-admin gets 403 on /admin routes)
 
 **Deliverables:**
 - Mode-aware OIDC server (single-tenant or multi-tenant via config)
 - Platform admin can create/manage tenants (multi-tenant mode)
 - Tenant admins can manage their own clients/users (both modes)
+- User self-service portal (separate from admin, accessible to all users)
+- Role-based access control (admin vs. regular user separation)
 - Documentation: multi-tenancy architecture guide and mode-switching guide
 
 ### Phase 2: Branding and Tenant Settings – 2-3 weeks
@@ -1809,20 +2021,31 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
 
 ## 20. Conclusion
 
-This backlog provides a comprehensive roadmap for transforming MrWhoOidc.WebAuth into a production-ready multi-tenant OIDC Provider. The phased approach balances feature delivery with risk management, starting with an MVP (path-based routing, basic admin) and progressively adding advanced features (subdomain, custom domains, billing).
+This backlog provides a comprehensive roadmap for transforming MrWhoOidc.WebAuth into a production-ready multi-tenant OIDC Provider. The phased approach balances feature delivery with risk management, starting with an MVP (path-based routing, basic admin) and progressively adding advanced features (branding, lifecycle management, billing).
 
 **Key success factors:**
 - **Data isolation**: Rigorous testing and auditing to prevent cross-tenant leaks
+- **User access separation**: Clear distinction between regular users (self-service portal) and administrators (admin UI) with role-based access control
+- **Mode flexibility**: Single-tenant mode for enterprise/IdP chaining scenarios; multi-tenant mode for SaaS deployments
 - **Scalability**: Performance testing and architectural decisions (caching, sharding) to support 10k+ tenants
-- **Developer experience**: Clear documentation and intuitive admin UIs for both platform and tenant admins
-- **Flexibility**: Configurable tenant resolution strategies and settings overrides to accommodate diverse use cases
+- **Developer experience**: Clear documentation and intuitive UIs for end users, tenant admins, and platform admins
+- **Flexibility**: Configurable settings hierarchy (platform → tenant → client) to accommodate diverse use cases
+
+**Access Control Summary:**
+
+| User Type | Access to | Route Prefix | Role Required |
+|-----------|-----------|--------------|---------------|
+| **Regular User** | Self-service portal (profile, MFA, sessions, consent) | `/account/*` or `/t/{slug}/account/*` | None (just authenticated) |
+| **Tenant Admin** | Admin UI (manage users, clients, realms, IdPs, settings) | `/admin/*` or `/t/{slug}/admin/*` | `tenant-admin` role |
+| **Platform Admin** | Platform admin (manage all tenants, cross-tenant metrics) | `/platform-admin/*` | Platform admin entity/flag |
 
 **Next steps:**
 1. Review and approve this backlog with stakeholders
 2. Prioritize Phase 1 tasks and assign to team
 3. Create detailed task breakdown for Phase 1 (JIRA/GitHub issues)
-4. Set up CI/CD pipeline for multi-tenant testing
-5. Begin implementation!
+4. Design wireframes for user self-service portal and updated admin UI
+5. Set up CI/CD pipeline for multi-tenant testing
+6. Begin implementation!
 
 ---
 
