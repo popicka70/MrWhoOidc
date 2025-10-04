@@ -6,10 +6,10 @@ This document outlines the architectural changes and implementation roadmap to t
 
 **Status:** Phase 1 - In Progress (Foundation)  
 **Created:** October 4, 2025  
-**Updated:** October 4, 2025  
+**Updated:** October 4, 2025 (Evening - Routing & Background Services Complete)  
 **Target:** Production-ready multi-tenant OIDC Provider
 
-**Current Phase Progress:** Phase 1 Foundation - ~65% complete
+**Current Phase Progress:** Phase 1 Foundation - ~85% complete
 - ✅ Configuration infrastructure (MultiTenancyOptions, appsettings)
 - ✅ Tenant entity and TenantStatus enum
 - ✅ TenantId added to all entities with FK constraints
@@ -20,8 +20,11 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ Service layer updated (8 services now filter by TenantId)
 - ✅ Mode-aware issuer builder implemented and integrated
 - ✅ All issuer construction logic updated (GetIssuer extension methods)
+- ✅ Migration applied and tested in Docker
+- ✅ Multi-tenant routing pattern implemented (tenant-prefixed + fallback routes)
+- ✅ Background services made tenant-aware (5 services updated)
 - ✅ All 318 tests passing
-- 🔄 Next: Apply migration, update JWKS endpoint, update routing, create admin UIs
+- 🔄 Next: JWKS endpoint tenant filtering, Platform Admin UI, Tenant Admin UI scoping
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
