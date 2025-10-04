@@ -4,10 +4,20 @@
 
 This document outlines the architectural changes and implementation roadmap to transform MrWhoOidc.WebAuth from a single-tenant OIDC Provider into a full multi-tenant SaaS authorization server. The solution will support isolated tenant contexts with per-tenant configuration, branding, user bases, client applications, and independent administration.
 
-**Status:** Planning / Proposal  
+**Status:** Phase 1 - In Progress (Foundation)  
 **Created:** October 4, 2025  
 **Updated:** October 4, 2025  
 **Target:** Production-ready multi-tenant OIDC Provider
+
+**Current Phase Progress:** Phase 1 Foundation - ~45% complete
+- ✅ Configuration infrastructure (MultiTenancyOptions, appsettings)
+- ✅ Tenant entity and TenantStatus enum
+- ✅ TenantId added to all entities with FK constraints
+- ✅ Tenant resolution infrastructure (ITenantResolver, TenantAccessor, TenantContext)
+- ✅ Middleware created and registered (TenantResolutionMiddleware)
+- ✅ EF Core migration created with default tenant seed data
+- ✅ Services registered in DI container
+- 🔄 Next: Apply migration, update service layer queries, update issuer logic
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -1583,18 +1593,25 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
 
 **Tasks:**
 1. Configuration:
-   - [ ] Add `MultiTenancy:Enabled` feature flag to appsettings
-   - [ ] Add `MultiTenancy:DefaultTenantSlug` configuration
-   - [ ] Create `IMultiTenancyOptions` interface and implementation
+   - [x] Add `MultiTenancy:Enabled` feature flag to appsettings
+   - [x] Add `MultiTenancy:DefaultTenantSlug` configuration
+   - [x] Create `IMultiTenancyOptions` interface and implementation
 2. Data model changes:
-   - [ ] Add `Tenant` entity
-   - [ ] Add `TenantId` to existing entities (nullable first)
-   - [ ] Create migration with backfill to default tenant
-   - [ ] Add indexes and foreign keys
+   - [x] Add `Tenant` entity
+   - [x] Add `TenantId` to existing entities (nullable first)
+   - [x] Add `TenantStatus` enum
+   - [x] Add indexes and foreign keys in OnModelCreating
+   - [x] Create migration with backfill to default tenant
+   - [x] Seed default tenant in migration (Id: ...0001, Slug: "default")
+   - [ ] Apply migration to database
 3. Tenant resolution:
-   - [ ] Implement `ITenantResolver` with mode awareness
-   - [ ] Add `TenantResolutionMiddleware` (single/multi mode support)
-   - [ ] Implement `ITenantAccessor` scoped service with `IsSingleTenantMode` property
+   - [x] Implement `ITenantResolver` with mode awareness
+   - [x] Implement `ModeAwareTenantResolver` with caching
+   - [x] Add `TenantResolutionMiddleware` (single/multi mode support)
+   - [x] Implement `ITenantAccessor` scoped service
+   - [x] Create `TenantContext` class
+   - [x] Register services in DI container (Program.cs)
+   - [x] Add middleware to pipeline (after UseRouting, before UseAuthentication)
 4. Update services to filter by `TenantId`:
    - [ ] `ClientStore`, `UserService`, `ConsentService`, etc.
    - [ ] All DB queries include tenant filter (works in both modes)

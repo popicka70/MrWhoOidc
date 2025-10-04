@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Handlers; // handlers & related interfaces live here
@@ -20,6 +21,13 @@ public static class PersistenceAndCoreExtensions
 {
     public static IServiceCollection AddMrWhoOidcPersistenceAndCore(this IServiceCollection services, IConfiguration configuration)
     {
+        // Multi-tenancy support
+        services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
+        services.AddSingleton<IMultiTenancyOptions>(sp =>
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value);
+        services.AddScoped<ITenantAccessor, TenantAccessor>();
+        services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
+        
         // Persistence (DbContext + seeder)
         services.AddAuthPersistence(configuration);
         services.AddScoped<ISeeder, Seeder>();
