@@ -46,6 +46,15 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     services.AddRouting();
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     services.AddMrWhoOidcAuthCore();
+                    
+                    // Override ITenantAccessor with test implementation that automatically sets default tenant
+                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
+                    {
+                        var db = sp.GetRequiredService<AuthDbContext>();
+                        var logger = sp.GetService<Microsoft.Extensions.Logging.ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
+                        return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
+                    });
+                    
                     services.AddSingleton<OidcMetrics>();
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();

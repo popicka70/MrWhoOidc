@@ -3,6 +3,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Text.Json;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -16,7 +18,7 @@ public sealed class MultiRealmRoleTests
 
         // Authorization code for user in realm1 client with roles scope
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta);
+        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
         var reqR1 = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
         {
             IsValid = true,
@@ -27,8 +29,8 @@ public sealed class MultiRealmRoleTests
         };
         var (_, _, _, code1) = await codeSvc.IssueAsync(reqR1, seed.User.Id);
 
-        var ks = new KeyStore(db);
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), null);
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), null);
         var (ok1, payload1, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code1!, reqR1.RedirectUri!, reqR1.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok1);
 

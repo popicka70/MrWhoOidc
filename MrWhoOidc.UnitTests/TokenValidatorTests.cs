@@ -4,6 +4,8 @@ using MrWhoOidc.Auth.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -16,9 +18,9 @@ public sealed class TokenValidatorTests
     public void Validate_ReturnsPrincipal_ForValidToken()
     {
         using var db = CreateDb();
-        var jwt = new JwtService(new KeyStore(db));
+        var jwt = new JwtService(new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant()));
         var token = jwt.CreateJwt("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5));
-        var validator = new TokenValidator(new KeyStore(db));
+        var validator = new TokenValidator(new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant()));
         var (ok, principal, _) = validator.Validate(token, "https://issuer");
         Assert.IsTrue(ok);
         Assert.IsNotNull(principal);
@@ -29,9 +31,9 @@ public sealed class TokenValidatorTests
     public void Validate_Fails_ForWrongIssuer()
     {
         using var db = CreateDb();
-        var jwt = new JwtService(new KeyStore(db));
+        var jwt = new JwtService(new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant()));
         var token = jwt.CreateJwt("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5));
-        var validator = new TokenValidator(new KeyStore(db));
+        var validator = new TokenValidator(new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant()));
         var (ok, principal, error) = validator.Validate(token, "https://other");
         Assert.IsFalse(ok);
         Assert.IsNull(principal);

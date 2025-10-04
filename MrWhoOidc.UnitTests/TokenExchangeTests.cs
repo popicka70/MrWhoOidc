@@ -5,6 +5,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass, TestCategory("RequiresPostgres")]
@@ -29,9 +31,9 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_HappyPath_JwtSubject_NarrowsScopes_EmitsAct()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api", "api2");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -79,9 +81,9 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_DPoPBridgingDenied_WhenSubjectHasCnf()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -120,9 +122,9 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_SingleHop_Rejected_WhenActPresent()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);

@@ -5,6 +5,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -34,9 +36,9 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
     await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -94,9 +96,9 @@ public sealed class TokenExchangePolicyTests
         });
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -125,9 +127,9 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -157,9 +159,9 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -189,9 +191,9 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
@@ -220,9 +222,9 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db);
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);

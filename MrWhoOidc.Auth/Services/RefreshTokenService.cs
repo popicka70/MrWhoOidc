@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -10,7 +11,7 @@ public interface IRefreshTokenService
     Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default);
 }
 
-internal sealed class RefreshTokenService(AuthDbContext db) : IRefreshTokenService
+internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor) : IRefreshTokenService
 {
     public async Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default)
     {
@@ -24,7 +25,8 @@ internal sealed class RefreshTokenService(AuthDbContext db) : IRefreshTokenServi
             ClientId = clientId,
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(scopes),
             CreatedAt = DateTimeOffset.UtcNow,
-            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime)
+            ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
+            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required")
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);

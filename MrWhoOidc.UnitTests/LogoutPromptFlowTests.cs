@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Configuration;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -71,7 +73,7 @@ public class LogoutPromptFlowTests
             localLogout);
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
         var frontChannel = new FrontChannelLogoutNotifier(db);
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var config = new ConfigurationBuilder().Build();
         var backChannel = new BackChannelLogoutEnqueuer(db, tokenBuilder, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);

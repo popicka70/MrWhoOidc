@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -15,7 +16,8 @@ public sealed class AuthorizationCodeServiceTests
     {
         using var db = CreateDb();
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var svc = new AuthorizationCodeService(db, meta);
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizationCodeService(db, meta, tenantAccessor);
         var valid = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
         {
             IsValid = true,

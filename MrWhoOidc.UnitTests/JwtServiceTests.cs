@@ -4,6 +4,8 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Crypto;
 using System.Security.Claims;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -21,7 +23,7 @@ public sealed class JwtServiceTests
     public void CreateJwt_GeneratesToken_AndPersistsKeyOnFirstUse()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var svc = new JwtService(keyStore);
 
         var token = svc.CreateJwt("https://issuer", "api", new[] { new Claim("sub", "123") }, DateTimeOffset.UtcNow.AddMinutes(5));

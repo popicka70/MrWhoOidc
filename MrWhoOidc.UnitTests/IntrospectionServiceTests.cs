@@ -33,9 +33,10 @@ public sealed class IntrospectionServiceTests
     public void JWT_Token_Validation_Returns_Claims()
     {
         using var db = CreateDb();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         
         // Setup: Create a valid JWT
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, tenantAccessor);
         var jwtService = new JwtService(keyStore);
         var tokenValidator = new TokenValidator(keyStore);
         
@@ -63,9 +64,10 @@ public sealed class IntrospectionServiceTests
     public void JWT_Token_Expired_Returns_Invalid()
     {
         using var db = CreateDb();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         
         // Setup: Create JWT with past expiry manually to bypass JwtService's DateTime.UtcNow hardcoding
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, tenantAccessor);
         var tokenValidator = new TokenValidator(keyStore);
         
         var claims = new[]

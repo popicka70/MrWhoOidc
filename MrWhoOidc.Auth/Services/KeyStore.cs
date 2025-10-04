@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Crypto;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -11,11 +12,16 @@ public interface IKeyStore
     Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default);
 }
 
-internal sealed class KeyStore(AuthDbContext db) : IKeyStore
+internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor) : IKeyStore
 {
     public async Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
-        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        var current = await db.SigningKeys
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
         if (current is null)
         {
             // Generate a new RSA keypair and persist it
@@ -27,7 +33,8 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
             {
                 Kid = jwk.Kid,
                 Alg = jwk.Alg,
-                JwkJson = jwk.ToJson(includePrivate: true)
+                JwkJson = jwk.ToJson(includePrivate: true),
+                TenantId = tenantId
             });
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return jwk;
@@ -40,9 +47,10 @@ internal sealed class KeyStore(AuthDbContext db) : IKeyStore
 
     public async Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default)
     {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         // Publish active and non-retired previous keys; hide retired keys
         var keys = await db.SigningKeys
-            .Where(k => k.RetiredAt == null)
+            .Where(k => k.RetiredAt == null && k.TenantId == tenantId)
             .OrderByDescending(k => k.CreatedAt)
             .ToListAsync(ct)
             .ConfigureAwait(false);

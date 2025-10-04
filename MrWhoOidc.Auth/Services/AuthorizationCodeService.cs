@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 
@@ -10,7 +11,7 @@ public interface IAuthorizationCodeService
     Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta) : IAuthorizationCodeService
+internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta, ITenantAccessor tenantAccessor) : IAuthorizationCodeService
 {
     public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
     {
@@ -31,7 +32,8 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             CodeChallenge = valid.CodeChallenge,
             CodeChallengeMethod = valid.CodeChallengeMethod,
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
-            Consumed = false
+            Consumed = false,
+            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required")
         };
 
         db.AuthorizationCodes.Add(entity);

@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 /// <summary>
@@ -20,7 +22,7 @@ public sealed class RefreshTokenRevocationTests
             .UseInMemoryDatabase(dbName)
             .Options;
         var db = new AuthDbContext(opts);
-        var service = new RevocationService(db);
+        var service = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
         return (db, service);
     }
 
@@ -32,6 +34,7 @@ public sealed class RefreshTokenRevocationTests
         
         db.Tokens.Add(new Token
         {
+            TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
             Type = "refresh",
             TokenHash = hash,
             UserId = userId,

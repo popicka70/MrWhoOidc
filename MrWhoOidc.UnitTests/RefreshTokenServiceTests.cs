@@ -4,6 +4,8 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -16,7 +18,7 @@ public sealed class RefreshTokenServiceTests
             .UseInMemoryDatabase(dbName)
             .Options;
         var db = new AuthDbContext(opts);
-        var service = new RefreshTokenService(db);
+        var service = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
         return (db, service);
     }
 

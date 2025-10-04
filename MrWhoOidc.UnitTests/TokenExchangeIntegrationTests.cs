@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -49,6 +50,15 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     // Core auth services (TokenService, JwtService, etc.)
                     services.AddMrWhoOidcAuthCore();
+                    
+                    // Override ITenantAccessor with test implementation that automatically sets default tenant
+                    services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
+                    {
+                        var db = sp.GetRequiredService<AuthDbContext>();
+                        var logger = sp.GetService<ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
+                        return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
+                    });
+                    
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
