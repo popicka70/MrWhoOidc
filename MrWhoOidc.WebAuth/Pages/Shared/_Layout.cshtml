@@ -78,6 +78,19 @@
                             <a class="list-group-item list-group-item-action" asp-page="/Index"><i class="bi bi-house-door me-2"></i>Home</a>
                             <a class="list-group-item list-group-item-action" href="/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
                             <a class="list-group-item list-group-item-action" href="/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
+                            
+                            @* Platform Admin Section - Only visible to platform admins *@
+                            @if (User?.Identity?.IsAuthenticated ?? false)
+                            {
+                                @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
+                                var platformAdminResult = await AuthorizationService.AuthorizeAsync(User, null, "platform-admin");
+                                if (platformAdminResult.Succeeded)
+                                {
+                                    <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
+                                }
+                            }
+                            
                             <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
                             <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
                             <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index"><i class="bi bi-people me-2"></i>Clients</a>

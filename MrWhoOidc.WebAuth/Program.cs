@@ -7,6 +7,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
+using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
 
 var builder = WebApplication.CreateBuilder(args);
@@ -134,15 +135,11 @@ builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSect
 
 var app = builder.Build();
 
-// Support: dotnet run -- --seed
-if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+// Run migrations on startup
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
     await db.Database.MigrateAsync();
-    var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
-    await seeder.SeedAsync();
-    return; // exit after seeding
 }
 
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
@@ -150,6 +147,9 @@ app.MapMrWhoOidcEndpoints();
 
 // Standard pipeline (forwarded headers, exception handling, localization, authz, rate limiting, static assets)
 app.UseMrWhoOidcPipeline(redisMux);
+
+// Auto-seed default tenant and platform admin on first request (if database is empty)
+app.UseAutoSeed();
 
 
 // Admin + health endpoints (extracted)
