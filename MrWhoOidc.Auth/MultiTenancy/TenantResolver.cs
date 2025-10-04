@@ -65,11 +65,17 @@ public class ModeAwareTenantResolver : ITenantResolver
         var slug = ExtractTenantSlugFromPath(path);
         if (string.IsNullOrEmpty(slug))
         {
-            // No tenant slug in path - could be platform admin routes or error
-            return null;
+            // No tenant slug in path - fall back to default tenant for backward compatibility
+            // This allows existing routes (e.g., /.well-known/openid-configuration) to work
+            return await ResolveDefaultTenantAsync(cancellationToken);
         }
         
-        return await ResolveTenantBySlugAsync(slug, cancellationToken);
+        // Path has /t/{slug} - look up the specific tenant
+        var tenant = await ResolveTenantBySlugAsync(slug, cancellationToken);
+        
+        // If tenant not found and slug is NOT the default slug, return null (404)
+        // If tenant not found but slug IS the default slug, still return null (config error - 500)
+        return tenant;
     }
     
     /// <summary>

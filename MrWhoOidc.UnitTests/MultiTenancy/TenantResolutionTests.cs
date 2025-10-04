@@ -140,7 +140,7 @@ public class TenantResolutionTests
     }
 
     [TestMethod]
-    public async Task ResolveTenantAsync_MultiTenantMode_WithoutTenantPrefix_ReturnsNull()
+    public async Task ResolveTenantAsync_MultiTenantMode_WithoutTenantPrefix_FallsBackToDefaultTenant()
     {
         // Arrange
         using var scope = _serviceProvider.CreateScope();
@@ -150,7 +150,9 @@ public class TenantResolutionTests
         var result = await resolver.ResolveTenantAsync("/authorize");
         
         // Assert
-        Assert.IsNull(result, "Should return null for paths without /t/{slug} prefix in multi-tenant mode");
+        Assert.IsNotNull(result, "Should fall back to default tenant for backward compatibility");
+        Assert.AreEqual(_defaultTenantId, result.TenantId);
+        Assert.AreEqual("default", result.Slug);
     }
 
     [TestMethod]

@@ -47,21 +47,24 @@ public class TenantResolutionMiddleware
         
         if (tenantContext == null)
         {
-            // In single-tenant mode, this should never happen (default tenant should exist)
-            // In multi-tenant mode, this means tenant not found or invalid path
+            // Check if path has /t/{slug} prefix
+            var hasPrefix = path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase);
             
-            if (!options.Enabled)
+            if (hasPrefix)
             {
-                _logger.LogError("Default tenant not found in single-tenant mode. Slug: {Slug}", options.DefaultTenantSlug);
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                await context.Response.WriteAsync("Server configuration error: default tenant not found.");
+                // Path has /t/{slug} but tenant not found - return 404
+                _logger.LogWarning("Tenant not found for path: {Path}", path);
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                await context.Response.WriteAsync("Tenant not found.");
                 return;
             }
             else
             {
-                _logger.LogWarning("Tenant not found for path: {Path}", path);
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                await context.Response.WriteAsync("Tenant not found.");
+                // No /t/{slug} prefix but default tenant not found - config error, return 500
+                _logger.LogError("Default tenant resolution failed for path: {Path}. Slug: {Slug}", 
+                    path, options.DefaultTenantSlug);
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                await context.Response.WriteAsync("Server configuration error: default tenant not found.");
                 return;
             }
         }
