@@ -122,6 +122,9 @@ if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCore"], "true", Str
 // Background cleanup + backchannel feature extracted
 builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
+// On-demand tenant seeding service
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrWhoOidc.WebAuth.Services.TenantSeedingService>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted

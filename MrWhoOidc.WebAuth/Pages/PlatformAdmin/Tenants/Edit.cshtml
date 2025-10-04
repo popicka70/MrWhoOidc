@@ -14,9 +14,14 @@
             <code>@Model.Input.Slug</code>
         </p>
     </div>
-    <a class="btn btn-outline-secondary" asp-page="Index">
-        <i class="bi bi-arrow-left"></i> Back to List
-    </a>
+    <div>
+        <a class="btn btn-outline-secondary me-2" asp-page="Index">
+            <i class="bi bi-arrow-left"></i> Back to List
+        </a>
+        <button type="submit" form="editTenantForm" class="btn btn-success">
+            <i class="bi bi-check-circle"></i> Save Changes
+        </button>
+    </div>
 </div>
 
 @if (!ViewData.ModelState.IsValid)
@@ -36,7 +41,7 @@
     </div>
 }
 
-<form method="post">
+<form method="post" id="editTenantForm">
     <input type="hidden" asp-for="Input.Id" />
     
     <div class="card mb-4">

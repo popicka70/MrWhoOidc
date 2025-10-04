@@ -117,7 +117,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).IsRequired().HasMaxLength(100);
-            b.HasIndex(x => x.Name).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.Property(x => x.DisplayName).HasMaxLength(200);
             // Multi-tenancy FK
             b.HasOne<Tenant>()

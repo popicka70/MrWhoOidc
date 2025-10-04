@@ -418,5 +418,51 @@ public static class AdminApiEndpointMappingExtensions
                 .ToList();
             return Results.Ok(new { enabled = state.EmissionEnabled, backlog, openCircuits });
         }).WithName("BackchannelHealth");
+
+        // Platform Admin: On-demand tenant seeding (platform-admin only)
+        var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
+
+        platformAdmin.MapPost("/seed-tenant", async (
+            MrWhoOidc.WebAuth.Services.ITenantSeedingService seedingService,
+            SeedTenantRequest request,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.TenantSlug))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "TenantSlug is required");
+
+            if (string.IsNullOrWhiteSpace(request.TenantName))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "TenantName is required");
+
+            var result = await seedingService.SeedSampleTenantAsync(
+                request.TenantSlug,
+                request.TenantName,
+                request.AdminEmail,
+                request.AdminPassword,
+                ct);
+
+            if (!result.IsSuccess)
+                return Results.Problem(statusCode: 400, title: "Seeding failed", detail: result.ErrorMessage);
+
+            return Results.Ok(new
+            {
+                success = true,
+                tenantId = result.TenantId,
+                tenantSlug = result.TenantSlug,
+                tenantName = result.TenantName,
+                adminEmail = result.AdminEmail,
+                adminPassword = result.AdminPassword,
+                adminClientId = result.AdminClientId,
+                webClientId = result.WebClientId,
+                loginUrl = $"https://localhost:8443/t/{result.TenantSlug}/Login",
+                adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/Admin/Users"
+            });
+        }).WithName("SeedTenant");
     }
+
+    public record SeedTenantRequest(
+        string TenantSlug,
+        string TenantName,
+        string? AdminEmail = null,
+        string? AdminPassword = null
+    );
 }
