@@ -212,6 +212,25 @@ The system supports two operational modes via a simple configuration flag:
 21. `MrWhoOidc.UnitTests/AuthorizationCodeGrantStrategyTests.cs` - Added ITenantAccessor override
 22. `MrWhoOidc.UnitTests/ClientCredentialsGrantStrategyTests.cs` - Added ITenantAccessor override
 23. `MrWhoOidc.UnitTests/TokenEndpointGrantDispatchStrategyTests.cs` - Added ITenantAccessor override
+24. `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/EndpointMappingExtensions.cs` - **CRITICAL FIX:** Added tenant context initialization during startup
+
+### Critical Startup Fix ⚠️
+
+**Issue Resolved:** Application startup failure with "Tenant context required" error
+
+**Problem:**  
+During application startup, the signing key initialization was calling `KeyStore.GetActiveSigningKeyAsync()`, which requires tenant context. However, at startup time (before any HTTP requests), no tenant context existed, causing the application to crash.
+
+**Solution:**  
+Updated startup initialization to:
+1. Load the default tenant from database after migrations
+2. Explicitly set tenant context in `ITenantAccessor` before initializing keys
+3. Gracefully handle missing default tenant with warning instead of crash
+
+**Impact:**
+- ✅ Application can now start successfully with tenant-aware services
+- ✅ All 318 tests still passing
+- ✅ Detailed fix documentation in `docs/startup-tenant-context-fix.md`
 
 ## Remaining Phase 1 Work
 

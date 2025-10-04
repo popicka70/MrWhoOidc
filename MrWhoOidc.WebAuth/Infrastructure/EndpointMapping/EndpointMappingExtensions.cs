@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Security;
@@ -54,14 +55,49 @@ internal static class EndpointMappingExtensions
                         await db.Database.MigrateAsync();
                         logger.LogInformation("Database migrations completed successfully.");
                         
-                        logger.LogInformation("Initializing signing keys...");
-                        var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-                        await keyStore.GetActiveSigningKeyAsync();
-                        logger.LogInformation("Signing keys initialized.");
+                        logger.LogInformation("Initializing tenant context for startup...");
+                        var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
+                        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
                         
-                        logger.LogInformation("Seeding database...");
-                        await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
-                        logger.LogInformation("Database seeding completed.");
+                        // Load default tenant for startup operations
+                        var defaultTenant = await db.Tenants
+                            .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
+                            .FirstOrDefaultAsync();
+                        
+                        if (defaultTenant == null)
+                        {
+                            logger.LogWarning("Default tenant '{Slug}' not found. Signing key initialization skipped.", 
+                                multiTenancyOptions.DefaultTenantSlug);
+                        }
+                        else
+                        {
+                            // Set tenant context for startup operations
+                            var tenantContext = new TenantContext
+                            {
+                                TenantId = defaultTenant.Id,
+                                Slug = defaultTenant.Slug,
+                                Name = defaultTenant.Name,
+                                IssuerUri = defaultTenant.IssuerUri,
+                                IsMultiTenantMode = multiTenancyOptions.Enabled
+                            };
+                            tenantAccessor.SetTenant(tenantContext);
+                            logger.LogInformation("Tenant context set to '{TenantSlug}' for startup operations.", defaultTenant.Slug);
+                            
+                            logger.LogInformation("Seeding database...");
+                            var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
+                            await seeder.SeedAsync();
+                            logger.LogInformation("Database seeding completed.");
+                            
+                            logger.LogInformation("Initializing signing keys...");
+                            var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
+                            await keyStore.GetActiveSigningKeyAsync();
+                            logger.LogInformation("Signing keys initialized.");
+                            
+                            logger.LogInformation("Applying key rotation policies...");
+                            var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
+                            await rotation.EnsureInitializedAsync();
+                            logger.LogInformation("Key rotation policies applied.");
+                        }
                         
                         // Signal that migrations are complete
                         _migrationCompletionSource.TrySetResult(true);
