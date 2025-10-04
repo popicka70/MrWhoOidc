@@ -126,16 +126,22 @@ public class ModeAwareTenantResolver : ITenantResolver
     
     private async Task<TenantContext?> ResolveTenantBySlugAsync(string slug, CancellationToken cancellationToken)
     {
-        var cacheKey = $"{CacheKeyPrefix}{slug.ToLowerInvariant()}";
+        var normalizedSlug = slug.ToLowerInvariant();
+        var cacheKey = $"{CacheKeyPrefix}{normalizedSlug}";
         
         if (_cache.TryGetValue<TenantContext>(cacheKey, out var cachedContext) && cachedContext != null)
         {
             return cachedContext;
         }
         
-        var tenant = await _dbContext.Tenants
-            .Where(t => t.Slug == slug && t.Status == TenantStatus.Active)
-            .FirstOrDefaultAsync(cancellationToken);
+        // Case-insensitive comparison: fetch all active tenants and filter in memory
+        // In-memory DB doesn't support ToLower in queries
+        var tenants = await _dbContext.Tenants
+            .Where(t => t.Status == TenantStatus.Active)
+            .ToListAsync(cancellationToken);
+            
+        var tenant = tenants.FirstOrDefault(t => 
+            t.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase));
         
         if (tenant == null)
         {

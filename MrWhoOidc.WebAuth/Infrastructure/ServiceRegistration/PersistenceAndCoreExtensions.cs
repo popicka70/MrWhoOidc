@@ -21,19 +21,13 @@ public static class PersistenceAndCoreExtensions
 {
     public static IServiceCollection AddMrWhoOidcPersistenceAndCore(this IServiceCollection services, IConfiguration configuration)
     {
-        // Multi-tenancy support
-        services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
-        services.AddSingleton<IMultiTenancyOptions>(sp =>
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value);
-        services.AddScoped<ITenantAccessor, TenantAccessor>();
-        services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
-        
         // Persistence (DbContext + seeder)
         services.AddAuthPersistence(configuration);
         services.AddScoped<ISeeder, Seeder>();
 
         // Core auth/domain services (moved from Program.cs via AddMrWhoOidcAuthCore)
-        services.AddMrWhoOidcAuthCore();
+        // This now includes multi-tenancy service registration
+        services.AddMrWhoOidcAuthCore(configuration);
         // Diagnostic marker (used only in tests if validation flag set)
         services.AddSingleton(new AuthCoreRegistrationMarker(DateTime.UtcNow));
 

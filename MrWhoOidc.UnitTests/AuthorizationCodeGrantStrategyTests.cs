@@ -13,6 +13,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -23,6 +24,7 @@ namespace MrWhoOidc.UnitTests;
 public sealed class AuthorizationCodeGrantStrategyTests
 {
     private const string Issuer = "https://issuer";
+    private static readonly Guid DefaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
 
     private static AuthenticationHeaderValue Basic(string id, string secret)
     {
@@ -59,15 +61,29 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     using var scope = app.ApplicationServices.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                     var hasher = new Argon2PasswordHasher();
-                    var realm = new Realm { Name = "default" };
+                    
+                    // Seed default tenant
+                    var tenant = new Tenant
+                    {
+                        Id = DefaultTenantId,
+                        Slug = "default",
+                        Name = "Default Tenant",
+                        IssuerUri = Issuer,
+                        Status = TenantStatus.Active,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    db.Tenants.Add(tenant);
+                    
+                    var realm = new Realm { Name = "default", TenantId = DefaultTenantId };
                     db.Realms.Add(realm);
                     db.Clients.Add(new ClientEntity
                     {
                         ClientId = clientId,
                         ClientSecretHash = hasher.Hash(clientSecret),
-                        RealmId = realm.Id
+                        RealmId = realm.Id,
+                        TenantId = DefaultTenantId
                     });
-                    var user = new User { Username = "alice", PasswordHash = "p" };
+                    var user = new User { Username = "alice", PasswordHash = "p", TenantId = DefaultTenantId };
                     db.Users.Add(user);
                     await db.SaveChangesAsync();
 
@@ -81,7 +97,8 @@ public sealed class AuthorizationCodeGrantStrategyTests
                         ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
                         UserId = user.Id,
                         Nonce = "n",
-                        ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+                        ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+                        TenantId = DefaultTenantId
                     };
                     db.AuthorizationCodes.Add(code);
                     await db.SaveChangesAsync();

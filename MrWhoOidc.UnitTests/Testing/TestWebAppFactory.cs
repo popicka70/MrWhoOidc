@@ -2,6 +2,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using MrWhoOidc.WebAuth; // Program
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.UnitTests.Testing;
 
@@ -26,6 +30,9 @@ internal static class TestWebAppFactory
                 b.UseSetting("Testing:ValidateAuthCore", "true");
                 b.UseSetting("Testing:DiagnoseAuthCore", "false");
                 b.UseSetting("Testing:DisableStaticAssets", "true");
+                // Multi-tenancy: single-tenant mode for tests
+                b.UseSetting("MultiTenancy:Enabled", "false");
+                b.UseSetting("MultiTenancy:DefaultTenantSlug", "default");
                 // Provide a fake connection string (will be ignored because of in-memory flag)
                 b.UseSetting("ConnectionStrings:authdb", "Host=localhost;Database=fake;Username=fake;Password=fake");
                 b.ConfigureAppConfiguration((ctx, cfg) =>
@@ -40,9 +47,18 @@ internal static class TestWebAppFactory
                         ["Testing:ValidateAuthCore"] = "true",
                         ["Testing:DiagnoseAuthCore"] = "false",
                         ["Testing:DisableStaticAssets"] = "true",
+                        ["MultiTenancy:Enabled"] = "false",
+                        ["MultiTenancy:DefaultTenantSlug"] = "default",
                         ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake"
                     };
                     cfg.AddInMemoryCollection(dict);
+                });
+                
+                // Seed default tenant for tests
+                b.ConfigureServices((context, services) =>
+                {
+                    // Use a hosted service to seed the tenant after app starts
+                    services.AddHostedService<DefaultTenantSeedingService>();
                 });
             });
 
@@ -72,4 +88,43 @@ internal static class TestWebAppFactory
                     cfg.AddInMemoryCollection(dict);
                 });
             });
+}
+
+/// <summary>
+/// Background service that seeds the default tenant once on startup.
+/// Uses a static flag to ensure seeding only happens once per test run (shared in-memory database).
+/// </summary>
+internal sealed class DefaultTenantSeedingService : IHostedService
+{
+    private static int _seeded = 0;
+    private readonly IServiceProvider _serviceProvider;
+
+    public DefaultTenantSeedingService(IServiceProvider serviceProvider)
+    {
+        _serviceProvider = serviceProvider;
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        // Use Interlocked.CompareExchange to ensure only one thread/instance seeds the tenant
+        if (Interlocked.CompareExchange(ref _seeded, 1, 0) == 0)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            
+            var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
+            db.Tenants.Add(new Tenant
+            {
+                Id = defaultTenantId,
+                Slug = "default",
+                Name = "Default Tenant",
+                IssuerUri = "https://localhost:5001",
+                Status = TenantStatus.Active,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

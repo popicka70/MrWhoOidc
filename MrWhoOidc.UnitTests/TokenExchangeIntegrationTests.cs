@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth;
@@ -27,6 +28,7 @@ namespace MrWhoOidc.UnitTests;
 public sealed class TokenExchangeIntegrationTests
 {
     private const string Issuer = "https://test";
+    private static readonly Guid DefaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
 
     private sealed record TestHostBundle(IHost Host, string ClientId, string ClientSecret, Guid UserId);
 
@@ -77,7 +79,20 @@ public sealed class TokenExchangeIntegrationTests
                     {
                         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                         var hasher = new Argon2PasswordHasher();
-                        var realm = new Realm { Name = "default" };
+                        
+                        // Seed default tenant
+                        var tenant = new Tenant
+                        {
+                            Id = DefaultTenantId,
+                            Slug = "default",
+                            Name = "Default Tenant",
+                            IssuerUri = Issuer,
+                            Status = TenantStatus.Active,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        };
+                        db.Tenants.Add(tenant);
+                        
+                        var realm = new Realm { Name = "default", TenantId = DefaultTenantId };
                         db.Realms.Add(realm);
                         var client = new ClientEntity
                         {
@@ -85,6 +100,7 @@ public sealed class TokenExchangeIntegrationTests
                             ClientName = "App1",
                             ClientSecretHash = hasher.Hash(clientSecret),
                             RealmId = realm.Id,
+                            TenantId = DefaultTenantId,
                             OboEnabled = true,
                             // Allow target audience api-b only by policy
                             OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api-b" }),
@@ -95,7 +111,7 @@ public sealed class TokenExchangeIntegrationTests
                         configureClient?.Invoke(client);
                         db.Clients.Add(client);
 
-                        db.Users.Add(new User { Id = userId, Username = "bob", Name = "Bob" });
+                        db.Users.Add(new User { Id = userId, Username = "bob", Name = "Bob", TenantId = DefaultTenantId });
                         await db.SaveChangesAsync();
                     }
 

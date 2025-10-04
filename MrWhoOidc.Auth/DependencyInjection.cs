@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
@@ -8,8 +10,27 @@ namespace MrWhoOidc.Auth;
 
 public static class AuthServiceCollectionExtensions
 {
-    public static IServiceCollection AddMrWhoOidcAuthCore(this IServiceCollection services)
+    public static IServiceCollection AddMrWhoOidcAuthCore(this IServiceCollection services, IConfiguration? configuration = null)
     {
+        // Multi-tenancy support (if configuration provided)
+        if (configuration != null)
+        {
+            services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
+            services.AddSingleton<IMultiTenancyOptions>(sp =>
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value);
+        }
+        else
+        {
+            // Default: single-tenant mode for tests
+            services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
+        }
+        
+        // Memory cache needed by TenantResolver
+        services.AddMemoryCache();
+        
+        services.AddScoped<ITenantAccessor, TenantAccessor>();
+        services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
+
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddScoped<IUserService, UserService>();
@@ -44,3 +65,4 @@ public static class AuthServiceCollectionExtensions
         return services;
     }
 }
+
