@@ -309,14 +309,14 @@ public class ProgramSurfaceSnapshotTests
     {
         using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         using var scope1 = factory.Services.CreateScope();
-        var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name.Contains("AdminAuthorizationHandler")).ToList();
+        var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name == "AdminAuthorizationHandler").ToList();
         Assert.IsTrue(handlers1.Count == 1, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
         var h1a = handlers1[0];
-        var h1b = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name.Contains("AdminAuthorizationHandler"));
+        var h1b = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name == "AdminAuthorizationHandler");
         // Scoped => same instance within scope
         Assert.AreSame(h1a, h1b, "AdminAuthorizationHandler not scoped (different instances within one scope)");
         using var scope2 = factory.Services.CreateScope();
-        var h2 = scope2.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name.Contains("AdminAuthorizationHandler"));
+        var h2 = scope2.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name == "AdminAuthorizationHandler");
         // Scoped => different instance across scopes
         Assert.AreNotSame(h1a, h2, "AdminAuthorizationHandler appears singleton (same instance across scopes)");
     }

@@ -1116,7 +1116,7 @@
     "Pattern": "PlatformAdmin/Tenants",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": null,
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
@@ -1125,7 +1125,7 @@
     "Pattern": "PlatformAdmin/Tenants/Create",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": null,
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
@@ -1134,7 +1134,7 @@
     "Pattern": "PlatformAdmin/Tenants/Edit/{id:guid}",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": null,
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
@@ -1143,7 +1143,7 @@
     "Pattern": "PlatformAdmin/Tenants/Index",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": null,
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false

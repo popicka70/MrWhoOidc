@@ -11,7 +11,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
-[Authorize] // TODO: Add RequirePlatformAdmin policy
+[Authorize(Policy = "platform-admin")]
 public partial class CreateModel(
     AuthDbContext db,
     IPasswordHasher hasher,

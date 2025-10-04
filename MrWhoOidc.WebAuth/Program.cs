@@ -50,6 +50,9 @@ builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 
+// Platform admin policy options
+builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSection("PlatformAdminAuth"));
+
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 
