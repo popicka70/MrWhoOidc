@@ -135,11 +135,14 @@ builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSect
 
 var app = builder.Build();
 
-// Run migrations on startup
+// Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-    await db.Database.MigrateAsync();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
 }
 
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
