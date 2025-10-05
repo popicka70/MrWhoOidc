@@ -112,8 +112,16 @@
                                     </h6>
                                     <p class="card-text small text-muted">
                                         Quickly create a fully-configured sample tenant with admin user, clients, and scopes for demos or testing.
+                                        @if (!Model.IsMultiTenantMode)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1">Multi-tenant mode only</span>
+                                        }
                                     </p>
-                                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#seedTenantModal">
+                                    <button type="button" 
+                                            class="btn btn-success btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#seedTenantModal"
+                                            disabled="@(!Model.IsMultiTenantMode)">
                                         <i class="bi bi-magic me-1"></i>Seed Tenant
                                     </button>
                                 </div>
