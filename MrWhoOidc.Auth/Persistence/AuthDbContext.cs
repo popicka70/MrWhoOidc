@@ -97,8 +97,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.NormalizedEmail).HasMaxLength(256);
             b.Property(x => x.Name).HasMaxLength(200);
-            b.HasIndex(x => x.Username).IsUnique();
-            b.HasIndex(x => x.NormalizedEmail).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Username }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.NormalizedEmail }).IsUnique();
             b.HasMany(x => x.AlternativeEmails)
                 .WithOne()
                 .HasForeignKey(x => x.UserId)

@@ -20,7 +20,18 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label">
+                    <i class="bi bi-building me-1"></i>Tenant
+                </label>
+                <select class="form-select" name="tenantId" onchange="this.form.submit()">
+                    @foreach (var opt in Model.TenantOptions)
+                    {
+                        <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">
                     <i class="bi bi-diagram-3 me-1"></i>Realm
                 </label>
@@ -38,7 +49,7 @@
                 </label>
                 <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search roles..." />
             </div>
-            <div class="col-md-3">
+            <div class="col-md-1">
                 <button class="btn btn-primary w-100" type="submit">
                     <i class="bi bi-funnel"></i> Filter
                 </button>
@@ -58,6 +69,9 @@
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-diagram-3 me-1"></i>Realm
                     </th>
+                    <th class="d-none d-lg-table-cell">
+                        <i class="bi bi-building me-1"></i>Tenant
+                    </th>
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-toggle-on me-1"></i>Active
                     </th>
@@ -70,7 +84,10 @@
                 <tr>
                     <td data-label="Name"><strong>@r.Name</strong></td>
                     <td data-label="Realm" class="d-none d-md-table-cell">
-                        <span class="badge text-bg-secondary">@Model.RealmNameById(r.RealmId)</span>
+                        <span class="badge text-bg-secondary">@r.RealmName</span>
+                    </td>
+                    <td data-label="Tenant" class="d-none d-lg-table-cell">
+                        <span class="badge text-bg-info">@r.TenantName</span>
                     </td>
                     <td data-label="Active" class="d-none d-md-table-cell">
                         @if (r.IsActive)

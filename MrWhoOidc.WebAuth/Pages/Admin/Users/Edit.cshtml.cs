@@ -23,21 +23,42 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
     [BindProperty]
     public EditInput Input { get; set; } = new();
 
+    public string TenantName { get; set; } = string.Empty;
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-        if (user is null) return RedirectToPage("Index");
-        Input = new EditInput { Username = user.Username, Email = user.Email, Name = user.Name };
-        SetHeading(user.Username, user.Name);
+        var userQuery = from u in db.Users.AsNoTracking()
+                        join t in db.Tenants on u.TenantId equals t.Id
+                        where u.Id == id
+                        select new { User = u, Tenant = t };
+        
+        var result = await userQuery.FirstOrDefaultAsync();
+        if (result is null) return RedirectToPage("Index");
+        
+        TenantName = result.Tenant.Name;
+        Input = new EditInput 
+        { 
+            Username = result.User.Username, 
+            Email = result.User.Email, 
+            Name = result.User.Name 
+        };
+        SetHeading(result.User.Username, result.User.Name);
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
-        if (!ModelState.IsValid) return Page();
+        if (!ModelState.IsValid) 
+        {
+            await LoadTenantNameAsync(id);
+            return Page();
+        }
+        
         var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (entity is null) return RedirectToPage("Index");
+
+        // Load tenant name for display
+        await LoadTenantNameAsync(id);
 
         // Initialize heading from current entity state for validation error scenarios.
         SetHeading(entity.Username, entity.Name);
@@ -45,7 +66,8 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
         var newUsername = Input.Username.Trim();
         if (!string.Equals(entity.Username, newUsername, StringComparison.Ordinal))
         {
-            var exists = await db.Users.AnyAsync(u => u.Username == newUsername);
+            // Username uniqueness within tenant
+            var exists = await db.Users.AnyAsync(u => u.TenantId == entity.TenantId && u.Username == newUsername);
             if (exists)
             {
                 ModelState.AddModelError("Input.Username", "Username already exists.");
@@ -58,7 +80,8 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
         var normalized = EmailNormalizer.NormalizeForLookup(newEmail);
         if (!string.Equals(entity.NormalizedEmail, normalized, StringComparison.Ordinal))
         {
-            if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.NormalizedEmail == normalized && u.Id != id))
+            // Email uniqueness within tenant
+            if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.TenantId == entity.TenantId && u.NormalizedEmail == normalized && u.Id != id))
             {
                 ModelState.AddModelError("Input.Email", "Email already exists.");
                 return Page();
@@ -72,5 +95,13 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
         await db.SaveChangesAsync();
         SetHeading(entity.Username, entity.Name);
         return RedirectToPage("Index");
+    }
+
+    private async Task LoadTenantNameAsync(Guid userId)
+    {
+        TenantName = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Join(db.Tenants, u => u.TenantId, t => t.Id, (u, t) => t.Name)
+            .FirstOrDefaultAsync() ?? string.Empty;
     }
 }

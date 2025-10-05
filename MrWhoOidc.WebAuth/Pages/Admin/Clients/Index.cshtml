@@ -17,6 +17,29 @@
     </a>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-building me-1"></i>Tenant
+                </label>
+                <select class="form-select" name="tenantId" onchange="this.form.submit()">
+                    @foreach (var opt in Model.TenantOptions)
+                    {
+                        <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-primary w-100 mt-4" type="submit">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="table-responsive table-responsive-cards">
         <table class="table table-hover align-middle mb-0">
@@ -30,6 +53,9 @@
                     </th>
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-diagram-3 me-1"></i>Realm
+                    </th>
+                    <th class="d-none d-lg-table-cell">
+                        <i class="bi bi-building me-1"></i>Tenant
                     </th>
                     <th class="d-none d-md-table-cell">PKCE</th>
                     <th class="d-none d-md-table-cell">Consent</th>
@@ -47,6 +73,9 @@
                     <td data-label="Name"><strong>@c.ClientName</strong></td>
                     <td data-label="Realm" class="d-none d-md-table-cell">
                         <span class="badge text-bg-secondary">@c.RealmName</span>
+                    </td>
+                    <td data-label="Tenant" class="d-none d-lg-table-cell">
+                        <span class="badge text-bg-info">@c.TenantName</span>
                     </td>
                     <td data-label="PKCE" class="d-none d-md-table-cell">
                         @if (c.RequirePkce)

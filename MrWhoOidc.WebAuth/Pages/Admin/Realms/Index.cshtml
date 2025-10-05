@@ -17,6 +17,29 @@
     </a>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">
+                    <i class="bi bi-building me-1"></i>Tenant
+                </label>
+                <select class="form-select" name="tenantId" onchange="this.form.submit()">
+                    @foreach (var opt in Model.TenantOptions)
+                    {
+                        <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-primary w-100 mt-4" type="submit">
+                    <i class="bi bi-funnel"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="table-responsive table-responsive-cards">
         <table class="table table-hover align-middle mb-0">
@@ -27,6 +50,9 @@
                     </th>
                     <th>
                         <i class="bi bi-card-heading me-1"></i>Display Name
+                    </th>
+                    <th class="d-none d-lg-table-cell">
+                        <i class="bi bi-building me-1"></i>Tenant
                     </th>
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-calendar me-1"></i>Created
@@ -40,6 +66,9 @@
                 <tr>
                     <td data-label="Name"><code>@r.Name</code></td>
                     <td data-label="Display Name"><strong>@r.DisplayName</strong></td>
+                    <td data-label="Tenant" class="d-none d-lg-table-cell">
+                        <span class="badge text-bg-info">@r.TenantName</span>
+                    </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAt.ToLocalTime().ToString("g")</td>
                     <td data-label="Actions" class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@r.Id">

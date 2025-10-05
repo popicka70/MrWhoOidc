@@ -20,13 +20,24 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-8">
+            <div class="col-md-4">
+                <label class="form-label">
+                    <i class="bi bi-building me-1"></i>Tenant
+                </label>
+                <select class="form-select" name="tenantId" onchange="this.form.submit()">
+                    @foreach (var opt in Model.TenantOptions)
+                    {
+                        <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-5">
                 <label class="form-label">
                     <i class="bi bi-search me-1"></i>Search
                 </label>
                 <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search by username, email, or name..." />
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <button class="btn btn-primary w-100" type="submit">
                     <i class="bi bi-funnel"></i> Filter
                 </button>
@@ -49,6 +60,9 @@
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-card-text me-1"></i>Name
                     </th>
+                    <th class="d-none d-lg-table-cell">
+                        <i class="bi bi-building me-1"></i>Tenant
+                    </th>
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-calendar me-1"></i>Created
                     </th>
@@ -62,6 +76,9 @@
                     <td data-label="Username"><strong>@u.Username</strong></td>
                     <td data-label="Email">@u.Email</td>
                     <td data-label="Name" class="d-none d-md-table-cell">@u.Name</td>
+                    <td data-label="Tenant" class="d-none d-lg-table-cell">
+                        <span class="badge text-bg-info">@u.TenantName</span>
+                    </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@u.CreatedAt.ToLocalTime().ToString("g")</td>
                     <td data-label="Actions" class="text-end">
                         <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@u.Id">

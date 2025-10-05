@@ -127,13 +127,33 @@ public partial class CreateModel(
         await db.SaveChangesAsync();
 
         // Create default realm for tenant
-        var realm = new Realm
+        var defaultRealm = new Realm
         {
             TenantId = tenant.Id,
             Name = "default",
             DisplayName = $"{Input.Name} Default Realm"
         };
-        db.Realms.Add(realm);
+        db.Realms.Add(defaultRealm);
+
+        // Create admin realm for tenant
+        var adminRealm = new Realm
+        {
+            TenantId = tenant.Id,
+            Name = "admin",
+            DisplayName = $"{Input.Name} Admin Realm"
+        };
+        db.Realms.Add(adminRealm);
+        await db.SaveChangesAsync();
+
+        // Create admin role in admin realm
+        var adminRole = new Role
+        {
+            Name = "admin",
+            RealmId = adminRealm.Id,
+            TenantId = tenant.Id,
+            IsActive = true
+        };
+        db.Roles.Add(adminRole);
         await db.SaveChangesAsync();
 
         // Create first admin user
@@ -146,11 +166,24 @@ public partial class CreateModel(
             NormalizedEmail = normalizedEmail,
             Name = "Admin User",
             PasswordHash = passwordHash,
+            HashAlgorithm = "argon2id",
             EmailVerified = true, // Auto-verify first admin
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
         db.Users.Add(adminUser);
+        await db.SaveChangesAsync();
+
+        // Assign admin role to user
+        var roleAssignment = new UserRoleAssignment
+        {
+            UserId = adminUser.Id,
+            RoleId = adminRole.Id,
+            RealmId = adminRealm.Id,
+            IsActive = true
+        };
+        db.UserRoleAssignments.Add(roleAssignment);
         await db.SaveChangesAsync();
 
         TempData["SuccessMessage"] = $"Tenant '{Input.Name}' created successfully! Admin user: {Input.AdminEmail}";

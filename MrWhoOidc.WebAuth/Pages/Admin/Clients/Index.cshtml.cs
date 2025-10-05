@@ -12,14 +12,18 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 [Authorize]
 public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
 {
-    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
+    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 
     public IReadOnlyList<ClientRow> Clients { get; private set; } = Array.Empty<ClientRow>();
 
     public List<SelectListItem> RealmOptions { get; private set; } = new();
+    public List<SelectListItem> TenantOptions { get; private set; } = new();
 
     [BindProperty]
     public ClientInput Input { get; set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public Guid? TenantId { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -28,20 +32,40 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
 
     private async Task LoadAsync()
     {
+        // Load tenant options for filter
+        var tenants = await db.Tenants.AsNoTracking()
+            .Where(t => t.Status == TenantStatus.Active)
+            .OrderBy(t => t.Name)
+            .ToListAsync();
+        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+        TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+
         var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
 
-        Clients = await db.Clients.AsNoTracking()
-            .OrderBy(c => c.ClientId)
-            .Select(c => new ClientRow(
-                c.Id,
-                c.ClientId,
-                c.ClientName!,
-                db.Realms.Where(r => r.Id == c.RealmId).Select(r => r.Name).First(),
-                c.RequirePkce,
-                c.RequireConsent,
-                !string.IsNullOrEmpty(c.PublicJwksJson) || !string.IsNullOrEmpty(c.PublicJwksUri),
-                c.RequirePar
+        // Build query with tenant and realm JOINs
+        var q = db.Clients.AsNoTracking()
+            .Join(db.Tenants, c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
+            .Join(db.Realms, x => x.Client.RealmId, r => r.Id, (x, r) => new { x.Client, x.Tenant, Realm = r });
+
+        if (TenantId.HasValue)
+        {
+            q = q.Where(x => x.Client.TenantId == TenantId.Value);
+        }
+
+        Clients = await q
+            .OrderBy(x => x.Client.ClientId)
+            .Select(x => new ClientRow(
+                x.Client.Id,
+                x.Client.ClientId,
+                x.Client.ClientName,
+                x.Realm.Name,
+                x.Client.TenantId,
+                x.Tenant.Name,
+                x.Client.RequirePkce,
+                x.Client.RequireConsent,
+                !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri),
+                x.Client.RequirePar
             ))
             .ToListAsync();
     }
@@ -95,7 +119,7 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
         if (entity is null) return RedirectToPage();
         db.Clients.Remove(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        return RedirectToPage(new { TenantId });
     }
 
     public sealed class ClientInput

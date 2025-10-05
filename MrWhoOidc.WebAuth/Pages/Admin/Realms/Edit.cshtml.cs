@@ -16,27 +16,44 @@ public class EditModel(AuthDbContext db) : PageModel
     [BindProperty]
     public RealmInput Input { get; set; } = new();
 
+    public string TenantName { get; set; } = string.Empty;
+
     public async Task<IActionResult> OnGetAsync()
     {
-        var realm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == Id);
-        if (realm is null) return NotFound();
-        Input = new RealmInput { Name = realm.Name, DisplayName = realm.DisplayName };
+        var realmQuery = from r in db.Realms.AsNoTracking()
+                         join t in db.Tenants on r.TenantId equals t.Id
+                         where r.Id == Id
+                         select new { Realm = r, Tenant = t };
+        
+        var result = await realmQuery.FirstOrDefaultAsync();
+        if (result is null) return NotFound();
+        
+        TenantName = result.Tenant.Name;
+        Input = new RealmInput { Name = result.Realm.Name, DisplayName = result.Realm.DisplayName };
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid) return Page();
+        if (!ModelState.IsValid) 
+        {
+            await LoadTenantNameAsync();
+            return Page();
+        }
+        
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == Id);
         if (realm is null) return NotFound();
 
-        // If name changed, validate uniqueness
+        // Load tenant name for display
+        await LoadTenantNameAsync();
+
+        // If name changed, validate uniqueness within tenant
         if (!string.Equals(realm.Name, Input.Name, StringComparison.Ordinal))
         {
-            var exists = await db.Realms.AnyAsync(r => r.Name == Input.Name);
+            var exists = await db.Realms.AnyAsync(r => r.TenantId == realm.TenantId && r.Name == Input.Name);
             if (exists)
             {
-                ModelState.AddModelError("Input.Name", "Realm name already exists");
+                ModelState.AddModelError("Input.Name", "Realm name already exists in this tenant");
                 return Page();
             }
         }
@@ -45,6 +62,14 @@ public class EditModel(AuthDbContext db) : PageModel
         realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
         await db.SaveChangesAsync();
         return RedirectToPage("Index");
+    }
+
+    private async Task LoadTenantNameAsync()
+    {
+        TenantName = await db.Realms.AsNoTracking()
+            .Where(r => r.Id == Id)
+            .Join(db.Tenants, r => r.TenantId, t => t.Id, (r, t) => t.Name)
+            .FirstOrDefaultAsync() ?? string.Empty;
     }
 
     public sealed class RealmInput
