@@ -33,6 +33,13 @@ public class IndexModel(
 
     public async Task OnGetAsync()
     {
+        // Redirect to dashboard if multi-tenancy is disabled
+        if (!multiTenancyOptions.Value.Enabled)
+        {
+            Response.Redirect("/PlatformAdmin/Index");
+            return;
+        }
+        
         // Load all tenants with counts
         var tenants = await db.Tenants
             .AsNoTracking()
