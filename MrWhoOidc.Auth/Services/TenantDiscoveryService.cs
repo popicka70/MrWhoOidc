@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -15,6 +16,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
     private readonly AuthDbContext _db;
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantDiscoveryService> _logger;
+    private readonly IMultiTenancyOptions _multiTenancyOptions;
     
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant_discovery:";
@@ -22,11 +24,13 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
     public TenantDiscoveryService(
         AuthDbContext db,
         IMemoryCache cache,
-        ILogger<TenantDiscoveryService> logger)
+        ILogger<TenantDiscoveryService> logger,
+        IMultiTenancyOptions multiTenancyOptions)
     {
         _db = db;
         _cache = cache;
         _logger = logger;
+        _multiTenancyOptions = multiTenancyOptions;
     }
     
     public async Task<List<TenantInfo>> FindTenantsByEmailAsync(string email, CancellationToken ct = default)
@@ -112,7 +116,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
                 Slug = x.Tenant.Slug,
                 Name = x.Tenant.Name,
                 LogoUrl = x.Tenant.LogoUrl,
-                LoginUrl = $"/t/{x.Tenant.Slug}/login"
+                LoginUrl = _multiTenancyOptions.Enabled ? $"/t/{x.Tenant.Slug}/login" : "/login"
             })
             .Distinct()
             .ToListAsync(ct);
@@ -136,7 +140,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
                 Slug = x.Tenant.Slug,
                 Name = x.Tenant.Name,
                 LogoUrl = x.Tenant.LogoUrl,
-                LoginUrl = $"/t/{x.Tenant.Slug}/login"
+                LoginUrl = _multiTenancyOptions.Enabled ? $"/t/{x.Tenant.Slug}/login" : "/login"
             })
             .Distinct()
             .ToListAsync(ct);
