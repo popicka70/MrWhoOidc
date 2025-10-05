@@ -9,7 +9,7 @@ This document outlines the architectural changes and implementation roadmap to t
 **Updated:** October 4, 2025 (Evening - Routing & Background Services Complete)  
 **Target:** Production-ready multi-tenant OIDC Provider
 
-**Current Phase Progress:** Phase 1 Foundation - ~85% complete
+**Current Phase Progress:** Phase 1 Foundation - ~90% complete
 - ✅ Configuration infrastructure (MultiTenancyOptions, appsettings)
 - ✅ Tenant entity and TenantStatus enum
 - ✅ TenantId added to all entities with FK constraints
@@ -23,8 +23,9 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ Migration applied and tested in Docker
 - ✅ Multi-tenant routing pattern implemented (tenant-prefixed + fallback routes)
 - ✅ Background services made tenant-aware (5 services updated)
-- ✅ All 318 tests passing
-- 🔄 Next: JWKS endpoint tenant filtering, Platform Admin UI, Tenant Admin UI scoping
+- ✅ All 331 tests passing
+- ✅ JWKS endpoint tenant filtering implemented and tested
+- 🔄 Next: Platform Admin UI, Tenant Admin UI scoping, User Self-Service Portal
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -1630,8 +1631,9 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [x] Mode-aware issuer: root in single-tenant, path-based in multi-tenant
    - [x] All handler code updated to use mode-aware issuer
 6. Per-tenant JWKS:
-   - [ ] Update JWKS endpoint to use tenant-filtered keys from KeyStore
-   - [ ] Verify JWKS response includes only current tenant's keys
+   - [x] Update JWKS endpoint to use tenant-filtered keys from KeyStore
+   - [x] Verify JWKS response includes only current tenant's keys
+   - [x] Create comprehensive tests for tenant isolation
 7. Routing:
    - [ ] Implement mode-aware route registration (root or `/t/{slug}/*`)
    - [ ] Update all OIDC protocol endpoints to support both modes
