@@ -5,10 +5,14 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
-public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageModel
+public class LoginModel(
+    IUserService users, 
+    ILogger<LoginModel> logger,
+    ITenantAccessor tenantAccessor) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -100,8 +104,17 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
             return LocalRedirect(ReturnUrl);
         }
 
-        logger.LogInformation("➡️ [Login] No valid ReturnUrl, redirecting to /Index");
-        return RedirectToPage("/Index");
+        // Build tenant-aware default redirect URL
+        var currentTenant = tenantAccessor.CurrentTenant;
+        var defaultUrl = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/" 
+            : "/";
+        
+        logger.LogInformation("➡️ [Login] No valid ReturnUrl, redirecting to {DefaultUrl} (Tenant: {TenantSlug})", 
+            defaultUrl, 
+            currentTenant?.Slug ?? "(none)");
+        
+        return LocalRedirect(defaultUrl);
     }
 
     static string Key(HttpContext ctx, string username) => $"{ctx.Connection.RemoteIpAddress}-{username}";

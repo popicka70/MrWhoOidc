@@ -88,7 +88,17 @@ public class TenantSeedingService : ITenantSeedingService
 
             _logger.LogInformation("Created realms for tenant {TenantSlug}", tenantSlug);
 
-            // Create admin role
+            // Create tenant-admin role in default realm (used for tenant admin authorization)
+            var tenantAdminRole = new Role
+            {
+                Name = "tenant-admin",
+                RealmId = defaultRealm.Id,
+                TenantId = tenant.Id,
+                IsActive = true
+            };
+            _db.Roles.Add(tenantAdminRole);
+
+            // Create admin role in admin realm (legacy, kept for compatibility)
             var adminRole = new Role
             {
                 Name = "admin",
@@ -99,7 +109,7 @@ public class TenantSeedingService : ITenantSeedingService
             _db.Roles.Add(adminRole);
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Created admin role for tenant {TenantSlug}", tenantSlug);
+            _logger.LogInformation("Created tenant-admin and admin roles for tenant {TenantSlug}", tenantSlug);
 
             // Create admin user
             var adminUser = new User
@@ -141,11 +151,7 @@ public class TenantSeedingService : ITenantSeedingService
                     $"http://localhost:8443/t/{tenantSlug}/"
                 })
             };
-            _db.Clients.Add(adminClient);
-            await _db.SaveChangesAsync(ct);
-
-            _logger.LogInformation("Created admin client {ClientId} for tenant {TenantSlug}", adminClient.ClientId, tenantSlug);
-
+            
             // Create sample web client
             var webClient = new Client
             {
@@ -168,13 +174,37 @@ public class TenantSeedingService : ITenantSeedingService
                     "http://localhost:5001/"
                 })
             };
+            
+            _db.Clients.Add(adminClient);
             _db.Clients.Add(webClient);
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Created web client {ClientId} for tenant {TenantSlug}", webClient.ClientId, tenantSlug);
+            _logger.LogInformation("Created admin client {AdminClientId} and web client {WebClientId} for tenant {TenantSlug}", 
+                adminClient.ClientId, webClient.ClientId, tenantSlug);
 
-            // Assign admin role to admin user
-            var roleAssignment = new UserRoleAssignment
+            // Ensure clients have IDs after save
+            if (adminClient.Id == Guid.Empty || webClient.Id == Guid.Empty)
+            {
+                _logger.LogError("Client IDs not generated for tenant {TenantSlug}. Admin: {AdminId}, Web: {WebId}", 
+                    tenantSlug, adminClient.Id, webClient.Id);
+                return TenantSeedResult.Failure("Failed to create clients - IDs not generated");
+            }
+
+            _logger.LogInformation("Client IDs confirmed: Admin={AdminId}, Web={WebId}", adminClient.Id, webClient.Id);
+
+            // Assign tenant-admin role to admin user (in default realm)
+            var tenantAdminRoleAssignment = new UserRoleAssignment
+            {
+                UserId = adminUser.Id,
+                RoleId = tenantAdminRole.Id,
+                ClientId = adminClient.Id,
+                RealmId = defaultRealm.Id,
+                IsActive = true
+            };
+            _db.UserRoleAssignments.Add(tenantAdminRoleAssignment);
+
+            // Also assign legacy admin role (in admin realm)
+            var adminRoleAssignment = new UserRoleAssignment
             {
                 UserId = adminUser.Id,
                 RoleId = adminRole.Id,
@@ -182,10 +212,10 @@ public class TenantSeedingService : ITenantSeedingService
                 RealmId = adminRealm.Id,
                 IsActive = true
             };
-            _db.UserRoleAssignments.Add(roleAssignment);
+            _db.UserRoleAssignments.Add(adminRoleAssignment);
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Assigned admin role to user {AdminEmail} for tenant {TenantSlug}", adminEmail, tenantSlug);
+            _logger.LogInformation("Assigned tenant-admin and admin roles to user {AdminEmail} for tenant {TenantSlug}", adminEmail, tenantSlug);
 
             // Create standard scopes (client-scope associations)
             var scopes = new[] { "openid", "profile", "email", "roles", "offline_access" };

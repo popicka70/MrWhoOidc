@@ -1,4 +1,5 @@
 ﻿@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +13,14 @@
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
 <body>
-    @{ var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false; }
+    @{
+        var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false;
+        // Get tenant context from middleware (set by TenantResolutionMiddleware)
+        var currentTenant = TenantAccessor.CurrentTenant;
+        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+            ? $"/t/{currentTenant.Slug}" 
+            : "";
+    }
     @if (!hideNavbar)
     {
         <header>
@@ -97,15 +105,15 @@
                             }
                             
                             <div class="list-group-item fw-semibold text-uppercase small">Admin</div>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Realms/Index"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Clients/Index"><i class="bi bi-people me-2"></i>Clients</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Providers/Index"><i class="bi bi-shield-lock me-2"></i>Providers</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/ProviderMappings/Index"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Scopes/Index"><i class="bi bi-tags me-2"></i>Scopes</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Roles/Index"><i class="bi bi-person-badge me-2"></i>Roles</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Users/Index"><i class="bi bi-people-fill me-2"></i>Users</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Registrations/Index"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
-                            <a class="list-group-item list-group-item-action" asp-page="/Admin/Backchannel/Index"><i class="bi bi-plug me-2"></i>BCL outbox</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Clients"><i class="bi bi-people me-2"></i>Clients</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Providers"><i class="bi bi-shield-lock me-2"></i>Providers</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/ProviderMappings"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Scopes"><i class="bi bi-tags me-2"></i>Scopes</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Roles"><i class="bi bi-person-badge me-2"></i>Roles</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Users"><i class="bi bi-people-fill me-2"></i>Users</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
+                            <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
                             
                             <div class="mt-auto border-top">
                                 <div class="list-group-item fw-semibold text-uppercase small">Account</div>

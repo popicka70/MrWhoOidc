@@ -145,7 +145,17 @@ public partial class CreateModel(
         db.Realms.Add(adminRealm);
         await db.SaveChangesAsync();
 
-        // Create admin role in admin realm
+        // Create tenant-admin role in default realm (for tenant admin authorization)
+        var tenantAdminRole = new Role
+        {
+            Name = "tenant-admin",
+            RealmId = defaultRealm.Id,
+            TenantId = tenant.Id,
+            IsActive = true
+        };
+        db.Roles.Add(tenantAdminRole);
+
+        // Create admin role in admin realm (legacy)
         var adminRole = new Role
         {
             Name = "admin",
@@ -175,11 +185,45 @@ public partial class CreateModel(
         db.Users.Add(adminUser);
         await db.SaveChangesAsync();
 
-        // Assign admin role to user
+        // Create admin client for role assignments
+        var adminClient = new Client
+        {
+            ClientId = $"{Input.Slug}-admin",
+            ClientName = $"{Input.Name} Admin Portal",
+            TenantId = tenant.Id,
+            RealmId = adminRealm.Id,
+            RequirePkce = true,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
+            { 
+                $"{baseUrl}/t/{Input.Slug}/signin-oidc"
+            }),
+            AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
+            { 
+                $"{baseUrl}/t/{Input.Slug}/signout-callback-oidc",
+                $"{baseUrl}/t/{Input.Slug}/"
+            })
+        };
+        db.Clients.Add(adminClient);
+        await db.SaveChangesAsync();
+
+        // Assign tenant-admin role to user (in default realm)
+        var tenantAdminRoleAssignment = new UserRoleAssignment
+        {
+            UserId = adminUser.Id,
+            RoleId = tenantAdminRole.Id,
+            ClientId = adminClient.Id,
+            RealmId = defaultRealm.Id,
+            IsActive = true
+        };
+        db.UserRoleAssignments.Add(tenantAdminRoleAssignment);
+
+        // Assign admin role to user (in admin realm, legacy)
         var roleAssignment = new UserRoleAssignment
         {
             UserId = adminUser.Id,
             RoleId = adminRole.Id,
+            ClientId = adminClient.Id,
             RealmId = adminRealm.Id,
             IsActive = true
         };
