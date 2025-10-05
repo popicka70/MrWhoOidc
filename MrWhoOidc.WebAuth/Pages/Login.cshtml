@@ -33,14 +33,22 @@
                 <label asp-for="Username" class="form-label">
                     <i class="bi bi-person me-1"></i>Username or Email
                 </label>
-                <input asp-for="Username" class="form-control" autocomplete="username" placeholder="alice or alice@example.com" />
+                <input asp-for="Username" 
+                       class="form-control" 
+                       autocomplete="username" 
+                       placeholder="alice or alice@example.com"
+                       readonly="@(!string.IsNullOrEmpty(Model.Email))" />
                 <span asp-validation-for="Username" class="text-danger"></span>
             </div>
             <div class="mb-4">
                 <label asp-for="Password" class="form-label">
                     <i class="bi bi-lock me-1"></i>Password
                 </label>
-                <input asp-for="Password" class="form-control" type="password" autocomplete="current-password" />
+                <input asp-for="Password" 
+                       class="form-control" 
+                       type="password" 
+                       autocomplete="current-password"
+                       autofocus="@(!string.IsNullOrEmpty(Model.Email))" />
                 <span asp-validation-for="Password" class="text-danger"></span>
             </div>
             <button type="submit" class="btn btn-primary w-100 auth-btn">
