@@ -2,17 +2,28 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public IReadOnlyList<Scope> Scopes { get; private set; } = Array.Empty<Scope>();
+    public bool IsPlatformAdmin { get; private set; }
 
     public async Task OnGetAsync()
     {
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
+        
+        // Note: Scopes are global/shared across tenants in current implementation
+        // Future: Consider tenant-specific scopes if needed
         Scopes = await db.Scopes.AsNoTracking().OrderBy(s => s.Name).ToListAsync();
     }
 

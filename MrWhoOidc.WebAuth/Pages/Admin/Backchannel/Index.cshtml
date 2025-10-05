@@ -13,6 +13,15 @@
         <p class="text-muted mb-0">Monitor and manage backchannel logout requests</p>
     </div>
     <form method="get" class="d-flex gap-2">
+        @if (Model.IsPlatformAdmin)
+        {
+            <select class="form-select" name="tenantId" onchange="this.form.submit()" style="width: auto;">
+                @foreach (var opt in Model.TenantOptions)
+                {
+                    <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                }
+            </select>
+        }
         <select class="form-select" name="status" onchange="this.form.submit()" style="width: auto;">
             <option value="" selected="@(Model.Status is null)">All Statuses</option>
             <option value="pending" selected="@(Model.Status=="pending")">Pending</option>

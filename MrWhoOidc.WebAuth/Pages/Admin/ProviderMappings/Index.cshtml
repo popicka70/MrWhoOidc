@@ -6,6 +6,32 @@
 
 <h2>Client ? Provider Mappings</h2>
 
+@if (Model.IsPlatformAdmin)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label">
+                        <i class="bi bi-building me-1"></i>Tenant Filter
+                    </label>
+                    <select class="form-select" name="tenantId" onchange="this.form.submit()">
+                        @foreach (var opt in Model.TenantOptions)
+                        {
+                            <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="bi bi-funnel"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
 <form method="post">
     <div class="row g-3 align-items-end">
         <div class="col-md-4">

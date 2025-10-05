@@ -2,24 +2,74 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Registrations;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public IReadOnlyList<ItemVm> Items { get; private set; } = Array.Empty<ItemVm>();
+    public List<SelectListItem> TenantOptions { get; private set; } = new();
+    public bool IsPlatformAdmin { get; private set; }
+    
+    [BindProperty(SupportsGet = true)]
+    public Guid? TenantId { get; set; }
 
     public record ItemVm(Guid Id, string Email, string? FirstName, string? LastName, string? ClientDisplay, string State, string CreatedAtLocal, string? Decision);
 
     public async Task OnGetAsync()
     {
-        var regs = await db.Set<Registration>().AsNoTracking()
-            .OrderByDescending(r => r.CreatedAt)
-            .ToListAsync();
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
+        
+        // Load tenant options for filter (platform admins only)
+        if (IsPlatformAdmin)
+        {
+            var tenants = await db.Tenants.AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        }
+        
+        // Build query with automatic tenant scoping
+        var q = db.Set<Registration>().AsNoTracking();
+        
+        if (IsPlatformAdmin)
+        {
+            // Platform admins can optionally filter by tenant
+            if (TenantId.HasValue)
+            {
+                q = q.Where(r => r.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            // Regular tenant admins only see their tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                q = q.Where(r => r.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                // No tenant context, return empty
+                Items = Array.Empty<ItemVm>();
+                return;
+            }
+        }
+        
+        var regs = await q.OrderByDescending(r => r.CreatedAt).ToListAsync();
 
         var clientIds = regs.Where(r => r.ClientId.HasValue).Select(r => r.ClientId!.Value).Distinct().ToArray();
         var clientMap = await db.Clients.AsNoTracking().Where(c => clientIds.Contains(c.Id))

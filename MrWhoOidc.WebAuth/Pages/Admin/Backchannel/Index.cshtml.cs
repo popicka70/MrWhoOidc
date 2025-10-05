@@ -1,30 +1,82 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using System.Net.Http.Json;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Backchannel;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db, MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public sealed record Item(Guid Id, string ClientId, string TargetUri, string Status, int AttemptCount, int MaxAttempts, int? LastHttpStatus, string? LastError, DateTimeOffset CreatedAt, DateTimeOffset? LastAttemptAt, DateTimeOffset? NextAttemptAt);
     public sealed record CircuitItem(string ClientId, int Failures, DateTimeOffset? OpenUntil);
 
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
+    
+    [BindProperty(SupportsGet = true)]
+    public Guid? TenantId { get; set; }
 
     public long Backlog { get; private set; }
     public bool Enabled { get; private set; }
     public List<Item> Items { get; private set; } = new();
     public List<CircuitItem> OpenCircuits { get; private set; } = new();
+    public List<SelectListItem> TenantOptions { get; private set; } = new();
+    public bool IsPlatformAdmin { get; private set; }
 
     public async Task OnGetAsync()
     {
-        // Query API for items and backlog
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
+        
+        // Load tenant options for filter (platform admins only)
+        if (IsPlatformAdmin)
+        {
+            var tenants = await db.Tenants.AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        }
+        
+        // Query API for items and backlog with tenant scoping
         var q = db.BackchannelLogoutNotifications.AsNoTracking();
+        
+        // Automatic tenant scoping
+        if (IsPlatformAdmin)
+        {
+            // Platform admins can optionally filter by tenant
+            if (TenantId.HasValue)
+            {
+                q = q.Where(n => n.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            // Regular tenant admins only see their tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                q = q.Where(n => n.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                // No tenant context, return empty
+                Items = new List<Item>();
+                return;
+            }
+        }
+        
         if (!string.IsNullOrWhiteSpace(Status)) q = q.Where(n => n.Status == Status);
         Items = await q.OrderByDescending(n => n.CreatedAt)
             .Take(200)
