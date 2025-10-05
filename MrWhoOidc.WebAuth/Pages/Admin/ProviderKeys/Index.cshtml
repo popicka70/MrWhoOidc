@@ -1,7 +1,13 @@
 @page "{providerId:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys.IndexModel
 @{
     ViewData["Title"] = "Provider Keys";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <h2>Keys for @Model.ProviderDisplay</h2>
@@ -53,7 +59,7 @@
             <button type="submit" asp-page-handler="Add" class="btn btn-primary">Import key</button>
             <button type="submit" asp-page-handler="Pretty" class="btn btn-outline-secondary">Pretty</button>
             <button type="submit" asp-page-handler="Compact" class="btn btn-outline-secondary">Compact</button>
-            <a asp-page="/Admin/Providers/Index" class="btn btn-secondary ms-auto">Back</a>
+            <a href="@(tenantPrefix)/Admin/Providers/Index" class="btn btn-secondary ms-auto">Back</a>
         </div>
     </div>
 </form>

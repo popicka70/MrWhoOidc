@@ -1,7 +1,13 @@
 @page "{clientId:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.ClientKeys.IndexModel
 @{
     ViewData["Title"] = "Client Keys";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <h2>Client Keys for @Model.ClientDisplay</h2>
@@ -24,7 +30,7 @@
             <button type="submit" class="btn btn-outline-secondary w-100">Fetch JWKS</button>
         </div>
         <div class="col-md-4 text-end">
-            <a asp-page="/Admin/Clients/Edit" asp-route-id="@Model.ClientId" class="btn btn-secondary">Back to client</a>
+            <a href="@(tenantPrefix)/Admin/Clients/Edit/@Model.ClientId" class="btn btn-secondary">Back to client</a>
         </div>
     </form>
 </div>

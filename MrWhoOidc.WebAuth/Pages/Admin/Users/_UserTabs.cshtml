@@ -1,5 +1,12 @@
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @* Shared user management tab navigation *@
 @{
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+    
     var rd = ViewContext?.RouteData?.Values;
     string? idVal = null;
     if (rd is not null)
@@ -12,18 +19,18 @@
 }
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link @(active=="edit"?"active":"")" asp-page="/Admin/Users/Edit" asp-route-id="@userId">Profile</a>
+        <a class="nav-link @(active=="edit"?"active":"")" href="@(tenantPrefix)/Admin/Users/Edit/@userId">Profile</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="emails"?"active":"")" asp-page="/Admin/Users/Emails/Index" asp-route-userId="@userId">Emails</a>
+        <a class="nav-link @(active=="emails"?"active":"")" href="@(tenantPrefix)/Admin/Users/Emails/Index?userId=@userId">Emails</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="clients"?"active":"")" asp-page="/Admin/Users/Clients/Index" asp-route-userId="@userId">Clients</a>
+        <a class="nav-link @(active=="clients"?"active":"")" href="@(tenantPrefix)/Admin/Users/Clients/Index?userId=@userId">Clients</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="roles"?"active":"")" asp-page="/Admin/Users/Roles/Index" asp-route-userId="@userId">Roles</a>
+        <a class="nav-link @(active=="roles"?"active":"")" href="@(tenantPrefix)/Admin/Users/Roles/Index?userId=@userId">Roles</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="linked"?"active":"")" asp-page="/Admin/Users/Linked/Index" asp-route-userId="@userId">Linked accounts</a>
+        <a class="nav-link @(active=="linked"?"active":"")" href="@(tenantPrefix)/Admin/Users/Linked/Index?userId=@userId">Linked accounts</a>
     </li>
 </ul>

@@ -1,7 +1,13 @@
 @page "{providerId:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings.IndexModel
 @{
     ViewData["Title"] = "Claim Mappings";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <h2>Claim mappings for @Model.ProviderDisplay</h2>
@@ -66,7 +72,7 @@ else
                 <td>@r.LocalClaim</td>
                 <td>@r.Transform</td>
                 <td class="text-end">
-                    <a class="btn btn-sm btn-secondary" asp-page="Edit" asp-route-id="@r.Id">Edit</a>
+                    <a class="btn btn-sm btn-secondary" href="@(tenantPrefix)/Admin/ProviderClaimMappings/Edit/@r.Id">Edit</a>
                     <form method="post" asp-page-handler="Delete" class="d-inline">
                         <input type="hidden" name="id" value="@r.Id" />
                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete mapping?');">Delete</button>

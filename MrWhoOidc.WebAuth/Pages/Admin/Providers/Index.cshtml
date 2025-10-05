@@ -1,7 +1,13 @@
 @page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.IndexModel
 @{
     ViewData["Title"] = "Identity Providers";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 <h2>Identity Providers</h2>
 
@@ -59,10 +65,10 @@ else
                     <span class="text-muted small">@p.Name • @p.Type • @(p.Enabled ? "Enabled" : "Disabled") @(p.IsDefault ? "• Default" : string.Empty)</span>
                 </div>
                 <div class="btn-group btn-group-sm">
-                    <a asp-page="Details" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="View">View</a>
-                    <a asp-page="Edit" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
-                    <a asp-page="ClaimMappings" asp-route-id="@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
-                    <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
+                    <a href="@(tenantPrefix)/Admin/Providers/Details/@p.Id" class="btn btn-outline-secondary" title="View">View</a>
+                    <a href="@(tenantPrefix)/Admin/Providers/Edit/@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                    <a href="@(tenantPrefix)/Admin/Providers/ClaimMappings/@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
+                    <a href="@(tenantPrefix)/Admin/ProviderKeys/Index?providerId=@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
                     <a asp-page="Delete" asp-route-id="@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                 </div>
                 <span class="drag-handle ms-3 text-muted" aria-hidden="true" title="Drag to reorder">☰</span>

@@ -1,7 +1,13 @@
 @page "{id:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.DetailsModel
 @{
     ViewData["Title"] = "Provider Details";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <h2>Provider Details</h2>
@@ -36,8 +42,8 @@ else
     </dl>
 
     <p>
-        <a asp-page="ClaimMappings" asp-route-id="@Model.Provider.Id" class="btn btn-outline-primary">Manage claim mappings</a>
-        <a asp-page="Edit" asp-route-id="@Model.Provider.Id" class="btn btn-primary">Edit</a>
-        <a asp-page="/Admin/ProviderKeys/Index" asp-route-providerId="@Model.Provider.Id" class="btn btn-outline-secondary">Manage keys</a>
+        <a href="@(tenantPrefix)/Admin/Providers/ClaimMappings/@Model.Provider.Id" class="btn btn-outline-primary">Manage claim mappings</a>
+        <a href="@(tenantPrefix)/Admin/Providers/Edit/@Model.Provider.Id" class="btn btn-primary">Edit</a>
+        <a href="@(tenantPrefix)/Admin/ProviderKeys/Index?providerId=@Model.Provider.Id" class="btn btn-outline-secondary">Manage keys</a>
     </p>
 }
