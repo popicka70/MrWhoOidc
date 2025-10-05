@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public sealed record Row(Guid Id, int Order, string ExternalClaim, string LocalClaim, string? Transform);

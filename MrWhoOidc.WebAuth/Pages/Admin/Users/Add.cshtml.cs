@@ -8,7 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class AddModel(AuthDbContext db) : PageModel
 {
     public class AddInput

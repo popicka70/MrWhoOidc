@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class DetailsModel(AuthDbContext db) : PageModel
 {
     public IdentityProvider? Provider { get; private set; }

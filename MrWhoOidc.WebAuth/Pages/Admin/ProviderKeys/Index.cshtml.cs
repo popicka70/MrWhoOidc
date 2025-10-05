@@ -13,7 +13,7 @@ using MrWhoOidc.WebAuth.Security;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageModel
 {
     // Extended to include parsed kty/use for advanced JWKS visual preview

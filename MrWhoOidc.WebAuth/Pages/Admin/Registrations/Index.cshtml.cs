@@ -8,7 +8,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Registrations;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public IReadOnlyList<ItemVm> Items { get; private set; } = Array.Empty<ItemVm>();

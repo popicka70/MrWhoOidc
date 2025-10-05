@@ -8,7 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);

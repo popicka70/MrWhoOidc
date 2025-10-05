@@ -6,7 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Linked;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : UserPageModelBase
 {
     [FromRoute]

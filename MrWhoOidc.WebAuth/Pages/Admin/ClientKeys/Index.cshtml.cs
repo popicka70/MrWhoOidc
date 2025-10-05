@@ -9,7 +9,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ClientKeys;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public sealed record HistoryRow(Guid Id, DateTimeOffset CreatedAt, string Source, string? Hash, string Summary);

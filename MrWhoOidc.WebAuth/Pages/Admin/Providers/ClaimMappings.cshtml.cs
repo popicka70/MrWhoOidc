@@ -10,7 +10,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, ILogger<ClaimMappingsModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }

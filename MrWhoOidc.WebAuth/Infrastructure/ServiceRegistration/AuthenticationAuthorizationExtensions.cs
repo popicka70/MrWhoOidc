@@ -44,9 +44,11 @@ public static class AuthenticationAuthorizationExtensions
         {
             options.AddPolicy("admin", policy => policy.Requirements.Add(new AdminRequirement()));
             options.AddPolicy("platform-admin", policy => policy.Requirements.Add(new PlatformAdminRequirement()));
+            options.AddPolicy("tenant-admin", policy => policy.Requirements.Add(new TenantAdminRequirement()));
         });
         services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
 
         return services;
     }

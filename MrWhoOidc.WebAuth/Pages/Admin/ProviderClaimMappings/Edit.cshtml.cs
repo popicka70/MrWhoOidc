@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class EditModel(AuthDbContext db) : PageModel
 {
     [BindProperty]

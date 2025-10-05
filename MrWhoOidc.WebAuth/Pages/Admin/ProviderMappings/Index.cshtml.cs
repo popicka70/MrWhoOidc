@@ -8,7 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderMappings;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public sealed record Row(Guid ClientId, Guid IdentityProviderId, string ClientIdVal, string? ClientName, string ProviderName, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);

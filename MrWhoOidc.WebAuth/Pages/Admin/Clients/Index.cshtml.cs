@@ -9,7 +9,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
 {
     public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);

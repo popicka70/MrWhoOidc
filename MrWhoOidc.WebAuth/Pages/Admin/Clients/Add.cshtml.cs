@@ -9,7 +9,7 @@ using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
 {
     public List<SelectListItem> RealmOptions { get; private set; } = new();

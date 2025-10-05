@@ -16,7 +16,7 @@ using MrWhoOidc.Auth.Crypto;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : PageModel
 {
     private readonly ILogger<EditModel> _logger = logger;

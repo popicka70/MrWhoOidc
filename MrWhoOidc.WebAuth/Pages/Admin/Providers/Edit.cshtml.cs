@@ -12,7 +12,7 @@ using System.IO;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory, IWebHostEnvironment env) : PageModel
 {
     [BindProperty]

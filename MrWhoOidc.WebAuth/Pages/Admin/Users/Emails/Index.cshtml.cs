@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Emails;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : UserPageModelBase
 {
     [FromRoute]

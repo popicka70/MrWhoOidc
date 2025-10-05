@@ -7,7 +7,7 @@ using System.Net.Http.Json;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Backchannel;
 
-[Authorize(Policy = "admin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db, MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state) : PageModel
 {
     public sealed record Item(Guid Id, string ClientId, string TargetUri, string Status, int AttemptCount, int MaxAttempts, int? LastHttpStatus, string? LastError, DateTimeOffset CreatedAt, DateTimeOffset? LastAttemptAt, DateTimeOffset? NextAttemptAt);

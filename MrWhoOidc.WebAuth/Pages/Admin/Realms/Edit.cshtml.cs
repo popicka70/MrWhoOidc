@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class EditModel(AuthDbContext db) : PageModel
 {
     [FromRoute]

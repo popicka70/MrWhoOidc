@@ -6,7 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
-[Authorize]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public IReadOnlyList<Scope> Scopes { get; private set; } = Array.Empty<Scope>();
