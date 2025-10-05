@@ -1,0 +1,198 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.SelectTenantModel
+@{
+    ViewData["Title"] = "Select Organization";
+    Layout = "_AuthLayout";
+}
+
+<div class="auth-card">
+    <div class="card-body p-4">
+        <div class="text-center mb-4">
+            <i class="bi bi-building text-primary" style="font-size: 3rem;"></i>
+            <h2 class="mt-3 mb-2 auth-heading">Select your organization</h2>
+            @if (!string.IsNullOrEmpty(Model.Email))
+            {
+                <p class="text-muted">
+                    <i class="bi bi-envelope me-1"></i>
+                    @Model.Email
+                </p>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                @Model.ErrorMessage
+            </div>
+        }
+
+        @if (Model.Tenants != null && Model.Tenants.Any())
+        {
+            <div class="tenant-selection-grid">
+                @foreach (var tenant in Model.Tenants)
+                {
+                    <div class="tenant-card mb-3" data-tenant-slug="@tenant.Slug">
+                        <div class="card h-100 tenant-card-inner" 
+                             style="cursor: pointer;"
+                             onclick="selectTenant('@tenant.Slug', '@tenant.LoginUrl')">
+                            <div class="card-body d-flex align-items-center">
+                                <div class="tenant-logo me-3">
+                                    @if (!string.IsNullOrEmpty(tenant.LogoUrl))
+                                    {
+                                        <img src="@tenant.LogoUrl" 
+                                             alt="@tenant.Name logo" 
+                                             class="rounded"
+                                             style="width: 48px; height: 48px; object-fit: contain;" />
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-primary bg-opacity-10 rounded d-flex align-items-center justify-content-center" 
+                                             style="width: 48px; height: 48px;">
+                                            <i class="bi bi-building text-primary" style="font-size: 24px;"></i>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="tenant-info flex-grow-1">
+                                    <h5 class="card-title mb-1">@tenant.Name</h5>
+                                    <p class="card-text text-muted small mb-0">
+                                        <i class="bi bi-link-45deg me-1"></i>
+                                        @tenant.Slug
+                                    </p>
+                                    @if (tenant.LastLoginAt.HasValue)
+                                    {
+                                        <p class="card-text text-muted small mb-0">
+                                            <i class="bi bi-clock me-1"></i>
+                                            Last login: @tenant.LastLoginAt.Value.ToString("MMM d, yyyy")
+                                        </p>
+                                    }
+                                </div>
+                                <div class="tenant-action">
+                                    <i class="bi bi-arrow-right-circle text-primary" style="font-size: 24px;"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <form method="post" id="tenantSelectionForm" style="display: none;">
+                <input type="hidden" name="SelectedTenantSlug" id="selectedTenantSlug" />
+                <input type="hidden" asp-for="Email" />
+                <input type="hidden" asp-for="ReturnUrl" />
+            </form>
+
+            <div class="mt-4 text-center">
+                <label class="form-check-label">
+                    <input type="checkbox" class="form-check-input" id="rememberChoice" />
+                    Remember my choice for this browser
+                </label>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                No organizations found. Please try entering your email again.
+            </div>
+        }
+
+        <div class="text-center mt-4">
+            <a href="/discover-tenant@(string.IsNullOrEmpty(Model.ReturnUrl) ? "" : $"?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}")" 
+               class="btn btn-link text-decoration-none">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back to email entry
+            </a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function selectTenant(tenantSlug, loginUrl) {
+            // Store preference if checkbox is checked
+            const rememberChoice = document.getElementById('rememberChoice').checked;
+            if (rememberChoice) {
+                const emailHash = hashString('@Model.Email');
+                localStorage.setItem('preferred_tenant_' + emailHash, tenantSlug);
+                console.log('Saved tenant preference:', tenantSlug);
+            }
+
+            // Build redirect URL with email pre-filled
+            let redirectUrl = loginUrl;
+            if (!redirectUrl.includes('?')) {
+                redirectUrl += '?';
+            } else {
+                redirectUrl += '&';
+            }
+            redirectUrl += 'email=' + encodeURIComponent('@Model.Email');
+
+            const returnUrl = '@Model.ReturnUrl';
+            if (returnUrl) {
+                redirectUrl += '&returnUrl=' + encodeURIComponent(returnUrl);
+            }
+
+            // Redirect to tenant-specific login
+            window.location.href = redirectUrl;
+        }
+
+        // Simple hash function for email (for storage key)
+        function hashString(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            return Math.abs(hash).toString(16);
+        }
+
+        // Keyboard navigation support
+        document.addEventListener('DOMContentLoaded', function() {
+            const tenantCards = document.querySelectorAll('.tenant-card-inner');
+            tenantCards.forEach((card, index) => {
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('role', 'button');
+                card.setAttribute('aria-label', 'Select ' + card.closest('.tenant-card').querySelector('.card-title').textContent);
+                
+                card.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        card.click();
+                    }
+                });
+
+                // Add hover effect
+                card.addEventListener('mouseenter', function() {
+                    card.classList.add('shadow-sm');
+                });
+                card.addEventListener('mouseleave', function() {
+                    card.classList.remove('shadow-sm');
+                });
+            });
+        });
+    </script>
+}
+
+<style>
+    .tenant-card-inner {
+        transition: all 0.2s ease;
+        border: 2px solid #dee2e6;
+    }
+
+    .tenant-card-inner:hover,
+    .tenant-card-inner:focus {
+        border-color: var(--bs-primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .tenant-card-inner:active {
+        transform: translateY(0);
+    }
+
+    .tenant-selection-grid {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+</style>

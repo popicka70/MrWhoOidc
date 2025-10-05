@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -8,17 +9,18 @@ public interface IRevocationService
     Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default);
 }
 
-internal sealed class RevocationService(AuthDbContext db) : IRevocationService
+internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenantAccessor) : IRevocationService
 {
     public async Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default)
     {
         var hash = Hash(token);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
         // Idempotency: if already revoked or audit exists, return OK
-        var already = await db.Tokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt != null, ct).ConfigureAwait(false);
+        var already = await db.Tokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt != null && t.TenantId == tenantId, ct).ConfigureAwait(false);
         if (!already)
         {
-            var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct).ConfigureAwait(false);
+            var rt = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.TenantId == tenantId, ct).ConfigureAwait(false);
             if (rt is not null && string.Equals(rt.ClientId, clientId, StringComparison.Ordinal))
             {
                 rt.RevokedAt = DateTimeOffset.UtcNow;

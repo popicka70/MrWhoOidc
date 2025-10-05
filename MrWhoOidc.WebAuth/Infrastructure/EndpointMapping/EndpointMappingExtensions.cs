@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Security;
@@ -54,14 +55,49 @@ internal static class EndpointMappingExtensions
                         await db.Database.MigrateAsync();
                         logger.LogInformation("Database migrations completed successfully.");
                         
-                        logger.LogInformation("Initializing signing keys...");
-                        var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-                        await keyStore.GetActiveSigningKeyAsync();
-                        logger.LogInformation("Signing keys initialized.");
+                        logger.LogInformation("Initializing tenant context for startup...");
+                        var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
+                        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
                         
-                        logger.LogInformation("Seeding database...");
-                        await MrWhoOidc.Auth.Seeding.DatabaseSeeder.EnsureSeedDataAsync(app.Services);
-                        logger.LogInformation("Database seeding completed.");
+                        // Load default tenant for startup operations
+                        var defaultTenant = await db.Tenants
+                            .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
+                            .FirstOrDefaultAsync();
+                        
+                        if (defaultTenant == null)
+                        {
+                            logger.LogWarning("Default tenant '{Slug}' not found. Signing key initialization skipped.", 
+                                multiTenancyOptions.DefaultTenantSlug);
+                        }
+                        else
+                        {
+                            // Set tenant context for startup operations
+                            var tenantContext = new TenantContext
+                            {
+                                TenantId = defaultTenant.Id,
+                                Slug = defaultTenant.Slug,
+                                Name = defaultTenant.Name,
+                                IssuerUri = defaultTenant.IssuerUri,
+                                IsMultiTenantMode = multiTenancyOptions.Enabled
+                            };
+                            tenantAccessor.SetTenant(tenantContext);
+                            logger.LogInformation("Tenant context set to '{TenantSlug}' for startup operations.", defaultTenant.Slug);
+                            
+                            logger.LogInformation("Seeding database...");
+                            var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
+                            await seeder.SeedAsync();
+                            logger.LogInformation("Database seeding completed.");
+                            
+                            logger.LogInformation("Initializing signing keys...");
+                            var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
+                            await keyStore.GetActiveSigningKeyAsync();
+                            logger.LogInformation("Signing keys initialized.");
+                            
+                            logger.LogInformation("Applying key rotation policies...");
+                            var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
+                            await rotation.EnsureInitializedAsync();
+                            logger.LogInformation("Key rotation policies applied.");
+                        }
                         
                         // Signal that migrations are complete
                         _migrationCompletionSource.TrySetResult(true);
@@ -83,16 +119,51 @@ internal static class EndpointMappingExtensions
             _migrationCompletionSource.TrySetResult(true);
         }
 
-        app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
-           .RequireCors("oidc")
-           .RequireRateLimiting("rl-authorize");
-        app.MapGet("/jwks", GetServerJwks)
-           .RequireCors("oidc");
+        // Multi-tenant routing: register both tenant-prefixed and fallback routes
+        var multiTenancyOptions = app.Services.GetRequiredService<IMultiTenancyOptions>();
+        
+        if (multiTenancyOptions.Enabled)
+        {
+            // Multi-tenant mode: register tenant-prefixed routes
+            var tenantGroup = app.MapGroup("/t/{slug}");
+            MapOidcEndpoints(tenantGroup);
+            
+            // Fallback routes for backward compatibility (map to default tenant)
+            MapOidcEndpoints(app);
+        }
+        else
+        {
+            // Single-tenant mode: register root-level routes only
+            MapOidcEndpoints(app);
+        }
 
-        var authOptions = app.Services.GetRequiredService<IOptions<AuthOptions>>();
+        var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
+
+        // NOTE: For brevity, admin endpoints not yet extracted in detail for snapshot step; keeping manifest stability focus.
+        // (Retain existing admin endpoints inline in Program for now to reduce patch size.)
+    }
+
+    /// <summary>
+    /// Maps all OIDC protocol and auth endpoints to the specified route builder.
+    /// Can be called with app (root level) or a MapGroup (tenant-prefixed).
+    /// </summary>
+    private static void MapOidcEndpoints(IEndpointRouteBuilder routes)
+    {
+        var app = routes as WebApplication;
+        var authOptions = (app?.Services ?? routes.ServiceProvider).GetRequiredService<IOptions<AuthOptions>>();
+        
+        // OIDC Discovery and JWKS endpoints
+        routes.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
+        
+        routes.MapGet("/jwks", GetServerJwks)
+            .RequireCors("oidc");
+
+        // Optional client JWKS endpoint
         if (authOptions.Value.ExposeClientJwks)
         {
-            app.MapGet("/clients/{clientId}/jwks", async (string clientId, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/clients/{clientId}/jwks", async (string clientId, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
             {
                 var (etag, json) = await cache.GetClientAsync(clientId, ct);
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
@@ -101,9 +172,11 @@ internal static class EndpointMappingExtensions
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
+        
+        // Optional provider JWKS endpoints
         if (authOptions.Value.ExposeProviderJwks)
         {
-            app.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/{providerName}/jwks", async (string providerName, IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
             {
                 var (etag, json) = await cache.GetProviderAsync(providerName, ct);
                 if (json == "__not_found__") return Results.Problem(statusCode: 404, title: "Provider not found");
@@ -113,9 +186,10 @@ internal static class EndpointMappingExtensions
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
+        
         if (authOptions.Value.ExposeAggregatedProviderJwks)
         {
-            app.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
+            routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
             {
                 var (etag, json) = await cache.GetAllProvidersAsync(ct);
                 var notModified = EtagHelpers.SetConditionalEtag(ctx, etag);
@@ -125,50 +199,53 @@ internal static class EndpointMappingExtensions
             }).RequireRateLimiting("rl-jwks");
         }
 
-        app.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-           .RequireRateLimiting("rl-authorize");
-        app.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
-        app.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
-        app.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx)); // new opaque redirect resolution
-        app.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
-        app.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-           .RequireCors("oidc")
+        // OIDC protocol endpoints
+        routes.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireRateLimiting("rl-authorize");
+        
+        routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
+        routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
+        routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx));
+        routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
+        
+        routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
             .RequireRateLimiting("rl-token")
             .RequireRateLimiting("rl-token-exchange");
-        app.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
-           .RequireCors("oidc");
-        app.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
-        app.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
-           .RequireCors("oidc")
-           .RequireRateLimiting("rl-userinfo");
-        app.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
-           .RequireCors("oidc");
-        app.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-           .RequireRateLimiting("rl-introspect");
-        app.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
-           .RequireCors("oidc")
-           .RequireRateLimiting("rl-par");
-        app.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
-           .RequireCors("oidc");
+        routes.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+        
+        routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+        
+        routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-userinfo");
+        routes.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+        
+        routes.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireRateLimiting("rl-introspect");
+        
+        routes.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-par");
+        routes.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
 
-        app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
-        app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
-        app.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
+        // External OIDC (IdP chaining) endpoints
+        routes.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
+        routes.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
+        routes.MapGet("/Auth/External/Confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
 
         // QR login endpoints
         // Note: /Auth/Qr and /Auth/QrConfirm are handled by Razor Pages directly
-        app.MapGet("/Auth/QrMobile", (IQrLoginHandler h, HttpContext ctx) => h.MobileLandingAsync(ctx));
-        app.MapGet("/api/qr/status/{sessionToken}", (IQrLoginHandler h, HttpContext ctx, string sessionToken) => h.GetStatusAsync(ctx, sessionToken))
-           .RequireRateLimiting("rl-qr-poll");
-        app.MapPost("/api/qr/confirm", (IQrLoginHandler h, HttpContext ctx) => h.ConfirmAsync(ctx))
-           .RequireRateLimiting("rl-qr-confirm");
-        app.MapPost("/api/qr/cancel", (IQrLoginHandler h, HttpContext ctx) => h.CancelAsync(ctx))
-           .RequireRateLimiting("rl-qr-cancel");
-
-        var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
-
-        // NOTE: For brevity, admin endpoints not yet extracted in detail for snapshot step; keeping manifest stability focus.
-        // (Retain existing admin endpoints inline in Program for now to reduce patch size.)
+        routes.MapGet("/Auth/QrMobile", (IQrLoginHandler h, HttpContext ctx) => h.MobileLandingAsync(ctx));
+        routes.MapGet("/api/qr/status/{sessionToken}", (IQrLoginHandler h, HttpContext ctx, string sessionToken) => h.GetStatusAsync(ctx, sessionToken))
+            .RequireRateLimiting("rl-qr-poll");
+        routes.MapPost("/api/qr/confirm", (IQrLoginHandler h, HttpContext ctx) => h.ConfirmAsync(ctx))
+            .RequireRateLimiting("rl-qr-confirm");
+        routes.MapPost("/api/qr/cancel", (IQrLoginHandler h, HttpContext ctx) => h.CancelAsync(ctx))
+            .RequireRateLimiting("rl-qr-cancel");
     }
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).

@@ -43,8 +43,10 @@ public static class AuthenticationAuthorizationExtensions
         services.AddAuthorization(options =>
         {
             options.AddPolicy("admin", policy => policy.Requirements.Add(new AdminRequirement()));
+            options.AddPolicy("platform-admin", policy => policy.Requirements.Add(new PlatformAdminRequirement()));
         });
         services.AddScoped<IAuthorizationHandler, AdminAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
 
         return services;
     }

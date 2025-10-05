@@ -2,12 +2,15 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public sealed class EmailNormalizationTests
 {
+    private static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -95,7 +98,8 @@ public sealed class EmailNormalizationTests
         {
             Username = "u4",
             PasswordHash = "hash",
-            Email = "Lookup@Example.COM"
+            Email = "Lookup@Example.COM",
+            TenantId = DefaultTenantId
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -108,7 +112,8 @@ public sealed class EmailNormalizationTests
         });
         await db.SaveChangesAsync();
 
-        var service = new UserService(db, new NoopHasher());
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var service = new UserService(db, new NoopHasher(), tenantAccessor);
 
         var byPrimary = await service.FindByUsernameOrEmailAsync("lookup@example.com");
         Assert.IsNotNull(byPrimary);

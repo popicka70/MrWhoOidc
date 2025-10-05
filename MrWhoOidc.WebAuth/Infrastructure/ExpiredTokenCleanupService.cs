@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Background;
 
 namespace MrWhoOidc.WebAuth.Infrastructure;
 
@@ -30,6 +31,14 @@ internal sealed class ExpiredTokenCleanupService(IServiceProvider services, ILog
             try
             {
                 using var scope = services.CreateScope();
+                
+                // Set tenant context for background operation
+                if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
+                {
+                    logger.LogWarning("Expired token cleanup skipped: default tenant not found");
+                    continue;
+                }
+                
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
 
                 var now = DateTimeOffset.UtcNow;

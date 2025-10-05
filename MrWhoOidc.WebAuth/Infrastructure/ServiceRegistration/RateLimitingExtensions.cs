@@ -166,6 +166,19 @@ public static class RateLimitingExtensions
                     AutoReplenishment = true
                 });
             });
+
+            // Tenant discovery rate limiting policy
+            options.AddPolicy("email-discovery", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
         });
         return services;
 

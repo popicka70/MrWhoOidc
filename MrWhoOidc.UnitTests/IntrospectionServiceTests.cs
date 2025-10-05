@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -18,6 +19,8 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class IntrospectionServiceTests
 {
+    private static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -30,9 +33,10 @@ public sealed class IntrospectionServiceTests
     public void JWT_Token_Validation_Returns_Claims()
     {
         using var db = CreateDb();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         
         // Setup: Create a valid JWT
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, tenantAccessor);
         var jwtService = new JwtService(keyStore);
         var tokenValidator = new TokenValidator(keyStore);
         
@@ -60,9 +64,10 @@ public sealed class IntrospectionServiceTests
     public void JWT_Token_Expired_Returns_Invalid()
     {
         using var db = CreateDb();
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         
         // Setup: Create JWT with past expiry manually to bypass JwtService's DateTime.UtcNow hardcoding
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, tenantAccessor);
         var tokenValidator = new TokenValidator(keyStore);
         
         var claims = new[]
@@ -372,7 +377,7 @@ public sealed class IntrospectionServiceTests
         using var db = CreateDb();
         
         // Setup: Client with secret
-        var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
+        var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm", TenantId = DefaultTenantId };
         var hasher = new Argon2PasswordHasher();
         var correctSecret = "my_secure_secret_123";
         var wrongSecret = "wrong_secret";
@@ -381,14 +386,16 @@ public sealed class IntrospectionServiceTests
         { 
             ClientId = "confidential-client", 
             RealmId = realm.Id,
-            ClientSecretHash = hasher.Hash(correctSecret)
+            ClientSecretHash = hasher.Hash(correctSecret),
+            TenantId = DefaultTenantId
         };
         
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
         
-        var clientStore = new ClientStore(db, hasher);
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var clientStore = new ClientStore(db, hasher, tenantAccessor);
         
         // Act: Validate correct secret
         var foundClient = await clientStore.FindByClientIdAsync("confidential-client");
@@ -408,19 +415,21 @@ public sealed class IntrospectionServiceTests
         using var db = CreateDb();
         
         // Setup: Public client (no secret)
-        var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
+        var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm", TenantId = DefaultTenantId };
         var client = new ClientEntity 
         { 
             ClientId = "public-client", 
             RealmId = realm.Id,
-            ClientSecretHash = null // Public client has no secret
+            ClientSecretHash = null, // Public client has no secret
+            TenantId = DefaultTenantId
         };
         
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
         
-        var clientStore = new ClientStore(db, new Argon2PasswordHasher());
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var clientStore = new ClientStore(db, new Argon2PasswordHasher(), tenantAccessor);
         
         // Act: Find public client
         var foundClient = await clientStore.FindByClientIdAsync("public-client");

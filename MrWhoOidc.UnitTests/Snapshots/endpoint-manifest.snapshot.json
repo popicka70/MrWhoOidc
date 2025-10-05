@@ -456,6 +456,17 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/seed-tenant",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/providers/{providerName}/jwks",
     "Methods": "GET",
     "RateLimiters": [
@@ -1014,6 +1025,17 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "DiscoverTenant",
+    "Methods": "",
+    "RateLimiters": [
+      "email-discovery"
+    ],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Error",
     "Methods": "",
     "RateLimiters": [],
@@ -1113,6 +1135,60 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "PlatformAdmin",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "PlatformAdmin/Index",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "PlatformAdmin/Tenants",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "PlatformAdmin/Tenants/Create",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "PlatformAdmin/Tenants/Edit/{id:guid}",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "PlatformAdmin/Tenants/Index",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "platform-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Privacy",
     "Methods": "",
     "RateLimiters": [],
@@ -1138,5 +1214,14 @@
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": true
+  },
+  {
+    "Pattern": "SelectTenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
   }
 ]

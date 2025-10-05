@@ -7,6 +7,7 @@ using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
+using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
 
 var builder = WebApplication.CreateBuilder(args);
@@ -49,6 +50,9 @@ builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 
 // Admin policy options
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
+
+// Platform admin policy options
+builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSection("PlatformAdminAuth"));
 
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
@@ -118,6 +122,9 @@ if (string.Equals(builder.Configuration["Testing:DiagnoseAuthCore"], "true", Str
 // Background cleanup + backchannel feature extracted
 builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
+// On-demand tenant seeding service
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrWhoOidc.WebAuth.Services.TenantSeedingService>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted
@@ -131,15 +138,14 @@ builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSect
 
 var app = builder.Build();
 
-// Support: dotnet run -- --seed
-if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+// Run migrations on startup (only for relational databases, not in-memory test DBs)
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-    await db.Database.MigrateAsync();
-    var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
-    await seeder.SeedAsync();
-    return; // exit after seeding
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
 }
 
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
@@ -147,6 +153,9 @@ app.MapMrWhoOidcEndpoints();
 
 // Standard pipeline (forwarded headers, exception handling, localization, authz, rate limiting, static assets)
 app.UseMrWhoOidcPipeline(redisMux);
+
+// Auto-seed default tenant and platform admin on first request (if database is empty)
+app.UseAutoSeed();
 
 
 // Admin + health endpoints (extracted)

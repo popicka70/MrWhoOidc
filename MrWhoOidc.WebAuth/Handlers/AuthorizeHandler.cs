@@ -4,6 +4,7 @@ using System.Diagnostics.Metrics;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using Microsoft.Extensions.Options;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -552,7 +553,20 @@ public sealed class AuthorizeHandler(
     }
 
     private static string GetIssuer(HttpContext http)
-        => (http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions)?.Issuer ?? $"{http.Request.Scheme}://{http.Request.Host}";
+    {
+        var options = http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions;
+        
+        // If issuer is explicitly configured, use it (backward compatibility)
+        if (!string.IsNullOrEmpty(options?.Issuer))
+        {
+            return options.Issuer;
+        }
+
+        // Otherwise, use mode-aware issuer builder
+        var issuerBuilder = http.RequestServices.GetRequiredService<IIssuerBuilder>();
+        var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
+        return issuerBuilder.BuildIssuer(baseUrl);
+    }
 
     private static string? ExtractParId(string? requestUri)
     {

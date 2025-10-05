@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -26,16 +27,19 @@ public sealed class PushedAuthorizationRequestEntry
     public required DateTimeOffset ExpiresAt { get; init; }
 }
 
-internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptions<AuthOptions> authOptions) : IPushedAuthorizationRequestStore
+internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptions<AuthOptions> authOptions, ITenantAccessor tenantAccessor) : IPushedAuthorizationRequestStore
 {
     public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
     {
         if (!TryToGuid(id, out var gid)) throw new ArgumentException("Invalid id format", nameof(id));
 
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+
         // Enforce per-client pending limit (not yet consumed and not expired)
         var now = DateTimeOffset.UtcNow;
         var limit = Math.Max(1, authOptions.Value.ParClientPendingLimit);
-        var pending = db.PushedAuthorizationRequests.AsNoTracking().Count(e => e.ClientId == clientId && !e.Consumed && e.ExpiresAt > now);
+        var pending = db.PushedAuthorizationRequests.AsNoTracking()
+            .Count(e => e.TenantId == tenantId && e.ClientId == clientId && !e.Consumed && e.ExpiresAt > now);
         if (pending >= limit)
         {
             throw new InvalidOperationException("PAR pending limit reached");
@@ -45,6 +49,7 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
         var entity = new PushedAuthorizationRequest
         {
             Id = gid,
+            TenantId = tenantId,
             RequestUri = requestUri ?? string.Empty,
             ClientId = clientId,
             RequestJson = JsonSerializer.Serialize(request),
@@ -60,14 +65,18 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
     public PushedAuthorizationRequestEntry? TryGetById(string id)
     {
         if (!TryToGuid(id, out var gid)) return null;
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        
         var now = DateTimeOffset.UtcNow;
-        var entity = db.PushedAuthorizationRequests.AsNoTracking().FirstOrDefault(e => e.Id == gid);
+        var entity = db.PushedAuthorizationRequests.AsNoTracking()
+            .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId);
         if (entity is null || entity.Consumed || entity.ExpiresAt < now)
         {
             if (entity is { ExpiresAt: var exp } && exp < now)
             {
-                // Opportunistic cleanup of expired rows
-                var expired = db.PushedAuthorizationRequests.Where(e => e.ExpiresAt < now).ToList();
+                // Opportunistic cleanup of expired rows for this tenant
+                var expired = db.PushedAuthorizationRequests
+                    .Where(e => e.TenantId == tenantId && e.ExpiresAt < now).ToList();
                 if (expired.Count > 0)
                 {
                     db.PushedAuthorizationRequests.RemoveRange(expired);
@@ -84,7 +93,10 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
     public void MarkConsumedById(string id)
     {
         if (!TryToGuid(id, out var gid)) return;
-        var entity = db.PushedAuthorizationRequests.FirstOrDefault(e => e.Id == gid);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        
+        var entity = db.PushedAuthorizationRequests
+            .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId);
         if (entity is null) return;
         if (!entity.Consumed)
         {

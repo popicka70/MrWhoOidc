@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
@@ -17,6 +19,7 @@ public sealed class RevocationServiceTests
         // Seed a refresh token entry
         db.Tokens.Add(new Token
         {
+            TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
             Type = "refresh",
             TokenHash = Hash("rt"),
             ClientId = "c1",
@@ -26,7 +29,7 @@ public sealed class RevocationServiceTests
         });
         await db.SaveChangesAsync();
 
-        var svc = new RevocationService(db);
+        var svc = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
         await svc.RevokeAsync("rt", "refresh_token", "c1", "127.0.0.1");
         await svc.RevokeAsync("rt", "refresh_token", "c1", "127.0.0.1");
 

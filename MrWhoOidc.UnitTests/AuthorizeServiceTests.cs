@@ -1,12 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public sealed class AuthorizeServiceTests
 {
+    private static readonly Guid DefaultTenantId = new("00000000-0000-0000-0000-000000000001");
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -24,12 +27,14 @@ public sealed class AuthorizeServiceTests
             ClientId = "spa",
             RequirePkce = true,
             RequireConsent = false,
-            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]"
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]",
+            TenantId = DefaultTenantId
         };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
         var reqMissingPkce = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -65,7 +70,8 @@ public sealed class AuthorizeServiceTests
             ClientId = "spa",
             RequirePkce = true,
             RequireConsent = true,
-            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/oidc-cb\"]"
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/oidc-cb\"]",
+            TenantId = DefaultTenantId
         };
         // Assign scopes so enforcement is active
         db.Clients.Add(client);
@@ -73,7 +79,8 @@ public sealed class AuthorizeServiceTests
         db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
         await db.SaveChangesAsync();
 
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -101,7 +108,8 @@ public sealed class AuthorizeServiceTests
             ClientId = "spa",
             RequirePkce = true,
             RequireConsent = false,
-            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]"
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]",
+            TenantId = DefaultTenantId
         };
         db.Clients.Add(client);
         db.Scopes.Add(new Scope { Name = "openid" });
@@ -110,7 +118,8 @@ public sealed class AuthorizeServiceTests
         db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
         await db.SaveChangesAsync();
 
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -138,14 +147,16 @@ public sealed class AuthorizeServiceTests
             ClientId = "spa",
             RequirePkce = true,
             RequireConsent = false,
-            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]"
+            AllowedLoginRedirectUrisJson = "[\"https://app.example.com/callback\"]",
+            TenantId = DefaultTenantId
         };
         db.Clients.Add(client);
         db.Scopes.Add(new Scope { Name = "openid" });
         db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = "openid" });
         await db.SaveChangesAsync();
 
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher()));
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",

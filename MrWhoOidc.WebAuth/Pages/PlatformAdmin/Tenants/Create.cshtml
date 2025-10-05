@@ -1,0 +1,164 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants.CreateModel
+@{
+    ViewData["Title"] = "Create Tenant";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="bi bi-plus-circle text-success me-2"></i>
+            Create Tenant
+        </h1>
+        <p class="text-muted mb-0">Set up a new tenant instance</p>
+    </div>
+    <div>
+        <a class="btn btn-outline-secondary me-2" asp-page="Index">
+            <i class="bi bi-arrow-left"></i> Back to List
+        </a>
+        <button type="submit" form="createTenantForm" class="btn btn-success">
+            <i class="bi bi-check-circle"></i> Create Tenant
+        </button>
+    </div>
+</div>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Validation Error:</strong> Please correct the errors below.
+    </div>
+}
+
+<form method="post" id="createTenantForm">
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-info-circle me-2"></i>Basic Information
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.Slug" class="form-label">Slug <span class="text-danger">*</span></label>
+                    <input asp-for="Input.Slug" class="form-control" placeholder="acme-corp" />
+                    <div class="form-text">URL-safe identifier (lowercase, hyphens allowed). Used in URLs: /t/{slug}</div>
+                    <span asp-validation-for="Input.Slug" class="text-danger small"></span>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.Name" class="form-label">Name <span class="text-danger">*</span></label>
+                    <input asp-for="Input.Name" class="form-control" placeholder="Acme Corporation" />
+                    <div class="form-text">Display name for the tenant</div>
+                    <span asp-validation-for="Input.Name" class="text-danger small"></span>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label asp-for="Input.Description" class="form-label">Description</label>
+                <textarea asp-for="Input.Description" class="form-control" rows="3" placeholder="Optional description"></textarea>
+                <span asp-validation-for="Input.Description" class="text-danger small"></span>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.AdminEmail" class="form-label">Admin Email <span class="text-danger">*</span></label>
+                    <input asp-for="Input.AdminEmail" type="email" class="form-control" placeholder="admin@acme-corp.com" />
+                    <div class="form-text">Email for first admin user (will be created automatically)</div>
+                    <span asp-validation-for="Input.AdminEmail" class="text-danger small"></span>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.AdminPassword" class="form-label">Admin Password <span class="text-danger">*</span></label>
+                    <input asp-for="Input.AdminPassword" type="password" class="form-control" placeholder="••••••••" />
+                    <div class="form-text">Password for first admin user (min 8 characters)</div>
+                    <span asp-validation-for="Input.AdminPassword" class="text-danger small"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-gear me-2"></i>Configuration
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.Status" class="form-label">Status</label>
+                    <select asp-for="Input.Status" class="form-select">
+                        <option value="1">Active - Ready for use</option>
+                        <option value="3">Pending Setup - Initial configuration</option>
+                    </select>
+                    <span asp-validation-for="Input.Status" class="text-danger small"></span>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.BillingPlan" class="form-label">Billing Plan</label>
+                    <select asp-for="Input.BillingPlan" class="form-select">
+                        <option value="Free">Free</option>
+                        <option value="Starter">Starter</option>
+                        <option value="Pro">Pro</option>
+                        <option value="Enterprise">Enterprise</option>
+                    </select>
+                    <span asp-validation-for="Input.BillingPlan" class="text-danger small"></span>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.MaxUsers" class="form-label">Max Users</label>
+                    <input asp-for="Input.MaxUsers" type="number" class="form-control" />
+                    <div class="form-text">Maximum number of users (0 = unlimited)</div>
+                    <span asp-validation-for="Input.MaxUsers" class="text-danger small"></span>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.MaxClients" class="form-label">Max Clients</label>
+                    <input asp-for="Input.MaxClients" type="number" class="form-control" />
+                    <div class="form-text">Maximum number of OAuth clients (0 = unlimited)</div>
+                    <span asp-validation-for="Input.MaxClients" class="text-danger small"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-palette me-2"></i>Branding (Optional)
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label asp-for="Input.LogoUrl" class="form-label">Logo URL</label>
+                <input asp-for="Input.LogoUrl" type="url" class="form-control" placeholder="https://example.com/logo.png" />
+                <div class="form-text">URL to tenant logo image</div>
+                <span asp-validation-for="Input.LogoUrl" class="text-danger small"></span>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.PrimaryColor" class="form-label">Primary Color</label>
+                    <input asp-for="Input.PrimaryColor" type="color" class="form-control form-control-color" value="#0d6efd" />
+                    <div class="form-text">Main brand color (hex format)</div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label asp-for="Input.AccentColor" class="form-label">Accent Color</label>
+                    <input asp-for="Input.AccentColor" type="color" class="form-control form-control-color" value="#6610f2" />
+                    <div class="form-text">Secondary brand color (hex format)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-between">
+        <a class="btn btn-secondary" asp-page="Index">
+            <i class="bi bi-x-circle"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-circle"></i> Create Tenant
+        </button>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

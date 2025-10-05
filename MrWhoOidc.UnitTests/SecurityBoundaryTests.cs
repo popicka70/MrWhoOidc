@@ -7,6 +7,8 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Security.Cryptography;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 /// <summary>
@@ -55,7 +57,7 @@ public sealed class SecurityBoundaryTests
         await db.SaveChangesAsync();
 
         // Act: Client2 attempts to revoke Client1's token (using RevokeAsync with wrong clientId)
-        var revocationService = new RevocationService(db);
+        var revocationService = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
         await revocationService.RevokeAsync("token_123", "refresh_token", "client2");
 
         // Assert: Token should NOT be revoked (cross-client revocation blocked)
@@ -82,6 +84,7 @@ public sealed class SecurityBoundaryTests
         var tokenHash = Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("token_456")));
         var token = new Token
         {
+            TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
             Type = "refresh",
             TokenHash = tokenHash,
             ClientId = "client1",
@@ -94,7 +97,7 @@ public sealed class SecurityBoundaryTests
         await db.SaveChangesAsync();
 
         // Act: Same client revokes its own token
-        var revocationService = new RevocationService(db);
+        var revocationService = new RevocationService(db, MockTenantAccessor.CreateWithDefaultTenant());
         await revocationService.RevokeAsync("token_456", "refresh_token", "client1");
 
         // Assert: Token SHOULD be revoked
@@ -200,7 +203,7 @@ public sealed class SecurityBoundaryTests
     public void Security_Audience_Mismatch_Rejected()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwtService = new JwtService(keyStore);
         var tokenValidator = new TokenValidator(keyStore);
 
@@ -235,7 +238,7 @@ public sealed class SecurityBoundaryTests
     public void Security_JWT_Algorithm_None_Rejected()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var tokenValidator = new TokenValidator(keyStore);
 
         // Create an unsigned JWT (algorithm "none" attack)

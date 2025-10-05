@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -33,7 +34,8 @@ public sealed class JwksHistoryAndParStressTests
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
         var options = Options.Create(new AuthOptions { ParClientPendingLimit = 50 });
-        var store = new EfPushedAuthorizationRequestStore(db, options);
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var store = new EfPushedAuthorizationRequestStore(db, options, tenantAccessor);
 
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest { response_type = "code", client_id = "cli", redirect_uri = "https://cb", scope = "openid" };
 

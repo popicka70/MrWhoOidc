@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.WebAuth.Handlers; // handlers & related interfaces live here
@@ -25,7 +26,8 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ISeeder, Seeder>();
 
         // Core auth/domain services (moved from Program.cs via AddMrWhoOidcAuthCore)
-        services.AddMrWhoOidcAuthCore();
+        // This now includes multi-tenancy service registration
+        services.AddMrWhoOidcAuthCore(configuration);
         // Diagnostic marker (used only in tests if validation flag set)
         services.AddSingleton(new AuthCoreRegistrationMarker(DateTime.UtcNow));
 

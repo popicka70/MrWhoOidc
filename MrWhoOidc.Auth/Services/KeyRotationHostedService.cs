@@ -22,6 +22,9 @@ internal sealed class KeyRotationHostedService(
             return;
         }
 
+        // Startup delay to allow migrations to complete
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken).ConfigureAwait(false);
+
         // Initial run on startup
         await RunOnceAsync(stoppingToken).ConfigureAwait(false);
 
@@ -39,6 +42,14 @@ internal sealed class KeyRotationHostedService(
         try
         {
             using var scope = services.CreateScope();
+            
+            // Set tenant context for background operation
+            if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, ct).ConfigureAwait(false))
+            {
+                logger.LogWarning("Key rotation skipped: default tenant not found");
+                return;
+            }
+            
             var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
             await rotation.EnsureInitializedAsync(ct).ConfigureAwait(false);
         }

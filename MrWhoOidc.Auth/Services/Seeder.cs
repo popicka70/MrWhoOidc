@@ -3,6 +3,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Linq;
 using System.Text.Json;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -11,7 +12,7 @@ public interface ISeeder
     Task SeedAsync(CancellationToken ct = default);
 }
 
-public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
+public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor) : ISeeder
 {
     // Initial constant secret for the blazor-web client (development only)
     private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
@@ -34,17 +35,29 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
+        // Get current tenant ID from context (required for multi-tenancy)
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required for seeding");
+        
         // Ensure admin realm exists
-        var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin", ct).ConfigureAwait(false);
+        var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminRealm is null)
         {
-            adminRealm = new Realm { Name = "admin", DisplayName = "Admin Realm" };
+            adminRealm = new Realm { Name = "admin", DisplayName = "Admin Realm", TenantId = tenantId };
             db.Realms.Add(adminRealm);
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
-        // Seed default scopes
-    string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
+        // Ensure platform realm exists (for platform administrators)
+        var platformRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "platform" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+        if (platformRealm is null)
+        {
+            platformRealm = new Realm { Name = "platform", DisplayName = "Platform Admin Realm", TenantId = tenantId };
+            db.Realms.Add(platformRealm);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        // Seed default scopes (scopes are global, not tenant-specific)
+        string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
         foreach (var s in defaultScopes)
         {
             if (!await db.Scopes.AnyAsync(x => x.Name == s, ct).ConfigureAwait(false))
@@ -53,14 +66,35 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             }
         }
 
-        // Seed an admin role in admin realm
-        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct).ConfigureAwait(false))
+        // Save scopes immediately to avoid race conditions in parallel tests
+        try
         {
-            db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true });
+            if (db.ChangeTracker.HasChanges())
+            {
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("An item with the same key has already been added"))
+        {
+            // Ignore duplicate key errors for scopes (can happen in parallel test execution)
+            // Clear the tracked entities that failed to save
+            db.ChangeTracker.Clear();
+        }
+
+        // Seed an admin role in admin realm
+        if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        {
+            db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
+        }
+
+        // Seed platform-admin role in platform realm (for Platform Admin UI access)
+        if (!await db.Roles.AnyAsync(r => r.RealmId == platformRealm.Id && r.Name == "platform-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        {
+            db.Roles.Add(new Role { Name = "platform-admin", RealmId = platformRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed demo user alice if DB is empty (kept for compatibility)
-        if (!await db.Users.AnyAsync(ct).ConfigureAwait(false))
+        if (!await db.Users.AnyAsync(u => u.TenantId == tenantId, ct).ConfigureAwait(false))
         {
             db.Users.Add(new User
             {
@@ -70,13 +104,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 Name = "Alice Adams",
                 Email = "alice@example.com",
                 EmailVerified = true,
-                EmailVerifiedAt = DateTimeOffset.UtcNow
+                EmailVerifiedAt = DateTimeOffset.UtcNow,
+                TenantId = tenantId
             });
         }
 
         // Seed default admin user (idempotent)
     var normalizedAdminEmail = EmailNormalizer.NormalizeForLookup(AdminEmail);
-    var adminUser = await db.Users.FirstOrDefaultAsync(u => u.Username == AdminUsername || u.NormalizedEmail == normalizedAdminEmail, ct).ConfigureAwait(false);
+    var adminUser = await db.Users.FirstOrDefaultAsync(u => (u.Username == AdminUsername || u.NormalizedEmail == normalizedAdminEmail) && u.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminUser is null)
         {
             adminUser = new User
@@ -87,13 +122,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 EmailVerified = true,
                 EmailVerifiedAt = DateTimeOffset.UtcNow,
                 PasswordHash = hasher.Hash(AdminEasyPassword),
-                HashAlgorithm = "argon2id"
+                HashAlgorithm = "argon2id",
+                TenantId = tenantId
             };
             db.Users.Add(adminUser);
         }
 
         // Ensure blazor-web client exists as a confidential client with an initial constant secret
-        var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web", ct).ConfigureAwait(false);
+        var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web" && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (blazorWebClient is null)
         {
             blazorWebClient = new Client
@@ -104,6 +140,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 RequirePkce = true,
                 ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret),
                 RealmId = adminRealm.Id,
+                TenantId = tenantId,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
                 AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { 
                     "https://localhost:7181/signin-oidc",
@@ -182,7 +219,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // Seed dedicated admin client (separate from demo blazor-web)
-        var adminClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == AdminClientId, ct).ConfigureAwait(false);
+        var adminClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == AdminClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminClient is null)
         {
             adminClient = new Client
@@ -194,6 +231,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 // Keep as public by default for interactive code flow with PKCE
                 ClientSecretHash = null,
                 RealmId = adminRealm.Id,
+                TenantId = tenantId,
                 // Admin portal typically needs roles scope
                 AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://localhost:5003/signin-oidc", "http://localhost:5003/signin-oidc" })
             };
@@ -201,7 +239,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         }
 
         // Seed a simple M2M confidential client (client_credentials)
-        var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId, ct).ConfigureAwait(false);
+        var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (m2m is null)
         {
             m2m = new Client
@@ -211,7 +249,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 RequirePkce = false,
                 RequireConsent = false,
                 ClientSecretHash = hasher.Hash(M2MClientSecret),
-                RealmId = adminRealm.Id
+                RealmId = adminRealm.Id,
+                TenantId = tenantId
             };
             db.Clients.Add(m2m);
         }
@@ -221,8 +260,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             m2m.ClientSecretHash = hasher.Hash(M2MClientSecret);
         }
 
-        // Backfill RealmId for any existing client rows missing it
-        var clientsWithoutRealm = await db.Clients.Where(c => c.RealmId == Guid.Empty).ToListAsync(ct).ConfigureAwait(false);
+        // Backfill RealmId for any existing client rows missing it (within current tenant)
+        var clientsWithoutRealm = await db.Clients.Where(c => c.TenantId == tenantId && c.RealmId == Guid.Empty).ToListAsync(ct).ConfigureAwait(false);
         foreach (var c in clientsWithoutRealm)
         {
             c.RealmId = adminRealm.Id;
@@ -231,7 +270,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Seed example API confidential client (used for demonstrations and validation)
-        var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId, ct).ConfigureAwait(false);
+        var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (testApiClient is null)
         {
             testApiClient = new Client
@@ -242,6 +281,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                 RequireConsent = false,
                 ClientSecretHash = hasher.Hash(TestApiClientSecret),
                 RealmId = adminRealm.Id,
+                TenantId = tenantId,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" })
             };
             db.Clients.Add(testApiClient);
@@ -270,7 +310,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
     await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Optionally assign alice to blazor-web client in admin realm
-        var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice", ct).ConfigureAwait(false);
+        var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice" && u.TenantId == tenantId, ct).ConfigureAwait(false);
         if (alice is not null)
         {
             var hasAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
@@ -280,7 +320,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             }
 
             // Assign admin role to alice for blazor-web in admin realm (demo)
-            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct).ConfigureAwait(false);
+            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
             var hasRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == alice.Id && a.RoleId == adminRole.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasRole)
             {
@@ -306,11 +346,20 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
             }
 
             // Role assignment
-            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin", ct).ConfigureAwait(false);
+            var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
             var hasAdminRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.ClientId == adminClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAdminRole)
             {
                 db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = adminUser.Id, RoleId = adminRole.Id, ClientId = adminClient.Id, RealmId = adminRealm.Id, IsActive = true });
+            }
+
+            // Platform admin role assignment (for Platform Admin UI access)
+            var platformAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == platformRealm.Id && r.Name == "platform-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+            var hasPlatformAdminRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == platformAdminRole.Id && a.RealmId == platformRealm.Id, ct).ConfigureAwait(false);
+            if (!hasPlatformAdminRole)
+            {
+                // Assign platform-admin role with admin client (platform-level access)
+                db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = adminUser.Id, RoleId = platformAdminRole.Id, ClientId = adminClient.Id, RealmId = platformRealm.Id, IsActive = true });
             }
         }
 
@@ -320,7 +369,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
         try
         {
             // Skip if already present
-            var existingIdp = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == "dev-oidc", ct).ConfigureAwait(false);
+            var existingIdp = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == "dev-oidc" && p.TenantId == tenantId, ct).ConfigureAwait(false);
             if (existingIdp is null)
             {
                 var config = new
@@ -353,7 +402,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher) : ISeeder
                     SortOrder = 0,
                     ConfigJson = JsonSerializer.Serialize(config),
                     CreatedAt = DateTimeOffset.UtcNow,
-                    UpdatedAt = DateTimeOffset.UtcNow
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    TenantId = tenantId
                 };
                 db.IdentityProviders.Add(idp);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);

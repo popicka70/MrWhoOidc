@@ -83,6 +83,9 @@ public sealed class BackchannelLogoutDispatcher : BackgroundService
         var http = _httpFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(5);
 
+        // Startup delay to allow migrations to complete
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try

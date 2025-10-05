@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -30,11 +31,13 @@ public sealed class QrLoginService : IQrLoginService
 {
     private readonly AuthDbContext _db;
     private readonly IOptions<QrLoginOptions> _options;
+    private readonly ITenantAccessor _tenantAccessor;
 
-    public QrLoginService(AuthDbContext db, IOptions<QrLoginOptions> options)
+    public QrLoginService(AuthDbContext db, IOptions<QrLoginOptions> options, ITenantAccessor tenantAccessor)
     {
         _db = db;
         _options = options;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task<(string sessionToken, string authUrl)> CreateSessionAsync(
@@ -67,7 +70,8 @@ public sealed class QrLoginService : IQrLoginService
             Scope = scope,
             Status = QrSessionStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow,
-            ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(opts.SessionLifetimeSeconds)
+            ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(opts.SessionLifetimeSeconds),
+            TenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required")
         };
 
         _db.QrLoginSessions.Add(session);
@@ -82,13 +86,17 @@ public sealed class QrLoginService : IQrLoginService
 
     public async Task<QrLoginSession?> GetSessionAsync(string sessionToken)
     {
+        var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         return await _db.QrLoginSessions
+            .Where(s => s.TenantId == tenantId)
             .FirstOrDefaultAsync(s => s.SessionToken == sessionToken);
     }
 
     public async Task<QrLoginSession?> GetSessionByHashAsync(string sessionTokenHash)
     {
+        var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         return await _db.QrLoginSessions
+            .Where(s => s.TenantId == tenantId)
             .FirstOrDefaultAsync(s => s.SessionTokenHash == sessionTokenHash);
     }
 
@@ -157,8 +165,9 @@ public sealed class QrLoginService : IQrLoginService
 
     public async Task<int> CleanupExpiredSessionsAsync(DateTimeOffset olderThan)
     {
+        var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         var expiredSessions = await _db.QrLoginSessions
-            .Where(s => s.ExpiresAt < olderThan && 
+            .Where(s => s.TenantId == tenantId && s.ExpiresAt < olderThan && 
                         (s.Status == QrSessionStatus.Expired || 
                          s.Status == QrSessionStatus.Cancelled ||
                          s.Status == QrSessionStatus.Consumed))

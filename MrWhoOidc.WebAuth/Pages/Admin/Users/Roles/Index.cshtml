@@ -6,6 +6,15 @@
 
 @{ ViewData["ActiveUserTab"] = "roles"; }
 <h1 class="mb-3">Role assignments <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
+
+@if (!string.IsNullOrEmpty(Model.TenantName))
+{
+    <div class="alert alert-secondary mb-3">
+        <i class="bi bi-building"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
+        <div class="small mt-1">Only realms, clients, and roles from this tenant can be assigned.</div>
+    </div>
+}
+
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <div class="row g-3">
@@ -17,18 +26,34 @@
                     <div class="col-auto">
                         <label class="form-label">Realm</label>
                         <select class="form-select" asp-for="RealmAddRealmId">
-                            @foreach (var r in Model.Realms)
+                            @if (!Model.Realms.Any())
                             {
-                                <option value="@r.Id">@r.Name</option>
+                                <option value="">-- No realms available --</option>
+                            }
+                            else
+                            {
+                                <option value="">-- Select realm --</option>
+                                @foreach (var r in Model.Realms)
+                                {
+                                    <option value="@r.Id">@r.Name</option>
+                                }
                             }
                         </select>
                     </div>
                     <div class="col-auto">
                         <label class="form-label">Role</label>
                         <select class="form-select" asp-for="RealmAddRoleId">
-                            @foreach (var r in Model.Roles)
+                            @if (!Model.Roles.Any())
                             {
-                                <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                                <option value="">-- No roles available --</option>
+                            }
+                            else
+                            {
+                                <option value="">-- Select role --</option>
+                                @foreach (var r in Model.Roles)
+                                {
+                                    <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                                }
                             }
                         </select>
                     </div>
@@ -37,7 +62,7 @@
                         <label class="form-check-label" asp-for="RealmIsActive">Active</label>
                     </div>
                     <div class="col-auto">
-                        <button class="btn btn-primary" type="submit">Add</button>
+                        <button class="btn btn-primary" type="submit" disabled="@(!Model.Realms.Any() || !Model.Roles.Any())">Add</button>
                     </div>
                 </form>
 
@@ -46,23 +71,34 @@
                         <tr>
                             <th>Realm</th>
                             <th>Role</th>
+                            <th>Tenant</th>
                             <th>Active</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach (var a in Model.RealmAssignments)
+                    @if (!Model.RealmAssignments.Any())
                     {
                         <tr>
-                            <td>@a.RealmName</td>
-                            <td>@a.RoleName</td>
-                            <td>@(a.IsActive ? "Yes" : "No")</td>
-                            <td class="text-end">
-                                <form method="post" class="d-inline" asp-page-handler="DeleteRealm" asp-route-roleId="@a.RoleId" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this role?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-                                </form>
-                            </td>
+                            <td colspan="5" class="text-center text-muted">No realm role assignments</td>
                         </tr>
+                    }
+                    else
+                    {
+                        @foreach (var a in Model.RealmAssignments)
+                        {
+                            <tr>
+                                <td>@a.RealmName</td>
+                                <td>@a.RoleName</td>
+                                <td><span class="badge text-bg-info">@a.TenantName</span></td>
+                                <td>@(a.IsActive ? "Yes" : "No")</td>
+                                <td class="text-end">
+                                    <form method="post" class="d-inline" asp-page-handler="DeleteRealm" asp-route-roleId="@a.RoleId" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this role?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
                     }
                     </tbody>
                 </table>
@@ -78,18 +114,34 @@
                     <div class="col-auto">
                         <label class="form-label">Client</label>
                         <select class="form-select" asp-for="ClientAddClientId">
-                            @foreach (var c in Model.Clients)
+                            @if (!Model.Clients.Any())
                             {
-                                <option value="@c.Id">@c.ClientId (@c.RealmName)</option>
+                                <option value="">-- No clients available --</option>
+                            }
+                            else
+                            {
+                                <option value="">-- Select client --</option>
+                                @foreach (var c in Model.Clients)
+                                {
+                                    <option value="@c.Id">@c.ClientId @(!string.IsNullOrEmpty(c.ClientName) ? $"({c.ClientName})" : "")</option>
+                                }
                             }
                         </select>
                     </div>
                     <div class="col-auto">
                         <label class="form-label">Role</label>
                         <select class="form-select" asp-for="ClientAddRoleId">
-                            @foreach (var r in Model.Roles)
+                            @if (!Model.Roles.Any())
                             {
-                                <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                                <option value="">-- No roles available --</option>
+                            }
+                            else
+                            {
+                                <option value="">-- Select role --</option>
+                                @foreach (var r in Model.Roles)
+                                {
+                                    <option value="@r.Id">@r.Name (@r.RealmName)</option>
+                                }
                             }
                         </select>
                     </div>
@@ -98,7 +150,7 @@
                         <label class="form-check-label" asp-for="ClientIsActive">Active</label>
                     </div>
                     <div class="col-auto">
-                        <button class="btn btn-primary" type="submit">Add</button>
+                        <button class="btn btn-primary" type="submit" disabled="@(!Model.Clients.Any() || !Model.Roles.Any())">Add</button>
                     </div>
                 </form>
 
@@ -108,24 +160,35 @@
                             <th>Client</th>
                             <th>Realm</th>
                             <th>Role</th>
+                            <th>Tenant</th>
                             <th>Active</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach (var a in Model.ClientAssignments)
+                    @if (!Model.ClientAssignments.Any())
                     {
                         <tr>
-                            <td>@a.ClientId (@a.ClientName)</td>
-                            <td>@a.RealmName</td>
-                            <td>@a.RoleName</td>
-                            <td>@(a.IsActive ? "Yes" : "No")</td>
-                            <td class="text-end">
-                                <form method="post" class="d-inline" asp-page-handler="DeleteClient" asp-route-roleId="@a.RoleId" asp-route-clientId="@a.ClientGuid" onsubmit="return confirm('Remove this role?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-                                </form>
-                            </td>
+                            <td colspan="6" class="text-center text-muted">No client role assignments</td>
                         </tr>
+                    }
+                    else
+                    {
+                        @foreach (var a in Model.ClientAssignments)
+                        {
+                            <tr>
+                                <td>@a.ClientId @(!string.IsNullOrEmpty(a.ClientName) ? $"({a.ClientName})" : "")</td>
+                                <td>@a.RealmName</td>
+                                <td>@a.RoleName</td>
+                                <td><span class="badge text-bg-info">@a.TenantName</span></td>
+                                <td>@(a.IsActive ? "Yes" : "No")</td>
+                                <td class="text-end">
+                                    <form method="post" class="d-inline" asp-page-handler="DeleteClient" asp-route-roleId="@a.RoleId" asp-route-clientId="@a.ClientGuid" onsubmit="return confirm('Remove this role?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
                     }
                     </tbody>
                 </table>
@@ -137,3 +200,4 @@
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
 }
+

@@ -6,24 +6,46 @@
 
 @{ ViewData["ActiveUserTab"] = "clients"; }
 <h1 class="mb-3">Client assignments <small class="text-muted">@((ViewData["UserHeading"] as string) ?? Model.UserHeading ?? "")</small></h1>
+
+@if (!string.IsNullOrEmpty(Model.TenantName))
+{
+    <div class="alert alert-secondary mb-3">
+        <i class="bi bi-building"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
+        <div class="small mt-1">Only clients from this tenant can be assigned.</div>
+    </div>
+}
+
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
 <form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="Add">
     <div class="col-auto">
-        <label class="form-label">Client</label>
-        <select class="form-select" asp-for="ClientId">
-            @foreach (var c in Model.Clients)
+        <label class="form-label">Realm <span class="text-danger">*</span></label>
+        <select class="form-select" asp-for="RealmId" onchange="this.form.submit()">
+            <option value="">-- Select realm first --</option>
+            @foreach (var r in Model.Realms)
             {
-                <option value="@c.Id">@c.ClientId (@c.RealmName)</option>
+                <option value="@r.Id">@r.Name</option>
             }
         </select>
     </div>
     <div class="col-auto">
-        <label class="form-label">Realm</label>
-        <select class="form-select" asp-for="RealmId">
-            @foreach (var r in Model.Realms)
+        <label class="form-label">Client <span class="text-danger">*</span></label>
+        <select class="form-select" asp-for="ClientId" disabled="@(!Model.RealmId.HasValue || !Model.Clients.Any())">
+            @if (!Model.RealmId.HasValue)
             {
-                <option value="@r.Id">@r.Name</option>
+                <option value="">-- Select realm first --</option>
+            }
+            else if (!Model.Clients.Any())
+            {
+                <option value="">-- No clients in this realm --</option>
+            }
+            else
+            {
+                <option value="">-- Select client --</option>
+                @foreach (var c in Model.Clients)
+                {
+                    <option value="@c.Id">@c.ClientId @(!string.IsNullOrEmpty(c.ClientName) ? $"({c.ClientName})" : "")</option>
+                }
             }
         </select>
     </div>
@@ -32,7 +54,7 @@
         <label class="form-check-label" asp-for="IsActive">Active</label>
     </div>
     <div class="col-auto">
-        <button class="btn btn-primary" type="submit">Add</button>
+        <button class="btn btn-primary" type="submit" disabled="@(!Model.RealmId.HasValue || !Model.Clients.Any())">Add</button>
     </div>
 </form>
 
@@ -41,23 +63,34 @@
         <tr>
             <th>Client</th>
             <th>Realm</th>
+            <th>Tenant</th>
             <th>Active</th>
             <th></th>
         </tr>
     </thead>
     <tbody>
-    @foreach (var a in Model.Assignments)
+    @if (!Model.Assignments.Any())
     {
         <tr>
-            <td>@a.ClientId (@a.ClientName)</td>
-            <td>@a.RealmName</td>
-            <td>@(a.IsActive ? "Yes" : "No")</td>
-            <td class="text-end">
-                <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-clientId="@a.ClientGuid" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this assignment?');">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-                </form>
-            </td>
+            <td colspan="5" class="text-center text-muted">No client assignments</td>
         </tr>
+    }
+    else
+    {
+        @foreach (var a in Model.Assignments)
+        {
+            <tr>
+                <td>@a.ClientId @(!string.IsNullOrEmpty(a.ClientName) ? $"({a.ClientName})" : "")</td>
+                <td>@a.RealmName</td>
+                <td><span class="badge text-bg-info">@a.TenantName</span></td>
+                <td>@(a.IsActive ? "Yes" : "No")</td>
+                <td class="text-end">
+                    <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-clientId="@a.ClientGuid" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this assignment?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        }
     }
     </tbody>
 </table>

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Pipeline;
@@ -43,6 +44,12 @@ public static class PipelineExtensions
         });
 
         app.UseRouting();
+
+        // Multi-tenancy: resolve tenant from path early in pipeline
+        app.UseTenantResolution();
+
+        // Session storage (required for tenant discovery flow)
+        app.UseSession();
 
         // Localization (single supported culture placeholder; future expansion can move to configuration)
         var supportedCultures = new[] { "en-US" };

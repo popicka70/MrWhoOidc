@@ -976,3 +976,19 @@ textarea[style*="monospace"] {
   }
 }
 
+/* ========================================
+   FORM ENHANCEMENTS
+   ======================================== */
+
+/* Style readonly inputs to look disabled but still submit values */
+input[readonly].form-control {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+input[readonly].form-control:focus {
+  background-color: #e9ecef;
+  box-shadow: none;
+  border-color: #ced4da;
+}

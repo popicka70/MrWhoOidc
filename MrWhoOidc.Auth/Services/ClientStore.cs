@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -10,14 +11,32 @@ public interface IClientStore
     IQueryable<Client> QueryClients(CancellationToken ct = default);
 }
 
-internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher) : IClientStore
+internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor) : IClientStore
 {
     public Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
-        => db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
+    {
+        var query = db.Clients.AsNoTracking().Where(c => c.ClientId == clientId);
+        
+        // Filter by tenant if tenant context is available
+        if (tenantAccessor.CurrentTenant != null)
+        {
+            query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
+        }
+        
+        return query.FirstOrDefaultAsync(ct);
+    }
 
     public async Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
     {
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+        var query = db.Clients.AsNoTracking().Where(c => c.ClientId == clientId);
+        
+        // Filter by tenant if tenant context is available
+        if (tenantAccessor.CurrentTenant != null)
+        {
+            query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
+        }
+        
+        var client = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (client is null) return false;
         if (string.IsNullOrEmpty(client.ClientSecretHash))
         {
@@ -29,5 +48,15 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher) : IC
     }
 
     public IQueryable<Client> QueryClients(CancellationToken ct = default)
-        => db.Clients.AsQueryable();
+    {
+        var query = db.Clients.AsQueryable();
+        
+        // Filter by tenant if tenant context is available
+        if (tenantAccessor.CurrentTenant != null)
+        {
+            query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
+        }
+        
+        return query;
+    }
 }

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -14,7 +15,8 @@ public sealed class ParStoreTests
         using var db = TestDataSeeder.CreateInMemoryDb();
         // Set a low pending limit to exercise the limit path
         var options = Options.Create(new AuthOptions { ParClientPendingLimit = 2 });
-        var store = new EfPushedAuthorizationRequestStore(db, options);
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var store = new EfPushedAuthorizationRequestStore(db, options, tenantAccessor);
 
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
@@ -62,7 +64,8 @@ public sealed class ParStoreTests
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
         var options = Options.Create(new AuthOptions { ParClientPendingLimit = 10 });
-        var store = new EfPushedAuthorizationRequestStore(db, options);
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var store = new EfPushedAuthorizationRequestStore(db, options, tenantAccessor);
 
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest { response_type = "code", client_id = "spa", redirect_uri = "https://app.example.com/callback", scope = "openid" };
         var id = Guid.NewGuid().ToString("N");

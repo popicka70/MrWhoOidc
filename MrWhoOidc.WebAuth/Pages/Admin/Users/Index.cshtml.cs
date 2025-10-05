@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 
@@ -9,20 +10,54 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 [Authorize]
 public class IndexModel(AuthDbContext db) : PageModel
 {
-    public IReadOnlyList<User> Users { get; private set; } = Array.Empty<User>();
+    public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
+
+    public IReadOnlyList<UserRow> Users { get; private set; } = Array.Empty<UserRow>();
+    public List<SelectListItem> TenantOptions { get; private set; } = new();
 
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public Guid? TenantId { get; set; }
+
     public async Task OnGetAsync()
     {
-        var q = db.Users.AsNoTracking().AsQueryable();
+        // Load tenant options for filter
+        var tenants = await db.Tenants.AsNoTracking()
+            .Where(t => t.Status == TenantStatus.Active)
+            .OrderBy(t => t.Name)
+            .ToListAsync();
+        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+        TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+
+        // Build query with tenant JOIN
+        var q = db.Users.AsNoTracking()
+            .Join(db.Tenants, u => u.TenantId, t => t.Id, (u, t) => new { User = u, Tenant = t });
+
+        if (TenantId.HasValue)
+        {
+            q = q.Where(x => x.User.TenantId == TenantId.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(Search))
         {
             var s = Search.Trim();
-            q = q.Where(u => u.Username.Contains(s) || (u.Email != null && u.Email.Contains(s)) || (u.Name != null && u.Name.Contains(s)));
+            q = q.Where(x => x.User.Username.Contains(s) || (x.User.Email != null && x.User.Email.Contains(s)) || (x.User.Name != null && x.User.Name.Contains(s)));
         }
-        Users = await q.OrderBy(u => u.Username).ToListAsync();
+
+        Users = await q
+            .OrderBy(x => x.User.Username)
+            .Select(x => new UserRow(
+                x.User.Id,
+                x.User.Username,
+                x.User.Email,
+                x.User.Name,
+                x.User.CreatedAt,
+                x.User.TenantId,
+                x.Tenant.Name
+            ))
+            .ToListAsync();
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
@@ -40,6 +75,6 @@ public class IndexModel(AuthDbContext db) : PageModel
         if (entity is null) return RedirectToPage();
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        return RedirectToPage(new { TenantId });
     }
 }

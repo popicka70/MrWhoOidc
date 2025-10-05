@@ -9,6 +9,13 @@
 <form method="post" autocomplete="off">
     <div asp-validation-summary="ModelOnly" class="text-danger"></div>
     <div class="mb-3">
+        <label asp-for="Input.TenantId" class="form-label">Tenant</label>
+        <select asp-for="Input.TenantId" asp-items="Model.TenantOptions" class="form-select">
+            <option value="">-- Select tenant --</option>
+        </select>
+        <span asp-validation-for="Input.TenantId" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
         <label asp-for="Input.Name" class="form-label"></label>
         <input asp-for="Input.Name" class="form-control" autocomplete="off" />
         <span asp-validation-for="Input.Name" class="text-danger"></span>

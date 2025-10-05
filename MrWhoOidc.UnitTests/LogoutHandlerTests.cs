@@ -14,6 +14,8 @@ using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
 
+using MrWhoOidc.UnitTests.Helpers;
+
 namespace MrWhoOidc.UnitTests;
 
 /// <summary>
@@ -277,7 +279,7 @@ public class LogoutHandlerTests
     private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcMetrics metrics, IConfiguration config)
     {
         var frontChannel = new FrontChannelLogoutNotifier(db);
-        var keyStore = new KeyStore(db);
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var backChannel = new BackChannelLogoutEnqueuer(
             db,
