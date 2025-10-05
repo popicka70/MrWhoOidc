@@ -57,13 +57,28 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
 
         // Seed default scopes (scopes are global, not tenant-specific)
-    string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
+        string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
         foreach (var s in defaultScopes)
         {
             if (!await db.Scopes.AnyAsync(x => x.Name == s, ct).ConfigureAwait(false))
             {
                 db.Scopes.Add(new Scope { Name = s, Description = $"Standard scope {s}", IsExposed = true });
             }
+        }
+
+        // Save scopes immediately to avoid race conditions in parallel tests
+        try
+        {
+            if (db.ChangeTracker.HasChanges())
+            {
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("An item with the same key has already been added"))
+        {
+            // Ignore duplicate key errors for scopes (can happen in parallel test execution)
+            // Clear the tracked entities that failed to save
+            db.ChangeTracker.Clear();
         }
 
         // Seed an admin role in admin realm
