@@ -12,43 +12,76 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
     [FromRoute]
     public Guid UserId { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public Guid? RealmId { get; set; }
+
     [BindProperty]
     public Guid ClientId { get; set; }
 
     [BindProperty]
-    public Guid RealmId { get; set; }
-
-    [BindProperty]
     public bool IsActive { get; set; } = true;
+
+    public string TenantName { get; set; } = string.Empty;
+    public Guid UserTenantId { get; set; }
 
     public IReadOnlyList<AssignmentVm> Assignments { get; private set; } = Array.Empty<AssignmentVm>();
     public IReadOnlyList<ClientVm> Clients { get; private set; } = Array.Empty<ClientVm>();
-    public IReadOnlyList<Realm> Realms { get; private set; } = Array.Empty<Realm>();
+    public IReadOnlyList<RealmVm> Realms { get; private set; } = Array.Empty<RealmVm>();
 
-    public record AssignmentVm(Guid ClientGuid, string ClientId, string? ClientName, Guid RealmId, string RealmName, bool IsActive);
-    public record ClientVm(Guid Id, string ClientId, string RealmName);
+    public record AssignmentVm(Guid ClientGuid, string ClientId, string? ClientName, Guid RealmId, string RealmName, string TenantName, bool IsActive);
+    public record ClientVm(Guid Id, string ClientId, string? ClientName, Guid RealmId);
+    public record RealmVm(Guid Id, string Name);
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
-        if (user is null) return RedirectToPage("/Admin/Users/Index");
-        SetHeading(user.Username, user.Name);
+        var userQuery = from u in db.Users.AsNoTracking()
+                        join t in db.Tenants on u.TenantId equals t.Id
+                        where u.Id == UserId
+                        select new { User = u, Tenant = t };
+        
+        var userResult = await userQuery.FirstOrDefaultAsync();
+        if (userResult is null) return RedirectToPage("/Admin/Users/Index");
+        
+        UserTenantId = userResult.User.TenantId;
+        TenantName = userResult.Tenant.Name;
+        SetHeading(userResult.User.Username, userResult.User.Name);
 
-        Realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
-
-        // Avoid projecting to record type before OrderBy to keep query translatable by EF
-        Clients = await db.Clients.AsNoTracking()
-            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new { c.Id, c.ClientId, RealmName = r.Name })
-            .OrderBy(x => x.ClientId)
-            .Select(x => new ClientVm(x.Id, x.ClientId, x.RealmName))
+        // Load realms filtered by user's tenant
+        Realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == UserTenantId)
+            .OrderBy(r => r.Name)
+            .Select(r => new RealmVm(r.Id, r.Name))
             .ToListAsync();
 
-        // Same approach for assignments: order before projecting to record type
-        Assignments = await db.UserClientAssignments.AsNoTracking().Where(a => a.UserId == UserId)
+        // Load clients filtered by user's tenant and selected realm (if any)
+        var clientQuery = db.Clients.AsNoTracking()
+            .Where(c => c.TenantId == UserTenantId);
+        
+        if (RealmId.HasValue)
+        {
+            clientQuery = clientQuery.Where(c => c.RealmId == RealmId.Value);
+        }
+
+        Clients = await clientQuery
+            .OrderBy(c => c.ClientId)
+            .Select(c => new ClientVm(c.Id, c.ClientId, c.ClientName, c.RealmId))
+            .ToListAsync();
+
+        // Load assignments with tenant info
+        Assignments = await db.UserClientAssignments.AsNoTracking()
+            .Where(a => a.UserId == UserId)
             .Join(db.Clients, a => a.ClientId, c => c.Id, (a, c) => new { a, c })
-            .Join(db.Realms, ac => ac.a.RealmId, r => r.Id, (ac, r) => new { ac, r })
-            .OrderBy(x => x.ac.c.ClientId)
-            .Select(x => new AssignmentVm(x.ac.c.Id, x.ac.c.ClientId, x.ac.c.ClientName, x.r.Id, x.r.Name, x.ac.a.IsActive))
+            .Join(db.Realms, ac => ac.c.RealmId, r => r.Id, (ac, r) => new { ac.a, ac.c, r })
+            .Join(db.Tenants, acr => acr.c.TenantId, t => t.Id, (acr, t) => new { acr.a, acr.c, acr.r, t })
+            .OrderBy(x => x.c.ClientId)
+            .Select(x => new AssignmentVm(
+                x.c.Id, 
+                x.c.ClientId, 
+                x.c.ClientName, 
+                x.r.Id, 
+                x.r.Name, 
+                x.t.Name,
+                x.a.IsActive))
             .ToListAsync();
 
         return Page();
@@ -56,25 +89,73 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostAddAsync()
     {
-        if (UserId == Guid.Empty || ClientId == Guid.Empty || RealmId == Guid.Empty) return await OnGetAsync();
-        var exists = await db.UserClientAssignments.AnyAsync(a => a.UserId == UserId && a.ClientId == ClientId && a.RealmId == RealmId);
+        if (UserId == Guid.Empty || ClientId == Guid.Empty || !RealmId.HasValue) 
+        {
+            return await OnGetAsync();
+        }
+
+        // Get user's tenant
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        if (user is null) return RedirectToPage("/Admin/Users/Index");
+
+        // Validate client belongs to user's tenant
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == ClientId && c.TenantId == user.TenantId);
+        if (client is null)
+        {
+            // Client doesn't exist or doesn't belong to user's tenant - security violation
+            return await OnGetAsync();
+        }
+
+        // Validate realm belongs to user's tenant
+        var realmValid = await db.Realms.AsNoTracking()
+            .AnyAsync(r => r.Id == RealmId.Value && r.TenantId == user.TenantId);
+        if (!realmValid)
+        {
+            // Realm doesn't belong to user's tenant - security violation
+            return await OnGetAsync();
+        }
+
+        // Validate client belongs to selected realm
+        if (client.RealmId != RealmId.Value)
+        {
+            // Client doesn't belong to selected realm - invalid assignment
+            return await OnGetAsync();
+        }
+
+        var exists = await db.UserClientAssignments.AnyAsync(a => 
+            a.UserId == UserId && 
+            a.ClientId == ClientId && 
+            a.RealmId == RealmId.Value);
+        
         if (!exists)
         {
-            db.UserClientAssignments.Add(new UserClientAssignment { UserId = UserId, ClientId = ClientId, RealmId = RealmId, IsActive = IsActive });
+            db.UserClientAssignments.Add(new UserClientAssignment 
+            { 
+                UserId = UserId, 
+                ClientId = ClientId, 
+                RealmId = RealmId.Value, 
+                IsActive = IsActive 
+            });
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { userId = UserId });
+        
+        return RedirectToPage(new { userId = UserId, realmId = RealmId });
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid clientId, Guid realmId)
     {
-        var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => a.UserId == UserId && a.ClientId == clientId && a.RealmId == realmId);
+        var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => 
+            a.UserId == UserId && 
+            a.ClientId == clientId && 
+            a.RealmId == realmId);
+        
         if (entity is not null)
         {
             db.UserClientAssignments.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { userId = UserId });
+        
+        return RedirectToPage(new { userId = UserId, realmId = RealmId });
     }
-
 }
