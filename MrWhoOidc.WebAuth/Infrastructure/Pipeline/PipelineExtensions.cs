@@ -48,6 +48,9 @@ public static class PipelineExtensions
         // Multi-tenancy: resolve tenant from path early in pipeline
         app.UseTenantResolution();
 
+        // Session storage (required for tenant discovery flow)
+        app.UseSession();
+
         // Localization (single supported culture placeholder; future expansion can move to configuration)
         var supportedCultures = new[] { "en-US" };
         var localizationOptions = new RequestLocalizationOptions()

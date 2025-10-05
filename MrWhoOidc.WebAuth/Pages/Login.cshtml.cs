@@ -24,9 +24,22 @@ public class LoginModel(IUserService users, ILogger<LoginModel> logger) : PageMo
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Email { get; set; }
+
+    public bool ShowNotYouLink => !string.IsNullOrEmpty(Email);
+
     public void OnGet()
     {
-        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}", ReturnUrl ?? "(null)");
+        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}", 
+            ReturnUrl ?? "(null)", 
+            Email ?? "(null)");
+
+        // Pre-fill username with email if provided
+        if (!string.IsNullOrEmpty(Email))
+        {
+            Username = Email;
+        }
     }
 
     public async Task<IActionResult> OnPostAsync()

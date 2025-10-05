@@ -49,6 +49,9 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.AddSingleton<ITotpService, TotpService>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
+        
+        // Tenant discovery service for email-first login flow
+        services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();
 
         // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();

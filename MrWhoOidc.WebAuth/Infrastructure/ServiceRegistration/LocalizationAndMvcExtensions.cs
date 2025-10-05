@@ -27,6 +27,18 @@ public static class LocalizationAndMvcExtensions
         var multiTenancySection = configuration.GetSection("MultiTenancy");
         var isMultiTenantMode = multiTenancySection.GetValue<bool>("Enabled", false);
 
+        // Session storage (required for tenant discovery flow)
+        services.AddDistributedMemoryCache();
+        services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromMinutes(10);
+            options.Cookie.Name = ".mrwhooidc.session";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.IsEssential = true;
+        });
+
         // Razor Pages (admin folder locked down by policy = admin)
         // Multi-tenant routing added via conventions
         services.AddRazorPages(options =>
@@ -72,7 +84,7 @@ public static class LocalizationAndMvcExtensions
                 
                 // Add tenant-prefixed routes for authentication-related pages
                 // This allows: /t/{slug}/login, /t/{slug}/consent, etc.
-                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index" };
+                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index", "/DiscoverTenant", "/SelectTenant" };
                 foreach (var page in authPages)
                 {
                     options.Conventions.AddPageRouteModelConvention(page, model => AddTenantPrefixedRoutes(model));
