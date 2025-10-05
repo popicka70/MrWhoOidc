@@ -35,15 +35,9 @@ public static class LocalizationAndMvcExtensions
             
             if (isMultiTenantMode)
             {
-                // Add tenant-prefixed routes for all Admin pages: /t/{slug}/admin/*
-                // Original /admin/* routes remain as fallback for backward compatibility
-                options.Conventions.AddFolderRouteModelConvention("/Admin", model =>
+                // Helper method to add tenant-prefixed routes
+                void AddTenantPrefixedRoutes(PageRouteModel model)
                 {
-                    // For each page under /Admin, add an additional route template with tenant prefix
-                    // Example: /Admin/Users/Index gets both:
-                    //   - /Admin/Users (original, fallback to default tenant)
-                    //   - /t/{slug}/Admin/Users (tenant-specific)
-                    
                     var selectorsToAdd = new List<SelectorModel>();
                     
                     foreach (var selector in model.Selectors)
@@ -70,7 +64,32 @@ public static class LocalizationAndMvcExtensions
                     {
                         model.Selectors.Add(selector);
                     }
-                });
+                }
+                
+                // Add tenant-prefixed routes for all Admin pages: /t/{slug}/admin/*
+                // Original /admin/* routes remain as fallback for backward compatibility
+                options.Conventions.AddFolderRouteModelConvention("/Admin", model => AddTenantPrefixedRoutes(model));
+                
+                // Add tenant-prefixed routes for authentication-related pages
+                // This allows: /t/{slug}/login, /t/{slug}/consent, etc.
+                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index" };
+                foreach (var page in authPages)
+                {
+                    options.Conventions.AddPageRouteModelConvention(page, model => AddTenantPrefixedRoutes(model));
+                }
+                
+                // Add tenant-prefixed routes for logout pages
+                options.Conventions.AddFolderRouteModelConvention("/Logout", model => AddTenantPrefixedRoutes(model));
+                
+                // Add tenant-prefixed routes for auth flows (QR, external providers)
+                options.Conventions.AddFolderRouteModelConvention("/Auth", model => AddTenantPrefixedRoutes(model));
+                
+                // Add tenant-prefixed routes for MFA/password management
+                options.Conventions.AddFolderRouteModelConvention("/Mfa", model => AddTenantPrefixedRoutes(model));
+                options.Conventions.AddFolderRouteModelConvention("/Password", model => AddTenantPrefixedRoutes(model));
+                
+                // Add tenant-prefixed routes for registrations
+                options.Conventions.AddFolderRouteModelConvention("/Registrations", model => AddTenantPrefixedRoutes(model));
             }
         });
 
