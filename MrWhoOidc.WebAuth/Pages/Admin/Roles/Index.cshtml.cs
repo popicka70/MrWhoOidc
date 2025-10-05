@@ -3,18 +3,23 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public sealed record RoleRow(Guid Id, string Name, Guid RealmId, string RealmName, Guid TenantId, string TenantName, bool IsActive);
 
     public IReadOnlyList<RoleRow> Roles { get; private set; } = Array.Empty<RoleRow>();
     public IReadOnlyList<Realm> Realms { get; private set; } = Array.Empty<Realm>();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
+    public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty(SupportsGet = true)]
     public Guid? RealmId { get; set; }
@@ -29,19 +34,42 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     public async Task OnGetAsync()
     {
-        // Load tenants for filter
-        var allTenants = await db.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .ToListAsync();
-        TenantOptions = allTenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-        TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
 
-        // Filter realms by tenant if selected
-        var realmQuery = db.Realms.AsNoTracking().AsQueryable();
-        if (TenantId.HasValue)
+        // Load tenant options for filter (platform admins only)
+        if (IsPlatformAdmin)
         {
-            realmQuery = realmQuery.Where(r => r.TenantId == TenantId.Value);
+            var allTenants = await db.Tenants.AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            TenantOptions = allTenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        }
+
+        // Filter realms by tenant if selected or current tenant
+        var realmQuery = db.Realms.AsNoTracking().AsQueryable();
+        if (IsPlatformAdmin)
+        {
+            if (TenantId.HasValue)
+            {
+                realmQuery = realmQuery.Where(r => r.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                realmQuery = realmQuery.Where(r => r.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                Roles = Array.Empty<RoleRow>();
+                return;
+            }
         }
         Realms = await realmQuery.OrderBy(r => r.Name).ToListAsync();
 

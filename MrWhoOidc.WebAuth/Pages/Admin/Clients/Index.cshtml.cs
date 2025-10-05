@@ -4,13 +4,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
+public class IndexModel(
+    AuthDbContext db, 
+    IPasswordHasher hasher, 
+    IClientIdGenerator idGen,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 
@@ -18,6 +24,8 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
 
     public List<SelectListItem> RealmOptions { get; private set; } = new();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
+    
+    public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty]
     public ClientInput Input { get; set; } = new();
@@ -32,13 +40,20 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
 
     private async Task LoadAsync()
     {
-        // Load tenant options for filter
-        var tenants = await db.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .ToListAsync();
-        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-        TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Load tenant options for filter (platform admins only)
+        if (IsPlatformAdmin)
+        {
+            var tenants = await db.Tenants.AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        }
 
         var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
@@ -48,9 +63,29 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGener
             .Join(db.Tenants, c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
             .Join(db.Realms, x => x.Client.RealmId, r => r.Id, (x, r) => new { x.Client, x.Tenant, Realm = r });
 
-        if (TenantId.HasValue)
+        // Automatic tenant scoping
+        if (IsPlatformAdmin)
         {
-            q = q.Where(x => x.Client.TenantId == TenantId.Value);
+            // Platform admins can optionally filter by tenant
+            if (TenantId.HasValue)
+            {
+                q = q.Where(x => x.Client.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            // Regular tenant admins only see their tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                q = q.Where(x => x.Client.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                // No tenant context, return empty
+                Clients = Array.Empty<ClientRow>();
+                return;
+            }
         }
 
         Clients = await q

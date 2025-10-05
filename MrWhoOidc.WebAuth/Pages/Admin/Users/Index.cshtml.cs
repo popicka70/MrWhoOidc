@@ -3,17 +3,22 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : PageModel
 {
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
     public IReadOnlyList<UserRow> Users { get; private set; } = Array.Empty<UserRow>();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
+    public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
@@ -23,21 +28,48 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     public async Task OnGetAsync()
     {
-        // Load tenant options for filter
-        var tenants = await db.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .ToListAsync();
-        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-        TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        IsPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Load tenant options for filter (platform admins only)
+        if (IsPlatformAdmin)
+        {
+            var tenants = await db.Tenants.AsNoTracking()
+                .Where(t => t.Status == TenantStatus.Active)
+                .OrderBy(t => t.Name)
+                .ToListAsync();
+            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+        }
 
         // Build query with tenant JOIN
         var q = db.Users.AsNoTracking()
             .Join(db.Tenants, u => u.TenantId, t => t.Id, (u, t) => new { User = u, Tenant = t });
 
-        if (TenantId.HasValue)
+        // Automatic tenant scoping
+        if (IsPlatformAdmin)
         {
-            q = q.Where(x => x.User.TenantId == TenantId.Value);
+            // Platform admins can optionally filter by tenant
+            if (TenantId.HasValue)
+            {
+                q = q.Where(x => x.User.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            // Regular tenant admins only see their tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                q = q.Where(x => x.User.TenantId == currentTenantId.Value);
+            }
+            else
+            {
+                // No tenant context, return empty
+                Users = Array.Empty<UserRow>();
+                return;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(Search))
