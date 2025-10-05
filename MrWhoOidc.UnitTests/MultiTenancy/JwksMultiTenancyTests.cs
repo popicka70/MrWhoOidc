@@ -127,7 +127,7 @@ public class JwksMultiTenancyTests
         var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
         
         // Act & Assert
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             async () => await keyStore.GetPublicJwksAsync(),
             "GetPublicJwksAsync should throw when tenant context is not set");
     }
@@ -140,7 +140,7 @@ public class JwksMultiTenancyTests
         var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
         
         // Act & Assert
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             async () => await keyStore.GetActiveSigningKeyAsync(),
             "GetActiveSigningKeyAsync should throw when tenant context is not set");
     }
