@@ -636,14 +636,21 @@ public class IndexModel(
 - **Status**: Completed January 2025
 - **Details**: See `docs/phase3-platform-admin-enhancement-implementation.md`
 
-### Phase 4: User Self-Service Portal (Week 4-6)
-- [ ] Create `/account/*` route structure
-- [ ] Profile management page
-- [ ] MFA management page (consolidated)
-- [ ] Active sessions page with revocation
+### Phase 4: User Self-Service Portal (Week 4-6) ⏳ IN PROGRESS (37.5% Complete)
+- [x] Create `/account/*` route structure
+- [x] Profile management page
+- [x] MFA management page (consolidated) - Routing fixed
+- [x] Active sessions page with revocation
 - [ ] Consent history page
 - [ ] Linked identities page
-- [ ] Apply `[Authorize]` (no admin role required)
+- [ ] Alternative emails page
+- [x] Apply `[Authorize]` (no admin role required)
+- [x] Fix tenant-prefixed routing for all account pages
+- [x] Password/Security routing fixes
+
+**Status**: Foundation complete (Dashboard, Profile, Sessions). Password and Security routing fixed. Remaining: Consents, LinkedAccounts, Emails pages.
+
+**Progress**: 3 of 8 pages complete (Dashboard, Profile, Sessions)
 
 ### Phase 5: UI Polish (Week 6-7)
 - [ ] Tenant switcher for multi-tenant users

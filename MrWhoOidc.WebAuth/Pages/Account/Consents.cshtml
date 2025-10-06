@@ -1,0 +1,130 @@
+@page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.ConsentsModel
+@{
+    ViewData["Title"] = "App Permissions";
+    ViewData["ActiveAccountTab"] = "consents";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+}
+
+<h1 class="mb-3">App Permissions</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-2"></i>@Model.Message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-check2-square me-2"></i>Authorized Applications</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Consents.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var consent in Model.Consents)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="bi bi-app-indicator me-2 fs-5 text-primary"></i>
+                                            <h6 class="mb-0">@consent.ClientName</h6>
+                                        </div>
+                                        <dl class="row small mb-0">
+                                            <dt class="col-sm-3 text-muted">Client ID</dt>
+                                            <dd class="col-sm-9"><code>@consent.ClientId</code></dd>
+                                            
+                                            <dt class="col-sm-3 text-muted">Permissions</dt>
+                                            <dd class="col-sm-9">
+                                                @if (consent.Scopes.Any())
+                                                {
+                                                    <div class="d-flex flex-wrap gap-1">
+                                                        @foreach (var scope in consent.Scopes)
+                                                        {
+                                                            <span class="badge bg-secondary">@scope</span>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">No specific scopes</span>
+                                                }
+                                            </dd>
+                                            
+                                            <dt class="col-sm-3 text-muted">Authorized</dt>
+                                            <dd class="col-sm-9">
+                                                <i class="bi bi-clock me-1"></i>
+                                                @consent.ConsentedAt.ToString("MMM d, yyyy 'at' h:mm tt")
+                                            </dd>
+                                        </dl>
+                                    </div>
+                                    <div class="ms-3">
+                                        <form method="post" asp-page-handler="Revoke" asp-route-consentId="@consent.Id" 
+                                              onsubmit="return confirm('Are you sure you want to revoke access for @consent.ClientName? The application will need to request permission again.');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Revoke consent">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="bi bi-check2-square text-muted" style="font-size: 4rem;"></i>
+                        <p class="text-muted mt-3">No applications have been authorized yet.</p>
+                        <p class="small text-muted">
+                            When you authorize an application to access your account, it will appear here.
+                        </p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-info-circle text-info me-1"></i>
+                    About App Permissions
+                </h6>
+                <p class="small text-muted mb-2">
+                    You've given these applications permission to access certain information from your account.
+                </p>
+                <p class="small text-muted mb-3">
+                    Revoking consent will:
+                </p>
+                <ul class="small text-muted">
+                    <li>Remove the application's access to your account</li>
+                    <li>Require you to re-authorize the application next time you use it</li>
+                    <li>Not delete any data the application may have already stored</li>
+                </ul>
+                <hr class="my-3">
+                <h6 class="small fw-semibold mb-2">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    Security Tips
+                </h6>
+                <ul class="small text-muted mb-0">
+                    <li>Regularly review authorized applications</li>
+                    <li>Revoke access for apps you no longer use</li>
+                    <li>Be cautious when granting permissions to new apps</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

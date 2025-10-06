@@ -1,0 +1,185 @@
+@page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Account.EmailsModel
+@{
+    ViewData["Title"] = "Email Addresses";
+    ViewData["ActiveAccountTab"] = "emails";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+}
+
+<h1 class="mb-3">Email Addresses</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>@Model.Message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>@Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Primary Email -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-envelope-fill me-2"></i>Primary Email</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-envelope-check-fill fs-4 text-success me-3"></i>
+                    <div class="flex-grow-1">
+                        <p class="mb-0 fw-semibold">@Model.PrimaryEmail</p>
+                        <small class="text-muted">This is your primary login email and cannot be removed.</small>
+                    </div>
+                    <span class="badge bg-success">Primary</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alternative Emails -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-envelope me-2"></i>Alternative Emails</h5>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.AlternativeEmails.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var email in Model.AlternativeEmails)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center">
+                                            @if (email.IsVerified)
+                                            {
+                                                <i class="bi bi-envelope-check fs-5 text-success me-2"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-envelope fs-5 text-warning me-2"></i>
+                                            }
+                                            <div>
+                                                <p class="mb-0">@email.Email</p>
+                                                @if (email.IsVerified && email.VerifiedAt.HasValue)
+                                                {
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                                        Verified on @email.VerifiedAt.Value.ToString("MMM d, yyyy")
+                                                    </small>
+                                                }
+                                                else
+                                                {
+                                                    <small class="text-warning">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                        Not verified - verification email sent
+                                                    </small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="ms-3">
+                                        <form method="post" asp-page-handler="Remove" asp-route-emailId="@email.Id" 
+                                              onsubmit="return confirm('Are you sure you want to remove this email address?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove email">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No alternative email addresses added yet.</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Add New Email Form -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="bi bi-plus-circle me-2"></i>Add Alternative Email</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" asp-page-handler="Add">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label asp-for="NewEmail" class="form-label">Email Address</label>
+                            <input asp-for="NewEmail" class="form-control" placeholder="alternative@example.com" />
+                            <span asp-validation-for="NewEmail" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-circle me-1"></i>Add Email
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-info-circle text-info me-1"></i>
+                    About Email Addresses
+                </h6>
+                <p class="small text-muted mb-3">
+                    Alternative email addresses allow you to:
+                </p>
+                <ul class="small text-muted mb-3">
+                    <li>Receive notifications at multiple addresses</li>
+                    <li>Use different emails for different purposes</li>
+                    <li>Maintain access if your primary email changes</li>
+                </ul>
+                <hr class="my-3">
+                <h6 class="small fw-semibold mb-2">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    Verification Required
+                </h6>
+                <p class="small text-muted mb-0">
+                    New email addresses must be verified before they can be used. A verification link will be sent to the email address after you add it.
+                </p>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-lightbulb text-warning me-1"></i>
+                    Tips
+                </h6>
+                <ul class="small text-muted mb-0">
+                    <li>Keep at least one verified email for account recovery</li>
+                    <li>Remove old or unused email addresses</li>
+                    <li>Check spam folder for verification emails</li>
+                    <li>Each email can only be used by one account</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

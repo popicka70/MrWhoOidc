@@ -1,0 +1,90 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Persistence;
+using System.Security.Claims;
+
+namespace MrWhoOidc.WebAuth.Pages.Account;
+
+[Authorize]
+public class LinkedAccountsModel(AuthDbContext db) : PageModel
+{
+    public List<LinkedAccountViewModel> LinkedAccounts { get; private set; } = new();
+    public string? Message { get; private set; }
+
+    public async Task OnGetAsync()
+    {
+        var user = await GetCurrentUserAsync();
+        if (user is null) return;
+
+        // Get all external identities for the user
+        var externalIdentities = await db.ExternalIdentities
+            .AsNoTracking()
+            .Where(ei => ei.UserId == user.Id)
+            .OrderByDescending(ei => ei.LastSeenAt)
+            .ToListAsync();
+
+        LinkedAccounts = externalIdentities.Select(ei => new LinkedAccountViewModel
+        {
+            Id = ei.Id,
+            Issuer = ei.Issuer,
+            Subject = ei.Subject,
+            ProviderName = ei.ProviderName ?? "Unknown Provider",
+            LinkedAt = ei.CreatedAt,
+            LastSeenAt = ei.LastSeenAt
+        }).ToList();
+    }
+
+    public async Task<IActionResult> OnPostUnlinkAsync(Guid accountId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/LinkedAccounts") });
+
+        var externalIdentity = await db.ExternalIdentities
+            .FirstOrDefaultAsync(ei => ei.Id == accountId && ei.UserId == user.Id);
+
+        if (externalIdentity is null)
+        {
+            Message = "Linked account not found.";
+            return RedirectToPage();
+        }
+
+        // Safety check: ensure user has a password or other external identities
+        var hasPassword = !string.IsNullOrWhiteSpace(user.PasswordHash);
+        var otherIdentitiesCount = await db.ExternalIdentities
+            .CountAsync(ei => ei.UserId == user.Id && ei.Id != accountId);
+
+        if (!hasPassword && otherIdentitiesCount == 0)
+        {
+            Message = "Cannot unlink this account. You must have a password or at least one other linked account to maintain access to your account.";
+            return RedirectToPage();
+        }
+
+        db.ExternalIdentities.Remove(externalIdentity);
+        await db.SaveChangesAsync();
+        
+        Message = $"Successfully unlinked {externalIdentity.ProviderName ?? "external account"}.";
+
+        return RedirectToPage();
+    }
+
+    private async Task<User?> GetCurrentUserAsync()
+    {
+        var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(sub, out var userId)) return null;
+
+        return await db.Users
+            .FirstOrDefaultAsync(u => u.Id == userId);
+    }
+}
+
+public class LinkedAccountViewModel
+{
+    public Guid Id { get; set; }
+    public string Issuer { get; set; } = string.Empty;
+    public string Subject { get; set; } = string.Empty;
+    public string ProviderName { get; set; } = string.Empty;
+    public DateTimeOffset LinkedAt { get; set; }
+    public DateTimeOffset LastSeenAt { get; set; }
+}
