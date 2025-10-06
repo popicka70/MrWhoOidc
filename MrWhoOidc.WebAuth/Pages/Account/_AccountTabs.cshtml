@@ -1,0 +1,52 @@
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@* Shared account portal tab navigation *@
+@{
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+    var active = (string?)ViewData["ActiveAccountTab"] ?? string.Empty;
+}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(active=="index"?"active":"")" href="@(tenantPrefix)/Account">
+            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="profile"?"active":"")" href="@(tenantPrefix)/Account/Profile">
+            <i class="bi bi-person me-1"></i>Profile
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="password"?"active":"")" href="@(tenantPrefix)/Account/Password">
+            <i class="bi bi-key me-1"></i>Password
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="security"?"active":"")" href="@(tenantPrefix)/Account/Security">
+            <i class="bi bi-shield-lock me-1"></i>Security
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="sessions"?"active":"")" href="@(tenantPrefix)/Account/Sessions">
+            <i class="bi bi-phone me-1"></i>Sessions
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="consents"?"active":"")" href="@(tenantPrefix)/Account/Consents">
+            <i class="bi bi-check2-square me-1"></i>Consents
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="linked"?"active":"")" href="@(tenantPrefix)/Account/LinkedAccounts">
+            <i class="bi bi-link-45deg me-1"></i>Linked
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(active=="emails"?"active":"")" href="@(tenantPrefix)/Account/Emails">
+            <i class="bi bi-envelope me-1"></i>Emails
+        </a>
+    </li>
+</ul>

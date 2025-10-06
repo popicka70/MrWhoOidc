@@ -1,0 +1,124 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Account.ProfileModel
+@{
+    ViewData["Title"] = "Profile";
+    ViewData["ActiveAccountTab"] = "profile";
+}
+
+<h1 class="mb-3">Profile</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>@Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-person me-2"></i>Personal Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        <input type="text" class="form-control" value="@Model.Username" readonly disabled />
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>Username cannot be changed
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Name" class="form-label fw-semibold"></label>
+                        <input asp-for="Input.Name" class="form-control" placeholder="Enter your full name" />
+                        <span asp-validation-for="Input.Name" class="text-danger"></span>
+                        <div class="form-text">
+                            Your display name shown to other users
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Email" class="form-label fw-semibold"></label>
+                        <input asp-for="Input.Email" class="form-control" placeholder="Enter your email" />
+                        <span asp-validation-for="Input.Email" class="text-danger"></span>
+                        <div class="form-text">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Changing your email will require re-verification
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>Save Changes
+                        </button>
+                        <a href="/Account" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>Account Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    @if (!string.IsNullOrEmpty(Model.TenantName))
+                    {
+                        <dt class="col-sm-3">Tenant</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge bg-primary">
+                                <i class="bi bi-building me-1"></i>@Model.TenantName
+                            </span>
+                        </dd>
+                    }
+                    
+                    <dt class="col-sm-3">Member Since</dt>
+                    <dd class="col-sm-9">
+                        <i class="bi bi-calendar me-1"></i>@Model.CreatedAt.ToString("MMMM d, yyyy 'at' h:mm tt")
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-lightbulb me-2"></i>Profile Tips</h6>
+                <ul class="small mb-0 ps-3">
+                    <li class="mb-2">Use your real name to help others identify you</li>
+                    <li class="mb-2">Keep your email address up to date for security notifications</li>
+                    <li class="mb-2">Consider adding alternative emails in the <a href="/Account/Emails">Emails</a> section</li>
+                    <li>Your username is permanent and cannot be changed</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-link-45deg me-2"></i>Related Settings</h6>
+                <div class="list-group list-group-flush">
+                    <a href="/Account/Password" class="list-group-item list-group-item-action">
+                        <i class="bi bi-key me-2"></i>Change Password
+                    </a>
+                    <a href="/Account/Security" class="list-group-item list-group-item-action">
+                        <i class="bi bi-shield-lock me-2"></i>Security Settings
+                    </a>
+                    <a href="/Account/Emails" class="list-group-item list-group-item-action">
+                        <i class="bi bi-envelope me-2"></i>Alternative Emails
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
