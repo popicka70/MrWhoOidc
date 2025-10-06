@@ -108,9 +108,17 @@ else
                             <small class="text-muted">@t.CreatedAt.ToString("yyyy-MM-dd")</small>
                         </td>
                         <td data-label="Actions" class="text-end">
-                            <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id">
-                                <i class="bi bi-pencil"></i> Edit
-                            </a>
+                            <div class="btn-group" role="group">
+                                <form method="post" asp-page="/StartImpersonation" class="d-inline">
+                                    <input type="hidden" name="tenantId" value="@t.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="View as Tenant Admin">
+                                        <i class="bi bi-incognito"></i> Impersonate
+                                    </button>
+                                </form>
+                                <a class="btn btn-sm btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 }

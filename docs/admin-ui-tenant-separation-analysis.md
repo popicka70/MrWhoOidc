@@ -667,8 +667,8 @@ public class IndexModel(
 8. Security (`/Mfa`) - Two-factor authentication (routing fixed)
 
 ### Phase 5: UI Polish (Week 6-7)
-- [ ] Tenant switcher for multi-tenant users
-- [ ] Tenant impersonation for platform admins
+- [x] Tenant switcher for multi-tenant users ✅ (January 15, 2025)
+- [x] Platform admin impersonation ✅ (January 15, 2025)
 - [ ] Mobile responsiveness improvements
 - [ ] Accessibility audit (ARIA labels, keyboard navigation)
 

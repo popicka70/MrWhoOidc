@@ -1,5 +1,6 @@
 ﻿@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.WebAuth.Services.ITenantSwitchingService TenantSwitchingService
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,6 +21,13 @@
         var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
             ? $"/t/{currentTenant.Slug}" 
             : "";
+        
+        // Load user's accessible tenants for tenant switcher
+        var userTenants = new List<MrWhoOidc.WebAuth.Services.TenantAccessInfo>();
+        if (User?.Identity?.IsAuthenticated ?? false)
+        {
+            userTenants = await TenantSwitchingService.GetUserTenantsAsync(User);
+        }
     }
     @if (!hideNavbar)
     {
@@ -33,6 +41,46 @@
                         </button>
                     }
                     <a class="navbar-brand" asp-area="" asp-page="/Index">MrWhoOidc.WebAuth</a>
+                    
+                    @* Tenant Switcher Dropdown *@
+                    @if ((User?.Identity?.IsAuthenticated ?? false) && userTenants.Count > 1)
+                    {
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="tenantSwitcherDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-building me-1"></i>
+                                @if (currentTenant != null)
+                                {
+                                    <span>@currentTenant.Name</span>
+                                }
+                                else
+                                {
+                                    <span>Select Tenant</span>
+                                }
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="tenantSwitcherDropdown">
+                                <li><h6 class="dropdown-header">Switch Tenant</h6></li>
+                                <li><hr class="dropdown-divider"></li>
+                                @foreach (var tenant in userTenants)
+                                {
+                                    var isCurrent = currentTenant?.TenantId == tenant.TenantId;
+                                    <li>
+                                        <form method="post" asp-page="/SwitchTenant" class="m-0">
+                                            <input type="hidden" name="tenantId" value="@tenant.TenantId" />
+                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                            <button type="submit" class="dropdown-item @(isCurrent ? "active" : "")" @(isCurrent ? "disabled" : "")>
+                                                <i class="bi @(tenant.HasAdminAccess ? "bi-shield-check" : "bi-building") me-2"></i>
+                                                @tenant.TenantName
+                                                @if (isCurrent)
+                                                {
+                                                    <i class="bi bi-check-circle-fill ms-2 text-success"></i>
+                                                }
+                                            </button>
+                                        </form>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
                     
                     @if (User?.Identity?.IsAuthenticated ?? false)
                     {
@@ -135,6 +183,9 @@
                 </aside>
                 <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4">
                     <div class="py-3">
+                        @* Impersonation Banner - Shows when platform admin is impersonating *@
+                        <partial name="_ImpersonationBanner" />
+                        
                         @* Tenant Context Banner for Admin Pages *@
                         @if (Context.Request.Path.StartsWithSegments("/Admin") || Context.Request.Path.StartsWithSegments("/PlatformAdmin"))
                         {

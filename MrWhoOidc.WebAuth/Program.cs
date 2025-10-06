@@ -125,6 +125,12 @@ builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 // On-demand tenant seeding service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrWhoOidc.WebAuth.Services.TenantSeedingService>();
 
+// Tenant switching service
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, MrWhoOidc.WebAuth.Services.TenantSwitchingService>();
+
+// Impersonation service (platform admin viewing as tenant admin)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrWhoOidc.WebAuth.Services.ImpersonationService>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted

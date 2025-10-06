@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
 
@@ -10,6 +11,7 @@ namespace MrWhoOidc.WebAuth.Security.Admin;
 /// Authorization handler for tenant admin access.
 /// Checks if the user has the tenant-admin role in the current tenant's default realm.
 /// Platform admins automatically satisfy this requirement.
+/// Platform admins impersonating a tenant also satisfy this requirement.
 /// </summary>
 public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<TenantAdminRequirement>
 {
@@ -17,17 +19,23 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IOptions<TenantAdminAuthOptions> _options;
     private readonly IOptions<PlatformAdminAuthOptions> _platformOptions;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IImpersonationService _impersonationService;
 
     public TenantAdminAuthorizationHandler(
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
         IOptions<TenantAdminAuthOptions> options,
-        IOptions<PlatformAdminAuthOptions> platformOptions)
+        IOptions<PlatformAdminAuthOptions> platformOptions,
+        IHttpContextAccessor httpContextAccessor,
+        IImpersonationService impersonationService)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
         _options = options;
         _platformOptions = platformOptions;
+        _httpContextAccessor = httpContextAccessor;
+        _impersonationService = impersonationService;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -54,8 +62,24 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
 
         if (isPlatformAdmin)
         {
+            // Platform admins always have access, even when not impersonating
             context.Succeed(requirement);
             return;
+        }
+
+        // Check if platform admin is impersonating this tenant
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext != null && _impersonationService.IsImpersonating(httpContext))
+        {
+            var impersonatedTenantId = _impersonationService.GetImpersonatedTenantId(httpContext);
+            var currentTenantId = _tenantAccessor.CurrentTenant?.TenantId;
+            
+            if (impersonatedTenantId == currentTenantId)
+            {
+                // User is a platform admin impersonating this tenant - grant access
+                context.Succeed(requirement);
+                return;
+            }
         }
 
         // Get current tenant context

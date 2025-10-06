@@ -1,0 +1,44 @@
+@inject MrWhoOidc.WebAuth.Services.IImpersonationService ImpersonationService
+@{
+    var impersonationInfo = await ImpersonationService.GetImpersonationInfoAsync(Context);
+    if (impersonationInfo != null)
+    {
+        <div class="alert alert-warning border-start border-5 border-warning mb-3 shadow-sm" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-incognito fs-3 me-3 text-warning"></i>
+                <div class="flex-grow-1">
+                    <h6 class="alert-heading mb-1 d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Impersonation Mode Active</strong>
+                    </h6>
+                    <p class="mb-2">
+                        You are viewing as <strong>Tenant Admin</strong> for: 
+                        <span class="badge bg-warning text-dark ms-1">@impersonationInfo.TenantName</span>
+                    </p>
+                    <div class="small text-muted mb-2">
+                        <i class="bi bi-tag me-1"></i>
+                        <code class="text-dark">@impersonationInfo.TenantSlug</code>
+                        <span class="mx-2">|</span>
+                        <i class="bi bi-clock me-1"></i>
+                        Duration: @impersonationInfo.Duration
+                        <span class="mx-2">|</span>
+                        <i class="bi bi-link-45deg me-1"></i>
+                        <small>@impersonationInfo.IssuerUri</small>
+                    </div>
+                    <div class="alert-message small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Read-Only Mode:</strong> You have view access to tenant admin UI. Write operations may be restricted.
+                    </div>
+                </div>
+                <div class="ms-3">
+                    <form method="post" asp-page="/StopImpersonation" class="d-inline">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Exit Impersonation
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}
