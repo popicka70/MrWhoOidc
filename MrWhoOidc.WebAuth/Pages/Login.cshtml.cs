@@ -12,7 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class LoginModel(
     IUserService users, 
     ILogger<LoginModel> logger,
-    ITenantAccessor tenantAccessor) : PageModel
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -104,15 +105,23 @@ public class LoginModel(
             return LocalRedirect(ReturnUrl);
         }
 
-        // Build tenant-aware default redirect URL
+        // Build tenant-aware default redirect URL based on mode
         var currentTenant = tenantAccessor.CurrentTenant;
-        var defaultUrl = currentTenant != null 
-            ? $"/t/{currentTenant.Slug}/" 
-            : "/";
+        string defaultUrl;
         
-        logger.LogInformation("➡️ [Login] No valid ReturnUrl, redirecting to {DefaultUrl} (Tenant: {TenantSlug})", 
-            defaultUrl, 
-            currentTenant?.Slug ?? "(none)");
+        if (multiTenancyOptions.Enabled && currentTenant != null)
+        {
+            // Multi-tenant mode: redirect to /t/{slug}/
+            defaultUrl = $"/t/{currentTenant.Slug}/";
+            logger.LogInformation("➡️ [Login] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})", 
+                defaultUrl, currentTenant.Slug);
+        }
+        else
+        {
+            // Single-tenant mode: redirect to root /
+            defaultUrl = "/";
+            logger.LogInformation("➡️ [Login] Single-tenant mode: redirecting to {DefaultUrl}", defaultUrl);
+        }
         
         return LocalRedirect(defaultUrl);
     }
