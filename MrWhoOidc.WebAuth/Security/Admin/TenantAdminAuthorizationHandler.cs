@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Security.Admin;
 
@@ -20,22 +19,19 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
     private readonly IOptions<TenantAdminAuthOptions> _options;
     private readonly IOptions<PlatformAdminAuthOptions> _platformOptions;
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly IImpersonationService _impersonationService;
 
     public TenantAdminAuthorizationHandler(
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
         IOptions<TenantAdminAuthOptions> options,
         IOptions<PlatformAdminAuthOptions> platformOptions,
-        IHttpContextAccessor httpContextAccessor,
-        IImpersonationService impersonationService)
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
         _options = options;
         _platformOptions = platformOptions;
         _httpContextAccessor = httpContextAccessor;
-        _impersonationService = impersonationService;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -68,17 +64,21 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         }
 
         // Check if platform admin is impersonating this tenant
+        // Access session directly to avoid circular dependency with IImpersonationService
         var httpContext = _httpContextAccessor.HttpContext;
-        if (httpContext != null && _impersonationService.IsImpersonating(httpContext))
+        if (httpContext?.Session != null)
         {
-            var impersonatedTenantId = _impersonationService.GetImpersonatedTenantId(httpContext);
-            var currentTenantId = _tenantAccessor.CurrentTenant?.TenantId;
-            
-            if (impersonatedTenantId == currentTenantId)
+            var impersonatedTenantIdStr = httpContext.Session.GetString("ImpersonatingTenantId");
+            if (!string.IsNullOrEmpty(impersonatedTenantIdStr) && Guid.TryParse(impersonatedTenantIdStr, out var impersonatedTenantId))
             {
-                // User is a platform admin impersonating this tenant - grant access
-                context.Succeed(requirement);
-                return;
+                var currentTenantId = _tenantAccessor.CurrentTenant?.TenantId;
+                
+                if (impersonatedTenantId == currentTenantId)
+                {
+                    // User is a platform admin impersonating this tenant - grant access
+                    context.Succeed(requirement);
+                    return;
+                }
             }
         }
 

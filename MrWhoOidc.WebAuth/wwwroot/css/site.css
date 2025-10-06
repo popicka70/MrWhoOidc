@@ -949,6 +949,56 @@ textarea[style*="monospace"] {
   h2 {
     font-size: 1.5rem;
   }
+  
+  /* Stack stat cards on mobile */
+  .row.g-4 > [class*="col"] {
+    margin-bottom: 1rem;
+  }
+  
+  /* Make forms more compact */
+  .mb-3 {
+    margin-bottom: 1rem !important;
+  }
+  
+  .form-label {
+    font-size: 0.9rem;
+  }
+  
+  /* Improve form spacing */
+  .form-control,
+  .form-select {
+    font-size: 1rem; /* Prevent zoom on iOS */
+    padding: 0.75rem;
+  }
+  
+  /* Button groups stack on mobile */
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-group > .btn,
+  .btn-group > form {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .btn-group > form:last-child,
+  .btn-group > .btn:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Dropdown menus full width on mobile */
+  .dropdown-menu {
+    width: 100% !important;
+  }
+  
+  /* Alert spacing */
+  .alert {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
 }
 
 /* Improve card spacing on mobile */
@@ -960,6 +1010,44 @@ textarea[style*="monospace"] {
   
   .card-body {
     padding: 1rem;
+  }
+  
+  /* Stat cards on dashboards */
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  /* Code blocks wrap on mobile */
+  code {
+    word-break: break-all;
+    font-size: 0.85rem;
+  }
+  
+  pre {
+    font-size: 0.8rem;
+    padding: 0.75rem;
+  }
+}
+
+/* Responsive images and media */
+@media (max-width: 767.98px) {
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Tenant context banner compact on mobile */
+  .alert.border-start {
+    padding: 0.75rem;
+  }
+  
+  .alert h6 {
+    font-size: 0.95rem;
+  }
+  
+  .alert small,
+  .alert .small {
+    font-size: 0.8rem;
   }
 }
 
