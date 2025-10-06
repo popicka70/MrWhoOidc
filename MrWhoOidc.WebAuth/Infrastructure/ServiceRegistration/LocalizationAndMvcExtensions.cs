@@ -100,6 +100,9 @@ public static class LocalizationAndMvcExtensions
                 options.Conventions.AddFolderRouteModelConvention("/Mfa", model => AddTenantPrefixedRoutes(model));
                 options.Conventions.AddFolderRouteModelConvention("/Password", model => AddTenantPrefixedRoutes(model));
                 
+                // Add tenant-prefixed routes for user account self-service portal
+                options.Conventions.AddFolderRouteModelConvention("/Account", model => AddTenantPrefixedRoutes(model));
+                
                 // Add tenant-prefixed routes for registrations
                 options.Conventions.AddFolderRouteModelConvention("/Registrations", model => AddTenantPrefixedRoutes(model));
             }

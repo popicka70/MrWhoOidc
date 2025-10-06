@@ -88,6 +88,17 @@
                             <a class="list-group-item list-group-item-action" href="/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
                             <a class="list-group-item list-group-item-action" href="/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
                             
+                            @* My Account Section - All authenticated users *@
+                            @if (User?.Identity?.IsAuthenticated ?? false)
+                            {
+                                <div class="list-group-item fw-semibold text-uppercase small bg-info text-white">My Account</div>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account"><i class="bi bi-person-circle me-2"></i>Dashboard</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Profile"><i class="bi bi-person me-2"></i>Profile</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Password"><i class="bi bi-key me-2"></i>Password</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Security"><i class="bi bi-shield-lock me-2"></i>Security</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Sessions"><i class="bi bi-phone me-2"></i>Sessions</a>
+                            }
+                            
                             @* Platform Admin Section - Only visible to platform admins *@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
