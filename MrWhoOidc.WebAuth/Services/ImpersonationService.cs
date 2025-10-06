@@ -40,10 +40,12 @@ public interface IImpersonationService
 
 public class ImpersonationService(
     AuthDbContext db,
-    IAuthorizationService authorizationService) : IImpersonationService
+    IAuthorizationService authorizationService,
+    ILogger<ImpersonationService> logger) : IImpersonationService
 {
     private const string ImpersonationTenantIdKey = "ImpersonatingTenantId";
     private const string ImpersonationStartTimeKey = "ImpersonationStartTime";
+    private const string ImpersonationStartLogIdKey = "ImpersonationStartLogId";
 
     public async Task<bool> StartImpersonationAsync(HttpContext context, ClaimsPrincipal user, Guid tenantId)
     {
@@ -54,6 +56,16 @@ public class ImpersonationService(
             return false;
         }
 
+        // Get platform admin user ID and username
+        var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var username = user.Identity?.Name ?? "unknown";
+        
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var platformAdminUserId))
+        {
+            logger.LogWarning("Cannot start impersonation: invalid user ID claim");
+            return false;
+        }
+
         // Verify tenant exists and is active
         var tenant = await db.Tenants
             .Where(t => t.Id == tenantId && t.Status == TenantStatus.Active)
@@ -61,21 +73,94 @@ public class ImpersonationService(
 
         if (tenant == null)
         {
+            logger.LogWarning("Cannot start impersonation: tenant {TenantId} not found or inactive", tenantId);
             return false;
         }
+
+        // Create audit log entry
+        var auditLog = new ImpersonationAuditLog
+        {
+            Id = Guid.NewGuid(),
+            PlatformAdminUserId = platformAdminUserId,
+            PlatformAdminUsername = username,
+            TenantId = tenantId,
+            TenantName = tenant.Name,
+            TenantSlug = tenant.Slug,
+            Action = ImpersonationAction.Start,
+            Timestamp = DateTimeOffset.UtcNow,
+            IpAddress = context.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = context.Request.Headers.UserAgent.ToString()
+        };
+
+        db.ImpersonationAuditLogs.Add(auditLog);
+        await db.SaveChangesAsync();
 
         // Store impersonation in session
         context.Session.SetString(ImpersonationTenantIdKey, tenantId.ToString());
         context.Session.SetString(ImpersonationStartTimeKey, DateTimeOffset.UtcNow.ToString("O"));
+        context.Session.SetString(ImpersonationStartLogIdKey, auditLog.Id.ToString());
+
+        logger.LogInformation(
+            "Platform admin {Username} (ID: {UserId}) started impersonating tenant {TenantName} (ID: {TenantId})",
+            username, platformAdminUserId, tenant.Name, tenantId);
 
         return true;
     }
 
-    public Task StopImpersonationAsync(HttpContext context)
+    public async Task StopImpersonationAsync(HttpContext context)
     {
+        // Get impersonation details before clearing session
+        var tenantId = GetImpersonatedTenantId(context);
+        var startLogIdStr = context.Session.GetString(ImpersonationStartLogIdKey);
+        var startTimeStr = context.Session.GetString(ImpersonationStartTimeKey);
+
+        if (tenantId.HasValue && Guid.TryParse(startLogIdStr, out var startLogId))
+        {
+            // Find the start log entry
+            var startLog = await db.ImpersonationAuditLogs
+                .Where(l => l.Id == startLogId)
+                .FirstOrDefaultAsync();
+
+            if (startLog != null)
+            {
+                // Calculate duration
+                TimeSpan? duration = null;
+                if (DateTimeOffset.TryParse(startTimeStr, out var startTime))
+                {
+                    duration = DateTimeOffset.UtcNow - startTime;
+                }
+
+                // Create stop audit log entry
+                var stopLog = new ImpersonationAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    PlatformAdminUserId = startLog.PlatformAdminUserId,
+                    PlatformAdminUsername = startLog.PlatformAdminUsername,
+                    TenantId = startLog.TenantId,
+                    TenantName = startLog.TenantName,
+                    TenantSlug = startLog.TenantSlug,
+                    Action = ImpersonationAction.Stop,
+                    Timestamp = DateTimeOffset.UtcNow,
+                    IpAddress = context.Connection.RemoteIpAddress?.ToString(),
+                    UserAgent = context.Request.Headers.UserAgent.ToString(),
+                    StartLogId = startLogId,
+                    Duration = duration
+                };
+
+                db.ImpersonationAuditLogs.Add(stopLog);
+                await db.SaveChangesAsync();
+
+                logger.LogInformation(
+                    "Platform admin {Username} (ID: {UserId}) stopped impersonating tenant {TenantName} (ID: {TenantId}) after {Duration}",
+                    startLog.PlatformAdminUsername, startLog.PlatformAdminUserId, startLog.TenantName, startLog.TenantId, 
+                    duration?.ToString(@"hh\:mm\:ss") ?? "unknown");
+            }
+        }
+
+        // Clear session
         context.Session.Remove(ImpersonationTenantIdKey);
         context.Session.Remove(ImpersonationStartTimeKey);
-        return Task.CompletedTask;
+        context.Session.Remove(ImpersonationStartLogIdKey);
     }
 
     public Guid? GetImpersonatedTenantId(HttpContext context)
