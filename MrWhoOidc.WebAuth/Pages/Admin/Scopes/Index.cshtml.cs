@@ -10,7 +10,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 [Authorize(Policy = "tenant-admin")]
 public class IndexModel(
     AuthDbContext db,
-    ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService) : PageModel
 {
     public IReadOnlyList<Scope> Scopes { get; private set; } = Array.Empty<Scope>();
