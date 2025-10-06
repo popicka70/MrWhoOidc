@@ -3,38 +3,35 @@
     var impersonationInfo = await ImpersonationService.GetImpersonationInfoAsync(Context);
     if (impersonationInfo != null)
     {
-        <div class="alert alert-warning border-start border-5 border-warning mb-3 shadow-sm" role="alert">
+        <div class="alert alert-danger border-start border-5 border-danger mb-3 shadow-sm" role="alert">
             <div class="d-flex align-items-center">
-                <i class="bi bi-incognito fs-3 me-3 text-warning"></i>
+                <i class="bi bi-shield-lock-fill fs-2 me-3 text-danger"></i>
                 <div class="flex-grow-1">
-                    <h6 class="alert-heading mb-1 d-flex align-items-center">
+                    <h5 class="alert-heading mb-2 d-flex align-items-center">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        <strong>Impersonation Mode Active</strong>
-                    </h6>
+                        <strong>🔒 READ-ONLY IMPERSONATION MODE</strong>
+                    </h5>
                     <p class="mb-2">
-                        You are viewing as <strong>Tenant Admin</strong> for: 
-                        <span class="badge bg-warning text-dark ms-1">@impersonationInfo.TenantName</span>
+                        Viewing as <strong>Tenant Admin</strong> for: 
+                        <span class="badge bg-danger text-white ms-1">@impersonationInfo.TenantName</span>
                     </p>
-                    <div class="small text-muted mb-2">
+                    <div class="small mb-2">
                         <i class="bi bi-tag me-1"></i>
-                        <code class="text-dark">@impersonationInfo.TenantSlug</code>
+                        <code class="bg-white px-1 rounded">@impersonationInfo.TenantSlug</code>
                         <span class="mx-2">|</span>
                         <i class="bi bi-clock me-1"></i>
-                        Duration: @impersonationInfo.Duration
-                        <span class="mx-2">|</span>
-                        <i class="bi bi-link-45deg me-1"></i>
-                        <small>@impersonationInfo.IssuerUri</small>
+                        Duration: <strong>@impersonationInfo.Duration</strong>
                     </div>
-                    <div class="alert-message small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>Read-Only Mode:</strong> You have view access to tenant admin UI. Write operations may be restricted.
+                    <div class="alert alert-light border border-danger mb-0 py-2">
+                        <i class="bi bi-info-circle-fill me-1 text-danger"></i>
+                        <strong>All write operations are disabled.</strong> You can view data but cannot create, edit, or delete anything. Exit impersonation to make changes.
                     </div>
                 </div>
                 <div class="ms-3">
                     <form method="post" asp-page="/StopImpersonation" class="d-inline">
-                        <button type="submit" class="btn btn-warning btn-sm">
+                        <button type="submit" class="btn btn-danger btn-lg shadow">
                             <i class="bi bi-x-circle me-1"></i>
-                            Exit Impersonation
+                            Exit Read-Only Mode
                         </button>
                     </form>
                 </div>

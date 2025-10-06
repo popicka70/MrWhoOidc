@@ -4,8 +4,9 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 /// <summary>
 /// Base class for user admin Razor Pages providing a consistent user heading (username + optional friendly name).
+/// Inherits from ReadOnlyAdminPageModel to automatically enforce read-only mode during impersonation.
 /// </summary>
-public abstract class UserPageModelBase : PageModel
+public abstract class UserPageModelBase : MrWhoOidc.WebAuth.Pages.Admin.ReadOnlyAdminPageModel
 {
     public string UserHeading { get; private set; } = string.Empty;
 

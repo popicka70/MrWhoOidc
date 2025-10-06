@@ -7,7 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class DeleteModel(AuthDbContext db) : PageModel
+public class DeleteModel(AuthDbContext db) : ReadOnlyAdminPageModel
 {
     public IdentityProvider? Provider { get; private set; }
 

@@ -8,7 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db) : PageModel
+public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 {
     public class EditInput
     {

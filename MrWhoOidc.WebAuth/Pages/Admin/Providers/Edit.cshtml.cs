@@ -13,7 +13,7 @@ using System.IO;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory, IWebHostEnvironment env) : PageModel
+public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory, IWebHostEnvironment env) : ReadOnlyAdminPageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
