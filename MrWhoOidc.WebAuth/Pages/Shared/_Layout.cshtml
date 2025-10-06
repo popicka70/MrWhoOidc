@@ -66,8 +66,12 @@
                             <span class="navbar-toggler-icon"></span>
                         </button>
                     }
-                    <a class="navbar-brand" asp-area="" asp-page="/Index">
+                    <a class="navbar-brand d-flex align-items-center gap-2" asp-area="" asp-page="/Index">
                         <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
+                        @if (currentTenant != null)
+                        {
+                            <span class="text-muted small">@currentTenant.Name</span>
+                        }
                     </a>
                     
                     @* Tenant Switcher Dropdown *@

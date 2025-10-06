@@ -17,16 +17,22 @@ Updated the top navbar to provide better user context by displaying the user's e
 
 **After:**
 ```razor
-<a class="navbar-brand" asp-area="" asp-page="/Index">
+<a class="navbar-brand d-flex align-items-center gap-2" asp-area="" asp-page="/Index">
     <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
+    @if (currentTenant != null)
+    {
+        <span class="text-muted small">@currentTenant.Name</span>
+    }
 </a>
 ```
 
 - ✅ Removed "MrWhoOidc.WebAuth" text
 - ✅ Added shield lock icon as placeholder
+- ✅ **Added current tenant name next to logo**
 - ✅ Blue primary color for brand consistency
-- ✅ Larger font size (fs-4) for prominence
-- 🔜 Ready to replace with actual logo in the future
+- ✅ Larger font size (fs-4) for prominent icon
+- ✅ Muted gray text for tenant name (subtle, non-intrusive)
+- 🔜 Ready to replace icon with actual logo in the future
 
 ---
 
@@ -140,6 +146,7 @@ This ensures the display always shows something meaningful.
 
 ✅ **Better User Context** - Email is more identifiable than username  
 ✅ **Role Visibility** - Users immediately see their role level  
+✅ **Tenant Context** - Current tenant name displayed next to logo  
 ✅ **Consistent Design** - Badge colors match sidebar section colors  
 ✅ **Mobile Friendly** - Role badge also shown in mobile dropdown  
 ✅ **Future Ready** - Logo placeholder ready for brand image  
@@ -158,8 +165,10 @@ This ensures the display always shows something meaningful.
 
 **After:**
 ```
-[≡] [🛡️]    [Tenant ▼]    Register | Password | MFA | admin@example.com [Platform Admin] | Log out
+[≡] [🛡️] Acme Corp    [Tenant ▼]    Register | Password | MFA | admin@example.com [Platform Admin] | Log out
 ```
+
+**Note:** Tenant name appears next to the logo, providing immediate context about which tenant you're managing.
 
 ### Mobile Dropdown Menu
 
