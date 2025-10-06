@@ -49,6 +49,7 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<IClientSecretGenerator, ClientSecretGenerator>();
         services.AddSingleton<ITotpService, TotpService>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
+        services.AddSingleton<IUserAgentParser, UserAgentParser>();
         
         // Tenant discovery service for email-first login flow
         services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();

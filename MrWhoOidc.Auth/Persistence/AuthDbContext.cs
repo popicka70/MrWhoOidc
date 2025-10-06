@@ -414,6 +414,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.CnfJkt).HasMaxLength(200);
             b.Property(x => x.ActJson);
             b.Property(x => x.DelegationDepth).HasDefaultValue(0);
+            // Session metadata (Phase 5B Feature 3)
+            b.Property(x => x.IpAddress).HasMaxLength(100);
+            b.Property(x => x.UserAgent).HasMaxLength(500);
             b.HasIndex(x => new { x.UserId, x.ClientId, x.Type });
             // Multi-tenancy FK
             b.HasOne<Tenant>()
@@ -949,6 +952,11 @@ public class Token
     // OBO tracking (for opaque access tokens)
     public string? ActJson { get; set; }
     public int DelegationDepth { get; set; } = 0;
+    // Session metadata (Phase 5B Feature 3)
+    [MaxLength(100)]
+    public string? IpAddress { get; set; }
+    [MaxLength(500)]
+    public string? UserAgent { get; set; }
 }
 
 [Microsoft.EntityFrameworkCore.Index(nameof(RevocationAudit.TokenHash), nameof(RevocationAudit.ClientId))]

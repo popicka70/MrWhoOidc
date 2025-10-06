@@ -30,7 +30,12 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
         }
 
         var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
-        var (ok, payload, _, status) = await context.Tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, context.ClientId, codeVerifier, issuer, context.DPoPJkt);
+        
+        // Capture session metadata
+        var ipAddress = context.Http.Connection.RemoteIpAddress?.ToString();
+        var userAgent = context.Http.Request.Headers.UserAgent.ToString();
+        
+        var (ok, payload, _, status) = await context.Tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, context.ClientId, codeVerifier, issuer, context.DPoPJkt, ipAddress, userAgent);
         if (!ok)
         {
             logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));

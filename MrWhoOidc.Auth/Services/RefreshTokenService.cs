@@ -8,12 +8,26 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IRefreshTokenService
 {
-    Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default);
+    Task<(string token, string hash)> CreateRefreshTokenAsync(
+        Guid userId, 
+        string clientId, 
+        TimeSpan lifetime, 
+        string[] scopes, 
+        string? ipAddress = null,
+        string? userAgent = null,
+        CancellationToken ct = default);
 }
 
 internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor) : IRefreshTokenService
 {
-    public async Task<(string token, string hash)> CreateRefreshTokenAsync(Guid userId, string clientId, TimeSpan lifetime, string[] scopes, CancellationToken ct = default)
+    public async Task<(string token, string hash)> CreateRefreshTokenAsync(
+        Guid userId, 
+        string clientId, 
+        TimeSpan lifetime, 
+        string[] scopes, 
+        string? ipAddress = null,
+        string? userAgent = null,
+        CancellationToken ct = default)
     {
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Hash(token);
@@ -26,7 +40,9 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(scopes),
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
-            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required")
+            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required"),
+            IpAddress = ipAddress,
+            UserAgent = userAgent
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);
@@ -38,3 +54,4 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
     }
 }
+

@@ -574,14 +574,14 @@ public sealed class TokenHandlerTests
     private sealed class StubTokenService : ITokenService
     {
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-            string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));

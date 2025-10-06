@@ -12,9 +12,9 @@ namespace MrWhoOidc.Auth.Services;
 public interface ITokenService
 {
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
     // New: client credentials (M2M)
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
@@ -34,7 +34,7 @@ public interface ITokenService
 internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator, IOboPolicyService? oboPolicy = null) : ITokenService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
         var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
         if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
@@ -249,7 +249,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             authTime: authTime
         );
 
-        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct).ConfigureAwait(false);
+        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
 
         entity.Consumed = true;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -270,7 +270,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
         var hash = Hash(refreshToken);
         var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct).ConfigureAwait(false);
@@ -344,7 +344,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         }
 
         // Rotation: create new refresh token and revoke the old one
-        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ct).ConfigureAwait(false);
+        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
         tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 

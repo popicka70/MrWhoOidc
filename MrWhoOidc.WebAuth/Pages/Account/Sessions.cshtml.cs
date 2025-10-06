@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class SessionsModel(AuthDbContext db) : PageModel
+public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageModel
 {
     public List<SessionViewModel> Sessions { get; private set; } = new();
     public string? Message { get; private set; }
@@ -19,6 +20,7 @@ public class SessionsModel(AuthDbContext db) : PageModel
         if (user is null) return;
 
         var currentSessionJti = GetCurrentSessionJti();
+        var currentUserAgent = Request.Headers.UserAgent.ToString();
 
         // Get active tokens (sessions)
         var tokens = await db.Tokens
@@ -29,15 +31,29 @@ public class SessionsModel(AuthDbContext db) : PageModel
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
 
-        Sessions = tokens.Select(t => new SessionViewModel
+        Sessions = tokens.Select(t =>
         {
-            Id = t.Id,
-            TokenType = t.Type,
-            ClientId = t.ClientId ?? "Unknown",
-            CreatedAt = t.CreatedAt,
-            ExpiresAt = t.ExpiresAt,
-            Jti = t.Jti ?? string.Empty,
-            IsCurrent = !string.IsNullOrEmpty(currentSessionJti) && t.Jti == currentSessionJti
+            var uaInfo = uaParser.Parse(t.UserAgent);
+            var isCurrentDevice = !string.IsNullOrEmpty(currentUserAgent) && 
+                                  !string.IsNullOrEmpty(t.UserAgent) &&
+                                  currentUserAgent.Equals(t.UserAgent, StringComparison.OrdinalIgnoreCase);
+            
+            return new SessionViewModel
+            {
+                Id = t.Id,
+                TokenType = t.Type,
+                ClientId = t.ClientId ?? "Unknown",
+                CreatedAt = t.CreatedAt,
+                ExpiresAt = t.ExpiresAt,
+                Jti = t.Jti ?? string.Empty,
+                IsCurrent = !string.IsNullOrEmpty(currentSessionJti) && t.Jti == currentSessionJti,
+                IpAddress = t.IpAddress,
+                Browser = uaInfo.Browser,
+                Os = uaInfo.Os,
+                DeviceType = uaInfo.DeviceType,
+                DeviceIcon = uaInfo.Icon,
+                IsCurrentDevice = isCurrentDevice
+            };
         }).ToList();
     }
 
@@ -115,5 +131,12 @@ public class SessionsModel(AuthDbContext db) : PageModel
         public DateTimeOffset ExpiresAt { get; set; }
         public string Jti { get; set; } = string.Empty;
         public bool IsCurrent { get; set; }
+        // Phase 5B Feature 3: Session Metadata
+        public string? IpAddress { get; set; }
+        public string Browser { get; set; } = "Unknown";
+        public string Os { get; set; } = "Unknown";
+        public string DeviceType { get; set; } = "desktop";
+        public string DeviceIcon { get; set; } = "bi-display";
+        public bool IsCurrentDevice { get; set; }
     }
 }

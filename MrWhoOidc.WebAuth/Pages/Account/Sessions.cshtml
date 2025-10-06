@@ -52,7 +52,13 @@
                                                     <i class="bi bi-check-circle-fill"></i> Current Session
                                                 </span>
                                             }
-                                            else
+                                            @if (session.IsCurrentDevice)
+                                            {
+                                                <span class="badge bg-primary me-2">
+                                                    <i class="bi @session.DeviceIcon"></i> This Device
+                                                </span>
+                                            }
+                                            @if (!session.IsCurrent && !session.IsCurrentDevice)
                                             {
                                                 <i class="bi bi-circle me-2"></i>
                                             }
@@ -61,6 +67,22 @@
                                                 Token Session
                                             </h6>
                                         </div>
+                                        
+                                        @* Device & Location Info *@
+                                        <div class="mb-2">
+                                            <div class="d-flex align-items-center text-muted small">
+                                                <i class="bi @session.DeviceIcon me-1"></i>
+                                                <span class="me-3"><strong>@session.Browser</strong> on <strong>@session.Os</strong></span>
+                                                @if (!string.IsNullOrEmpty(session.IpAddress))
+                                                {
+                                                    <span>
+                                                        <i class="bi bi-geo-alt me-1"></i>
+                                                        <code>@session.IpAddress</code>
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                        
                                         <dl class="row small mb-0">
                                             <dt class="col-sm-3 text-muted">Client</dt>
                                             <dd class="col-sm-9"><code>@session.ClientId</code></dd>
@@ -142,16 +164,19 @@
                 <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>About Sessions</h6>
                 <p class="small mb-2">
                     Sessions represent active tokens issued to applications that can access your account.
-                    Each session is tied to a specific device and application.
+                    Each session shows the device, browser, and location where it was created.
                 </p>
                 <p class="small mb-2">
-                    <strong>Current Session:</strong> The session you're using right now. You cannot revoke it from here.
+                    <strong><i class="bi bi-check-circle-fill text-success"></i> Current Session:</strong> The token session you're using right now. You cannot revoke it from here.
                 </p>
                 <p class="small mb-2">
-                    <strong>Other Sessions:</strong> Sessions from other devices or browsers. Revoke them if you don't recognize them.
+                    <strong><i class="bi bi-display text-primary"></i> This Device:</strong> Sessions created from the same browser on this device.
+                </p>
+                <p class="small mb-2">
+                    <strong>Other Sessions:</strong> Sessions from other devices or browsers. Revoke them if you don't recognize the device, location, or browser.
                 </p>
                 <p class="small mb-0">
-                    <strong>Tip:</strong> Regularly review and revoke unused sessions to keep your account secure.
+                    <strong>Tip:</strong> Regularly review sessions and look for unfamiliar IP addresses or devices.
                 </p>
             </div>
         </div>
