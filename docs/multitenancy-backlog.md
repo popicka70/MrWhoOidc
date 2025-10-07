@@ -4,12 +4,12 @@
 
 This document outlines the architectural changes and implementation roadmap to transform MrWhoOidc.WebAuth from a single-tenant OIDC Provider into a full multi-tenant SaaS authorization server. The solution will support isolated tenant contexts with per-tenant configuration, branding, user bases, client applications, and independent administration.
 
-**Status:** Phase 1 - In Progress (Foundation)  
+**Status:** Phase 1 - Near Complete (95%), Transitioning to Phase 2  
 **Created:** October 4, 2025  
-**Updated:** October 4, 2025 (Evening - Routing & Background Services Complete)  
+**Updated:** October 7, 2025  
 **Target:** Production-ready multi-tenant OIDC Provider
 
-**Current Phase Progress:** Phase 1 Foundation - ~90% complete
+**Current Phase Progress:** Phase 1 Foundation - ~95% complete
 - ✅ Configuration infrastructure (MultiTenancyOptions, appsettings)
 - ✅ Tenant entity and TenantStatus enum
 - ✅ TenantId added to all entities with FK constraints
@@ -25,7 +25,9 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ Background services made tenant-aware (5 services updated)
 - ✅ All 331 tests passing
 - ✅ JWKS endpoint tenant filtering implemented and tested
-- 🔄 Next: Platform Admin UI, Tenant Admin UI scoping, User Self-Service Portal
+- ✅ Platform Admin UI implemented (tenant CRUD, dashboard, impersonation)
+- ✅ User Self-Service Portal complete (8 pages: dashboard, profile, sessions, consents, linked accounts, emails, password, MFA)
+- 🔄 Next: Integration tests, end-to-end testing, Phase 2 (branding)
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -1611,7 +1613,7 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [x] Add indexes and foreign keys in OnModelCreating
    - [x] Create migration with backfill to default tenant
    - [x] Seed default tenant in migration (Id: ...0001, Slug: "default")
-   - [ ] Apply migration to database (requires running Aspire AppHost)
+   - [x] Apply migration to database (running in Docker)
 3. Tenant resolution:
    - [x] Implement `ITenantResolver` with mode awareness
    - [x] Implement `ModeAwareTenantResolver` with caching
@@ -1623,7 +1625,7 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
 4. Update services to filter by `TenantId`:
    - [x] `ClientStore`, `UserService`, `ConsentService`, `AuthorizationCodeService`
    - [x] `KeyStore`, `RefreshTokenService`, `RevocationService`, `QrLoginService`
-   - [x] All 8 tenant-aware services updated and tested (318/318 tests passing)
+   - [x] All 8 tenant-aware services updated and tested (331/331 tests passing)
 5. Update issuer logic:
    - [x] Create `IIssuerBuilder` interface and implementation
    - [x] Register IssuerBuilder in DI container
@@ -1635,45 +1637,54 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
    - [x] Verify JWKS response includes only current tenant's keys
    - [x] Create comprehensive tests for tenant isolation
 7. Routing:
-   - [ ] Implement mode-aware route registration (root or `/t/{slug}/*`)
-   - [ ] Update all OIDC protocol endpoints to support both modes
-   - [ ] Add fallback to default tenant for non-prefixed routes (backward compatibility)
+   - [x] Implement mode-aware route registration (root or `/t/{slug}/*`)
+   - [x] Update all OIDC protocol endpoints to support both modes
+   - [x] Add fallback to default tenant for non-prefixed routes (backward compatibility)
 8. Platform admin UI:
-   - [ ] Create `/platform-admin/tenants` list page (multi-tenant mode only)
-   - [ ] Create `/platform-admin/tenants/create` form
-   - [ ] Implement tenant CRUD operations
-   - [ ] Hide platform admin UI in single-tenant mode
+   - [x] Create `/platform-admin/tenants` list page (multi-tenant mode only)
+   - [x] Create `/platform-admin/tenants/create` form
+   - [x] Implement tenant CRUD operations (Index, Create, Edit)
+   - [x] Platform admin dashboard with cross-tenant stats
+   - [x] Tenant impersonation functionality
+   - [x] Impersonation history tracking
+   - [x] Hide platform admin UI in single-tenant mode
 9. Tenant admin UI:
-   - [ ] Move existing admin UI to `/t/{slug}/admin` (multi) or `/admin` (single)
-   - [ ] Add tenant context awareness to admin pages
-   - [ ] Simplified UI in single-tenant mode (no tenant branding, no platform features)
+   - [x] Existing admin UI works at `/admin` (single) or `/t/{slug}/admin` (multi)
+   - [x] Add tenant context awareness to admin pages
+   - [x] Platform admin can filter by tenant across all admin pages
+   - [x] Tenant admins see only their own tenant data
 10. User self-service portal:
-   - [ ] Create `/account/*` routes (separate from admin UI)
-   - [ ] Profile management page (view/edit name, email, alternative emails)
-   - [ ] Password change page
-   - [ ] MFA management page (enable/disable TOTP, view QR code)
-   - [ ] Active sessions page (view and revoke)
-   - [ ] Consent history page (view and revoke app authorizations)
-   - [ ] Linked identities page (view external IdP linkages)
-   - [ ] Apply authorization policy: any authenticated user (no admin role required)
+   - [x] Create `/account/*` routes (separate from admin UI)
+   - [x] Dashboard page with overview stats (`/Account`)
+   - [x] Profile management page (view/edit name, email) (`/Account/Profile`)
+   - [x] Active sessions page (view and revoke) (`/Account/Sessions`)
+   - [x] Consent history page (view and revoke app authorizations) (`/Account/Consents`)
+   - [x] Linked identities page (view external IdP linkages, unlink) (`/Account/LinkedAccounts`)
+   - [x] Alternative emails management (`/Account/Emails`)
+   - [x] Password change page (existing `/Password/Index`, routing fixed)
+   - [x] MFA management page (existing `/Mfa/Index`, routing fixed)
+   - [x] Apply authorization policy: any authenticated user (no admin role required)
+   - [x] Shared tab navigation component (`_AccountTabs.cshtml`)
 11. Testing:
    - [x] Unit tests updated for issuer builder and multi-tenancy services
-   - [x] All 318 tests passing with mode-aware issuer logic
-   - [ ] Single-tenant mode tests (root issuer, no tenant prefix)
-   - [ ] Multi-tenant integration tests (2+ tenants)
+   - [x] All 331 tests passing with mode-aware issuer logic
+   - [ ] Single-tenant mode E2E tests (root issuer, no tenant prefix)
+   - [ ] Multi-tenant integration tests (2+ tenants, data isolation)
    - [ ] Verify data isolation (queries don't leak across tenants)
    - [ ] E2E test: create tenant, create client, issue token, validate issuer
    - [ ] Mode switching tests (single → multi, multi → single)
-   - [ ] User self-service tests (non-admin user can access /account, cannot access /admin)
-   - [ ] Admin UI protection tests (non-admin gets 403 on /admin routes)
+   - [ ] User self-service tests (non-admin user access, admin UI protection)
+   - [ ] Platform admin impersonation security tests
 
 **Deliverables:**
-- Mode-aware OIDC server (single-tenant or multi-tenant via config)
-- Platform admin can create/manage tenants (multi-tenant mode)
-- Tenant admins can manage their own clients/users (both modes)
-- User self-service portal (separate from admin, accessible to all users)
-- Role-based access control (admin vs. regular user separation)
-- Documentation: multi-tenancy architecture guide and mode-switching guide
+- ✅ Mode-aware OIDC server (single-tenant or multi-tenant via config)
+- ✅ Platform admin can create/manage tenants (multi-tenant mode)
+- ✅ Tenant admins can manage their own clients/users (both modes)
+- ✅ User self-service portal complete (8 pages, accessible to all authenticated users)
+- ✅ Role-based access control (platform admin, tenant admin, regular user separation)
+- ✅ Platform admin impersonation with audit trail
+- 🔄 Documentation: multi-tenancy architecture guide and mode-switching guide (in progress)
+- 🔄 Comprehensive integration and E2E tests (pending)
 
 ### Phase 2: Branding and Tenant Settings – 2-3 weeks
 
@@ -2071,12 +2082,265 @@ This backlog provides a comprehensive roadmap for transforming MrWhoOidc.WebAuth
 | **Platform Admin** | Platform admin (manage all tenants, cross-tenant metrics) | `/platform-admin/*` | Platform admin entity/flag |
 
 **Next steps:**
-1. Review and approve this backlog with stakeholders
-2. Prioritize Phase 1 tasks and assign to team
-3. Create detailed task breakdown for Phase 1 (JIRA/GitHub issues)
-4. Design wireframes for user self-service portal and updated admin UI
-5. Set up CI/CD pipeline for multi-tenant testing
-6. Begin implementation!
+1. ✅ ~~Review and approve this backlog with stakeholders~~
+2. ✅ ~~Prioritize Phase 1 tasks and assign to team~~
+3. ✅ ~~Create detailed task breakdown for Phase 1~~
+4. ✅ ~~Design wireframes for user self-service portal and updated admin UI~~
+5. ✅ ~~Set up CI/CD pipeline for multi-tenant testing~~
+6. ✅ ~~Complete Phase 1 implementation!~~
+
+**Current Status: Phase 1 Complete (95%), Moving to Testing & Phase 2**
+
+---
+
+## 21. Phase 1 Completion Status & Next Steps (October 7, 2025)
+
+### ✅ Phase 1 Achievements (October 4-7, 2025)
+
+**Infrastructure (100% Complete):**
+- ✅ Multi-tenancy configuration system
+- ✅ Tenant entity model and database migrations
+- ✅ Tenant resolution middleware with mode awareness
+- ✅ Service layer tenant filtering (8 core services)
+- ✅ Mode-aware issuer builder
+- ✅ Multi-tenant routing with fallback support
+- ✅ Background services tenant context management
+- ✅ JWKS endpoint tenant filtering
+
+**Platform Admin UI (100% Complete):**
+- ✅ Dashboard with cross-tenant statistics
+- ✅ Tenant list, create, edit pages
+- ✅ Tenant impersonation functionality
+- ✅ Impersonation audit history
+- ✅ Platform admin authorization policy
+
+**User Self-Service Portal (100% Complete):**
+- ✅ Dashboard with account overview
+- ✅ Profile management
+- ✅ Active sessions with revocation
+- ✅ App consent/permissions management
+- ✅ Linked external accounts
+- ✅ Alternative emails management
+- ✅ Password change (routing fixed)
+- ✅ MFA/security management (routing fixed)
+
+**Test Coverage:**
+- ✅ All 331 unit tests passing
+- ✅ Tenant resolution tests
+- ✅ Service layer isolation tests
+- ✅ JWKS filtering tests
+
+### 🔄 Remaining Phase 1 Work (5%)
+
+**Integration & E2E Testing (Priority: HIGH):**
+
+1. **Multi-Tenant E2E Flow Tests** (Estimated: 8-12 hours)
+   - [ ] Create 2+ tenants via Platform Admin UI
+   - [ ] Create clients in each tenant
+   - [ ] Issue tokens for each tenant
+   - [ ] Verify issuer URIs differ by tenant
+   - [ ] Verify tokens from Tenant A rejected by Tenant B
+   - [ ] Verify JWKS contains only tenant-specific keys
+   - [ ] Test discovery endpoint per tenant
+
+2. **Data Isolation Verification** (Estimated: 4-6 hours)
+   - [ ] Audit all database queries for `TenantId` filtering
+   - [ ] Create automated "cross-tenant leak" detection tests
+   - [ ] Test that User A (Tenant 1) cannot access User B (Tenant 2) data
+   - [ ] Test that Client A (Tenant 1) cannot access Client B (Tenant 2) data
+   - [ ] Verify admin UI queries respect tenant boundaries
+
+3. **Mode Switching Tests** (Estimated: 4-6 hours)
+   - [ ] Test single-tenant mode behavior (root issuer, no `/t/{slug}`)
+   - [ ] Test multi-tenant mode behavior (path-based issuers)
+   - [ ] Document mode switching procedure
+   - [ ] Test fallback routes to default tenant
+   - [ ] Verify issuer consistency after mode change
+
+4. **Platform Admin Security Tests** (Estimated: 4-6 hours)
+   - [ ] Verify non-platform-admin users cannot access `/PlatformAdmin/*`
+   - [ ] Test impersonation authorization (only platform admins)
+   - [ ] Test impersonation audit logging
+   - [ ] Verify impersonation session isolation
+   - [ ] Test "stop impersonation" cleanup
+
+5. **User Self-Service Authorization Tests** (Estimated: 2-3 hours)
+   - [ ] Verify any authenticated user can access `/Account/*`
+   - [ ] Verify users can only see their own data
+   - [ ] Test session revocation (cannot revoke current session)
+   - [ ] Test consent revocation
+   - [ ] Verify tenant admins cannot access other users' `/Account` pages
+
+**Estimated Total Remaining: 22-33 hours (3-4 days)**
+
+### 📋 Proposed Next Steps (Priority Order)
+
+#### Immediate (This Week - October 7-11, 2025)
+
+**Option A: Complete Phase 1 Testing First (Recommended)**
+- Focus: Integration and E2E testing
+- Goal: Ensure Phase 1 foundation is rock-solid before adding new features
+- Deliverables:
+  - Comprehensive E2E test suite
+  - Data isolation verification report
+  - Mode switching guide
+  - Security audit report
+- Benefit: Reduce technical debt, catch issues early
+
+**Option B: Begin Phase 2 Branding (Parallel Track)**
+- Focus: Per-tenant branding and settings
+- Risk: May introduce bugs before Phase 1 is fully validated
+- Benefit: Faster feature delivery for end users
+
+**Recommendation:** **Option A** - Complete Phase 1 testing before moving to Phase 2.
+
+#### Week 2-3 (October 14-25, 2025): Phase 2 - Branding & Settings
+
+**Phase 2 Core Tasks:**
+
+1. **Tenant Branding System** (6-8 hours)
+   - [ ] Implement logo upload to blob storage or CDN
+   - [ ] Add color scheme configuration (primary, accent, background)
+   - [ ] Create branding preview component
+   - [ ] Update login/consent pages to use tenant branding
+   - [ ] Add branding to Platform Admin UI (Create/Edit tenant)
+
+2. **Per-Tenant Settings System** (8-10 hours)
+   - [ ] Define settings schema (JSON or dedicated columns)
+   - [ ] Implement settings cascade: Platform → Tenant → Client
+   - [ ] Add settings editor UI in Platform Admin
+   - [ ] Add tenant-specific OIDC overrides (token lifetimes, PKCE requirements, etc.)
+   - [ ] Add tenant-specific features flags (allow registration, require email verification, etc.)
+
+3. **Tenant Setup Wizard** (8-12 hours)
+   - [ ] Post-creation wizard flow (branding, first client, first user)
+   - [ ] Guided onboarding experience
+   - [ ] Skip/complete tracking
+   - [ ] Integration with tenant seeding service
+
+4. **Tenant Admin Settings Page** (4-6 hours)
+   - [ ] Create `/t/{slug}/Admin/Settings` page
+   - [ ] Allow tenant admins to customize tenant-level settings
+   - [ ] Prevent editing platform-enforced settings
+   - [ ] Settings validation and preview
+
+**Estimated Phase 2 Total: 26-36 hours (3-5 days)**
+
+#### Week 4-6 (October 28 - November 15, 2025): Phase 3 - Lifecycle Management
+
+**Phase 3 Core Tasks:**
+
+1. **Tenant Suspension Flow** (6-8 hours)
+   - [ ] Implement suspension logic (billing, abuse, manual)
+   - [ ] Return 503 for suspended tenant requests
+   - [ ] Platform Admin UI for suspend/unsuspend
+   - [ ] Notification system for suspended tenants
+   - [ ] Grace period configuration
+
+2. **Soft Delete with Grace Period** (8-10 hours)
+   - [ ] Implement soft delete (mark `DeletedAt` timestamp)
+   - [ ] Hide soft-deleted tenants from normal queries
+   - [ ] Create background job for hard delete after grace period (30 days)
+   - [ ] Platform Admin UI for restore from soft delete
+   - [ ] Audit logging for deletion/restoration
+
+3. **Quota Enforcement** (6-8 hours)
+   - [ ] Check quotas at creation time (users, clients, IdPs)
+   - [ ] Return 429/403 when quota exceeded
+   - [ ] Display current usage vs. quota in Tenant Admin dashboard
+   - [ ] Quota warning notifications (80%, 90%, 100%)
+   - [ ] Platform Admin can override quotas
+
+4. **Usage Dashboard** (8-12 hours)
+   - [ ] Track MAU (Monthly Active Users)
+   - [ ] Track token issuance volume
+   - [ ] Track API calls per tenant
+   - [ ] Create `TenantUsage` table
+   - [ ] Background job for usage aggregation
+   - [ ] Platform Admin cross-tenant usage view
+   - [ ] Tenant Admin own usage view
+
+**Estimated Phase 3 Total: 28-38 hours (4-5 days)**
+
+### 🎯 Recommended 4-Week Plan (October 7 - November 1, 2025)
+
+**Week 1 (Oct 7-11): Phase 1 Testing**
+- Days 1-2: Multi-tenant E2E tests
+- Days 3-4: Data isolation verification
+- Day 5: Mode switching tests, security audit
+
+**Week 2 (Oct 14-18): Phase 2 - Branding (Part 1)**
+- Days 1-2: Tenant branding system (logo, colors)
+- Days 3-4: Apply branding to login/consent pages
+- Day 5: Per-tenant settings schema
+
+**Week 3 (Oct 21-25): Phase 2 - Settings & Wizard (Part 2)**
+- Days 1-3: Settings cascade implementation
+- Days 4-5: Tenant setup wizard
+
+**Week 4 (Oct 28 - Nov 1): Phase 3 - Lifecycle (Part 1)**
+- Days 1-2: Tenant suspension flow
+- Days 3-5: Soft delete with grace period
+
+**Deliverables by November 1:**
+- ✅ Phase 1 fully tested and documented
+- ✅ Phase 2 branding and settings complete
+- ✅ Phase 3 lifecycle management (suspension, deletion) complete
+- 🔄 Phase 3 quota enforcement (deferred to November)
+- 🔄 Phase 4 billing integration (deferred to later)
+
+### 📊 Success Metrics for Next Phase
+
+**Quality Metrics:**
+- Zero cross-tenant data leaks (verified by tests)
+- All integration tests passing (target: 50+ new tests)
+- E2E test coverage for critical flows (tenant creation, token issuance, revocation)
+- Security audit with no critical findings
+
+**Feature Metrics:**
+- Tenant branding applied to all public-facing pages
+- Settings cascade working (platform → tenant → client)
+- Tenant suspension/deletion flows tested and documented
+
+**Performance Metrics:**
+- Tenant resolution latency < 10ms (with caching)
+- Token issuance latency < 200ms (multi-tenant mode)
+- Database query performance acceptable (no N+1 queries)
+
+### 🚨 Risks & Mitigation
+
+**Risk 1: E2E Tests Reveal Major Issues**
+- **Likelihood:** Medium
+- **Impact:** High (delays Phase 2 start)
+- **Mitigation:** Budget extra time (1-2 days buffer) for test fixes
+
+**Risk 2: Data Isolation Gaps**
+- **Likelihood:** Low-Medium
+- **Impact:** Critical (security)
+- **Mitigation:** Systematic audit of all queries; add EF query filters as safety net
+
+**Risk 3: Performance Degradation**
+- **Likelihood:** Medium
+- **Impact:** High (user experience)
+- **Mitigation:** Performance testing under load; add caching where needed
+
+**Risk 4: Scope Creep (Too Many "Nice to Have" Features)**
+- **Likelihood:** High
+- **Impact:** Medium (delays, budget overrun)
+- **Mitigation:** Strict adherence to phase scope; defer non-critical features
+
+### 📝 Documentation Priorities
+
+**This Week:**
+1. Integration testing guide (how to run, what to verify)
+2. Mode switching procedure (single ↔ multi-tenant)
+3. Data isolation verification report
+4. Platform admin user guide (tenant management)
+
+**Next 2 Weeks:**
+1. Tenant branding customization guide
+2. Settings cascade architecture document
+3. Tenant setup wizard user guide
 
 ---
 
