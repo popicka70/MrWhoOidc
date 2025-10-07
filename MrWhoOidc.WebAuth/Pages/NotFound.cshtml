@@ -1,9 +1,10 @@
-@page
+@page "{*path}"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.NotFoundModel
 @{
     ViewData["Title"] = "Not Found";
+    Response.StatusCode = 404;
     var currentTenant = TenantAccessor.CurrentTenant;
     var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
         ? $"/t/{currentTenant.Slug}" 

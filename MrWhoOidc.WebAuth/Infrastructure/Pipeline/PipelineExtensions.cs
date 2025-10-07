@@ -66,6 +66,10 @@ public static class PipelineExtensions
         // Tenant-aware redirect: redirect users from tenant-unaware URLs to tenant-specific versions
         app.UseTenantAwareRedirect();
 
+        // Handle status code pages (must be after authentication/authorization)
+        // This will re-execute the pipeline for the NotFound page when 404 occurs
+        app.UseStatusCodePagesWithReExecute("/NotFound");
+
         if (redisMux is not null)
         {
             // Shared Redis sliding-window style limiter (custom middleware) for certain high-volume endpoints

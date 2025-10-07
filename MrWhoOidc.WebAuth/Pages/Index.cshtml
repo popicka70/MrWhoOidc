@@ -1,8 +1,14 @@
 ﻿@page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model IndexModel
 @{
     ViewData["Title"] = "Home page";
     ViewData["HideNavbar"] = true; // Use tight landing layout (no navbar/sidebar)
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <div class="text-center">
@@ -18,7 +24,7 @@
             You are signed in as <strong>@User.Identity!.Name</strong>
         </div>
         <div class="mt-4 d-flex gap-3 justify-content-center flex-wrap">
-            <a class="btn btn-primary" asp-page="/Admin/Clients/Index">
+            <a class="btn btn-primary" href="@(tenantPrefix)/Account">
                 <i class="bi bi-grid-3x3-gap"></i> Dashboard
             </a>
             <a class="btn btn-outline-secondary" href="/.well-known/openid-configuration" target="_blank">
@@ -32,7 +38,7 @@
             <a class="btn btn-primary btn-lg" asp-page="/DiscoverTenant">
                 <i class="bi bi-box-arrow-in-right"></i> Log in
             </a>
-            <a class="btn btn-outline-secondary btn-lg" asp-page="/Registrations/Index">
+            <a class="btn btn-outline-secondary btn-lg" href="@(tenantPrefix)/Registrations">
                 <i class="bi bi-person-plus"></i> Register
             </a>
         </div>
