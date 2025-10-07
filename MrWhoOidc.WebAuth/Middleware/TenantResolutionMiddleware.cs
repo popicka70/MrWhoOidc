@@ -79,9 +79,16 @@ public class TenantResolutionMiddleware
                     }
                 }
                 
-                // Fallback: return plain 404
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                await context.Response.WriteAsync("Tenant not found.");
+                // Fallback: redirect to default tenant NotFound page or generic NotFound
+                if (!string.IsNullOrEmpty(options.DefaultTenantSlug))
+                {
+                    context.Response.Redirect($"/t/{options.DefaultTenantSlug}/NotFound", permanent: false);
+                }
+                else
+                {
+                    // No default tenant, redirect to non-tenant NotFound
+                    context.Response.Redirect("/NotFound", permanent: false);
+                }
                 return;
             }
             else
