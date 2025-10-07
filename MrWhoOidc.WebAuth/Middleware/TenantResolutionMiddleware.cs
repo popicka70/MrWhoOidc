@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 
@@ -52,8 +52,34 @@ public class TenantResolutionMiddleware
             
             if (hasPrefix)
             {
-                // Path has /t/{slug} but tenant not found - return 404
+                // Path has /t/{slug} but tenant not found
+                // Redirect to NotFound page with tenant context determined from authenticated user
                 _logger.LogWarning("Tenant not found for path: {Path}", path);
+                
+                // Try to determine tenant from authenticated user
+                if (context.User?.Identity?.IsAuthenticated ?? false)
+                {
+                    var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (!string.IsNullOrEmpty(userId))
+                    {
+                        // Inject AuthDbContext to look up user's tenant
+                        var dbContext = context.RequestServices.GetRequiredService<MrWhoOidc.Auth.Persistence.AuthDbContext>();
+                        var userTenant = await (from u in dbContext.Users
+                                                join t in dbContext.Tenants on u.TenantId equals t.Id
+                                                where u.Id.ToString() == userId
+                                                select new { t.Slug })
+                            .FirstOrDefaultAsync(context.RequestAborted);
+                        
+                        if (userTenant != null)
+                        {
+                            // Redirect to tenant-specific NotFound page
+                            context.Response.Redirect($"/t/{userTenant.Slug}/NotFound", permanent: false);
+                            return;
+                        }
+                    }
+                }
+                
+                // Fallback: return plain 404
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 await context.Response.WriteAsync("Tenant not found.");
                 return;

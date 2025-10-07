@@ -63,6 +63,9 @@ public static class PipelineExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
+        // Tenant-aware redirect: redirect users from tenant-unaware URLs to tenant-specific versions
+        app.UseTenantAwareRedirect();
+
         if (redisMux is not null)
         {
             // Shared Redis sliding-window style limiter (custom middleware) for certain high-volume endpoints

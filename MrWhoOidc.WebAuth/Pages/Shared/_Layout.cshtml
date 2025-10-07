@@ -66,7 +66,7 @@
                             <span class="navbar-toggler-icon"></span>
                         </button>
                     }
-                    <a class="navbar-brand d-flex align-items-center gap-2" asp-area="" asp-page="/Index">
+                    <a class="navbar-brand d-flex align-items-center gap-2" href="@(tenantPrefix)/">
                         <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
                         @if (currentTenant != null)
                         {
@@ -118,14 +118,14 @@
                     {
                         <!-- Desktop Navigation -->
                         <div class="d-none d-md-flex align-items-center gap-3">
-                            <a class="nav-link" asp-page="/Registrations/Index">Register</a>
-                            <a class="nav-link" asp-page="/Password/Index">Change password</a>
-                            <a class="nav-link" asp-page="/Mfa/Index">Two-factor (TOTP)</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Registrations">Register</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Password">Change password</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Mfa">Two-factor (TOTP)</a>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="navbar-text small">@userEmail</span>
                                 <span class="badge @roleBadgeClass">@userRole</span>
                             </div>
-                            <a class="nav-link" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
+                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
                         </div>
                         <!-- Mobile Navigation Dropdown -->
                         <div class="dropdown d-md-none">
@@ -136,18 +136,18 @@
                                 <li><h6 class="dropdown-header">@userEmail</h6></li>
                                 <li><div class="px-3 pb-2"><span class="badge @roleBadgeClass">@userRole</span></div></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" asp-page="/Registrations/Index"><i class="bi bi-person-plus me-2"></i>Register</a></li>
-                                <li><a class="dropdown-item" asp-page="/Password/Index"><i class="bi bi-key me-2"></i>Change password</a></li>
-                                <li><a class="dropdown-item" asp-page="/Mfa/Index"><i class="bi bi-shield-lock me-2"></i>Two-factor (TOTP)</a></li>
+                                <li><a class="dropdown-item" href="@(tenantPrefix)/Registrations"><i class="bi bi-person-plus me-2"></i>Register</a></li>
+                                <li><a class="dropdown-item" href="@(tenantPrefix)/Password"><i class="bi bi-key me-2"></i>Change password</a></li>
+                                <li><a class="dropdown-item" href="@(tenantPrefix)/Mfa"><i class="bi bi-shield-lock me-2"></i>Two-factor (TOTP)</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
+                                <li><a class="dropdown-item" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
                             </ul>
                         </div>
                     }
                     else
                     {
                         <div class="d-flex align-items-center gap-3">
-                            <a class="nav-link" asp-page="/Registrations/Index">Register</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Registrations">Register</a>
                             <a class="nav-link" asp-page="/DiscoverTenant">Log in</a>
                         </div>
                     }
@@ -213,7 +213,7 @@
                             
                             <div class="mt-auto border-top">
                                 <div class="list-group-item fw-semibold text-uppercase small bg-secondary text-white">Account</div>
-                                <a class="list-group-item list-group-item-action" href="/logout?returnUrl=@Uri.EscapeDataString("/")"><i class="bi bi-box-arrow-right me-2"></i>Log out</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString("/")"><i class="bi bi-box-arrow-right me-2"></i>Log out</a>
                             </div>
                         </div>
                     </div>
