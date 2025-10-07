@@ -1,4 +1,6 @@
-using Microsoft.AspNetCore.Http;using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 
@@ -31,7 +33,8 @@ public class TenantResolutionMiddleware
         HttpContext context,
         ITenantResolver tenantResolver,
         ITenantAccessor tenantAccessor,
-        IMultiTenancyOptions options)
+        IMultiTenancyOptions options,
+        HybridCache cache)
     {
         var path = context.Request.Path.Value ?? "/";
         
@@ -62,18 +65,32 @@ public class TenantResolutionMiddleware
                     var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                     if (!string.IsNullOrEmpty(userId))
                     {
-                        // Inject AuthDbContext to look up user's tenant
-                        var dbContext = context.RequestServices.GetRequiredService<MrWhoOidc.Auth.Persistence.AuthDbContext>();
-                        var userTenant = await (from u in dbContext.Users
-                                                join t in dbContext.Tenants on u.TenantId equals t.Id
-                                                where u.Id.ToString() == userId
-                                                select new { t.Slug })
-                            .FirstOrDefaultAsync(context.RequestAborted);
+                        // Use HybridCache to cache user-to-tenant slug mapping (short-term, 2 minutes)
+                        var userTenantSlug = await cache.GetOrCreateAsync(
+                            $"user:tenant:slug:{userId}",
+                            async cancel =>
+                            {
+                                var dbContext = context.RequestServices.GetRequiredService<MrWhoOidc.Auth.Persistence.AuthDbContext>();
+                                var result = await (from u in dbContext.Users
+                                                    join t in dbContext.Tenants on u.TenantId equals t.Id
+                                                    where u.Id.ToString() == userId
+                                                    select t.Slug)
+                                    .FirstOrDefaultAsync(cancel);
+                                return result; // Can be null
+                            },
+                            new HybridCacheEntryOptions
+                            {
+                                Expiration = TimeSpan.FromMinutes(2),
+                                LocalCacheExpiration = TimeSpan.FromMinutes(2)
+                            },
+                            tags: new[] { "user-tenant-mapping", $"user:{userId}" },
+                            cancellationToken: context.RequestAborted
+                        );
                         
-                        if (userTenant != null)
+                        if (userTenantSlug != null)
                         {
                             // Redirect to tenant-specific NotFound page
-                            context.Response.Redirect($"/t/{userTenant.Slug}/NotFound", permanent: false);
+                            context.Response.Redirect($"/t/{userTenantSlug}/NotFound", permanent: false);
                             return;
                         }
                     }

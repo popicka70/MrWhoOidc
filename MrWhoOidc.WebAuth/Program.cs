@@ -57,6 +57,9 @@ builder.Services.Configure<PlatformAdminAuthOptions>(builder.Configuration.GetSe
 // Redis (distributed features) extracted
 var redisMux = builder.Services.AddMrWhoOidcRedis(builder.Configuration);
 
+// HybridCache (L1 + optional L2 via Redis)
+builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
+
 // Presentation layer (Razor Pages + MVC + antiforgery + localization)
 builder.Services.AddLocalizationAndMvc(builder.Configuration);
 
