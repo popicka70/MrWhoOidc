@@ -1189,6 +1189,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "NotFound/{*path}",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Password",
     "Methods": "",
     "RateLimiters": [],
