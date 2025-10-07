@@ -1,10 +1,20 @@
 @page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Mfa.IndexModel
 @{
-    ViewData["Title"] = "Two-factor authentication";
+    ViewData["Title"] = "Security";
+    ViewData["ActiveAccountTab"] = "security";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
-<h2>Two-factor authentication (TOTP)</h2>
+<h1 class="mb-3">Security</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+<h2 class="mt-4">Two-factor authentication (TOTP)</h2>
 
 @if (!string.IsNullOrEmpty(Model.QrPngBase64))
 {

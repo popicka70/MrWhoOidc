@@ -1,11 +1,20 @@
 @page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Password.IndexModel
 @{
-    ViewData["Title"] = "Change password";
-    Layout = "_AuthLayout";
+    ViewData["Title"] = "Password";
+    ViewData["ActiveAccountTab"] = "password";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
-<h2 class="mb-4 text-center">Change password</h2>
+<h1 class="mb-3">Password</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+<h2 class="mt-4 mb-4">Change password</h2>
 
 @if (!string.IsNullOrEmpty(Model.SuccessMessage))
 {
