@@ -30,6 +30,7 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
@@ -37,6 +38,7 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),
+            settingsService,
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
@@ -70,6 +72,7 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["bob"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
@@ -77,6 +80,7 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),
+            settingsService,
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
@@ -110,6 +114,7 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
@@ -117,6 +122,7 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),
+            settingsService,
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");

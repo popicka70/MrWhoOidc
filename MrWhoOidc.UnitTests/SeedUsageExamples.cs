@@ -33,7 +33,8 @@ public sealed class SeedUsageExamples
 
         // Exchange it
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), null);
+        var settingsService = new MockTenantSettingsService();
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);

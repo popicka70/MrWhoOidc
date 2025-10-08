@@ -42,7 +42,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -102,7 +103,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var result = await svc.ExchangeTokenAsync(raw, null, null, null, Array.Empty<string>(), "caller-app", "https://issuer", null);
         Assert.IsFalse(result.ok);
@@ -133,7 +135,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var subject = jwt.CreateJwt("https://issuer", "api-a", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10));
@@ -165,7 +168,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         // Subject from api-a (not allowed as source)
@@ -197,7 +201,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var subject = jwt.CreateJwt("https://issuer", "api", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10));
@@ -228,7 +233,8 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, new OboPolicyService(db, opts));
+        var settingsService = new MockTenantSettingsService();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         // Subject with 10 minutes remaining, requested read scope allowed by default

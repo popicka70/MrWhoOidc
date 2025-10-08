@@ -30,7 +30,8 @@ public sealed class MultiRealmRoleTests
         var (_, _, _, code1) = await codeSvc.IssueAsync(reqR1, seed.User.Id);
 
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), null);
+        var settingsService = new MockTenantSettingsService();
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
         var (ok1, payload1, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code1!, reqR1.RedirectUri!, reqR1.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok1);
 

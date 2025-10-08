@@ -1,0 +1,199 @@
+@page "/t/{tenantSlug}/admin/settings"
+@model MrWhoOidc.WebAuth.Pages.Admin.SettingsModel
+@{
+    ViewData["Title"] = "Tenant Settings";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2>Tenant Settings</h2>
+            <p class="text-muted">Override platform defaults with tenant-specific configuration</p>
+            
+            @if (Model.SuccessMessage != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>@Model.SuccessMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            
+            @if (!Model.IsMultiTenantMode)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <strong>Single-Tenant Mode:</strong> Settings overrides are available in multi-tenant mode only.
+                </div>
+            }
+            
+            <form method="post" class="needs-validation" novalidate>
+                
+                @* Authentication Settings *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-shield-check me-2"></i>Authentication
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="Input.AllowRefreshTokenIntrospection" id="allowRefreshIntrospection">
+                            <label class="form-check-label" for="allowRefreshIntrospection">
+                                Allow Refresh Token Introspection
+                            </label>
+                            <small class="form-text text-muted d-block">
+                                Platform default: <strong>@(Model.PlatformDefaults?.Auth?.AllowRefreshTokenIntrospection?.ToString() ?? "Not set")</strong>
+                            </small>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="Input.RequireMfa" id="requireMfa">
+                            <label class="form-check-label" for="requireMfa">
+                                Require MFA for All Users
+                            </label>
+                            <small class="form-text text-muted d-block">
+                                Platform default: <strong>@(Model.PlatformDefaults?.Auth?.RequireMfa?.ToString() ?? "Not set")</strong>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                @* Password Policy *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-key-fill me-2"></i>Password Policy
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.PasswordMinLength" class="form-label">Minimum Length</label>
+                                <input asp-for="Input.PasswordMinLength" type="number" class="form-control" min="6" max="128" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Auth?.PasswordPolicy?.MinLength?.ToString() ?? "8")</strong>
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="Input.PasswordRequireUppercase" id="reqUpper">
+                                    <label class="form-check-label" for="reqUpper">Require Uppercase</label>
+                                </div>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="Input.PasswordRequireLowercase" id="reqLower">
+                                    <label class="form-check-label" for="reqLower">Require Lowercase</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="Input.PasswordRequireDigit" id="reqDigit">
+                                    <label class="form-check-label" for="reqDigit">Require Digit</label>
+                                </div>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="Input.PasswordRequireSpecialChar" id="reqSpecial">
+                                    <label class="form-check-label" for="reqSpecial">Require Special Character</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                @* QR Login Settings *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-qr-code me-2"></i>QR Login
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="Input.QrLoginEnabled" id="qrEnabled">
+                            <label class="form-check-label" for="qrEnabled">
+                                Enable QR Login
+                            </label>
+                            <small class="form-text text-muted d-block">
+                                Platform default: <strong>@(Model.PlatformDefaults?.QrLogin?.Enabled?.ToString() ?? "Not set")</strong>
+                            </small>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label asp-for="Input.QrSessionLifetimeSeconds" class="form-label">Session Lifetime (seconds)</label>
+                                <input asp-for="Input.QrSessionLifetimeSeconds" type="number" class="form-control" min="30" max="600" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.QrLogin?.SessionLifetimeSeconds?.ToString() ?? "300")</strong>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                @* Token Lifetimes *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-clock-history me-2"></i>Token Lifetimes
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.AccessTokenLifetimeSeconds" class="form-label">Access Token (seconds)</label>
+                                <input asp-for="Input.AccessTokenLifetimeSeconds" type="number" class="form-control" min="60" max="86400" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Tokens?.AccessTokenLifetimeSeconds?.ToString() ?? "3600")</strong>
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.RefreshTokenLifetimeSeconds" class="form-label">Refresh Token (seconds)</label>
+                                <input asp-for="Input.RefreshTokenLifetimeSeconds" type="number" class="form-control" min="3600" max="2592000" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Tokens?.RefreshTokenLifetimeSeconds?.ToString() ?? "1296000")</strong>
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label asp-for="Input.AuthorizationCodeLifetimeSeconds" class="form-label">Authorization Code (seconds)</label>
+                                <input asp-for="Input.AuthorizationCodeLifetimeSeconds" type="number" class="form-control" min="30" max="600" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Tokens?.AuthorizationCodeLifetimeSeconds?.ToString() ?? "300")</strong>
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.IdTokenLifetimeSeconds" class="form-label">ID Token (seconds)</label>
+                                <input asp-for="Input.IdTokenLifetimeSeconds" type="number" class="form-control" min="60" max="86400" placeholder="Leave empty for platform default">
+                                <small class="form-text text-muted">
+                                    Platform default: <strong>@(Model.PlatformDefaults?.Tokens?.IdTokenLifetimeSeconds?.ToString() ?? "3600")</strong>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <a asp-page="/Admin/Clients/Index" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left me-1"></i>Back
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" onclick="resetToDefaults()">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Platform Defaults
+                        </button>
+                    </div>
+                    <button type="submit" class="btn btn-primary" disabled="@(!Model.IsMultiTenantMode)">
+                        <i class="bi bi-save me-1"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        function resetToDefaults() {
+            if (confirm('Are you sure you want to reset all settings to platform defaults? This will clear all tenant-specific overrides.')) {
+                // Clear all form fields
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
+            }
+        }
+    </script>
+}

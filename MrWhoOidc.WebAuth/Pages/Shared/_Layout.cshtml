@@ -229,6 +229,7 @@
                             @if (MultiTenancyOptions.Value.Enabled)
                             {
                                 <a class="list-group-item list-group-item-action" asp-page="/Admin/Branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
+                                <a class="list-group-item list-group-item-action" asp-page="/Admin/Settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
                             }
                             
                             <div class="mt-auto border-top">

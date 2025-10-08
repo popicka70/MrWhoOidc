@@ -31,8 +31,9 @@ public interface ITokenService
         CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator, IOboPolicyService? oboPolicy = null) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator, ITenantSettingsService settingsService, IOboPolicyService? oboPolicy = null) : ITokenService
 {
+    private readonly ITenantSettingsService _settingsService = settingsService;
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
@@ -122,13 +123,18 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             }
         }
 
+        // Load tenant settings once for all token generation
+        var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600); // Default: 1 hour
+        var idTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.IdTokenLifetimeSeconds ?? 3600); // Default: 1 hour
+
         string accessToken;
         if (opaqueEnabled)
         {
             // Create opaque token (random 256-bit), persist with hash
             var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(entity.UserId, clientId, audience, scopes, jti, raw, accessTokenLifetime, dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -176,7 +182,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 }
             }
 
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime));
         }
 
         // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
@@ -243,7 +249,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             issuer,
             clientId,
             idClaims,
-            DateTimeOffset.UtcNow.AddMinutes(5),
+            DateTimeOffset.UtcNow.Add(idTokenLifetime),
             nonce: entity.Nonce,
             accessTokenHash: atHash,
             authTime: authTime
@@ -272,6 +278,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
         string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
+        // Load tenant settings
+        var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
+
         var hash = Hash(refreshToken);
         var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct).ConfigureAwait(false);
         if (tokenEntity is null || tokenEntity.ExpiresAt < DateTimeOffset.UtcNow || !string.Equals(tokenEntity.ClientId, clientId, StringComparison.Ordinal))
@@ -340,7 +350,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 accessClaims.Add(new("realm", realmName));
             }
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.AddMinutes(15));
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime));
         }
 
         // Rotation: create new refresh token and revoke the old one
@@ -362,6 +372,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
+        // Load tenant settings for default token lifetime
+        var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var defaultAccessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
+
         // Resolve client and its policy/scopes
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client is null)
@@ -436,7 +450,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Lifetime override per client for M2M
         var lifetime = (client.M2MAccessTokenLifetimeSeconds.HasValue && client.M2MAccessTokenLifetimeSeconds.Value > 0)
             ? TimeSpan.FromSeconds(client.M2MAccessTokenLifetimeSeconds.Value)
-            : TimeSpan.FromMinutes(15);
+            : defaultAccessTokenLifetime;
 
         // Issue JWT access token (opaque not supported for M2M yet)
         var expiry = DateTimeOffset.UtcNow.Add(lifetime);
@@ -489,6 +503,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         string? dpopJkt,
         CancellationToken ct = default)
     {
+        // Load tenant settings for token lifetime
+        var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
+
         // Support only access tokens for MVP
         if (!string.IsNullOrEmpty(requestedTokenType) && !string.Equals(requestedTokenType, "urn:ietf:params:oauth:token-type:access_token", StringComparison.Ordinal))
         {
@@ -686,7 +704,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             var nowUtc = DateTimeOffset.UtcNow;
             var remaining = subjectExpiry - nowUtc;
             if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
-            var policyMax = TimeSpan.FromMinutes(15);
+            var policyMax = accessTokenLifetime; // Use tenant setting
             lifetime = remaining <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : (remaining < policyMax ? remaining : policyMax);
         }
 
