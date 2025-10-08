@@ -20,6 +20,8 @@ internal static class EndpointMappingExtensions
 {
     private static readonly TaskCompletionSource<bool> _migrationCompletionSource = new();
 
+    public static TaskCompletionSource<bool> GetMigrationCompletionSource() => _migrationCompletionSource;
+
     public static void MapMrWhoOidcEndpoints(this WebApplication app)
     {
         // This method is a straight extraction of the mapping logic from Program.cs (Phase 0 safety refactor step).
@@ -28,18 +30,11 @@ internal static class EndpointMappingExtensions
         app.MapDefaultEndpoints();
         app.MapRazorPages().WithStaticAssets();
 
-        // Run DB migration & seeding asynchronously but gate requests until complete
+        // Run DB migration & seeding asynchronously (but DO NOT add middleware here)
+        // Middleware has been moved to UseMrWhoOidcPipeline to ensure correct ordering
         var skipMigrations = app.Configuration["Testing:SkipAuthMigrations"];
         if (!string.Equals(skipMigrations, "true", StringComparison.OrdinalIgnoreCase))
         {
-            // Add middleware to wait for migrations before processing requests
-            app.Use(async (context, next) =>
-            {
-                // Wait for migrations to complete (will be instant after first completion)
-                await _migrationCompletionSource.Task;
-                await next(context);
-            });
-
             // Start migrations asynchronously on ApplicationStarted
             app.Lifetime.ApplicationStarted.Register(() =>
             {

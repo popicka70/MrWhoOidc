@@ -163,15 +163,18 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
-app.MapMrWhoOidcEndpoints();
-
 // Standard pipeline (forwarded headers, exception handling, localization, authz, rate limiting, static assets)
-app.UseMrWhoOidcPipeline(redisMux);
+// MUST come before endpoint mapping because it includes UseRouting()
+// Pass migration completion source so the pipeline can wait for migrations before processing requests
+var migrationCompletionSource = EndpointMappingExtensions.GetMigrationCompletionSource();
+app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
 
 // Auto-seed default tenant and platform admin on first request (if database is empty)
+// MUST be before endpoint mapping (it's middleware)
 app.UseAutoSeed();
 
+// Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
+app.MapMrWhoOidcEndpoints();
 
 // Admin + health endpoints (extracted)
 app.MapMrWhoAdminApiEndpoints();
