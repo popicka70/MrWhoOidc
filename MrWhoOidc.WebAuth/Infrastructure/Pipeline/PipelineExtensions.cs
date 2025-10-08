@@ -76,21 +76,8 @@ public static class PipelineExtensions
         app.UseTenantAwareRedirect();
 
         // Handle status code pages (must be after authentication/authorization)
-        // IMPORTANT: Only apply to page requests, not API/OIDC protocol endpoints
-        // API endpoints must return raw HTTP status codes (401, 403, etc.) for proper protocol compliance
-        // (DPoP nonce challenges, OAuth errors, etc. require specific status codes)
-        app.UseWhen(
-            context => !context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/token", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/userinfo", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/authorize", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/revoke", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/introspect", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/par", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/jwks", StringComparison.OrdinalIgnoreCase)
-                    && !context.Request.Path.StartsWithSegments("/.well-known", StringComparison.OrdinalIgnoreCase),
-            branch => branch.UseStatusCodePagesWithReExecute("/NotFound")
-        );
+        // IMPORTANT: Only handle 4xx/5xx status codes, and NotFound page will filter API paths
+        app.UseStatusCodePagesWithReExecute("/NotFound", "?path={0}");
 
         if (redisMux is not null)
         {

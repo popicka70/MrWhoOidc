@@ -48,8 +48,8 @@ The `/userinfo` endpoint **was working** and correctly returning **401 Unauthori
 
 ## Solution
 
-### Critical Fix: Exclude API Endpoints from Status Code Page Middleware
-Modified `UseStatusCodePagesWithReExecute` to **only apply to user-facing pages**, not API/OIDC protocol endpoints:
+### Critical Fix: Smart Status Code Page Handling
+Modified status code pages middleware to **intelligently detect API responses** and leave them untouched:
 
 **Before:**
 ```csharp
@@ -59,20 +59,41 @@ app.UseStatusCodePagesWithReExecute("/NotFound");
 
 **After:**
 ```csharp
-// PipelineExtensions.cs - CORRECT: Only for non-API pages
-app.UseWhen(
-    context => !context.Request.Path.StartsWithSegments("/api")
-            && !context.Request.Path.StartsWithSegments("/token")
-            && !context.Request.Path.StartsWithSegments("/userinfo")
-            && !context.Request.Path.StartsWithSegments("/authorize")
-            && !context.Request.Path.StartsWithSegments("/revoke")
-            && !context.Request.Path.StartsWithSegments("/introspect")
-            && !context.Request.Path.StartsWithSegments("/par")
-            && !context.Request.Path.StartsWithSegments("/jwks")
-            && !context.Request.Path.StartsWithSegments("/.well-known"),
-    branch => branch.UseStatusCodePagesWithReExecute("/NotFound")
-);
+// PipelineExtensions.cs - CORRECT: Smart detection
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    var request = context.HttpContext.Request;
+    
+    // Don't intercept if response has protocol-specific headers
+    if (response.Headers.ContainsKey("WWW-Authenticate") ||
+        response.Headers.ContainsKey("DPoP-Nonce") ||
+        response.ContentType?.StartsWith("application/json") == true)
+    {
+        return; // Let the original response through
+    }
+    
+    // Don't intercept specific API paths
+    if (request.Path.StartsWithSegments("/token") ||
+        request.Path.StartsWithSegments("/userinfo") ||
+        /* ... other API paths ... */)
+    {
+        return; // Let the original response through
+    }
+    
+    // For user-facing pages, re-execute for NotFound page
+    var originalPath = request.Path.Value ?? "/";
+    request.Path = "/NotFound";
+    request.QueryString = new QueryString($"?path={Uri.EscapeDataString(originalPath)}");
+    await context.Next(context.HttpContext);
+});
 ```
+
+**This approach:**
+- ✅ **Preserves API protocol compliance** (DPoP, OAuth errors, etc.)
+- ✅ **Maintains pretty 404 pages** for user-facing routes
+- ✅ **Auto-detects API responses** via headers (`WWW-Authenticate`, `DPoP-Nonce`, `application/json`)
+- ✅ **Explicit path exclusions** for known API endpoints
 
 ### Additional Fixes (Pipeline Ordering)
 These were necessary but not sufficient:
