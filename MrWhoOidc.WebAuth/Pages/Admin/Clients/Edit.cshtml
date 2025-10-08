@@ -238,6 +238,45 @@
         <div class="tab-pane fade" id="tab-providers" role="tabpanel" aria-labelledby="providers-tab" tabindex="0">
             <div class="row g-3">
                 <div class="col-12">
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <i class="bi bi-link-45deg me-2"></i>IdP Chaining Configuration URLs
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Use these tenant-aware URLs when configuring this instance as a downstream IdP in an identity provider chaining scenario.
+                            </p>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-box-arrow-in-right me-1"></i>Authorization Endpoint (Login URL)
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingAuthorizationUrl" id="authz-url" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('authz-url', this)" title="Copy to clipboard">
+                                            <i class="bi bi-clipboard"></i> Copy
+                                        </button>
+                                    </div>
+                                    <small class="form-text text-muted">Use this URL as the <code>authorization_endpoint</code> in upstream IdP configuration.</small>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-box-arrow-right me-1"></i>End Session Endpoint (Logout URL)
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingEndSessionUrl" id="endsession-url" />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('endsession-url', this)" title="Copy to clipboard">
+                                            <i class="bi bi-clipboard"></i> Copy
+                                        </button>
+                                    </div>
+                                    <small class="form-text text-muted">Use this URL as the <code>end_session_endpoint</code> in upstream IdP configuration.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
                     <h5>Add or update mapping</h5>
                     <div class="row g-2 align-items-end">
                         <div class="col-md-4">
@@ -689,5 +728,40 @@
                 updateSecretButtons(input, copyBtn, revealBtn);
             }
         })();
+
+        // IdP Chaining URL copy function
+        window.copyToClipboard = async function(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (!input || !input.value) return;
+            
+            const originalHtml = button.innerHTML;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(input.value);
+                } else {
+                    input.select();
+                    document.execCommand('copy');
+                    window.getSelection().removeAllRanges();
+                }
+                button.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-success');
+                setTimeout(() => {
+                    button.innerHTML = originalHtml;
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-outline-secondary');
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                button.innerHTML = '<i class="bi bi-x-circle"></i> Failed';
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-danger');
+                setTimeout(() => {
+                    button.innerHTML = originalHtml;
+                    button.classList.remove('btn-danger');
+                    button.classList.add('btn-outline-secondary');
+                }, 1500);
+            }
+        };
     </script>
 }

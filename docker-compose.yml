@@ -16,6 +16,8 @@ services:
       ConnectionStrings__redis: redis:6379,abortConnect=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      # OIDC configuration
+      Oidc__Issuer: "https://localhost:8443"
       # Multi-tenancy configuration
       MultiTenancy__Enabled: "true"
       MultiTenancy__DefaultTenantSlug: "default"

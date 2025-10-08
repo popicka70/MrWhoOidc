@@ -13,11 +13,14 @@ using System.Text.Json.Serialization;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Crypto;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit) : ReadOnlyAdminPageModel
+public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit, OidcOptions oidcOptions) : ReadOnlyAdminPageModel
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -58,6 +61,10 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public JwksValidationStatus? JwksStatus { get; private set; }
 
+    // IdP Chaining URLs (tenant-aware)
+    public string IdpChainingAuthorizationUrl { get; private set; } = string.Empty;
+    public string IdpChainingEndSessionUrl { get; private set; } = string.Empty;
+
     public async Task<IActionResult> OnGetAsync()
     {
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
@@ -66,6 +73,12 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
         await LoadRealmsAsync();
         await LoadScopesAsync(client.Id);
         await LoadProviderMappingsAsync(client.Id);
+
+        // Build tenant-aware IdP chaining URLs
+        var issuer = HttpContext.GetIssuer(oidcOptions);
+        var baseUrl = issuer.TrimEnd('/');
+        IdpChainingAuthorizationUrl = $"{baseUrl}/authorize";
+        IdpChainingEndSessionUrl = $"{baseUrl}/connect/endsession";
 
         string introspectionAudiences = string.Empty;
         if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))
