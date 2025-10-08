@@ -255,7 +255,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             authTime: authTime
         );
 
-        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, TimeSpan.FromDays(30), scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
+        var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
 
         entity.Consumed = true;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -354,7 +354,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         }
 
         // Rotation: create new refresh token and revoke the old one
-        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, TimeSpan.FromDays(30), scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
+        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(tokenEntity.UserId, clientId, scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
         tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 

@@ -18,7 +18,7 @@ public sealed class RefreshTokenServiceTests
             .UseInMemoryDatabase(dbName)
             .Options;
         var db = new AuthDbContext(opts);
-        var service = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var service = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), new MockTenantSettingsService());
         return (db, service);
     }
 
@@ -30,10 +30,9 @@ public sealed class RefreshTokenServiceTests
         var userId = Guid.NewGuid();
         var clientId = "test-client";
         var scopes = new[] { "openid", "profile" };
-        var lifetime = TimeSpan.FromDays(30);
 
         // Act
-        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
 
         // Assert
         Assert.IsNotNull(token);
@@ -59,7 +58,7 @@ public sealed class RefreshTokenServiceTests
         var lifetime = TimeSpan.FromDays(30);
 
         // Act
-        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
 
         // Assert
         var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
@@ -82,11 +81,12 @@ public sealed class RefreshTokenServiceTests
         var userId = Guid.NewGuid();
         var clientId = "test-client";
         var scopes = new[] { "openid" };
-        var lifetime = TimeSpan.FromHours(24);
+        // Note: Service now uses tenant settings (default: 1296000 seconds = 15 days)
+        var expectedLifetime = TimeSpan.FromSeconds(1296000);
         var before = DateTimeOffset.UtcNow;
 
         // Act
-        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
         var after = DateTimeOffset.UtcNow;
 
         // Assert
@@ -97,9 +97,12 @@ public sealed class RefreshTokenServiceTests
         Assert.IsTrue(saved.CreatedAt >= before);
         Assert.IsTrue(saved.CreatedAt <= after);
         
-        // ExpiresAt should be CreatedAt + lifetime (within 1 second tolerance)
-        var expectedExpiry = saved.CreatedAt.Add(lifetime);
-        Assert.IsTrue(Math.Abs((saved.ExpiresAt - expectedExpiry).TotalSeconds) < 1);
+        // ExpiresAt should be CreatedAt + expectedLifetime (within 1 second tolerance)
+        var expectedExpiry = saved.CreatedAt.Add(expectedLifetime);
+        var actualDifference = (saved.ExpiresAt - expectedExpiry).TotalSeconds;
+        Assert.IsTrue(
+            Math.Abs(actualDifference) < 1, 
+            $"Expiry mismatch: expected {expectedExpiry}, got {saved.ExpiresAt}, diff={actualDifference}s");
     }
 
     [TestMethod]
@@ -113,9 +116,9 @@ public sealed class RefreshTokenServiceTests
         var lifetime = TimeSpan.FromDays(7);
 
         // Act - create multiple tokens
-        var (token1, hash1) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
-        var (token2, hash2) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
-        var (token3, hash3) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token1, hash1) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
+        var (token2, hash2) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
+        var (token3, hash3) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
 
         // Assert - all should be unique
         Assert.AreNotEqual(token1, token2);
@@ -137,7 +140,7 @@ public sealed class RefreshTokenServiceTests
         var lifetime = TimeSpan.FromDays(30);
 
         // Act
-        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
 
         // Assert
         Assert.IsNotNull(token);
@@ -161,7 +164,7 @@ public sealed class RefreshTokenServiceTests
         var lifetime = TimeSpan.FromDays(30);
 
         // Act
-        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, lifetime, scopes);
+        var (token, hash) = await service.CreateRefreshTokenAsync(userId, clientId, scopes);
 
         // Assert
         var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);

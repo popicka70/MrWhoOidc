@@ -121,7 +121,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
             var user = db.Users.Single();
             var rtSvc = scope.ServiceProvider.GetRequiredService<IRefreshTokenService>();
-            (rawRt, _) = await rtSvc.CreateRefreshTokenAsync(user.Id, clientId, TimeSpan.FromDays(1), new[] { "openid" });
+            (rawRt, _) = await rtSvc.CreateRefreshTokenAsync(user.Id, clientId, new[] { "openid" });
         }
 
         var client = host.GetTestClient();

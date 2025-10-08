@@ -15,10 +15,11 @@ public sealed class TokenRoleEmissionTests
     public async Task AuthorizationCodeExchange_OmitsRolesWhenScopeMissing()
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
+        var settingsService = new MockTenantSettingsService();
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
+        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var request = new AuthorizeValidationResult
         {
             IsValid = true,
@@ -30,11 +31,10 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()),
+            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),
@@ -57,10 +57,11 @@ public sealed class TokenRoleEmissionTests
     public async Task AuthorizationCodeExchange_OmitsRolesWhenNoAssignments()
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
+        var settingsService = new MockTenantSettingsService();
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
+        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var request = new AuthorizeValidationResult
         {
             IsValid = true,
@@ -72,11 +73,10 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["bob"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()),
+            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),
@@ -99,10 +99,11 @@ public sealed class TokenRoleEmissionTests
     public async Task AuthorizationCodeExchange_EmitsRolesWhenScopeAndAssignmentsPresent()
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
+        var settingsService = new MockTenantSettingsService();
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
+        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var request = new AuthorizeValidationResult
         {
             IsValid = true,
@@ -114,11 +115,10 @@ public sealed class TokenRoleEmissionTests
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var settingsService = new MockTenantSettingsService();
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()),
+            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             new TokenValidator(keyStore),

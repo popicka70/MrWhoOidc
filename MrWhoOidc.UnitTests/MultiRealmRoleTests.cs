@@ -14,11 +14,12 @@ public sealed class MultiRealmRoleTests
     public async Task Roles_Issued_Are_Scoped_To_Client_Realm()
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
+        var settingsService = new MockTenantSettingsService();
         var seed = await TestDataSeeder.SeedMultiRealmAsync(db);
 
         // Authorization code for user in realm1 client with roles scope
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
+        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var reqR1 = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
         {
             IsValid = true,
@@ -30,8 +31,7 @@ public sealed class MultiRealmRoleTests
         var (_, _, _, code1) = await codeSvc.IssueAsync(reqR1, seed.User.Id);
 
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var settingsService = new MockTenantSettingsService();
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
         var (ok1, payload1, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code1!, reqR1.RedirectUri!, reqR1.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok1);
 

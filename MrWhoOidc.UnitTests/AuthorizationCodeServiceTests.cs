@@ -17,7 +17,8 @@ public sealed class AuthorizationCodeServiceTests
         using var db = CreateDb();
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizationCodeService(db, meta, tenantAccessor);
+        var settingsService = new MockTenantSettingsService();
+        var svc = new AuthorizationCodeService(db, meta, tenantAccessor, settingsService);
         var valid = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
         {
             IsValid = true,

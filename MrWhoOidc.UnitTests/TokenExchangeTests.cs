@@ -31,13 +31,13 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_HappyPath_JwtSubject_NarrowsScopes_EmitsAct()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api", "api2");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
 
         var userId = Guid.NewGuid();
@@ -82,13 +82,13 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_DPoPBridgingDenied_WhenSubjectHasCnf()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
 
         var userId = Guid.NewGuid();
@@ -124,13 +124,13 @@ public sealed class TokenExchangeTests
     public async Task TokenExchange_SingleHop_Rejected_WhenActPresent()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
 
         var userId = Guid.NewGuid();

@@ -31,6 +31,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_DPoP_SameKey_Required_ByPolicy()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client with OboDpopMode.RequireSameJkt
     var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboDpopMode = OboDpopMode.RequireSameJkt };
         db.Clients.Add(callerClient);
@@ -38,11 +39,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
@@ -74,6 +74,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_OpaqueSubject_Respects_MaxDelegationDepth()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client with max depth = 1
     var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboMaxDelegationDepth = 1 };
         db.Clients.Add(callerClient);
@@ -99,11 +100,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var result = await svc.ExchangeTokenAsync(raw, null, null, null, Array.Empty<string>(), "caller-app", "https://issuer", null);
@@ -119,6 +119,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_Invalid_Target_Audience_ByPolicy()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client with allowed target audiences = ["api-b"] only
         var callerClient = new ClientEntity
         {
@@ -131,11 +132,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
@@ -152,6 +152,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_Invalid_Source_Audience_ByPolicy()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client allowing only source audience = api-x
         var callerClient = new ClientEntity
         {
@@ -164,11 +165,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api-a", "api-b");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
@@ -185,6 +185,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_Insufficient_Scope_WhenIntersectionEmpty()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client allowed scopes = ["write"]
         var callerClient = new ClientEntity
         {
@@ -197,11 +198,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
@@ -217,6 +217,7 @@ public sealed class TokenExchangePolicyTests
     public async Task TokenExchange_Lifetime_Capped_ByPolicy_MinOfSubjectRemainingAndPolicy()
     {
         using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
         // Seed caller client with lifetime cap 3 minutes
         var callerClient = new ClientEntity
         {
@@ -229,11 +230,10 @@ public sealed class TokenExchangePolicyTests
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var settingsService = new MockTenantSettingsService();
         var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();

@@ -11,24 +11,28 @@ public interface IRefreshTokenService
     Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId, 
         string clientId, 
-        TimeSpan lifetime, 
         string[] scopes, 
         string? ipAddress = null,
         string? userAgent = null,
         CancellationToken ct = default);
 }
 
-internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor) : IRefreshTokenService
+internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IRefreshTokenService
 {
     public async Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId, 
         string clientId, 
-        TimeSpan lifetime, 
         string[] scopes, 
         string? ipAddress = null,
         string? userAgent = null,
         CancellationToken ct = default)
     {
+        // Get tenant-specific refresh token lifetime
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        var settings = await settingsService.GetTenantSettingsAsync(tenantId);
+        var lifetimeSeconds = settings?.Tokens?.RefreshTokenLifetimeSeconds ?? 1296000; // Default: 15 days
+        var lifetime = TimeSpan.FromSeconds(lifetimeSeconds);
+        
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Hash(token);
         db.Tokens.Add(new Token
@@ -40,7 +44,7 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
             ScopesJson = System.Text.Json.JsonSerializer.Serialize(scopes),
             CreatedAt = DateTimeOffset.UtcNow,
             ExpiresAt = DateTimeOffset.UtcNow.Add(lifetime),
-            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required"),
+            TenantId = tenantId,
             IpAddress = ipAddress,
             UserAgent = userAgent
         });

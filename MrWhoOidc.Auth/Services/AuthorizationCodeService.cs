@@ -11,10 +11,15 @@ public interface IAuthorizationCodeService
     Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta, ITenantAccessor tenantAccessor) : IAuthorizationCodeService
+internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IAuthorizationCodeService
 {
     public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
     {
+        // Get tenant-specific authorization code lifetime
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+        var settings = await settingsService.GetTenantSettingsAsync(tenantId);
+        var lifetimeSeconds = settings?.Tokens?.AuthorizationCodeLifetimeSeconds ?? 300; // Default: 5 minutes
+        
         // Create a random code
         var code = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=')
@@ -31,9 +36,9 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             Nonce = valid.Nonce,
             CodeChallenge = valid.CodeChallenge,
             CodeChallengeMethod = valid.CodeChallengeMethod,
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(lifetimeSeconds),
             Consumed = false,
-            TenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required")
+            TenantId = tenantId
         };
 
         db.AuthorizationCodes.Add(entity);

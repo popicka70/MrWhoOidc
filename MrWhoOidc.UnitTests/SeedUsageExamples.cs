@@ -14,11 +14,12 @@ public sealed class SeedUsageExamples
     public async Task SeedBasic_Allows_Complex_TokenService_Path()
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
+        var settingsService = new MockTenantSettingsService();
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
         // Issue an authorization code for alice -> spa with roles scope
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant());
+        var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var authorizeResult = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
         {
             IsValid = true,
@@ -33,8 +34,7 @@ public sealed class SeedUsageExamples
 
         // Exchange it
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
-        var settingsService = new MockTenantSettingsService();
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant()), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, new TokenValidator(ks), settingsService, null);
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);
