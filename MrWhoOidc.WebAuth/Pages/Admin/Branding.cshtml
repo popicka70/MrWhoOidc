@@ -1,0 +1,202 @@
+@page "/t/{tenantSlug}/admin/branding"
+@model MrWhoOidc.WebAuth.Pages.Admin.BrandingModel
+@{
+    ViewData["Title"] = "Branding";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>Branding Customization</h2>
+            <p class="text-muted">Customize the appearance of your login pages, emails, and user-facing interfaces.</p>
+            
+            @if (Model.SuccessMessage != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>@Model.SuccessMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+            
+            @if (!Model.IsMultiTenantMode)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <strong>Single-Tenant Mode:</strong> Branding customization is available in multi-tenant mode only.
+                </div>
+            }
+            
+            <form method="post" class="needs-validation" novalidate>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-palette-fill me-2"></i>Brand Colors
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label asp-for="Input.PrimaryColor" class="form-label">Primary Color</label>
+                                <div class="input-group">
+                                    <input asp-for="Input.PrimaryColor" type="color" class="form-control form-control-color" />
+                                    <input asp-for="Input.PrimaryColor" type="text" class="form-control" placeholder="#007bff" maxlength="50" />
+                                </div>
+                                <small class="form-text text-muted">Main brand color used for buttons and accents</small>
+                                <span asp-validation-for="Input.PrimaryColor" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Input.AccentColor" class="form-label">Accent Color</label>
+                                <div class="input-group">
+                                    <input asp-for="Input.AccentColor" type="color" class="form-control form-control-color" />
+                                    <input asp-for="Input.AccentColor" type="text" class="form-control" placeholder="#6c757d" maxlength="50" />
+                                </div>
+                                <small class="form-text text-muted">Secondary color for links and highlights</small>
+                                <span asp-validation-for="Input.AccentColor" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-image-fill me-2"></i>Logo
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label asp-for="Input.LogoUrl" class="form-label">Logo URL</label>
+                            <input asp-for="Input.LogoUrl" type="url" class="form-control" placeholder="https://example.com/logo.png" maxlength="200" />
+                            <small class="form-text text-muted">
+                                Public URL to your logo image (PNG, SVG, or JPG). Recommended size: 200x60px
+                            </small>
+                            <span asp-validation-for="Input.LogoUrl" class="text-danger"></span>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(Model.Input.LogoUrl))
+                        {
+                            <div class="mt-2">
+                                <label class="form-label">Preview:</label>
+                                <div class="border rounded p-3 bg-light">
+                                    <img src="@Model.Input.LogoUrl" alt="Logo preview" style="max-height: 60px; max-width: 200px;" 
+                                         onerror="this.parentElement.innerHTML='<span class=\'text-danger\'>Failed to load logo</span>';" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <a asp-page="/Admin/Index" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </a>
+                    <button type="submit" class="btn btn-primary" disabled="@(!Model.IsMultiTenantMode)">
+                        <i class="bi bi-save me-1"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-eye-fill me-2"></i>Live Preview
+                </div>
+                <div class="card-body">
+                    <div class="border rounded p-3" style="background-color: var(--bs-light);">
+                        <div class="text-center mb-3">
+                            @if (!string.IsNullOrEmpty(Model.Input.LogoUrl))
+                            {
+                                <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height: 60px; max-width: 180px;" class="mb-3"
+                                     onerror="this.style.display='none';" />
+                            }
+                            else
+                            {
+                                <div class="mb-3 text-muted">
+                                    <i class="bi bi-image" style="font-size: 3rem;"></i>
+                                </div>
+                            }
+                            <h5>Sign In</h5>
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" placeholder="Email" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" placeholder="Password" disabled />
+                        </div>
+                        <button class="btn w-100" 
+                                style="background-color: @(Model.Input.PrimaryColor ?? "#007bff"); color: white; border: none;" 
+                                disabled>
+                            Sign In
+                        </button>
+                        <div class="text-center mt-2">
+                            <a href="#" style="color: @(Model.Input.AccentColor ?? "#6c757d");">Forgot password?</a>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        This is a simplified preview. Actual login pages may vary.
+                    </small>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i class="bi bi-lightbulb-fill me-2"></i>Tips
+                </div>
+                <div class="card-body">
+                    <ul class="small mb-0">
+                        <li>Use high-contrast colors for accessibility</li>
+                        <li>Test your logo on both light and dark backgrounds</li>
+                        <li>Colors should be in hex format (#RRGGBB)</li>
+                        <li>Logo should be hosted on a reliable CDN</li>
+                        <li>Consider mobile viewport when choosing colors</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Real-time color preview update
+        document.querySelectorAll('input[type="color"], input[type="text"][maxlength="50"]').forEach(input => {
+            input.addEventListener('input', function() {
+                const isPrimary = this.name.includes('PrimaryColor');
+                const previewBtn = document.querySelector('.btn.w-100');
+                const previewLink = document.querySelector('a[href="#"]');
+                
+                if (isPrimary && previewBtn) {
+                    previewBtn.style.backgroundColor = this.value || '#007bff';
+                } else if (!isPrimary && previewLink) {
+                    previewLink.style.color = this.value || '#6c757d';
+                }
+            });
+        });
+        
+        // Sync color picker with text input
+        document.querySelectorAll('input[type="text"][maxlength="50"]').forEach(textInput => {
+            const colorInput = textInput.previousElementSibling;
+            if (colorInput && colorInput.type === 'color') {
+                textInput.addEventListener('input', function() {
+                    if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                        colorInput.value = this.value;
+                    }
+                });
+                colorInput.addEventListener('input', function() {
+                    textInput.value = this.value;
+                });
+            }
+        });
+        
+        // Logo URL preview update
+        const logoInput = document.querySelector('input[name="Input.LogoUrl"]');
+        const logoPreview = document.querySelector('.col-md-4 img[alt="Logo"]');
+        if (logoInput && logoPreview) {
+            logoInput.addEventListener('blur', function() {
+                if (this.value) {
+                    logoPreview.src = this.value;
+                    logoPreview.style.display = 'block';
+                }
+            });
+        }
+    </script>
+}

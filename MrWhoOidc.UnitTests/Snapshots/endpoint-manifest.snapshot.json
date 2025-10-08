@@ -1358,5 +1358,14 @@
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
+  },
+  {
+    "Pattern": "t/{tenantSlug}/admin/branding",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
   }
 ]

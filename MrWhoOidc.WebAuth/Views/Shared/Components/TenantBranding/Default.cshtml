@@ -1,0 +1,41 @@
+@model MrWhoOidc.Auth.Services.TenantBranding
+
+@if (Model.HasCustomBranding)
+{
+    <style>
+        :root {
+            --tenant-primary-color: @Model.GetPrimaryColorOrDefault();
+            --tenant-accent-color: @Model.GetAccentColorOrDefault();
+        }
+        
+        /* Apply branding to primary buttons */
+        .btn-primary {
+            background-color: var(--tenant-primary-color) !important;
+            border-color: var(--tenant-primary-color) !important;
+        }
+        
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: color-mix(in srgb, var(--tenant-primary-color) 85%, black) !important;
+            border-color: color-mix(in srgb, var(--tenant-primary-color) 85%, black) !important;
+        }
+        
+        /* Apply branding to links */
+        a:not(.btn):not(.nav-link):not(.list-group-item) {
+            color: var(--tenant-accent-color);
+        }
+        
+        a:not(.btn):not(.nav-link):not(.list-group-item):hover {
+            color: color-mix(in srgb, var(--tenant-accent-color) 85%, black);
+        }
+        
+        /* Apply to badges */
+        .badge.bg-primary {
+            background-color: var(--tenant-primary-color) !important;
+        }
+        
+        /* Apply to navbar brand icon */
+        .navbar-brand .text-primary {
+            color: var(--tenant-primary-color) !important;
+        }
+    </style>
+}

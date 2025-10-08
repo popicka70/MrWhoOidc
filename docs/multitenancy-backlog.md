@@ -4,7 +4,7 @@
 
 This document outlines the architectural changes and implementation roadmap to transform MrWhoOidc.WebAuth from a single-tenant OIDC Provider into a full multi-tenant SaaS authorization server. The solution will support isolated tenant contexts with per-tenant configuration, branding, user bases, client applications, and independent administration.
 
-**Status:** Phase 1 - COMPLETE ✅ | Phase 2 - Ready to Start  
+**Status:** Phase 1 - COMPLETE ✅ | Phase 2 - IN PROGRESS 🔄 (40%)  
 **Created:** October 4, 2025  
 **Updated:** October 8, 2025  
 **Target:** Production-ready multi-tenant OIDC Provider
@@ -28,7 +28,12 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ Platform Admin UI implemented (tenant CRUD, dashboard, impersonation)
 - ✅ User Self-Service Portal complete (8 pages: dashboard, profile, sessions, consents, linked accounts, emails, password, MFA)
 
-**Next: Phase 2 - Branding & Customization** 🎨
+**Phase 2 In Progress - Branding & Customization:** 🔄 40%
+- ✅ Branding service layer (ITenantBrandingService, TenantBrandingService)
+- ✅ Branding admin UI (/t/{slug}/admin/branding) with live preview
+- ✅ Dynamic branding display (CSS variables, navbar logo)
+- 📋 Settings override system (NEXT)
+- 📋 Tenant setup wizard (PLANNED)
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -1687,31 +1692,42 @@ All phases include mode-aware implementation. The `MultiTenancy:Enabled` feature
 - 🔄 Documentation: multi-tenancy architecture guide and mode-switching guide (in progress)
 - 🔄 Comprehensive integration and E2E tests (pending)
 
-### Phase 2: Branding and Tenant Settings – 2-3 weeks
+### Phase 2: Branding and Tenant Settings – 2-3 weeks 🔄 IN PROGRESS
 
 **Goal:** Add per-tenant branding and advanced settings management.
 
+**Progress:** 40% complete (Step 1 of 4 done)
+
 **Tasks:**
-1. Branding:
-   - [ ] Add logo/color fields to `Tenant` entity
-   - [ ] Update login/consent pages to use tenant branding
-   - [ ] Tenant admin UI for branding customization
-3. Tenant setup wizard:
+1. Branding: ✅ **COMPLETE**
+   - [x] ~~Add logo/color fields to `Tenant` entity~~ (Already in Phase 1)
+   - [x] Branding service layer (`ITenantBrandingService`, `TenantBrandingService`)
+   - [x] Tenant admin UI for branding customization (`/t/{slug}/admin/branding`)
+   - [x] Dynamic branding display (CSS variables, logo in navbar)
+   - [ ] Update login/consent pages to use tenant branding (deferred - works via CSS vars)
+2. Login/Consent page enhancement: 🔄 **OPTIONAL** (works via global CSS)
+   - [ ] Apply branding component to login.cshtml
+   - [ ] Apply branding component to consent.cshtml
+3. Tenant setup wizard: 📋 **PLANNED**
    - [ ] Post-creation wizard (branding, first client, IdP, users)
    - [ ] Guided onboarding flow
-4. Settings overrides:
+4. Settings overrides: 📋 **NEXT UP**
    - [ ] Implement `Tenant.SettingsJson` parsing
+   - [ ] Define `TenantSettings` model
    - [ ] Cascade settings: platform → tenant → client
    - [ ] Tenant admin UI for settings management
 5. Testing:
-   - [ ] Branding display tests (visual regression or screenshot)
+   - [x] Unit tests (331 passing)
+   - [ ] Branding display tests (manual/visual)
    - [ ] Settings override tests (platform → tenant → client cascade)
 
 **Deliverables:**
-- Per-tenant branding (logo, colors)
-- Tenant setup wizard
-- Settings override system
-- Enhanced tenant admin UI
+- ✅ Per-tenant branding (logo, colors) - **DONE**
+- 📋 Tenant setup wizard - **PLANNED**
+- 📋 Settings override system - **NEXT**
+- ✅ Enhanced tenant admin UI - **DONE**
+
+**See:** `docs/phase2-branding-implementation.md` for detailed implementation notes.
 
 ### Phase 3: Lifecycle Management and Advanced Admin – 3-4 weeks
 

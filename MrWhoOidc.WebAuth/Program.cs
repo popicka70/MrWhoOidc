@@ -134,6 +134,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, M
 // Impersonation service (platform admin viewing as tenant admin)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrWhoOidc.WebAuth.Services.ImpersonationService>();
 
+// Tenant branding service
+builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantBrandingService, MrWhoOidc.Auth.Services.TenantBrandingService>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted
