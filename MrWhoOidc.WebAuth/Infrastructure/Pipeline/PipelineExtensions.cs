@@ -6,6 +6,7 @@ using StackExchange.Redis;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability;
+using Microsoft.AspNetCore.Http;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 
@@ -76,8 +77,44 @@ public static class PipelineExtensions
         app.UseTenantAwareRedirect();
 
         // Handle status code pages (must be after authentication/authorization)
-        // IMPORTANT: Only handle 4xx/5xx status codes, and NotFound page will filter API paths
-        app.UseStatusCodePagesWithReExecute("/NotFound", "?path={0}");
+        // IMPORTANT: Only handle 4xx/5xx status codes for user-facing pages. Do NOT transform API/protocol responses.
+        app.UseStatusCodePages(async context =>
+        {
+            var http = context.HttpContext;
+            var response = http.Response;
+            var request = http.Request;
+
+            // If protocol/auth headers are present or JSON content is being returned, do not interfere
+            var contentType = response.ContentType ?? string.Empty;
+            if (response.Headers.ContainsKey("WWW-Authenticate") ||
+                response.Headers.ContainsKey("DPoP-Nonce") ||
+                contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                return; // preserve original response (e.g., OAuth/DPoP challenges)
+            }
+
+            // Skip status code page for API/protocol endpoints
+            var p = request.Path;
+            if (p.StartsWithSegments("/.well-known", out _) ||
+                p.StartsWithSegments("/jwks", out _) ||
+                p.StartsWithSegments("/token", out _) ||
+                p.StartsWithSegments("/revoke", out _) ||
+                p.StartsWithSegments("/introspect", out _) ||
+                p.StartsWithSegments("/par", out _) ||
+                p.StartsWithSegments("/userinfo", out _) ||
+                p.StartsWithSegments("/api", out _) ||
+                p.StartsWithSegments("/connect", out _) ||
+                p.StartsWithSegments("/Auth/External", out _))
+            {
+                return; // leave status code and body untouched
+            }
+
+            // For user-facing routes, re-execute pipeline to render NotFound page
+            var originalPath = request.Path.Value ?? "/";
+            request.Path = "/NotFound";
+            request.QueryString = new QueryString($"?path={Uri.EscapeDataString(originalPath)}");
+            await context.Next(http);
+        });
 
         if (redisMux is not null)
         {
