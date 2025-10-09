@@ -12,8 +12,8 @@ public class MockTenantAccessor : ITenantAccessor
     /// <summary>
     /// Gets or sets the current tenant context. Returns null by default (single-tenant mode).
     /// </summary>
-    public TenantContext? CurrentTenant 
-    { 
+    public TenantContext? CurrentTenant
+    {
         get => _currentTenant;
         set => _currentTenant = value;
     }

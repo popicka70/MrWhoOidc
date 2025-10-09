@@ -21,7 +21,7 @@ public class IndexModel(AuthDbContext db) : PageModel
     public int TotalCount { get; set; }
     public int TotalSessions { get; set; }
     public int ActiveSessions { get; set; }
-    
+
     private const int PageSize = 50;
 
     public async Task OnGetAsync(

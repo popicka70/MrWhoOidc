@@ -15,7 +15,7 @@ public sealed class IdpProviderMappingTests
         // Realms and client
         var realm = new Realm { Name = "r", DisplayName = "R" };
         db.Realms.Add(realm);
-    var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id, AllowedLoginRedirectUrisJson = "[\"https://cb\"]" };
+        var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id, AllowedLoginRedirectUrisJson = "[\"https://cb\"]" };
         db.Clients.Add(client);
 
         // Providers
@@ -39,7 +39,7 @@ public sealed class IdpProviderMappingTests
             .Select(x => new { name = x.p.Name, display = x.p.DisplayName })
             .ToListAsync();
 
-        Assert.AreEqual(2, enabled.Count);
+        Assert.HasCount(2, enabled);
         Assert.AreEqual("aad", enabled[0].name);
         Assert.AreEqual("google", enabled[1].name);
     }

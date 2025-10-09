@@ -41,10 +41,10 @@ public class MrWhoLogoutManagerTests
 
         Assert.IsNotNull(request.LogoutUri);
         Assert.IsFalse(string.IsNullOrEmpty(request.State));
-    var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(request.LogoutUri.Query);
-    Assert.AreEqual("session-123", query["sid"].ToString());
-    Assert.AreEqual("client", query["client_id"].ToString());
-    Assert.AreEqual("https://app.local/signed-out", query["post_logout_redirect_uri"].ToString());
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(request.LogoutUri.Query);
+        Assert.AreEqual("session-123", query["sid"].ToString());
+        Assert.AreEqual("client", query["client_id"].ToString());
+        Assert.AreEqual("https://app.local/signed-out", query["post_logout_redirect_uri"].ToString());
     }
 
     [TestMethod]
@@ -135,7 +135,7 @@ public class MrWhoLogoutManagerTests
             expires: DateTime.UtcNow.AddMinutes(5),
             signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256));
 
-    token.Header["typ"] = "logout+jwt";
+        token.Header["typ"] = "logout+jwt";
 
         return handler.WriteToken(token);
     }

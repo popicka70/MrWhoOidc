@@ -21,7 +21,7 @@ public class StartImpersonationModel(
     public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
     {
         var success = await impersonationService.StartImpersonationAsync(HttpContext, User, tenantId);
-        
+
         if (!success)
         {
             TempData["Error"] = "Failed to start impersonation. You may not have permission or the tenant may be inactive.";

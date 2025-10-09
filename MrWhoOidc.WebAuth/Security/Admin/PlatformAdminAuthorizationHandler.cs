@@ -14,7 +14,7 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
     private readonly Microsoft.Extensions.Options.IOptions<PlatformAdminAuthOptions> _options;
 
     public PlatformAdminAuthorizationHandler(
-        AuthDbContext db, 
+        AuthDbContext db,
         Microsoft.Extensions.Options.IOptions<PlatformAdminAuthOptions> options)
     {
         _db = db;
@@ -22,7 +22,7 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
     }
 
     protected override async Task HandleRequirementAsync(
-        AuthorizationHandlerContext context, 
+        AuthorizationHandlerContext context,
         PlatformAdminRequirement requirement)
     {
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -36,10 +36,10 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
         var hasPlatformAdmin = await _db.UserRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
-            .AnyAsync(x => x.a.UserId == userId 
-                           && x.a.IsActive 
+            .AnyAsync(x => x.a.UserId == userId
+                           && x.a.IsActive
                            && x.r.IsActive
-                           && x.r.Name == roleName 
+                           && x.r.Name == roleName
                            && x.rl.Name == realmName);
 
         if (hasPlatformAdmin)

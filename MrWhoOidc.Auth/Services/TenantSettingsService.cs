@@ -25,7 +25,7 @@ public class TenantSettingsService : ITenantSettingsService
         _db = db;
         _tenantAccessor = tenantAccessor;
         _configuration = configuration;
-        
+
         // Load platform defaults from appsettings.json once
         _platformDefaults = LoadPlatformDefaults();
     }
@@ -75,7 +75,7 @@ public class TenantSettingsService : ITenantSettingsService
 
         tenant.SettingsJson = json;
         await _db.SaveChangesAsync();
-        
+
         return true;
     }
 
@@ -169,7 +169,7 @@ public class TenantSettingsService : ITenantSettingsService
     private OidcTenantSettings? MergeOidc(OidcTenantSettings? platform, OidcTenantSettings? tenant)
     {
         if (platform == null && tenant == null) return null;
-        
+
         return new OidcTenantSettings
         {
             Issuer = tenant?.Issuer ?? platform?.Issuer,
@@ -181,7 +181,7 @@ public class TenantSettingsService : ITenantSettingsService
     private AuthTenantSettings? MergeAuth(AuthTenantSettings? platform, AuthTenantSettings? tenant)
     {
         if (platform == null && tenant == null) return null;
-        
+
         return new AuthTenantSettings
         {
             AllowRefreshTokenIntrospection = tenant?.AllowRefreshTokenIntrospection ?? platform?.AllowRefreshTokenIntrospection,
@@ -193,7 +193,7 @@ public class TenantSettingsService : ITenantSettingsService
     private PasswordPolicySettings? MergePasswordPolicy(PasswordPolicySettings? platform, PasswordPolicySettings? tenant)
     {
         if (platform == null && tenant == null) return null;
-        
+
         return new PasswordPolicySettings
         {
             MinLength = tenant?.MinLength ?? platform?.MinLength,
@@ -207,7 +207,7 @@ public class TenantSettingsService : ITenantSettingsService
     private QrLoginTenantSettings? MergeQrLogin(QrLoginTenantSettings? platform, QrLoginTenantSettings? tenant)
     {
         if (platform == null && tenant == null) return null;
-        
+
         return new QrLoginTenantSettings
         {
             Enabled = tenant?.Enabled ?? platform?.Enabled,
@@ -218,7 +218,7 @@ public class TenantSettingsService : ITenantSettingsService
     private TokenTenantSettings? MergeTokens(TokenTenantSettings? platform, TokenTenantSettings? tenant)
     {
         if (platform == null && tenant == null) return null;
-        
+
         return new TokenTenantSettings
         {
             AccessTokenLifetimeSeconds = tenant?.AccessTokenLifetimeSeconds ?? platform?.AccessTokenLifetimeSeconds,

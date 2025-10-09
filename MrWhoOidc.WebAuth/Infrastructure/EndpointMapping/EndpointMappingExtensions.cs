@@ -44,24 +44,24 @@ internal static class EndpointMappingExtensions
                     {
                         using var scope = app.Services.CreateScope();
                         var logger = scope.ServiceProvider.GetRequiredService<ILogger<WebApplication>>();
-                        
+
                         logger.LogInformation("Starting database migrations...");
                         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                         await db.Database.MigrateAsync();
                         logger.LogInformation("Database migrations completed successfully.");
-                        
+
                         logger.LogInformation("Initializing tenant context for startup...");
                         var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
                         var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-                        
+
                         // Load default tenant for startup operations
                         var defaultTenant = await db.Tenants
                             .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
                             .FirstOrDefaultAsync();
-                        
+
                         if (defaultTenant == null)
                         {
-                            logger.LogWarning("Default tenant '{Slug}' not found. Signing key initialization skipped.", 
+                            logger.LogWarning("Default tenant '{Slug}' not found. Signing key initialization skipped.",
                                 multiTenancyOptions.DefaultTenantSlug);
                         }
                         else
@@ -77,23 +77,23 @@ internal static class EndpointMappingExtensions
                             };
                             tenantAccessor.SetTenant(tenantContext);
                             logger.LogInformation("Tenant context set to '{TenantSlug}' for startup operations.", defaultTenant.Slug);
-                            
+
                             logger.LogInformation("Seeding database...");
                             var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
                             await seeder.SeedAsync();
                             logger.LogInformation("Database seeding completed.");
-                            
+
                             logger.LogInformation("Initializing signing keys...");
                             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
                             await keyStore.GetActiveSigningKeyAsync();
                             logger.LogInformation("Signing keys initialized.");
-                            
+
                             logger.LogInformation("Applying key rotation policies...");
                             var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
                             await rotation.EnsureInitializedAsync();
                             logger.LogInformation("Key rotation policies applied.");
                         }
-                        
+
                         // Signal that migrations are complete
                         _migrationCompletionSource.TrySetResult(true);
                     }
@@ -116,13 +116,13 @@ internal static class EndpointMappingExtensions
 
         // Multi-tenant routing: register both tenant-prefixed and fallback routes
         var multiTenancyOptions = app.Services.GetRequiredService<IMultiTenancyOptions>();
-        
+
         if (multiTenancyOptions.Enabled)
         {
             // Multi-tenant mode: register tenant-prefixed routes
             var tenantGroup = app.MapGroup("/t/{slug}");
             MapOidcEndpoints(tenantGroup);
-            
+
             // Fallback routes for backward compatibility (map to default tenant)
             MapOidcEndpoints(app);
         }
@@ -146,12 +146,12 @@ internal static class EndpointMappingExtensions
     {
         var app = routes as WebApplication;
         var authOptions = (app?.Services ?? routes.ServiceProvider).GetRequiredService<IOptions<AuthOptions>>();
-        
+
         // OIDC Discovery and JWKS endpoints
         routes.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
-        
+
         routes.MapGet("/jwks", GetServerJwks)
             .RequireCors("oidc");
 
@@ -167,7 +167,7 @@ internal static class EndpointMappingExtensions
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
-        
+
         // Optional provider JWKS endpoints
         if (authOptions.Value.ExposeProviderJwks)
         {
@@ -181,7 +181,7 @@ internal static class EndpointMappingExtensions
                 return Results.Text(json, "application/json");
             }).RequireRateLimiting("rl-jwks");
         }
-        
+
         if (authOptions.Value.ExposeAggregatedProviderJwks)
         {
             routes.MapGet("/providers/jwks", async (IPublicJwksCache cache, HttpContext ctx, CancellationToken ct) =>
@@ -197,30 +197,30 @@ internal static class EndpointMappingExtensions
         // OIDC protocol endpoints
         routes.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireRateLimiting("rl-authorize");
-        
+
         routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
         routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
         routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx));
         routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
-        
+
         routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-token")
             .RequireRateLimiting("rl-token-exchange");
         routes.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
-        
+
         routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
-        
+
         routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-userinfo");
         routes.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
-        
+
         routes.MapPost("/introspect", (IIntrospectionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireRateLimiting("rl-introspect");
-        
+
         routes.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-par");

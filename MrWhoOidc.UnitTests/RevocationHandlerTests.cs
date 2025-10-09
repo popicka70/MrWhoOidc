@@ -20,7 +20,7 @@ public sealed class RevocationHandlerTests
     {
         var logger = NullLogger<RevocationHandler>.Instance;
         var metrics = new OidcMetrics();
-        
+
         revocations ??= new StubRevocationService();
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
@@ -38,7 +38,7 @@ public sealed class RevocationHandlerTests
         services.AddLogging();
         services.AddOptions();
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
         context.Request.Scheme = "https";
@@ -83,7 +83,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyMSJ9.sig", // Mock access token
@@ -109,7 +109,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "refresh_token_abc123",
@@ -136,7 +136,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: false); // Unknown token
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "unknown_token_xyz",
@@ -161,7 +161,7 @@ public sealed class RevocationHandlerTests
         // Arrange
         var clientStore = new StubClientStore(authenticated: false);
         var handler = CreateHandler(clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "some_token",
@@ -185,7 +185,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "token_to_revoke"
@@ -211,7 +211,7 @@ public sealed class RevocationHandlerTests
         var assertions = new StubClientAssertionValidator(valid: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore, assertions: assertions);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "token_to_revoke",
@@ -237,7 +237,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: false);
         var assertions = new StubClientAssertionValidator(valid: false);
         var handler = CreateHandler(clients: clientStore, assertions: assertions);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "token_to_revoke",
@@ -261,7 +261,7 @@ public sealed class RevocationHandlerTests
         // Arrange
         var clientStore = new StubClientStore(authenticated: true);
         var handler = CreateHandler(clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -283,7 +283,7 @@ public sealed class RevocationHandlerTests
     {
         // Arrange
         var handler = CreateHandler();
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "some_token",
@@ -307,7 +307,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "opaque_access_token_123",
@@ -334,7 +334,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "refresh_token_xyz",
@@ -361,7 +361,7 @@ public sealed class RevocationHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var revocationService = new StubRevocationService(revoked: true);
         var handler = CreateHandler(revocations: revocationService, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["token"] = "token_to_revoke",
@@ -385,7 +385,7 @@ public sealed class RevocationHandlerTests
     {
         // Arrange
         var handler = CreateHandler();
-        
+
         var context = new DefaultHttpContext();
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("test.example.com");

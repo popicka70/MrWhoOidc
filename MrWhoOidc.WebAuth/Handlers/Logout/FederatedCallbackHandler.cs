@@ -21,13 +21,13 @@ public sealed class FederatedCallbackHandler(
         var state = http.Request.Query["state"].ToString();
 
         var validation = await upstreamLogoutSvc.ValidateCallbackAsync(state, http.RequestAborted).ConfigureAwait(false);
-        
+
         if (!validation.Valid)
         {
             metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", validation.Reason ?? "invalid_state"));
             metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "federated_callback_fail"));
             audit.Emit("logout.federated.callback.page.fail", new { reason = validation.Reason });
-            
+
             var reasonParam = validation.Reason ?? "invalid_state";
             return Results.Redirect($"/Logout/FederatedCallbackError?reason={WebUtility.UrlEncode(reasonParam)}");
         }

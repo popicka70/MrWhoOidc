@@ -19,7 +19,7 @@ public class IndexModel(
     public IReadOnlyList<ItemVm> Items { get; private set; } = Array.Empty<ItemVm>();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
     public bool IsPlatformAdmin { get; private set; }
-    
+
     [BindProperty(SupportsGet = true)]
     public Guid? TenantId { get; set; }
 
@@ -30,7 +30,7 @@ public class IndexModel(
         // Check if user is platform admin
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         // Load tenant options for filter (platform admins only)
         if (IsPlatformAdmin)
         {
@@ -41,10 +41,10 @@ public class IndexModel(
             TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
             TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
         }
-        
+
         // Build query with automatic tenant scoping
         var q = db.Set<Registration>().AsNoTracking();
-        
+
         if (IsPlatformAdmin)
         {
             // Platform admins can optionally filter by tenant
@@ -68,7 +68,7 @@ public class IndexModel(
                 return;
             }
         }
-        
+
         var regs = await q.OrderByDescending(r => r.CreatedAt).ToListAsync();
 
         var clientIds = regs.Where(r => r.ClientId.HasValue).Select(r => r.ClientId!.Value).Distinct().ToArray();

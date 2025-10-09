@@ -102,7 +102,7 @@ public sealed class OpaqueTokenIntrospector(
     private static Dictionary<string, object?> BuildOpaqueResponse(Token entity, string issuer)
     {
         var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
-        
+
         var response = new Dictionary<string, object?>
         {
             ["active"] = true,

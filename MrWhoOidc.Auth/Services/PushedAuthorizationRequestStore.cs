@@ -66,7 +66,7 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
     {
         if (!TryToGuid(id, out var gid)) return null;
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        
+
         var now = DateTimeOffset.UtcNow;
         var entity = db.PushedAuthorizationRequests.AsNoTracking()
             .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId);
@@ -94,7 +94,7 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
     {
         if (!TryToGuid(id, out var gid)) return;
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        
+
         var entity = db.PushedAuthorizationRequests
             .FirstOrDefault(e => e.Id == gid && e.TenantId == tenantId);
         if (entity is null) return;

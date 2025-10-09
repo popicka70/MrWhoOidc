@@ -25,8 +25,8 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
         // Get active tokens (sessions)
         var tokens = await db.Tokens
             .AsNoTracking()
-            .Where(t => t.UserId == user.Id 
-                        && t.RevokedAt == null 
+            .Where(t => t.UserId == user.Id
+                        && t.RevokedAt == null
                         && t.ExpiresAt > DateTimeOffset.UtcNow)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
@@ -34,10 +34,10 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
         Sessions = tokens.Select(t =>
         {
             var uaInfo = uaParser.Parse(t.UserAgent);
-            var isCurrentDevice = !string.IsNullOrEmpty(currentUserAgent) && 
+            var isCurrentDevice = !string.IsNullOrEmpty(currentUserAgent) &&
                                   !string.IsNullOrEmpty(t.UserAgent) &&
                                   currentUserAgent.Equals(t.UserAgent, StringComparison.OrdinalIgnoreCase);
-            
+
             return new SessionViewModel
             {
                 Id = t.Id,
@@ -90,8 +90,8 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
 
         // Revoke all tokens except current session
         var tokensToRevoke = await db.Tokens
-            .Where(t => t.UserId == user.Id 
-                        && t.RevokedAt == null 
+            .Where(t => t.UserId == user.Id
+                        && t.RevokedAt == null
                         && (string.IsNullOrEmpty(currentSessionJti) || t.Jti != currentSessionJti))
             .ToListAsync();
 

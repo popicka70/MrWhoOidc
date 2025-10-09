@@ -75,7 +75,7 @@ public class PublicJwksMetricsTests
         task.GetAwaiter().GetResult();
         var (_, json) = task.Result;
         Assert.AreNotEqual("__not_found__", json);
-        Assert.IsTrue(json.Contains("\"keys\":[]"));
-        Assert.IsTrue(capture.ZeroKeys >= 1, $"Expected zero_keys metric >=1, got {capture.ZeroKeys}");
+        Assert.Contains("\"keys\":[]", json);
+        Assert.IsGreaterThanOrEqualTo(1, capture.ZeroKeys, $"Expected zero_keys metric >=1, got {capture.ZeroKeys}");
     }
 }

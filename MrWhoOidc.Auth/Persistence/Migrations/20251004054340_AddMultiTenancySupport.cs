@@ -136,15 +136,15 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
             var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
             migrationBuilder.InsertData(
                 table: "Tenants",
-                columns: new[] { "Id", "Slug", "Name", "Description", "IssuerUri", "Status", "CreatedAt", 
+                columns: new[] { "Id", "Slug", "Name", "Description", "IssuerUri", "Status", "CreatedAt",
                     "SuspendedAt", "DeletedAt", "LogoUrl", "PrimaryColor", "AccentColor", "SettingsJson",
-                    "MaxUsers", "MaxClients", "MaxIdentityProviders", "AdminEmail", "BillingPlan", 
+                    "MaxUsers", "MaxClients", "MaxIdentityProviders", "AdminEmail", "BillingPlan",
                     "TrialEndsAt", "MetadataJson" },
-                values: new object[] { 
-                    defaultTenantId, 
-                    "default", 
-                    "Default Tenant", 
-                    "Default tenant for single-tenant mode and existing data migration", 
+                values: new object[] {
+                    defaultTenantId,
+                    "default",
+                    "Default Tenant",
+                    "Default tenant for single-tenant mode and existing data migration",
                     "https://localhost:5001", // Will be overridden at runtime based on mode
                     1, // TenantStatus.Active
                     DateTimeOffset.UtcNow,

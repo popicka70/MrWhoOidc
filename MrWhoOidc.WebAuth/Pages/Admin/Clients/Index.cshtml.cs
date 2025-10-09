@@ -12,8 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
 public class IndexModel(
-    AuthDbContext db, 
-    IPasswordHasher hasher, 
+    AuthDbContext db,
+    IPasswordHasher hasher,
     IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService) : PageModel
@@ -24,7 +24,7 @@ public class IndexModel(
 
     public List<SelectListItem> RealmOptions { get; private set; } = new();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
-    
+
     public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty]

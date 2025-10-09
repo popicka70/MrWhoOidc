@@ -101,7 +101,7 @@ public sealed class ClientAuthenticator(
         }
 
         var presentedThumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
-        var match = allowedThumbprints.Any(t => 
+        var match = allowedThumbprints.Any(t =>
             string.Equals(t, presentedThumbprint, StringComparison.OrdinalIgnoreCase));
 
         if (!match)

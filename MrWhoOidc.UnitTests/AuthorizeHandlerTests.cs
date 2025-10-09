@@ -43,7 +43,7 @@ public sealed class AuthorizeHandlerTests
     {
         var metrics = new OidcMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
-        
+
         authorize ??= new StubAuthorizeService(true);
         codes ??= new StubAuthorizationCodeService();
         consents ??= new StubConsentService();
@@ -65,14 +65,14 @@ public sealed class AuthorizeHandlerTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddOptions();
-        
+
         // Register mock multi-tenancy services required by issuer builder
         services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
-        
+
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
         context.Request.Scheme = "https";
@@ -86,8 +86,8 @@ public sealed class AuthorizeHandlerTests
                 kvp => kvp.Key,
                 kvp => new Microsoft.Extensions.Primitives.StringValues(kvp.Value)));
             context.Request.Query = query;
-            
-            var queryString = "?" + string.Join("&", queryParams.Select(kvp => 
+
+            var queryString = "?" + string.Join("&", queryParams.Select(kvp =>
                 $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
             context.Request.QueryString = new QueryString(queryString);
         }
@@ -107,7 +107,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "Missing client_id");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["redirect_uri"] = "https://app/callback",
@@ -131,7 +131,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "Missing redirect_uri");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -155,7 +155,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "unauthorized_client", errorDescription: "Unknown client_id");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "unknown_client",
@@ -183,7 +183,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "redirect_uri is not allowed for this client");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -211,7 +211,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_scope", errorDescription: "The following scopes are not allowed: admin");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -239,7 +239,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "unsupported_response_type", errorDescription: "Only response_type=code is supported");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -263,7 +263,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         // Create valid client in database
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
@@ -279,7 +279,7 @@ public sealed class AuthorizeHandlerTests
 
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -308,7 +308,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "public_client",
@@ -333,7 +333,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             Id = Guid.NewGuid(),
@@ -348,7 +348,7 @@ public sealed class AuthorizeHandlerTests
 
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -377,7 +377,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -404,7 +404,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             Id = Guid.NewGuid(),
@@ -431,7 +431,7 @@ public sealed class AuthorizeHandlerTests
         var parStore = new StubPushedAuthorizationRequestStore("par123", parRequest, "test_client");
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
         var handler = CreateHandler(db, authorize: authorize, parStore: parStore);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["request_uri"] = "urn:ietf:params:oauth:request_uri:par123",
@@ -452,7 +452,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             Id = Guid.NewGuid(),
@@ -479,7 +479,7 @@ public sealed class AuthorizeHandlerTests
         var requestObjects = new StubRequestObjectValidator(valid: true, request: jarRequest, clientId: "test_client");
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
         var handler = CreateHandler(db, authorize: authorize, requestObjects: requestObjects);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["request"] = "eyJhbGciOiJSUzI1NiJ9.eyJjbGllbnRfaWQiOiJ0ZXN0In0.sig", // Mock JWT
@@ -500,7 +500,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var clientGuid = Guid.NewGuid();
@@ -536,7 +536,7 @@ public sealed class AuthorizeHandlerTests
         var consents = new StubConsentService(hasConsent: true);
         var clientStore = new StubClientStore(client);
         var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -548,7 +548,7 @@ public sealed class AuthorizeHandlerTests
             ["code_challenge_method"] = "S256",
             ["state"] = "state_value"
         };
-        
+
         // Authenticated user
         var claims = new[] { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
@@ -567,7 +567,7 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var clientGuid = Guid.NewGuid();
@@ -604,7 +604,7 @@ public sealed class AuthorizeHandlerTests
         var consents = new StubConsentService(hasConsent: true);
         var clientStore = new StubClientStore(client);
         var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -616,7 +616,7 @@ public sealed class AuthorizeHandlerTests
             ["code_challenge_method"] = "S256",
             ["state"] = "state123"
         };
-        
+
         var claims = new[] { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var context = CreateHttpContext(queryParams, principal);
@@ -636,7 +636,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "form_post");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -665,7 +665,7 @@ public sealed class AuthorizeHandlerTests
         using var db = CreateDb();
         var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "query.jwt");
         var handler = CreateHandler(db, authorize: authorize);
-        
+
         var queryParams = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",

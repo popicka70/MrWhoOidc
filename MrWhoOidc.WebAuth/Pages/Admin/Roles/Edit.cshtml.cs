@@ -34,24 +34,24 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
                         join tenant in db.Tenants on role.TenantId equals tenant.Id
                         where role.Id == id
                         select new { Role = role, Realm = realm, Tenant = tenant };
-        
+
         var result = await roleQuery.FirstOrDefaultAsync();
         if (result is null) return RedirectToPage("Index");
 
         TenantName = result.Tenant.Name;
         RealmName = result.Realm.Name;
-        
+
         // Load realms filtered by tenant
         Realms = await db.Realms.AsNoTracking()
             .Where(r => r.TenantId == result.Role.TenantId)
             .OrderBy(r => r.Name)
             .ToListAsync();
-        
-        Input = new EditInput 
-        { 
-            RealmId = result.Role.RealmId, 
-            Name = result.Role.Name, 
-            IsActive = result.Role.IsActive 
+
+        Input = new EditInput
+        {
+            RealmId = result.Role.RealmId,
+            Name = result.Role.Name,
+            IsActive = result.Role.IsActive
         };
         return Page();
     }
@@ -63,7 +63,7 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
         // Load tenant and realm info
         await LoadTenantAndRealmAsync(id);
-        
+
         // Load realms filtered by tenant
         Realms = await db.Realms.AsNoTracking()
             .Where(r => r.TenantId == entity.TenantId)
@@ -82,10 +82,10 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
         if (!string.Equals(entity.Name, Input.Name, StringComparison.Ordinal))
         {
-            var exists = await db.Roles.AnyAsync(r => 
-                r.TenantId == entity.TenantId && 
-                r.RealmId == entity.RealmId && 
-                r.Name == Input.Name && 
+            var exists = await db.Roles.AnyAsync(r =>
+                r.TenantId == entity.TenantId &&
+                r.RealmId == entity.RealmId &&
+                r.Name == Input.Name &&
                 r.Id != id);
             if (exists)
             {

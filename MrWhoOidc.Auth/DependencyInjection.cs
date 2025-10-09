@@ -24,10 +24,10 @@ public static class AuthServiceCollectionExtensions
             // Default: single-tenant mode for tests
             services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
         }
-        
+
         // Memory cache needed by TenantResolver
         services.AddMemoryCache();
-        
+
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
@@ -53,7 +53,7 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<ITotpService, TotpService>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
-        
+
         // Tenant discovery service for email-first login flow
         services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();
 

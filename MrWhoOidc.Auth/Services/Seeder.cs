@@ -37,7 +37,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     {
         // Get current tenant ID from context (required for multi-tenancy)
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required for seeding");
-        
+
         // Ensure admin realm exists
         var adminRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminRealm is null)
@@ -110,8 +110,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
 
         // Seed default admin user (idempotent)
-    var normalizedAdminEmail = EmailNormalizer.NormalizeForLookup(AdminEmail);
-    var adminUser = await db.Users.FirstOrDefaultAsync(u => (u.Username == AdminUsername || u.NormalizedEmail == normalizedAdminEmail) && u.TenantId == tenantId, ct).ConfigureAwait(false);
+        var normalizedAdminEmail = EmailNormalizer.NormalizeForLookup(AdminEmail);
+        var adminUser = await db.Users.FirstOrDefaultAsync(u => (u.Username == AdminUsername || u.NormalizedEmail == normalizedAdminEmail) && u.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminUser is null)
         {
             adminUser = new User
@@ -142,13 +142,13 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 RealmId = adminRealm.Id,
                 TenantId = tenantId,
                 IntrospectionAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
-                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
                     "https://localhost:7181/signin-oidc",
                     "http://localhost:7181/signin-oidc",
                     "https://localhost:5001/signin-oidc",
                     "http://localhost:5001/signin-oidc"
                 }),
-                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
                     "https://localhost:7181/signout-callback-oidc",
                     "https://localhost:7181/",
                     "http://localhost:7181/signout-callback-oidc",
@@ -183,7 +183,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             // Backfill redirect URIs if missing
             if (string.IsNullOrEmpty(blazorWebClient.AllowedLoginRedirectUrisJson))
             {
-                blazorWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                blazorWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] {
                     "https://localhost:7181/signin-oidc",
                     "http://localhost:7181/signin-oidc",
                     "https://localhost:5001/signin-oidc",
@@ -192,7 +192,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             }
             if (string.IsNullOrEmpty(blazorWebClient.AllowedLogoutRedirectUrisJson))
             {
-                blazorWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { 
+                blazorWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
                     "https://localhost:7181/signout-callback-oidc",
                     "https://localhost:7181/",
                     "http://localhost:7181/signout-callback-oidc",
@@ -307,7 +307,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = scope });
         }
 
-    await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Optionally assign alice to blazor-web client in admin realm
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice" && u.TenantId == tenantId, ct).ConfigureAwait(false);

@@ -10,20 +10,20 @@ namespace MrWhoOidc.Auth.Services;
 public interface IQrLoginService
 {
     Task<(string sessionToken, string authUrl)> CreateSessionAsync(
-        string clientId, string returnUrl, string codeChallenge, 
+        string clientId, string returnUrl, string codeChallenge,
         string codeChallengeMethod, string state, string? nonce, string scope);
-    
+
     Task<QrLoginSession?> GetSessionAsync(string sessionToken);
-    
+
     Task<QrLoginSession?> GetSessionByHashAsync(string sessionTokenHash);
-    
-    Task<bool> UpdateStatusAsync(string sessionToken, QrSessionStatus newStatus, 
+
+    Task<bool> UpdateStatusAsync(string sessionToken, QrSessionStatus newStatus,
         Guid? userId = null, string? authCode = null);
-    
+
     Task<bool> MarkScannedAsync(string sessionToken, string? mobileIp, string? mobileUserAgent);
-    
+
     Task ExpireSessionAsync(string sessionToken);
-    
+
     Task<int> CleanupExpiredSessionsAsync(DateTimeOffset olderThan);
 }
 
@@ -41,11 +41,11 @@ public sealed class QrLoginService : IQrLoginService
     }
 
     public async Task<(string sessionToken, string authUrl)> CreateSessionAsync(
-        string clientId, string returnUrl, string codeChallenge, 
+        string clientId, string returnUrl, string codeChallenge,
         string codeChallengeMethod, string state, string? nonce, string scope)
     {
         var opts = _options.Value;
-        
+
         // Generate secure session token (32 bytes = 256 bits)
         var tokenBytes = new byte[32];
         RandomNumberGenerator.Fill(tokenBytes);
@@ -100,7 +100,7 @@ public sealed class QrLoginService : IQrLoginService
             .FirstOrDefaultAsync(s => s.SessionTokenHash == sessionTokenHash);
     }
 
-    public async Task<bool> UpdateStatusAsync(string sessionToken, QrSessionStatus newStatus, 
+    public async Task<bool> UpdateStatusAsync(string sessionToken, QrSessionStatus newStatus,
         Guid? userId = null, string? authCode = null)
     {
         var session = await GetSessionAsync(sessionToken);
@@ -110,12 +110,12 @@ public sealed class QrLoginService : IQrLoginService
         }
 
         session.Status = newStatus;
-        
+
         if (userId.HasValue)
         {
             session.UserId = userId.Value;
         }
-        
+
         if (!string.IsNullOrEmpty(authCode))
         {
             session.AuthorizationCode = authCode;
@@ -145,7 +145,7 @@ public sealed class QrLoginService : IQrLoginService
             session.ScannedAt = DateTimeOffset.UtcNow;
             session.MobileIpAddress = mobileIp?.Length > 100 ? mobileIp[..100] : mobileIp;
             session.MobileUserAgent = mobileUserAgent?.Length > 500 ? mobileUserAgent[..500] : mobileUserAgent;
-            
+
             await _db.SaveChangesAsync();
             return true;
         }
@@ -167,8 +167,8 @@ public sealed class QrLoginService : IQrLoginService
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         var expiredSessions = await _db.QrLoginSessions
-            .Where(s => s.TenantId == tenantId && s.ExpiresAt < olderThan && 
-                        (s.Status == QrSessionStatus.Expired || 
+            .Where(s => s.TenantId == tenantId && s.ExpiresAt < olderThan &&
+                        (s.Status == QrSessionStatus.Expired ||
                          s.Status == QrSessionStatus.Cancelled ||
                          s.Status == QrSessionStatus.Consumed))
             .ToListAsync();

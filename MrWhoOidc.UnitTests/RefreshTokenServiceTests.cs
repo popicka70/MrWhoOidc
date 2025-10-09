@@ -37,14 +37,14 @@ public sealed class RefreshTokenServiceTests
         // Assert
         Assert.IsNotNull(token);
         Assert.IsNotNull(hash);
-        Assert.IsTrue(token.Length > 32, "Token should be substantial length");
-        Assert.IsTrue(hash.Length > 32, "Hash should be substantial length");
+        Assert.IsGreaterThan(32, token.Length, "Token should be substantial length");
+        Assert.IsGreaterThan(32, hash.Length, "Hash should be substantial length");
         Assert.AreNotEqual(token, hash, "Token and hash should be different");
-        
+
         // Token should be URL-safe base64
-        Assert.IsFalse(token.Contains('+'));
-        Assert.IsFalse(token.Contains('/'));
-        Assert.IsFalse(token.Contains('='));
+        Assert.DoesNotContain('+', token);
+        Assert.DoesNotContain('/', token);
+        Assert.DoesNotContain('=', token);
     }
 
     [TestMethod]
@@ -68,7 +68,7 @@ public sealed class RefreshTokenServiceTests
         Assert.AreEqual(userId, saved.UserId);
         Assert.AreEqual(clientId, saved.ClientId);
         Assert.IsNotNull(saved.ScopesJson);
-        
+
         var savedScopes = JsonSerializer.Deserialize<string[]>(saved.ScopesJson);
         CollectionAssert.AreEqual(scopes, savedScopes);
     }
@@ -92,17 +92,17 @@ public sealed class RefreshTokenServiceTests
         // Assert
         var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
         Assert.IsNotNull(saved);
-        
+
         // CreatedAt should be around now
         Assert.IsTrue(saved.CreatedAt >= before);
         Assert.IsTrue(saved.CreatedAt <= after);
-        
+
         // ExpiresAt should be CreatedAt + expectedLifetime (within 1 second tolerance)
         var expectedExpiry = saved.CreatedAt.Add(expectedLifetime);
         var actualDifference = (saved.ExpiresAt - expectedExpiry).TotalSeconds;
-        Assert.IsTrue(
-            Math.Abs(actualDifference) < 1, 
-            $"Expiry mismatch: expected {expectedExpiry}, got {saved.ExpiresAt}, diff={actualDifference}s");
+        Assert.IsLessThan(
+1,
+            Math.Abs(actualDifference), $"Expiry mismatch: expected {expectedExpiry}, got {saved.ExpiresAt}, diff={actualDifference}s");
     }
 
     [TestMethod]
@@ -145,12 +145,12 @@ public sealed class RefreshTokenServiceTests
         // Assert
         Assert.IsNotNull(token);
         Assert.IsNotNull(hash);
-        
+
         var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
         Assert.IsNotNull(saved);
         var savedScopes = JsonSerializer.Deserialize<string[]>(saved.ScopesJson);
         Assert.IsNotNull(savedScopes);
-        Assert.AreEqual(0, savedScopes.Length);
+        Assert.IsEmpty(savedScopes);
     }
 
     [TestMethod]
@@ -171,7 +171,7 @@ public sealed class RefreshTokenServiceTests
         Assert.IsNotNull(saved);
         var savedScopes = JsonSerializer.Deserialize<string[]>(saved.ScopesJson);
         Assert.IsNotNull(savedScopes);
-        Assert.AreEqual(6, savedScopes.Length);
+        Assert.HasCount(6, savedScopes);
         CollectionAssert.AreEqual(scopes, savedScopes);
     }
 }

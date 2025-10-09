@@ -89,7 +89,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         var provider = await _db.IdentityProviders.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled);
-        
+
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
             _logger.LogWarning("External start unknown provider {Provider}", providerName);
@@ -136,7 +136,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         _logger.LogInformation("Redirecting to authorization endpoint ({Mechanism})", authRequest.Mechanism);
         _metricsRecorder.RecordStartOutcome(true, startTs, providerName, clientId, authRequest.Mechanism);
-        
+
         return Results.Redirect(authRequest.RedirectUrl);
     }
 
@@ -168,12 +168,12 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             {
                 state.ReturnUrl = ExternalOidcUrlHelpers.EnsureCidRef(state.ReturnUrl, newCorrelation.Handle);
             }
-            
-            _logger.LogWarning("Correlation handle stale during callback handleHash={Handle}", 
+
+            _logger.LogWarning("Correlation handle stale during callback handleHash={Handle}",
                 ExternalOidcCorrelationManager.HashHandleForLog(correlationResolution.Handle));
-            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                 "cid_ref_stale", correlationPresent: false, handleStale: true);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, newCorrelation.Handle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, newCorrelation.Handle,
                 "Your sign-in session expired. Please start again.", "cid_ref_stale");
         }
 
@@ -185,7 +185,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         {
             _logger.LogWarning("External callback contained error from IdP: {Error} - {Description}", error, errorDescription);
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, "upstream_error", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 $"Upstream error: {error}{(string.IsNullOrEmpty(errorDescription) ? string.Empty : " - " + errorDescription)}", "upstream_error");
         }
 
@@ -194,24 +194,24 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         {
             _logger.LogWarning("External callback missing authorization code");
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, "missing_code", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 "Missing authorization code from upstream IdP.", "missing_code");
         }
 
         var provider = await _db.IdentityProviders.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Name == state.Provider && p.Enabled);
-        
+
         if (provider is null || string.IsNullOrWhiteSpace(provider.ConfigJson))
         {
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, "unknown_provider", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 "Unknown or disabled provider.", "unknown_provider");
         }
 
         if (!OidcProviderConfig.TryParse(provider.ConfigJson!, out var cfg).ok || cfg is null)
         {
             _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, "invalid_config", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 "Invalid provider configuration.", "invalid_config");
         }
 
@@ -219,22 +219,22 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         if (!discovery.Success)
         {
             _logger.LogWarning("Callback discovery failed: {Error}", discovery.ErrorMessage);
-            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                 discovery.ErrorCode ?? "discovery_failed", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
         var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
         var tokenResult = await _tokenExchangeService.ExchangeCodeForTokensAsync(
-            code, discovery.Response!.TokenEndpoint, redirectUri, cfg.ClientId, cfg.ClientSecret, 
+            code, discovery.Response!.TokenEndpoint, redirectUri, cfg.ClientId, cfg.ClientSecret,
             state.CodeVerifier, http.RequestAborted);
 
         if (!tokenResult.Success)
         {
-            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                 tokenResult.ErrorCode!, correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 tokenResult.ErrorMessage!, tokenResult.ErrorCode);
         }
 
@@ -257,9 +257,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
             if (!validationResult.Success)
             {
                 _logger.LogWarning("ID token validation failed: {Error}", validationResult.ErrorMessage);
-                _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+                _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                     validationResult.ErrorCode!, correlationPresent, handleStaleMarker);
-                return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+                return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                     validationResult.ErrorMessage!, validationResult.ErrorCode);
             }
 
@@ -276,9 +276,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (string.IsNullOrEmpty(userInfo.Subject) || string.IsNullOrEmpty(userInfo.Issuer))
         {
-            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                 "missing_sub_or_issuer", correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 "Missing subject/issuer from upstream IdP", "missing_sub_or_issuer");
         }
 
@@ -301,9 +301,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (!provisioningResult.Success)
         {
-            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId, 
+            _metricsRecorder.RecordCallbackOutcome(false, cbStart, state.Provider, state.ClientId,
                 provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
-            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle, 
+            return _errorHandler.CreateFriendlyError(state.ReturnUrl, state.ClientId, state.CorrelationHandle,
                 provisioningResult.ErrorMessage!, provisioningResult.ErrorCode);
         }
 
@@ -311,18 +311,18 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         {
             var token = _stateManager.ProtectConfirm(provisioningResult.ConfirmationModel!);
             var existingUser = await _db.Users.FindAsync(provisioningResult.ConfirmationModel!.TargetUserId);
-            return _errorHandler.CreateConfirmPage(token, state.ReturnUrl, state.ClientId, 
-                correlationResolution.CorrelationId, provisioningResult.ConfirmationModel.Email!, 
+            return _errorHandler.CreateConfirmPage(token, state.ReturnUrl, state.ClientId,
+                correlationResolution.CorrelationId, provisioningResult.ConfirmationModel.Email!,
                 existingUser?.Name ?? existingUser?.Username ?? "User");
         }
 
-        await _sessionManager.SignInAsync(http, provisioningResult.UserId!.Value, userInfo.Name, userInfo.Email, 
+        await _sessionManager.SignInAsync(http, provisioningResult.UserId!.Value, userInfo.Name, userInfo.Email,
             state.Provider, userInfo.Acr, userInfo.Amrs, mapped, idToken);
 
         _sessionManager.SetLastProviderCookie(http, state.Provider, state.ClientId);
 
         _logger.LogInformation("External sign-in successful; redirecting to returnUrl");
-        _metricsRecorder.RecordCallbackOutcome(true, cbStart, state.Provider, state.ClientId, 
+        _metricsRecorder.RecordCallbackOutcome(true, cbStart, state.Provider, state.ClientId,
             provisioningResult.Outcome!, correlationPresent, handleStaleMarker);
 
         return Results.Redirect(state.ReturnUrl ?? "/");
@@ -348,14 +348,14 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         var extExisting = await _db.ExternalIdentities.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Issuer == model.Issuer && e.Subject == model.Subject);
-        
+
         if (extExisting is not null)
         {
-            await _sessionManager.SignInAsync(http, extExisting.UserId, model.Name, model.Email, 
+            await _sessionManager.SignInAsync(http, extExisting.UserId, model.Name, model.Email,
                 model.Provider, null, Array.Empty<string>(), new Dictionary<string, string>(), null);
-            
+
             _sessionManager.SetLastProviderCookie(http, model.Provider, model.ClientId);
-            
+
             return Results.Redirect(model.ReturnUrl ?? "/");
         }
 
@@ -376,13 +376,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync();
 
-        await _sessionManager.SignInAsync(http, user.Id, model.Name, model.Email, model.Provider, 
+        await _sessionManager.SignInAsync(http, user.Id, model.Name, model.Email, model.Provider,
             null, Array.Empty<string>(), new Dictionary<string, string>(), null);
 
         _sessionManager.SetLastProviderCookie(http, model.Provider, model.ClientId);
 
         _metricsRecorder.RecordCallbackOutcome(true, DateTime.UtcNow, model.Provider, model.ClientId, "confirm_link_success");
-        
+
         return Results.Redirect(model.ReturnUrl ?? "/");
     }
 

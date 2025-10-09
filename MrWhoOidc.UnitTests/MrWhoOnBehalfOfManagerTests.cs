@@ -21,8 +21,8 @@ public class MrWhoOnBehalfOfManagerTests
         var tokenClient = new Mock<IMrWhoTokenClient>(MockBehavior.Strict);
 
         var tokenResult = TokenResult.FromSuccess(new TokenResponsePayload("obo-token", null, "Bearer", 3600, null, "api.read", "{}"));
-    tokenClient.Setup(t => t.TokenExchangeAsync(It.IsAny<TokenExchangeRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(tokenResult);
+        tokenClient.Setup(t => t.TokenExchangeAsync(It.IsAny<TokenExchangeRequest>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(tokenResult);
 
         var manager = new MrWhoOnBehalfOfManager(tokenClient.Object, monitor, cache, NullLogger<MrWhoOnBehalfOfManager>.Instance);
 

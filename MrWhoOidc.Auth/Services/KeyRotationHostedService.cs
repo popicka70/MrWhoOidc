@@ -42,14 +42,14 @@ internal sealed class KeyRotationHostedService(
         try
         {
             using var scope = services.CreateScope();
-            
+
             // Set tenant context for background operation
             if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, ct).ConfigureAwait(false))
             {
                 logger.LogWarning("Key rotation skipped: default tenant not found");
                 return;
             }
-            
+
             var rotation = scope.ServiceProvider.GetRequiredService<IKeyRotationService>();
             await rotation.EnsureInitializedAsync(ct).ConfigureAwait(false);
         }

@@ -77,7 +77,7 @@ public class BackchannelAlertSamplerTests
             await sampler.TickAsync(CancellationToken.None);
             clock.Advance(TimeSpan.FromSeconds(30));
         }
-        Assert.AreEqual(0, alerts.Published.Count, "No alert before sustained window reached");
+        Assert.IsEmpty(alerts.Published, "No alert before sustained window reached");
 
         await sampler.TickAsync(CancellationToken.None); // 4th sample triggers
         Assert.IsTrue(alerts.Published.Any(a => a.Type == "bcl.alert.failure_rate"), "Failure rate alert emitted after sustained threshold");

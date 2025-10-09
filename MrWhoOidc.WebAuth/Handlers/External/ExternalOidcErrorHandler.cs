@@ -23,14 +23,14 @@ internal sealed class ExternalOidcErrorHandler : IExternalOidcErrorHandler
             ["returnUrl"] = returnUrl,
             ["clientId"] = clientId
         };
-        
+
         var qb = System.Web.HttpUtility.ParseQueryString(string.Empty);
         foreach (var kv in qp)
         {
-            if (!string.IsNullOrEmpty(kv.Value)) 
+            if (!string.IsNullOrEmpty(kv.Value))
                 qb[kv.Key] = kv.Value;
         }
-        
+
         var url = "/Auth/External/Error?" + qb.ToString();
         return Results.Redirect(url);
     }
@@ -52,7 +52,7 @@ internal sealed class ExternalOidcErrorHandler : IExternalOidcErrorHandler
         builder.Append($"<a class=\"btn btn-secondary\" href=\"/Auth/External/Confirm?t={Uri.EscapeDataString(token)}&cancel=1\">Cancel</a>");
         builder.Append("</div>");
         builder.Append("</body></html>");
-        
+
         return Results.Content(builder.ToString(), "text/html; charset=utf-8");
     }
 }

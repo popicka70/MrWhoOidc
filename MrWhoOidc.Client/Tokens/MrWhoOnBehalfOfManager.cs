@@ -71,7 +71,7 @@ internal sealed class MrWhoOnBehalfOfManager : IMrWhoOnBehalfOfManager
             return result;
         }
 
-    var lifetime = ResolveLifetime(resolvedRegistration.CacheLifetime, result.ExpiresIn);
+        var lifetime = ResolveLifetime(resolvedRegistration.CacheLifetime, result.ExpiresIn);
         if (lifetime is not null)
         {
             var expiresAt = DateTimeOffset.UtcNow.Add(lifetime.Value);

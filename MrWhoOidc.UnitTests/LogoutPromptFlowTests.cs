@@ -59,7 +59,7 @@ public class LogoutPromptFlowTests
         var cache = new MemoryCache(new MemoryCacheOptions());
         var dp = new EphemeralDataProtectionProvider();
         var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
-        
+
         // Create refactored handler dependencies
         var metrics = new OidcMetrics();
         var audit = new NoopAuditSink();
@@ -81,7 +81,7 @@ public class LogoutPromptFlowTests
         var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, audit, metrics, new NullLogger<EndSessionHandler>());
         var redirectResolver = new LogoutRedirectResolver(db, audit);
         var handler = new LogoutHandler(localLogout, federatedEntry, federatedCallback, endSession, redirectResolver);
-        
+
         var ctx = new DefaultHttpContext();
         ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("idp", "google") }, "cookie"));
         ctx.Request.QueryString = new QueryString("?returnUrl=%2Fhome&style=dark");

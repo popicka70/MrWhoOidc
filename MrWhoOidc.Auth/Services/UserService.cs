@@ -17,13 +17,13 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
     public Task<User?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         var query = db.Users.AsNoTracking().Where(u => u.Username == username);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(u => u.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         return query.FirstOrDefaultAsync(ct);
     }
 
@@ -33,13 +33,13 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
 
         // Fast path: direct username match (exact, case-sensitive as stored)
         var query = db.Users.AsNoTracking().Where(u => u.Username == usernameOrEmail);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(u => u.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         var user = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (user != null) return user;
 
@@ -51,26 +51,26 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
         if (string.IsNullOrEmpty(email)) return null;
 
         var emailQuery = db.Users.AsNoTracking().Where(u => u.NormalizedEmail == email);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             emailQuery = emailQuery.Where(u => u.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         user = await emailQuery.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (user != null) return user;
 
         // Alternative emails (only consider verified to reduce enumeration attacks)
         var altQuery = db.UserAlternativeEmails.AsNoTracking()
             .Where(a => a.NormalizedEmail == email && a.IsVerified);
-        
+
         // Join with Users to filter by tenant
         if (tenantAccessor.CurrentTenant != null)
         {
             altQuery = altQuery.Where(a => db.Users.Any(u => u.Id == a.UserId && u.TenantId == tenantAccessor.CurrentTenant.TenantId));
         }
-        
+
         var alt = await altQuery
             .Select(a => a.UserId)
             .FirstOrDefaultAsync(ct)

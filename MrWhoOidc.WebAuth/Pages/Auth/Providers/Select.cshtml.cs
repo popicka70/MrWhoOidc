@@ -56,7 +56,7 @@ public class SelectModel(AuthDbContext db) : PageModel
     {
         // DEBUG: Log ReturnUrl for QR troubleshooting
         Console.WriteLine($"[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}");
-        
+
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
             // Auto-fallback to admin client when client_id is not specified

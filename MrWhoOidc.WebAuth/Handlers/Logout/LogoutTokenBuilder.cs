@@ -37,10 +37,10 @@ public sealed class LogoutTokenBuilder(IKeyStore keyStore)
             { "iat", now },
             { "exp", exp },
             { "jti", Guid.NewGuid().ToString("N") },
-            { "events", new Dictionary<string, object> 
-                { 
-                    { "http://schemas.openid.net/event/backchannel-logout", new Dictionary<string, object>() } 
-                } 
+            { "events", new Dictionary<string, object>
+                {
+                    { "http://schemas.openid.net/event/backchannel-logout", new Dictionary<string, object>() }
+                }
             }
         };
 
@@ -50,7 +50,7 @@ public sealed class LogoutTokenBuilder(IKeyStore keyStore)
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
         var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
         var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
-        
+
         var header = new JwtHeader(creds)
         {
             { "typ", "logout+jwt" }
@@ -58,7 +58,7 @@ public sealed class LogoutTokenBuilder(IKeyStore keyStore)
 
         var handler = new JwtSecurityTokenHandler();
         var token = new JwtSecurityToken(header, payload);
-        
+
         return handler.WriteToken(token);
     }
 }

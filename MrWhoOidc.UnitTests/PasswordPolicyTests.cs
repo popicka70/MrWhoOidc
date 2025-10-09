@@ -21,7 +21,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsTrue(result.IsValid);
-        Assert.AreEqual(0, result.Errors.Count);
+        Assert.IsEmpty(result.Errors);
     }
 
     [TestMethod]
@@ -36,8 +36,8 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.AreEqual(1, result.Errors.Count);
-        Assert.IsTrue(result.Errors[0].Contains("at least 6 characters"));
+        Assert.HasCount(1, result.Errors);
+        Assert.Contains("at least 6 characters", result.Errors[0]);
     }
 
     [TestMethod]
@@ -57,8 +57,8 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.AreEqual(1, result.Errors.Count);
-        Assert.IsTrue(result.Errors[0].Contains("uppercase"));
+        Assert.HasCount(1, result.Errors);
+        Assert.Contains("uppercase", result.Errors[0]);
     }
 
     [TestMethod]
@@ -97,7 +97,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.IsTrue(result.Errors[0].Contains("lowercase"));
+        Assert.Contains("lowercase", result.Errors[0]);
     }
 
     [TestMethod]
@@ -117,7 +117,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.IsTrue(result.Errors[0].Contains("digit"));
+        Assert.Contains("digit", result.Errors[0]);
     }
 
     [TestMethod]
@@ -137,7 +137,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.IsTrue(result.Errors[0].Contains("special character"));
+        Assert.Contains("special character", result.Errors[0]);
     }
 
     [TestMethod]
@@ -201,7 +201,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.AreEqual(4, result.Errors.Count); // Should have 4 errors
+        Assert.HasCount(4, result.Errors); // Should have 4 errors
     }
 
     [TestMethod]
@@ -216,7 +216,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result.IsValid);
-        Assert.IsTrue(result.Errors[0].Contains("cannot be empty"));
+        Assert.Contains("cannot be empty", result.Errors[0]);
     }
 
     [TestMethod]
@@ -237,7 +237,7 @@ public class PasswordPolicyTests
 
         // Assert
         Assert.IsFalse(result1.IsValid);
-        Assert.IsTrue(result1.Errors[0].Contains("at least 10 characters"));
+        Assert.Contains("at least 10 characters", result1.Errors[0]);
         Assert.IsTrue(result2.IsValid);
     }
 }

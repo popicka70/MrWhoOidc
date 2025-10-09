@@ -34,8 +34,8 @@ public sealed class DPoPValidator(
         }
 
         // Validate JKT match
-        if (!validation.Ok || 
-            string.IsNullOrEmpty(validation.Jkt) || 
+        if (!validation.Ok ||
+            string.IsNullOrEmpty(validation.Jkt) ||
             !string.Equals(validation.Jkt, expectedJkt, StringComparison.Ordinal))
         {
             return (false, null);

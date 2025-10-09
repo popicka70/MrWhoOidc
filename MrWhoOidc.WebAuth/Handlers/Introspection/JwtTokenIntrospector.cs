@@ -18,7 +18,7 @@ public sealed class JwtTokenIntrospector(
         IntrospectionContext context)
     {
         var (isValid, principal, _) = tokenValidator.Validate(context.Request.Token, context.Issuer);
-        
+
         if (!isValid || principal is null)
         {
             return (null, null); // Not a valid JWT, try opaque token

@@ -26,9 +26,9 @@ public class IndexModel(
         DateTimeOffset CreatedAt);
 
     public IReadOnlyList<TenantRow> TenantRows { get; private set; } = Array.Empty<TenantRow>();
-    
+
     public string CurrentMode => multiTenancyOptions.Value.Enabled ? "MultiTenant" : "SingleTenant";
-    
+
     public string? DefaultTenantSlug => multiTenancyOptions.Value.DefaultTenantSlug;
 
     public async Task OnGetAsync()
@@ -39,7 +39,7 @@ public class IndexModel(
             Response.Redirect("/PlatformAdmin/Index");
             return;
         }
-        
+
         // Load all tenants with counts
         var tenants = await db.Tenants
             .AsNoTracking()

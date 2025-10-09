@@ -47,7 +47,7 @@ public class TenantBrandingService : ITenantBrandingService
         }
 
         var branding = await GetBrandingAsync(currentTenant.TenantId);
-        
+
         // Return tenant name even if no custom branding
         return branding ?? new TenantBranding
         {

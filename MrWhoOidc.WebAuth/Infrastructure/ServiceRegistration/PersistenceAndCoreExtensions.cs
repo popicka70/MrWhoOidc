@@ -43,7 +43,7 @@ public static class PersistenceAndCoreExtensions
         // Protocol endpoint handlers (discovery, token, etc.)
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
-        
+
         // Logout services (refactored)
         services.AddScoped<Handlers.Logout.ILogoutHandler, Handlers.Logout.LogoutHandler>();
         services.AddScoped<Handlers.Logout.LocalLogoutHandler>();
@@ -55,7 +55,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<Handlers.Logout.BackChannelLogoutEnqueuer>();
         services.AddScoped<Handlers.Logout.PostLogoutRedirectValidator>();
         services.AddScoped<Handlers.Logout.LogoutTokenBuilder>();
-        
+
         services.AddScoped<IUpstreamLogoutService, UpstreamLogoutService>(); // uses DbContext (scoped)
         services.AddMemoryCache();
         services.AddScoped<ITokenHandler, TokenHandler>();
@@ -65,7 +65,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
-        
+
         // Introspection services
         services.AddScoped<IIntrospectionHandler, Handlers.Introspection.IntrospectionHandler>();
         services.AddScoped<Handlers.Introspection.ClientAuthenticator>();
@@ -75,7 +75,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<Handlers.Introspection.JwtTokenIntrospector>();
         services.AddScoped<Handlers.Introspection.OpaqueTokenIntrospector>();
         services.AddScoped<Handlers.Introspection.RefreshTokenIntrospector>();
-        
+
         services.AddSingleton<IPublicJwksCache, PublicJwksCache>();
 
         // QR login services

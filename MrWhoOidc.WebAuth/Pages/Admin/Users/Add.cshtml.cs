@@ -15,13 +15,13 @@ public class AddModel(AuthDbContext db) : PageModel
     {
         [Required]
         public Guid TenantId { get; set; }
-        
+
         [Required, StringLength(200)]
         public string Username { get; set; } = string.Empty;
-        
+
         [EmailAddress, StringLength(256)]
         public string? Email { get; set; }
-        
+
         [StringLength(200)]
         public string? Name { get; set; }
     }
@@ -54,7 +54,7 @@ public class AddModel(AuthDbContext db) : PageModel
         }
 
         var username = Input.Username.Trim();
-        
+
         // Check uniqueness within tenant
         if (await db.Users.AnyAsync(u => u.TenantId == Input.TenantId && u.Username == username))
         {
@@ -62,7 +62,7 @@ public class AddModel(AuthDbContext db) : PageModel
             await LoadTenantsAsync();
             return Page();
         }
-        
+
         var email = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
         var normalized = EmailNormalizer.NormalizeForLookup(email);
         if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.TenantId == Input.TenantId && u.NormalizedEmail == normalized))
@@ -71,7 +71,7 @@ public class AddModel(AuthDbContext db) : PageModel
             await LoadTenantsAsync();
             return Page();
         }
-        
+
         db.Users.Add(new User
         {
             TenantId = Input.TenantId,
@@ -82,7 +82,7 @@ public class AddModel(AuthDbContext db) : PageModel
             HashAlgorithm = "argon2id",
             PasswordHash = string.Empty
         });
-        
+
         await db.SaveChangesAsync();
         return RedirectToPage("Index", new { TenantId = Input.TenantId });
     }

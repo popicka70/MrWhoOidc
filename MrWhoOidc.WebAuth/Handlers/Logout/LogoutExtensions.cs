@@ -15,7 +15,7 @@ public static class LogoutExtensions
     public static string GetIssuer(this HttpContext http)
     {
         var options = http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions;
-        
+
         // If issuer is explicitly configured, use it (backward compatibility)
         if (!string.IsNullOrEmpty(options?.Issuer))
         {

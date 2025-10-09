@@ -72,7 +72,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
             if (!string.IsNullOrEmpty(impersonatedTenantIdStr) && Guid.TryParse(impersonatedTenantIdStr, out var impersonatedTenantId))
             {
                 var currentTenantId = _tenantAccessor.CurrentTenant?.TenantId;
-                
+
                 if (impersonatedTenantId == currentTenantId)
                 {
                     // User is a platform admin impersonating this tenant - grant access

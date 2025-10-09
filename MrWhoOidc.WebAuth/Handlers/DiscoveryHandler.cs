@@ -30,11 +30,11 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             scopes = OidcConstants.Scopes.AllStandardScopes;
         }
 
-        var grants = new List<string> 
-        { 
-            OAuthConstants.GrantTypes.AuthorizationCode, 
-            OAuthConstants.GrantTypes.RefreshToken, 
-            OAuthConstants.GrantTypes.ClientCredentials 
+        var grants = new List<string>
+        {
+            OAuthConstants.GrantTypes.AuthorizationCode,
+            OAuthConstants.GrantTypes.RefreshToken,
+            OAuthConstants.GrantTypes.ClientCredentials
         };
         if (authOptions.Value.EnableTokenExchange)
         {
@@ -50,14 +50,14 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             revocation_endpoint = $"{baseUrl}/revoke",
             introspection_endpoint = $"{baseUrl}/introspect",
             introspection_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
-            introspection_endpoint_auth_signing_alg_values_supported = new[] 
-            { 
-                SecurityConstants.JwtAlgorithms.RS256, 
-                SecurityConstants.JwtAlgorithms.RS384, 
-                SecurityConstants.JwtAlgorithms.RS512, 
-                SecurityConstants.JwtAlgorithms.ES256, 
-                SecurityConstants.JwtAlgorithms.ES384, 
-                SecurityConstants.JwtAlgorithms.ES512 
+            introspection_endpoint_auth_signing_alg_values_supported = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
             },
             pushed_authorization_request_endpoint = $"{baseUrl}/par",
             require_pushed_authorization_requests = authOptions.Value.RequirePar,
@@ -70,14 +70,14 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             response_types_supported = new[] { OAuthConstants.ResponseTypes.Code },
             grant_types_supported = grants.ToArray(),
             token_endpoint_auth_methods_supported = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
-            token_endpoint_auth_signing_alg_values_supported = new[] 
-            { 
-                SecurityConstants.JwtAlgorithms.RS256, 
-                SecurityConstants.JwtAlgorithms.RS384, 
-                SecurityConstants.JwtAlgorithms.RS512, 
-                SecurityConstants.JwtAlgorithms.ES256, 
-                SecurityConstants.JwtAlgorithms.ES384, 
-                SecurityConstants.JwtAlgorithms.ES512 
+            token_endpoint_auth_signing_alg_values_supported = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
             },
             code_challenge_methods_supported = new[] { OAuthConstants.CodeChallengeMethods.S256 },
             id_token_signing_alg_values_supported = new[] { SecurityConstants.JwtAlgorithms.RS256 },
@@ -88,13 +88,13 @@ public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptio
             request_uri_parameter_supported = true,
             request_object_signing_alg_values_supported = (authOptions.Value.RequestObjectAllowedAlgorithms is { Length: > 0 }
                 ? authOptions.Value.RequestObjectAllowedAlgorithms
-                : new[] 
-                { 
-                    SecurityConstants.JwtAlgorithms.RS256, 
-                    SecurityConstants.JwtAlgorithms.PS256, 
-                    SecurityConstants.JwtAlgorithms.ES256, 
-                    SecurityConstants.JwtAlgorithms.ES384, 
-                    SecurityConstants.JwtAlgorithms.ES512 
+                : new[]
+                {
+                    SecurityConstants.JwtAlgorithms.RS256,
+                    SecurityConstants.JwtAlgorithms.PS256,
+                    SecurityConstants.JwtAlgorithms.ES256,
+                    SecurityConstants.JwtAlgorithms.ES384,
+                    SecurityConstants.JwtAlgorithms.ES512
                 })
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(a => a)

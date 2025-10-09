@@ -34,15 +34,15 @@ public class MrWhoAuthorizationManagerTests
             TokenEndpoint = "https://issuer.example.com/token"
         });
 
-    var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
+        var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
 
         var context = await manager.BuildAuthorizeRequestAsync(new Uri("https://app/callback"));
 
         Assert.IsNotNull(context.RequestUri);
-    var query = QueryHelpers.ParseQuery(context.RequestUri.Query);
-    Assert.AreEqual("S256", query["code_challenge_method"].ToString());
-    Assert.IsFalse(string.IsNullOrEmpty(query["nonce"].ToString()));
-    Assert.IsFalse(string.IsNullOrEmpty(query["code_challenge"].ToString()));
+        var query = QueryHelpers.ParseQuery(context.RequestUri.Query);
+        Assert.AreEqual("S256", query["code_challenge_method"].ToString());
+        Assert.IsFalse(string.IsNullOrEmpty(query["nonce"].ToString()));
+        Assert.IsFalse(string.IsNullOrEmpty(query["code_challenge"].ToString()));
         Assert.IsFalse(string.IsNullOrEmpty(context.CodeVerifier));
     }
 
@@ -59,7 +59,7 @@ public class MrWhoAuthorizationManagerTests
         {
             AuthorizationEndpoint = "https://issuer.example.com/authorize"
         });
-    var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
+        var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
 
         var result = await manager.ValidateCallbackAsync("missing", "code", null);
         Assert.IsTrue(result.IsError);
@@ -79,7 +79,7 @@ public class MrWhoAuthorizationManagerTests
         {
             AuthorizationEndpoint = "https://issuer.example.com/authorize"
         });
-    var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
+        var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
 
         var context = await manager.BuildAuthorizeRequestAsync(new Uri("https://app/callback"));
         var result = await manager.ValidateCallbackAsync(context.State, "code", null);
@@ -118,9 +118,9 @@ public class MrWhoAuthorizationManagerTests
     [TestMethod]
     public async Task ValidateCallback_JarmResponseValidatesAndReturnsCode()
     {
-    Span<byte> keyMaterial = stackalloc byte[32];
-    RandomNumberGenerator.Fill(keyMaterial);
-    var signingKey = new SymmetricSecurityKey(keyMaterial.ToArray()) { KeyId = "sig" };
+        Span<byte> keyMaterial = stackalloc byte[32];
+        RandomNumberGenerator.Fill(keyMaterial);
+        var signingKey = new SymmetricSecurityKey(keyMaterial.ToArray()) { KeyId = "sig" };
         var options = new StaticOptionsMonitor(new MrWhoOidcClientOptions
         {
             Issuer = "https://issuer.example.com",
@@ -135,7 +135,7 @@ public class MrWhoAuthorizationManagerTests
             AuthorizationEndpoint = "https://issuer.example.com/authorize"
         });
 
-    var jwks = new JsonWebKeySet();
+        var jwks = new JsonWebKeySet();
         jwks.Keys.Add(JsonWebKeyConverter.ConvertFromSecurityKey(signingKey));
 
         var manager = new MrWhoAuthorizationManager(discovery, options, new StubJwksCache(jwks), new MemoryCache(new MemoryCacheOptions()), NullLogger<MrWhoAuthorizationManager>.Instance);
@@ -211,7 +211,7 @@ public class MrWhoAuthorizationManagerTests
         using var sha = SHA256.Create();
         var hash = sha.ComputeHash(Encoding.ASCII.GetBytes(value));
         var left = new byte[hash.Length / 2];
-    Array.Copy(hash, 0, left, 0, left.Length);
+        Array.Copy(hash, 0, left, 0, left.Length);
         return Base64UrlTextEncoder.Encode(left);
     }
 }

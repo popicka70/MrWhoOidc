@@ -75,9 +75,9 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         // Client authentication: private_key_jwt, basic, or post
         var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
         if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
-        if (string.IsNullOrWhiteSpace(clientId)) 
-        { 
-            metrics.ParFailures.Add(1); 
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            metrics.ParFailures.Add(1);
             return ErrorResults.InvalidRequest("Missing client_id", correlationId: corr);
         }
 

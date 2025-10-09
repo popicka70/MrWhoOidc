@@ -63,7 +63,7 @@ public class LinkedAccountsModel(AuthDbContext db) : PageModel
 
         db.ExternalIdentities.Remove(externalIdentity);
         await db.SaveChangesAsync();
-        
+
         Message = $"Successfully unlinked {externalIdentity.ProviderName ?? "external account"}.";
 
         return RedirectToPage();

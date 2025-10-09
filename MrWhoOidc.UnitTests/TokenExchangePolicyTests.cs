@@ -33,9 +33,9 @@ public sealed class TokenExchangePolicyTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         // Seed caller client with OboDpopMode.RequireSameJkt
-    var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboDpopMode = OboDpopMode.RequireSameJkt };
+        var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboDpopMode = OboDpopMode.RequireSameJkt };
         db.Clients.Add(callerClient);
-    await db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var jwt = new JwtService(keyStore);
@@ -76,9 +76,9 @@ public sealed class TokenExchangePolicyTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         // Seed caller client with max depth = 1
-    var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboMaxDelegationDepth = 1 };
+        var callerClient = new ClientEntity { ClientId = "caller-app", RealmId = Guid.NewGuid(), OboMaxDelegationDepth = 1 };
         db.Clients.Add(callerClient);
-    await db.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         // Seed an opaque subject token with DelegationDepth = 1 (already used once)
         var userId = Guid.NewGuid();

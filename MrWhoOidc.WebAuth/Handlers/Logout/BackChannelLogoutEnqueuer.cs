@@ -24,9 +24,9 @@ public sealed class BackChannelLogoutEnqueuer(
     /// Enqueues back-channel logout notifications for all registered clients with BackChannelLogoutUri.
     /// </summary>
     public async Task EnqueueNotificationsAsync(
-        HttpContext http, 
-        string issuer, 
-        string? idTokenHint, 
+        HttpContext http,
+        string issuer,
+        string? idTokenHint,
         string? sidFromQuery,
         CancellationToken cancellationToken = default)
     {
@@ -65,13 +65,13 @@ public sealed class BackChannelLogoutEnqueuer(
             if (Uri.TryCreate(client.BackChannelLogoutUri, UriKind.Absolute, out var target))
             {
                 var host = target.Host;
-                
+
                 if (blockList.Contains(host, StringComparer.OrdinalIgnoreCase))
                 {
                     logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} is blocked", client.ClientId, host);
                     continue;
                 }
-                
+
                 if (allowList.Length > 0 && !allowList.Contains(host, StringComparer.OrdinalIgnoreCase))
                 {
                     logger.LogWarning("Skipping BCL for client {ClientId}: host {Host} not in allow-list", client.ClientId, host);
@@ -79,7 +79,7 @@ public sealed class BackChannelLogoutEnqueuer(
                 }
             }
 
-            var sid = string.IsNullOrEmpty(sidFromQuery) 
+            var sid = string.IsNullOrEmpty(sidFromQuery)
                 ? (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null)
                 : sidFromQuery;
             var sub = idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sub") : null;

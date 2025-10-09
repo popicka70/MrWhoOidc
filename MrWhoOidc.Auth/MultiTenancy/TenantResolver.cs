@@ -37,7 +37,7 @@ public class ModeAwareTenantResolver : ITenantResolver
     private readonly IMemoryCache _cache;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant:";
-    
+
     public ModeAwareTenantResolver(
         AuthDbContext dbContext,
         IMultiTenancyOptions options,
@@ -47,20 +47,20 @@ public class ModeAwareTenantResolver : ITenantResolver
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
-    
+
     public async Task<TenantContext?> ResolveTenantAsync(string path, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(path))
         {
             path = "/";
         }
-        
+
         // Single-tenant mode: always return default tenant
         if (!_options.Enabled)
         {
             return await ResolveDefaultTenantAsync(cancellationToken);
         }
-        
+
         // Multi-tenant mode: parse path for /t/{slug}
         var slug = ExtractTenantSlugFromPath(path);
         if (string.IsNullOrEmpty(slug))
@@ -69,15 +69,15 @@ public class ModeAwareTenantResolver : ITenantResolver
             // This allows existing routes (e.g., /.well-known/openid-configuration) to work
             return await ResolveDefaultTenantAsync(cancellationToken);
         }
-        
+
         // Path has /t/{slug} - look up the specific tenant
         var tenant = await ResolveTenantBySlugAsync(slug, cancellationToken);
-        
+
         // If tenant not found and slug is NOT the default slug, return null (404)
         // If tenant not found but slug IS the default slug, still return null (config error - 500)
         return tenant;
     }
-    
+
     /// <summary>
     /// Extracts tenant slug from path like "/t/acme/authorize" -> "acme"
     /// Returns null if path doesn't start with /t/
@@ -88,35 +88,35 @@ public class ModeAwareTenantResolver : ITenantResolver
         {
             return null;
         }
-        
+
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length < 2 || !segments[0].Equals("t", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
-        
+
         return segments[1]; // tenant slug
     }
-    
+
     private async Task<TenantContext?> ResolveDefaultTenantAsync(CancellationToken cancellationToken)
     {
         var slug = _options.DefaultTenantSlug;
         var cacheKey = $"{CacheKeyPrefix}default";
-        
+
         if (_cache.TryGetValue<TenantContext>(cacheKey, out var cachedContext) && cachedContext != null)
         {
             return cachedContext;
         }
-        
+
         var tenant = await _dbContext.Tenants
             .Where(t => t.Slug == slug && t.Status == TenantStatus.Active)
             .FirstOrDefaultAsync(cancellationToken);
-        
+
         if (tenant == null)
         {
             return null;
         }
-        
+
         var context = new TenantContext
         {
             TenantId = tenant.Id,
@@ -125,35 +125,35 @@ public class ModeAwareTenantResolver : ITenantResolver
             IssuerUri = tenant.IssuerUri, // In single-tenant mode, this should be base URL
             IsMultiTenantMode = false
         };
-        
+
         _cache.Set(cacheKey, context, CacheDuration);
         return context;
     }
-    
+
     private async Task<TenantContext?> ResolveTenantBySlugAsync(string slug, CancellationToken cancellationToken)
     {
         var normalizedSlug = slug.ToLowerInvariant();
         var cacheKey = $"{CacheKeyPrefix}{normalizedSlug}";
-        
+
         if (_cache.TryGetValue<TenantContext>(cacheKey, out var cachedContext) && cachedContext != null)
         {
             return cachedContext;
         }
-        
+
         // Case-insensitive comparison: fetch all active tenants and filter in memory
         // In-memory DB doesn't support ToLower in queries
         var tenants = await _dbContext.Tenants
             .Where(t => t.Status == TenantStatus.Active)
             .ToListAsync(cancellationToken);
-            
-        var tenant = tenants.FirstOrDefault(t => 
+
+        var tenant = tenants.FirstOrDefault(t =>
             t.Slug.Equals(slug, StringComparison.OrdinalIgnoreCase));
-        
+
         if (tenant == null)
         {
             return null;
         }
-        
+
         var context = new TenantContext
         {
             TenantId = tenant.Id,
@@ -162,7 +162,7 @@ public class ModeAwareTenantResolver : ITenantResolver
             IssuerUri = tenant.IssuerUri, // In multi-tenant mode, this includes /t/{slug}
             IsMultiTenantMode = true
         };
-        
+
         _cache.Set(cacheKey, context, CacheDuration);
         return context;
     }

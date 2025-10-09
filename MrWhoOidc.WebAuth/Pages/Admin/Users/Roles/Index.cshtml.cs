@@ -50,10 +50,10 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
                         join t in db.Tenants on u.TenantId equals t.Id
                         where u.Id == UserId
                         select new { User = u, Tenant = t };
-        
+
         var userResult = await userQuery.FirstOrDefaultAsync();
         if (userResult is null) return RedirectToPage("/Admin/Users/Index");
-        
+
         UserTenantId = userResult.User.TenantId;
         TenantName = userResult.Tenant.Name;
         SetHeading(userResult.User.Username, userResult.User.Name);
@@ -131,19 +131,19 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
             return await OnGetAsync();
         }
 
-        var exists = await db.UserRealmRoleAssignments.AnyAsync(a => 
-            a.UserId == UserId && 
-            a.RealmId == RealmAddRealmId && 
+        var exists = await db.UserRealmRoleAssignments.AnyAsync(a =>
+            a.UserId == UserId &&
+            a.RealmId == RealmAddRealmId &&
             a.RoleId == RealmAddRoleId);
-        
+
         if (!exists)
         {
-            db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment 
-            { 
-                UserId = UserId, 
-                RealmId = RealmAddRealmId, 
-                RoleId = RealmAddRoleId, 
-                IsActive = RealmIsActive 
+            db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+            {
+                UserId = UserId,
+                RealmId = RealmAddRealmId,
+                RoleId = RealmAddRoleId,
+                IsActive = RealmIsActive
             });
             await db.SaveChangesAsync();
         }
@@ -152,11 +152,11 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostDeleteRealmAsync(Guid roleId, Guid realmId)
     {
-        var entity = await db.UserRealmRoleAssignments.FirstOrDefaultAsync(a => 
-            a.UserId == UserId && 
-            a.RealmId == realmId && 
+        var entity = await db.UserRealmRoleAssignments.FirstOrDefaultAsync(a =>
+            a.UserId == UserId &&
+            a.RealmId == realmId &&
             a.RoleId == roleId);
-        
+
         if (entity is not null)
         {
             db.UserRealmRoleAssignments.Remove(entity);
@@ -192,19 +192,19 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
             return await OnGetAsync();
         }
 
-        var exists = await db.UserClientRoleAssignments.AnyAsync(a => 
-            a.UserId == UserId && 
-            a.ClientId == ClientAddClientId && 
+        var exists = await db.UserClientRoleAssignments.AnyAsync(a =>
+            a.UserId == UserId &&
+            a.ClientId == ClientAddClientId &&
             a.RoleId == ClientAddRoleId);
-        
+
         if (!exists)
         {
-            db.UserClientRoleAssignments.Add(new UserClientRoleAssignment 
-            { 
-                UserId = UserId, 
-                ClientId = ClientAddClientId, 
-                RoleId = ClientAddRoleId, 
-                IsActive = ClientIsActive 
+            db.UserClientRoleAssignments.Add(new UserClientRoleAssignment
+            {
+                UserId = UserId,
+                ClientId = ClientAddClientId,
+                RoleId = ClientAddRoleId,
+                IsActive = ClientIsActive
             });
             await db.SaveChangesAsync();
         }
@@ -213,11 +213,11 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostDeleteClientAsync(Guid roleId, Guid clientId)
     {
-        var entity = await db.UserClientRoleAssignments.FirstOrDefaultAsync(a => 
-            a.UserId == UserId && 
-            a.ClientId == clientId && 
+        var entity = await db.UserClientRoleAssignments.FirstOrDefaultAsync(a =>
+            a.UserId == UserId &&
+            a.ClientId == clientId &&
             a.RoleId == roleId);
-        
+
         if (entity is not null)
         {
             db.UserClientRoleAssignments.Remove(entity);

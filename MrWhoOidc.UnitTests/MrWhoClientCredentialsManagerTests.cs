@@ -77,12 +77,12 @@ public class MrWhoClientCredentialsManagerTests
         var tokenClient = new Mock<IMrWhoTokenClient>(MockBehavior.Strict);
 
         var tokenResult = TokenResult.FromSuccess(new TokenResponsePayload("m2m-token", null, "Bearer", 3600, null, "api.read", "{}"));
-    tokenClient.Setup(t => t.ClientCredentialsAsync(It.Is<ClientCredentialsRequest>(r =>
-        r.Audience == "api://resource" &&
-        r.Resource == "https://resource" &&
-        r.Scopes != null && r.Scopes.Count == 1 &&
-        r.AdditionalParameters.ContainsKey("custom")), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(tokenResult);
+        tokenClient.Setup(t => t.ClientCredentialsAsync(It.Is<ClientCredentialsRequest>(r =>
+            r.Audience == "api://resource" &&
+            r.Resource == "https://resource" &&
+            r.Scopes != null && r.Scopes.Count == 1 &&
+            r.AdditionalParameters.ContainsKey("custom")), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(tokenResult);
 
         var manager = new MrWhoClientCredentialsManager(tokenClient.Object, monitor, cache, NullLogger<MrWhoClientCredentialsManager>.Instance);
 

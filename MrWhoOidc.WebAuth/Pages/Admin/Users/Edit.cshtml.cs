@@ -31,16 +31,16 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
                         join t in db.Tenants on u.TenantId equals t.Id
                         where u.Id == id
                         select new { User = u, Tenant = t };
-        
+
         var result = await userQuery.FirstOrDefaultAsync();
         if (result is null) return RedirectToPage("Index");
-        
+
         TenantName = result.Tenant.Name;
-        Input = new EditInput 
-        { 
-            Username = result.User.Username, 
-            Email = result.User.Email, 
-            Name = result.User.Name 
+        Input = new EditInput
+        {
+            Username = result.User.Username,
+            Email = result.User.Email,
+            Name = result.User.Name
         };
         SetHeading(result.User.Username, result.User.Name);
         return Page();
@@ -48,12 +48,12 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
-        if (!ModelState.IsValid) 
+        if (!ModelState.IsValid)
         {
             await LoadTenantNameAsync(id);
             return Page();
         }
-        
+
         var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (entity is null) return RedirectToPage("Index");
 

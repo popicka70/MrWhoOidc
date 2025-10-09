@@ -23,7 +23,7 @@ public sealed class AudiencePolicy(IOptions<AuthOptions> authOptions)
         {
             try
             {
-                var clientAllowedAudiences = JsonSerializer.Deserialize<string[]>(client.IntrospectionAudiencesJson) 
+                var clientAllowedAudiences = JsonSerializer.Deserialize<string[]>(client.IntrospectionAudiencesJson)
                     ?? Array.Empty<string>();
                 return clientAllowedAudiences.Contains(audience, StringComparer.Ordinal);
             }

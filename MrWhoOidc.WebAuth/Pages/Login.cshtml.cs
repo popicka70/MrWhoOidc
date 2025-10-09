@@ -10,7 +10,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 namespace MrWhoOidc.WebAuth.Pages;
 
 public class LoginModel(
-    IUserService users, 
+    IUserService users,
     ILogger<LoginModel> logger,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
@@ -37,8 +37,8 @@ public class LoginModel(
 
     public void OnGet()
     {
-        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}", 
-            ReturnUrl ?? "(null)", 
+        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}",
+            ReturnUrl ?? "(null)",
             Email ?? "(null)");
 
         // Pre-fill username with email if provided
@@ -86,7 +86,7 @@ public class LoginModel(
             var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
             ClearAttempts(HttpContext, Username);
-            
+
             logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", Username);
             var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = ReturnUrl }, protocol: Request.Scheme);
             return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
@@ -133,12 +133,12 @@ public class LoginModel(
         // Build tenant-aware default redirect URL based on mode
         var currentTenant = tenantAccessor.CurrentTenant;
         string defaultUrl;
-        
+
         if (multiTenancyOptions.Enabled && currentTenant != null)
         {
             // Multi-tenant mode: redirect to /t/{slug}/
             defaultUrl = $"/t/{currentTenant.Slug}/";
-            logger.LogInformation("➡️ [Login] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})", 
+            logger.LogInformation("➡️ [Login] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})",
                 defaultUrl, currentTenant.Slug);
         }
         else
@@ -147,7 +147,7 @@ public class LoginModel(
             defaultUrl = "/";
             logger.LogInformation("➡️ [Login] Single-tenant mode: redirecting to {DefaultUrl}", defaultUrl);
         }
-        
+
         return LocalRedirect(defaultUrl);
     }
 

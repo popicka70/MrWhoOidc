@@ -46,7 +46,7 @@ public sealed class AutoSeedMiddleware
             {
                 // Check if database needs seeding (no tenants exist)
                 var needsSeeding = !db.Tenants.Any();
-                
+
                 if (needsSeeding)
                 {
                     // Create default tenant first (synchronously for simplicity in lock)

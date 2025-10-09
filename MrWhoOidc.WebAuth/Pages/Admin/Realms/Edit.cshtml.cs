@@ -24,10 +24,10 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
                          join t in db.Tenants on r.TenantId equals t.Id
                          where r.Id == Id
                          select new { Realm = r, Tenant = t };
-        
+
         var result = await realmQuery.FirstOrDefaultAsync();
         if (result is null) return NotFound();
-        
+
         TenantName = result.Tenant.Name;
         Input = new RealmInput { Name = result.Realm.Name, DisplayName = result.Realm.DisplayName };
         return Page();
@@ -35,12 +35,12 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid) 
+        if (!ModelState.IsValid)
         {
             await LoadTenantNameAsync();
             return Page();
         }
-        
+
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == Id);
         if (realm is null) return NotFound();
 

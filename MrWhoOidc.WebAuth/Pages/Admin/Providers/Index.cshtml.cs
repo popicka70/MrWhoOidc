@@ -17,7 +17,7 @@ public class IndexModel(
     public IReadOnlyList<IdentityProvider> Providers { get; private set; } = Array.Empty<IdentityProvider>();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
     public bool IsPlatformAdmin { get; private set; }
-    
+
     [BindProperty(SupportsGet = true)]
     public Guid? TenantId { get; set; }
 
@@ -26,7 +26,7 @@ public class IndexModel(
         // Check if user is platform admin
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         // Load tenant options for filter (platform admins only)
         if (IsPlatformAdmin)
         {
@@ -37,11 +37,11 @@ public class IndexModel(
             TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
             TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
         }
-        
+
         // Build query with tenant JOIN
         var q = db.IdentityProviders.AsNoTracking()
             .Join(db.Tenants, p => p.TenantId, t => t.Id, (p, t) => new { Provider = p, Tenant = t });
-        
+
         // Automatic tenant scoping
         if (IsPlatformAdmin)
         {
@@ -66,7 +66,7 @@ public class IndexModel(
                 return;
             }
         }
-        
+
         Providers = await q
             .OrderBy(x => x.Provider.SortOrder)
             .ThenBy(x => x.Provider.Name)

@@ -36,7 +36,7 @@ public sealed class KeyStoreTests
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
         var _ = await ks.GetActiveSigningKeyAsync();
         var list = await ks.GetPublicJwksAsync();
-        Assert.IsTrue(list.Count >= 1);
+        Assert.IsGreaterThanOrEqualTo(1, list.Count);
         foreach (var k in list)
         {
             Assert.IsNull(k.D);

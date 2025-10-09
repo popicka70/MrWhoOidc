@@ -194,12 +194,12 @@ public partial class CreateModel(
             RealmId = adminRealm.Id,
             RequirePkce = true,
             RequireConsent = false,
-            AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-            { 
+            AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+            {
                 $"{baseUrl}/t/{Input.Slug}/signin-oidc"
             }),
-            AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-            { 
+            AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+            {
                 $"{baseUrl}/t/{Input.Slug}/signout-callback-oidc",
                 $"{baseUrl}/t/{Input.Slug}/"
             })

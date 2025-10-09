@@ -33,7 +33,7 @@ public class DiscoverTenantModel : PageModel
     public string? ReturnUrl { get; set; }
 
     public string? ErrorMessage { get; set; }
-    
+
     public bool ShowDirectLoginLink { get; set; } = true;
 
     public void OnGet()
@@ -75,17 +75,17 @@ public class DiscoverTenantModel : PageModel
                         "Auto-redirecting to single tenant: {TenantSlug} for email (hashed): {EmailHash}",
                         tenant.Slug,
                         HashEmail(Email));
-                    
+
                     // Store email in TempData for pre-fill on login page
                     TempData["PrefilledEmail"] = Email;
-                    
+
                     // Build redirect URL with email pre-filled
                     var loginUrl = $"{tenant.LoginUrl}?email={Uri.EscapeDataString(Email)}";
                     if (!string.IsNullOrEmpty(ReturnUrl))
                     {
                         loginUrl += $"&returnUrl={Uri.EscapeDataString(ReturnUrl)}";
                     }
-                    
+
                     return Redirect(loginUrl);
 
                 default:
@@ -94,16 +94,16 @@ public class DiscoverTenantModel : PageModel
                         "Multiple tenants ({Count}) found for email (hashed): {EmailHash}, redirecting to selection",
                         tenants.Count,
                         HashEmail(Email));
-                    
+
                     // Store email and tenant list in TempData for selection page
                     TempData["Email"] = Email;
                     TempData["ReturnUrl"] = ReturnUrl;
                     TempData["TenantCount"] = tenants.Count;
-                    
+
                     // Store tenant info in session (serialize to JSON)
-                    HttpContext.Session.SetString("DiscoveredTenants", 
+                    HttpContext.Session.SetString("DiscoveredTenants",
                         System.Text.Json.JsonSerializer.Serialize(tenants));
-                    
+
                     return RedirectToPage("/SelectTenant");
             }
         }

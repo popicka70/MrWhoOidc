@@ -172,7 +172,7 @@ internal sealed class RegistrationService : IRegistrationService
             if (client is not null)
             {
                 var exists = await _db.UserClientAssignments.AnyAsync(
-                    a => a.UserId == user.Id && a.ClientId == client.Id && a.RealmId == client.RealmId, 
+                    a => a.UserId == user.Id && a.ClientId == client.Id && a.RealmId == client.RealmId,
                     cancellationToken);
                 if (!exists)
                 {

@@ -41,7 +41,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") == true, "Expected redirect to error page");
+        Assert.AreEqual(true, url?.Contains("/Auth/External/Error"), "Expected redirect to error page");
     }
 
     [TestMethod]
@@ -58,7 +58,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") == true, "Expected redirect to error page");
+        Assert.AreEqual(true, url?.Contains("/Auth/External/Error"), "Expected redirect to error page");
     }
 
     [TestMethod]
@@ -75,7 +75,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") == true, "Expected redirect to error page for unknown provider");
+        Assert.AreEqual(true, url?.Contains("/Auth/External/Error"), "Expected redirect to error page for unknown provider");
     }
 
     [TestMethod]
@@ -84,7 +84,7 @@ public class ExternalOidcHandlerTests
         // Arrange
         var (handler, ctx) = CreateHandler();
         var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
-        
+
         // Add a disabled provider
         db.IdentityProviders.Add(new IdentityProvider
         {
@@ -107,7 +107,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") == true, "Expected redirect to error page for disabled provider");
+        Assert.AreEqual(true, url?.Contains("/Auth/External/Error"), "Expected redirect to error page for disabled provider");
     }
 
     [TestMethod]
@@ -135,7 +135,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") == true, "Expected redirect to error page for invalid config");
+        Assert.AreEqual(true, url?.Contains("/Auth/External/Error"), "Expected redirect to error page for invalid config");
     }
 
     #endregion
@@ -211,18 +211,18 @@ public class ExternalOidcHandlerTests
         services.AddLogging();
         services.AddDataProtection();
         services.AddMemoryCache();
-        
+
         var dbName = "ext-handler-" + Guid.NewGuid().ToString("N");
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
-        
+
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
         services.AddSingleton<OidcMetrics>();
         services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
-        
+
         // Add HttpClient with test handler
         services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
-        
+
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
         services.AddExternalOidcHandler(); // Use DI registration
@@ -230,22 +230,22 @@ public class ExternalOidcHandlerTests
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();
         var scoped = scope.ServiceProvider;
-        
+
         var handler = scoped.GetRequiredService<IExternalOidcHandler>();
-        
+
         var ctx = new DefaultHttpContext
         {
             RequestServices = scoped
         };
-        
+
         // Set HttpContext in IHttpContextAccessor
         var httpContextAccessor = scoped.GetRequiredService<IHttpContextAccessor>();
         httpContextAccessor.HttpContext = ctx;
-        
+
         ctx.Items["__scope"] = scope; // Keep scope alive
         ctx.Request.Scheme = "https";
         ctx.Request.Host = new HostString("test.example.com");
-        
+
         return (handler, ctx);
     }
 
@@ -272,14 +272,14 @@ public class ExternalOidcHandlerTests
                     jwks_uri = $"{request.RequestUri.GetLeftPart(UriPartial.Authority)}/jwks",
                     userinfo_endpoint = $"{request.RequestUri.GetLeftPart(UriPartial.Authority)}/userinfo"
                 };
-                
+
                 var json = JsonSerializer.Serialize(discovery);
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
                 });
             }
-            
+
             // Return empty JWKS for JWKS requests
             if (request.RequestUri?.AbsolutePath?.Contains("/jwks") == true)
             {
@@ -288,7 +288,7 @@ public class ExternalOidcHandlerTests
                     Content = new StringContent("{\"keys\":[]}", System.Text.Encoding.UTF8, "application/json")
                 });
             }
-            
+
             // Default: return empty JSON
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {

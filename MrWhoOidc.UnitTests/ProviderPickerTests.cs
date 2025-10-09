@@ -45,7 +45,7 @@ public class ProviderPickerTests
     {
         using var db = CreateDb(nameof(Recommends_Provider_Based_On_LastProvider_Cookie));
         var realmId = Guid.NewGuid();
-    var client = new ClientEntity { ClientId = "spaclient", ClientName = "SPA", RealmId = realmId, AllowLocalLogin = false };
+        var client = new ClientEntity { ClientId = "spaclient", ClientName = "SPA", RealmId = realmId, AllowLocalLogin = false };
         db.Clients.Add(client);
         var idpA = new IdentityProvider { Name = "google", DisplayName = "Google" };
         var idpB = new IdentityProvider { Name = "github", DisplayName = "GitHub" };
@@ -65,7 +65,7 @@ public class ProviderPickerTests
 
         var result = await model.OnGetAsync();
         Assert.IsInstanceOfType(result, typeof(PageResult));
-        Assert.AreEqual(2, model.Providers.Count);
+        Assert.HasCount(2, model.Providers);
         Assert.AreEqual("github", model.Providers[0].Name, "Last provider should be first and recommended");
         Assert.IsTrue(model.Providers[0].IsRecommended, "Provider should be marked as recommended");
         Assert.AreEqual("last", model.RecommendationSource);
@@ -76,7 +76,7 @@ public class ProviderPickerTests
     {
         using var db = CreateDb(nameof(Recommends_Provider_Based_On_Idp_Hint));
         var realmId = Guid.NewGuid();
-    var client = new ClientEntity { ClientId = "spaclient2", ClientName = "SPA 2", RealmId = realmId, AllowLocalLogin = true };
+        var client = new ClientEntity { ClientId = "spaclient2", ClientName = "SPA 2", RealmId = realmId, AllowLocalLogin = true };
         db.Clients.Add(client);
         var idpA = new IdentityProvider { Name = "contoso", DisplayName = "Contoso" };
         var idpB = new IdentityProvider { Name = "fabrikam", DisplayName = "Fabrikam" };
@@ -94,7 +94,7 @@ public class ProviderPickerTests
 
         var result = await model.OnGetAsync();
         Assert.IsInstanceOfType(result, typeof(PageResult));
-        Assert.AreEqual(2, model.Providers.Count);
+        Assert.HasCount(2, model.Providers);
         Assert.AreEqual("fabrikam", model.Providers[0].Name);
         Assert.IsTrue(model.Providers[0].IsRecommended);
         Assert.AreEqual("hint", model.RecommendationSource);

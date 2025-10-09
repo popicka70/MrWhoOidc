@@ -331,7 +331,7 @@ public sealed class ExternalOidcIntegrationTests
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode);
         var upstreamLocation = start.Headers.Location;
         Assert.IsNotNull(upstreamLocation, "Start redirect is missing location header");
-        Assert.IsTrue(upstreamLocation!.ToString().Contains("/up1/authorize"), "Redirect should target upstream /up1/authorize");
+        Assert.Contains("/up1/authorize", upstreamLocation!.ToString(), "Redirect should target upstream /up1/authorize");
         var uri = upstreamLocation.IsAbsoluteUri ? upstreamLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), upstreamLocation);
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         var state = qs["state"]!;
@@ -365,7 +365,7 @@ public sealed class ExternalOidcIntegrationTests
         }
         else
         {
-            Assert.IsTrue(setCookie.Contains(expectedCookieName), $"Expected last provider cookie {expectedCookieName}");
+            Assert.Contains(expectedCookieName, setCookie, $"Expected last provider cookie {expectedCookieName}");
         }
     }
 
@@ -383,7 +383,7 @@ public sealed class ExternalOidcIntegrationTests
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
         var errLoc = cb.Headers.Location!.ToString();
         Assert.IsTrue(errLoc.StartsWith("/Auth/External/Error", StringComparison.OrdinalIgnoreCase));
-        Assert.IsTrue(errLoc.Contains("code=upstream_error"));
+        Assert.Contains("code=upstream_error", errLoc);
     }
 
     [TestMethod]

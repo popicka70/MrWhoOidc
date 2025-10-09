@@ -26,7 +26,7 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
         Username = user.Username;
         CreatedAt = user.CreatedAt;
-        
+
         Input.Name = user.Name ?? string.Empty;
         Input.Email = user.Email ?? string.Empty;
 
@@ -54,8 +54,8 @@ public class ProfileModel(AuthDbContext db) : PageModel
         // Check for duplicate email in same tenant
         var normalizedEmail = Input.Email.ToUpperInvariant();
         var emailExists = await db.Users
-            .AnyAsync(u => u.NormalizedEmail == normalizedEmail 
-                           && u.TenantId == user.TenantId 
+            .AnyAsync(u => u.NormalizedEmail == normalizedEmail
+                           && u.TenantId == user.TenantId
                            && u.Id != user.Id);
 
         if (emailExists)
@@ -70,7 +70,7 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
         // Update user
         bool emailChanged = user.Email != Input.Email;
-        
+
         user.Name = Input.Name;
         user.Email = Input.Email;
         user.NormalizedEmail = normalizedEmail;
@@ -84,7 +84,7 @@ public class ProfileModel(AuthDbContext db) : PageModel
 
         await db.SaveChangesAsync();
 
-        SuccessMessage = emailChanged 
+        SuccessMessage = emailChanged
             ? "Profile updated. Please verify your new email address."
             : "Profile updated successfully.";
 

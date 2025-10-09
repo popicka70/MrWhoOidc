@@ -15,13 +15,13 @@ public class AddModel(AuthDbContext db) : PageModel
     {
         [Required]
         public Guid TenantId { get; set; }
-        
+
         [Required]
         public Guid RealmId { get; set; }
-        
+
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
-        
+
         public bool IsActive { get; set; } = true;
     }
 
@@ -75,12 +75,12 @@ public class AddModel(AuthDbContext db) : PageModel
             return Page();
         }
 
-        db.Roles.Add(new Role 
-        { 
+        db.Roles.Add(new Role
+        {
             TenantId = Input.TenantId,
-            RealmId = Input.RealmId, 
-            Name = Input.Name, 
-            IsActive = Input.IsActive 
+            RealmId = Input.RealmId,
+            Name = Input.Name,
+            IsActive = Input.IsActive
         });
         await db.SaveChangesAsync();
         return RedirectToPage("Index", new { TenantId = Input.TenantId });

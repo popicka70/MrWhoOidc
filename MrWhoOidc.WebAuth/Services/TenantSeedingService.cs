@@ -26,10 +26,10 @@ public class TenantSeedingService : ITenantSeedingService
     }
 
     public async Task<TenantSeedResult> SeedSampleTenantAsync(
-        string tenantSlug, 
-        string tenantName, 
-        string? adminEmail = null, 
-        string? adminPassword = null, 
+        string tenantSlug,
+        string tenantName,
+        string? adminEmail = null,
+        string? adminPassword = null,
         CancellationToken ct = default)
     {
         // Validate inputs
@@ -138,20 +138,20 @@ public class TenantSeedingService : ITenantSeedingService
                 RealmId = adminRealm.Id,
                 RequirePkce = true,
                 RequireConsent = false,
-                AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-                { 
+                AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+                {
                     $"https://localhost:8443/t/{tenantSlug}/signin-oidc",
                     $"http://localhost:8443/t/{tenantSlug}/signin-oidc"
                 }),
-                AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-                { 
+                AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+                {
                     $"https://localhost:8443/t/{tenantSlug}/signout-callback-oidc",
                     $"https://localhost:8443/t/{tenantSlug}/",
                     $"http://localhost:8443/t/{tenantSlug}/signout-callback-oidc",
                     $"http://localhost:8443/t/{tenantSlug}/"
                 })
             };
-            
+
             // Create sample web client
             var webClient = new Client
             {
@@ -161,31 +161,31 @@ public class TenantSeedingService : ITenantSeedingService
                 RealmId = defaultRealm.Id,
                 RequirePkce = true,
                 RequireConsent = false,
-                AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-                { 
+                AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+                {
                     "https://localhost:5001/signin-oidc",
                     "http://localhost:5001/signin-oidc"
                 }),
-                AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[] 
-                { 
+                AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
+                {
                     "https://localhost:5001/signout-callback-oidc",
                     "https://localhost:5001/",
                     "http://localhost:5001/signout-callback-oidc",
                     "http://localhost:5001/"
                 })
             };
-            
+
             _db.Clients.Add(adminClient);
             _db.Clients.Add(webClient);
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Created admin client {AdminClientId} and web client {WebClientId} for tenant {TenantSlug}", 
+            _logger.LogInformation("Created admin client {AdminClientId} and web client {WebClientId} for tenant {TenantSlug}",
                 adminClient.ClientId, webClient.ClientId, tenantSlug);
 
             // Ensure clients have IDs after save
             if (adminClient.Id == Guid.Empty || webClient.Id == Guid.Empty)
             {
-                _logger.LogError("Client IDs not generated for tenant {TenantSlug}. Admin: {AdminId}, Web: {WebId}", 
+                _logger.LogError("Client IDs not generated for tenant {TenantSlug}. Admin: {AdminId}, Web: {WebId}",
                     tenantSlug, adminClient.Id, webClient.Id);
                 return TenantSeedResult.Failure("Failed to create clients - IDs not generated");
             }
@@ -225,15 +225,15 @@ public class TenantSeedingService : ITenantSeedingService
                 var scope = await _db.Scopes.FirstOrDefaultAsync(s => s.Name == scopeName, ct);
                 if (scope == null)
                 {
-                    scope = new Scope 
-                    { 
-                        Name = scopeName, 
+                    scope = new Scope
+                    {
+                        Name = scopeName,
                         Description = $"{scopeName} scope",
                         IsExposed = true
                     };
                     _db.Scopes.Add(scope);
                 }
-                
+
                 // Associate scope with both clients
                 _db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = scopeName });
                 _db.ClientScopes.Add(new ClientScope { ClientId = webClient.Id, ScopeName = scopeName });

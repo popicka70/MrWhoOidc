@@ -38,10 +38,10 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
                         join t in db.Tenants on u.TenantId equals t.Id
                         where u.Id == UserId
                         select new { User = u, Tenant = t };
-        
+
         var userResult = await userQuery.FirstOrDefaultAsync();
         if (userResult is null) return RedirectToPage("/Admin/Users/Index");
-        
+
         UserTenantId = userResult.User.TenantId;
         TenantName = userResult.Tenant.Name;
         SetHeading(userResult.User.Username, userResult.User.Name);
@@ -56,7 +56,7 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
         // Load clients filtered by user's tenant and selected realm (if any)
         var clientQuery = db.Clients.AsNoTracking()
             .Where(c => c.TenantId == UserTenantId);
-        
+
         if (RealmId.HasValue)
         {
             clientQuery = clientQuery.Where(c => c.RealmId == RealmId.Value);
@@ -75,11 +75,11 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
             .Join(db.Tenants, acr => acr.c.TenantId, t => t.Id, (acr, t) => new { acr.a, acr.c, acr.r, t })
             .OrderBy(x => x.c.ClientId)
             .Select(x => new AssignmentVm(
-                x.c.Id, 
-                x.c.ClientId, 
-                x.c.ClientName, 
-                x.r.Id, 
-                x.r.Name, 
+                x.c.Id,
+                x.c.ClientId,
+                x.c.ClientName,
+                x.r.Id,
+                x.r.Name,
                 x.t.Name,
                 x.a.IsActive))
             .ToListAsync();
@@ -89,7 +89,7 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
 
     public async Task<IActionResult> OnPostAddAsync()
     {
-        if (UserId == Guid.Empty || ClientId == Guid.Empty || !RealmId.HasValue) 
+        if (UserId == Guid.Empty || ClientId == Guid.Empty || !RealmId.HasValue)
         {
             return await OnGetAsync();
         }
@@ -123,39 +123,39 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
             return await OnGetAsync();
         }
 
-        var exists = await db.UserClientAssignments.AnyAsync(a => 
-            a.UserId == UserId && 
-            a.ClientId == ClientId && 
+        var exists = await db.UserClientAssignments.AnyAsync(a =>
+            a.UserId == UserId &&
+            a.ClientId == ClientId &&
             a.RealmId == RealmId.Value);
-        
+
         if (!exists)
         {
-            db.UserClientAssignments.Add(new UserClientAssignment 
-            { 
-                UserId = UserId, 
-                ClientId = ClientId, 
-                RealmId = RealmId.Value, 
-                IsActive = IsActive 
+            db.UserClientAssignments.Add(new UserClientAssignment
+            {
+                UserId = UserId,
+                ClientId = ClientId,
+                RealmId = RealmId.Value,
+                IsActive = IsActive
             });
             await db.SaveChangesAsync();
         }
-        
+
         return RedirectToPage(new { userId = UserId, realmId = RealmId });
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid clientId, Guid realmId)
     {
-        var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a => 
-            a.UserId == UserId && 
-            a.ClientId == clientId && 
+        var entity = await db.UserClientAssignments.FirstOrDefaultAsync(a =>
+            a.UserId == UserId &&
+            a.ClientId == clientId &&
             a.RealmId == realmId);
-        
+
         if (entity is not null)
         {
             db.UserClientAssignments.Remove(entity);
             await db.SaveChangesAsync();
         }
-        
+
         return RedirectToPage(new { userId = UserId, realmId = RealmId });
     }
 }

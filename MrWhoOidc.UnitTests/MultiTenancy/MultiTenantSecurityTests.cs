@@ -42,7 +42,7 @@ public class MultiTenantSecurityTests
 
         // Logging
         services.AddLogging();
-        
+
         // Authorization
         services.AddAuthorization(options =>
         {
@@ -59,7 +59,7 @@ public class MultiTenantSecurityTests
 
         // Register ITenantAccessor (required by TenantAdminAuthorizationHandler)
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateSingleTenantMode());
-        
+
         services.AddSingleton<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
         services.AddSingleton<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
         services.AddScoped<IHttpContextAccessor, HttpContextAccessor>();
@@ -263,7 +263,7 @@ public class MultiTenantSecurityTests
             .ToListAsync();
 
         // Assert: Should see own tenant's users
-        Assert.IsTrue(ownTenantUsers.Count > 0);
+        Assert.IsNotEmpty(ownTenantUsers);
         Assert.IsTrue(ownTenantUsers.All(u => u.TenantId == _tenant1Id));
     }
 
@@ -299,7 +299,7 @@ public class MultiTenantSecurityTests
             .ToListAsync();
 
         // Verify Tenant 2 has users
-        Assert.IsTrue(otherTenantUsers.Count > 0);
+        Assert.IsNotEmpty(otherTenantUsers);
 
         // Now verify that with proper tenant filtering (Tenant 1 context),
         // we wouldn't see Tenant 2 users
@@ -307,7 +307,7 @@ public class MultiTenantSecurityTests
             .Where(u => u.TenantId == _tenant1Id)
             .ToListAsync();
 
-        Assert.IsFalse(tenant1Users.Any(u => u.TenantId == _tenant2Id), 
+        Assert.IsFalse(tenant1Users.Any(u => u.TenantId == _tenant2Id),
             "Tenant 1 context should not return Tenant 2 users");
     }
 
@@ -352,7 +352,7 @@ public class MultiTenantSecurityTests
             .ToListAsync();
 
         // Assert: Should only see self
-        Assert.AreEqual(1, otherUser.Count);
+        Assert.HasCount(1, otherUser);
         Assert.AreEqual(user1Id, otherUser[0].Id);
     }
 
@@ -402,16 +402,16 @@ public class MultiTenantSecurityTests
         var tenant1Users = await _db.Users.Where(u => u.TenantId == _tenant1Id).ToListAsync();
         var tenant2Users = await _db.Users.Where(u => u.TenantId == _tenant2Id).ToListAsync();
 
-        Assert.AreEqual(1, tenant1Users.Count);
-        Assert.AreEqual(1, tenant2Users.Count);
+        Assert.HasCount(1, tenant1Users);
+        Assert.HasCount(1, tenant2Users);
         Assert.AreNotEqual(tenant1Users[0].Id, tenant2Users[0].Id);
 
         // Act & Assert: Clients table
         var tenant1Clients = await _db.Clients.Where(c => c.TenantId == _tenant1Id).ToListAsync();
         var tenant2Clients = await _db.Clients.Where(c => c.TenantId == _tenant2Id).ToListAsync();
 
-        Assert.AreEqual(1, tenant1Clients.Count);
-        Assert.AreEqual(1, tenant2Clients.Count);
+        Assert.HasCount(1, tenant1Clients);
+        Assert.HasCount(1, tenant2Clients);
         Assert.AreNotEqual(tenant1Clients[0].Id, tenant2Clients[0].Id);
 
         // Critical: Verify no cross-contamination
@@ -458,7 +458,7 @@ public class MultiTenantSecurityTests
         var allUsers = await _db.Users.ToListAsync();
 
         // Assert: This would return ALL users (BAD!)
-        Assert.IsTrue(allUsers.Count >= 3, "Unfiltered query returns all tenants' data");
+        Assert.IsGreaterThanOrEqualTo(3, allUsers.Count, "Unfiltered query returns all tenants' data");
 
         // Demonstrate CORRECT query (with tenant filter)
         var specificTenantUsers = await _db.Users
@@ -466,7 +466,7 @@ public class MultiTenantSecurityTests
             .ToListAsync();
 
         // Assert: Filtered query returns only specific tenant
-        Assert.IsTrue(specificTenantUsers.All(u => u.TenantId == _tenant1Id), 
+        Assert.IsTrue(specificTenantUsers.All(u => u.TenantId == _tenant1Id),
             "Filtered query should only return specific tenant data");
 
         // This test serves as documentation: ALWAYS filter by TenantId
@@ -485,14 +485,14 @@ public class MultiTenantSecurityTests
         var allTenants = await _db.Tenants.ToListAsync();
 
         // Assert: Platform admin can see all tenants
-        Assert.IsTrue(allTenants.Count >= 2, "Platform admin should see all tenants");
+        Assert.IsGreaterThanOrEqualTo(2, allTenants.Count, "Platform admin should see all tenants");
 
         // Verify tenant isolation still applies to non-platform-admin data
         var tenant1Users = await _db.Users.Where(u => u.TenantId == _tenant1Id).ToListAsync();
         var tenant2Users = await _db.Users.Where(u => u.TenantId == _tenant2Id).ToListAsync();
 
         // Even platform admin queries should specify tenant when accessing tenant data
-        Assert.IsFalse(tenant1Users.Any(u => u.TenantId == _tenant2Id), 
+        Assert.IsFalse(tenant1Users.Any(u => u.TenantId == _tenant2Id),
             "Even for platform admin, tenant data should be explicitly filtered");
     }
 
@@ -550,7 +550,7 @@ public class MultiTenantSecurityTests
         var tenant1EditorId = tenant1Roles.First(r => r.Name == "editor").Id;
         var tenant2EditorId = tenant2Roles.First(r => r.Name == "editor").Id;
 
-        Assert.AreNotEqual(tenant1EditorId, tenant2EditorId, 
+        Assert.AreNotEqual(tenant1EditorId, tenant2EditorId,
             "Same role name in different tenants should be separate records");
     }
 }

@@ -16,7 +16,7 @@ public interface IExternalOidcCorrelationManager
 internal sealed class ExternalOidcCorrelationManager : IExternalOidcCorrelationManager
 {
     private static readonly object CorrelationHandleItemKey = new();
-    
+
     private readonly ICorrelationContextAccessor _correlationContext;
     private readonly ICorrelationStateCache _correlationCache;
     private readonly ICorrelationIdGenerator _correlationGenerator;
@@ -35,8 +35,8 @@ internal sealed class ExternalOidcCorrelationManager : IExternalOidcCorrelationM
     }
 
     public async Task<CorrelationSnapshot> EnsureCorrelationAsync(
-        HttpContext http, 
-        string? currentCorrelationId, 
+        HttpContext http,
+        string? currentCorrelationId,
         string? requestedHandle)
     {
         var correlationId = currentCorrelationId;
@@ -46,7 +46,7 @@ internal sealed class ExternalOidcCorrelationManager : IExternalOidcCorrelationM
             _logger.LogDebug("Generated new correlation id {CorrelationId} for external flow", correlationId);
         }
 
-        if (!_correlationContext.HasCorrelation || 
+        if (!_correlationContext.HasCorrelation ||
             !string.Equals(_correlationContext.CorrelationId, correlationId, StringComparison.Ordinal))
         {
             _correlationContext.Set(correlationId, false);
@@ -83,7 +83,7 @@ internal sealed class ExternalOidcCorrelationManager : IExternalOidcCorrelationM
         if (string.IsNullOrEmpty(requestedHandle))
         {
             var queryHandle = http.Request.Query["cid_ref"].ToString();
-            if (!string.IsNullOrEmpty(queryHandle)) 
+            if (!string.IsNullOrEmpty(queryHandle))
                 requestedHandle = queryHandle;
         }
 

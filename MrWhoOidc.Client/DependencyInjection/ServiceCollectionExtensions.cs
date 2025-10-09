@@ -48,13 +48,13 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDPoPKeyStore, EphemeralDpopKeyStore>();
         services.TryAddSingleton<IDPoPProofGenerator, JwtDpopProofGenerator>();
 
-    services.TryAddSingleton<IMrWhoDiscoveryClient, MrWhoDiscoveryClient>();
-    services.TryAddSingleton<IMrWhoJwksCache, MrWhoJwksCache>();
-    services.TryAddSingleton<IMrWhoTokenClient, MrWhoTokenClient>();
-    services.TryAddSingleton<IMrWhoAuthorizationManager, MrWhoAuthorizationManager>();
-    services.TryAddSingleton<IMrWhoOnBehalfOfManager, MrWhoOnBehalfOfManager>();
-    services.TryAddSingleton<IMrWhoClientCredentialsManager, MrWhoClientCredentialsManager>();
-    services.TryAddSingleton<IMrWhoLogoutManager, MrWhoLogoutManager>();
+        services.TryAddSingleton<IMrWhoDiscoveryClient, MrWhoDiscoveryClient>();
+        services.TryAddSingleton<IMrWhoJwksCache, MrWhoJwksCache>();
+        services.TryAddSingleton<IMrWhoTokenClient, MrWhoTokenClient>();
+        services.TryAddSingleton<IMrWhoAuthorizationManager, MrWhoAuthorizationManager>();
+        services.TryAddSingleton<IMrWhoOnBehalfOfManager, MrWhoOnBehalfOfManager>();
+        services.TryAddSingleton<IMrWhoClientCredentialsManager, MrWhoClientCredentialsManager>();
+        services.TryAddSingleton<IMrWhoLogoutManager, MrWhoLogoutManager>();
 
         var httpClientBuilder = services.AddHttpClient(MrWhoOidcClientDefaults.DefaultHttpClientName);
         httpClientBuilder.AddStandardResilienceHandler();

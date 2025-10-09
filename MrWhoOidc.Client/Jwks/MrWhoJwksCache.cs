@@ -37,8 +37,8 @@ internal sealed class MrWhoJwksCache : IMrWhoJwksCache
             return entry.Keys;
         }
 
-    var discovery = await _discoveryClient.GetAsync(cancellationToken).ConfigureAwait(false);
-    var jwksUri = discovery.RequireHttps(discovery.JwksUri, _options.CurrentValue.RequireHttpsMetadata);
+        var discovery = await _discoveryClient.GetAsync(cancellationToken).ConfigureAwait(false);
+        var jwksUri = discovery.RequireHttps(discovery.JwksUri, _options.CurrentValue.RequireHttpsMetadata);
 
         var client = _httpClientFactory.CreateClient(opts.HttpClientName);
         using var request = new HttpRequestMessage(HttpMethod.Get, jwksUri);

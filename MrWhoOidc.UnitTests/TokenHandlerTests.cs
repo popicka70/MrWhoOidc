@@ -36,7 +36,7 @@ public sealed class TokenHandlerTests
         IOptions<OidcOptions>? options = null)
     {
         var logger = NullLogger<TokenHandler>.Instance;
-        
+
         tokens ??= new StubTokenService();
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
@@ -56,7 +56,7 @@ public sealed class TokenHandlerTests
         services.AddLogging();
         services.AddOptions();
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
         context.Request.Scheme = "https";
@@ -95,7 +95,7 @@ public sealed class TokenHandlerTests
         // Arrange
         using var db = CreateDb();
         var handler = CreateHandler(db);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "invalid_grant",
@@ -119,7 +119,7 @@ public sealed class TokenHandlerTests
         using var db = CreateDb();
         var clients = new StubClientStore(authenticated: false);
         var handler = CreateHandler(db, clients: clients);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -144,7 +144,7 @@ public sealed class TokenHandlerTests
         // Arrange
         using var db = CreateDb();
         var handler = CreateHandler(db);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -165,7 +165,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -184,7 +184,7 @@ public sealed class TokenHandlerTests
         var assertions = new StubClientAssertionValidator(valid: false);
         var clientStore = new StubClientStore(client, authenticated: false);
         var handler = CreateHandler(db, assertions: assertions, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "client_credentials",
@@ -208,7 +208,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -226,7 +226,7 @@ public sealed class TokenHandlerTests
         var dpop = new StubDPoPValidator(ok: false, error: "missing_jti");
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, dpop: dpop, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -251,7 +251,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -269,7 +269,7 @@ public sealed class TokenHandlerTests
         var dpop = new StubDPoPValidator(ok: false, error: "invalid_signature");
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, dpop: dpop, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -294,7 +294,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -312,7 +312,7 @@ public sealed class TokenHandlerTests
         var dpop = new StubDPoPValidator(ok: false, error: "htm_mismatch");
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, dpop: dpop, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -337,7 +337,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -355,7 +355,7 @@ public sealed class TokenHandlerTests
         var dpop = new StubDPoPValidator(ok: false, error: "htu_mismatch");
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, dpop: dpop, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -380,7 +380,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -398,7 +398,7 @@ public sealed class TokenHandlerTests
         var grantHandler = new StubTokenGrantHandler(handled: true, success: true);
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, grantHandlers: new[] { grantHandler }, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -421,7 +421,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -439,7 +439,7 @@ public sealed class TokenHandlerTests
         var grantHandler = new StubTokenGrantHandler(handled: true, success: true);
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, grantHandlers: new[] { grantHandler }, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -463,7 +463,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -482,7 +482,7 @@ public sealed class TokenHandlerTests
         var grantHandler = new StubTokenGrantHandler(handled: true, success: true);
         var clientStore = new StubClientStore(client, authenticated: false); // Will be authenticated via assertion
         var handler = CreateHandler(db, assertions: assertions, grantHandlers: new[] { grantHandler }, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -507,7 +507,7 @@ public sealed class TokenHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var clientGuid = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var realm = new Realm { Id = realmId, Name = "test_realm" };
@@ -526,7 +526,7 @@ public sealed class TokenHandlerTests
         var grantHandler = new StubTokenGrantHandler(handled: true, success: true);
         var clientStore = new StubClientStore(client, authenticated: true);
         var handler = CreateHandler(db, grantHandlers: new[] { grantHandler }, tokenMetrics: new[] { metricsRecorder }, clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
@@ -553,7 +553,7 @@ public sealed class TokenHandlerTests
         // Arrange
         using var db = CreateDb();
         var handler = CreateHandler(db);
-        
+
         var context = new DefaultHttpContext();
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("test.example.com");

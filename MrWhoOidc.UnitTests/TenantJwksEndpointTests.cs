@@ -30,14 +30,14 @@ public class TenantJwksEndpointTests
             var db = sp.GetRequiredService<AuthDbContext>();
             return new TestTenantAccessor(db, Tenant1Id, null);
         });
-        
+
         var provider = services.BuildServiceProvider();
-        
+
         // Seed database with two tenants and their keys
         using (var scope = provider.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             // Create tenants
             db.Tenants.Add(new Tenant
             {
@@ -48,7 +48,7 @@ public class TenantJwksEndpointTests
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             db.Tenants.Add(new Tenant
             {
                 Id = Tenant2Id,
@@ -58,7 +58,7 @@ public class TenantJwksEndpointTests
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             // Create signing keys for tenant1
             db.SigningKeys.Add(new SigningKey
             {
@@ -68,7 +68,7 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             db.SigningKeys.Add(new SigningKey
             {
                 Kid = "tenant1-key2",
@@ -77,7 +77,7 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-5)
             });
-            
+
             // Create signing keys for tenant2
             db.SigningKeys.Add(new SigningKey
             {
@@ -87,10 +87,10 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant2Id,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             await db.SaveChangesAsync();
         }
-        
+
         // Act & Assert - Tenant 1 should only see tenant1 keys
         using (var scope = provider.CreateScope())
         {
@@ -103,15 +103,15 @@ public class TenantJwksEndpointTests
                 IssuerUri = "https://auth.example.com/t/tenant1",
                 IsMultiTenantMode = true
             });
-            
+
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
             var jwks = await keyStore.GetPublicJwksAsync();
-            
-            Assert.AreEqual(2, jwks.Count, "Tenant1 should see exactly 2 keys");
+
+            Assert.HasCount(2, jwks, "Tenant1 should see exactly 2 keys");
             Assert.IsTrue(jwks.All(k => k.Kid.StartsWith("tenant1-")), "All keys should belong to tenant1");
             Assert.IsFalse(jwks.Any(k => k.Kid.StartsWith("tenant2-")), "No tenant2 keys should be visible");
         }
-        
+
         // Act & Assert - Tenant 2 should only see tenant2 keys
         using (var scope = provider.CreateScope())
         {
@@ -124,11 +124,11 @@ public class TenantJwksEndpointTests
                 IssuerUri = "https://auth.example.com/t/tenant2",
                 IsMultiTenantMode = true
             });
-            
+
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
             var jwks = await keyStore.GetPublicJwksAsync();
-            
-            Assert.AreEqual(1, jwks.Count, "Tenant2 should see exactly 1 key");
+
+            Assert.HasCount(1, jwks, "Tenant2 should see exactly 1 key");
             Assert.IsTrue(jwks.All(k => k.Kid.StartsWith("tenant2-")), "All keys should belong to tenant2");
             Assert.IsFalse(jwks.Any(k => k.Kid.StartsWith("tenant1-")), "No tenant1 keys should be visible");
         }
@@ -147,14 +147,14 @@ public class TenantJwksEndpointTests
             var db = sp.GetRequiredService<AuthDbContext>();
             return new TestTenantAccessor(db, Tenant1Id, null);
         });
-        
+
         var provider = services.BuildServiceProvider();
-        
+
         // Seed database with tenant and keys (one active, one retired)
         using (var scope = provider.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             db.Tenants.Add(new Tenant
             {
                 Id = Tenant1Id,
@@ -164,7 +164,7 @@ public class TenantJwksEndpointTests
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             // Active key
             db.SigningKeys.Add(new SigningKey
             {
@@ -175,7 +175,7 @@ public class TenantJwksEndpointTests
                 CreatedAt = DateTimeOffset.UtcNow,
                 RetiredAt = null
             });
-            
+
             // Retired key
             db.SigningKeys.Add(new SigningKey
             {
@@ -186,10 +186,10 @@ public class TenantJwksEndpointTests
                 CreatedAt = DateTimeOffset.UtcNow.AddDays(-7),
                 RetiredAt = DateTimeOffset.UtcNow.AddDays(-1)
             });
-            
+
             await db.SaveChangesAsync();
         }
-        
+
         // Act
         using (var scope = provider.CreateScope())
         {
@@ -202,12 +202,12 @@ public class TenantJwksEndpointTests
                 IssuerUri = "https://auth.example.com/t/tenant1",
                 IsMultiTenantMode = true
             });
-            
+
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
             var jwks = await keyStore.GetPublicJwksAsync();
-            
+
             // Assert
-            Assert.AreEqual(1, jwks.Count, "Should only return active (non-retired) keys");
+            Assert.HasCount(1, jwks, "Should only return active (non-retired) keys");
             Assert.AreEqual("active-key", jwks[0].Kid);
         }
     }
@@ -225,14 +225,14 @@ public class TenantJwksEndpointTests
             var db = sp.GetRequiredService<AuthDbContext>();
             return new TestTenantAccessor(db, Tenant1Id, null);
         });
-        
+
         var provider = services.BuildServiceProvider();
-        
+
         // Seed database with tenant and key containing private material
         using (var scope = provider.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             db.Tenants.Add(new Tenant
             {
                 Id = Tenant1Id,
@@ -242,7 +242,7 @@ public class TenantJwksEndpointTests
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             // Key with private material
             db.SigningKeys.Add(new SigningKey
             {
@@ -252,10 +252,10 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             await db.SaveChangesAsync();
         }
-        
+
         // Act
         using (var scope = provider.CreateScope())
         {
@@ -268,18 +268,18 @@ public class TenantJwksEndpointTests
                 IssuerUri = "https://auth.example.com/t/tenant1",
                 IsMultiTenantMode = true
             });
-            
+
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
             var jwks = await keyStore.GetPublicJwksAsync();
-            
+
             // Assert
-            Assert.AreEqual(1, jwks.Count);
+            Assert.HasCount(1, jwks);
             var publicKey = jwks[0];
-            
+
             Assert.AreEqual("test-key", publicKey.Kid);
             Assert.AreEqual("public-n", publicKey.N);
             Assert.AreEqual("AQAB", publicKey.E);
-            
+
             // Verify private material is stripped
             Assert.IsNull(publicKey.D, "Private exponent D should be null");
             Assert.IsNull(publicKey.P, "Private prime P should be null");
@@ -303,14 +303,14 @@ public class TenantJwksEndpointTests
             var db = sp.GetRequiredService<AuthDbContext>();
             return new TestTenantAccessor(db, Tenant1Id, null);
         });
-        
+
         var provider = services.BuildServiceProvider();
-        
+
         // Seed database with multiple keys at different times
         using (var scope = provider.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             db.Tenants.Add(new Tenant
             {
                 Id = Tenant1Id,
@@ -320,7 +320,7 @@ public class TenantJwksEndpointTests
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             });
-            
+
             // Add keys in non-chronological order
             db.SigningKeys.Add(new SigningKey
             {
@@ -330,7 +330,7 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow.AddDays(-2)
             });
-            
+
             db.SigningKeys.Add(new SigningKey
             {
                 Kid = "key-1",
@@ -339,7 +339,7 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow // Most recent
             });
-            
+
             db.SigningKeys.Add(new SigningKey
             {
                 Kid = "key-3",
@@ -348,10 +348,10 @@ public class TenantJwksEndpointTests
                 TenantId = Tenant1Id,
                 CreatedAt = DateTimeOffset.UtcNow.AddDays(-5)
             });
-            
+
             await db.SaveChangesAsync();
         }
-        
+
         // Act
         using (var scope = provider.CreateScope())
         {
@@ -364,12 +364,12 @@ public class TenantJwksEndpointTests
                 IssuerUri = "https://auth.example.com/t/tenant1",
                 IsMultiTenantMode = true
             });
-            
+
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
             var jwks = await keyStore.GetPublicJwksAsync();
-            
+
             // Assert - keys should be ordered by CreatedAt descending (newest first)
-            Assert.AreEqual(3, jwks.Count);
+            Assert.HasCount(3, jwks);
             Assert.AreEqual("key-1", jwks[0].Kid, "Newest key should be first");
             Assert.AreEqual("key-2", jwks[1].Kid, "Second newest key should be second");
             Assert.AreEqual("key-3", jwks[2].Kid, "Oldest key should be last");
@@ -389,14 +389,14 @@ public class TenantJwksEndpointTests
             var db = sp.GetRequiredService<AuthDbContext>();
             return new TestTenantAccessor(db, Guid.Empty, null);
         });
-        
+
         var provider = services.BuildServiceProvider();
-        
+
         // Act & Assert
         using (var scope = provider.CreateScope())
         {
             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-            
+
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 async () => await keyStore.GetPublicJwksAsync());
         }

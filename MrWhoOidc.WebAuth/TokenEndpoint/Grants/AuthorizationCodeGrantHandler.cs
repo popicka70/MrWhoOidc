@@ -24,17 +24,17 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
         var codeVerifier = context.Form[OAuthConstants.Parameters.CodeVerifier].ToString();
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
         {
-            logger.LogWarning("/token {ErrorCode}: missing code or redirect_uri for client {ClientIdHash}", 
+            logger.LogWarning("/token {ErrorCode}: missing code or redirect_uri for client {ClientIdHash}",
                 OAuthConstants.ErrorCodes.InvalidRequest, Infrastructure.Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest());
         }
 
         var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
-        
+
         // Capture session metadata
         var ipAddress = context.Http.Connection.RemoteIpAddress?.ToString();
         var userAgent = context.Http.Request.Headers.UserAgent.ToString();
-        
+
         var (ok, payload, _, status) = await context.Tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, context.ClientId, codeVerifier, issuer, context.DPoPJkt, ipAddress, userAgent);
         if (!ok)
         {

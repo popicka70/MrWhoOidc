@@ -33,10 +33,10 @@ public sealed class FrontChannelLogoutNotifier(AuthDbContext db)
 
             if (client.FrontChannelLogoutSessionRequired)
             {
-                var sidValue = !string.IsNullOrEmpty(sidFromQuery) 
-                    ? sidFromQuery 
+                var sidValue = !string.IsNullOrEmpty(sidFromQuery)
+                    ? sidFromQuery
                     : (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null);
-                    
+
                 if (!string.IsNullOrEmpty(sidValue))
                 {
                     url += "&sid=" + Uri.EscapeDataString(sidValue);

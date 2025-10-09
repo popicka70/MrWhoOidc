@@ -11,7 +11,7 @@ public interface IMultiTenancyOptions
     /// When true, system operates in multi-tenant mode with path-based tenant resolution.
     /// </summary>
     bool Enabled { get; }
-    
+
     /// <summary>
     /// Slug of the default tenant used in single-tenant mode or as fallback.
     /// Default: "default"

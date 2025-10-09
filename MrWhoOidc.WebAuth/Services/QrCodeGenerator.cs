@@ -21,7 +21,7 @@ public sealed class QrCodeGenerator : IQrCodeGenerator
     public string GenerateQrCodeDataUri(string url)
     {
         using var qrGenerator = new QRCodeGenerator();
-        
+
         // Parse error correction level
         var eccLevel = _options.QrCodeErrorCorrectionLevel.ToUpperInvariant() switch
         {
@@ -34,10 +34,10 @@ public sealed class QrCodeGenerator : IQrCodeGenerator
 
         using var qrCodeData = qrGenerator.CreateQrCode(url, eccLevel);
         using var qrCode = new PngByteQRCode(qrCodeData);
-        
+
         var qrCodeBytes = qrCode.GetGraphic(_options.QrCodePixelsPerModule);
         var base64 = Convert.ToBase64String(qrCodeBytes);
-        
+
         return $"data:image/png;base64,{base64}";
     }
 }

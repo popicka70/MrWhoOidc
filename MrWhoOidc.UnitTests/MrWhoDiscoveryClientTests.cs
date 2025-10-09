@@ -32,7 +32,7 @@ public class MrWhoDiscoveryClientTests
 
         handler.NextStatusCode = System.Net.HttpStatusCode.NotModified;
 
-    await Task.Delay(25);
+        await Task.Delay(25);
 
         var doc2 = await client.GetAsync();
         Assert.AreEqual(2, handler.RequestCount);

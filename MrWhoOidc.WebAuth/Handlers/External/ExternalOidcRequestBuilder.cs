@@ -105,12 +105,12 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         if (config.UsePAR && !string.IsNullOrEmpty(discovery.PushedAuthorizationRequestEndpoint))
         {
             var parResult = await TryPushAuthorizationRequestAsync(
-                http, 
-                config, 
-                discovery.PushedAuthorizationRequestEndpoint, 
-                requestJwt, 
+                http,
+                config,
+                discovery.PushedAuthorizationRequestEndpoint,
+                requestJwt,
                 query);
-            
+
             if (parResult is not null)
             {
                 _logger.LogInformation("Redirecting to authorization endpoint with PAR request_uri.");
@@ -124,7 +124,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
 
         var ub = new UriBuilder(discovery.AuthorizationEndpoint);
         var q = System.Web.HttpUtility.ParseQueryString(ub.Query);
-        
+
         if (!string.IsNullOrEmpty(requestJwt))
         {
             q["client_id"] = config.ClientId;
@@ -138,9 +138,9 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
                     q[kv.Key] = kv.Value;
             }
         }
-        
+
         ub.Query = q.ToString();
-        
+
         _logger.LogInformation("Redirecting to authorization endpoint (standard).");
         return new AuthorizationRequestResult
         {
@@ -162,7 +162,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
             .Where(k => k.IdentityProviderId == provider.Id && k.Purpose == IdentityProviderKeyPurpose.Signing && k.Active)
             .OrderByDescending(k => k.CreatedAt)
             .FirstOrDefaultAsync(http.RequestAborted);
-        
+
         if (key is null)
             return null;
 
@@ -173,13 +173,13 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
             {
                 jsonWebKey.KeyId = key.Kid;
             }
-            
+
             var alg = MapAlgorithm(key.Alg);
             var creds = new SigningCredentials(jsonWebKey, alg);
 
             var aud = ((discovery.Issuer ?? config.Authority).TrimEnd('/')) + "/authorize";
             var now = DateTimeOffset.UtcNow;
-            
+
             var claims = new Dictionary<string, object?>
             {
                 ["response_type"] = query.GetValueOrDefault("response_type"),
@@ -259,15 +259,15 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
 
             var httpc = _httpFactory.CreateClient();
             using var parResp = await httpc.SendAsync(parReq, http.RequestAborted);
-            
+
             if (parResp.IsSuccessStatusCode)
             {
                 var parBody = await parResp.Content.ReadAsStringAsync(http.RequestAborted);
                 using var parDoc = JsonDocument.Parse(parBody);
-                var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl) 
-                    ? ruriEl.GetString() 
+                var requestUri = parDoc.RootElement.TryGetProperty("request_uri", out var ruriEl)
+                    ? ruriEl.GetString()
                     : null;
-                
+
                 if (!string.IsNullOrEmpty(requestUri))
                 {
                     var ub = new UriBuilder(parEndpoint.Replace("/par", "").TrimEnd('/') + "/authorize");
@@ -283,7 +283,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         {
             _logger.LogWarning(ex, "PAR attempt failed; falling back to direct redirect");
         }
-        
+
         return null;
     }
 

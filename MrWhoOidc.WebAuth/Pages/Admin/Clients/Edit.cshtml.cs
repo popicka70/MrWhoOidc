@@ -1031,7 +1031,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
     private static string? NormalizeUrlsToJson(string? input)
     {
         if (string.IsNullOrWhiteSpace(input)) return null;
-        
+
         // Split by newlines first (for textarea input), then fallback to comma-separated for backward compatibility
         var list = input
             .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -1041,7 +1041,7 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             .Distinct(StringComparer.Ordinal)
             .Select(s => s.Trim())
             .ToArray();
-        
+
         return list.Length == 0 ? null : JsonSerializer.Serialize(list);
     }
 

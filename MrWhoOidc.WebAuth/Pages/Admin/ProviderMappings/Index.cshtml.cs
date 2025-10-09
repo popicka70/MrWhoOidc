@@ -22,7 +22,7 @@ public class IndexModel(
     public List<SelectListItem> TenantOptions { get; private set; } = new();
     public IReadOnlyList<Row> Rows { get; private set; } = Array.Empty<Row>();
     public bool IsPlatformAdmin { get; private set; }
-    
+
     [BindProperty(SupportsGet = true)]
     public Guid? TenantId { get; set; }
 
@@ -39,7 +39,7 @@ public class IndexModel(
         // Check if user is platform admin
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         // Load tenant options for filter (platform admins only)
         if (IsPlatformAdmin)
         {
@@ -50,7 +50,7 @@ public class IndexModel(
             TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
             TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
         }
-        
+
         // Determine tenant scope
         Guid? scopeTenantId;
         if (IsPlatformAdmin)
@@ -68,17 +68,17 @@ public class IndexModel(
                 return;
             }
         }
-        
+
         // Load clients and providers scoped to tenant
         var clientsQuery = db.Clients.AsNoTracking();
         var providersQuery = db.IdentityProviders.AsNoTracking();
-        
+
         if (scopeTenantId.HasValue)
         {
             clientsQuery = clientsQuery.Where(c => c.TenantId == scopeTenantId.Value);
             providersQuery = providersQuery.Where(p => p.TenantId == scopeTenantId.Value);
         }
-        
+
         ClientOptions = await clientsQuery
             .OrderBy(c => c.ClientId)
             .Select(c => new SelectListItem(c.ClientId, c.Id.ToString()))
@@ -91,12 +91,12 @@ public class IndexModel(
         var mappingsQuery = db.ClientIdentityProviders.AsNoTracking()
             .Join(db.Clients, cip => cip.ClientId, c => c.Id, (cip, c) => new { cip, c })
             .Join(db.IdentityProviders, cc => cc.cip.IdentityProviderId, p => p.Id, (cc, p) => new { cc.cip, cc.c, p });
-        
+
         if (scopeTenantId.HasValue)
         {
             mappingsQuery = mappingsQuery.Where(x => x.c.TenantId == scopeTenantId.Value);
         }
-        
+
         Rows = await mappingsQuery
             .OrderBy(x => x.c.ClientId).ThenBy(x => x.cip.Order)
             .Select(x => new Row(x.c.Id, x.cip.IdentityProviderId, x.c.ClientId, x.c.ClientName, x.p.DisplayName ?? x.p.Name, x.cip.Enabled, x.cip.IsDefaultForClient, x.cip.AutoRedirectIfSingle, x.cip.RequiredAcr, x.cip.Order))

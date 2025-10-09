@@ -12,17 +12,17 @@ public class EditModel(AuthDbContext db) : PageModel
 {
     [BindProperty]
     public TenantInput Input { get; set; } = new();
-    
+
     public int CurrentUserCount { get; private set; }
-    
+
     public int CurrentClientCount { get; private set; }
-    
+
     public int CurrentIdPCount { get; private set; }
 
     public class TenantInput
     {
         public Guid Id { get; set; }
-        
+
         public string Slug { get; set; } = string.Empty;
 
         [Required]
@@ -65,9 +65,9 @@ public class EditModel(AuthDbContext db) : PageModel
         public string? BillingPlan { get; set; }
 
         public DateTimeOffset CreatedAt { get; set; }
-        
+
         public DateTimeOffset? SuspendedAt { get; set; }
-        
+
         public DateTimeOffset? DeletedAt { get; set; }
     }
 

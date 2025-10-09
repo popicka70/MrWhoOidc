@@ -62,7 +62,7 @@ public static class OidcConstants
         public const string PhoneNumberVerified = "phone_number_verified";
         public const string Address = "address";
         public const string UpdatedAt = "updated_at";
-        
+
         // ID Token specific claims
         public const string Nonce = "nonce";
         public const string AuthTime = "auth_time";
@@ -73,7 +73,7 @@ public static class OidcConstants
         public const string AtHash = "at_hash";
         public const string CHash = "c_hash";
         public const string SHash = "s_hash";
-        
+
         // Extensions
         public const string Roles = "roles";
         public const string Realm = "realm";

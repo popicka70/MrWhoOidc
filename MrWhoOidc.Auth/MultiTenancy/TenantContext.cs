@@ -11,24 +11,24 @@ public class TenantContext
     /// Tenant ID (from database)
     /// </summary>
     public Guid TenantId { get; set; }
-    
+
     /// <summary>
     /// Tenant slug (URL-safe identifier, e.g., "acme", "default")
     /// </summary>
     public string Slug { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Display name of the tenant
     /// </summary>
     public string Name { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Computed issuer URI for this tenant.
     /// Single-tenant mode: https://auth.example.com
     /// Multi-tenant mode: https://auth.example.com/t/acme
     /// </summary>
     public string IssuerUri { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Whether multi-tenancy is enabled (from configuration)
     /// </summary>
@@ -45,7 +45,7 @@ public interface ITenantAccessor
     /// Gets the current tenant context, or null if not yet resolved.
     /// </summary>
     TenantContext? CurrentTenant { get; }
-    
+
     /// <summary>
     /// Sets the current tenant context (called by middleware).
     /// </summary>
@@ -59,9 +59,9 @@ public interface ITenantAccessor
 public class TenantAccessor : ITenantAccessor
 {
     private TenantContext? _currentTenant;
-    
+
     public TenantContext? CurrentTenant => _currentTenant;
-    
+
     public void SetTenant(TenantContext context)
     {
         _currentTenant = context ?? throw new ArgumentNullException(nameof(context));

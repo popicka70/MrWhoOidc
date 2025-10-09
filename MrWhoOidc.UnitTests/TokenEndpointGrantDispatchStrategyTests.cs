@@ -47,7 +47,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddRouting();
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     services.AddMrWhoOidcAuthCore();
-                    
+
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
                     services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
                     {
@@ -55,7 +55,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                         var logger = sp.GetService<Microsoft.Extensions.Logging.ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
                         return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
                     });
-                    
+
                     services.AddSingleton<OidcMetrics>();
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
@@ -71,7 +71,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     using var scope = app.ApplicationServices.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                     var hasher = new Argon2PasswordHasher();
-                    
+
                     // Seed default tenant
                     var tenant = new Tenant
                     {
@@ -83,7 +83,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                         CreatedAt = DateTimeOffset.UtcNow
                     };
                     db.Tenants.Add(tenant);
-                    
+
                     var realm = new Realm { Name = "default", TenantId = DefaultTenantId };
                     db.Realms.Add(realm);
                     db.Clients.Add(new ClientEntity

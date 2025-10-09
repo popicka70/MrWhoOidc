@@ -85,7 +85,7 @@ public sealed partial class UserAgentParser : IUserAgentParser
             return "Android";
         if (ua.Contains("iPhone", StringComparison.OrdinalIgnoreCase) || ua.Contains("iPad", StringComparison.OrdinalIgnoreCase))
             return "iOS";
-        
+
         // Desktop OS
         if (ua.Contains("Windows NT", StringComparison.OrdinalIgnoreCase))
             return "Windows";

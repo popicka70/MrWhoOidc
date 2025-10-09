@@ -19,7 +19,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         var settings = await settingsService.GetTenantSettingsAsync(tenantId);
         var lifetimeSeconds = settings?.Tokens?.AuthorizationCodeLifetimeSeconds ?? 300; // Default: 5 minutes
-        
+
         // Create a random code
         var code = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=')

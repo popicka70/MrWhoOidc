@@ -31,25 +31,25 @@ public class QrConfirmModel : PageModel
     public async Task<IActionResult> OnGet()
     {
         var requestUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}{Request.QueryString}";
-        
-        _logger.LogInformation("🔍 [QR Confirm Page] Request from {IP}, Full URL: {Url}", 
+
+        _logger.LogInformation("🔍 [QR Confirm Page] Request from {IP}, Full URL: {Url}",
             HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             requestUrl);
-        _logger.LogInformation("🔍 [QR Confirm Page] Session parameter: {HasSession}, Length: {Length}, IsAuthenticated: {IsAuth}", 
+        _logger.LogInformation("🔍 [QR Confirm Page] Session parameter: {HasSession}, Length: {Length}, IsAuthenticated: {IsAuth}",
             !string.IsNullOrEmpty(Session),
             Session?.Length ?? 0,
             User.Identity?.IsAuthenticated ?? false);
 
         if (string.IsNullOrEmpty(Session))
         {
-            _logger.LogWarning("❌ [QR Confirm Page] REJECTED: missing session parameter. Query string: {QueryString}", 
+            _logger.LogWarning("❌ [QR Confirm Page] REJECTED: missing session parameter. Query string: {QueryString}",
                 Request.QueryString.Value);
             return BadRequest("Missing session parameter");
         }
 
         _logger.LogDebug("🔍 [QR Confirm Page] Looking up session");
         var session = await _qrService.GetSessionAsync(Session);
-        
+
         if (session is null)
         {
             _logger.LogWarning("❌ [QR Confirm Page] Session not found");
@@ -62,7 +62,7 @@ public class QrConfirmModel : PageModel
             return BadRequest("This QR code has expired.");
         }
 
-        _logger.LogInformation("✅ [QR Confirm Page] Session valid for client {ClientId}, status: {Status}", 
+        _logger.LogInformation("✅ [QR Confirm Page] Session valid for client {ClientId}, status: {Status}",
             session.ClientId, session.Status);
 
         // Get client info
@@ -77,7 +77,7 @@ public class QrConfirmModel : PageModel
             return BadRequest("Invalid client");
         }
 
-        _logger.LogInformation("✅ [QR Confirm Page] Rendering confirm page for client {ClientName} ({ClientId})", 
+        _logger.LogInformation("✅ [QR Confirm Page] Rendering confirm page for client {ClientName} ({ClientId})",
             client.ClientName ?? client.ClientId, client.ClientId);
 
         // Set model properties for the view

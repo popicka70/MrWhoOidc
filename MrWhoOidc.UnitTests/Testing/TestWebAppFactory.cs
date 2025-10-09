@@ -55,14 +55,14 @@ internal static class TestWebAppFactory
                     };
                     cfg.AddInMemoryCollection(dict);
                 });
-                
+
                 // Seed default tenant for tests
                 b.ConfigureServices((context, services) =>
                 {
                     // Use a hosted service to seed the tenant after app starts
                     services.AddHostedService<DefaultTenantSeedingService>();
                 });
-                
+
                 // Override services AFTER all other registration (this runs last)
                 b.ConfigureTestServices(services =>
                 {
@@ -125,7 +125,7 @@ internal sealed class DefaultTenantSeedingService : IHostedService
         {
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
             db.Tenants.Add(new Tenant
             {
@@ -179,10 +179,10 @@ public sealed class TestTenantAccessor : ITenantAccessor
                         {
                             // EnsureCreated is synchronous and safe to call multiple times
                             _db.Database.EnsureCreated();
-                            
+
                             // Load tenant from database
                             var tenant = _db.Tenants.FirstOrDefault(t => t.Id == _defaultTenantId);
-                            
+
                             if (tenant != null)
                             {
                                 _currentTenant = new TenantContext
@@ -193,8 +193,8 @@ public sealed class TestTenantAccessor : ITenantAccessor
                                     IssuerUri = tenant.IssuerUri,
                                     IsMultiTenantMode = false
                                 };
-                                
-                                _logger?.LogDebug("TestTenantAccessor initialized with default tenant: {Slug} (ID: {TenantId})", 
+
+                                _logger?.LogDebug("TestTenantAccessor initialized with default tenant: {Slug} (ID: {TenantId})",
                                     tenant.Slug, tenant.Id);
                             }
                             else
@@ -213,7 +213,7 @@ public sealed class TestTenantAccessor : ITenantAccessor
                     }
                 }
             }
-            
+
             return _currentTenant;
         }
     }

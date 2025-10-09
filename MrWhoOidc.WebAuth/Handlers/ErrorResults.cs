@@ -17,7 +17,7 @@ public sealed class ErrorResults
         => Create(OAuthConstants.ErrorCodes.UnauthorizedClient, description, null, correlationId, 401);
 
     public static IResult UnsupportedGrantType(string? description = null, string? correlationId = null)
-        => Create(OAuthConstants.ErrorCodes.UnsupportedGrantType, 
+        => Create(OAuthConstants.ErrorCodes.UnsupportedGrantType,
             description ?? "The authorization grant type is not supported by the authorization server.",
             null, correlationId, 400);
 
@@ -45,7 +45,7 @@ public sealed class ErrorResults
     public static IResult RateLimitExceeded(string? description = null, string? correlationId = null)
         => Create(OAuthConstants.ErrorCodes.RateLimitExceeded, description, null, correlationId, 429);
 
-    public static IResult TooManyRequests(string? description = null, string? correlationId = null) 
+    public static IResult TooManyRequests(string? description = null, string? correlationId = null)
         => Create(OAuthConstants.ErrorCodes.SlowDown, description, null, correlationId, 429);
 
     private static IResult Create(string code, string? description, string? state, string? correlationId, int statusCode)
@@ -54,14 +54,14 @@ public sealed class ErrorResults
         {
             ["error"] = code
         };
-        
-        if (!string.IsNullOrEmpty(description)) 
+
+        if (!string.IsNullOrEmpty(description))
             payload["error_description"] = description;
-        if (!string.IsNullOrEmpty(state)) 
+        if (!string.IsNullOrEmpty(state))
             payload["state"] = state;
-        if (!string.IsNullOrEmpty(correlationId)) 
+        if (!string.IsNullOrEmpty(correlationId))
             payload["correlation_id"] = correlationId;
-            
+
         return Results.Json(payload, statusCode: statusCode);
     }
 }

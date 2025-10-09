@@ -16,13 +16,13 @@ internal sealed class ConsentService(AuthDbContext db, ITenantAccessor tenantAcc
     {
         var query = db.Consents.AsNoTracking()
             .Where(c => c.UserId == userId && c.ClientId == clientId && c.RevokedAt == null);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         var consent = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (consent is null) return false;
 
@@ -39,13 +39,13 @@ internal sealed class ConsentService(AuthDbContext db, ITenantAccessor tenantAcc
     public async Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
     {
         var query = db.Consents.Where(c => c.UserId == userId && c.ClientId == clientId);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         var existing = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase));
         if (existing is null)
@@ -58,13 +58,13 @@ internal sealed class ConsentService(AuthDbContext db, ITenantAccessor tenantAcc
                 ScopesJson = scopesJson,
                 CreatedAt = DateTimeOffset.UtcNow
             };
-            
+
             // Set TenantId if tenant context is available
             if (tenantAccessor.CurrentTenant != null)
             {
                 consent.TenantId = tenantAccessor.CurrentTenant.TenantId;
             }
-            
+
             db.Consents.Add(consent);
         }
         else

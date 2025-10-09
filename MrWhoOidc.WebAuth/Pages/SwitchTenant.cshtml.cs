@@ -13,7 +13,7 @@ public class SwitchTenantModel(ITenantSwitchingService tenantSwitchingService) :
         // Verify user has access to this tenant
         var userTenants = await tenantSwitchingService.GetUserTenantsAsync(User);
         var targetTenant = userTenants.FirstOrDefault(t => t.TenantId == tenantId);
-        
+
         if (targetTenant == null)
         {
             return Forbid();

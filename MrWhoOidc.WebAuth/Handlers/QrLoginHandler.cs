@@ -165,7 +165,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         string codeChallengeMethod)
     {
         var opts = _options.Value;
-        
+
         _logger.LogDebug("QR session creation: clientId={ClientId}, scope={Scope}, challenge={HasChallenge}",
             clientId,
             scope,
@@ -174,18 +174,19 @@ public sealed class QrLoginHandler : IQrLoginHandler
         try
         {
             _logger.LogDebug("Creating QR session for client {ClientId} with scope {Scope}", clientId, scope);
-            
+
             var (sessionToken, authUrl) = await _qrService.CreateSessionAsync(
-                clientId, returnUrl, codeChallenge, codeChallengeMethod, 
+                clientId, returnUrl, codeChallenge, codeChallengeMethod,
                 state ?? string.Empty, nonce, scope);
 
             var qrCodeDataUri = _qrCodeGenerator.GenerateQrCodeDataUri(authUrl);
 
-            _logger.LogInformation("QR login session created: {SessionToken} for client {ClientId}", 
+            _logger.LogInformation("QR login session created: {SessionToken} for client {ClientId}",
                 sessionToken, clientId);
 
-            _audit.Emit("qr.session.created", new { 
-                client_id = clientId, 
+            _audit.Emit("qr.session.created", new
+            {
+                client_id = clientId,
                 session_token_hash = ComputeHash(sessionToken),
                 ip = http.Connection.RemoteIpAddress?.ToString(),
                 expiry = opts.SessionLifetimeSeconds
@@ -193,7 +194,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             // Pass data via query parameters to the Razor page
             var qrPageUrl = $"/Auth/Qr?token={Uri.EscapeDataString(sessionToken)}&qr={Uri.EscapeDataString(qrCodeDataUri)}&interval={opts.PollIntervalSeconds}";
-            
+
             _logger.LogDebug("Redirecting to /Auth/Qr Razor page with QR data in query");
             return Results.Redirect(qrPageUrl);
         }
@@ -208,9 +209,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
     public async Task<IResult> GetStatusAsync(HttpContext http, string sessionToken)
     {
         _logger.LogDebug("QR status check for session {SessionTokenHash}", ComputeHash(sessionToken));
-        
+
         var session = await _qrService.GetSessionAsync(sessionToken);
-        
+
         if (session is null)
         {
             _logger.LogWarning("QR status check: session not found for token hash {Hash}", ComputeHash(sessionToken));
@@ -249,7 +250,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
     public async Task<IResult> ConfirmAsync(HttpContext http)
     {
         _logger.LogInformation("QR confirm called from {IP}", http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-        
+
         var form = await http.Request.ReadFormAsync();
         var sessionToken = form["sessionToken"].ToString();
 
@@ -261,7 +262,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         _logger.LogDebug("QR confirm for session hash {Hash}", ComputeHash(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
-        
+
         if (session is null)
         {
             _logger.LogWarning("QR confirm rejected: session not found for hash {Hash}", ComputeHash(sessionToken));
@@ -298,7 +299,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         try
         {
             _logger.LogDebug("Generating authorization code for QR session, client {ClientId}, user {UserId}", session.ClientId, userId);
-            
+
             // Build validation result for code generation
             var validationResult = new AuthorizeValidationResult
             {
@@ -313,7 +314,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             // Generate authorization code
             var result = await _authCodeService.IssueAsync(validationResult, userId);
-            
+
             if (!result.ok || string.IsNullOrEmpty(result.code))
             {
                 _logger.LogError("Failed to generate authorization code for QR session: ok={Ok}, error={Error}", result.ok, result.error);
@@ -321,23 +322,25 @@ public sealed class QrLoginHandler : IQrLoginHandler
             }
 
             _logger.LogDebug("Authorization code generated successfully for QR session");
-            
+
             // Update session
             await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Authenticated, userId, result.code);
 
-            _logger.LogInformation("QR login confirmed: user {UserId} for client {ClientId}", 
+            _logger.LogInformation("QR login confirmed: user {UserId} for client {ClientId}",
                 userId, session.ClientId);
 
-            _audit.Emit("qr.confirm", new { 
-                user_id = userId, 
+            _audit.Emit("qr.confirm", new
+            {
+                user_id = userId,
                 client_id = session.ClientId,
                 session_token_hash = ComputeHash(sessionToken),
                 success = true
             });
 
-            return Results.Json(new { 
-                success = true, 
-                message = "Authentication confirmed. You may close this page." 
+            return Results.Json(new
+            {
+                success = true,
+                message = "Authentication confirmed. You may close this page."
             });
         }
         catch (Exception ex)
@@ -350,7 +353,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
     public async Task<IResult> CancelAsync(HttpContext http)
     {
         _logger.LogInformation("QR cancel called from {IP}", http.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-        
+
         var form = await http.Request.ReadFormAsync();
         var sessionToken = form["sessionToken"].ToString();
 
@@ -366,8 +369,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             _logger.LogInformation("Cancelling QR session for client {ClientId}", session.ClientId);
             await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Cancelled);
-            
-            _audit.Emit("qr.cancel", new { 
+
+            _audit.Emit("qr.cancel", new
+            {
                 session_token_hash = ComputeHash(sessionToken),
                 source = "desktop"
             });
@@ -380,24 +384,24 @@ public sealed class QrLoginHandler : IQrLoginHandler
     {
         var sessionToken = http.Request.Query["session"].ToString();
         var requestUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}{http.Request.QueryString}";
-        
-        _logger.LogInformation("🔍 [QR Mobile Landing] Request from {IP}, Full URL: {Url}", 
+
+        _logger.LogInformation("🔍 [QR Mobile Landing] Request from {IP}, Full URL: {Url}",
             http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             requestUrl);
-        _logger.LogInformation("🔍 [QR Mobile Landing] Session token present: {HasSession}, Length: {Length}", 
+        _logger.LogInformation("🔍 [QR Mobile Landing] Session token present: {HasSession}, Length: {Length}",
             !string.IsNullOrEmpty(sessionToken),
             sessionToken?.Length ?? 0);
 
         if (string.IsNullOrEmpty(sessionToken))
         {
-            _logger.LogWarning("❌ [QR Mobile Landing] REJECTED: missing session parameter. Query string: {QueryString}", 
+            _logger.LogWarning("❌ [QR Mobile Landing] REJECTED: missing session parameter. Query string: {QueryString}",
                 http.Request.QueryString.Value);
             return Results.BadRequest("Missing session parameter");
         }
 
         _logger.LogDebug("🔍 [QR Mobile Landing] Looking up QR session with hash {Hash}", ComputeHash(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
-        
+
         if (session is null)
         {
             _logger.LogWarning("❌ [QR Mobile Landing] Session not found for hash {Hash}", ComputeHash(sessionToken));
@@ -428,7 +432,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         _logger.LogInformation("✅ [QR Mobile Landing] Marking session as scanned for client {ClientId}", session.ClientId);
         await _qrService.MarkScannedAsync(sessionToken, mobileIp, mobileUserAgent);
 
-        _audit.Emit("qr.session.scanned", new { 
+        _audit.Emit("qr.session.scanned", new
+        {
             session_token_hash = ComputeHash(sessionToken),
             mobile_ip = mobileIp,
             mobile_user_agent = mobileUserAgent
@@ -437,13 +442,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
         // Check if user is authenticated
         var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
         _logger.LogInformation("🔍 [QR Mobile Landing] User authenticated: {IsAuthenticated}", isAuthenticated);
-        
+
         if (!isAuthenticated)
         {
             // Redirect to login with return URL
             var returnUrl = $"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}";
             var loginUrl = $"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}";
-            _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to LOGIN. ReturnUrl: {ReturnUrl}, Full login URL: {LoginUrl}", 
+            _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to LOGIN. ReturnUrl: {ReturnUrl}, Full login URL: {LoginUrl}",
                 returnUrl, loginUrl);
             return Results.Redirect(loginUrl);
         }
@@ -468,9 +473,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
     {
         var returnUrl = session.ReturnUrl;
         var separator = returnUrl.Contains('?') ? "&" : "?";
-        
+
         var url = $"{returnUrl}{separator}code={Uri.EscapeDataString(session.AuthorizationCode!)}";
-        
+
         if (!string.IsNullOrEmpty(session.State))
         {
             url += $"&state={Uri.EscapeDataString(session.State)}";

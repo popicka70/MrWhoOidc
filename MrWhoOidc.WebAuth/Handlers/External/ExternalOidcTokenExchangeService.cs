@@ -152,8 +152,8 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
         if (userinfoEndpoint is null || string.IsNullOrEmpty(accessToken))
             return baseInfo;
 
-        if (!string.IsNullOrEmpty(baseInfo.Subject) && 
-            !string.IsNullOrEmpty(baseInfo.Email) && 
+        if (!string.IsNullOrEmpty(baseInfo.Subject) &&
+            !string.IsNullOrEmpty(baseInfo.Email) &&
             !string.IsNullOrEmpty(baseInfo.Name))
         {
             return baseInfo;

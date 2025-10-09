@@ -26,11 +26,11 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
         }
 
         var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
-        
+
         // Capture session metadata
         var ipAddress = context.Http.Connection.RemoteIpAddress?.ToString();
         var userAgent = context.Http.Request.Headers.UserAgent.ToString();
-        
+
         (bool ok, object? payload, string? _, int status) = await context.Tokens.ExchangeRefreshTokenAsync(refresh, context.ClientId, issuer, context.DPoPJkt, ipAddress, userAgent);
         if (!ok)
         {

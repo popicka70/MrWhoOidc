@@ -21,7 +21,7 @@ public class IndexModel(
 
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
-    
+
     [BindProperty(SupportsGet = true)]
     public Guid? TenantId { get; set; }
 
@@ -37,7 +37,7 @@ public class IndexModel(
         // Check if user is platform admin
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         // Load tenant options for filter (platform admins only)
         if (IsPlatformAdmin)
         {
@@ -48,10 +48,10 @@ public class IndexModel(
             TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
             TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
         }
-        
+
         // Query API for items and backlog with tenant scoping
         var q = db.BackchannelLogoutNotifications.AsNoTracking();
-        
+
         // Automatic tenant scoping
         if (IsPlatformAdmin)
         {
@@ -76,7 +76,7 @@ public class IndexModel(
                 return;
             }
         }
-        
+
         if (!string.IsNullOrWhiteSpace(Status)) q = q.Where(n => n.Status == Status);
         Items = await q.OrderByDescending(n => n.CreatedAt)
             .Take(200)

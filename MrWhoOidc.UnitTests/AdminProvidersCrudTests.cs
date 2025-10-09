@@ -63,7 +63,7 @@ public sealed class AdminProvidersCrudTests
                     app.UseEndpoints(endpoints =>
                     {
                         var admin = endpoints.MapGroup("/admin/api").RequireAuthorization("admin");
-                        
+
                         admin.MapGet("/providers", async (AuthDbContext db) =>
                         {
                             var list = await db.IdentityProviders.AsNoTracking()
@@ -124,7 +124,7 @@ public sealed class AdminProvidersCrudTests
         // Arrange
         var userId = Guid.NewGuid();
         using var host = await CreateHostAsync(userId);
-        
+
         // Seed providers
         using (var scope = host.Services.CreateScope())
         {
@@ -163,8 +163,8 @@ public sealed class AdminProvidersCrudTests
         // Assert
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadAsStringAsync();
-        Assert.IsTrue(json.Contains("provider1"));
-        Assert.IsTrue(json.Contains("provider2"));
+        Assert.Contains("provider1", json);
+        Assert.Contains("provider2", json);
     }
 
     [TestMethod]

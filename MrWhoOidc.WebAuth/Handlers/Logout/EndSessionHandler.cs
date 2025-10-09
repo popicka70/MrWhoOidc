@@ -25,17 +25,17 @@ public sealed class EndSessionHandler(
 
         // Build front-channel iframe URLs
         var iframes = await frontChannelNotifier.GetFrontChannelIframeUrlsAsync(
-            issuer, 
-            request.IdTokenHint, 
-            request.Sid, 
+            issuer,
+            request.IdTokenHint,
+            request.Sid,
             http.RequestAborted).ConfigureAwait(false);
 
         // Enqueue back-channel logout notifications
         await backChannelEnqueuer.EnqueueNotificationsAsync(
-            http, 
-            issuer, 
-            request.IdTokenHint, 
-            request.Sid, 
+            http,
+            issuer,
+            request.IdTokenHint,
+            request.Sid,
             http.RequestAborted).ConfigureAwait(false);
 
         // Validate post_logout_redirect_uri and create opaque reference if provided
@@ -44,10 +44,10 @@ public sealed class EndSessionHandler(
         if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri) && string.IsNullOrEmpty(request.ClientId))
         {
             var host = TryGetHost(request.PostLogoutRedirectUri);
-            audit.Emit("logout.redirect.rejected_missing_client", new 
-            { 
-                post_logout_host = host, 
-                post_logout_hash = audit.HashValue(request.PostLogoutRedirectUri) 
+            audit.Emit("logout.redirect.rejected_missing_client", new
+            {
+                post_logout_host = host,
+                post_logout_hash = audit.HashValue(request.PostLogoutRedirectUri)
             });
             metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_missing_client"));
             logger.LogWarning("Rejecting post_logout_redirect_uri without client_id. host={Host}", host ?? "unknown");
@@ -55,9 +55,9 @@ public sealed class EndSessionHandler(
         else if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri) && !string.IsNullOrEmpty(request.ClientId))
         {
             refId = await redirectValidator.ValidateAndCreateReferenceAsync(
-                request.PostLogoutRedirectUri, 
-                request.ClientId!, 
-                request.State, 
+                request.PostLogoutRedirectUri,
+                request.ClientId!,
+                request.State,
                 http.RequestAborted).ConfigureAwait(false);
         }
 

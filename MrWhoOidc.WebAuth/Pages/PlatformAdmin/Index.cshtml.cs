@@ -18,8 +18,8 @@ public class IndexModel : PageModel
     private readonly IOptions<MultiTenancyOptions> _multiTenancyOptions;
 
     public IndexModel(
-        AuthDbContext db, 
-        ITenantSeedingService seedingService, 
+        AuthDbContext db,
+        ITenantSeedingService seedingService,
         ILogger<IndexModel> logger,
         IOptions<MultiTenancyOptions> multiTenancyOptions)
     {

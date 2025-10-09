@@ -147,7 +147,7 @@ public sealed class IntrospectionHandler(
         Dictionary<string, object?> response,
         out IResult result)
     {
-        var isActive = response.TryGetValue("active", out var activeValue) && 
+        var isActive = response.TryGetValue("active", out var activeValue) &&
                       activeValue is bool active && active;
 
         if (isActive)

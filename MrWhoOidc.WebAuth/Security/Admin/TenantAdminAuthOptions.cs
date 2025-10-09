@@ -10,7 +10,7 @@ public sealed class TenantAdminAuthOptions
     /// This is the realm name within each tenant where the tenant-admin role must exist.
     /// </summary>
     public string RealmName { get; set; } = "default";
-    
+
     /// <summary>
     /// The name of the role that grants tenant admin access (default: "tenant-admin").
     /// </summary>

@@ -39,23 +39,23 @@ public sealed class QrLoginCleanupService : BackgroundService
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(_options.CleanupIntervalSeconds), stoppingToken);
-                
+
                 using var scope = _serviceProvider.CreateScope();
-                
+
                 // Set tenant context for background operation
                 if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
                 {
                     _logger.LogWarning("QR login cleanup skipped: default tenant not found");
                     continue;
                 }
-                
+
                 var qrService = scope.ServiceProvider.GetRequiredService<IQrLoginService>();
 
                 var gracePeriod = TimeSpan.FromSeconds(_options.CleanupGracePeriodSeconds);
                 var olderThan = DateTimeOffset.UtcNow.Subtract(gracePeriod);
-                
+
                 var count = await qrService.CleanupExpiredSessionsAsync(olderThan);
-                
+
                 if (count > 0)
                 {
                     _logger.LogInformation("Cleaned up {Count} expired QR login sessions", count);

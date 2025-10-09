@@ -6,7 +6,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class NotFoundModel : PageModel
 {
     public string? RequestedPath { get; set; }
-    
+
     public IActionResult OnGet(string? path = null)
     {
         // Get original path from query string (set by UseStatusCodePagesWithReExecute)

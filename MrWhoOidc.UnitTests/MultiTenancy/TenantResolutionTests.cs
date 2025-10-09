@@ -19,15 +19,15 @@ public class TenantResolutionTests
     public async Task Setup()
     {
         var services = new ServiceCollection();
-        
+
         // In-memory database for testing - register as singleton so all services share the same instance
         services.AddDbContext<AuthDbContext>(options =>
             options.UseInMemoryDatabase(databaseName: $"TenantResolutionTestDb_{Guid.NewGuid()}"),
             ServiceLifetime.Singleton);
-        
+
         // Memory cache
         services.AddMemoryCache();
-        
+
         // Multi-tenancy options (multi-tenant mode enabled)
         var multiTenancyOptions = new MultiTenancyOptions
         {
@@ -35,18 +35,18 @@ public class TenantResolutionTests
             DefaultTenantSlug = "default"
         };
         services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
-        
+
         // Tenant resolver
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
-        
+
         _serviceProvider = services.BuildServiceProvider();
         _db = _serviceProvider.GetRequiredService<AuthDbContext>();
-        
+
         // Seed test tenants
         _defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
         _acmeTenantId = Guid.NewGuid();
         _contosoTenantId = Guid.NewGuid();
-        
+
         _db.Tenants.AddRange(
             new Tenant
             {
@@ -76,7 +76,7 @@ public class TenantResolutionTests
                 CreatedAt = DateTimeOffset.UtcNow
             }
         );
-        
+
         await _db.SaveChangesAsync();
     }
 
@@ -94,10 +94,10 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/acme/authorize");
-        
+
         // Assert
         Assert.IsNotNull(result);
         Assert.AreEqual(_acmeTenantId, result.TenantId);
@@ -113,10 +113,10 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/contoso/.well-known/openid-configuration");
-        
+
         // Assert
         Assert.IsNotNull(result);
         Assert.AreEqual(_contosoTenantId, result.TenantId);
@@ -131,10 +131,10 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/nonexistent/authorize");
-        
+
         // Assert
         Assert.IsNull(result);
     }
@@ -145,10 +145,10 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/authorize");
-        
+
         // Assert
         Assert.IsNotNull(result, "Should fall back to default tenant for backward compatibility");
         Assert.AreEqual(_defaultTenantId, result.TenantId);
@@ -161,10 +161,10 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act - uppercase slug
         var result = await resolver.ResolveTenantAsync("/t/ACME/authorize");
-        
+
         // Assert
         Assert.IsNotNull(result);
         Assert.AreEqual(_acmeTenantId, result.TenantId);
@@ -180,7 +180,7 @@ public class TenantResolutionTests
             options.UseInMemoryDatabase(databaseName: $"SingleTenantTestDb_{Guid.NewGuid()}"),
             ServiceLifetime.Singleton);
         services.AddMemoryCache();
-        
+
         var singleTenantOptions = new MultiTenancyOptions
         {
             Enabled = false, // Single-tenant mode
@@ -188,10 +188,10 @@ public class TenantResolutionTests
         };
         services.AddSingleton<IMultiTenancyOptions>(singleTenantOptions);
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
-        
+
         using var provider = services.BuildServiceProvider();
         var db = provider.GetRequiredService<AuthDbContext>();
-        
+
         // Seed default tenant
         db.Tenants.Add(new Tenant
         {
@@ -203,24 +203,24 @@ public class TenantResolutionTests
             CreatedAt = DateTimeOffset.UtcNow
         });
         await db.SaveChangesAsync();
-        
+
         var resolver = provider.GetRequiredService<ITenantResolver>();
-        
+
         // Act - any path should resolve to default tenant
         var result1 = await resolver.ResolveTenantAsync("/authorize");
         var result2 = await resolver.ResolveTenantAsync("/t/acme/authorize");
         var result3 = await resolver.ResolveTenantAsync("/.well-known/openid-configuration");
-        
+
         // Assert - all resolve to default tenant
         Assert.IsNotNull(result1);
         Assert.AreEqual(_defaultTenantId, result1.TenantId);
         Assert.AreEqual("default", result1.Slug);
         Assert.IsFalse(result1.IsMultiTenantMode);
-        
+
         Assert.IsNotNull(result2);
         Assert.AreEqual(_defaultTenantId, result2.TenantId);
         Assert.IsFalse(result2.IsMultiTenantMode);
-        
+
         Assert.IsNotNull(result3);
         Assert.AreEqual(_defaultTenantId, result3.TenantId);
     }
@@ -241,13 +241,13 @@ public class TenantResolutionTests
             CreatedAt = DateTimeOffset.UtcNow
         });
         await _db.SaveChangesAsync();
-        
+
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/suspended/authorize");
-        
+
         // Assert
         Assert.IsNull(result, "Suspended tenant should not be resolvable");
     }
@@ -268,13 +268,13 @@ public class TenantResolutionTests
             CreatedAt = DateTimeOffset.UtcNow
         });
         await _db.SaveChangesAsync();
-        
+
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/deleted/authorize");
-        
+
         // Assert
         Assert.IsNull(result, "Deleted tenant should not be resolvable");
     }
@@ -285,18 +285,18 @@ public class TenantResolutionTests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act - first call populates cache
         var result1 = await resolver.ResolveTenantAsync("/t/acme/authorize");
-        
+
         // Delete tenant from DB to verify cache is used
         var tenant = await _db.Tenants.FindAsync(_acmeTenantId);
         _db.Tenants.Remove(tenant!);
         await _db.SaveChangesAsync();
-        
+
         // Second call should return cached result
         var result2 = await resolver.ResolveTenantAsync("/t/acme/token");
-        
+
         // Assert
         Assert.IsNotNull(result1);
         Assert.IsNotNull(result2, "Should return cached result even after tenant deleted from DB");

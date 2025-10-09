@@ -9,7 +9,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 {
     // Multi-tenancy
     public DbSet<Tenant> Tenants => Set<Tenant>();
-    
+
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
@@ -91,7 +91,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.Slug).IsUnique();
             b.HasIndex(x => x.Status);
         });
-        
+
         modelBuilder.Entity<User>(b =>
         {
             b.HasKey(x => x.Id);
@@ -667,10 +667,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 public class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(200)]
     public string Username { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty; // Argon2id
@@ -696,10 +696,10 @@ public class User
 public class Realm
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty; // slug, e.g., "admin"
     [MaxLength(200)]
@@ -710,10 +710,10 @@ public class Realm
 public class Role
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
     public Guid RealmId { get; set; }
@@ -733,10 +733,10 @@ public class Scope
 public class Client
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
@@ -881,10 +881,10 @@ public class UserClientRoleAssignment
 public class SigningKey
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy: nullable for backward compat, but should always be set in multi-tenant mode
     public Guid? TenantId { get; set; }
-    
+
     public string Kid { get; set; } = string.Empty;
     public string Alg { get; set; } = "RS256";
     public string JwkJson { get; set; } = string.Empty; // private JWK material
@@ -895,10 +895,10 @@ public class SigningKey
 public class AuthorizationCode
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(200)]
     public string Code { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty; // public client id string
@@ -916,10 +916,10 @@ public class AuthorizationCode
 public class Consent
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     public Guid UserId { get; set; }
     public string ClientId { get; set; } = string.Empty;
     public string ScopesJson { get; set; } = "[]";
@@ -930,10 +930,10 @@ public class Consent
 public class Token
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(20)]
     public string Type { get; set; } = "refresh"; // refresh | access (opaque)
     [MaxLength(200)]
@@ -979,10 +979,10 @@ public class RevocationAudit
 public class PushedAuthorizationRequest
 {
     public Guid Id { get; set; } = Guid.NewGuid(); // opaque identifier
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(512)]
     public string? RequestUri { get; set; } // optional absolute request URI returned to client
     public string ClientId { get; set; } = string.Empty;
@@ -995,10 +995,10 @@ public class PushedAuthorizationRequest
 public class Registration
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(256)]
     public string Email { get; set; } = string.Empty; // mandatory
     [MaxLength(256)]
@@ -1030,10 +1030,10 @@ public enum IdentityProviderType
 public class IdentityProvider
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(150)]
     public string Name { get; set; } = string.Empty; // unique key
     [MaxLength(200)]
@@ -1136,10 +1136,10 @@ public class ExternalIdentity
 public class BackchannelLogoutNotification
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     public Guid ClientDbId { get; set; } // link to Clients table
     public string ClientId { get; set; } = string.Empty; // stable client_id string
     [MaxLength(2000)] public string TargetUri { get; set; } = string.Empty;
@@ -1175,10 +1175,10 @@ public class LogoutRedirectReference
 public class QrLoginSession
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     [MaxLength(128)]
     public string SessionToken { get; set; } = string.Empty; // unique, indexed
     [MaxLength(64)]

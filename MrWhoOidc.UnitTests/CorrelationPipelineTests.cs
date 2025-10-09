@@ -67,7 +67,7 @@ public sealed class CorrelationPipelineTests
     [TestMethod]
     public async Task Callback_StaleHandle_EmitsCacheMissAndWriteMetrics()
     {
-    using var scope = CreateServiceScope(out var handler, out var metrics);
+        using var scope = CreateServiceScope(out var handler, out var metrics);
         metrics.Reset();
 
         var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
@@ -83,17 +83,17 @@ public sealed class CorrelationPipelineTests
         AssertRedirect(result, out var redirectUrl);
         StringAssert.StartsWith(redirectUrl, "/Auth/External/Error");
 
-    Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Cache miss should be recorded once");
-    Assert.AreEqual(1, metrics.GetCounterEvents("oidc.correlation.cache.misses").Count, "Expected a single miss measurement");
-    Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "New correlation handle should be stored once");
-    Assert.AreEqual(1, metrics.GetCounterEvents("oidc.correlation.cache.writes").Count, "Expected a single write measurement");
+        Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Cache miss should be recorded once");
+        Assert.HasCount(1, metrics.GetCounterEvents("oidc.correlation.cache.misses"), "Expected a single miss measurement");
+        Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "New correlation handle should be stored once");
+        Assert.HasCount(1, metrics.GetCounterEvents("oidc.correlation.cache.writes"), "Expected a single write measurement");
         Assert.IsFalse(string.IsNullOrWhiteSpace(ctx.Response.Headers["X-Correlation-Id"].ToString()));
     }
 
     [TestMethod]
     public async Task Callback_InvalidHandleFormat_IgnoresHandleButStoresNewCorrelation()
     {
-    using var scope = CreateServiceScope(out var handler, out var metrics);
+        using var scope = CreateServiceScope(out var handler, out var metrics);
         metrics.Reset();
 
         var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
@@ -109,10 +109,10 @@ public sealed class CorrelationPipelineTests
         AssertRedirect(result, out var redirectUrl);
         StringAssert.StartsWith(redirectUrl, "/Auth/External/Error");
 
-    Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Invalid handles should be ignored without cache lookup");
-    Assert.AreEqual(0, metrics.GetCounterEvents("oidc.correlation.cache.misses").Count, "Invalid handles should not record miss measurements");
-    Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "A single handle write was expected");
-    Assert.AreEqual(1, metrics.GetCounterEvents("oidc.correlation.cache.writes").Count, "Expected one write measurement");
+        Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Invalid handles should be ignored without cache lookup");
+        Assert.IsEmpty(metrics.GetCounterEvents("oidc.correlation.cache.misses"), "Invalid handles should not record miss measurements");
+        Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "A single handle write was expected");
+        Assert.HasCount(1, metrics.GetCounterEvents("oidc.correlation.cache.writes"), "Expected one write measurement");
         Assert.IsFalse(string.IsNullOrWhiteSpace(scope.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>().CorrelationId));
     }
 

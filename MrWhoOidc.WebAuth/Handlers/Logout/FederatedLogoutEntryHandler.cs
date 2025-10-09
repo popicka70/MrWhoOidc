@@ -40,7 +40,7 @@ public sealed class FederatedLogoutEntryHandler(
 
         var idpDisplay = capability.ProviderDisplayName ?? capability.ProviderName;
         var formReturn = string.IsNullOrEmpty(request.ReturnUrl) ? "/" : request.ReturnUrl;
-        
+
         audit.Emit("logout.federated.prompt", new { provider = capability.ProviderName });
         metrics.LogoutRequests.Add(1, new KeyValuePair<string, object?>("mode", "prompt"));
         metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "prompt"));

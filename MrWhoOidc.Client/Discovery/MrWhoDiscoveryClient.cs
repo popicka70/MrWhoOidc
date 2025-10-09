@@ -38,8 +38,8 @@ internal sealed class MrWhoDiscoveryClient : IMrWhoDiscoveryClient
         }
 
         var httpClient = _httpClientFactory.CreateClient(opts.HttpClientName);
-    var issuerUri = new Uri(opts.Issuer!, UriKind.Absolute);
-    var discoveryUri = opts.DiscoveryUri ?? new Uri(issuerUri, ".well-known/openid-configuration");
+        var issuerUri = new Uri(opts.Issuer!, UriKind.Absolute);
+        var discoveryUri = opts.DiscoveryUri ?? new Uri(issuerUri, ".well-known/openid-configuration");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, discoveryUri);
         if (entry.Etag is not null)
@@ -63,7 +63,7 @@ internal sealed class MrWhoDiscoveryClient : IMrWhoDiscoveryClient
             ?? throw new InvalidOperationException("Failed to deserialize discovery document.");
 
         var etag = response.Headers.ETag?.Tag;
-    _cache.Set(cacheKey, (document, etag, DateTimeOffset.UtcNow.Add(opts.MetadataRefreshInterval)));
+        _cache.Set(cacheKey, (document, etag, DateTimeOffset.UtcNow.Add(opts.MetadataRefreshInterval)));
         _logger.LogInformation("Discovery document refreshed; token endpoint {TokenEndpoint}", document.TokenEndpoint);
         return document;
     }

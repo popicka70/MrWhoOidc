@@ -35,7 +35,7 @@ public sealed class UserInfoHandlerTests
         var options = new OidcOptions { Issuer = "https://test.example.com" };
         var metrics = new OidcMetrics();
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<UserInfoHandler>();
-        
+
         validator ??= new StubTokenValidator(true, new ClaimsPrincipal());
         dpopValidator ??= new StubDPoPValidator(true);
         replayCache ??= new StubDPoPReplayCache();
@@ -50,7 +50,7 @@ public sealed class UserInfoHandlerTests
         services.AddLogging();
         services.AddOptions();
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
         context.Request.Scheme = "https";
@@ -107,12 +107,12 @@ public sealed class UserInfoHandlerTests
     public async Task UserInfo_Valid_Token_Returns_Claims()
     {
         using var db = CreateDb();
-        
+
         // Create test user with claims
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = Guid.NewGuid(),
-            Username = "testuser", 
+            Username = "testuser",
             Email = "test@example.com",
             Name = "Test User",
             PasswordHash = "hash"
@@ -127,7 +127,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -140,12 +140,12 @@ public sealed class UserInfoHandlerTests
     public async Task UserInfo_Sub_Claim_Always_Present()
     {
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
-            Username = "testuser", 
+            Username = "testuser",
             Email = "test@example.com",
             PasswordHash = "hash"
         };
@@ -159,7 +159,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -173,12 +173,12 @@ public sealed class UserInfoHandlerTests
     public async Task UserInfo_DPoP_Bound_Token_Requires_Valid_Proof()
     {
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
-            Username = "testuser", 
+            Username = "testuser",
             PasswordHash = "hash"
         };
         db.Users.Add(user);
@@ -194,10 +194,10 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         // DPoP validation fails
         var dpopValidator = new StubDPoPValidator(false, error: "invalid_dpop");
-        
+
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -279,7 +279,7 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         // Expired token simulation - validator returns invalid
         var validator = new StubTokenValidator(false, null);
         var handler = CreateHandler(db, validator: validator);
@@ -299,7 +299,7 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         // Revoked token simulation - validator returns invalid
         var validator = new StubTokenValidator(false, null);
         var handler = CreateHandler(db, validator: validator);
@@ -319,10 +319,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             PasswordHash = "hash"
@@ -340,10 +340,10 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         // DPoP proof with mismatched jkt = "different_thumbprint"
         var dpopValidator = new StubDPoPValidator(true, jkt: "different_thumbprint");
-        
+
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -360,10 +360,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             PasswordHash = "hash"
@@ -381,11 +381,11 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         // DPoP validation succeeds but nonce validation fails (requires nonce)
         var dpopValidator = new StubDPoPValidator(true);
         var nonceStore = new StubDPoPNonceStore(ok: false, nonce: "server_issued_nonce");
-        
+
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator, nonceStore: nonceStore);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -403,10 +403,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
@@ -424,7 +424,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -441,10 +441,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
@@ -463,7 +463,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -480,10 +480,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
@@ -502,7 +502,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -519,7 +519,7 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
         var realmId = Guid.NewGuid();
         var clientGuid = Guid.NewGuid();
@@ -527,28 +527,28 @@ public sealed class UserInfoHandlerTests
 
         // Create realm, client, user, role, and assignment
         var realm = new Realm { Id = realmId, Name = "test_realm" };
-        var client = new MrWhoOidc.Auth.Persistence.Client 
-        { 
-            Id = clientGuid, 
-            ClientId = "test_client", 
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = clientGuid,
+            ClientId = "test_client",
             RealmId = realmId,
             ClientName = "Test Client",
             ClientSecretHash = "hash"
         };
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             PasswordHash = "hash"
         };
         var role = new Role { Id = roleId, Name = "admin", RealmId = realmId };
-        var assignment = new UserRoleAssignment 
-        { 
-            UserId = userId, 
-            RoleId = roleId, 
-            ClientId = clientGuid, 
-            RealmId = realmId, 
-            IsActive = true 
+        var assignment = new UserRoleAssignment
+        {
+            UserId = userId,
+            RoleId = roleId,
+            ClientId = clientGuid,
+            RealmId = realmId,
+            IsActive = true
         };
 
         db.Realms.Add(realm);
@@ -568,7 +568,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -585,10 +585,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
@@ -607,7 +607,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 
@@ -624,10 +624,10 @@ public sealed class UserInfoHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        
+
         var userId = Guid.NewGuid();
-        var user = new User 
-        { 
+        var user = new User
+        {
             Id = userId,
             Username = "testuser",
             PasswordHash = "hash"
@@ -642,7 +642,7 @@ public sealed class UserInfoHandlerTests
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
-        
+
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer valid_token");
 

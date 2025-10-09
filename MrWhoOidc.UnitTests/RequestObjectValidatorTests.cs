@@ -28,7 +28,7 @@ public sealed class RequestObjectValidatorTests
     public async Task ValidateAsync_Fails_WhenNoKeyConfigured()
     {
         using var db = CreateDb();
-    db.Clients.Add(new ClientEntity { ClientId = "c1" });
+        db.Clients.Add(new ClientEntity { ClientId = "c1" });
         await db.SaveChangesAsync();
 
         var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());
@@ -69,7 +69,7 @@ public sealed class RequestObjectValidatorTests
             signingCredentials: creds
         );
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
-    db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
+        db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
         var cache = new InMemoryJarReplayCache();
@@ -108,7 +108,7 @@ public sealed class RequestObjectValidatorTests
         var creds = new SigningCredentials(jwk, SecurityAlgorithms.RsaSha256);
         var aud = "https://as/authorize";
         var clientId = "c2";
-    db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
+        db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
         var now = DateTime.UtcNow;
@@ -150,7 +150,7 @@ public sealed class RequestObjectValidatorTests
         var creds = new SigningCredentials(jwk, SecurityAlgorithms.RsaSha256);
         var aud = "https://as/authorize";
         var clientId = "c3";
-    db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
+        db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
         var now = DateTime.UtcNow;
@@ -175,7 +175,7 @@ public sealed class RequestObjectValidatorTests
     {
         using var db = CreateDb();
         var (jwt, kid, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
-    db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
         var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());

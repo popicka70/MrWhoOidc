@@ -14,7 +14,7 @@ public static class FrontChannelPageBuilder
     public static string BuildPage(IEnumerable<string> iframeUrls, string? refId, string? state)
     {
         var sb = new System.Text.StringBuilder();
-        
+
         sb.Append("<!DOCTYPE html><html><head>");
         sb.Append("<title>Logout</title>");
         sb.Append("<meta http-equiv=\"cache-control\" content=\"no-cache\"/>");

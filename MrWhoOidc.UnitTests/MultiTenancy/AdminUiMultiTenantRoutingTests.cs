@@ -40,7 +40,7 @@ public class AdminUiMultiTenantRoutingTests
         var adminEndpoints = allEndpoints
             .Where(e => e.RoutePattern.RawText?.Contains("Admin", StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
-        
+
         // Log ALL admin endpoints for debugging
         Console.WriteLine($"\n=== ALL ADMIN ENDPOINTS ({adminEndpoints.Count}) ===");
         foreach (var endpoint in adminEndpoints.Take(30))
@@ -53,7 +53,7 @@ public class AdminUiMultiTenantRoutingTests
         }
 
         // Assert: Verify we have admin endpoints
-        Assert.IsTrue(adminEndpoints.Count > 0, "Should have admin endpoints");
+        Assert.IsNotEmpty(adminEndpoints, "Should have admin endpoints");
 
         // Check for tenant-prefixed routes (e.g., "t/{slug}/Admin/...")
         var tenantPrefixedAdminRoutes = adminEndpoints
@@ -61,7 +61,7 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // Assert: In multi-tenant mode, we should have tenant-prefixed admin routes
-        Assert.IsTrue(tenantPrefixedAdminRoutes.Count > 0, 
+        Assert.IsNotEmpty(tenantPrefixedAdminRoutes,
             $"In multi-tenant mode, should have tenant-prefixed admin routes. Found {tenantPrefixedAdminRoutes.Count}");
 
         // Check for fallback routes (Admin/... without tenant prefix)
@@ -76,14 +76,14 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // Assert: Should also have fallback routes for backward compatibility
-        Assert.IsTrue(fallbackAdminRoutes.Count > 0, 
+        Assert.IsNotEmpty(fallbackAdminRoutes,
             $"In multi-tenant mode, should have fallback admin routes. Found {fallbackAdminRoutes.Count}");
 
         // Log some examples for debugging
         Console.WriteLine($"Total admin endpoints: {adminEndpoints.Count}");
         Console.WriteLine($"Tenant-prefixed admin routes: {tenantPrefixedAdminRoutes.Count}");
         Console.WriteLine($"Fallback admin routes: {fallbackAdminRoutes.Count}");
-        
+
         var exampleTenantRoute = tenantPrefixedAdminRoutes.FirstOrDefault();
         if (exampleTenantRoute != null)
         {
@@ -115,7 +115,7 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // Assert: Verify we have admin endpoints
-        Assert.IsTrue(adminEndpoints.Count > 0, "Should have admin endpoints");
+        Assert.IsNotEmpty(adminEndpoints, "Should have admin endpoints");
 
         // Check for root-level routes (Admin/... without tenant prefix)
         var rootAdminRoutes = adminEndpoints
@@ -129,7 +129,7 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // Assert: Should have root-level routes in single-tenant mode
-        Assert.IsTrue(rootAdminRoutes.Count > 0, 
+        Assert.IsNotEmpty(rootAdminRoutes,
             $"In single-tenant mode, should have root-level admin routes. Found {rootAdminRoutes.Count}");
 
         // Check for tenant-prefixed routes
@@ -138,7 +138,7 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // Assert: In single-tenant mode, should NOT have tenant-prefixed admin routes
-        Assert.AreEqual(0, tenantPrefixedAdminRoutes.Count, 
+        Assert.IsEmpty(tenantPrefixedAdminRoutes,
             $"In single-tenant mode, should NOT have tenant-prefixed admin routes. Found {tenantPrefixedAdminRoutes.Count}");
 
         // Log for debugging
@@ -152,7 +152,7 @@ public class AdminUiMultiTenantRoutingTests
     {
         // This test ensures we're not accidentally breaking admin page registration
         var factory = TestWebAppFactory.CreateInMemory();
-        
+
         var endpoints = factory.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>();
         var adminPageEndpoints = endpoints.Endpoints
             .OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
@@ -160,7 +160,7 @@ public class AdminUiMultiTenantRoutingTests
             .ToList();
 
         // We should have admin pages (at least platform admin + regular admin API endpoints)
-        Assert.IsTrue(adminPageEndpoints.Count >= 20, 
-            $"Expected at least 20 admin endpoints, found {adminPageEndpoints.Count}");
+        Assert.IsGreaterThanOrEqualTo(20,
+adminPageEndpoints.Count, $"Expected at least 20 admin endpoints, found {adminPageEndpoints.Count}");
     }
 }

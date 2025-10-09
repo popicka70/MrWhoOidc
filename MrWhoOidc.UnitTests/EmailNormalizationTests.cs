@@ -87,7 +87,7 @@ public sealed class EmailNormalizationTests
             Email = "not-an-email"
         });
 
-    await Assert.ThrowsExactlyAsync<ValidationException>(() => db.SaveChangesAsync());
+        await Assert.ThrowsExactlyAsync<ValidationException>(() => db.SaveChangesAsync());
     }
 
     [TestMethod]

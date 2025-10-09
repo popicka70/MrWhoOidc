@@ -46,7 +46,7 @@ public class SelectTenantModel : PageModel
         try
         {
             Tenants = System.Text.Json.JsonSerializer.Deserialize<List<TenantInfo>>(tenantsJson);
-            
+
             if (Tenants == null || !Tenants.Any())
             {
                 _logger.LogWarning("Deserialized tenant list is empty");
@@ -54,7 +54,7 @@ public class SelectTenantModel : PageModel
             }
 
             _logger.LogDebug("Displaying {Count} tenants for selection", Tenants.Count);
-            
+
             // Preserve TempData for potential reloads
             TempData.Keep("Email");
             TempData.Keep("ReturnUrl");

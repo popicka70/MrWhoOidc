@@ -144,7 +144,7 @@ internal sealed class MrWhoAuthorizationManager : IMrWhoAuthorizationManager
             Query = query
         }.Uri;
 
-    var session = new AuthorizationSession(state, nonce, codeVerifier, DateTimeOffset.UtcNow);
+        var session = new AuthorizationSession(state, nonce, codeVerifier, DateTimeOffset.UtcNow);
         _cache.Set(CacheKey(state), session, SessionLifetime);
 
         _logger.LogDebug("Created authorization request for client {ClientId} with state {State}", opts.ClientId, state);

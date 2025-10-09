@@ -15,7 +15,7 @@ public sealed class JwksHistoryAndParStressTests
         using var db = TestDataSeeder.CreateInMemoryDb();
         var realm = new Realm { Name = "r", DisplayName = "R" };
         db.Realms.Add(realm);
-    var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id };
+        var client = new ClientEntity { ClientId = "cli", RealmId = realm.Id };
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -24,7 +24,7 @@ public sealed class JwksHistoryAndParStressTests
         await db.SaveChangesAsync();
 
         var list = await db.ClientJwksHistories.AsNoTracking().Where(h => h.ClientId == client.Id).OrderBy(h => h.CreatedAt).ToListAsync();
-        Assert.AreEqual(2, list.Count);
+        Assert.HasCount(2, list);
         Assert.AreEqual("manual", list[0].Source);
         Assert.AreEqual("fetch", list[1].Source);
     }

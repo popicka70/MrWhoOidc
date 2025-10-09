@@ -47,7 +47,7 @@ public static class TestDataSeeder
         db.Users.AddRange(alice, bob);
 
         // Clients
-    var spa = new ClientEntity
+        var spa = new ClientEntity
         {
             ClientId = "spa",
             ClientName = "SPA Client",
@@ -57,7 +57,7 @@ public static class TestDataSeeder
             AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app.example.com/callback", "https://app.example.com/oidc-cb" })
         };
 
-    var conf = new ClientEntity
+        var conf = new ClientEntity
         {
             ClientId = "conf",
             ClientName = "Confidential Client",
@@ -130,8 +130,8 @@ public static class TestDataSeeder
         var u = new User { Username = "multi", Email = "multi@example.com", Name = "Multi" };
         db.Users.Add(u);
 
-    var c1 = new ClientEntity { ClientId = "spa-r1", RealmId = r1.Id, RequirePkce = true, RequireConsent = false, AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app1/cb" }) };
-    var c2 = new ClientEntity { ClientId = "spa-r2", RealmId = r2.Id, RequirePkce = true, RequireConsent = false, AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app2/cb" }) };
+        var c1 = new ClientEntity { ClientId = "spa-r1", RealmId = r1.Id, RequirePkce = true, RequireConsent = false, AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app1/cb" }) };
+        var c2 = new ClientEntity { ClientId = "spa-r2", RealmId = r2.Id, RequirePkce = true, RequireConsent = false, AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app2/cb" }) };
         db.Clients.AddRange(c1, c2);
         foreach (var s in scopes) { db.ClientScopes.Add(new ClientScope { ClientId = c1.Id, ScopeName = s.Name }); db.ClientScopes.Add(new ClientScope { ClientId = c2.Id, ScopeName = s.Name }); }
 
@@ -161,7 +161,7 @@ public static class TestDataSeeder
     {
         public required Realm Realm { get; init; }
         public required Dictionary<string, User> Users { get; init; }
-    public required Dictionary<string, ClientEntity> Clients { get; init; }
+        public required Dictionary<string, ClientEntity> Clients { get; init; }
         public required Dictionary<string, Role> Roles { get; init; }
         public required Dictionary<string, Scope> Scopes { get; init; }
     }
@@ -171,8 +171,8 @@ public static class TestDataSeeder
         public required User User { get; init; }
         public required Realm Realm1 { get; init; }
         public required Realm Realm2 { get; init; }
-    public required ClientEntity ClientR1 { get; init; }
-    public required ClientEntity ClientR2 { get; init; }
+        public required ClientEntity ClientR1 { get; init; }
+        public required ClientEntity ClientR2 { get; init; }
         public required Role R1Admin { get; init; }
         public required Role R2User { get; init; }
     }

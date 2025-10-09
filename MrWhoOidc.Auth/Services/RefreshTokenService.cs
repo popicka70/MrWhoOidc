@@ -9,9 +9,9 @@ namespace MrWhoOidc.Auth.Services;
 public interface IRefreshTokenService
 {
     Task<(string token, string hash)> CreateRefreshTokenAsync(
-        Guid userId, 
-        string clientId, 
-        string[] scopes, 
+        Guid userId,
+        string clientId,
+        string[] scopes,
         string? ipAddress = null,
         string? userAgent = null,
         CancellationToken ct = default);
@@ -20,9 +20,9 @@ public interface IRefreshTokenService
 internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IRefreshTokenService
 {
     public async Task<(string token, string hash)> CreateRefreshTokenAsync(
-        Guid userId, 
-        string clientId, 
-        string[] scopes, 
+        Guid userId,
+        string clientId,
+        string[] scopes,
         string? ipAddress = null,
         string? userAgent = null,
         CancellationToken ct = default)
@@ -32,7 +32,7 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         var settings = await settingsService.GetTenantSettingsAsync(tenantId);
         var lifetimeSeconds = settings?.Tokens?.RefreshTokenLifetimeSeconds ?? 1296000; // Default: 15 days
         var lifetime = TimeSpan.FromSeconds(lifetimeSeconds);
-        
+
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Hash(token);
         db.Tokens.Add(new Token

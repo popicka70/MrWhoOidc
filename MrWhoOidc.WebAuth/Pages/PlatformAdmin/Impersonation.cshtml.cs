@@ -79,7 +79,7 @@ public class ImpersonationModel(
         }
 
         TempData["Success"] = $"Now impersonating tenant: {tenant.Name}. All write operations are disabled.";
-        
+
         // Redirect to tenant admin dashboard
         // In multi-tenant mode: /t/{slug}/Admin/Index
         // In single-tenant mode: /Admin/Index

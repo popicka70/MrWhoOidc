@@ -19,31 +19,31 @@ public class JwksMultiTenancyTests
     public async Task Setup()
     {
         var services = new ServiceCollection();
-        
+
         // In-memory database
         services.AddDbContext<AuthDbContext>(options =>
             options.UseInMemoryDatabase($"JwksMultiTenancyTests_{Guid.NewGuid()}"));
-        
+
         // Multi-tenancy services
         services.AddMemoryCache();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions 
-        { 
-            Enabled = true, 
-            DefaultTenantSlug = "default" 
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions
+        {
+            Enabled = true,
+            DefaultTenantSlug = "default"
         });
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
-        
+
         // KeyStore
         services.AddScoped<IKeyStore, KeyStore>();
-        
+
         _serviceProvider = services.BuildServiceProvider();
         _db = _serviceProvider.GetRequiredService<AuthDbContext>();
-        
+
         // Create two test tenants
         _tenantAId = Guid.NewGuid();
         _tenantBId = Guid.NewGuid();
-        
+
         _db.Tenants.Add(new Tenant
         {
             Id = _tenantAId,
@@ -52,7 +52,7 @@ public class JwksMultiTenancyTests
             Status = TenantStatus.Active,
             IssuerUri = "https://auth.example.com/t/tenant-a"
         });
-        
+
         _db.Tenants.Add(new Tenant
         {
             Id = _tenantBId,
@@ -61,7 +61,7 @@ public class JwksMultiTenancyTests
             Status = TenantStatus.Active,
             IssuerUri = "https://auth.example.com/t/tenant-b"
         });
-        
+
         await _db.SaveChangesAsync();
     }
 
@@ -79,7 +79,7 @@ public class JwksMultiTenancyTests
         using var scopeA = _serviceProvider.CreateScope();
         var tenantAccessorA = scopeA.ServiceProvider.GetRequiredService<ITenantAccessor>();
         var keyStoreA = scopeA.ServiceProvider.GetRequiredService<IKeyStore>();
-        
+
         tenantAccessorA.SetTenant(new TenantContext
         {
             TenantId = _tenantAId,
@@ -88,16 +88,16 @@ public class JwksMultiTenancyTests
             IssuerUri = "https://auth.example.com/t/tenant-a",
             IsMultiTenantMode = true
         });
-        
+
         // Act - Get active signing key for Tenant A (will create if not exists)
         var keyA = await keyStoreA.GetActiveSigningKeyAsync();
         var jwksA = await keyStoreA.GetPublicJwksAsync();
-        
+
         // Arrange - Set context to Tenant B and get/create key
         using var scopeB = _serviceProvider.CreateScope();
         var tenantAccessorB = scopeB.ServiceProvider.GetRequiredService<ITenantAccessor>();
         var keyStoreB = scopeB.ServiceProvider.GetRequiredService<IKeyStore>();
-        
+
         tenantAccessorB.SetTenant(new TenantContext
         {
             TenantId = _tenantBId,
@@ -106,15 +106,15 @@ public class JwksMultiTenancyTests
             IssuerUri = "https://auth.example.com/t/tenant-b",
             IsMultiTenantMode = true
         });
-        
+
         // Act - Get active signing key for Tenant B (will create if not exists)
         var keyB = await keyStoreB.GetActiveSigningKeyAsync();
         var jwksB = await keyStoreB.GetPublicJwksAsync();
-        
+
         // Assert - Keys should be different
         Assert.AreNotEqual(keyA.Kid, keyB.Kid, "Tenant A and Tenant B should have different key IDs");
-        Assert.AreEqual(1, jwksA.Count, "Tenant A should have exactly 1 key");
-        Assert.AreEqual(1, jwksB.Count, "Tenant B should have exactly 1 key");
+        Assert.HasCount(1, jwksA, "Tenant A should have exactly 1 key");
+        Assert.HasCount(1, jwksB, "Tenant B should have exactly 1 key");
         Assert.AreEqual(keyA.Kid, jwksA[0].Kid, "JWKS should contain Tenant A's key");
         Assert.AreEqual(keyB.Kid, jwksB[0].Kid, "JWKS should contain Tenant B's key");
     }
@@ -125,7 +125,7 @@ public class JwksMultiTenancyTests
         // Arrange - No tenant context set
         using var scope = _serviceProvider.CreateScope();
         var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-        
+
         // Act & Assert
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             async () => await keyStore.GetPublicJwksAsync(),
@@ -138,7 +138,7 @@ public class JwksMultiTenancyTests
         // Arrange - No tenant context set
         using var scope = _serviceProvider.CreateScope();
         var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-        
+
         // Act & Assert
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             async () => await keyStore.GetActiveSigningKeyAsync(),
@@ -152,7 +152,7 @@ public class JwksMultiTenancyTests
         using var scope = _serviceProvider.CreateScope();
         var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
         var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
-        
+
         tenantAccessor.SetTenant(new TenantContext
         {
             TenantId = _tenantAId,
@@ -161,13 +161,13 @@ public class JwksMultiTenancyTests
             IssuerUri = "https://auth.example.com/t/tenant-a",
             IsMultiTenantMode = true
         });
-        
+
         // Act - Create key and get public JWKS
         await keyStore.GetActiveSigningKeyAsync();
         var jwks = await keyStore.GetPublicJwksAsync();
-        
+
         // Assert - Public JWKS should not include private key components
-        Assert.AreEqual(1, jwks.Count);
+        Assert.HasCount(1, jwks);
         var publicKey = jwks[0];
         Assert.IsNull(publicKey.D, "Public JWKS should not include private exponent D");
         Assert.IsNull(publicKey.P, "Public JWKS should not include prime P");
@@ -185,7 +185,7 @@ public class JwksMultiTenancyTests
         // Arrange - Create keys for both tenants using the shared DbContext
         var tenantAccessor = _serviceProvider.GetRequiredService<ITenantAccessor>();
         var keyStore = _serviceProvider.GetRequiredService<IKeyStore>();
-        
+
         // Create key for Tenant A
         tenantAccessor.SetTenant(new TenantContext
         {
@@ -196,7 +196,7 @@ public class JwksMultiTenancyTests
             IsMultiTenantMode = true
         });
         await keyStore.GetActiveSigningKeyAsync();
-        
+
         // Create key for Tenant B
         tenantAccessor.SetTenant(new TenantContext
         {
@@ -207,16 +207,16 @@ public class JwksMultiTenancyTests
             IsMultiTenantMode = true
         });
         await keyStore.GetActiveSigningKeyAsync();
-        
+
         // Act - Query database directly
         var keysInDb = await _db.SigningKeys.ToListAsync();
         var tenantAKeys = keysInDb.Where(k => k.TenantId == _tenantAId).ToList();
         var tenantBKeys = keysInDb.Where(k => k.TenantId == _tenantBId).ToList();
-        
+
         // Assert
-        Assert.AreEqual(2, keysInDb.Count, "Should have 2 keys total in database");
-        Assert.AreEqual(1, tenantAKeys.Count, "Tenant A should have 1 key");
-        Assert.AreEqual(1, tenantBKeys.Count, "Tenant B should have 1 key");
+        Assert.HasCount(2, keysInDb, "Should have 2 keys total in database");
+        Assert.HasCount(1, tenantAKeys, "Tenant A should have 1 key");
+        Assert.HasCount(1, tenantBKeys, "Tenant B should have 1 key");
         Assert.AreNotEqual(tenantAKeys[0].Kid, tenantBKeys[0].Kid, "Keys should have different Kids");
     }
 }

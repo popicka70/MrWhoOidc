@@ -17,10 +17,10 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantDiscoveryService> _logger;
     private readonly IMultiTenancyOptions _multiTenancyOptions;
-    
+
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant_discovery:";
-    
+
     public TenantDiscoveryService(
         AuthDbContext db,
         IMemoryCache cache,
@@ -32,7 +32,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
         _logger = logger;
         _multiTenancyOptions = multiTenancyOptions;
     }
-    
+
     public async Task<List<TenantInfo>> FindTenantsByEmailAsync(string email, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -40,7 +40,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             _logger.LogWarning("FindTenantsByEmail called with null or empty email");
             return new List<TenantInfo>();
         }
-        
+
         // Normalize email for lookup (lowercase, trim)
         var normalizedEmail = EmailNormalizer.NormalizeForLookup(email);
         if (string.IsNullOrEmpty(normalizedEmail))
@@ -48,53 +48,53 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             _logger.LogWarning("Email normalization failed for: {EmailHash}", HashEmail(email));
             return new List<TenantInfo>();
         }
-        
+
         // Check cache first
         var cacheKey = $"{CacheKeyPrefix}{normalizedEmail}";
         if (_cache.TryGetValue<List<TenantInfo>>(cacheKey, out var cachedResult) && cachedResult != null)
         {
-            _logger.LogDebug("Cache hit for tenant discovery: {EmailHash}, found {Count} tenant(s)", 
+            _logger.LogDebug("Cache hit for tenant discovery: {EmailHash}, found {Count} tenant(s)",
                 HashEmail(email), cachedResult.Count);
             return cachedResult;
         }
-        
+
         // Query database
         var tenants = await QueryTenantsAsync(normalizedEmail, ct);
-        
+
         // Audit logging (use hashed email for privacy)
         _logger.LogInformation(
             "Tenant discovery: email={EmailHash}, tenants_found={Count}, cache=miss",
             HashEmail(email),
             tenants.Count);
-        
+
         // Cache results
         _cache.Set(cacheKey, tenants, CacheDuration);
-        
+
         return tenants;
     }
-    
+
     public Task<TenantInfo?> GetPreferredTenantAsync(string email, string? ipAddress = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
             return Task.FromResult<TenantInfo?>(null);
         }
-        
+
         var normalizedEmail = EmailNormalizer.NormalizeForLookup(email);
         if (string.IsNullOrEmpty(normalizedEmail))
         {
             return Task.FromResult<TenantInfo?>(null);
         }
-        
+
         // For MVP, we don't store preferences in DB yet - will use cookies on client side
         // Future enhancement: query UserTenantPreference table by email + IP
-        
-        _logger.LogDebug("GetPreferredTenant called for {EmailHash} from IP {IP}", 
+
+        _logger.LogDebug("GetPreferredTenant called for {EmailHash} from IP {IP}",
             HashEmail(email), ipAddress ?? "unknown");
-        
+
         return Task.FromResult<TenantInfo?>(null);
     }
-    
+
     /// <summary>
     /// Query database for tenants associated with the given email.
     /// Searches both User.Email and UserAlternativeEmail.Email (verified only).
@@ -120,7 +120,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             })
             .Distinct()
             .ToListAsync(ct);
-        
+
         // Query 2: Find tenants via alternative emails (only verified)
         var tenantsFromAlternative = await _db.UserAlternativeEmails
             .AsNoTracking()
@@ -144,7 +144,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             })
             .Distinct()
             .ToListAsync(ct);
-        
+
         // Combine and deduplicate by TenantId
         var allTenants = tenantsFromPrimary
             .Concat(tenantsFromAlternative)
@@ -152,10 +152,10 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
             .Select(g => g.First())
             .OrderBy(t => t.Name)
             .ToList();
-        
+
         return allTenants;
     }
-    
+
     /// <summary>
     /// Hash email address for privacy in logs.
     /// Uses first 8 characters of SHA256 hash.
@@ -164,7 +164,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
     {
         if (string.IsNullOrEmpty(email))
             return "empty";
-        
+
         using var sha256 = System.Security.Cryptography.SHA256.Create();
         var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(email.ToLowerInvariant()));
         return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();

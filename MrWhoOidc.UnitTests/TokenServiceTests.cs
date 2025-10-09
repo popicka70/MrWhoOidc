@@ -43,7 +43,7 @@ public sealed class TokenServiceTests
     {
         using var db = CreateDb();
         var user = new User { Username = "u", PasswordHash = "x" };
-    var client = new ClientEntity { ClientId = "c1" };
+        var client = new ClientEntity { ClientId = "c1" };
         db.Users.Add(user);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -82,7 +82,7 @@ public sealed class TokenServiceTests
     {
         using var db = CreateDb();
         var user = new User { Username = "u", PasswordHash = "x" };
-    var client = new ClientEntity { ClientId = "c1" };
+        var client = new ClientEntity { ClientId = "c1" };
         db.Users.Add(user);
         db.Clients.Add(client);
         await db.SaveChangesAsync();

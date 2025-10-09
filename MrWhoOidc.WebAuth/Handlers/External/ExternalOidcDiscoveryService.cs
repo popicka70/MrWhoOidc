@@ -49,12 +49,12 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
     }
 
     public async Task<DiscoveryResult> DiscoverAsync(
-        string authority, 
-        string? discoveryUrl, 
+        string authority,
+        string? discoveryUrl,
         CancellationToken cancellationToken)
     {
-        var discoUrl = string.IsNullOrWhiteSpace(discoveryUrl) 
-            ? authority.TrimEnd('/') + "/.well-known/openid-configuration" 
+        var discoUrl = string.IsNullOrWhiteSpace(discoveryUrl)
+            ? authority.TrimEnd('/') + "/.well-known/openid-configuration"
             : discoveryUrl;
 
         try
@@ -81,16 +81,16 @@ internal sealed class ExternalOidcDiscoveryService : IExternalOidcDiscoveryServi
             var discovery = new DiscoveryResponse
             {
                 AuthorizationEndpoint = root.GetProperty("authorization_endpoint").GetString()!,
-                PushedAuthorizationRequestEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parEl) 
-                    ? parEl.GetString() 
+                PushedAuthorizationRequestEndpoint = root.TryGetProperty("pushed_authorization_request_endpoint", out var parEl)
+                    ? parEl.GetString()
                     : null,
                 TokenEndpoint = root.GetProperty("token_endpoint").GetString()!,
-                UserinfoEndpoint = root.TryGetProperty("userinfo_endpoint", out var uiEl) 
-                    ? uiEl.GetString() 
+                UserinfoEndpoint = root.TryGetProperty("userinfo_endpoint", out var uiEl)
+                    ? uiEl.GetString()
                     : null,
                 JwksUri = root.GetProperty("jwks_uri").GetString()!,
-                Issuer = root.TryGetProperty("issuer", out var issEl) 
-                    ? issEl.GetString() 
+                Issuer = root.TryGetProperty("issuer", out var issEl)
+                    ? issEl.GetString()
                     : null
             };
 

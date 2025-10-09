@@ -56,7 +56,7 @@ internal static class IntrospectionRequestParser
             var bytes = Convert.FromBase64String(raw);
             var pair = Encoding.UTF8.GetString(bytes);
             var idx = pair.IndexOf(':');
-            
+
             if (idx < 0)
             {
                 return (null, null);

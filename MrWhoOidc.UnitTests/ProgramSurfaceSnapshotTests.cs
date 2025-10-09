@@ -244,7 +244,7 @@ public class ProgramSurfaceSnapshotTests
         var lines = File.ReadAllLines(programPath).Length;
         // Baseline captured now (after Phase 1 & partial Phase 2). We assert it does not exceed this by > 5 lines.
         const int baseline = 855; // updated baseline after Phase 1 & partial Phase 2 extractions (2025-09-27)
-        Assert.IsTrue(lines <= baseline + 5, $"Program.cs line count grew unexpectedly: {lines} > {baseline}+5");
+        Assert.IsLessThanOrEqualTo(baseline + 5, lines, $"Program.cs line count grew unexpectedly: {lines} > {baseline}+5");
     }
 
     // WebApplicationFactory drives real Program.cs; no manual host builder is needed now.
@@ -310,7 +310,7 @@ public class ProgramSurfaceSnapshotTests
         using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         using var scope1 = factory.Services.CreateScope();
         var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name == "AdminAuthorizationHandler").ToList();
-        Assert.IsTrue(handlers1.Count == 1, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
+        Assert.AreEqual(1, handlers1.Count, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
         var h1a = handlers1[0];
         var h1b = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name == "AdminAuthorizationHandler");
         // Scoped => same instance within scope

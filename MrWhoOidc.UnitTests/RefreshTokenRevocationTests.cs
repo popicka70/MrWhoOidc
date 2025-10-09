@@ -31,7 +31,7 @@ public sealed class RefreshTokenRevocationTests
         var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
-        
+
         db.Tokens.Add(new Token
         {
             TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
@@ -56,7 +56,7 @@ public sealed class RefreshTokenRevocationTests
         var userId = Guid.NewGuid();
         var clientId = "test-client";
         var scopes = new[] { "openid" };
-        
+
         var token = await CreateRefreshTokenInDb(db, userId, clientId, scopes);
         var hash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 
@@ -78,7 +78,7 @@ public sealed class RefreshTokenRevocationTests
         var userId = Guid.NewGuid();
         var clientId = "test-client";
         var scopes = new[] { "openid" };
-        
+
         var token = await CreateRefreshTokenInDb(db, userId, clientId, scopes);
         var hash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 
@@ -101,7 +101,7 @@ public sealed class RefreshTokenRevocationTests
         var userId = Guid.NewGuid();
         var clientId = "test-client";
         var scopes = new[] { "openid" };
-        
+
         var revokedTime = DateTimeOffset.UtcNow.AddMinutes(-5);
         var token = await CreateRefreshTokenInDb(db, userId, clientId, scopes, revokedAt: revokedTime);
 
@@ -109,7 +109,7 @@ public sealed class RefreshTokenRevocationTests
         await service.RevokeAsync(token, "refresh_token", clientId);
 
         // Assert - should complete without error (idempotent)
-        var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == 
+        var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash ==
             Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token))));
         Assert.IsNotNull(saved);
         Assert.AreEqual(revokedTime, saved.RevokedAt, "Original revocation time should be preserved");
@@ -141,7 +141,7 @@ public sealed class RefreshTokenRevocationTests
         var originalClientId = "client-1";
         var differentClientId = "client-2";
         var scopes = new[] { "openid" };
-        
+
         var token = await CreateRefreshTokenInDb(db, userId, originalClientId, scopes);
         var hash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 
@@ -152,7 +152,7 @@ public sealed class RefreshTokenRevocationTests
         var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
         Assert.IsNotNull(saved);
         Assert.IsNull(saved.RevokedAt, "Token should NOT be revoked with wrong client ID");
-        
+
         // But audit should still be created
         var audit = await db.RevocationAudits.FirstOrDefaultAsync(a => a.TokenHash == hash);
         Assert.IsNotNull(audit);

@@ -23,17 +23,17 @@ public static class SecurityConstants
         public const string RS256 = "RS256";
         public const string RS384 = "RS384";
         public const string RS512 = "RS512";
-        
+
         // ECDSA algorithms
         public const string ES256 = "ES256";
         public const string ES384 = "ES384";
         public const string ES512 = "ES512";
-        
+
         // RSASSA-PSS algorithms
         public const string PS256 = "PS256";
         public const string PS384 = "PS384";
         public const string PS512 = "PS512";
-        
+
         // HMAC algorithms (typically not used for OIDC signing)
         public const string HS256 = "HS256";
         public const string HS384 = "HS384";

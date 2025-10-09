@@ -26,7 +26,7 @@ public static class ReadOnlyModeExtensions
         if (impersonationService.IsImpersonating(context))
         {
             pageModel.TempData["Error"] = "⚠️ Cannot perform this action in read-only impersonation mode. Exit impersonation to make changes.";
-            
+
             // Return Forbid to prevent the action
             return new ForbidResult();
         }

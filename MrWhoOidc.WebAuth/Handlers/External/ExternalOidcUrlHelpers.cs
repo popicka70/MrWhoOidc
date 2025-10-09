@@ -12,7 +12,7 @@ internal static class ExternalOidcUrlHelpers
     /// </summary>
     public static string EnsureCidRef(string url, string handle)
     {
-        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(handle)) 
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(handle))
             return url;
 
         var fragmentIndex = url.IndexOf('#');
@@ -25,7 +25,7 @@ internal static class ExternalOidcUrlHelpers
 
         var parsed = QueryHelpers.ParseQuery(string.IsNullOrEmpty(query) ? string.Empty : "?" + query);
         var dict = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (var kv in parsed)
         {
             if (!string.Equals(kv.Key, "cid_ref", StringComparison.OrdinalIgnoreCase))
@@ -33,10 +33,10 @@ internal static class ExternalOidcUrlHelpers
                 dict[kv.Key] = kv.Value.LastOrDefault();
             }
         }
-        
+
         dict["cid_ref"] = handle;
         var rebuilt = QueryHelpers.AddQueryString(path, dict);
-        
+
         return fragment.Length > 0 ? rebuilt + fragment : rebuilt;
     }
 
@@ -45,9 +45,9 @@ internal static class ExternalOidcUrlHelpers
     /// </summary>
     public static string? TryGetClientIdFromReturnUrl(string? returnUrl)
     {
-        if (string.IsNullOrWhiteSpace(returnUrl)) 
+        if (string.IsNullOrWhiteSpace(returnUrl))
             return null;
-        
+
         try
         {
             var ru = new Uri(returnUrl, UriKind.RelativeOrAbsolute);
@@ -55,9 +55,9 @@ internal static class ExternalOidcUrlHelpers
                 ru.IsAbsoluteUri ? ru.Query : new Uri("http://local" + returnUrl).Query);
             return qs["client_id"];
         }
-        catch 
-        { 
-            return null; 
+        catch
+        {
+            return null;
         }
     }
 
@@ -71,14 +71,14 @@ internal static class ExternalOidcUrlHelpers
             var ru = new Uri(returnUrl, UriKind.RelativeOrAbsolute);
             var qs = System.Web.HttpUtility.ParseQueryString(
                 ru.IsAbsoluteUri ? ru.Query : new Uri("http://local" + returnUrl).Query);
-            
+
             void TryCopy(string name)
             {
                 var val = qs[name];
-                if (!string.IsNullOrEmpty(val)) 
+                if (!string.IsNullOrEmpty(val))
                     targetQuery[name] = val;
             }
-            
+
             TryCopy("login_hint");
             TryCopy("ui_locales");
             TryCopy("prompt");
@@ -87,8 +87,8 @@ internal static class ExternalOidcUrlHelpers
             TryCopy("resource");
             TryCopy("audience");
         }
-        catch 
-        { 
+        catch
+        {
             // Ignore parsing errors
         }
     }
@@ -98,16 +98,16 @@ internal static class ExternalOidcUrlHelpers
     /// </summary>
     public static bool LooksLikeHandle(string value)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length < 8 || value.Length > 64) 
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 8 || value.Length > 64)
             return false;
-        
+
         foreach (var ch in value)
         {
             if (char.IsLetterOrDigit(ch)) continue;
             if (ch is '-' or '_') continue;
             return false;
         }
-        
+
         return true;
     }
 }

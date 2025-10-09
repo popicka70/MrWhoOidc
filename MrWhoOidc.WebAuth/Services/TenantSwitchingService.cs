@@ -14,12 +14,12 @@ public interface ITenantSwitchingService
     /// Get all tenants the current user has access to (has roles in)
     /// </summary>
     Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user);
-    
+
     /// <summary>
     /// Switch the user's current tenant context (stores in session)
     /// </summary>
     Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId);
-    
+
     /// <summary>
     /// Get the user's preferred tenant from session
     /// </summary>

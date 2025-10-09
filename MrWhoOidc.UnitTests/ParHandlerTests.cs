@@ -35,7 +35,7 @@ public sealed class ParHandlerTests
     {
         var logger = NullLogger<ParHandler>.Instance;
         var metrics = new OidcMetrics();
-        
+
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
         authorize ??= new StubAuthorizeService();
@@ -55,7 +55,7 @@ public sealed class ParHandlerTests
         services.AddLogging();
         services.AddOptions();
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var context = new DefaultHttpContext();
         context.RequestServices = serviceProvider;
         context.Request.Scheme = "https";
@@ -96,7 +96,7 @@ public sealed class ParHandlerTests
         var authorize = new StubAuthorizeService(valid: true);
         var parStore = new StubPushedAuthorizationRequestStore(createSuccess: true);
         var handler = CreateHandler(clients: clientStore, authorize: authorize, parStore: parStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -126,7 +126,7 @@ public sealed class ParHandlerTests
         var authorize = new StubAuthorizeService(valid: true);
         var parStore = new StubPushedAuthorizationRequestStore(createSuccess: true);
         var handler = CreateHandler(clients: clientStore, requestObjects: requestObjects, authorize: authorize, parStore: parStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -150,7 +150,7 @@ public sealed class ParHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var requestObjects = new StubRequestObjectValidator(valid: false, error: "invalid_request_object", errorDescription: "Invalid JWT signature");
         var handler = CreateHandler(clients: clientStore, requestObjects: requestObjects);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -174,7 +174,7 @@ public sealed class ParHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var requestObjects = new StubRequestObjectValidator(valid: true, clientId: "other_client");
         var handler = CreateHandler(clients: clientStore, requestObjects: requestObjects);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["client_id"] = "test_client",
@@ -197,7 +197,7 @@ public sealed class ParHandlerTests
         // Arrange
         var clientStore = new StubClientStore(authenticated: false);
         var handler = CreateHandler(clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -223,7 +223,7 @@ public sealed class ParHandlerTests
         var authorize = new StubAuthorizeService(valid: true);
         var parStore = new StubPushedAuthorizationRequestStore(createSuccess: true);
         var handler = CreateHandler(clients: clientStore, authorize: authorize, parStore: parStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -252,7 +252,7 @@ public sealed class ParHandlerTests
         var authorize = new StubAuthorizeService(valid: true);
         var parStore = new StubPushedAuthorizationRequestStore(createSuccess: true);
         var handler = CreateHandler(clients: clientStore, assertions: assertions, authorize: authorize, parStore: parStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -281,7 +281,7 @@ public sealed class ParHandlerTests
         var clientStore = new StubClientStore(authenticated: false);
         var assertions = new StubClientAssertionValidator(valid: false);
         var handler = CreateHandler(clients: clientStore, assertions: assertions);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -307,7 +307,7 @@ public sealed class ParHandlerTests
         // Arrange
         var clientStore = new StubClientStore(authenticated: false);
         var handler = CreateHandler(clients: clientStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -331,7 +331,7 @@ public sealed class ParHandlerTests
     {
         // Arrange
         var handler = CreateHandler();
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -355,7 +355,7 @@ public sealed class ParHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var authorize = new StubAuthorizeService(valid: false, error: "invalid_scope", errorDescription: "Invalid scope requested");
         var handler = CreateHandler(clients: clientStore, authorize: authorize);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -381,7 +381,7 @@ public sealed class ParHandlerTests
         var clientStore = new StubClientStore(authenticated: true);
         var authOptions = Options.Create(new AuthOptions { RequestObjectMaxBytes = 100 }); // Small limit
         var handler = CreateHandler(clients: clientStore, authOptions: authOptions);
-        
+
         var largeRequestObject = new string('x', 200); // Exceeds 100 byte limit
         var formData = new Dictionary<string, string>
         {
@@ -407,7 +407,7 @@ public sealed class ParHandlerTests
         var authorize = new StubAuthorizeService(valid: true);
         var parStore = new StubPushedAuthorizationRequestStore(createSuccess: false, throwsPendingLimit: true);
         var handler = CreateHandler(clients: clientStore, authorize: authorize, parStore: parStore);
-        
+
         var formData = new Dictionary<string, string>
         {
             ["response_type"] = "code",
@@ -433,7 +433,7 @@ public sealed class ParHandlerTests
     {
         // Arrange
         var handler = CreateHandler();
-        
+
         var context = new DefaultHttpContext();
         context.Request.Scheme = "https";
         context.Request.Host = new HostString("test.example.com");

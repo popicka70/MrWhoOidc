@@ -16,26 +16,26 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITen
     public Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
     {
         var query = db.Clients.AsNoTracking().Where(c => c.ClientId == clientId);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         return query.FirstOrDefaultAsync(ct);
     }
 
     public async Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default)
     {
         var query = db.Clients.AsNoTracking().Where(c => c.ClientId == clientId);
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         var client = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (client is null) return false;
         if (string.IsNullOrEmpty(client.ClientSecretHash))
@@ -50,13 +50,13 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITen
     public IQueryable<Client> QueryClients(CancellationToken ct = default)
     {
         var query = db.Clients.AsQueryable();
-        
+
         // Filter by tenant if tenant context is available
         if (tenantAccessor.CurrentTenant != null)
         {
             query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
         }
-        
+
         return query;
     }
 }

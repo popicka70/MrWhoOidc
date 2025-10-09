@@ -28,7 +28,7 @@ public static class AuthenticationAuthorizationExtensions
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                
+
                 // Handle tenant-aware redirects for unauthorized/unauthenticated requests
                 options.Events = new CookieAuthenticationEvents
                 {
@@ -37,12 +37,12 @@ public static class AuthenticationAuthorizationExtensions
                         // Get tenant context from current request
                         var tenantAccessor = context.HttpContext.RequestServices.GetService<ITenantAccessor>();
                         var multiTenancyOptions = context.HttpContext.RequestServices.GetService<IMultiTenancyOptions>();
-                        
+
                         var currentTenant = tenantAccessor?.CurrentTenant;
                         var loginPath = currentTenant != null && multiTenancyOptions?.Enabled == true
                             ? $"/t/{currentTenant.Slug}/login"
                             : "/login";
-                        
+
                         var redirectUri = context.RedirectUri.Replace("/login", loginPath);
                         context.Response.Redirect(redirectUri);
                         return Task.CompletedTask;
@@ -52,12 +52,12 @@ public static class AuthenticationAuthorizationExtensions
                         // Get tenant context from current request
                         var tenantAccessor = context.HttpContext.RequestServices.GetService<ITenantAccessor>();
                         var multiTenancyOptions = context.HttpContext.RequestServices.GetService<IMultiTenancyOptions>();
-                        
+
                         var currentTenant = tenantAccessor?.CurrentTenant;
                         var accessDeniedPath = currentTenant != null && multiTenancyOptions?.Enabled == true
                             ? $"/t/{currentTenant.Slug}/Account/AccessDenied"
                             : "/Account/AccessDenied";
-                        
+
                         // Build redirect with returnUrl
                         var returnUrl = context.Request.Path + context.Request.QueryString;
                         context.Response.Redirect($"{accessDeniedPath}?ReturnUrl={Uri.EscapeDataString(returnUrl)}");

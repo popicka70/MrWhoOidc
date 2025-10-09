@@ -126,13 +126,13 @@ public class HybridCacheExampleService
             {
                 _logger.LogInformation("Calling API endpoint {Endpoint}", endpoint);
                 await Task.Delay(200, cancel);
-                
+
                 // Simulate API call that might fail
                 if (endpoint == "fail")
                 {
                     return null; // Don't cache failures
                 }
-                
+
                 return new ApiResult { Data = $"Result from {endpoint}" };
             },
             new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(5) },

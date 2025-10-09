@@ -44,7 +44,7 @@ public sealed class AuthorizeHandler(
         logger.LogInformation("⚡ AuthorizeHandler.HandleAsync called, Path={Path}, QueryString={QueryString}",
             http.Request.Path,
             http.Request.QueryString.Value ?? "(empty)");
-        
+
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         string outcome = "redirect";
@@ -329,7 +329,7 @@ public sealed class AuthorizeHandler(
                 {
                     clientGuid = await db.Clients.AsNoTracking().Where(c => c.ClientId == validationResult.ClientId).Select(c => (Guid?)c.Id).FirstOrDefaultAsync();
                 }
-                
+
                 // Load provider links if external IdPs are allowed
                 var providerLinks = new List<dynamic>();
                 if (allowExternal && clientGuid is Guid cg)
@@ -555,7 +555,7 @@ public sealed class AuthorizeHandler(
     private static string GetIssuer(HttpContext http)
     {
         var options = http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions;
-        
+
         // If issuer is explicitly configured, use it (backward compatibility)
         if (!string.IsNullOrEmpty(options?.Issuer))
         {

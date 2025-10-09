@@ -36,13 +36,13 @@ internal sealed class ExternalOidcMetricsRecorder : IExternalOidcMetricsRecorder
             { "clientId", clientId ?? string.Empty },
             { "outcome", outcome }
         };
-        
+
         var durMs = (DateTime.UtcNow - startTs).TotalMilliseconds;
         _metrics.ExternalStartDurationMs.Record(durMs, tags);
-        
-        if (success) 
-            _metrics.ExternalStartSuccess.Add(1, tags); 
-        else 
+
+        if (success)
+            _metrics.ExternalStartSuccess.Add(1, tags);
+        else
             _metrics.ExternalStartFailures.Add(1, tags);
     }
 
@@ -68,15 +68,15 @@ internal sealed class ExternalOidcMetricsRecorder : IExternalOidcMetricsRecorder
             { "correlation", correlationPresent is null ? "unknown" : (correlationPresent.Value ? "present" : "missing") },
             { "handle", handleStale is null ? "unused" : (handleStale.Value ? "stale" : "fresh") }
         };
-        
+
         var durMs = (DateTime.UtcNow - startTs).TotalMilliseconds;
         _metrics.ExternalCallbackDurationMs.Record(durMs, tags);
-        
-        if (success) 
-            _metrics.ExternalCallbackSuccess.Add(1, tags); 
-        else 
+
+        if (success)
+            _metrics.ExternalCallbackSuccess.Add(1, tags);
+        else
             _metrics.ExternalCallbackFailures.Add(1, tags);
-        
+
         _metrics.ExternalCallbackOutcomes.Add(1, tags);
     }
 }

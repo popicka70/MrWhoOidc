@@ -16,22 +16,22 @@ public interface IImpersonationService
     /// Only platform admins can impersonate.
     /// </summary>
     Task<bool> StartImpersonationAsync(HttpContext context, ClaimsPrincipal user, Guid tenantId);
-    
+
     /// <summary>
     /// Stop impersonating and return to platform admin view.
     /// </summary>
     Task StopImpersonationAsync(HttpContext context);
-    
+
     /// <summary>
     /// Get the currently impersonated tenant ID, if any.
     /// </summary>
     Guid? GetImpersonatedTenantId(HttpContext context);
-    
+
     /// <summary>
     /// Check if the current user is impersonating a tenant admin.
     /// </summary>
     bool IsImpersonating(HttpContext context);
-    
+
     /// <summary>
     /// Get impersonation details for display (tenant name, slug, etc.)
     /// </summary>
@@ -59,7 +59,7 @@ public class ImpersonationService(
         // Get platform admin user ID and username
         var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var username = user.Identity?.Name ?? "unknown";
-        
+
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var platformAdminUserId))
         {
             logger.LogWarning("Cannot start impersonation: invalid user ID claim");
@@ -152,7 +152,7 @@ public class ImpersonationService(
 
                 logger.LogInformation(
                     "Platform admin {Username} (ID: {UserId}) stopped impersonating tenant {TenantName} (ID: {TenantId}) after {Duration}",
-                    startLog.PlatformAdminUsername, startLog.PlatformAdminUserId, startLog.TenantName, startLog.TenantId, 
+                    startLog.PlatformAdminUsername, startLog.PlatformAdminUserId, startLog.TenantName, startLog.TenantId,
                     duration?.ToString(@"hh\:mm\:ss") ?? "unknown");
             }
         }
@@ -213,7 +213,7 @@ public class ImpersonationInfo
     public string TenantSlug { get; set; } = string.Empty;
     public string IssuerUri { get; set; } = string.Empty;
     public DateTimeOffset StartTime { get; set; }
-    
+
     public string Duration
     {
         get

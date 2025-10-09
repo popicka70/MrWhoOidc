@@ -46,12 +46,12 @@ public sealed class LogoutRedirectResolver(
         {
             var ub = new UriBuilder(dest);
             var q = HttpUtility.ParseQueryString(ub.Query);
-            
+
             if (string.IsNullOrEmpty(q["state"]))
             {
                 q["state"] = record.State;
             }
-            
+
             ub.Query = q.ToString();
             dest = ub.ToString();
         }

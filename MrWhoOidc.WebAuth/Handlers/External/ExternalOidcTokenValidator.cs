@@ -28,10 +28,10 @@ public sealed class TokenValidationResult
 public interface IExternalOidcTokenValidator
 {
     Task<TokenValidationResult> ValidateIdTokenAsync(
-        string idToken, 
-        string jwksUri, 
-        string? expectedIssuer, 
-        string expectedAudience, 
+        string idToken,
+        string jwksUri,
+        string? expectedIssuer,
+        string expectedAudience,
         string? expectedNonce,
         CancellationToken cancellationToken);
 }
@@ -93,7 +93,7 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
             };
 
             var principal = tokenHandler.ValidateToken(idToken, parms, out var _);
-            
+
             var issuer = principal.FindFirst("iss")?.Value ?? parms.ValidIssuer;
             var sub = principal.FindFirst("sub")?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var name = principal.FindFirst("name")?.Value ?? principal.FindFirst(ClaimTypes.Name)?.Value;
@@ -107,7 +107,7 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
                 .ToArray();
 
             var nonceClaim = principal.FindFirst("nonce")?.Value;
-            if (!string.IsNullOrEmpty(expectedNonce) && 
+            if (!string.IsNullOrEmpty(expectedNonce) &&
                 !string.Equals(expectedNonce, nonceClaim, StringComparison.Ordinal))
             {
                 _logger.LogWarning("Nonce mismatch in ID token validation");

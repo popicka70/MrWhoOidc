@@ -12,7 +12,7 @@ public sealed class GeneratorTests
         var id = gen.Generate(48);
         Assert.IsFalse(string.IsNullOrWhiteSpace(id));
         Assert.IsFalse(id.Contains('+') || id.Contains('/'));
-        Assert.IsFalse(id.Contains('='));
+        Assert.DoesNotContain('=', id);
         Assert.AreEqual(48, id.Length);
     }
 
@@ -23,7 +23,7 @@ public sealed class GeneratorTests
         var secret = gen.Generate(32);
         Assert.IsFalse(string.IsNullOrWhiteSpace(secret));
         Assert.IsFalse(secret.Contains('+') || secret.Contains('/'));
-        Assert.IsFalse(secret.Contains('='));
-        Assert.IsTrue(secret.Length >= 32); // base64url expands
+        Assert.DoesNotContain('=', secret);
+        Assert.IsGreaterThanOrEqualTo(32, secret.Length); // base64url expands
     }
 }

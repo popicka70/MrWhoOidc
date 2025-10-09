@@ -39,7 +39,7 @@ public sealed record PasswordValidationResult
     /// <summary>
     /// Creates a failed validation result with error messages.
     /// </summary>
-    public static PasswordValidationResult Failure(params string[] errors) 
+    public static PasswordValidationResult Failure(params string[] errors)
         => new() { IsValid = false, Errors = errors };
 }
 
@@ -94,8 +94,8 @@ internal sealed class PasswordPolicyService(ITenantSettingsService settingsServi
             errors.Add("Password must contain at least one special character.");
         }
 
-        return errors.Count == 0 
-            ? PasswordValidationResult.Success() 
+        return errors.Count == 0
+            ? PasswordValidationResult.Success()
             : PasswordValidationResult.Failure(errors.ToArray());
     }
 }

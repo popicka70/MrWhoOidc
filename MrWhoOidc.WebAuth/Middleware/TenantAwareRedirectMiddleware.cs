@@ -20,7 +20,7 @@ public class TenantAwareRedirectMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<TenantAwareRedirectMiddleware> _logger;
-    
+
     public TenantAwareRedirectMiddleware(
         RequestDelegate next,
         ILogger<TenantAwareRedirectMiddleware> logger)
@@ -28,7 +28,7 @@ public class TenantAwareRedirectMiddleware
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
-    
+
     public async Task InvokeAsync(
         HttpContext context,
         ITenantAccessor tenantAccessor,
@@ -41,30 +41,30 @@ public class TenantAwareRedirectMiddleware
             await _next(context);
             return;
         }
-        
+
         // Skip if user is not authenticated
         if (!context.User?.Identity?.IsAuthenticated ?? true)
         {
             await _next(context);
             return;
         }
-        
+
         var path = context.Request.Path.Value ?? "/";
-        
+
         // Skip if path should not be tenant-aware
         if (ShouldSkipRedirect(path))
         {
             await _next(context);
             return;
         }
-        
+
         // Skip if path already has tenant prefix
         if (path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;
         }
-        
+
         // Get user's tenant
         var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
@@ -73,35 +73,35 @@ public class TenantAwareRedirectMiddleware
             await _next(context);
             return;
         }
-        
+
         // Look up user's tenant from database
         var user = await (from u in dbContext.Users
                           join t in dbContext.Tenants on u.TenantId equals t.Id
                           where u.Id.ToString() == userId
                           select new { u.TenantId, t.Slug })
             .FirstOrDefaultAsync(context.RequestAborted);
-        
+
         if (user == null)
         {
             _logger.LogWarning("User {UserId} not found in database", userId);
             await _next(context);
             return;
         }
-        
+
         // Redirect to tenant-specific version
         var tenantPath = $"/t/{user.Slug}{path}";
         if (!string.IsNullOrEmpty(context.Request.QueryString.Value))
         {
             tenantPath += context.Request.QueryString.Value;
         }
-        
+
         _logger.LogInformation(
             "Redirecting user {UserId} from tenant-unaware path {OriginalPath} to tenant-specific path {TenantPath}",
             userId, path, tenantPath);
-        
+
         context.Response.Redirect(tenantPath, permanent: false);
     }
-    
+
     /// <summary>
     /// Determines if redirect should be skipped for the given path.
     /// Skips: platform admin routes, auth endpoints that should remain global, static assets, etc.
@@ -109,7 +109,7 @@ public class TenantAwareRedirectMiddleware
     private static bool ShouldSkipRedirect(string path)
     {
         var lowerPath = path.ToLowerInvariant();
-        
+
         return lowerPath.StartsWith("/health") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/platformadmin") ||

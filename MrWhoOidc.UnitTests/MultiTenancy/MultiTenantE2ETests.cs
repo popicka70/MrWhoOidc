@@ -26,15 +26,15 @@ public class MultiTenantE2ETests
     public async Task Setup()
     {
         var services = new ServiceCollection();
-        
+
         // In-memory database for testing - register as singleton so all services share the same instance
         services.AddDbContext<AuthDbContext>(options =>
             options.UseInMemoryDatabase(databaseName: $"MultiTenantE2E_{Guid.NewGuid()}"),
             ServiceLifetime.Singleton);
-        
+
         // Memory cache
         services.AddMemoryCache();
-        
+
         // Multi-tenancy options (multi-tenant mode enabled)
         var multiTenancyOptions = new MultiTenancyOptions
         {
@@ -42,19 +42,19 @@ public class MultiTenantE2ETests
             DefaultTenantSlug = "default"
         };
         services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
-        
+
         // Tenant resolver
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
-        
+
         _serviceProvider = services.BuildServiceProvider();
         _db = _serviceProvider.GetRequiredService<AuthDbContext>();
-        
+
         // Seed test data
         _tenant1Id = Guid.NewGuid();
         _tenant2Id = Guid.NewGuid();
         _realm1Id = Guid.NewGuid();
         _realm2Id = Guid.NewGuid();
-        
+
         // Tenant 1
         _db.Tenants.Add(new Tenant
         {
@@ -65,7 +65,7 @@ public class MultiTenantE2ETests
             Status = TenantStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow
         });
-        
+
         // Tenant 2
         _db.Tenants.Add(new Tenant
         {
@@ -76,54 +76,54 @@ public class MultiTenantE2ETests
             Status = TenantStatus.Active,
             CreatedAt = DateTimeOffset.UtcNow
         });
-        
+
         // Realms
         var realm1 = new Realm { Id = _realm1Id, Name = "acme-realm", DisplayName = "Acme Realm" };
         var realm2 = new Realm { Id = _realm2Id, Name = "contoso-realm", DisplayName = "Contoso Realm" };
         _db.Realms.AddRange(realm1, realm2);
-        
+
         // Clients for each tenant
-        var client1 = new ClientEntity 
-        { 
-            ClientId = "acme-client", 
+        var client1 = new ClientEntity
+        {
+            ClientId = "acme-client",
             ClientName = "Acme SPA",
             RealmId = _realm1Id,
             TenantId = _tenant1Id,
             RequirePkce = true,
             RequireConsent = false
         };
-        
-        var client2 = new ClientEntity 
-        { 
-            ClientId = "contoso-client", 
+
+        var client2 = new ClientEntity
+        {
+            ClientId = "contoso-client",
             ClientName = "Contoso SPA",
             RealmId = _realm2Id,
             TenantId = _tenant2Id,
             RequirePkce = true,
             RequireConsent = false
         };
-        
+
         _db.Clients.AddRange(client1, client2);
-        
+
         // Users for each tenant
-        var user1 = new User 
-        { 
-            Username = "alice@acme.com", 
-            Email = "alice@acme.com", 
+        var user1 = new User
+        {
+            Username = "alice@acme.com",
+            Email = "alice@acme.com",
             Name = "Alice",
             TenantId = _tenant1Id
         };
-        
-        var user2 = new User 
-        { 
-            Username = "bob@contoso.com", 
-            Email = "bob@contoso.com", 
+
+        var user2 = new User
+        {
+            Username = "bob@contoso.com",
+            Email = "bob@contoso.com",
             Name = "Bob",
             TenantId = _tenant2Id
         };
-        
+
         _db.Users.AddRange(user1, user2);
-        
+
         await _db.SaveChangesAsync();
     }
 
@@ -134,7 +134,7 @@ public class MultiTenantE2ETests
         _db.Dispose();
         _serviceProvider.Dispose();
     }
-    
+
     private sealed class DummyHasher : IPasswordHasher
     {
         public string Hash(string password) => password;
@@ -147,18 +147,18 @@ public class MultiTenantE2ETests
         // Arrange
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", "Acme Corporation");
         var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor);
-        
+
         // Act - find client from tenant 1
         var client1 = await clientStore.FindByClientIdAsync("acme-client");
-        
+
         // Assert - should find tenant 1 client
         Assert.IsNotNull(client1, "Should find client from tenant 1");
         Assert.AreEqual("acme-client", client1.ClientId);
         Assert.AreEqual(_tenant1Id, client1.TenantId);
-        
+
         // Act - try to find client from tenant 2
         var client2 = await clientStore.FindByClientIdAsync("contoso-client");
-        
+
         // Assert - should NOT find client from different tenant
         Assert.IsNull(client2, "Should NOT find client from different tenant");
     }
@@ -169,10 +169,10 @@ public class MultiTenantE2ETests
         // Arrange
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", "Contoso Ltd");
         var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor);
-        
+
         // Act - find client from tenant 2
         var client = await clientStore.FindByClientIdAsync("contoso-client");
-        
+
         // Assert - should find tenant 2 client
         Assert.IsNotNull(client, "Should find client from tenant 2");
         Assert.AreEqual("contoso-client", client.ClientId);
@@ -185,23 +185,23 @@ public class MultiTenantE2ETests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-        
+
         // Act - get users for tenant 1
         var tenant1Users = await db.Users
             .Where(u => u.TenantId == _tenant1Id)
             .ToListAsync();
-        
+
         // Assert
-        Assert.AreEqual(1, tenant1Users.Count, "Tenant 1 should have exactly 1 user");
+        Assert.HasCount(1, tenant1Users, "Tenant 1 should have exactly 1 user");
         Assert.AreEqual("alice@acme.com", tenant1Users[0].Username);
-        
+
         // Act - get users for tenant 2
         var tenant2Users = await db.Users
             .Where(u => u.TenantId == _tenant2Id)
             .ToListAsync();
-        
+
         // Assert
-        Assert.AreEqual(1, tenant2Users.Count, "Tenant 2 should have exactly 1 user");
+        Assert.HasCount(1, tenant2Users, "Tenant 2 should have exactly 1 user");
         Assert.AreEqual("bob@contoso.com", tenant2Users[0].Username);
     }
 
@@ -211,18 +211,18 @@ public class MultiTenantE2ETests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act - resolve tenant 1
         var result1 = await resolver.ResolveTenantAsync("/t/acme/authorize");
-        
+
         // Assert
         Assert.IsNotNull(result1, "Should successfully resolve tenant 1");
         Assert.AreEqual(_tenant1Id, result1.TenantId);
         Assert.AreEqual("acme", result1.Slug);
-        
+
         // Act - resolve tenant 2
         var result2 = await resolver.ResolveTenantAsync("/t/contoso/authorize");
-        
+
         // Assert
         Assert.IsNotNull(result2, "Should successfully resolve tenant 2");
         Assert.AreEqual(_tenant2Id, result2.TenantId);
@@ -234,43 +234,43 @@ public class MultiTenantE2ETests
     {
         // Arrange - add clients with same client_id in different tenants
         var sameClientId = "shared-spa";
-        
-        var clientInTenant1 = new ClientEntity 
-        { 
-            ClientId = sameClientId, 
+
+        var clientInTenant1 = new ClientEntity
+        {
+            ClientId = sameClientId,
             ClientName = "Tenant 1 SPA",
             RealmId = _realm1Id,
             TenantId = _tenant1Id,
             RequirePkce = true
         };
-        
-        var clientInTenant2 = new ClientEntity 
-        { 
-            ClientId = sameClientId, 
+
+        var clientInTenant2 = new ClientEntity
+        {
+            ClientId = sameClientId,
             ClientName = "Tenant 2 SPA",
             RealmId = _realm2Id,
             TenantId = _tenant2Id,
             RequirePkce = false // Different setting
         };
-        
+
         _db.Clients.AddRange(clientInTenant1, clientInTenant2);
         await _db.SaveChangesAsync();
-        
+
         // Act - retrieve client from tenant 1 context
         var accessor1 = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
         var store1 = new ClientStore(_db, new DummyHasher(), accessor1);
         var result1 = await store1.FindByClientIdAsync(sameClientId);
-        
+
         // Assert - should get tenant 1's version
         Assert.IsNotNull(result1);
         Assert.AreEqual("Tenant 1 SPA", result1.ClientName);
         Assert.IsTrue(result1.RequirePkce, "Should have tenant 1 settings");
-        
+
         // Act - retrieve client from tenant 2 context
         var accessor2 = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
         var store2 = new ClientStore(_db, new DummyHasher(), accessor2);
         var result2 = await store2.FindByClientIdAsync(sameClientId);
-        
+
         // Assert - should get tenant 2's version
         Assert.IsNotNull(result2);
         Assert.AreEqual("Tenant 2 SPA", result2.ClientName);
@@ -285,13 +285,13 @@ public class MultiTenantE2ETests
         Assert.IsNotNull(tenant);
         tenant.Status = TenantStatus.Suspended;
         await _db.SaveChangesAsync();
-        
+
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/acme/authorize");
-        
+
         // Assert
         Assert.IsNull(result, "Should return null for suspended tenant");
     }
@@ -302,10 +302,10 @@ public class MultiTenantE2ETests
         // Arrange
         using var scope = _serviceProvider.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<ITenantResolver>();
-        
+
         // Act
         var result = await resolver.ResolveTenantAsync("/t/nonexistent/authorize");
-        
+
         // Assert
         Assert.IsNull(result, "Should return null for non-existent tenant");
     }

@@ -57,6 +57,6 @@ public class ExternalOidcErrorTests
         // The new FriendlyError returns a redirect to /Auth/External/Error
         var prop = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var urlVal = prop?.GetValue(result)?.ToString();
-        Assert.IsTrue(urlVal?.StartsWith("/Auth/External/Error", System.StringComparison.OrdinalIgnoreCase) == true, "Expected redirect to external error page");
+        Assert.AreEqual(true, urlVal?.StartsWith("/Auth/External/Error", System.StringComparison.OrdinalIgnoreCase), "Expected redirect to external error page");
     }
 }

@@ -49,54 +49,54 @@ public class SettingsModel : PageModel
         private bool? _qrLoginEnabled;
 
         // UI binding properties (non-nullable for checkboxes)
-        public bool AllowRefreshTokenIntrospection 
-        { 
+        public bool AllowRefreshTokenIntrospection
+        {
             get => _allowRefreshTokenIntrospection ?? false;
             set => _allowRefreshTokenIntrospection = value ? true : null;
         }
-        
-        public bool RequireMfa 
-        { 
+
+        public bool RequireMfa
+        {
             get => _requireMfa ?? false;
             set => _requireMfa = value ? true : null;
         }
-        
+
         // Password policy
         public int? PasswordMinLength { get; set; }
-        
-        public bool PasswordRequireUppercase 
-        { 
+
+        public bool PasswordRequireUppercase
+        {
             get => _passwordRequireUppercase ?? false;
             set => _passwordRequireUppercase = value ? true : null;
         }
-        
-        public bool PasswordRequireLowercase 
-        { 
+
+        public bool PasswordRequireLowercase
+        {
             get => _passwordRequireLowercase ?? false;
             set => _passwordRequireLowercase = value ? true : null;
         }
-        
-        public bool PasswordRequireDigit 
-        { 
+
+        public bool PasswordRequireDigit
+        {
             get => _passwordRequireDigit ?? false;
             set => _passwordRequireDigit = value ? true : null;
         }
-        
-        public bool PasswordRequireSpecialChar 
-        { 
+
+        public bool PasswordRequireSpecialChar
+        {
             get => _passwordRequireSpecialChar ?? false;
             set => _passwordRequireSpecialChar = value ? true : null;
         }
-        
+
         // QR Login
-        public bool QrLoginEnabled 
-        { 
+        public bool QrLoginEnabled
+        {
             get => _qrLoginEnabled ?? false;
             set => _qrLoginEnabled = value ? true : null;
         }
-        
+
         public int? QrSessionLifetimeSeconds { get; set; }
-        
+
         // Token lifetimes
         public int? AccessTokenLifetimeSeconds { get; set; }
         public int? RefreshTokenLifetimeSeconds { get; set; }
@@ -111,7 +111,7 @@ public class SettingsModel : PageModel
         public bool? GetPasswordRequireDigit() => _passwordRequireDigit;
         public bool? GetPasswordRequireSpecialChar() => _passwordRequireSpecialChar;
         public bool? GetQrLoginEnabled() => _qrLoginEnabled;
-        
+
         // Methods to set nullable values from loaded settings
         public void SetAllowRefreshTokenIntrospection(bool? value) => _allowRefreshTokenIntrospection = value;
         public void SetRequireMfa(bool? value) => _requireMfa = value;
@@ -222,7 +222,7 @@ public class SettingsModel : PageModel
     private void PopulateForm(TenantSettings settings)
     {
         Input = new SettingsInput();
-        
+
         Input.SetAllowRefreshTokenIntrospection(settings.Auth?.AllowRefreshTokenIntrospection);
         Input.SetRequireMfa(settings.Auth?.RequireMfa);
         Input.PasswordMinLength = settings.Auth?.PasswordPolicy?.MinLength;

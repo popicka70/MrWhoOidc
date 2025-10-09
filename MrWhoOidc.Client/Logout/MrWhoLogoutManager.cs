@@ -125,7 +125,7 @@ internal sealed class MrWhoLogoutManager : IMrWhoLogoutManager
             query[kv.Key] = kv.Value;
         }
 
-    var finalParameters = new Dictionary<string, string>(StringComparer.Ordinal);
+        var finalParameters = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var kv in query)
         {
             if (!string.IsNullOrEmpty(kv.Value))
@@ -134,7 +134,7 @@ internal sealed class MrWhoLogoutManager : IMrWhoLogoutManager
             }
         }
 
-    var logoutUrl = QueryHelpers.AddQueryString(endSessionUri.ToString(), finalParameters.ToDictionary(static kv => kv.Key, static kv => (string?)kv.Value, StringComparer.Ordinal));
+        var logoutUrl = QueryHelpers.AddQueryString(endSessionUri.ToString(), finalParameters.ToDictionary(static kv => kv.Key, static kv => (string?)kv.Value, StringComparer.Ordinal));
 
         return new FrontChannelLogoutRequest
         {

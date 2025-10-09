@@ -76,7 +76,7 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
                             user.TotpEnabled = true;
                             await db.SaveChangesAsync();
                             Message = "TOTP enabled.";
-                            
+
                             // If this was required enrollment, redirect to TOTP login page
                             if (Required)
                             {

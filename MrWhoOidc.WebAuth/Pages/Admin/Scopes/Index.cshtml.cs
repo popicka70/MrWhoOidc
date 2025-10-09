@@ -20,7 +20,7 @@ public class IndexModel(
         // Check if user is platform admin
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         // Note: Scopes are global/shared across tenants in current implementation
         // Future: Consider tenant-specific scopes if needed
         Scopes = await db.Scopes.AsNoTracking().OrderBy(s => s.Name).ToListAsync();

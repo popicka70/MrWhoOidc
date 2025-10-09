@@ -50,7 +50,7 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     // Core auth services (TokenService, JwtService, etc.)
                     services.AddMrWhoOidcAuthCore();
-                    
+
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
                     services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
                     {
@@ -58,7 +58,7 @@ public sealed class TokenExchangeIntegrationTests
                         var logger = sp.GetService<ILogger<MrWhoOidc.UnitTests.Testing.TestTenantAccessor>>();
                         return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
                     });
-                    
+
                     // WebAuth endpoint dependencies
                     services.AddSingleton<OidcMetrics>();
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
@@ -89,7 +89,7 @@ public sealed class TokenExchangeIntegrationTests
                     {
                         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                         var hasher = new Argon2PasswordHasher();
-                        
+
                         // Seed default tenant
                         var tenant = new Tenant
                         {
@@ -101,7 +101,7 @@ public sealed class TokenExchangeIntegrationTests
                             CreatedAt = DateTimeOffset.UtcNow
                         };
                         db.Tenants.Add(tenant);
-                        
+
                         var realm = new Realm { Name = "default", TenantId = DefaultTenantId };
                         db.Realms.Add(realm);
                         var client = new ClientEntity
@@ -185,7 +185,7 @@ public sealed class TokenExchangeIntegrationTests
         Assert.IsTrue(expiresIn > 0 && expiresIn <= 180, $"expires_in out of expected cap: {expiresIn}");
         var access = doc.GetProperty("access_token").GetString();
         Assert.IsNotNull(access);
-        Assert.IsTrue(access!.Split('.').Length == 3, "Expected JWT access token");
+        Assert.AreEqual(3, access!.Split('.').Length, "Expected JWT access token");
     }
 
     [TestMethod]
@@ -697,7 +697,7 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual(bundle.ClientId, stored.ClientId);
         Assert.AreEqual(bundle.UserId, stored.UserId);
         // Scopes include 'read'
-        Assert.IsTrue(stored.ScopesJson?.Contains("read") == true);
+        Assert.AreEqual(true, stored.ScopesJson?.Contains("read"));
     }
 
     private static string? TryGetJwtCnfJkt(string jwt)

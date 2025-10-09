@@ -10,14 +10,14 @@ public sealed class ParCleanupHostedService(IServiceProvider services, ILogger<P
     {
         // Startup delay to allow migrations to complete
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-        
+
         // Run every 5 minutes
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = services.CreateScope();
-                
+
                 // Set tenant context for background operation
                 if (!await BackgroundServiceTenantHelper.TrySetDefaultTenantContextAsync(scope, stoppingToken))
                 {
@@ -25,7 +25,7 @@ public sealed class ParCleanupHostedService(IServiceProvider services, ILogger<P
                     await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
                     continue;
                 }
-                
+
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                 var now = DateTimeOffset.UtcNow;
                 var expired = await db.PushedAuthorizationRequests.Where(p => p.ExpiresAt < now || p.Consumed).ToListAsync(stoppingToken);

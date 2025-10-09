@@ -47,8 +47,8 @@ public readonly record struct CorrelationSnapshot(string CorrelationId, string H
 /// Result of correlation resolution.
 /// </summary>
 public readonly record struct CorrelationResolutionResult(
-    bool Success, 
-    string CorrelationId, 
-    string Handle, 
-    bool FromHandle, 
+    bool Success,
+    string CorrelationId,
+    string Handle,
+    bool FromHandle,
     bool HandleStale);

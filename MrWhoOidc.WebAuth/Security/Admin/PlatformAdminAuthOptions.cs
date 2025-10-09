@@ -10,7 +10,7 @@ public sealed class PlatformAdminAuthOptions
     /// Default is "platform" (a special realm for platform-level administrators).
     /// </summary>
     public string RealmName { get; set; } = "platform";
-    
+
     /// <summary>
     /// The role name that grants platform admin privileges.
     /// Default is "platform-admin".

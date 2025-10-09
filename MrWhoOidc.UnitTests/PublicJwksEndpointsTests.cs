@@ -84,7 +84,7 @@ public class PublicJwksEndpointsTests
         using var scope = env.Host.Services.CreateScope();
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AuthDbContext>>();
         await using var db = await factory.CreateDbContextAsync();
-    db.Clients.Add(new ClientEntity { ClientId = "c1", ClientName = "Test" });
+        db.Clients.Add(new ClientEntity { ClientId = "c1", ClientName = "Test" });
         await db.SaveChangesAsync();
 
         var json = await env.Client.GetStringAsync("/clients/c1/jwks");
@@ -108,7 +108,7 @@ public class PublicJwksEndpointsTests
         var etag1 = resp1.Headers.ETag?.Tag;
         var body1 = await resp1.Content.ReadAsStringAsync();
         Assert.IsNotNull(etag1);
-        Assert.IsFalse(body1.Contains("\"d\""));
+        Assert.DoesNotContain("\"d\"", body1);
 
         using (var scope = env.Host.Services.CreateScope())
         {
@@ -152,7 +152,7 @@ public class PublicJwksEndpointsTests
         var json = await env.Client.GetStringAsync("/providers/up1/jwks");
         using var doc = JsonDocument.Parse(json);
         var arr = doc.RootElement.GetProperty("keys").EnumerateArray().ToList();
-        Assert.AreEqual(1, arr.Count);
+        Assert.HasCount(1, arr);
         Assert.AreEqual("dup", arr[0].GetProperty("kid").GetString());
     }
 
@@ -195,7 +195,7 @@ public class PublicJwksEndpointsTests
         var json = await env.Client.GetStringAsync("/providers/unpub/jwks");
         using var doc = JsonDocument.Parse(json);
         var arr = doc.RootElement.GetProperty("keys").EnumerateArray().ToList();
-        Assert.AreEqual(0, arr.Count);
+        Assert.IsEmpty(arr);
     }
 
     [TestMethod]

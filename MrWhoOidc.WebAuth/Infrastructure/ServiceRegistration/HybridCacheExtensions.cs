@@ -32,13 +32,13 @@ public static class HybridCacheExtensions
             // L1 (in-memory) cache settings
             options.MaximumPayloadBytes = 1024 * 1024; // 1 MB max per entry
             options.MaximumKeyLength = 512; // Max key length
-            
+
             // Read custom settings from configuration if available
             var cacheSection = configuration.GetSection("HybridCache");
-            
+
             TimeSpan expiration = TimeSpan.FromMinutes(5); // Default
             TimeSpan localExpiration = TimeSpan.FromMinutes(5); // Default
-            
+
             if (cacheSection.Exists())
             {
                 var maxPayloadMb = cacheSection.GetValue<int?>("MaximumPayloadMB");
@@ -54,7 +54,7 @@ public static class HybridCacheExtensions
                     localExpiration = TimeSpan.FromMinutes(defaultExpirationMinutes.Value);
                 }
             }
-            
+
             // Set default expiration with init-only properties
             options.DefaultEntryOptions = new HybridCacheEntryOptions
             {
