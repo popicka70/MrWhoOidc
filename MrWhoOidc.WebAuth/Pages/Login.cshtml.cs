@@ -13,7 +13,8 @@ public class LoginModel(
     IUserService users, 
     ILogger<LoginModel> logger,
     ITenantAccessor tenantAccessor,
-    IMultiTenancyOptions multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions,
+    ITenantSettingsService settingsService) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -65,6 +66,30 @@ public class LoginModel(
             RegisterFailedAttempt(HttpContext, Username);
             ModelState.AddModelError(string.Empty, "Invalid username or password");
             return Page();
+        }
+
+        // Check tenant MFA requirement
+        var settings = await settingsService.GetCurrentTenantSettingsAsync();
+        var mfaRequired = settings.Auth?.RequireMfa ?? false;
+
+        // If MFA is required but user doesn't have it enabled, redirect to enrollment
+        if (mfaRequired && !user.TotpEnabled)
+        {
+            // Issue short-lived preauth to allow MFA enrollment
+            var preauthClaims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Username),
+                new("amr", "pwd"),
+                new("mfa_enrollment_required", "true")
+            };
+            var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
+            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
+            ClearAttempts(HttpContext, Username);
+            
+            logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", Username);
+            var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = ReturnUrl }, protocol: Request.Scheme);
+            return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
         }
 
         // If TOTP enabled, issue short-lived preauth and redirect to TOTP page

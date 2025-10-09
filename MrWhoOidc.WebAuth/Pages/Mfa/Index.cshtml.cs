@@ -10,7 +10,7 @@ using QRCoder;
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
 [Authorize]
-public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration config) : PageModel
+public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration config, ITenantSettingsService settingsService) : PageModel
 {
     [BindProperty]
     public string? Action { get; set; }
@@ -18,6 +18,12 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
     [BindProperty]
     [StringLength(6, MinimumLength = 6)]
     public string? VerificationCode { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public bool Required { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? ReturnUrl { get; set; }
 
     public bool Enabled { get; set; }
     public string? QrPngBase64 { get; set; }
@@ -28,6 +34,12 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
         var user = await GetCurrentUserAsync();
         if (user is null) { Enabled = false; return; }
         Enabled = user.TotpEnabled;
+
+        // If MFA is required and user doesn't have it, show warning
+        if (Required && !Enabled)
+        {
+            Message = "⚠️ Your organization requires multi-factor authentication. Please set up TOTP to continue.";
+        }
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -64,6 +76,12 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
                             user.TotpEnabled = true;
                             await db.SaveChangesAsync();
                             Message = "TOTP enabled.";
+                            
+                            // If this was required enrollment, redirect to TOTP login page
+                            if (Required)
+                            {
+                                return RedirectToPage("/LoginTotp", new { ReturnUrl });
+                            }
                         }
                         else
                         {
@@ -75,6 +93,17 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
                 }
             case "disable":
                 {
+                    // Check if MFA is required by tenant policy
+                    var settings = await settingsService.GetCurrentTenantSettingsAsync();
+                    var mfaRequired = settings.Auth?.RequireMfa ?? false;
+
+                    if (mfaRequired)
+                    {
+                        Enabled = user.TotpEnabled;
+                        Message = "⚠️ Cannot disable MFA: Your organization requires multi-factor authentication.";
+                        return Page();
+                    }
+
                     user.TotpEnabled = false;
                     user.TotpSecret = null;
                     await db.SaveChangesAsync();
