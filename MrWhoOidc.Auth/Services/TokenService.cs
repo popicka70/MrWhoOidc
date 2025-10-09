@@ -269,7 +269,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             id_token = idToken,
             refresh_token = refreshToken,
             token_type = "Bearer",
-            expires_in = 900,
+            expires_in = (int)accessTokenLifetime.TotalSeconds,
             scope = string.Join(' ', scopes)
         };
         return (true, payload, null, 200);
@@ -325,7 +325,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         {
             var jti = Guid.NewGuid().ToString("N");
             var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, jti, raw, TimeSpan.FromMinutes(15), dpopJkt, ct).ConfigureAwait(false);
+            await PersistOpaqueAccessAsync(tokenEntity.UserId, clientId, audience, scopes, jti, raw, accessTokenLifetime, dpopJkt, ct).ConfigureAwait(false);
             accessToken = raw;
         }
         else
@@ -363,7 +363,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             access_token = accessToken,
             refresh_token = newRefresh,
             token_type = "Bearer",
-            expires_in = 900,
+            expires_in = (int)accessTokenLifetime.TotalSeconds,
             scope = string.Join(' ', scopes)
         };
         return (true, payload, null, 200);

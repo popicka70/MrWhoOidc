@@ -36,6 +36,7 @@ public static class AuthServiceCollectionExtensions
 
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+        services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IAuthorizeService, AuthorizeService>();

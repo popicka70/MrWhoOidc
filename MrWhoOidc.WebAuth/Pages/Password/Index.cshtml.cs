@@ -9,7 +9,7 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Password;
 
 [Authorize]
-public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
+public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IPasswordPolicyService passwordPolicy) : PageModel
 {
     [BindProperty]
     public ChangePasswordInput Input { get; set; } = new();
@@ -34,10 +34,24 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher) : PageModel
         {
             ModelState.AddModelError("Input.CurrentPassword", "Current password is required.");
         }
-        if (string.IsNullOrWhiteSpace(Input.NewPassword) || Input.NewPassword.Length < 6)
+
+        // Validate new password against tenant password policy
+        if (!string.IsNullOrWhiteSpace(Input.NewPassword))
         {
-            ModelState.AddModelError("Input.NewPassword", "Password must be at least 6 characters.");
+            var validation = await passwordPolicy.ValidatePasswordAsync(Input.NewPassword);
+            if (!validation.IsValid)
+            {
+                foreach (var error in validation.Errors)
+                {
+                    ModelState.AddModelError("Input.NewPassword", error);
+                }
+            }
         }
+        else
+        {
+            ModelState.AddModelError("Input.NewPassword", "Password is required.");
+        }
+
         if (!string.Equals(Input.NewPassword, Input.ConfirmPassword, StringComparison.Ordinal))
         {
             ModelState.AddModelError("Input.ConfirmPassword", "Passwords do not match.");

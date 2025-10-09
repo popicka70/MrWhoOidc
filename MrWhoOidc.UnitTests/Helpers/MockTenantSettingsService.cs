@@ -26,7 +26,7 @@ public class MockTenantSettingsService : ITenantSettingsService
                 AllowRefreshTokenIntrospection = true,
                 PasswordPolicy = new PasswordPolicySettings
                 {
-                    MinLength = 8,
+                    MinLength = 6,
                     RequireUppercase = false,
                     RequireLowercase = false,
                     RequireDigit = false,
@@ -71,6 +71,18 @@ public class MockTenantSettingsService : ITenantSettingsService
     public TenantSettings GetPlatformDefaults()
     {
         return _settings;
+    }
+
+    /// <summary>
+    /// Sets the password policy for testing
+    /// </summary>
+    public void SetPasswordPolicy(PasswordPolicySettings policy)
+    {
+        if (_settings.Auth is null)
+        {
+            _settings.Auth = new AuthTenantSettings();
+        }
+        _settings.Auth.PasswordPolicy = policy;
     }
 
     /// <summary>
