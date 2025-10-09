@@ -185,7 +185,7 @@ public sealed class TokenExchangeIntegrationTests
         Assert.IsTrue(expiresIn > 0 && expiresIn <= 180, $"expires_in out of expected cap: {expiresIn}");
         var access = doc.GetProperty("access_token").GetString();
         Assert.IsNotNull(access);
-        Assert.AreEqual(3, access!.Split('.').Length, "Expected JWT access token");
+        Assert.HasCount(3, access!.Split('.'), "Expected JWT access token");
     }
 
     [TestMethod]
@@ -684,7 +684,7 @@ public sealed class TokenExchangeIntegrationTests
         var access = doc.GetProperty("access_token").GetString();
         Assert.IsNotNull(access);
         // Opaque access token: should not be a JWT
-        Assert.IsTrue(!access!.Contains('.'));
+        Assert.DoesNotContain('.', access!);
 
         // Verify stored token has DelegationDepth incremented to 2 and expected fields
         using var scope = bundle.Host.Services.CreateScope();
@@ -697,7 +697,7 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual(bundle.ClientId, stored.ClientId);
         Assert.AreEqual(bundle.UserId, stored.UserId);
         // Scopes include 'read'
-        Assert.AreEqual(true, stored.ScopesJson?.Contains("read"));
+        Assert.IsTrue(stored.ScopesJson?.Contains("read") ?? false);
     }
 
     private static string? TryGetJwtCnfJkt(string jwt)

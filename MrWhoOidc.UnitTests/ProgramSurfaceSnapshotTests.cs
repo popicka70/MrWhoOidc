@@ -310,7 +310,7 @@ public class ProgramSurfaceSnapshotTests
         using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
         using var scope1 = factory.Services.CreateScope();
         var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name == "AdminAuthorizationHandler").ToList();
-        Assert.AreEqual(1, handlers1.Count, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
+        Assert.HasCount(1, handlers1, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");
         var h1a = handlers1[0];
         var h1b = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().First(h => h.GetType().Name == "AdminAuthorizationHandler");
         // Scoped => same instance within scope
