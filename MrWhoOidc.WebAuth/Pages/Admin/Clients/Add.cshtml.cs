@@ -4,13 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen) : PageModel
+public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen, ITenantAccessor tenantAccessor) : PageModel
 {
     public List<SelectListItem> RealmOptions { get; private set; } = new();
 
@@ -38,10 +39,19 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
             return Page();
         }
 
+        // Get current tenant ID from context
+        var currentTenant = tenantAccessor.CurrentTenant;
+        if (currentTenant == null)
+        {
+            ModelState.AddModelError(string.Empty, "Unable to determine current tenant context");
+            return Page();
+        }
+
         var entity = new Client
         {
             ClientId = Input.ClientId,
             ClientName = string.IsNullOrWhiteSpace(Input.ClientName) ? null : Input.ClientName,
+            TenantId = currentTenant.TenantId,
             RealmId = Input.RealmId,
             RequirePkce = Input.RequirePkce,
             RequireConsent = Input.RequireConsent,
@@ -66,7 +76,18 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
 
     private async Task LoadRealmsAsync()
     {
-        var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
+        // Get current tenant ID to filter realms
+        var currentTenant = tenantAccessor.CurrentTenant;
+        if (currentTenant == null)
+        {
+            RealmOptions = new List<SelectListItem>();
+            return;
+        }
+
+        var realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == currentTenant.TenantId)
+            .OrderBy(r => r.Name)
+            .ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
     }
 
