@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
 using System.ComponentModel.DataAnnotations;
@@ -10,7 +11,10 @@ public interface IIdentityProviderValidator
     Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default);
 }
 
-public sealed class IdentityProviderValidator(AuthDbContext db, IHttpClientFactory httpClientFactory) : IIdentityProviderValidator
+public sealed class IdentityProviderValidator(
+    AuthDbContext db, 
+    IHttpClientFactory httpClientFactory,
+    ILogger<IdentityProviderValidator> logger) : IIdentityProviderValidator
 {
     public async Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default)
     {
@@ -35,7 +39,7 @@ public sealed class IdentityProviderValidator(AuthDbContext db, IHttpClientFacto
                 return (false, msg);
             }
 
-            // Try discovery if reachable
+            // Try discovery if reachable - NON-BLOCKING: failures are logged but don't prevent saving
             var metadataUrl = string.IsNullOrWhiteSpace(cfg!.DiscoveryUrl) ? CombineWellKnown(cfg.Authority) : cfg.DiscoveryUrl!;
             try
             {
@@ -43,11 +47,29 @@ public sealed class IdentityProviderValidator(AuthDbContext db, IHttpClientFacto
                 client.Timeout = TimeSpan.FromSeconds(5);
                 using var resp = await client.GetAsync(metadataUrl, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
-                    return (false, $"Discovery failed: HTTP {(int)resp.StatusCode}");
+                {
+                    logger.LogWarning(
+                        "Provider '{ProviderName}' discovery check failed: HTTP {StatusCode} from {Url}. Provider saved anyway.",
+                        provider.Name, 
+                        (int)resp.StatusCode, 
+                        metadataUrl);
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "Provider '{ProviderName}' discovery check successful: {Url}",
+                        provider.Name,
+                        metadataUrl);
+                }
             }
             catch (Exception ex)
             {
-                return (false, $"Discovery error: {ex.Message}");
+                logger.LogWarning(
+                    ex,
+                    "Provider '{ProviderName}' discovery check failed: {ErrorMessage} from {Url}. Provider saved anyway.",
+                    provider.Name,
+                    ex.Message,
+                    metadataUrl);
             }
         }
 
