@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -23,6 +24,9 @@ public class JwksMultiTenancyTests
         // In-memory database
         services.AddDbContext<AuthDbContext>(options =>
             options.UseInMemoryDatabase($"JwksMultiTenancyTests_{Guid.NewGuid()}"));
+
+        // HybridCache
+        services.AddHybridCache();
 
         // Multi-tenancy services
         services.AddMemoryCache();

@@ -22,7 +22,7 @@ public sealed class KeyStoreTests
     public async Task GetActiveSigningKey_GeneratesAndPersistsOnce()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var k1 = await ks.GetActiveSigningKeyAsync();
         var k2 = await ks.GetActiveSigningKeyAsync();
         Assert.AreEqual(k1.Kid, k2.Kid);
@@ -33,7 +33,7 @@ public sealed class KeyStoreTests
     public async Task GetPublicJwks_ReturnsPublicPortionOnly()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var _ = await ks.GetActiveSigningKeyAsync();
         var list = await ks.GetPublicJwksAsync();
         Assert.IsGreaterThanOrEqualTo(1, list.Count);

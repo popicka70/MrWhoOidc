@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
@@ -24,6 +25,7 @@ public class TenantJwksEndpointTests
         var dbName = "jwks-tenant-filter-" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<ITenantAccessor>(sp =>
         {
@@ -141,6 +143,7 @@ public class TenantJwksEndpointTests
         var dbName = "jwks-retired-filter-" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<ITenantAccessor>(sp =>
         {
@@ -219,6 +222,7 @@ public class TenantJwksEndpointTests
         var dbName = "jwks-private-strip-" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<ITenantAccessor>(sp =>
         {
@@ -297,6 +301,7 @@ public class TenantJwksEndpointTests
         var dbName = "jwks-ordering-" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<ITenantAccessor>(sp =>
         {
@@ -383,6 +388,7 @@ public class TenantJwksEndpointTests
         var dbName = "jwks-no-tenant-" + Guid.NewGuid().ToString("N");
         var services = new ServiceCollection();
         services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddHybridCache();
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<ITenantAccessor>(sp =>
         {

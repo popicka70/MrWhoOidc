@@ -30,7 +30,7 @@ public sealed class TokenRoleEmissionTests
         };
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
@@ -72,7 +72,7 @@ public sealed class TokenRoleEmissionTests
         };
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["bob"].Id);
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),
@@ -114,7 +114,7 @@ public sealed class TokenRoleEmissionTests
         };
         var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
             new JwtService(keyStore),

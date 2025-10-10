@@ -279,7 +279,7 @@ public class LogoutHandlerTests
     private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcMetrics metrics, IConfiguration config)
     {
         var frontChannel = new FrontChannelLogoutNotifier(db);
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var backChannel = new BackChannelLogoutEnqueuer(
             db,

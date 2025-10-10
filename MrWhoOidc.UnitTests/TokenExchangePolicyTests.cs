@@ -37,7 +37,7 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
@@ -98,7 +98,7 @@ public sealed class TokenExchangePolicyTests
         });
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
@@ -130,7 +130,7 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api-a", "api-b");
@@ -163,7 +163,7 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api-a", "api-b");
@@ -196,7 +196,7 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
@@ -228,7 +228,7 @@ public sealed class TokenExchangePolicyTests
         db.Clients.Add(callerClient);
         await db.SaveChangesAsync();
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");

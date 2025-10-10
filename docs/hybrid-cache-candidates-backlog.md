@@ -268,6 +268,13 @@ var options = new HybridCacheEntryOptions
 
 **Estimated Impact**: 50-70% reduction in database load for signing key retrieval
 
+**Status**: ✅ **COMPLETED**
+- `GetActiveSigningKeyAsync` now uses HybridCache with 30 min L2 / 10 min L1 TTL
+- `KeyStore` constructor updated to receive `HybridCache` dependency
+- Invalidation methods `InvalidateActiveSigningKeyCacheAsync` and `InvalidatePublicJwksCacheAsync` implemented
+- `KeyRotationService` integrated with cache invalidation on key rotation and retirement
+- All 366 tests passing, including integration tests that manually create service providers
+
 ---
 
 ### 6. Authorization Code Lookups (`ITokenService.ExchangeAuthorizationCodeAsync`)

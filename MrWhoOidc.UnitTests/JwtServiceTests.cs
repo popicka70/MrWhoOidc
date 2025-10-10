@@ -23,7 +23,7 @@ public sealed class JwtServiceTests
     public void CreateJwt_GeneratesToken_AndPersistsKeyOnFirstUse()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var svc = new JwtService(keyStore);
 
         var token = svc.CreateJwt("https://issuer", "api", new[] { new Claim("sub", "123") }, DateTimeOffset.UtcNow.AddMinutes(5));

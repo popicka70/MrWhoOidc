@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -10,39 +11,72 @@ public interface IKeyStore
 {
     Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default);
     Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default);
+    Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
+    Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default);
 }
 
-internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor) : IKeyStore
+internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor, HybridCache cache) : IKeyStore
 {
     public async Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        var current = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId)
-            .OrderByDescending(k => k.CreatedAt)
-            .FirstOrDefaultAsync(ct)
-            .ConfigureAwait(false);
-        if (current is null)
+        
+        var cacheKey = $"signing:key:active:{tenantId}";
+        var options = new HybridCacheEntryOptions
         {
-            // Generate a new RSA keypair and persist it
-            using var rsa = RSA.Create(2048);
-            var kid = Guid.NewGuid().ToString("N");
-            var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis)
+            LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
+        };
+        var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
 
-            db.SigningKeys.Add(new Persistence.SigningKey
+        return await cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
             {
-                Kid = jwk.Kid,
-                Alg = jwk.Alg,
-                JwkJson = jwk.ToJson(includePrivate: true),
-                TenantId = tenantId
-            });
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            return jwk;
-        }
+                var current = await db.SigningKeys
+                    .Where(k => k.TenantId == tenantId)
+                    .OrderByDescending(k => k.CreatedAt)
+                    .FirstOrDefaultAsync(cancel)
+                    .ConfigureAwait(false);
+                    
+                if (current is null)
+                {
+                    // Generate a new RSA keypair and persist it
+                    using var rsa = RSA.Create(2048);
+                    var kid = Guid.NewGuid().ToString("N");
+                    var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
 
-        // Load from DB
-        var stored = System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(current.JwkJson)!;
-        return stored;
+                    db.SigningKeys.Add(new Persistence.SigningKey
+                    {
+                        Kid = jwk.Kid,
+                        Alg = jwk.Alg,
+                        JwkJson = jwk.ToJson(includePrivate: true),
+                        TenantId = tenantId
+                    });
+                    await db.SaveChangesAsync(cancel).ConfigureAwait(false);
+                    return jwk;
+                }
+
+                // Load from DB
+                var stored = System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(current.JwkJson)!;
+                return stored;
+            },
+            options,
+            tags,
+            ct
+        ).ConfigureAwait(false);
+    }
+
+    public async Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var cacheKey = $"signing:key:active:{tenantId}";
+        await cache.RemoveAsync(cacheKey, ct).ConfigureAwait(false);
+    }
+
+    public async Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var cacheKey = $"signing:jwks:public:{tenantId}";
+        await cache.RemoveAsync(cacheKey, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default)

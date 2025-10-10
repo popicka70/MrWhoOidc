@@ -32,7 +32,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api", "api2");
@@ -83,7 +83,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
@@ -125,7 +125,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
         var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
