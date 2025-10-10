@@ -20,7 +20,14 @@ using MrWhoOidc.WebAuth.Extensions;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditModel> logger, MrWhoOidc.WebAuth.Observability.IAuditSink audit, OidcOptions oidcOptions) : ReadOnlyAdminPageModel
+public class EditModel(
+    AuthDbContext db, 
+    IPasswordHasher hasher, 
+    ILogger<EditModel> logger, 
+    MrWhoOidc.WebAuth.Observability.IAuditSink audit, 
+    OidcOptions oidcOptions,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -67,7 +74,25 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Id);
+        // Check platform admin status
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Build query with tenant filtering
+        var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == Id);
+        
+        if (!isPlatformAdmin)
+        {
+            // Regular tenant admins: filter by current tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return NotFound(); // No tenant context
+            }
+            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        var client = await clientQuery.FirstOrDefaultAsync();
         if (client is null) return NotFound();
 
         await LoadRealmsAsync();
@@ -204,6 +229,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostAddScopeAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         await LoadScopesAsync(Id);
         if (string.IsNullOrWhiteSpace(NewScope))
@@ -228,6 +258,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostRemoveScopeAsync(string scopeName)
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         await LoadScopesAsync(Id);
         var entity = await db.ClientScopes.FirstOrDefaultAsync(cs => cs.ClientId == Id && cs.ScopeName == scopeName);
@@ -241,6 +276,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostExtractPublicJwkAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         await LoadScopesAsync(Id);
         if (string.IsNullOrWhiteSpace(Input.PrivateJwk))
@@ -308,6 +348,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostGenerateJwksAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
 
         var alg = string.IsNullOrWhiteSpace(GenerateAlg) ? "RS256" : GenerateAlg!.ToUpperInvariant();
@@ -390,6 +435,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostAddKeyAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         var alg = string.IsNullOrWhiteSpace(GenerateAlg) ? "RS256" : GenerateAlg!.ToUpperInvariant();
 
@@ -474,6 +524,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostFetchJwksAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         if (string.IsNullOrWhiteSpace(Input.PublicJwksUri))
         {
@@ -512,6 +567,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostValidateJwtAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
         JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
@@ -629,6 +689,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostSignTestJwtAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         if (string.IsNullOrWhiteSpace(Input.PrivateJwk))
         {
@@ -703,6 +768,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostRemoveKeyAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         if (string.IsNullOrWhiteSpace(Input.PublicJwksJson) || string.IsNullOrWhiteSpace(RemoveKid))
         {
@@ -773,16 +843,34 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             }
         }
 
-        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id);
+        // Check platform admin status
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Build query with tenant filtering
+        var clientQuery = db.Clients.Where(c => c.Id == Id);
+        
+        if (!isPlatformAdmin)
+        {
+            // Regular tenant admins: filter by current tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return NotFound(); // No tenant context
+            }
+            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        var client = await clientQuery.FirstOrDefaultAsync();
         if (client is null) return NotFound();
         // Capture old values for audit comparison
         var oldBclUri = client.BackChannelLogoutUri;
         var oldBclSess = client.BackChannelLogoutSessionRequired;
 
-        // If client id changed, enforce uniqueness
+        // If client id changed, enforce uniqueness within tenant
         if (!string.Equals(client.ClientId, Input.ClientId, StringComparison.Ordinal))
         {
-            var exists = await db.Clients.AnyAsync(c => c.ClientId == Input.ClientId);
+            var exists = await db.Clients.AnyAsync(c => c.ClientId == Input.ClientId && c.TenantId == client.TenantId);
             if (exists)
             {
                 await LoadRealmsAsync();
@@ -1085,6 +1173,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostAddProviderAsync()
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         await LoadScopesAsync(Id);
         await LoadProviderMappingsAsync(Id);
@@ -1115,6 +1208,11 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
 
     public async Task<IActionResult> OnPostDeleteProviderAsync(Guid providerId)
     {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
         await LoadRealmsAsync();
         await LoadScopesAsync(Id);
         await LoadProviderMappingsAsync(Id);
@@ -1126,6 +1224,28 @@ public class EditModel(AuthDbContext db, IPasswordHasher hasher, ILogger<EditMod
             await db.SaveChangesAsync();
         }
         return RedirectToPage(new { id = Id });
+    }
+
+    /// <summary>
+    /// Validates that the current user has access to the client based on tenant filtering.
+    /// Returns true if access is allowed (platform admin or client belongs to user's tenant).
+    /// </summary>
+    private async Task<bool> ValidateTenantAccessAsync()
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (platformAdminResult.Succeeded)
+        {
+            return true; // Platform admins can access all clients
+        }
+
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false; // No tenant context
+        }
+
+        // Check if client belongs to the current tenant
+        return await db.Clients.AnyAsync(c => c.Id == Id && c.TenantId == currentTenantId.Value);
     }
 
     private static List<KeyPreview> BuildPreviews(string? jwksJson)
