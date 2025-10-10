@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Configuration;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -15,16 +16,19 @@ public class TenantSettingsService : ITenantSettingsService
     private readonly AuthDbContext _db;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IConfiguration _configuration;
+    private readonly HybridCache _cache;
     private readonly TenantSettings _platformDefaults;
 
     public TenantSettingsService(
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        HybridCache cache)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
         _configuration = configuration;
+        _cache = cache;
 
         // Load platform defaults from appsettings.json once
         _platformDefaults = LoadPlatformDefaults();
@@ -32,17 +36,40 @@ public class TenantSettingsService : ITenantSettingsService
 
     public async Task<TenantSettings?> GetTenantSettingsAsync(Guid tenantId)
     {
-        var tenant = await _db.Tenants
-            .Where(t => t.Id == tenantId)
-            .Select(t => new { t.SettingsJson })
-            .FirstOrDefaultAsync();
+        var cacheKey = $"tenant:settings:{tenantId}";
 
-        if (tenant == null)
+        var options = new HybridCacheEntryOptions
         {
-            return null;
-        }
+            Expiration = TimeSpan.FromHours(1),            // L2 (Redis)
+            LocalCacheExpiration = TimeSpan.FromMinutes(15) // L1 (memory)
+        };
 
-        return MergeSettings(_platformDefaults, tenant.SettingsJson);
+        var tags = new List<string>
+        {
+            "tenant-settings",
+            $"tenant:{tenantId}"
+        };
+
+        return await _cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
+            {
+                var tenant = await _db.Tenants
+                    .Where(t => t.Id == tenantId)
+                    .Select(t => new { t.SettingsJson })
+                    .FirstOrDefaultAsync(cancel);
+
+                if (tenant == null)
+                {
+                    return null;
+                }
+
+                return MergeSettings(_platformDefaults, tenant.SettingsJson);
+            },
+            options,
+            tags,
+            CancellationToken.None
+        ).ConfigureAwait(false);
     }
 
     public async Task<TenantSettings> GetCurrentTenantSettingsAsync()
@@ -75,6 +102,10 @@ public class TenantSettingsService : ITenantSettingsService
 
         tenant.SettingsJson = json;
         await _db.SaveChangesAsync();
+
+        // Invalidate tenant settings cache
+        var cacheKey = $"tenant:settings:{tenantId}";
+        await _cache.RemoveAsync(cacheKey).ConfigureAwait(false);
 
         return true;
     }

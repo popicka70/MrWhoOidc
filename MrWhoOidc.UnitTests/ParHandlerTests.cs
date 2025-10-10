@@ -479,6 +479,11 @@ public sealed class ParHandlerTests
         {
             return Array.Empty<MrWhoOidc.Auth.Persistence.Client>().AsQueryable();
         }
+
+        public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubClientAssertionValidator : IClientAssertionValidator

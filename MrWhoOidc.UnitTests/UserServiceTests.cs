@@ -25,7 +25,7 @@ public sealed class UserServiceTests
         db.Users.Add(new User { Username = "alice", PasswordHash = "h", TenantId = DefaultTenantId });
         await db.SaveChangesAsync();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, new DummyHasher(), tenantAccessor);
+        var svc = new UserService(db, new DummyHasher(), tenantAccessor, new TestHybridCache());
         var u = await svc.FindByUsernameAsync("alice");
         Assert.IsNotNull(u);
         Assert.AreEqual("alice", u!.Username);
@@ -40,7 +40,7 @@ public sealed class UserServiceTests
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, hasher, tenantAccessor);
+        var svc = new UserService(db, hasher, tenantAccessor, new TestHybridCache());
         Assert.IsTrue(await svc.VerifyPasswordAsync(user, "secret"));
         Assert.IsFalse(await svc.VerifyPasswordAsync(user, "nope"));
     }
@@ -56,7 +56,7 @@ public sealed class UserServiceTests
         db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = u2.Id, Email = "dave.alt@example.com", IsVerified = true });
         await db.SaveChangesAsync();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, new DummyHasher(), tenantAccessor);
+        var svc = new UserService(db, new DummyHasher(), tenantAccessor, new TestHybridCache());
 
         var byUser = await svc.FindByUsernameOrEmailAsync("carol");
         Assert.IsNotNull(byUser);

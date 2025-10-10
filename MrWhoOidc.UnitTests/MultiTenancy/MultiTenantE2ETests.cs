@@ -146,7 +146,7 @@ public class MultiTenantE2ETests
     {
         // Arrange
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", "Acme Corporation");
-        var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor);
+        var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor, new TestHybridCache());
 
         // Act - find client from tenant 1
         var client1 = await clientStore.FindByClientIdAsync("acme-client");
@@ -168,7 +168,7 @@ public class MultiTenantE2ETests
     {
         // Arrange
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", "Contoso Ltd");
-        var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor);
+        var clientStore = new ClientStore(_db, new DummyHasher(), tenantAccessor, new TestHybridCache());
 
         // Act - find client from tenant 2
         var client = await clientStore.FindByClientIdAsync("contoso-client");
@@ -258,7 +258,7 @@ public class MultiTenantE2ETests
 
         // Act - retrieve client from tenant 1 context
         var accessor1 = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
-        var store1 = new ClientStore(_db, new DummyHasher(), accessor1);
+        var store1 = new ClientStore(_db, new DummyHasher(), accessor1, new TestHybridCache());
         var result1 = await store1.FindByClientIdAsync(sameClientId);
 
         // Assert - should get tenant 1's version
@@ -268,7 +268,7 @@ public class MultiTenantE2ETests
 
         // Act - retrieve client from tenant 2 context
         var accessor2 = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
-        var store2 = new ClientStore(_db, new DummyHasher(), accessor2);
+        var store2 = new ClientStore(_db, new DummyHasher(), accessor2, new TestHybridCache());
         var result2 = await store2.FindByClientIdAsync(sameClientId);
 
         // Assert - should get tenant 2's version
@@ -310,3 +310,4 @@ public class MultiTenantE2ETests
         Assert.IsNull(result, "Should return null for non-existent tenant");
     }
 }
+

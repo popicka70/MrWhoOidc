@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
@@ -12,7 +13,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IAuthorizationService authorizationService,
+    IUserService userService) : PageModel
 {
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
@@ -114,6 +116,10 @@ public class IndexModel(
 
         var entity = await userQuery.FirstOrDefaultAsync();
         if (entity is null) return RedirectToPage();
+        
+        // Capture for cache invalidation
+        var username = entity.Username;
+        var tenantId = entity.TenantId;
 
         // Check if user is in use
         var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
@@ -127,6 +133,10 @@ public class IndexModel(
         }
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
+        
+        // Invalidate user cache after deletion
+        await userService.InvalidateUserCacheAsync(id, username, tenantId);
+        
         return RedirectToPage(new { TenantId });
     }
 }

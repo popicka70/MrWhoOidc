@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
@@ -12,7 +13,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : UserPageModelBase
+    IAuthorizationService authorizationService,
+    IUserService userService) : UserPageModelBase
 {
     public class EditInput
     {
@@ -115,6 +117,10 @@ public class EditModel(
 
         entity.Name = string.IsNullOrWhiteSpace(Input.Name) ? null : Input.Name.Trim();
         await db.SaveChangesAsync();
+        
+        // Invalidate user cache after update
+        await userService.InvalidateUserCacheAsync(entity.Id, entity.Username, entity.TenantId);
+        
         SetHeading(entity.Username, entity.Name);
         return RedirectToPage("Index");
     }

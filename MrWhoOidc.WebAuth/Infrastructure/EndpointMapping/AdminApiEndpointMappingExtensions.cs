@@ -289,7 +289,7 @@ public static class AdminApiEndpointMappingExtensions
             }
             await db.SaveChangesAsync(ct);
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
-            if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
+            if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
         });
 
@@ -322,7 +322,7 @@ public static class AdminApiEndpointMappingExtensions
             }
             await db.SaveChangesAsync(ct);
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
-            if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
+            if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.NoContent();
         });
 
@@ -333,7 +333,7 @@ public static class AdminApiEndpointMappingExtensions
             db.IdentityProviderKeys.Remove(entity);
             await db.SaveChangesAsync(ct);
             var providerName = await db.IdentityProviders.Where(p => p.Id == providerId).Select(p => p.Name).FirstOrDefaultAsync(ct);
-            if (!string.IsNullOrEmpty(providerName)) jwksCache.InvalidateProvider(providerName!);
+            if (!string.IsNullOrEmpty(providerName)) await jwksCache.InvalidateProviderAsync(providerName!, ct);
             return Results.NoContent();
         });
 
@@ -374,7 +374,7 @@ public static class AdminApiEndpointMappingExtensions
             }
             client.PublicJwksUri = string.IsNullOrWhiteSpace(input.PublicJwksUri) ? null : input.PublicJwksUri;
             await db.SaveChangesAsync(ct);
-            if (!string.IsNullOrEmpty(client.ClientId)) jwksCache.InvalidateClient(client.ClientId);
+            if (!string.IsNullOrEmpty(client.ClientId)) await jwksCache.InvalidateClientAsync(client.ClientId, ct);
             return Results.NoContent();
         });
 

@@ -48,6 +48,7 @@ public class PublicJwksMetricsTests
         var services = new ServiceCollection();
         services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase("jwks-metrics-" + Guid.NewGuid().ToString("N")));
         services.AddMemoryCache();
+        services.AddHybridCache(); // Required for PublicJwksCache
         services.AddLogging();
         services.AddOptions();
         services.Configure<AuthOptions>(_ => { });

@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using MrWhoOidc.WebAuth.Security;
 using System.Net;
 using MrWhoOidc.WebAuth.Observability;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -31,6 +32,7 @@ public class PublicJwksEndpointsTests
         var services = builder.Services;
         services.AddDbContextFactory<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
         services.AddMemoryCache();
+        services.AddHybridCache(); // Required for PublicJwksCache
         services.AddLogging();
         // Register metrics early and explicitly so PublicJwksCache constructor always resolves it deterministically
         services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
@@ -119,7 +121,7 @@ public class PublicJwksEndpointsTests
             await db.SaveChangesAsync();
             // Invalidate cache so next fetch recomputes JWKS + ETag
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateClient("c2");
+            await cache.InvalidateClientAsync("c2");
         }
         var resp2 = await env.Client.GetAsync("/clients/c2/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
@@ -223,7 +225,7 @@ public class PublicJwksEndpointsTests
             db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "k-et1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"a\",\"e\":\"AQAB\",\"kid\":\"k-et1\"}" });
             await db.SaveChangesAsync();
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateProvider("etagp1");
+            await cache.InvalidateProviderAsync("etagp1");
         }
         var resp2 = await env.Client.GetAsync("/providers/etagp1/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
@@ -255,7 +257,7 @@ public class PublicJwksEndpointsTests
             db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "k-et2", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"b\",\"e\":\"AQAB\",\"kid\":\"k-et2\"}" });
             await db.SaveChangesAsync();
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateProvider("etagp2");
+            await cache.InvalidateProviderAsync("etagp2");
         }
         var resp2 = await env.Client.GetAsync("/providers/etagp2/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
@@ -289,7 +291,7 @@ public class PublicJwksEndpointsTests
             db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = provider.Id, Kid = "dup", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"c2\",\"e\":\"AQAB\",\"kid\":\"dup\"}" });
             await db.SaveChangesAsync();
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateProvider("etagp3");
+            await cache.InvalidateProviderAsync("etagp3");
         }
         var resp2 = await env.Client.GetAsync("/providers/etagp3/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
@@ -321,7 +323,7 @@ public class PublicJwksEndpointsTests
             db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-agg1", Alg = "RS256", Active = true, Publishable = true, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"z1\",\"e\":\"AQAB\",\"kid\":\"k-agg1\"}" });
             await db.SaveChangesAsync();
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateAllProviders();
+            await cache.InvalidateAllProvidersAsync();
         }
         var resp2 = await env.Client.GetAsync("/providers/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;
@@ -352,7 +354,7 @@ public class PublicJwksEndpointsTests
             db.IdentityProviderKeys.Add(new IdentityProviderKey { IdentityProviderId = p.Id, Kid = "k-agg3", Alg = "RS256", Active = true, Publishable = false, Purpose = IdentityProviderKeyPurpose.Signing, Jwk = "{\"kty\":\"RSA\",\"n\":\"z3\",\"e\":\"AQAB\",\"kid\":\"k-agg3\"}" });
             await db.SaveChangesAsync();
             var cache = scope.ServiceProvider.GetRequiredService<IPublicJwksCache>();
-            cache.InvalidateAllProviders();
+            await cache.InvalidateAllProvidersAsync();
         }
         var resp2 = await env.Client.GetAsync("/providers/jwks");
         var etag2 = resp2.Headers.ETag?.Tag;

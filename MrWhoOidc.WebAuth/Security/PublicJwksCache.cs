@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -14,9 +14,9 @@ public interface IPublicJwksCache
     Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct);
     Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct);
     Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct);
-    void InvalidateClient(string clientId);
-    void InvalidateProvider(string providerName);
-    void InvalidateAllProviders();
+    Task InvalidateClientAsync(string clientId, CancellationToken ct = default);
+    Task InvalidateProviderAsync(string providerName, CancellationToken ct = default);
+    Task InvalidateAllProvidersAsync(CancellationToken ct = default);
 }
 
 public sealed class PublicJwksCache : IPublicJwksCache
@@ -26,14 +26,14 @@ public sealed class PublicJwksCache : IPublicJwksCache
         public static readonly EventId ZeroKeysJarEnabled = new(5100, nameof(ZeroKeysJarEnabled));
         public static readonly EventId ZeroKeysActiveNonPublishable = new(5101, nameof(ZeroKeysActiveNonPublishable));
     }
-    private readonly IMemoryCache _cache;
+    private readonly HybridCache _cache;
     private readonly IDbContextFactory<AuthDbContext> _dbFactory;
     private readonly IOptions<AuthOptions> _options;
     private readonly ILogger<PublicJwksCache> _logger;
     private readonly Observability.IOidcMetrics _metrics;
 
     // metrics parameter made optional to avoid breaking lightweight test hosts that haven't registered OidcMetrics yet
-    public PublicJwksCache(IMemoryCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics)
+    public PublicJwksCache(HybridCache cache, IDbContextFactory<AuthDbContext> dbFactory, IOptions<AuthOptions> options, ILogger<PublicJwksCache> logger, Observability.IOidcMetrics metrics)
     {
         _cache = cache;
         _dbFactory = dbFactory;
@@ -42,44 +42,66 @@ public sealed class PublicJwksCache : IPublicJwksCache
         _metrics = metrics;
     }
 
-    public void InvalidateClient(string clientId)
+    public async Task InvalidateClientAsync(string clientId, CancellationToken ct = default)
     {
-        _cache.Remove(ClientKey(clientId));
+        await _cache.RemoveAsync(ClientKey(clientId), ct);
     }
 
-    public void InvalidateProvider(string providerName)
+    public async Task InvalidateProviderAsync(string providerName, CancellationToken ct = default)
     {
-        _cache.Remove(ProviderKey(providerName));
-        _cache.Remove(AllProvidersKey());
+        await _cache.RemoveAsync(ProviderKey(providerName), ct);
+        await _cache.RemoveAsync(AllProvidersKey(), ct);
     }
 
-    public void InvalidateAllProviders() => _cache.Remove(AllProvidersKey());
+    public async Task InvalidateAllProvidersAsync(CancellationToken ct = default)
+    {
+        await _cache.RemoveAsync(AllProvidersKey(), ct);
+    }
 
     public async Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct)
     {
         var cacheKey = ClientKey(clientId);
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
-        {
-            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "client"));
-            return cached;
-        }
 
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct);
-        string json;
-        if (client is null || string.IsNullOrWhiteSpace(client.PublicJwksJson))
+        var options = new HybridCacheEntryOptions
         {
-            json = "{\"keys\":[]}";
-        }
-        else
+            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis) - longer for keys
+            LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
+        };
+
+        var tags = new List<string>
         {
-            json = NormalizeAndSanitize(client.PublicJwksJson, algOverride: null);
-        }
-        var etag = ComputeEtag(json);
-        var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ClientJwksCacheSeconds));
-        var tuple = (etag, json);
-        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "client"));
-        _cache.Set(cacheKey, tuple, ttl);
+            "jwks",
+            $"client:{clientId}"
+        };
+
+        // Use GetOrCreateAsync pattern - metrics recorded in factory
+        var tuple = await _cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
+            {
+                _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "client"));
+
+                await using var db = await _dbFactory.CreateDbContextAsync(cancel);
+                var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, cancel);
+                string json;
+                if (client is null || string.IsNullOrWhiteSpace(client.PublicJwksJson))
+                {
+                    json = "{\"keys\":[]}";
+                }
+                else
+                {
+                    json = NormalizeAndSanitize(client.PublicJwksJson, algOverride: null);
+                }
+                var etag = ComputeEtag(json);
+                return (etag, json);
+            },
+            options,
+            tags,
+            ct
+        );
+
+        // Note: HybridCache doesn't provide cache hit/miss info directly, so we track misses in factory
+        // Hits are implied by not entering the factory
         return tuple;
     }
 
@@ -87,86 +109,109 @@ public sealed class PublicJwksCache : IPublicJwksCache
     {
         var cacheKey = ProviderKey(providerName);
         _metrics.ProviderJwksRequests.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
+
+        var options = new HybridCacheEntryOptions
         {
-            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
-            return cached;
-        }
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, ct);
-        if (provider is null)
+            Expiration = TimeSpan.FromMinutes(30),
+            LocalCacheExpiration = TimeSpan.FromMinutes(10)
+        };
+
+        var tags = new List<string>
         {
-            // Distinguish 404 vs empty caller side; return special marker
-            _metrics.ProviderJwksNotFound.Add(1);
-            return ("", "__not_found__");
-        }
-        var keysQuery = db.IdentityProviderKeys.AsNoTracking()
-            .Where(k => k.IdentityProviderId == provider.Id && k.Active && k.Publishable);
-        if (!_options.Value.ProviderJwksIncludeEncryption)
-        {
-            keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
-        }
-        var list = await keysQuery.ToListAsync(ct);
-        string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
-        if (list.Count == 0)
-        {
-            _metrics.ProviderJwksZeroKeys.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-            try
+            "jwks",
+            "providers",
+            $"provider:{providerName}"
+        };
+
+        return await _cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
             {
-                var jarRequired = provider.ConfigJson != null && Auth.IdentityProviders.OidcProviderConfig.TryParse(provider.ConfigJson, out var parsed).ok && parsed?.UseJAR == true;
-                if (jarRequired)
+                _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
+
+                await using var db = await _dbFactory.CreateDbContextAsync(cancel);
+                var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Name == providerName && p.Enabled, cancel);
+                if (provider is null)
                 {
-                    _logger.LogWarning(EventIds.ZeroKeysJarEnabled, "Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
+                    _metrics.ProviderJwksNotFound.Add(1);
+                    return ("", "__not_found__");
                 }
-                // Additional misconfiguration warning: active signing keys exist but none publishable
-                var hasActiveNonPublishable = await db.IdentityProviderKeys.AsNoTracking().AnyAsync(k => k.IdentityProviderId == provider.Id && k.Active && k.Purpose == IdentityProviderKeyPurpose.Signing && !k.Publishable, ct);
-                if (hasActiveNonPublishable)
+                var keysQuery = db.IdentityProviderKeys.AsNoTracking()
+                    .Where(k => k.IdentityProviderId == provider.Id && k.Active && k.Publishable);
+                if (!_options.Value.ProviderJwksIncludeEncryption)
                 {
-                    _logger.LogWarning(EventIds.ZeroKeysActiveNonPublishable, "Provider JWKS served zero keys for provider {Provider} but there is at least one ACTIVE non-publishable signing key (likely missing publish step)", providerName);
+                    keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
                 }
-            }
-            catch { }
-        }
-        var etag = ComputeEtag(json);
-        if (!_cache.TryGetValue<(string etag, string json)>(cacheKey, out var existing) || existing.etag != etag)
-        {
-            _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", providerName));
-        }
-        _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", providerName));
-        var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ProviderJwksCacheSeconds));
-        var tuple = (etag, json);
-        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "provider"));
-        _cache.Set(cacheKey, tuple, ttl);
-        return tuple;
+                var list = await keysQuery.ToListAsync(cancel);
+                string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
+                if (list.Count == 0)
+                {
+                    _metrics.ProviderJwksZeroKeys.Add(1, new KeyValuePair<string, object?>("provider", providerName));
+                    try
+                    {
+                        var jarRequired = provider.ConfigJson != null && Auth.IdentityProviders.OidcProviderConfig.TryParse(provider.ConfigJson, out var parsed).ok && parsed?.UseJAR == true;
+                        if (jarRequired)
+                        {
+                            _logger.LogWarning(EventIds.ZeroKeysJarEnabled, "Provider JWKS served zero keys for JAR-enabled provider {Provider}", providerName);
+                        }
+                        var hasActiveNonPublishable = await db.IdentityProviderKeys.AsNoTracking().AnyAsync(k => k.IdentityProviderId == provider.Id && k.Active && k.Purpose == IdentityProviderKeyPurpose.Signing && !k.Publishable, cancel);
+                        if (hasActiveNonPublishable)
+                        {
+                            _logger.LogWarning(EventIds.ZeroKeysActiveNonPublishable, "Provider JWKS served zero keys for provider {Provider} but there is at least one ACTIVE non-publishable signing key (likely missing publish step)", providerName);
+                        }
+                    }
+                    catch { }
+                }
+                var etag = ComputeEtag(json);
+                _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", providerName));
+                _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", providerName));
+                return (etag, json);
+            },
+            options,
+            tags,
+            ct
+        );
     }
 
     public async Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct)
     {
         var cacheKey = AllProvidersKey();
         _metrics.ProviderJwksAllRequests.Add(1);
-        if (_cache.TryGetValue<(string etag, string json)>(cacheKey, out var cached))
+
+        var options = new HybridCacheEntryOptions
         {
-            _metrics.ProviderJwksCacheHit.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
-            return cached;
-        }
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(ct);
-        var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
-        if (!_options.Value.ProviderJwksIncludeEncryption)
-            keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
-        var list = await keysQuery.ToListAsync(ct);
-        string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
-        var etag = ComputeEtag(json);
-        if (!_cache.TryGetValue<(string etag, string json)>(cacheKey, out var existingAll) || existingAll.etag != etag)
+            Expiration = TimeSpan.FromMinutes(30),
+            LocalCacheExpiration = TimeSpan.FromMinutes(10)
+        };
+
+        var tags = new List<string>
         {
-            _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", "__all__"));
-        }
-        _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", "__all__"));
-        var ttl = TimeSpan.FromSeconds(Math.Max(5, _options.Value.ProviderJwksCacheSeconds));
-        var tuple = (etag, json);
-        _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
-        _cache.Set(cacheKey, tuple, ttl);
-        return tuple;
+            "jwks",
+            "providers"
+        };
+
+        return await _cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
+            {
+                _metrics.ProviderJwksCacheMiss.Add(1, new KeyValuePair<string, object?>("scope", "providers_all"));
+
+                await using var db = await _dbFactory.CreateDbContextAsync(cancel);
+                var providers = await db.IdentityProviders.AsNoTracking().Where(p => p.Enabled).Select(p => p.Id).ToListAsync(cancel);
+                var keysQuery = db.IdentityProviderKeys.AsNoTracking().Where(k => providers.Contains(k.IdentityProviderId) && k.Active && k.Publishable);
+                if (!_options.Value.ProviderJwksIncludeEncryption)
+                    keysQuery = keysQuery.Where(k => k.Purpose == IdentityProviderKeyPurpose.Signing);
+                var list = await keysQuery.ToListAsync(cancel);
+                string json = list.Count == 0 ? "{\"keys\":[]}" : ComposeJwks(list);
+                var etag = ComputeEtag(json);
+                _metrics.ProviderJwksEtagChanges.Add(1, new KeyValuePair<string, object?>("provider", "__all__"));
+                _metrics.ProviderJwksKeysReturned.Add(list.Count, new KeyValuePair<string, object?>("provider", "__all__"));
+                return (etag, json);
+            },
+            options,
+            tags,
+            ct
+        );
     }
 
     private static string ClientKey(string clientId) => $"jwks:client:{clientId}";

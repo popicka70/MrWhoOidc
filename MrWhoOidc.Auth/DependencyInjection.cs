@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Caching.Hybrid;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -28,9 +29,15 @@ public static class AuthServiceCollectionExtensions
         // Memory cache needed by TenantResolver
         services.AddMemoryCache();
 
+        // HybridCache (required by services like ClientStore, UserService, TenantSettingsService, etc.)
+        // In production, WebAuth will override this with a Redis-backed version, but for unit tests
+        // and basic scenarios, this provides a default memory-only hybrid cache implementation.
+        services.AddHybridCache();
+
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
+        services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
 

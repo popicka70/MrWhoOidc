@@ -18,9 +18,9 @@ public class ProviderKeysPageModelTests
         public Task<(string etag, string json)> GetClientAsync(string clientId, CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
         public Task<(string etag, string json)> GetProviderAsync(string providerName, CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
         public Task<(string etag, string json)> GetAllProvidersAsync(CancellationToken ct) => Task.FromResult(("etag", "{\"keys\":[]}"));
-        public void InvalidateClient(string clientId) { }
-        public void InvalidateProvider(string providerName) { }
-        public void InvalidateAllProviders() { }
+        public Task InvalidateClientAsync(string clientId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task InvalidateProviderAsync(string providerName, CancellationToken ct = default) => Task.CompletedTask;
+        public Task InvalidateAllProvidersAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private (AuthDbContext db, IndexModel model) Create()

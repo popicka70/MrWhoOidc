@@ -27,7 +27,8 @@ public class EditModel(
     MrWhoOidc.WebAuth.Observability.IAuditSink audit, 
     OidcOptions oidcOptions,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IAuthorizationService authorizationService,
+    IClientStore clientStore) : ReadOnlyAdminPageModel
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -1098,6 +1099,10 @@ public class EditModel(
         client.OboDpopMode = Input.OboDpopMode;
 
         await db.SaveChangesAsync();
+        
+        // Invalidate client cache after update
+        await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
+        
         // Audit backchannel field changes if any
         if (!string.Equals(oldBclUri, client.BackChannelLogoutUri, StringComparison.Ordinal) || oldBclSess != client.BackChannelLogoutSessionRequired)
         {

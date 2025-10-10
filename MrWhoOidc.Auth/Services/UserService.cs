@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
 
@@ -10,21 +11,50 @@ public interface IUserService
     // New: find by username OR primary/alternative email (case-insensitive for email)
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
     Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default);
+    /// <summary>
+    /// Invalidates cached user data for the specified user.
+    /// Call this after user updates (profile, password, email, MFA, etc.).
+    /// </summary>
+    Task InvalidateUserCacheAsync(Guid userId, string username, Guid tenantId, CancellationToken ct = default);
 }
 
-internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor) : IUserService
+internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, HybridCache cache) : IUserService
 {
-    public Task<User?> FindByUsernameAsync(string username, CancellationToken ct = default)
+    public async Task<User?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
-        var query = db.Users.AsNoTracking().Where(u => u.Username == username);
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty;
+        var cacheKey = $"user:username:{tenantId}:{username}";
 
-        // Filter by tenant if tenant context is available
-        if (tenantAccessor.CurrentTenant != null)
+        var options = new HybridCacheEntryOptions
         {
-            query = query.Where(u => u.TenantId == tenantAccessor.CurrentTenant.TenantId);
-        }
+            Expiration = TimeSpan.FromMinutes(10),         // L2 (Redis)
+            LocalCacheExpiration = TimeSpan.FromMinutes(2) // L1 (memory) - shorter for security
+        };
 
-        return query.FirstOrDefaultAsync(ct);
+        var tags = new List<string>
+        {
+            "users",
+            $"tenant:{tenantId}"
+        };
+
+        return await cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
+            {
+                var query = db.Users.AsNoTracking().Where(u => u.Username == username);
+
+                // Filter by tenant if tenant context is available
+                if (tenantAccessor.CurrentTenant != null)
+                {
+                    query = query.Where(u => u.TenantId == tenantAccessor.CurrentTenant.TenantId);
+                }
+
+                return await query.FirstOrDefaultAsync(cancel);
+            },
+            options,
+            tags,
+            ct
+        ).ConfigureAwait(false);
     }
 
     public async Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default)
@@ -84,4 +114,15 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
 
     public Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default)
         => Task.FromResult(hasher.Verify(password, user.PasswordHash));
+
+    public async Task InvalidateUserCacheAsync(Guid userId, string username, Guid tenantId, CancellationToken ct = default)
+    {
+        // Invalidate username-based cache
+        var usernameCacheKey = $"user:username:{tenantId}:{username}";
+        await cache.RemoveAsync(usernameCacheKey, ct).ConfigureAwait(false);
+
+        // Optionally: Use tag-based invalidation if needed for email lookups
+        // Note: FindByUsernameOrEmailAsync is not cached due to multiple query paths
+        // Consider adding separate email-based cache if email lookups become frequent
+    }
 }

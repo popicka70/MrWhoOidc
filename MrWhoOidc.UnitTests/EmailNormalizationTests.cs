@@ -113,7 +113,7 @@ public sealed class EmailNormalizationTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var service = new UserService(db, new NoopHasher(), tenantAccessor);
+        var service = new UserService(db, new NoopHasher(), tenantAccessor, new TestHybridCache());
 
         var byPrimary = await service.FindByUsernameOrEmailAsync("lookup@example.com");
         Assert.IsNotNull(byPrimary);
@@ -130,3 +130,4 @@ public sealed class EmailNormalizationTests
         public bool Verify(string password, string hash) => password == hash;
     }
 }
+

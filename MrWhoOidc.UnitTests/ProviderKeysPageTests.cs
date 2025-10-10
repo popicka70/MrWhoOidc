@@ -17,9 +17,9 @@ public class ProviderKeysPageTests
 {
     private sealed class NoopJwksCache : IPublicJwksCache
     {
-        public void InvalidateAllProviders() { }
-        public void InvalidateClient(string clientId) { }
-        public void InvalidateProvider(string providerName) { }
+        public Task InvalidateAllProvidersAsync(System.Threading.CancellationToken ct = default) => Task.CompletedTask;
+        public Task InvalidateClientAsync(string clientId, System.Threading.CancellationToken ct = default) => Task.CompletedTask;
+        public Task InvalidateProviderAsync(string providerName, System.Threading.CancellationToken ct = default) => Task.CompletedTask;
         public Task<(string etag, string json)> GetAllProvidersAsync(System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
         public Task<(string etag, string json)> GetClientAsync(string clientId, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));
         public Task<(string etag, string json)> GetProviderAsync(string providerName, System.Threading.CancellationToken ct) => Task.FromResult(("", "{\"keys\":[]}"));

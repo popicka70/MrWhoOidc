@@ -16,7 +16,8 @@ public class IndexModel(
     IPasswordHasher hasher,
     IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IAuthorizationService authorizationService,
+    IClientStore clientStore) : PageModel
 {
     public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 
@@ -152,8 +153,17 @@ public class IndexModel(
     {
         var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
         if (entity is null) return RedirectToPage();
+        
+        // Capture for cache invalidation
+        var clientId = entity.ClientId;
+        var tenantId = entity.TenantId;
+        
         db.Clients.Remove(entity);
         await db.SaveChangesAsync();
+        
+        // Invalidate client cache after deletion
+        await clientStore.InvalidateClientCacheAsync(clientId, tenantId);
+        
         return RedirectToPage(new { TenantId });
     }
 

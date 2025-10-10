@@ -34,7 +34,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
         var reqMissingPkce = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -80,7 +80,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -119,7 +119,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -156,7 +156,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -181,3 +181,4 @@ public sealed class AuthorizeServiceTests
         public bool Verify(string password, string hash) => password == hash;
     }
 }
+

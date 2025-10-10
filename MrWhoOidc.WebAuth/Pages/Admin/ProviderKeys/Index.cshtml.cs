@@ -216,8 +216,8 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
         foreach (var o in others) o.Active = false;
         entity.Active = true;
         // Invalidate provider cache so new active key appears (if publishable) or old ETag changes
-        jwksCache.InvalidateProvider(providerId.ToString());
-        jwksCache.InvalidateAllProviders();
+        await jwksCache.InvalidateProviderAsync(providerId.ToString());
+        await jwksCache.InvalidateAllProvidersAsync();
         await db.SaveChangesAsync();
         Message = "Key activated.";
         await LoadAsync();
@@ -247,8 +247,8 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
         {
             entity.Publishable = true;
             await db.SaveChangesAsync();
-            jwksCache.InvalidateProvider(providerId.ToString());
-            jwksCache.InvalidateAllProviders();
+            await jwksCache.InvalidateProviderAsync(providerId.ToString());
+            await jwksCache.InvalidateAllProvidersAsync();
             Message = "Key marked publishable.";
         }
         await LoadAsync();
@@ -278,8 +278,8 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
         {
             entity.Publishable = false;
             await db.SaveChangesAsync();
-            jwksCache.InvalidateProvider(providerId.ToString());
-            jwksCache.InvalidateAllProviders();
+            await jwksCache.InvalidateProviderAsync(providerId.ToString());
+            await jwksCache.InvalidateAllProvidersAsync();
             Message = "Key unpublished.";
         }
         await LoadAsync();
