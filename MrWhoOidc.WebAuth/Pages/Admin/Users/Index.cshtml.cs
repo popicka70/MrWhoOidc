@@ -94,6 +94,28 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
+        // Check platform admin status
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Build query with tenant filtering
+        var userQuery = db.Users.Where(u => u.Id == id);
+        
+        if (!isPlatformAdmin)
+        {
+            // Regular tenant admins: filter by current tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return RedirectToPage(); // No tenant context
+            }
+            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+        }
+
+        var entity = await userQuery.FirstOrDefaultAsync();
+        if (entity is null) return RedirectToPage();
+
+        // Check if user is in use
         var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
             || await db.Consents.AnyAsync(c => c.UserId == id)
             || await db.UserClientAssignments.AnyAsync(a => a.UserId == id)
@@ -103,8 +125,6 @@ public class IndexModel(
             TempData["Error"] = "Cannot delete user; it is referenced by tokens, consents, or assignments.";
             return RedirectToPage();
         }
-        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
-        if (entity is null) return RedirectToPage();
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
         return RedirectToPage(new { TenantId });

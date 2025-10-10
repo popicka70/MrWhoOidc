@@ -3,11 +3,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Roles;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : UserPageModelBase
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : UserPageModelBase
 {
     [FromRoute]
     public Guid UserId { get; set; }
@@ -109,8 +113,23 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
         if (UserId == Guid.Empty || RealmAddRealmId == Guid.Empty || RealmAddRoleId == Guid.Empty)
             return await OnGetAsync();
 
-        // Get user's tenant
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        // Get user's tenant with tenant filtering
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
+        
+        if (!isPlatformAdmin)
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return RedirectToPage("/Admin/Users/Index");
+            }
+            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+        }
+
+        var user = await userQuery.FirstOrDefaultAsync();
         if (user is null) return RedirectToPage("/Admin/Users/Index");
 
         // Validate realm belongs to user's tenant
@@ -170,8 +189,23 @@ public class IndexModel(AuthDbContext db) : UserPageModelBase
         if (UserId == Guid.Empty || ClientAddClientId == Guid.Empty || ClientAddRoleId == Guid.Empty)
             return await OnGetAsync();
 
-        // Get user's tenant
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == UserId);
+        // Get user's tenant with tenant filtering
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
+        
+        if (!isPlatformAdmin)
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return RedirectToPage("/Admin/Users/Index");
+            }
+            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+        }
+
+        var user = await userQuery.FirstOrDefaultAsync();
         if (user is null) return RedirectToPage("/Admin/Users/Index");
 
         // Validate client belongs to user's tenant

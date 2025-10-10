@@ -4,11 +4,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db) : UserPageModelBase
+public class EditModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : UserPageModelBase
 {
     public class EditInput
     {
@@ -54,7 +58,25 @@ public class EditModel(AuthDbContext db) : UserPageModelBase
             return Page();
         }
 
-        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        // Check platform admin status
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        // Build query with tenant filtering
+        var userQuery = db.Users.Where(u => u.Id == id);
+        
+        if (!isPlatformAdmin)
+        {
+            // Regular tenant admins: filter by current tenant
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return RedirectToPage("Index"); // No tenant context
+            }
+            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+        }
+
+        var entity = await userQuery.FirstOrDefaultAsync();
         if (entity is null) return RedirectToPage("Index");
 
         // Load tenant name for display

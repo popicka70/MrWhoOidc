@@ -8,12 +8,19 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.IdentityProviders;
+using MrWhoOidc.Auth.MultiTenancy;
 using System.IO;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, IHttpClientFactory httpClientFactory, IWebHostEnvironment env) : ReadOnlyAdminPageModel
+public class EditModel(
+    AuthDbContext db, 
+    IIdentityProviderValidator validator, 
+    IHttpClientFactory httpClientFactory, 
+    IWebHostEnvironment env,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -30,8 +37,34 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
     public string? DiscoverySummary { get; private set; }
     public string? DiscoveryJson { get; private set; }
 
+    /// <summary>
+    /// Validates that the current user has access to the provider based on tenant filtering.
+    /// </summary>
+    private async Task<bool> ValidateTenantAccessAsync(Guid providerId)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (platformAdminResult.Succeeded)
+        {
+            return true; // Platform admins can access all providers
+        }
+
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false; // No tenant context
+        }
+
+        // Check if provider belongs to the current tenant
+        return await db.IdentityProviders.AnyAsync(p => p.Id == providerId && p.TenantId == currentTenantId.Value);
+    }
+
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
+        if (!await ValidateTenantAccessAsync(id))
+        {
+            return NotFound();
+        }
+
         await LoadTypesAsync();
         var entity = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null)
@@ -83,6 +116,11 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
+        if (!await ValidateTenantAccessAsync(id))
+        {
+            return NotFound();
+        }
+
         await LoadTypesAsync();
         if (!ModelState.IsValid || Input is null)
             return Page();
@@ -155,6 +193,11 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
 
     public async Task<IActionResult> OnPostTestAsync(Guid id)
     {
+        if (!await ValidateTenantAccessAsync(id))
+        {
+            return NotFound();
+        }
+
         await LoadTypesAsync();
         if (Input is null)
             return Page();
