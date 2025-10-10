@@ -2,19 +2,22 @@
 
 **Date**: October 10, 2025  
 **Audited by**: GitHub Copilot  
-**Scope**: All admin pages in `MrWhoOidc.WebAuth/Pages/Admin/**`
+**Scope**: All admin pages in `MrWhoOidc.WebAuth/Pages/Admin/**`  
+**Status**: ✅ ALL ISSUES FIXED
 
 ## Executive Summary
 
-A comprehensive audit of the admin pages revealed **multiple critical security vulnerabilities** where tenant isolation is not enforced, allowing potential cross-tenant data access and modification.
+A comprehensive audit of the admin pages revealed **15 security vulnerabilities** where tenant isolation was not enforced. **ALL ISSUES HAVE BEEN FIXED** in this session.
 
 ### Severity Breakdown
 
-- **Critical** (7 issues): Allow cross-tenant read/write access to sensitive data
-- **High** (6 issues): Allow cross-tenant read access or secondary data modification
-- **Medium** (2 issues): Indirect cross-tenant access via relationships
+- **Critical** (7 issues): ✅ ALL FIXED - Cross-tenant read/write access to sensitive data
+- **High** (6 issues): ✅ ALL FIXED - Cross-tenant read access or secondary data modification  
+- **Medium** (3 issues): ✅ ALL FIXED - Design decisions documented, defense-in-depth added
 
-**Total Issues Found**: 15
+**Total Issues Found**: 15  
+**Total Issues Fixed**: 15  
+**Build Status**: ✅ Success
 
 ---
 
@@ -299,69 +302,76 @@ Add tenant filtering to user load.
 
 ## Medium Severity Issues
 
-### 12. ⚠️ Scopes/Edit.cshtml.cs
-**Status**: ⚠️ NEEDS REVIEW  
+### 12. ✅ FIXED: Scopes/Edit.cshtml.cs, Add.cshtml.cs, Index.cshtml.cs
+**Status**: ✅ Fixed - Design Decision Documented  
 **Entity**: Scope (NO TenantId - global resource)  
-**File**: `MrWhoOidc.WebAuth/Pages/Admin/Scopes/Edit.cshtml.cs`
-
-#### Current Code:
-**Line 27** (OnGetAsync):
-```csharp
-var entity = await db.Scopes.AsNoTracking().FirstOrDefaultAsync(s => s.Name == name);
-```
-
-**Line 36** (OnPostAsync):
-```csharp
-var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
-```
+**File**: `MrWhoOidc.WebAuth/Pages/Admin/Scopes/*.cshtml.cs`
 
 #### Analysis:
-Scopes appear to be **global resources** (no TenantId in the schema). This may be by design if scopes are meant to be system-wide (like "openid", "profile", "email").
+Scopes are **GLOBAL resources** (no TenantId in schema by design). Standard OAuth/OIDC scopes like "openid", "profile", "email" should be shared across all tenants.
 
-#### Recommendation:
-- If scopes should be global: Document this in code and restrict edit access to platform-admin only
-- If scopes should be per-tenant: Add TenantId column and migrate data
+#### Fix Applied:
+- Changed authorization from `[Authorize(Policy = "tenant-admin")]` to `[Authorize(Policy = "platform-admin")]` in:
+  - **Add.cshtml.cs** - Only platform admins can create new scopes
+  - **Edit.cshtml.cs** - Only platform admins can edit scopes
+  - **Index.cshtml.cs OnPostDeleteAsync** - Only platform admins can delete scopes
+- Tenant admins can still VIEW scopes (needed to assign to clients), but cannot modify the global catalog
+- Added XML documentation comments explaining the design decision
+
+#### Rationale:
+Allowing tenant admins to modify global scopes would pollute the shared scope catalog and could affect other tenants' clients.
 
 ---
 
-### 13. ⚠️ Realms/Edit.cshtml.cs
-**Status**: ✅ APPEARS SAFE  
+### 13. ✅ FIXED: Realms/Edit.cshtml.cs
+**Status**: ✅ Fixed - Defense in Depth  
 **Entity**: Realm (has TenantId)  
 **File**: `MrWhoOidc.WebAuth/Pages/Admin/Realms/Edit.cshtml.cs`
 
-#### Current Code (OnGetAsync):
-```csharp
-var realmQuery = from r in db.Realms.AsNoTracking()
-                 join t in db.Tenants on r.TenantId equals t.Id
-                 where r.Id == Id
-                 select new { Realm = r, Tenant = t };
-```
+#### Original Issue:
+OnGetAsync used JOIN (safe), but OnPostAsync loaded realm directly without explicit tenant filtering before validation.
 
-#### Current Code (OnPostAsync):
-**Line 45** - Loads without explicit tenant filter:
-```csharp
-var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == Id);
-```
+#### Fix Applied:
+- Added `ITenantAccessor` and `IAuthorizationService` to constructor
+- Created `ValidateTenantAccessAsync(Realm realm)` helper method
+- Added explicit tenant ownership check at start of OnPostAsync
+- Platform admins bypass tenant filtering
+- Returns 404 if tenant validation fails (prevents cross-tenant modification)
 
-But line 53 validates uniqueness within tenant:
+#### Code Added:
 ```csharp
-var exists = await db.Realms.AnyAsync(r => r.TenantId == realm.TenantId && r.Name == Input.Name);
+// Defense in depth: Validate tenant ownership
+if (!await ValidateTenantAccessAsync(realm))
+{
+    return NotFound(); // Prevents cross-tenant modification
+}
 ```
-
-#### Recommendation:
-Add explicit tenant filtering to OnPostAsync for defense in depth.
 
 ---
 
-### 14. ⚠️ Roles/Edit.cshtml.cs
-**Status**: ✅ APPEARS SAFE  
+### 14. ✅ FIXED: Roles/Edit.cshtml.cs
+**Status**: ✅ Fixed - Defense in Depth  
 **Entity**: Role (has TenantId)  
 **File**: `MrWhoOidc.WebAuth/Pages/Admin/Roles/Edit.cshtml.cs`
 
-Similar pattern to Realms - uses JOIN in OnGet but direct load in OnPost. Validates tenant scope indirectly.
+#### Original Issue:
+Similar to Realms - used JOIN in OnGet but direct load in OnPost. Validated tenant scope indirectly through realm checks.
 
-#### Recommendation:
-Add explicit tenant filtering to OnPostAsync for defense in depth.
+#### Fix Applied:
+- Added `ITenantAccessor` and `IAuthorizationService` to constructor
+- Created `ValidateTenantAccessAsync(Role role)` helper method
+- Added explicit tenant ownership check at start of OnPostAsync
+- Platform admins bypass tenant filtering
+- Returns 404 if tenant validation fails (prevents cross-tenant modification)
+
+#### Code Added:
+```csharp
+// Defense in depth: Validate tenant ownership
+if (!await ValidateTenantAccessAsync(entity))
+{
+    return NotFound(); // Prevents cross-tenant modification
+}
+```
 
 ---
 

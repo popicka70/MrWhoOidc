@@ -7,7 +7,13 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
-[Authorize(Policy = "tenant-admin")]
+/// <summary>
+/// Edit OAuth/OIDC scopes.
+/// NOTE: Scopes are GLOBAL resources shared across all tenants (no TenantId).
+/// Only platform administrators can edit scopes to prevent tenant admins from modifying
+/// shared resources like "openid", "profile", "email", etc.
+/// </summary>
+[Authorize(Policy = "platform-admin")]
 public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 {
     public class EditInput

@@ -7,6 +7,11 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
+/// <summary>
+/// List and manage OAuth/OIDC scopes.
+/// NOTE: Scopes are GLOBAL resources shared across all tenants (no TenantId).
+/// Tenant admins can VIEW scopes, but only platform admins can DELETE them.
+/// </summary>
 [Authorize(Policy = "tenant-admin")]
 public class IndexModel(
     AuthDbContext db,
@@ -21,13 +26,19 @@ public class IndexModel(
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
 
-        // Note: Scopes are global/shared across tenants in current implementation
-        // Future: Consider tenant-specific scopes if needed
+        // Scopes are global/shared across tenants (no TenantId in schema)
         Scopes = await db.Scopes.AsNoTracking().OrderBy(s => s.Name).ToListAsync();
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(string name)
     {
+        // Only platform admins can delete global scopes
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (!platformAdminResult.Succeeded)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(name)) return RedirectToPage();
         var inUse = await db.ClientScopes.AnyAsync(cs => cs.ScopeName == name);
         if (inUse)

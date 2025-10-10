@@ -3,12 +3,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
+public class EditModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
 {
     [FromRoute]
     public Guid Id { get; set; }
@@ -17,6 +21,27 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
     public RealmInput Input { get; set; } = new();
 
     public string TenantName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Validates that the realm belongs to the current tenant (defense in depth).
+    /// Platform admins bypass this check.
+    /// </summary>
+    private async Task<bool> ValidateTenantAccessAsync(Realm realm)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (platformAdminResult.Succeeded)
+        {
+            return true; // Platform admins can access all realms
+        }
+
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false; // No tenant context
+        }
+
+        return realm.TenantId == currentTenantId.Value;
+    }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -43,6 +68,12 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == Id);
         if (realm is null) return NotFound();
+
+        // Defense in depth: Validate tenant ownership
+        if (!await ValidateTenantAccessAsync(realm))
+        {
+            return NotFound(); // Prevents cross-tenant modification
+        }
 
         // Load tenant name for display
         await LoadTenantNameAsync();

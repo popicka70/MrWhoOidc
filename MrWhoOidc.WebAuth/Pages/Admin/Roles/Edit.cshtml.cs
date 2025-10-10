@@ -3,12 +3,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 
 [Authorize(Policy = "tenant-admin")]
-public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
+public class EditModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
 {
     public class EditInput
     {
@@ -26,6 +30,27 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
     public string TenantName { get; set; } = string.Empty;
     public string RealmName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Validates that the role belongs to the current tenant (defense in depth).
+    /// Platform admins bypass this check.
+    /// </summary>
+    private async Task<bool> ValidateTenantAccessAsync(Role role)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (platformAdminResult.Succeeded)
+        {
+            return true; // Platform admins can access all roles
+        }
+
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false; // No tenant context
+        }
+
+        return role.TenantId == currentTenantId.Value;
+    }
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
@@ -60,6 +85,12 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
     {
         var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id);
         if (entity is null) return RedirectToPage("Index");
+
+        // Defense in depth: Validate tenant ownership
+        if (!await ValidateTenantAccessAsync(entity))
+        {
+            return NotFound(); // Prevents cross-tenant modification
+        }
 
         // Load tenant and realm info
         await LoadTenantAndRealmAsync(id);

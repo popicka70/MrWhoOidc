@@ -7,7 +7,13 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 
-[Authorize(Policy = "tenant-admin")]
+/// <summary>
+/// Add new OAuth/OIDC scopes.
+/// NOTE: Scopes are GLOBAL resources shared across all tenants (no TenantId).
+/// Only platform administrators can create scopes to prevent tenant admins from polluting
+/// the shared scope catalog.
+/// </summary>
+[Authorize(Policy = "platform-admin")]
 public class AddModel(AuthDbContext db) : PageModel
 {
     public class AddInput
