@@ -72,11 +72,10 @@ else
                 <td>@r.LocalClaim</td>
                 <td>@r.Transform</td>
                 <td class="text-end">
-                    <a class="btn btn-sm btn-secondary" href="@(tenantPrefix)/Admin/ProviderClaimMappings/Edit/@r.Id">Edit</a>
-                    <form method="post" asp-page-handler="Delete" class="d-inline">
-                        <input type="hidden" name="id" value="@r.Id" />
-                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete mapping?');">Delete</button>
-                    </form>
+                    <div class="btn-group btn-group-sm">
+                        <a href="@(tenantPrefix)/Admin/ProviderClaimMappings/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                        <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                    </div>
                 </td>
             </tr>
         }
