@@ -4,13 +4,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, IIdentityProviderValidator validator) : PageModel
+public class AddModel(AuthDbContext db, IIdentityProviderValidator validator, ITenantAccessor tenantAccessor) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -46,8 +47,17 @@ public class AddModel(AuthDbContext db, IIdentityProviderValidator validator) : 
             }
         }
 
+        // Get current tenant ID from context
+        var currentTenant = tenantAccessor.CurrentTenant;
+        if (currentTenant == null)
+        {
+            ModelState.AddModelError(string.Empty, "Unable to determine current tenant context");
+            return Page();
+        }
+
         var entity = new IdentityProvider
         {
+            TenantId = currentTenant.TenantId,
             Name = Input.Name.Trim(),
             DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName.Trim(),
             Type = Input.Type,

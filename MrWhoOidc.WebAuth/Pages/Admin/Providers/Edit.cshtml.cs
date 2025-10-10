@@ -51,9 +51,31 @@ public class EditModel(AuthDbContext db, IIdentityProviderValidator validator, I
         };
 
         // Parse JSON to form if OIDC
-        if (entity.Type == IdentityProviderType.Oidc && !string.IsNullOrWhiteSpace(entity.ConfigJson))
+        if (entity.Type == IdentityProviderType.Oidc)
         {
-            OidcConfig = JsonToForm(entity.ConfigJson);
+            if (!string.IsNullOrWhiteSpace(entity.ConfigJson))
+            {
+                OidcConfig = JsonToForm(entity.ConfigJson);
+            }
+            else
+            {
+                // Create default OIDC configuration if none exists
+                OidcConfig = new OidcConfigForm
+                {
+                    Authority = string.Empty,
+                    ClientId = string.Empty,
+                    ResponseType = "code",
+                    ScopesString = "openid profile email",
+                    UsePKCE = true,
+                    UseJAR = false,
+                    UsePAR = false,
+                    ClockSkewSeconds = 120,
+                    ValidateIssuer = true,
+                    ValidateAudience = false,
+                    ValidateLifetime = true,
+                    BackChannelLogout = true
+                };
+            }
         }
 
         return Page();
