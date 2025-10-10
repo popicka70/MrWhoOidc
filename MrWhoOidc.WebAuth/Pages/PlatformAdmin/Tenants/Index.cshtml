@@ -108,11 +108,11 @@ else
                             <small class="text-muted">@t.CreatedAt.ToString("yyyy-MM-dd")</small>
                         </td>
                         <td data-label="Actions" class="text-end">
-                            <div class="btn-group btn-group-sm">
-                                <form method="post" asp-page="/StartImpersonation" class="d-inline">
-                                    <input type="hidden" name="tenantId" value="@t.Id" />
-                                    <button type="submit" class="btn btn-outline-primary" title="View as Tenant Admin">Impersonate</button>
-                                </form>
+                            <form method="post" asp-page="/PlatformAdmin/Impersonation" asp-page-handler="StartImpersonation" id="impersonate-form-@t.Id" style="display:none;">
+                                <input type="hidden" name="tenantId" value="@t.Id" />
+                            </form>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" title="View as Tenant Admin" onclick="document.getElementById('impersonate-form-@t.Id').submit()">Impersonate</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
                             </div>
                         </td>

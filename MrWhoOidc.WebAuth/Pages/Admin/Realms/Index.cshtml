@@ -80,7 +80,7 @@
                     </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAt.ToLocalTime().ToString("g")</td>
                     <td data-label="Actions" class="text-end">
-                        <div class="btn-group btn-group-sm">
+                        <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/Admin/Realms/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                             <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                         </div>
