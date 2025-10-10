@@ -902,7 +902,7 @@
     "Pattern": "Admin/Scopes/Add",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": "tenant-admin",
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
@@ -911,7 +911,7 @@
     "Pattern": "Admin/Scopes/Edit/{name}",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": "tenant-admin",
+    "Authz": "platform-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
