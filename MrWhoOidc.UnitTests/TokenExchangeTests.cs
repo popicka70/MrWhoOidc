@@ -38,7 +38,8 @@ public sealed class TokenExchangeTests
         var opts = Options("api", "api2");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -89,7 +90,8 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -131,7 +133,8 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, null);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;

@@ -31,7 +31,7 @@ public interface ITokenService
         CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator, ITenantSettingsService settingsService, IOboPolicyService? oboPolicy = null) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITokenValidator validator, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IOboPolicyService? oboPolicy = null) : ITokenService
 {
     private readonly ITenantSettingsService _settingsService = settingsService;
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
@@ -147,6 +147,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', scopes)),
                 new("jti", jti)
             };
+            
+            // Add tenant_id claim if any custom (non-standard) scopes are granted
+            var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
+            if (hasCustomScopes && user?.TenantId != Guid.Empty)
+            {
+                accessClaims.Add(new("tenant_id", user!.TenantId.ToString()));
+            }
+            
             if (!string.IsNullOrEmpty(dpopJkt))
             {
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
@@ -337,6 +345,18 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', scopes)),
                 new("jti", jti)
             };
+            
+            // Add tenant_id claim if any custom (non-standard) scopes are granted
+            var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
+            if (hasCustomScopes)
+            {
+                var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
+                if (user?.TenantId != Guid.Empty)
+                {
+                    accessClaims.Add(new("tenant_id", user!.TenantId.ToString()));
+                }
+            }
+            
             if (!string.IsNullOrEmpty(dpopJkt))
             {
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
@@ -433,6 +453,13 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         if (granted.Count > 0)
         {
             claims.Add(new("scope", string.Join(' ', granted)));
+            
+            // Add tenant_id claim if any custom (non-standard) scopes are granted
+            var hasCustomScopes = granted.Any(s => !scopeResolver.IsStandardScope(s));
+            if (hasCustomScopes && client.TenantId != Guid.Empty)
+            {
+                claims.Add(new("tenant_id", client.TenantId.ToString()));
+            }
         }
         if (!string.IsNullOrEmpty(dpopJkt))
         {
@@ -527,6 +554,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         string[] subjectScopes = Array.Empty<string>();
         string? sourceAudience = null;
         string? subjectCnfJkt = null;
+        string? subjectTenantId = null;
         DateTimeOffset subjectExpiry;
         int subjectDelegationDepth = 0; // for opaque subjects
 
@@ -544,6 +572,9 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
             }
+
+            // Capture tenant_id claim if present
+            subjectTenantId = principal.FindFirst("tenant_id")?.Value;
 
             // scope claim is space-delimited
             var scopeStr = principal.FindFirst("scope")?.Value;
@@ -734,6 +765,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', resultScopes)),
                 new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = callerClientId }))
             };
+            
+            // Add tenant_id claim if any custom (non-standard) scopes are granted and tenant_id was in subject token
+            var hasCustomScopes = resultScopes.Any(s => !scopeResolver.IsStandardScope(s));
+            if (hasCustomScopes && !string.IsNullOrEmpty(subjectTenantId))
+            {
+                claims.Add(new System.Security.Claims.Claim("tenant_id", subjectTenantId));
+            }
+            
             if (!string.IsNullOrEmpty(outCnfJkt))
             {
                 var cnf = System.Text.Json.JsonSerializer.Serialize(new { jkt = outCnfJkt });

@@ -39,6 +39,7 @@ public sealed class TokenRoleEmissionTests
             meta,
             new TokenValidator(keyStore),
             settingsService,
+            new MockScopeResolver(),
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
@@ -81,6 +82,7 @@ public sealed class TokenRoleEmissionTests
             meta,
             new TokenValidator(keyStore),
             settingsService,
+            new MockScopeResolver(),
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
@@ -123,6 +125,7 @@ public sealed class TokenRoleEmissionTests
             meta,
             new TokenValidator(keyStore),
             settingsService,
+            new MockScopeResolver(),
             null);
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
