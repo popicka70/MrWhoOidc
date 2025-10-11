@@ -17,7 +17,7 @@ public class IndexModel(
     IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IClientStore clientStore) : PageModel
+    IClientStore clientStore) : TenantAwarePageModel(tenantAccessor)
 {
     public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 
@@ -133,7 +133,7 @@ public class IndexModel(
         };
         db.Clients.Add(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        return TenantAwareRedirectToPage();
     }
 
     public async Task<IActionResult> OnPostGenerateAsync()
@@ -152,7 +152,7 @@ public class IndexModel(
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
         var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
-        if (entity is null) return RedirectToPage();
+        if (entity is null) return TenantAwareRedirectToPage();
         
         // Capture for cache invalidation
         var clientId = entity.ClientId;
@@ -164,7 +164,7 @@ public class IndexModel(
         // Invalidate client cache after deletion
         await clientStore.InvalidateClientCacheAsync(clientId, tenantId);
         
-        return RedirectToPage(new { TenantId });
+        return TenantAwareRedirect("/Admin/Clients", TenantId.HasValue ? new { TenantId } : null);
     }
 
     public sealed class ClientInput

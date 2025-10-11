@@ -11,7 +11,7 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen, ITenantAccessor tenantAccessor) : PageModel
+public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
 {
     public List<SelectListItem> RealmOptions { get; private set; } = new();
 
@@ -59,7 +59,7 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
         };
         db.Clients.Add(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage("Edit", new { id = entity.Id });
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{entity.Id}");
     }
 
     public async Task<IActionResult> OnPostGenerateAsync()

@@ -1,13 +1,18 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 /// <summary>
 /// Base class for user admin Razor Pages providing a consistent user heading (username + optional friendly name).
-/// Inherits from ReadOnlyAdminPageModel to automatically enforce read-only mode during impersonation.
+/// Inherits from TenantAwarePageModel to provide tenant-aware redirects and enforce read-only mode during impersonation.
 /// </summary>
-public abstract class UserPageModelBase : MrWhoOidc.WebAuth.Pages.Admin.ReadOnlyAdminPageModel
+public abstract class UserPageModelBase : TenantAwarePageModel
 {
+    protected UserPageModelBase(ITenantAccessor tenantAccessor) : base(tenantAccessor)
+    {
+    }
+
     public string UserHeading { get; private set; } = string.Empty;
 
     protected void SetHeading(string username, string? name)

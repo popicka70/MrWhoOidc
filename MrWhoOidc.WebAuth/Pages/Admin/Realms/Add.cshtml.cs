@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db) : PageModel
+public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
 {
     [BindProperty]
     public RealmInput Input { get; set; } = new();
@@ -55,7 +56,13 @@ public class AddModel(AuthDbContext db) : PageModel
         };
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
-        return RedirectToPage("Edit", new { id = realm.Id });
+        
+        // Build tenant-aware redirect URL
+        var currentTenant = tenantAccessor.CurrentTenant;
+        var redirectUrl = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/Admin/Realms/Edit/{realm.Id}"
+            : $"/Admin/Realms/Edit/{realm.Id}";
+        return Redirect(redirectUrl);
     }
 
     private async Task LoadTenantsAsync()

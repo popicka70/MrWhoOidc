@@ -92,7 +92,13 @@ public class EditModel(
         realm.Name = Input.Name;
         realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
         await db.SaveChangesAsync();
-        return RedirectToPage("Index");
+        
+        // Build tenant-aware redirect URL
+        var currentTenant = tenantAccessor.CurrentTenant;
+        var redirectUrl = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/Admin/Realms"
+            : "/Admin/Realms";
+        return Redirect(redirectUrl);
     }
 
     private async Task LoadTenantNameAsync()

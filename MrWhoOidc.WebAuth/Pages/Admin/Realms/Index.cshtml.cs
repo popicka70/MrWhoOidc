@@ -87,10 +87,21 @@ public class IndexModel(
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
         if (realm is null)
         {
-            return RedirectToPage();
+            // Build tenant-aware redirect URL
+            var currentTenant = tenantAccessor.CurrentTenant;
+            var redirectUrl = currentTenant != null 
+                ? $"/t/{currentTenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
+                : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
+            return Redirect(redirectUrl);
         }
         db.Realms.Remove(realm);
         await db.SaveChangesAsync();
-        return RedirectToPage(new { TenantId });
+        
+        // Build tenant-aware redirect URL
+        var tenant = tenantAccessor.CurrentTenant;
+        var url = tenant != null 
+            ? $"/t/{tenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
+            : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
+        return Redirect(url);
     }
 }

@@ -14,7 +14,7 @@ public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IUserService userService) : PageModel
+    IUserService userService) : TenantAwarePageModel(tenantAccessor)
 {
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
@@ -109,13 +109,13 @@ public class IndexModel(
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
-                return RedirectToPage(); // No tenant context
+                return TenantAwareRedirectToPage(); // No tenant context
             }
             userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
         }
 
         var entity = await userQuery.FirstOrDefaultAsync();
-        if (entity is null) return RedirectToPage();
+        if (entity is null) return TenantAwareRedirectToPage();
         
         // Capture for cache invalidation
         var username = entity.Username;
@@ -129,7 +129,7 @@ public class IndexModel(
         if (inUse)
         {
             TempData["Error"] = "Cannot delete user; it is referenced by tokens, consents, or assignments.";
-            return RedirectToPage();
+            return TenantAwareRedirectToPage();
         }
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
@@ -137,6 +137,6 @@ public class IndexModel(
         // Invalidate user cache after deletion
         await userService.InvalidateUserCacheAsync(id, username, tenantId);
         
-        return RedirectToPage(new { TenantId });
+        return TenantAwareRedirect("/Admin/Users", TenantId.HasValue ? new { TenantId } : null);
     }
 }

@@ -11,7 +11,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Clients;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : UserPageModelBase
+    IAuthorizationService authorizationService) : UserPageModelBase(tenantAccessor)
 {
     [FromRoute]
     public Guid UserId { get; set; }

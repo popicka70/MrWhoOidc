@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Emails;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : UserPageModelBase
+    IAuthorizationService authorizationService) : UserPageModelBase(tenantAccessor)
 {
     [FromRoute]
     public Guid UserId { get; set; }

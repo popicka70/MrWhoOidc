@@ -28,7 +28,7 @@ public class EditModel(
     OidcOptions oidcOptions,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IClientStore clientStore) : ReadOnlyAdminPageModel
+    IClientStore clientStore) : TenantAwarePageModel(tenantAccessor)
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -254,7 +254,7 @@ public class EditModel(
             db.ClientScopes.Add(new ClientScope { ClientId = Id, ScopeName = NewScope });
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { id = Id });
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
     }
 
     public async Task<IActionResult> OnPostRemoveScopeAsync(string scopeName)
@@ -272,7 +272,7 @@ public class EditModel(
             db.ClientScopes.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { id = Id });
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
     }
 
     public async Task<IActionResult> OnPostExtractPublicJwkAsync()
@@ -1118,7 +1118,7 @@ public class EditModel(
                 when = DateTimeOffset.UtcNow
             });
         }
-        return RedirectToPage("Index");
+        return TenantAwareRedirect("/Admin/Clients");
     }
 
     private static string? NormalizeUrlsToJson(string? input)
@@ -1208,7 +1208,7 @@ public class EditModel(
         entity.Order = ProviderInput.Order;
 
         await db.SaveChangesAsync();
-        return RedirectToPage(new { id = Id });
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
     }
 
     public async Task<IActionResult> OnPostDeleteProviderAsync(Guid providerId)
@@ -1228,7 +1228,7 @@ public class EditModel(
             db.ClientIdentityProviders.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { id = Id });
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
     }
 
     /// <summary>

@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db) : PageModel
+public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
 {
     public class AddInput
     {
@@ -84,7 +85,7 @@ public class AddModel(AuthDbContext db) : PageModel
         });
 
         await db.SaveChangesAsync();
-        return RedirectToPage("Index", new { TenantId = Input.TenantId });
+        return TenantAwareRedirect("/Admin/Users", new { TenantId = Input.TenantId });
     }
 
     private async Task LoadTenantsAsync()

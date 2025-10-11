@@ -14,7 +14,7 @@ public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IUserService userService) : UserPageModelBase
+    IUserService userService) : UserPageModelBase(tenantAccessor)
 {
     public class EditInput
     {
@@ -39,7 +39,7 @@ public class EditModel(
                         select new { User = u, Tenant = t };
 
         var result = await userQuery.FirstOrDefaultAsync();
-        if (result is null) return RedirectToPage("Index");
+        if (result is null) return TenantAwareRedirect("/Admin/Users");
 
         TenantName = result.Tenant.Name;
         Input = new EditInput
@@ -73,13 +73,13 @@ public class EditModel(
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
-                return RedirectToPage("Index"); // No tenant context
+                return TenantAwareRedirect("/Admin/Users"); // No tenant context
             }
             userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
         }
 
         var entity = await userQuery.FirstOrDefaultAsync();
-        if (entity is null) return RedirectToPage("Index");
+        if (entity is null) return TenantAwareRedirect("/Admin/Users");
 
         // Load tenant name for display
         await LoadTenantNameAsync(id);
@@ -122,7 +122,7 @@ public class EditModel(
         await userService.InvalidateUserCacheAsync(entity.Id, entity.Username, entity.TenantId);
         
         SetHeading(entity.Username, entity.Name);
-        return RedirectToPage("Index");
+        return TenantAwareRedirect("/Admin/Users");
     }
 
     private async Task LoadTenantNameAsync(Guid userId)
