@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
@@ -14,7 +15,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 /// shared resources like "openid", "profile", "email", etc.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
-public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
+public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
 {
     public class EditInput
     {
@@ -30,9 +31,9 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
 
     public async Task<IActionResult> OnGetAsync(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return RedirectToPage("Index");
+        if (string.IsNullOrWhiteSpace(name)) return TenantAwareRedirect("/Admin/Scopes");
         var entity = await db.Scopes.AsNoTracking().FirstOrDefaultAsync(s => s.Name == name);
-        if (entity is null) return RedirectToPage("Index");
+        if (entity is null) return TenantAwareRedirect("/Admin/Scopes");
         Input = new EditInput { Name = entity.Name, Description = entity.Description, IsExposed = entity.IsExposed };
         return Page();
     }
@@ -41,10 +42,10 @@ public class EditModel(AuthDbContext db) : ReadOnlyAdminPageModel
     {
         if (!ModelState.IsValid) return Page();
         var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
-        if (entity is null) return RedirectToPage("Index");
+        if (entity is null) return TenantAwareRedirect("/Admin/Scopes");
         entity.Description = Input.Description;
         entity.IsExposed = Input.IsExposed;
         await db.SaveChangesAsync();
-        return RedirectToPage("Index");
+        return TenantAwareRedirect("/Admin/Scopes");
     }
 }

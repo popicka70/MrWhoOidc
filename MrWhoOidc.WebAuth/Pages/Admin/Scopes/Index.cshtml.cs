@@ -15,7 +15,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 [Authorize(Policy = "tenant-admin")]
 public class IndexModel(
     AuthDbContext db,
-    IAuthorizationService authorizationService) : PageModel
+    ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
 {
     public IReadOnlyList<Scope> Scopes { get; private set; } = Array.Empty<Scope>();
     public bool IsPlatformAdmin { get; private set; }
@@ -39,17 +40,17 @@ public class IndexModel(
             return Forbid();
         }
 
-        if (string.IsNullOrWhiteSpace(name)) return RedirectToPage();
+        if (string.IsNullOrWhiteSpace(name)) return TenantAwareRedirectToPage();
         var inUse = await db.ClientScopes.AnyAsync(cs => cs.ScopeName == name);
         if (inUse)
         {
             TempData["Error"] = $"Cannot delete scope '{name}' because it is assigned to one or more clients.";
-            return RedirectToPage();
+            return TenantAwareRedirectToPage();
         }
         var entity = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
-        if (entity is null) return RedirectToPage();
+        if (entity is null) return TenantAwareRedirectToPage();
         db.Scopes.Remove(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        return TenantAwareRedirectToPage();
     }
 }

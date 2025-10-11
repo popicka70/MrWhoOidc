@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
@@ -14,7 +15,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 /// the shared scope catalog.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
-public class AddModel(AuthDbContext db) : PageModel
+public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
 {
     public class AddInput
     {
@@ -40,6 +41,6 @@ public class AddModel(AuthDbContext db) : PageModel
         }
         db.Scopes.Add(new Scope { Name = Input.Name, Description = Input.Description, IsExposed = Input.IsExposed });
         await db.SaveChangesAsync();
-        return RedirectToPage("Index");
+        return TenantAwareRedirect("/Admin/Scopes");
     }
 }
