@@ -355,33 +355,88 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <h5>Assigned scopes</h5>
-                    <table class="table table-sm align-middle">
-                        <tbody>
-                        @foreach (var s in Model.AssignedScopes)
-                        {
-                            <tr>
-                                <td>@s</td>
-                                <td class="text-end">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="RemoveScope" name="scopeName" value="@s" formnovalidate>Remove</button>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
+                    
+                    @if (Model.GlobalAssignedScopes.Any())
+                    {
+                        <h6 class="text-muted mt-3">
+                            <i class="bi bi-globe me-1"></i> Global Scopes
+                        </h6>
+                        <table class="table table-sm align-middle">
+                            <tbody>
+                            @foreach (var s in Model.GlobalAssignedScopes)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary-emphasis me-1">Global</span>
+                                        @s
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="RemoveScope" name="scopeName" value="@s" formnovalidate>Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                    
+                    @if (Model.TenantAssignedScopes.Any())
+                    {
+                        <h6 class="text-muted mt-3">
+                            <i class="bi bi-building me-1"></i> Tenant Scopes
+                        </h6>
+                        <table class="table table-sm align-middle">
+                            <tbody>
+                            @foreach (var s in Model.TenantAssignedScopes)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-info-subtle text-info-emphasis me-1">Tenant</span>
+                                        @s
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" asp-page-handler="RemoveScope" name="scopeName" value="@s" formnovalidate>Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                    
+                    @if (!Model.AssignedScopes.Any())
+                    {
+                        <p class="text-muted fst-italic">No scopes assigned yet.</p>
+                    }
                 </div>
                 <div class="col-md-6">
                     <h5>Add scope</h5>
-                    <div class="input-group">
+                    <div class="input-group mb-2">
                         <select asp-for="NewScope" class="form-select">
                             <option value="">-- select scope --</option>
-                            @foreach (var s in Model.AvailableScopes)
+                            @if (Model.GlobalAvailableScopes.Any())
                             {
-                                <option value="@s.Name">@s.Name</option>
+                                <optgroup label="🌐 Global Scopes">
+                                    @foreach (var s in Model.GlobalAvailableScopes)
+                                    {
+                                        <option value="@s.Name">@s.Name</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (Model.TenantAvailableScopes.Any())
+                            {
+                                <optgroup label="🏢 Tenant Scopes">
+                                    @foreach (var s in Model.TenantAvailableScopes)
+                                    {
+                                        <option value="@s.Name">@s.Name</option>
+                                    }
+                                </optgroup>
                             }
                         </select>
                         <button type="submit" class="btn btn-outline-primary" asp-page-handler="AddScope" formnovalidate>Add</button>
                     </div>
-                    <small class="form-text text-muted">Only scopes from the catalog can be assigned.</small>
+                    <small class="form-text text-muted">
+                        <strong>Global scopes</strong> are available to all tenants (e.g., openid, profile, email).<br />
+                        <strong>Tenant scopes</strong> are specific to your tenant (e.g., @(Model.CurrentTenantSlug).reports.read).
+                    </small>
                     <span asp-validation-for="NewScope" class="text-danger"></span>
                 </div>
             </div>

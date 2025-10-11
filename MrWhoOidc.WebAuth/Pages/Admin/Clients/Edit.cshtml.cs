@@ -28,7 +28,8 @@ public class EditModel(
     OidcOptions oidcOptions,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IClientStore clientStore) : TenantAwarePageModel(tenantAccessor)
+    IClientStore clientStore,
+    IScopeResolver scopeResolver) : TenantAwarePageModel(tenantAccessor)
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -46,7 +47,13 @@ public class EditModel(
 
     // Scopes tab model
     public List<Scope> AvailableScopes { get; private set; } = new();
+    public List<Scope> GlobalAvailableScopes { get; private set; } = new();
+    public List<Scope> TenantAvailableScopes { get; private set; } = new();
     public List<string> AssignedScopes { get; private set; } = new();
+    public List<string> GlobalAssignedScopes { get; private set; } = new();
+    public List<string> TenantAssignedScopes { get; private set; } = new();
+    public string CurrentTenantSlug => TenantAccessor.CurrentTenant?.Slug ?? "tenant";
+
 
     public List<ProviderRow> ProviderMappings { get; private set; } = new();
 
@@ -1146,10 +1153,35 @@ public class EditModel(
 
     private async Task LoadScopesAsync(Guid clientId)
     {
-        AvailableScopes = await db.Scopes.AsNoTracking().OrderBy(s => s.Name).ToListAsync();
-        AssignedScopes = await db.ClientScopes.AsNoTracking().Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).OrderBy(n => n).ToListAsync();
+        // Get current tenant context for scope resolution
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        
+        // Get available scopes for current tenant context using scope resolver
+        var availableScopes = await scopeResolver.GetAvailableScopesAsync(currentTenantId);
+        var availableScopeNames = availableScopes.Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
+        
+        // Get assigned scopes for this client
+        AssignedScopes = await db.ClientScopes.AsNoTracking()
+            .Where(cs => cs.ClientId == clientId)
+            .Select(cs => cs.ScopeName)
+            .OrderBy(n => n)
+            .ToListAsync();
+        
         // Filter available list to those not yet assigned
-        AvailableScopes = AvailableScopes.Where(s => !AssignedScopes.Contains(s.Name, StringComparer.Ordinal)).ToList();
+        var availableScopeObjects = availableScopes
+            .Where(s => !AssignedScopes.Contains(s.Name, StringComparer.Ordinal))
+            .OrderBy(s => s.IsGlobal ? 0 : 1) // Global scopes first
+            .ThenBy(s => s.Name)
+            .ToList();
+        
+        // Group available scopes
+        AvailableScopes = availableScopeObjects;
+        GlobalAvailableScopes = availableScopeObjects.Where(s => s.IsGlobal).ToList();
+        TenantAvailableScopes = availableScopeObjects.Where(s => !s.IsGlobal).ToList();
+        
+        // Group assigned scopes by checking if they're standard scopes
+        GlobalAssignedScopes = AssignedScopes.Where(s => scopeResolver.IsStandardScope(s)).OrderBy(s => s).ToList();
+        TenantAssignedScopes = AssignedScopes.Where(s => !scopeResolver.IsStandardScope(s)).OrderBy(s => s).ToList();
     }
 
     private async Task LoadProviderMappingsAsync(Guid clientId)
