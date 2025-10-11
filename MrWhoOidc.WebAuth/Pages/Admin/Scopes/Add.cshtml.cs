@@ -19,7 +19,8 @@ public class AddModel(
     AuthDbContext db, 
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IScopeResolver scopeResolver) : TenantAwarePageModel(tenantAccessor)
+    IScopeResolver scopeResolver,
+    IScopeNameValidator scopeNameValidator) : TenantAwarePageModel(tenantAccessor)
 {
     public class AddInput
     {
@@ -64,14 +65,24 @@ public class AddModel(
         
         // Validate: tenant admins must create tenant-scoped scopes
         Guid? targetTenantId = null;
+        string? tenantSlug = null;
         if (!Input.IsGlobal)
         {
             targetTenantId = TenantAccessor.CurrentTenant?.TenantId;
+            tenantSlug = TenantAccessor.CurrentTenant?.Slug;
             if (!targetTenantId.HasValue)
             {
                 ModelState.AddModelError(string.Empty, "No tenant context found. Cannot create tenant-scoped scope.");
                 return Page();
             }
+        }
+        
+        // Validate scope name format using the validator
+        var nameValidation = scopeNameValidator.ValidateScopeName(Input.Name, Input.IsGlobal, tenantSlug);
+        if (!nameValidation.IsValid)
+        {
+            ModelState.AddModelError("Input.Name", nameValidation.ErrorMessage!);
+            return Page();
         }
         
         // Check if scope name is available
@@ -81,19 +92,6 @@ public class AddModel(
             var scopeType = Input.IsGlobal ? "global" : "tenant-scoped";
             ModelState.AddModelError("Input.Name", $"A {scopeType} scope with this name already exists.");
             return Page();
-        }
-        
-        // Validate scope name format for tenant-scoped scopes
-        if (!Input.IsGlobal && !scopeResolver.IsStandardScope(Input.Name))
-        {
-            // For tenant-scoped custom scopes, could enforce naming conventions here
-            // For now, just ensure it's not a reserved standard scope name
-            if (scopeResolver.IsStandardScope(Input.Name))
-            {
-                ModelState.AddModelError("Input.Name", 
-                    "Cannot use standard OAuth2/OIDC scope names for tenant-scoped scopes. Standard scopes must be global.");
-                return Page();
-            }
         }
         
         db.Scopes.Add(new Scope 
