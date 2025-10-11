@@ -49,6 +49,11 @@
 - ✅ `Edit.cshtml.cs` - 5 redirects fixed
 - ✅ `Index.cshtml.cs` - 3 redirects fixed
 
+### Roles Section (COMPLETE)
+- ✅ `Add.cshtml.cs` - 1 redirect fixed
+- ✅ `Edit.cshtml.cs` - 3 redirects fixed
+- ✅ `Index.cshtml.cs` - 3 redirects fixed
+
 ## Remaining Work
 
 ### Files Still Needing Fixes
@@ -56,12 +61,11 @@
 Based on grep search, the following admin sections have `RedirectToPage()` calls that need fixing:
 
 1. **Users Sub-Pages** (~18 redirects across Roles, Linked, Clients, Emails pages)
-2. **Roles Section** (~5 files: Index, Add, Edit)
-3. **Scopes Section** (~3 files: Index, Add, Edit)
-4. **Settings** (1 file)
-5. **Registrations** (Index.cshtml.cs)
+2. **Scopes Section** (~3 files: Index, Add, Edit)
+3. **Settings** (1 file)
+4. **Registrations** (Index.cshtml.cs)
 
-**Estimated Total:** ~30-40 additional redirects need fixing
+**Estimated Total:** ~25-30 additional redirects need fixing
 
 ## Migration Strategy
 

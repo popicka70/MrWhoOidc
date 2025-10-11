@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
 {
     public class EditInput
     {
@@ -61,7 +61,7 @@ public class EditModel(
                         select new { Role = role, Realm = realm, Tenant = tenant };
 
         var result = await roleQuery.FirstOrDefaultAsync();
-        if (result is null) return RedirectToPage("Index");
+        if (result is null) return TenantAwareRedirect("/Admin/Roles");
 
         TenantName = result.Tenant.Name;
         RealmName = result.Realm.Name;
@@ -84,7 +84,7 @@ public class EditModel(
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
         var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id);
-        if (entity is null) return RedirectToPage("Index");
+        if (entity is null) return TenantAwareRedirect("/Admin/Roles");
 
         // Defense in depth: Validate tenant ownership
         if (!await ValidateTenantAccessAsync(entity))
@@ -128,7 +128,7 @@ public class EditModel(
         entity.RealmId = Input.RealmId;
         entity.IsActive = Input.IsActive;
         await db.SaveChangesAsync();
-        return RedirectToPage("Index");
+        return TenantAwareRedirect("/Admin/Roles");
     }
 
     private async Task LoadTenantAndRealmAsync(Guid roleId)

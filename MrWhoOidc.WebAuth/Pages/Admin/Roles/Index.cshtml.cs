@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
 {
     public sealed record RoleRow(Guid Id, string Name, Guid RealmId, string RealmName, Guid TenantId, string TenantName, bool IsActive);
 
@@ -78,9 +78,25 @@ public class IndexModel(
             .Join(db.Tenants, role => role.TenantId, t => t.Id, (role, t) => new { Role = role, Tenant = t })
             .Join(db.Realms, x => x.Role.RealmId, r => r.Id, (x, r) => new { x.Role, x.Tenant, Realm = r });
 
-        if (TenantId.HasValue)
+        // Apply tenant filtering
+        if (IsPlatformAdmin)
         {
-            q = q.Where(x => x.Role.TenantId == TenantId.Value);
+            // Platform admins can optionally filter by tenant
+            if (TenantId.HasValue)
+            {
+                q = q.Where(x => x.Role.TenantId == TenantId.Value);
+            }
+        }
+        else
+        {
+            // Tenant admins can ONLY see their tenant's roles
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                Roles = Array.Empty<RoleRow>();
+                return;
+            }
+            q = q.Where(x => x.Role.TenantId == currentTenantId.Value);
         }
 
         if (RealmId is Guid rid)
@@ -114,12 +130,12 @@ public class IndexModel(
         if (inUse)
         {
             TempData["Error"] = "Cannot delete a role that is assigned to a user.";
-            return RedirectToPage();
+            return TenantAwareRedirectToPage();
         }
         var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id);
-        if (entity is null) return RedirectToPage();
+        if (entity is null) return TenantAwareRedirectToPage();
         db.Roles.Remove(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage(new { TenantId, RealmId });
+        return TenantAwareRedirect("/Admin/Roles", new { TenantId, RealmId });
     }
 }
