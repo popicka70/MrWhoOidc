@@ -60,7 +60,13 @@ public class DeleteModel(
         if (inUse)
         {
             TempData["Error"] = "Cannot delete a provider that is mapped to clients.";
-            return RedirectToPage("Index");
+            
+            // Build tenant-aware redirect URL
+            var currentTenant = tenantAccessor.CurrentTenant;
+            var redirectUrl = currentTenant != null 
+                ? $"/t/{currentTenant.Slug}/Admin/Providers"
+                : "/Admin/Providers";
+            return Redirect(redirectUrl);
         }
 
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
@@ -69,6 +75,12 @@ public class DeleteModel(
             db.IdentityProviders.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage("Index");
+        
+        // Build tenant-aware redirect URL
+        var tenant = tenantAccessor.CurrentTenant;
+        var url = tenant != null 
+            ? $"/t/{tenant.Slug}/Admin/Providers"
+            : "/Admin/Providers";
+        return Redirect(url);
     }
 }

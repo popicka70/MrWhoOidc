@@ -79,7 +79,12 @@ public class AddModel(AuthDbContext db, IIdentityProviderValidator validator, IT
 
         db.IdentityProviders.Add(entity);
         await db.SaveChangesAsync();
-        return RedirectToPage("Index");
+        
+        // Build tenant-aware redirect URL
+        var redirectUrl = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/Admin/Providers"
+            : "/Admin/Providers";
+        return Redirect(redirectUrl);
     }
 
     public sealed class InputModel

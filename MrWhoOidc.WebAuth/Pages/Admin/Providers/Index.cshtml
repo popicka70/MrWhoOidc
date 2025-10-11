@@ -12,7 +12,7 @@
 <h2>Identity Providers</h2>
 
 <p>
-    <a asp-page="Add" class="btn btn-primary">Add Provider</a>
+    <a href="@(tenantPrefix)/Admin/Providers/Add" class="btn btn-primary">Add Provider</a>
 </p>
 
 @if (Model.IsPlatformAdmin)
@@ -69,7 +69,7 @@ else
                     <a href="@(tenantPrefix)/Admin/Providers/Edit/@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                     <a href="@(tenantPrefix)/Admin/Providers/ClaimMappings/@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
                     <a href="@(tenantPrefix)/Admin/ProviderKeys/Index?providerId=@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
-                    <a asp-page="Delete" asp-route-id="@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
+                    <a href="@(tenantPrefix)/Admin/Providers/Delete/@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                 </div>
                 <span class="drag-handle ms-3 text-muted" aria-hidden="true" title="Drag to reorder">☰</span>
             </li>

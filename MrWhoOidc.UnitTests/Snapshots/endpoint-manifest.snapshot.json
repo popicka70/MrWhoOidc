@@ -25,7 +25,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -36,7 +36,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -47,7 +47,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -58,7 +58,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -69,7 +69,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -80,7 +80,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -91,7 +91,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -102,7 +102,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -113,7 +113,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -124,7 +124,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -135,7 +135,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -146,7 +146,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -157,7 +157,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -168,7 +168,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -179,7 +179,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -190,7 +190,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -201,7 +201,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -212,7 +212,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -223,7 +223,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -234,7 +234,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -245,7 +245,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -256,7 +256,7 @@
     "RateLimiters": [
       "rl-admin"
     ],
-    "Authz": "admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -540,6 +540,15 @@
   },
   {
     "Pattern": "Account",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Account/AccessDenied",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

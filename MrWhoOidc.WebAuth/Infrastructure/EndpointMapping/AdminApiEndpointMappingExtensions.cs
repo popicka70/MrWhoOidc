@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Admin.Dto;
 using MrWhoOidc.WebAuth.Admin.Helpers;
@@ -21,13 +23,35 @@ public static class AdminApiEndpointMappingExtensions
 {
     public static void MapMrWhoAdminApiEndpoints(this WebApplication app)
     {
-        // Admin Management APIs (admin-only, ProblemDetails on errors)
-        var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
+        // Admin Management APIs (tenant-admin, ProblemDetails on errors)
+        var admin = app.MapGroup("/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
 
-        // Providers CRUD
-        admin.MapGet("/providers", async (AuthDbContext db, CancellationToken ct) =>
+        // Providers CRUD (tenant-aware)
+        admin.MapGet("/providers", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
-            var list = await db.IdentityProviders.AsNoTracking()
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            var query = db.IdentityProviders.AsNoTracking();
+
+            // Tenant filtering: regular tenant admins see only their tenant's providers
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                query = query.Where(p => p.TenantId == currentTenantId.Value);
+            }
+
+            var list = await query
                 .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
                 .Select(p => new
                 {
@@ -39,21 +63,58 @@ public static class AdminApiEndpointMappingExtensions
                     p.IsDefault,
                     p.LogoUrl,
                     p.SortOrder,
+                    p.TenantId,
                     p.CreatedAt,
                     p.UpdatedAt
                 }).ToListAsync(ct);
             return Results.Ok(list);
         });
 
-        admin.MapGet("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+        admin.MapGet("/providers/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
-            var p = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            var query = db.IdentityProviders.AsNoTracking().Where(p => p.Id == id);
+
+            // Tenant filtering for non-platform admins
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                query = query.Where(p => p.TenantId == currentTenantId.Value);
+            }
+
+            var p = await query.FirstOrDefaultAsync(ct);
             return p is null ? Results.Problem(statusCode: 404, title: "Not Found") : Results.Ok(p);
         });
 
-        admin.MapPost("/providers", async (AuthDbContext db, IIdentityProviderValidator validator, IdentityProvider input, CancellationToken ct) =>
+        admin.MapPost("/providers", async (
+            AuthDbContext db,
+            IIdentityProviderValidator validator,
+            ITenantAccessor tenantAccessor,
+            IdentityProvider input,
+            CancellationToken ct) =>
         {
+            // Get current tenant ID - required for all providers
+            var currentTenant = tenantAccessor.CurrentTenant;
+            if (currentTenant == null)
+            {
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "Unable to determine current tenant context");
+            }
+
             input.Id = Guid.NewGuid();
+            input.TenantId = currentTenant.TenantId; // Always assign to current tenant
             input.CreatedAt = DateTimeOffset.UtcNow;
             input.UpdatedAt = DateTimeOffset.UtcNow;
             var (ok, error) = await validator.ValidateAsync(input, ct);
@@ -64,9 +125,34 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Created($"/admin/api/providers/{input.Id}", new { input.Id });
         });
 
-        admin.MapPut("/providers/{id:guid}", async (Guid id, AuthDbContext db, IIdentityProviderValidator validator, IdentityProvider input, CancellationToken ct) =>
+        admin.MapPut("/providers/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            IIdentityProviderValidator validator,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            IdentityProvider input,
+            CancellationToken ct) =>
         {
-            var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id, ct);
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            var query = db.IdentityProviders.Where(p => p.Id == id);
+
+            // Tenant filtering for non-platform admins
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                query = query.Where(p => p.TenantId == currentTenantId.Value);
+            }
+
+            var entity = await query.FirstOrDefaultAsync(ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
 
             entity.Name = input.Name;
@@ -78,6 +164,7 @@ public static class AdminApiEndpointMappingExtensions
             entity.SortOrder = input.SortOrder;
             entity.ConfigJson = input.ConfigJson;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
+            // Note: TenantId is NOT updated - providers cannot be moved between tenants
 
             var (ok, error) = await validator.ValidateAsync(entity, ct);
             if (!ok) return Results.Problem(statusCode: 400, title: "Validation failed", detail: error);
@@ -86,9 +173,32 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         });
 
-        admin.MapDelete("/providers/{id:guid}", async (Guid id, AuthDbContext db, CancellationToken ct) =>
+        admin.MapDelete("/providers/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
-            var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id, ct);
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            var query = db.IdentityProviders.Where(p => p.Id == id);
+
+            // Tenant filtering for non-platform admins
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                query = query.Where(p => p.TenantId == currentTenantId.Value);
+            }
+
+            var entity = await query.FirstOrDefaultAsync(ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             db.IdentityProviders.Remove(entity);
             await db.SaveChangesAsync(ct);
@@ -190,9 +300,19 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         });
 
-        // Claim mappings CRUD
-        admin.MapGet("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, CancellationToken ct) =>
+        // Claim mappings CRUD (with tenant validation)
+        admin.MapGet("/providers/{providerId:guid}/claim-mappings", async (
+            Guid providerId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var list = await db.IdentityProviderClaimMappings.AsNoTracking()
                 .Where(m => m.IdentityProviderId == providerId)
                 .OrderBy(m => m.Order)
@@ -201,12 +321,21 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Ok(list);
         });
 
-        admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (Guid providerId, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
+        admin.MapPost("/providers/{providerId:guid}/claim-mappings", async (
+            Guid providerId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ClaimMappingInput input,
+            CancellationToken ct) =>
         {
             if (input is null || string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
                 return Results.Problem(statusCode: 400, title: "Invalid input");
-            var exists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == providerId, ct);
-            if (!exists) return Results.Problem(statusCode: 404, title: "Provider not found");
+
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
 
             var entity = new IdentityProviderClaimMapping
             {
@@ -221,8 +350,20 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Created($"/admin/api/providers/{providerId}/claim-mappings/{entity.Id}", new { entity.Id });
         });
 
-        admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ClaimMappingInput input, CancellationToken ct) =>
+        admin.MapPut("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (
+            Guid providerId,
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ClaimMappingInput input,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             if (string.IsNullOrWhiteSpace(input.ExternalClaim) || string.IsNullOrWhiteSpace(input.LocalClaim))
@@ -236,8 +377,19 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         });
 
-        admin.MapDelete("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, CancellationToken ct) =>
+        admin.MapDelete("/providers/{providerId:guid}/claim-mappings/{id:guid}", async (
+            Guid providerId,
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             db.IdentityProviderClaimMappings.Remove(entity);
@@ -245,9 +397,19 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         });
 
-        // Provider keys CRUD
-        admin.MapGet("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, CancellationToken ct) =>
+        // Provider keys CRUD (with tenant validation)
+        admin.MapGet("/providers/{providerId:guid}/keys", async (
+            Guid providerId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var list = await db.IdentityProviderKeys.AsNoTracking()
                 .Where(k => k.IdentityProviderId == providerId)
                 .OrderByDescending(k => k.CreatedAt)
@@ -256,12 +418,24 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Ok(list);
         });
 
-        admin.MapPost("/providers/{providerId:guid}/keys", async (Guid providerId, AuthDbContext db, ProviderKeyInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
+        admin.MapPost("/providers/{providerId:guid}/keys", async (
+            Guid providerId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ProviderKeyInput input,
+            IPublicJwksCache jwksCache,
+            CancellationToken ct) =>
         {
             if (input is null || string.IsNullOrWhiteSpace(input.JwkJson) || string.IsNullOrWhiteSpace(input.Alg))
                 return Results.Problem(statusCode: 400, title: "Invalid input");
             try { using var _ = JsonDocument.Parse(input.JwkJson!); }
             catch (Exception ex) { return Results.Problem(statusCode: 400, title: "Invalid JWK JSON", detail: ex.Message); }
+
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
 
             if (!string.IsNullOrWhiteSpace(input.Kid))
             {
@@ -293,8 +467,21 @@ public static class AdminApiEndpointMappingExtensions
             return Results.Created($"/admin/api/providers/{providerId}/keys/{entity.Id}", new { entity.Id });
         });
 
-        admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, ProviderKeyInput input, IPublicJwksCache jwksCache, CancellationToken ct) =>
+        admin.MapPut("/providers/{providerId:guid}/keys/{id:guid}", async (
+            Guid providerId,
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ProviderKeyInput input,
+            IPublicJwksCache jwksCache,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             if (input is null || string.IsNullOrWhiteSpace(input.Alg)) return Results.Problem(statusCode: 400, title: "Invalid input");
@@ -326,8 +513,20 @@ public static class AdminApiEndpointMappingExtensions
             return Results.NoContent();
         });
 
-        admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (Guid providerId, Guid id, AuthDbContext db, IPublicJwksCache jwksCache, CancellationToken ct) =>
+        admin.MapDelete("/providers/{providerId:guid}/keys/{id:guid}", async (
+            Guid providerId,
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            IPublicJwksCache jwksCache,
+            CancellationToken ct) =>
         {
+            // Validate provider access
+            if (!await ValidateProviderAccessAsync(providerId, db, tenantAccessor, authorizationService, httpContext, ct))
+                return Results.Problem(statusCode: 404, title: "Provider not found");
+
             var entity = await db.IdentityProviderKeys.FirstOrDefaultAsync(k => k.Id == id && k.IdentityProviderId == providerId, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             db.IdentityProviderKeys.Remove(entity);
@@ -457,6 +656,37 @@ public static class AdminApiEndpointMappingExtensions
                 adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/Admin/Users"
             });
         }).WithName("SeedTenant");
+    }
+
+    /// <summary>
+    /// Helper method to validate that the current user has access to a provider based on tenant filtering.
+    /// Platform admins can access all providers; tenant admins can only access providers in their tenant.
+    /// </summary>
+    private static async Task<bool> ValidateProviderAccessAsync(
+        Guid providerId,
+        AuthDbContext db,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        // Check if user is platform admin
+        var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+        if (platformAdminResult.Succeeded)
+        {
+            // Platform admins can access all providers - just verify it exists
+            return await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == providerId, ct);
+        }
+
+        // For tenant admins, check if provider belongs to their tenant
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false; // No tenant context
+        }
+
+        return await db.IdentityProviders.AsNoTracking()
+            .AnyAsync(p => p.Id == providerId && p.TenantId == currentTenantId.Value, ct);
     }
 
     public record SeedTenantRequest(

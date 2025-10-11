@@ -188,7 +188,13 @@ public class EditModel(
         }
 
         TempData["Success"] = "Provider updated.";
-        return RedirectToPage("Index");
+        
+        // Build tenant-aware redirect URL
+        var currentTenant = tenantAccessor.CurrentTenant;
+        var redirectUrl = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/Admin/Providers"
+            : "/Admin/Providers";
+        return Redirect(redirectUrl);
     }
 
     public async Task<IActionResult> OnPostTestAsync(Guid id)

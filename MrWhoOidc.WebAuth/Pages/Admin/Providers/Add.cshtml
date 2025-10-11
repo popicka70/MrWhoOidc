@@ -1,7 +1,13 @@
 @page
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.AddModel
 @{
     ViewData["Title"] = "Add Identity Provider";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
 }
 
 <h2>Add Identity Provider</h2>
@@ -42,5 +48,5 @@
         <span class="form-text">Paste OIDC config (Authority, ClientId, etc.). Validation runs on save.</span>
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
-    <a asp-page="Index" class="btn btn-secondary">Cancel</a>
+    <a href="@(tenantPrefix)/Admin/Providers" class="btn btn-secondary">Cancel</a>
 </form>

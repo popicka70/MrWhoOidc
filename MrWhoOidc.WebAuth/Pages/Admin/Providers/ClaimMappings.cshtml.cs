@@ -7,11 +7,16 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, ILogger<ClaimMappingsModel> logger) : PageModel
+public class ClaimMappingsModel(
+    AuthDbContext db, 
+    IClaimMappingService mapper, 
+    ILogger<ClaimMappingsModel> logger,
+    ITenantAccessor tenantAccessor) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
@@ -23,6 +28,18 @@ public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, I
     [BindProperty] public string? SourceJson { get; set; }
     public Dictionary<string, string>? TestOutput { get; private set; }
     public string? ResultJson { get; private set; }
+
+    /// <summary>
+    /// Builds a tenant-aware redirect URL for the current page (with Id query parameter).
+    /// </summary>
+    private IActionResult RedirectToClaimMappings()
+    {
+        var currentTenant = tenantAccessor.CurrentTenant;
+        var url = currentTenant != null 
+            ? $"/t/{currentTenant.Slug}/Admin/Providers/ClaimMappings?id={Id}"
+            : $"/Admin/Providers/ClaimMappings?id={Id}";
+        return Redirect(url);
+    }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -38,7 +55,7 @@ public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, I
 
     public async Task<IActionResult> OnPostAddAsync()
     {
-        if (Input is null) return RedirectToPage(new { id = Id });
+        if (Input is null) return RedirectToClaimMappings();
         if (!ModelState.IsValid) return await OnGetAsync();
         var e = new IdentityProviderClaimMapping
         {
@@ -50,12 +67,12 @@ public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, I
         };
         db.IdentityProviderClaimMappings.Add(e);
         await db.SaveChangesAsync();
-        return RedirectToPage(new { id = Id });
+        return RedirectToClaimMappings();
     }
 
     public async Task<IActionResult> OnPostUpdateAsync(Guid mappingId)
     {
-        if (Input is null) return RedirectToPage(new { id = Id });
+        if (Input is null) return RedirectToClaimMappings();
         if (!ModelState.IsValid) return await OnGetAsync();
         var e = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == mappingId && m.IdentityProviderId == Id);
         if (e is null) return NotFound();
@@ -64,7 +81,7 @@ public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, I
         e.Transform = string.IsNullOrWhiteSpace(Input.Transform) ? null : Input.Transform.Trim();
         e.Order = Input.Order;
         await db.SaveChangesAsync();
-        return RedirectToPage(new { id = Id });
+        return RedirectToClaimMappings();
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid mappingId)
@@ -73,7 +90,7 @@ public class ClaimMappingsModel(AuthDbContext db, IClaimMappingService mapper, I
         if (e is null) return NotFound();
         db.IdentityProviderClaimMappings.Remove(e);
         await db.SaveChangesAsync();
-        return RedirectToPage(new { id = Id });
+        return RedirectToClaimMappings();
     }
 
     public async Task<IActionResult> OnPostTestAsync()
