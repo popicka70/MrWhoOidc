@@ -153,6 +153,26 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Name);
             b.Property(x => x.Name).HasMaxLength(100);
             b.Property(x => x.Description).HasMaxLength(200);
+            
+            // Multi-tenancy support
+            // Composite unique index for tenant-scoped scopes: (TenantId, Name)
+            b.HasIndex(x => new { x.TenantId, x.Name })
+                .IsUnique()
+                .HasFilter("[TenantId] IS NOT NULL");
+            
+            // Unique index for global scopes: Name must be unique among global scopes
+            b.HasIndex(x => x.Name)
+                .IsUnique()
+                .HasFilter("[TenantId] IS NULL AND [IsGlobal] = 1");
+            
+            // FK to Tenant for tenant-scoped scopes
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired(false); // Nullable for global scopes
+            
+            b.HasIndex(x => x.TenantId);
         });
 
         modelBuilder.Entity<Client>(b =>
@@ -725,6 +745,13 @@ public class Scope
     [Key]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty; // e.g., openid, profile, email, offline_access, roles
+    
+    // Multi-tenancy support: NULL for global scopes (e.g., openid, profile)
+    public Guid? TenantId { get; set; }
+    
+    // IsGlobal = true for standard OAuth2/OIDC scopes that are shared across all tenants
+    public bool IsGlobal { get; set; } = false;
+    
     [MaxLength(200)]
     public string? Description { get; set; }
     public bool IsExposed { get; set; } = true;

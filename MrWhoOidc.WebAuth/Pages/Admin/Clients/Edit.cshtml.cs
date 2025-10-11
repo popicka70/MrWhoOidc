@@ -85,7 +85,7 @@ public class EditModel(
         if (!isPlatformAdmin)
         {
             // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 return NotFound(); // No tenant context
@@ -854,7 +854,7 @@ public class EditModel(
         if (!isPlatformAdmin)
         {
             // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 return NotFound(); // No tenant context
@@ -1243,7 +1243,7 @@ public class EditModel(
             return true; // Platform admins can access all clients
         }
 
-        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {
             return false; // No tenant context

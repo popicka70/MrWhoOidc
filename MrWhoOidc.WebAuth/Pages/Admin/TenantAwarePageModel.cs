@@ -17,6 +17,11 @@ public abstract class TenantAwarePageModel : PageModel
     }
 
     /// <summary>
+    /// Gets the tenant accessor for accessing current tenant information.
+    /// </summary>
+    protected ITenantAccessor TenantAccessor => _tenantAccessor;
+
+    /// <summary>
     /// Redirects to a page within the current tenant context.
     /// </summary>
     /// <param name="pagePath">The page path (e.g., "/Admin/Users/Index" or "Index")</param>

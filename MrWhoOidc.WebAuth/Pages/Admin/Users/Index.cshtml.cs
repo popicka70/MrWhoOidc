@@ -61,7 +61,7 @@ public class IndexModel(
         else
         {
             // Regular tenant admins only see their tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (currentTenantId.HasValue)
             {
                 q = q.Where(x => x.User.TenantId == currentTenantId.Value);
@@ -106,7 +106,7 @@ public class IndexModel(
         if (!isPlatformAdmin)
         {
             // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 return TenantAwareRedirectToPage(); // No tenant context

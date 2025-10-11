@@ -70,7 +70,7 @@ public class EditModel(
         if (!isPlatformAdmin)
         {
             // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 return TenantAwareRedirect("/Admin/Users"); // No tenant context

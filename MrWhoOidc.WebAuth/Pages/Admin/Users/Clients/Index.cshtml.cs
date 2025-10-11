@@ -106,7 +106,7 @@ public class IndexModel(
         
         if (!isPlatformAdmin)
         {
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 return RedirectToPage("/Admin/Users/Index");

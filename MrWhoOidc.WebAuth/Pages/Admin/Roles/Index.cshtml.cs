@@ -60,7 +60,7 @@ public class IndexModel(
         }
         else
         {
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (currentTenantId.HasValue)
             {
                 realmQuery = realmQuery.Where(r => r.TenantId == currentTenantId.Value);
@@ -90,7 +90,7 @@ public class IndexModel(
         else
         {
             // Tenant admins can ONLY see their tenant's roles
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
             {
                 Roles = Array.Empty<RoleRow>();

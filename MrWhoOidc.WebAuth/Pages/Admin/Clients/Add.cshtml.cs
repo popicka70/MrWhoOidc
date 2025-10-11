@@ -40,7 +40,7 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
         }
 
         // Get current tenant ID from context
-        var currentTenant = tenantAccessor.CurrentTenant;
+        var currentTenant = TenantAccessor.CurrentTenant;
         if (currentTenant == null)
         {
             ModelState.AddModelError(string.Empty, "Unable to determine current tenant context");
@@ -77,7 +77,7 @@ public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerat
     private async Task LoadRealmsAsync()
     {
         // Get current tenant ID to filter realms
-        var currentTenant = tenantAccessor.CurrentTenant;
+        var currentTenant = TenantAccessor.CurrentTenant;
         if (currentTenant == null)
         {
             RealmOptions = new List<SelectListItem>();

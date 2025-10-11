@@ -46,6 +46,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
+        services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();

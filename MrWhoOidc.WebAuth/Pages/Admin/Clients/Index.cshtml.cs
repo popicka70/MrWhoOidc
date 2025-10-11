@@ -76,7 +76,7 @@ public class IndexModel(
         else
         {
             // Regular tenant admins only see their tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             if (currentTenantId.HasValue)
             {
                 q = q.Where(x => x.Client.TenantId == currentTenantId.Value);
