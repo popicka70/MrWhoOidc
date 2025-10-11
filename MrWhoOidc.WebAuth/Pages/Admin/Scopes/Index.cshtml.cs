@@ -47,6 +47,8 @@ public class IndexModel(
         }
 
         Scopes = await query
+            .OrderBy(s => s.IsGlobal ? 0 : 1) // Global first - MUST sort before projection
+            .ThenBy(s => s.Name)
             .GroupJoin(
                 db.Tenants.AsNoTracking(),
                 s => s.TenantId,
@@ -59,8 +61,6 @@ public class IndexModel(
                 x.Scope.IsGlobal,
                 x.Scope.TenantId,
                 x.Tenant != null ? x.Tenant.Name : null))
-            .OrderBy(s => s.IsGlobal ? 0 : 1) // Global first
-            .ThenBy(s => s.Name)
             .ToListAsync();
     }
 

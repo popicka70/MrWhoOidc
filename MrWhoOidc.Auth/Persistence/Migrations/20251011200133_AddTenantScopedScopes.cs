@@ -29,7 +29,7 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 table: "Scopes",
                 column: "Name",
                 unique: true,
-                filter: "[TenantId] IS NULL AND [IsGlobal] = 1");
+                filter: "\"TenantId\" IS NULL AND \"IsGlobal\" = true");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Scopes_TenantId",
@@ -41,7 +41,7 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                 table: "Scopes",
                 columns: new[] { "TenantId", "Name" },
                 unique: true,
-                filter: "[TenantId] IS NOT NULL");
+                filter: "\"TenantId\" IS NOT NULL");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Scopes_Tenants_TenantId",

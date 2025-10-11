@@ -158,12 +158,12 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             // Composite unique index for tenant-scoped scopes: (TenantId, Name)
             b.HasIndex(x => new { x.TenantId, x.Name })
                 .IsUnique()
-                .HasFilter("[TenantId] IS NOT NULL");
+                .HasFilter("\"TenantId\" IS NOT NULL");
             
             // Unique index for global scopes: Name must be unique among global scopes
             b.HasIndex(x => x.Name)
                 .IsUnique()
-                .HasFilter("[TenantId] IS NULL AND [IsGlobal] = 1");
+                .HasFilter("\"TenantId\" IS NULL AND \"IsGlobal\" = true");
             
             // FK to Tenant for tenant-scoped scopes
             b.HasOne<Tenant>()
