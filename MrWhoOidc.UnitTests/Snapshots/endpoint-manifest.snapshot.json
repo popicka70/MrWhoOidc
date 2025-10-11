@@ -911,7 +911,7 @@
     "Pattern": "Admin/Scopes/Add",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": "platform-admin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false
