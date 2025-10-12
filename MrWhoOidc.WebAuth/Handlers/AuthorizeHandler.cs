@@ -34,10 +34,33 @@ public sealed class AuthorizeHandler(
     IJwtService jwt,
     IClientStore clients,
     AuthDbContext db,
-    IQrLoginHandler qrLoginHandler
+    IQrLoginHandler qrLoginHandler,
+    ITenantAccessor tenantAccessor
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
+
+    /// <summary>
+    /// Builds a tenant-aware URL by prefixing with /t/{slug} if a tenant context exists.
+    /// </summary>
+    private string BuildTenantAwareUrl(string path)
+    {
+        var currentTenant = tenantAccessor.CurrentTenant;
+        
+        // Ensure path starts with /
+        if (!path.StartsWith('/'))
+        {
+            path = "/" + path;
+        }
+
+        // In multi-tenant mode with tenant context, prefix with /t/{slug}
+        if (currentTenant != null && currentTenant.IsMultiTenantMode)
+        {
+            return $"/t/{currentTenant.Slug}{path}";
+        }
+
+        return path;
+    }
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -314,7 +337,8 @@ public sealed class AuthorizeHandler(
                     {
                         outcome = "login";
                         var returnUrlDenied = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                        return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
+                        var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
+                        return Results.Redirect(loginUrl);
                     }
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
                     // Remember last provider for this client
@@ -367,8 +391,11 @@ public sealed class AuthorizeHandler(
 
                     // If multiple providers, look for last-used cookie and prefer it when not forcing account selection
                     var last = TryGetLastProviderCookie(http, validationResult.ClientId!);
+                    logger.LogInformation("Last provider cookie check: last={LastProvider}, providerLinksCount={Count}, forceAccountSelection={Force}, allowLocal={AllowLocal}, allowQr={AllowQr}",
+                        last ?? "(null)", providerLinks.Count, forceAccountSelection, allowLocal, allowQr);
                     if (!string.IsNullOrEmpty(last) && providerLinks.Any(pl => string.Equals(pl.Name, last, StringComparison.Ordinal)) && !forceAccountSelection && !allowLocal && !allowQr)
                     {
+                        logger.LogWarning("⚠️ Auto-redirecting to last-used provider '{LastProvider}' due to cookie (even though providerLinks is empty). This may cause a loop!", last);
                         var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
                         var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
                         return Results.Redirect(url);
@@ -389,7 +416,8 @@ public sealed class AuthorizeHandler(
                 var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
                 if (allowLocal)
                 {
-                    return Results.Redirect($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                    var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                    return Results.Redirect(loginUrl);
                 }
 
                 // If local login not allowed and no external/QR path chosen, return access_denied
@@ -440,7 +468,9 @@ public sealed class AuthorizeHandler(
             {
                 outcome = "consent";
                 var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                var consentUrl = $"/consent?ClientId={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&" + string.Join("&", validationResult.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
+                var scopesQuery = string.Join("&", validationResult.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
+                var consentUrlPath = BuildTenantAwareUrl("/consent");
+                var consentUrl = $"{consentUrlPath}?ClientId={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&{scopesQuery}";
                 return Results.Redirect(consentUrl);
             }
 

@@ -27,7 +27,7 @@
         }
         </ul>
 
-        <form method="post" action="/consent" asp-antiforgery="true">
+        <form method="post" asp-antiforgery="true">
             <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
             <input type="hidden" name="ClientId" value="@Model.ClientId" />
             @foreach (var scope in Model.Scopes)

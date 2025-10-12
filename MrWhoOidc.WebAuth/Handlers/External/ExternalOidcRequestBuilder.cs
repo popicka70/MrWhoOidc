@@ -66,6 +66,9 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         var callback = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
         var responseType = string.IsNullOrWhiteSpace(config.ResponseType) ? OAuthConstants.ResponseTypes.Code : config.ResponseType.Trim();
 
+        _logger.LogInformation("Building authorization request: callback={Callback}, responseType={ResponseType}, clientId={ClientId}", 
+            callback, responseType, config.ClientId);
+
         var query = new Dictionary<string, string?>
         {
             [OAuthConstants.Parameters.ResponseType] = responseType,

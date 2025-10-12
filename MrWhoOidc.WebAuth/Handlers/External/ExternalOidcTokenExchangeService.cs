@@ -85,6 +85,12 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
         if (!string.IsNullOrEmpty(clientSecret))
             form["client_secret"] = clientSecret;
 
+        _logger.LogInformation("Token exchange POST to {TokenEndpoint}: grant_type=authorization_code, redirect_uri={RedirectUri}, client_id={ClientId}, code={CodePreview}", 
+            tokenEndpoint, 
+            redirectUri, 
+            clientId, 
+            code.Length > 10 ? code.Substring(0, 10) + "..." : code);
+
         try
         {
             var httpc = _httpFactory.CreateClient();
@@ -101,7 +107,8 @@ internal sealed class ExternalOidcTokenExchangeService : IExternalOidcTokenExcha
 
             if (!tokResp.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Token exchange failed: {Status} {Body}", (int)tokResp.StatusCode, body);
+                _logger.LogWarning("Token exchange failed: {Status} {Body}. Sent redirect_uri: {RedirectUri}", 
+                    (int)tokResp.StatusCode, body, redirectUri);
                 return new TokenExchangeResult
                 {
                     Success = false,

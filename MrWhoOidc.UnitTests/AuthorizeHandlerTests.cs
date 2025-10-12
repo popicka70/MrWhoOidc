@@ -55,7 +55,18 @@ public sealed class AuthorizeHandlerTests
         clients ??= new StubClientStore();
         qrLoginHandler ??= new StubQrLoginHandler();
 
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler);
+        // Create a mock tenant accessor with default tenant
+        var tenantAccessor = new MockTenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Slug = "default",
+            Name = "Default",
+            IssuerUri = "https://localhost:8443",
+            IsMultiTenantMode = false
+        });
+
+        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler, tenantAccessor);
     }
 
     private static DefaultHttpContext CreateHttpContext(

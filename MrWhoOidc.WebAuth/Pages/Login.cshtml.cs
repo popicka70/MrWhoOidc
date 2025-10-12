@@ -50,6 +50,13 @@ public class LoginModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
+        logger.LogInformation("🔐 [Login POST] Username={Username}, ReturnUrl={ReturnUrl}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
+            Username ?? "(null)", 
+            ReturnUrl ?? "(null)", 
+            ModelState.IsValid,
+            tenantAccessor.CurrentTenant?.Slug ?? "(null)",
+            tenantAccessor.CurrentTenant?.TenantId.ToString() ?? "(null)");
+
         if (!ModelState.IsValid)
             return Page();
 
@@ -61,8 +68,14 @@ public class LoginModel(
 
         // Try username first; fallback to email/alternative email match.
         var user = await users.FindByUsernameAsync(Username) ?? await users.FindByUsernameOrEmailAsync(Username);
+        logger.LogInformation("🔍 [Login POST] User lookup result: {UserFound}, Username={Username}",
+            user != null ? "FOUND" : "NOT FOUND", Username);
+        
         if (user is null || !await users.VerifyPasswordAsync(user, Password))
         {
+            logger.LogWarning("⚠️ [Login POST] Authentication failed: user={UserNull}, passwordValid={PasswordCheck}",
+                user == null ? "NULL" : "EXISTS",
+                user == null ? "N/A" : (await users.VerifyPasswordAsync(user, Password) ? "VALID" : "INVALID"));
             RegisterFailedAttempt(HttpContext, Username);
             ModelState.AddModelError(string.Empty, "Invalid username or password");
             return Page();

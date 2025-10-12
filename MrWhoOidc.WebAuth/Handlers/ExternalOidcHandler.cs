@@ -134,7 +134,8 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var authRequest = await _requestBuilder.BuildAuthorizationRequestAsync(
             http, provider, cfg, discovery.Response!, state, nonce, challenge, returnUrl);
 
-        _logger.LogInformation("Redirecting to authorization endpoint ({Mechanism})", authRequest.Mechanism);
+        _logger.LogInformation("Redirecting to authorization endpoint ({Mechanism}). AuthRequest URL: {AuthRequestUrl}", 
+            authRequest.Mechanism, authRequest.RedirectUrl);
         _metricsRecorder.RecordStartOutcome(true, startTs, providerName, clientId, authRequest.Mechanism);
 
         return Results.Redirect(authRequest.RedirectUrl);
@@ -144,6 +145,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
     {
         var cbStart = DateTime.UtcNow;
         _metricsRecorder.RecordCallbackRequest();
+
+        _logger.LogInformation("OAuth callback received. Path: {Path}, Query: {Query}", 
+            http.Request.Path, http.Request.QueryString.Value);
 
         var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
@@ -226,6 +230,13 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         }
 
         var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
+        
+        _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
+            code.Length > 10 ? code.Substring(0, 10) + "..." : code, 
+            discovery.Response!.TokenEndpoint, 
+            redirectUri, 
+            cfg.ClientId);
+
         var tokenResult = await _tokenExchangeService.ExchangeCodeForTokensAsync(
             code, discovery.Response!.TokenEndpoint, redirectUri, cfg.ClientId, cfg.ClientSecret,
             state.CodeVerifier, http.RequestAborted);
