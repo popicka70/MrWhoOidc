@@ -78,9 +78,15 @@
                 </div>
                 
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Issuer URI</label>
-                    <input type="text" class="form-control" value="@Model.Input.IssuerUri" disabled />
-                    <div class="form-text">Read-only, computed from slug and mode</div>
+                    <label asp-for="Input.IssuerUri" class="form-label">
+                        Issuer URI <span class="text-danger">*</span>
+                    </label>
+                    <input asp-for="Input.IssuerUri" type="text" class="form-control" placeholder="https://localhost:8443/t/pop-app" />
+                    <div class="form-text">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Full issuer URL for this tenant (used in OIDC discovery). Must match the URL pattern used in your deployment.
+                    </div>
+                    <span asp-validation-for="Input.IssuerUri" class="text-danger small"></span>
                 </div>
             </div>
         </div>

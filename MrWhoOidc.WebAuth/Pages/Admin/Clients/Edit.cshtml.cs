@@ -29,7 +29,8 @@ public class EditModel(
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     IClientStore clientStore,
-    IScopeResolver scopeResolver) : TenantAwarePageModel(tenantAccessor)
+    IScopeResolver scopeResolver,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor)
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;
@@ -113,6 +114,14 @@ public class EditModel(
         // Build tenant-aware IdP chaining URLs
         var issuer = HttpContext.GetIssuer(oidcOptions);
         var baseUrl = issuer.TrimEnd('/');
+        
+        // If multi-tenancy is enabled, append tenant path to the issuer
+        if (multiTenancyOptions.Enabled && TenantAccessor.CurrentTenant != null)
+        {
+            var tenantSlug = TenantAccessor.CurrentTenant.Slug;
+            baseUrl = $"{baseUrl}/t/{tenantSlug}";
+        }
+        
         IdpChainingAuthorizationUrl = $"{baseUrl}/authorize";
         IdpChainingEndSessionUrl = $"{baseUrl}/connect/endsession";
 

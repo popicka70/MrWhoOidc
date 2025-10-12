@@ -14,7 +14,8 @@ public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IUserService userService) : TenantAwarePageModel(tenantAccessor)
+    IUserService userService,
+    IPasswordHasher passwordHasher) : TenantAwarePageModel(tenantAccessor)
 {
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
@@ -138,5 +139,43 @@ public class IndexModel(
         await userService.InvalidateUserCacheAsync(id, username, tenantId);
         
         return TenantAwareRedirect("/Admin/Users", TenantId.HasValue ? new { TenantId } : null);
+    }
+
+    public async Task<IActionResult> OnPostResetPasswordAsync(Guid id)
+    {
+        // Only platform admins can reset passwords
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        if (!platformAdminResult.Succeeded)
+        {
+            return Forbid();
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+        {
+            TempData["Error"] = "User not found.";
+            return TenantAwareRedirectToPage();
+        }
+
+        // Generate a random temporary password
+        var tempPassword = GenerateTemporaryPassword();
+        user.PasswordHash = passwordHasher.Hash(tempPassword);
+        user.HashAlgorithm = "argon2id";
+        await db.SaveChangesAsync();
+
+        // Invalidate user cache
+        await userService.InvalidateUserCacheAsync(user.Id, user.Username, user.TenantId);
+
+        TempData["Success"] = $"Password reset for user '<strong>{user.Username}</strong>'.<br/>Temporary password: <code class='user-select-all'>{tempPassword}</code><br/><small class='text-warning'><i class='bi bi-exclamation-triangle'></i> Please save this password and share it securely with the user.</small>";
+        
+        return TenantAwareRedirect("/Admin/Users", TenantId.HasValue ? new { TenantId } : null);
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        // Generate a secure random password: 16 characters, alphanumeric + symbols
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        var random = new Random();
+        return new string(Enumerable.Range(0, 16).Select(_ => chars[random.Next(chars.Length)]).ToArray());
     }
 }

@@ -8,6 +8,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -16,11 +17,18 @@ public interface IDiscoveryHandler
     IResult Handle(HttpContext ctx);
 }
 
-public sealed class DiscoveryHandler(OidcOptions oidcOptions, IOptions<AuthOptions> authOptions, AuthDbContext db) : IDiscoveryHandler
+public sealed class DiscoveryHandler(
+    OidcOptions oidcOptions, 
+    IOptions<AuthOptions> authOptions, 
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor) : IDiscoveryHandler
 {
     public IResult Handle(HttpContext ctx)
     {
-        var issuer = oidcOptions.Issuer ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+        // Use tenant-aware issuer URI from the resolved tenant context
+        var issuer = tenantAccessor.CurrentTenant?.IssuerUri 
+            ?? oidcOptions.Issuer 
+            ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
         var baseUrl = issuer.TrimEnd('/');
 
         // Pull scopes from DB (exposed only)

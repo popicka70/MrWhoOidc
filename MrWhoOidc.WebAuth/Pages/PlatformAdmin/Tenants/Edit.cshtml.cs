@@ -32,6 +32,9 @@ public class EditModel(AuthDbContext db) : PageModel
         [MaxLength(500)]
         public string? Description { get; set; }
 
+        [Required(ErrorMessage = "Issuer URI is required")]
+        [RegularExpression(@"^https?://[^\s]+$", ErrorMessage = "Issuer URI must be a valid URI")]
+        [MaxLength(500)]
         public string IssuerUri { get; set; } = string.Empty;
 
         public TenantStatus Status { get; set; }
@@ -100,6 +103,7 @@ public class EditModel(AuthDbContext db) : PageModel
         // Update tenant properties
         tenant.Name = Input.Name;
         tenant.Description = Input.Description;
+        tenant.IssuerUri = Input.IssuerUri?.Trim() ?? string.Empty;
         tenant.Status = Input.Status;
         tenant.MaxUsers = Input.MaxUsers;
         tenant.MaxClients = Input.MaxClients;
