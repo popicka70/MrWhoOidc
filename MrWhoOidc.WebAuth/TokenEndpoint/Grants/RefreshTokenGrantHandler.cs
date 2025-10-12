@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
+using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using System.Threading.Tasks;
@@ -25,7 +26,7 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest());
         }
 
-        var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
+        var issuer = context.Http.GetIssuer(context.Options);
 
         // Capture session metadata
         var ipAddress = context.Http.Connection.RemoteIpAddress?.ToString();

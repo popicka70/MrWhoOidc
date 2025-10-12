@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
+using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Protocols;
 using System.Threading.Tasks;
 
@@ -32,7 +33,7 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
 
-        var issuer = context.Options.Issuer ?? ($"{context.Http.Request.Scheme}://{context.Http.Request.Host}");
+        var issuer = context.Http.GetIssuer(context.Options);
         var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt);
         if (!ok)
         {
