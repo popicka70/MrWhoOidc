@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
@@ -47,15 +48,18 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     private readonly AuthDbContext _db;
     private readonly ILogger<ExternalOidcUserProvisioner> _logger;
     private readonly IRegistrationService _registrationService;
+    private readonly ITenantAccessor _tenantAccessor;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
         ILogger<ExternalOidcUserProvisioner> logger,
-        IRegistrationService registrationService)
+        IRegistrationService registrationService,
+        ITenantAccessor tenantAccessor)
     {
         _db = db;
         _logger = logger;
         _registrationService = registrationService;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task<UserProvisioningResult> ProvisionOrLinkUserAsync(
@@ -260,6 +264,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
             user = new User
             {
+                TenantId = _tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty,
                 Username = usernameCandidate,
                 Email = emailForUser,
                 Name = name ?? (emailForUser ?? baseUsername),
