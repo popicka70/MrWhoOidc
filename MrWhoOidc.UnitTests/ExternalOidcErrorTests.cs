@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.DataProtection;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -33,6 +35,10 @@ public class ExternalOidcErrorTests
         services.AddHttpClient();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        
+        // Register ITenantAccessor for multi-tenant support
+        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
+        
         services.AddExternalOidcHandler(); // Use DI registration
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();

@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.IdentityProviders;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
@@ -225,6 +227,10 @@ public class ExternalOidcHandlerTests
 
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        
+        // Register ITenantAccessor for multi-tenant support
+        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
+        
         services.AddExternalOidcHandler(); // Use DI registration
 
         var sp = services.BuildServiceProvider();

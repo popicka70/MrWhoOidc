@@ -11,12 +11,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
-using MrWhoOidc.UnitTests.TestSupport;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -132,6 +134,10 @@ public sealed class CorrelationPipelineTests
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
         services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
+        
+        // Register ITenantAccessor for multi-tenant support
+        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
+        
         services.AddExternalOidcHandler(); // Use DI registration
 
         var provider = services.BuildServiceProvider();
