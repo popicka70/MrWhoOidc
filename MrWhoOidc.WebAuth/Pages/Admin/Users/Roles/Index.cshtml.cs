@@ -11,26 +11,27 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Roles;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : UserPageModelBase(tenantAccessor)
+    IAuthorizationService authorizationService,
+    ILogger<IndexModel> logger) : UserPageModelBase(tenantAccessor)
 {
     [FromRoute]
     public Guid UserId { get; set; }
 
+    // Binds from ?realm=guid on GET and name="SelectedRealmId" on POST
+    [BindProperty(SupportsGet = true)]
+    public Guid? SelectedRealmId { get; set; }
+
+    // Binds from ?client=guid on GET and name="SelectedClientId" on POST
+    [BindProperty(SupportsGet = true)]
+    public Guid? SelectedClientId { get; set; }
+
     // Add (realm-role)
     [BindProperty]
-    public Guid RealmAddRealmId { get; set; }
-    [BindProperty]
     public Guid RealmAddRoleId { get; set; }
-    [BindProperty]
-    public bool RealmIsActive { get; set; } = true;
 
     // Add (client-role)
     [BindProperty]
-    public Guid ClientAddClientId { get; set; }
-    [BindProperty]
     public Guid ClientAddRoleId { get; set; }
-    [BindProperty]
-    public bool ClientIsActive { get; set; } = true;
 
     public string TenantName { get; set; } = string.Empty;
     public Guid UserTenantId { get; set; }
@@ -50,6 +51,10 @@ public class IndexModel(
 
     public async Task<IActionResult> OnGetAsync()
     {
+        logger.LogInformation(
+            "OnGetAsync called: UserId={UserId}, SelectedRealmId={SelectedRealmId}, SelectedClientId={SelectedClientId}",
+            UserId, SelectedRealmId, SelectedClientId);
+
         var userQuery = from u in db.Users.AsNoTracking()
                         join t in db.Tenants on u.TenantId equals t.Id
                         where u.Id == UserId
@@ -110,63 +115,106 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostAddRealmAsync()
     {
-        if (UserId == Guid.Empty || RealmAddRealmId == Guid.Empty || RealmAddRoleId == Guid.Empty)
-            return await OnGetAsync();
+        logger.LogInformation(
+            "OnPostAddRealmAsync called: UserId={UserId}, SelectedRealmId={SelectedRealmId}, RealmAddRoleId={RealmAddRoleId}",
+            UserId, SelectedRealmId, RealmAddRoleId);
+
+        if (UserId == Guid.Empty || !SelectedRealmId.HasValue || RealmAddRoleId == Guid.Empty)
+        {
+            logger.LogWarning(
+                "OnPostAddRealmAsync validation failed: UserId={UserId}, SelectedRealmId={SelectedRealmId}, RealmAddRoleId={RealmAddRoleId}",
+                UserId, SelectedRealmId, RealmAddRoleId);
+            return RedirectToPage(new { userId = UserId, SelectedRealmId });
+        }
 
         // Get user's tenant with tenant filtering
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        logger.LogInformation("User isPlatformAdmin: {IsPlatformAdmin}", isPlatformAdmin);
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
         
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+            logger.LogInformation("Current tenant from TenantAccessor: {CurrentTenantId}", currentTenantId);
+            
             if (!currentTenantId.HasValue)
             {
+                logger.LogWarning("No current tenant found in TenantAccessor, redirecting to Users/Index");
                 return RedirectToPage("/Admin/Users/Index");
             }
             userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
         }
 
         var user = await userQuery.FirstOrDefaultAsync();
-        if (user is null) return RedirectToPage("/Admin/Users/Index");
+        if (user is null)
+        {
+            logger.LogWarning("User {UserId} not found or access denied", UserId);
+            return RedirectToPage("/Admin/Users/Index");
+        }
+
+        logger.LogInformation("User found: {UserId}, UserTenantId={UserTenantId}", user.Id, user.TenantId);
 
         // Validate realm belongs to user's tenant
         var realmValid = await db.Realms.AsNoTracking()
-            .AnyAsync(r => r.Id == RealmAddRealmId && r.TenantId == user.TenantId);
+            .AnyAsync(r => r.Id == SelectedRealmId.Value && r.TenantId == user.TenantId);
+        
+        logger.LogInformation(
+            "Realm validation: RealmId={RealmId}, UserTenantId={UserTenantId}, IsValid={IsValid}",
+            SelectedRealmId.Value, user.TenantId, realmValid);
+        
         if (!realmValid)
         {
-            ModelState.AddModelError(string.Empty, "Realm does not belong to user's tenant.");
-            return await OnGetAsync();
+            logger.LogWarning("Realm {RealmId} is not valid for user tenant {UserTenantId}", SelectedRealmId.Value, user.TenantId);
+            return RedirectToPage(new { userId = UserId, SelectedRealmId });
         }
 
         // Validate role belongs to user's tenant AND the selected realm
         var roleValid = await db.Roles.AsNoTracking()
-            .AnyAsync(r => r.Id == RealmAddRoleId && r.TenantId == user.TenantId && r.RealmId == RealmAddRealmId);
+            .AnyAsync(r => r.Id == RealmAddRoleId && r.TenantId == user.TenantId && r.RealmId == SelectedRealmId.Value);
+        
+        logger.LogInformation(
+            "Role validation: RoleId={RoleId}, RealmId={RealmId}, UserTenantId={UserTenantId}, IsValid={IsValid}",
+            RealmAddRoleId, SelectedRealmId.Value, user.TenantId, roleValid);
+        
         if (!roleValid)
         {
-            ModelState.AddModelError(string.Empty, "Selected role does not belong to the selected realm or user's tenant.");
-            return await OnGetAsync();
+            logger.LogWarning(
+                "Role {RoleId} is not valid for realm {RealmId} and tenant {UserTenantId}",
+                RealmAddRoleId, SelectedRealmId.Value, user.TenantId);
+            return RedirectToPage(new { userId = UserId, SelectedRealmId });
         }
 
         var exists = await db.UserRealmRoleAssignments.AnyAsync(a =>
             a.UserId == UserId &&
-            a.RealmId == RealmAddRealmId &&
+            a.RealmId == SelectedRealmId.Value &&
             a.RoleId == RealmAddRoleId);
+
+        logger.LogInformation("Assignment already exists: {Exists}", exists);
 
         if (!exists)
         {
             db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
             {
                 UserId = UserId,
-                RealmId = RealmAddRealmId,
+                RealmId = SelectedRealmId.Value,
                 RoleId = RealmAddRoleId,
-                IsActive = RealmIsActive
+                IsActive = true
             });
             await db.SaveChangesAsync();
+            logger.LogInformation(
+                "Successfully added role assignment: UserId={UserId}, RealmId={RealmId}, RoleId={RoleId}",
+                UserId, SelectedRealmId.Value, RealmAddRoleId);
         }
-        return RedirectToPage(new { userId = UserId });
+        else
+        {
+            logger.LogInformation("Role assignment already exists, skipping creation");
+        }
+        
+        logger.LogInformation("Redirecting to: userId={UserId}, SelectedRealmId={RealmId}", UserId, SelectedRealmId);
+        return RedirectToPage(new { userId = UserId, SelectedRealmId });
     }
 
     public async Task<IActionResult> OnPostDeleteRealmAsync(Guid roleId, Guid realmId)
@@ -181,13 +229,13 @@ public class IndexModel(
             db.UserRealmRoleAssignments.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { userId = UserId });
+        return RedirectToPage(new { userId = UserId, SelectedRealmId = realmId });
     }
 
     public async Task<IActionResult> OnPostAddClientAsync()
     {
-        if (UserId == Guid.Empty || ClientAddClientId == Guid.Empty || ClientAddRoleId == Guid.Empty)
-            return await OnGetAsync();
+        if (UserId == Guid.Empty || !SelectedClientId.HasValue || ClientAddRoleId == Guid.Empty)
+            return RedirectToPage(new { userId = UserId, SelectedClientId });
 
         // Get user's tenant with tenant filtering
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
@@ -210,11 +258,10 @@ public class IndexModel(
 
         // Validate client belongs to user's tenant
         var client = await db.Clients.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == ClientAddClientId && c.TenantId == user.TenantId);
+            .FirstOrDefaultAsync(c => c.Id == SelectedClientId.Value && c.TenantId == user.TenantId);
         if (client is null)
         {
-            ModelState.AddModelError(string.Empty, "Client does not belong to user's tenant.");
-            return await OnGetAsync();
+            return RedirectToPage(new { userId = UserId, SelectedClientId });
         }
 
         // Validate role belongs to user's tenant
@@ -222,13 +269,12 @@ public class IndexModel(
             .AnyAsync(r => r.Id == ClientAddRoleId && r.TenantId == user.TenantId);
         if (!roleValid)
         {
-            ModelState.AddModelError(string.Empty, "Role does not belong to user's tenant.");
-            return await OnGetAsync();
+            return RedirectToPage(new { userId = UserId, SelectedClientId });
         }
 
         var exists = await db.UserClientRoleAssignments.AnyAsync(a =>
             a.UserId == UserId &&
-            a.ClientId == ClientAddClientId &&
+            a.ClientId == SelectedClientId.Value &&
             a.RoleId == ClientAddRoleId);
 
         if (!exists)
@@ -236,13 +282,13 @@ public class IndexModel(
             db.UserClientRoleAssignments.Add(new UserClientRoleAssignment
             {
                 UserId = UserId,
-                ClientId = ClientAddClientId,
+                ClientId = SelectedClientId.Value,
                 RoleId = ClientAddRoleId,
-                IsActive = ClientIsActive
+                IsActive = true
             });
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { userId = UserId });
+        return RedirectToPage(new { userId = UserId, SelectedClientId });
     }
 
     public async Task<IActionResult> OnPostDeleteClientAsync(Guid roleId, Guid clientId)
@@ -257,6 +303,6 @@ public class IndexModel(
             db.UserClientRoleAssignments.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { userId = UserId });
+        return RedirectToPage(new { userId = UserId, SelectedClientId = clientId });
     }
 }
