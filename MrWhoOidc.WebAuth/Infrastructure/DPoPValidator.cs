@@ -115,7 +115,7 @@ internal sealed class DPoPValidator : IDPoPValidator
             var provided = new Uri(htu).GetLeftPart(UriPartial.Path).TrimEnd('/');
             if (!string.Equals(expected, provided, StringComparison.Ordinal))
             {
-                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "htu_mismatch"));
+                return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, $"htu_mismatch: expected={expected}, provided={provided}"));
             }
 
             if (iat is null || !long.TryParse(iat.ToString(), out var iatSec))

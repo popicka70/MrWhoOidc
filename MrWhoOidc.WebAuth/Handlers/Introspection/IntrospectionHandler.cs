@@ -46,7 +46,8 @@ public sealed class IntrospectionHandler(
 
         // Build context
         var issuer = http.GetIssuer(options);
-        var endpoint = issuer + "/introspect";
+        // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
+        var endpoint = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
         var context = new IntrospectionContext
         {
             Request = request,

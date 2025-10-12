@@ -74,7 +74,8 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                     return WithWwwAuthenticate(ErrorResults.InvalidToken());
                 }
 
-                var endpointUrl = http.GetIssuer(options).TrimEnd('/') + "/userinfo";
+                // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
+                var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
                 var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
 
                 // Nonce challenge support

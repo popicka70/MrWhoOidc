@@ -22,7 +22,11 @@ internal static class DpopValidationHelper
         var validation = await validator.ValidateForEndpointAsync(http, endpointUrl, athToken);
         if (!validation.Ok)
         {
-            logger?.LogWarning("/token invalid_dpop_proof: reason={Reason} ip={IP}", validation.Error ?? "unknown", http.Connection.RemoteIpAddress?.ToString());
+            logger?.LogWarning("/token invalid_dpop_proof: reason={Reason} endpoint={Endpoint} method={Method} ip={IP}", 
+                validation.Error ?? "unknown", 
+                endpointUrl,
+                http.Request.Method,
+                http.Connection.RemoteIpAddress?.ToString());
             return (false, null);
         }
         return (true, validation.Jkt);

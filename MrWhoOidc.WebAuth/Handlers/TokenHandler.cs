@@ -154,8 +154,8 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
 
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
-            var authzUrl = http.GetIssuer(options);
-            var endpointUrl = authzUrl.TrimEnd('/') + "/token";
+            // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
+            var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
             if (!string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
             {
                 if (http.Request.Headers.ContainsKey("DPoP"))

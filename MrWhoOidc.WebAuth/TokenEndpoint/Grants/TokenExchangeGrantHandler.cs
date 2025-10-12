@@ -83,7 +83,8 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
 
         // DPoP ATH validation for token-exchange
         string? dpopJkt = context.DPoPJkt; // earlier early validation if any (should have been skipped for TE)
-        var endpointUrl = http.GetIssuer(context.Options).TrimEnd('/') + "/token";
+        // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
+        var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
         if (http.Request.Headers.ContainsKey("DPoP"))
         {
             var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, subjectToken, logger);
