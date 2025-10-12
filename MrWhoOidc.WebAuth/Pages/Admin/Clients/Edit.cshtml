@@ -688,6 +688,33 @@
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
     <script>
         (function(){
+            // Tab persistence: activate tab from URL parameter or restore from previous selection
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            
+            if (tabParam) {
+                // Activate tab from URL parameter
+                const tabButton = document.getElementById(tabParam + '-tab');
+                if (tabButton) {
+                    const tab = new bootstrap.Tab(tabButton);
+                    tab.show();
+                }
+            }
+            
+            // Store active tab selection in URL when user clicks tabs
+            const tabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
+            tabButtons.forEach(button => {
+                button.addEventListener('shown.bs.tab', function(event) {
+                    const targetId = event.target.id;
+                    const tabName = targetId.replace('-tab', '');
+                    
+                    // Update URL with tab parameter without page reload
+                    const newUrl = new URL(window.location);
+                    newUrl.searchParams.set('tab', tabName);
+                    window.history.replaceState({}, '', newUrl);
+                });
+            });
+            
             function toBase64Url(bytes) {
                 let binary = '';
                 const len = bytes.byteLength;

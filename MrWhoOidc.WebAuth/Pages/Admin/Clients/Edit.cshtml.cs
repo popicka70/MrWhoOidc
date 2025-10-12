@@ -37,6 +37,9 @@ public class EditModel(
     [FromRoute]
     public Guid Id { get; set; }
 
+    [FromQuery(Name = "tab")]
+    public string? ActiveTab { get; set; }
+
     public List<SelectListItem> RealmOptions { get; private set; } = new();
 
     public List<KeyPreview> KeyPreviews { get; private set; } = new();
@@ -261,7 +264,7 @@ public class EditModel(
             db.ClientScopes.Add(new ClientScope { ClientId = Id, ScopeName = NewScope });
             await db.SaveChangesAsync();
         }
-        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=scopes");
     }
 
     public async Task<IActionResult> OnPostRemoveScopeAsync(string scopeName)
@@ -279,7 +282,7 @@ public class EditModel(
             db.ClientScopes.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=scopes");
     }
 
     public async Task<IActionResult> OnPostExtractPublicJwkAsync()
@@ -1240,7 +1243,7 @@ public class EditModel(
         entity.Order = ProviderInput.Order;
 
         await db.SaveChangesAsync();
-        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
     }
 
     public async Task<IActionResult> OnPostDeleteProviderAsync(Guid providerId)
@@ -1260,7 +1263,7 @@ public class EditModel(
             db.ClientIdentityProviders.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}");
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
     }
 
     /// <summary>
