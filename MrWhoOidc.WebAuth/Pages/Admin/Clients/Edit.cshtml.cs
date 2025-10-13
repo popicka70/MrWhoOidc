@@ -30,7 +30,7 @@ public class EditModel(
     IAuthorizationService authorizationService,
     IClientStore clientStore,
     IScopeResolver scopeResolver,
-    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor)
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     private readonly ILogger<EditModel> _logger = logger;
     private readonly MrWhoOidc.WebAuth.Observability.IAuditSink _audit = audit;

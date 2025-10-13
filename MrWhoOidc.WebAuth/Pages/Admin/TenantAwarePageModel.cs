@@ -10,10 +10,12 @@ namespace MrWhoOidc.WebAuth.Pages.Admin;
 public abstract class TenantAwarePageModel : PageModel
 {
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly IMultiTenancyOptions _multiTenancyOptions;
 
-    protected TenantAwarePageModel(ITenantAccessor tenantAccessor)
+    protected TenantAwarePageModel(ITenantAccessor tenantAccessor, IMultiTenancyOptions multiTenancyOptions)
     {
         _tenantAccessor = tenantAccessor ?? throw new ArgumentNullException(nameof(tenantAccessor));
+        _multiTenancyOptions = multiTenancyOptions ?? throw new ArgumentNullException(nameof(multiTenancyOptions));
     }
 
     /// <summary>
@@ -23,6 +25,8 @@ public abstract class TenantAwarePageModel : PageModel
 
     /// <summary>
     /// Redirects to a page within the current tenant context.
+    /// In single-tenant mode: redirects to root-level path
+    /// In multi-tenant mode: redirects to tenant-prefixed path
     /// </summary>
     /// <param name="pagePath">The page path (e.g., "/Admin/Users/Index" or "Index")</param>
     /// <param name="routeValues">Optional route values to append as query string</param>
@@ -37,8 +41,8 @@ public abstract class TenantAwarePageModel : PageModel
             pagePath = "/" + pagePath;
         }
 
-        // Build tenant-aware URL
-        var url = currentTenant != null 
+        // Build tenant-aware URL only if multi-tenancy is enabled
+        var url = (_multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}{pagePath}"
             : pagePath;
 
@@ -68,6 +72,8 @@ public abstract class TenantAwarePageModel : PageModel
 
     /// <summary>
     /// Redirects to the current page (useful for POST-Redirect-GET pattern).
+    /// In single-tenant mode: redirects to root-level path
+    /// In multi-tenant mode: redirects to tenant-prefixed path
     /// </summary>
     protected IActionResult TenantAwareRedirectToPage()
     {
@@ -79,9 +85,9 @@ public abstract class TenantAwarePageModel : PageModel
             return Redirect(currentPath);
         }
 
-        // Otherwise, build tenant-aware URL
+        // Otherwise, build tenant-aware URL only if multi-tenancy is enabled
         var currentTenant = _tenantAccessor.CurrentTenant;
-        var url = currentTenant != null 
+        var url = (_multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}{currentPath}"
             : currentPath;
 

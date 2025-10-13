@@ -20,7 +20,8 @@ public class AddModel(
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     IScopeResolver scopeResolver,
-    IScopeNameValidator scopeNameValidator) : TenantAwarePageModel(tenantAccessor)
+    IScopeNameValidator scopeNameValidator,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public class AddInput
     {

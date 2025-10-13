@@ -16,7 +16,8 @@ public class ClaimMappingsModel(
     AuthDbContext db, 
     IClaimMappingService mapper, 
     ILogger<ClaimMappingsModel> logger,
-    ITenantAccessor tenantAccessor) : PageModel
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
@@ -31,11 +32,12 @@ public class ClaimMappingsModel(
 
     /// <summary>
     /// Builds a tenant-aware redirect URL for the current page (with Id query parameter).
+    /// Only adds tenant prefix when multi-tenancy is enabled.
     /// </summary>
     private IActionResult RedirectToClaimMappings()
     {
         var currentTenant = tenantAccessor.CurrentTenant;
-        var url = currentTenant != null 
+        var url = (multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}/Admin/Providers/ClaimMappings?id={Id}"
             : $"/Admin/Providers/ClaimMappings?id={Id}";
         return Redirect(url);

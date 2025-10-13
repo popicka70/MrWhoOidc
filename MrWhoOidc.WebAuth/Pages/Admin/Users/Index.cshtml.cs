@@ -15,7 +15,8 @@ public class IndexModel(
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     IUserService userService,
-    IPasswordHasher passwordHasher) : TenantAwarePageModel(tenantAccessor)
+    IPasswordHasher passwordHasher,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 

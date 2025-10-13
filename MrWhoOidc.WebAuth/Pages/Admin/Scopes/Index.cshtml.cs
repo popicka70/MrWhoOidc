@@ -16,7 +16,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record ScopeRow(string Name, string? Description, bool IsExposed, bool IsGlobal, Guid? TenantId, string? TenantName);
     

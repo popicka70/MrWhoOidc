@@ -10,7 +10,10 @@ using MrWhoOidc.Auth.Persistence;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
+public class AddModel(
+    AuthDbContext db, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public class AddInput
     {

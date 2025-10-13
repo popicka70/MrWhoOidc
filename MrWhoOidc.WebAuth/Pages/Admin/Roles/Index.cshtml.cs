@@ -12,7 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record RoleRow(Guid Id, string Name, Guid RealmId, string RealmName, Guid TenantId, string TenantName, bool IsActive);
 

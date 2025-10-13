@@ -14,7 +14,8 @@ public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IUserService userService) : UserPageModelBase(tenantAccessor)
+    IUserService userService,
+    IMultiTenancyOptions multiTenancyOptions) : UserPageModelBase(tenantAccessor, multiTenancyOptions)
 {
     public class EditInput
     {

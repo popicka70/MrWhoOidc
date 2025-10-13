@@ -13,7 +13,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
@@ -87,9 +88,9 @@ public class IndexModel(
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
         if (realm is null)
         {
-            // Build tenant-aware redirect URL
+            // Build tenant-aware redirect URL (only in multi-tenant mode)
             var currentTenant = tenantAccessor.CurrentTenant;
-            var redirectUrl = currentTenant != null 
+            var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
                 ? $"/t/{currentTenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
                 : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
             return Redirect(redirectUrl);
@@ -97,9 +98,9 @@ public class IndexModel(
         db.Realms.Remove(realm);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
         var tenant = tenantAccessor.CurrentTenant;
-        var url = tenant != null 
+        var url = (multiTenancyOptions.Enabled && tenant != null)
             ? $"/t/{tenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
             : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
         return Redirect(url);

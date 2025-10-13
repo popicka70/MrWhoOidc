@@ -11,7 +11,12 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, IPasswordHasher hasher, IClientIdGenerator idGen, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
+public class AddModel(
+    AuthDbContext db, 
+    IPasswordHasher hasher, 
+    IClientIdGenerator idGen, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public List<SelectListItem> RealmOptions { get; private set; } = new();
 

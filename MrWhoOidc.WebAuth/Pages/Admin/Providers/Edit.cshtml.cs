@@ -20,7 +20,8 @@ public class EditModel(
     IHttpClientFactory httpClientFactory, 
     IWebHostEnvironment env,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -189,9 +190,9 @@ public class EditModel(
 
         TempData["Success"] = "Provider updated.";
         
-        // Build tenant-aware redirect URL
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
         var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = currentTenant != null 
+        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}/Admin/Providers"
             : "/Admin/Providers";
         return Redirect(redirectUrl);

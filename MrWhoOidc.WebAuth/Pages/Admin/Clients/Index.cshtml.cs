@@ -17,7 +17,8 @@ public class IndexModel(
     IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IClientStore clientStore) : TenantAwarePageModel(tenantAccessor)
+    IClientStore clientStore,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
 

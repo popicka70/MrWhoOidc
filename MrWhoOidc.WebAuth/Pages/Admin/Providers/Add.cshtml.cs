@@ -11,7 +11,11 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, IIdentityProviderValidator validator, ITenantAccessor tenantAccessor) : PageModel
+public class AddModel(
+    AuthDbContext db, 
+    IIdentityProviderValidator validator, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -80,8 +84,8 @@ public class AddModel(AuthDbContext db, IIdentityProviderValidator validator, IT
         db.IdentityProviders.Add(entity);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL
-        var redirectUrl = currentTenant != null 
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
+        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}/Admin/Providers"
             : "/Admin/Providers";
         return Redirect(redirectUrl);

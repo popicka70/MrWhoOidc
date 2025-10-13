@@ -12,7 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     [FromRoute]
     public Guid Id { get; set; }
@@ -93,9 +94,9 @@ public class EditModel(
         realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
         var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = currentTenant != null 
+        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}/Admin/Realms"
             : "/Admin/Realms";
         return Redirect(redirectUrl);

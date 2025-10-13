@@ -11,7 +11,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 public class DeleteModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     public IdentityProvider? Provider { get; private set; }
 
@@ -61,9 +62,9 @@ public class DeleteModel(
         {
             TempData["Error"] = "Cannot delete a provider that is mapped to clients.";
             
-            // Build tenant-aware redirect URL
+            // Build tenant-aware redirect URL (only in multi-tenant mode)
             var currentTenant = tenantAccessor.CurrentTenant;
-            var redirectUrl = currentTenant != null 
+            var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
                 ? $"/t/{currentTenant.Slug}/Admin/Providers"
                 : "/Admin/Providers";
             return Redirect(redirectUrl);
@@ -76,9 +77,9 @@ public class DeleteModel(
             await db.SaveChangesAsync();
         }
         
-        // Build tenant-aware redirect URL
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
         var tenant = tenantAccessor.CurrentTenant;
-        var url = tenant != null 
+        var url = (multiTenancyOptions.Enabled && tenant != null)
             ? $"/t/{tenant.Slug}/Admin/Providers"
             : "/Admin/Providers";
         return Redirect(url);

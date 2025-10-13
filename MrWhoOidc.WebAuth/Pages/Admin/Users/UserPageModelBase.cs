@@ -9,7 +9,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 /// </summary>
 public abstract class UserPageModelBase : TenantAwarePageModel
 {
-    protected UserPageModelBase(ITenantAccessor tenantAccessor) : base(tenantAccessor)
+    protected UserPageModelBase(ITenantAccessor tenantAccessor, IMultiTenancyOptions multiTenancyOptions) 
+        : base(tenantAccessor, multiTenancyOptions)
     {
     }
 

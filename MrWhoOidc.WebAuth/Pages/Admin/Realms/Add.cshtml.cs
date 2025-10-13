@@ -10,7 +10,10 @@ using MrWhoOidc.Auth.MultiTenancy;
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
 [Authorize(Policy = "tenant-admin")]
-public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
+public class AddModel(
+    AuthDbContext db, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     [BindProperty]
     public RealmInput Input { get; set; } = new();
@@ -57,9 +60,9 @@ public class AddModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageMo
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL
+        // Build tenant-aware redirect URL (only in multi-tenant mode)
         var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = currentTenant != null 
+        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
             ? $"/t/{currentTenant.Slug}/Admin/Realms/Edit/{realm.Id}"
             : $"/Admin/Realms/Edit/{realm.Id}";
         return Redirect(redirectUrl);

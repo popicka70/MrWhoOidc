@@ -12,7 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : TenantAwarePageModel(tenantAccessor)
+    IAuthorizationService authorizationService,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public class EditInput
     {

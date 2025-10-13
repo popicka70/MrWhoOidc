@@ -12,7 +12,8 @@ public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    ILogger<IndexModel> logger) : UserPageModelBase(tenantAccessor)
+    ILogger<IndexModel> logger,
+    IMultiTenancyOptions multiTenancyOptions) : UserPageModelBase(tenantAccessor, multiTenancyOptions)
 {
     [FromRoute]
     public Guid UserId { get; set; }

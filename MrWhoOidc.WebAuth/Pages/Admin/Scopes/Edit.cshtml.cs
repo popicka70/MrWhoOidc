@@ -15,7 +15,10 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 /// shared resources like "openid", "profile", "email", etc.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
-public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : TenantAwarePageModel(tenantAccessor)
+public class EditModel(
+    AuthDbContext db, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public class EditInput
     {
