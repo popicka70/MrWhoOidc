@@ -60,6 +60,13 @@ public class LoginModel(
         if (!ModelState.IsValid)
             return Page();
 
+        // Validate username is not null
+        if (string.IsNullOrWhiteSpace(Username))
+        {
+            ModelState.AddModelError(string.Empty, "Username is required");
+            return Page();
+        }
+
         if (IsLockedOut(HttpContext, Username))
         {
             ModelState.AddModelError(string.Empty, "Too many attempts. Try again later.");
