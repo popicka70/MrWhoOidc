@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin;
 
@@ -33,38 +34,28 @@ public abstract class TenantAwarePageModel : PageModel
     /// <returns>A redirect result with tenant-aware URL</returns>
     protected IActionResult TenantAwareRedirect(string pagePath, object? routeValues = null)
     {
-        var currentTenant = _tenantAccessor.CurrentTenant;
+        string url;
         
-        // Ensure page path starts with /
-        if (!pagePath.StartsWith('/'))
-        {
-            pagePath = "/" + pagePath;
-        }
-
-        // Build tenant-aware URL only if multi-tenancy is enabled
-        var url = (_multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}{pagePath}"
-            : pagePath;
-
-        // Append route values as query string
         if (routeValues != null)
         {
-            var queryParams = new List<string>();
+            // Extract query parameters from route values object
             var properties = routeValues.GetType().GetProperties();
-            
-            foreach (var prop in properties)
-            {
-                var value = prop.GetValue(routeValues);
-                if (value != null)
-                {
-                    queryParams.Add($"{prop.Name}={Uri.EscapeDataString(value.ToString()!)}");
-                }
-            }
+            var queryParams = properties
+                .Select(prop => (prop.Name, prop.GetValue(routeValues)?.ToString()))
+                .ToArray();
 
-            if (queryParams.Any())
-            {
-                url += "?" + string.Join("&", queryParams);
-            }
+            url = TenantAwareUrlBuilder.BuildTenantPath(
+                pagePath,
+                _tenantAccessor,
+                _multiTenancyOptions,
+                queryParams);
+        }
+        else
+        {
+            url = TenantAwareUrlBuilder.BuildTenantPath(
+                pagePath,
+                _tenantAccessor,
+                _multiTenancyOptions);
         }
 
         return Redirect(url);
@@ -85,11 +76,11 @@ public abstract class TenantAwarePageModel : PageModel
             return Redirect(currentPath);
         }
 
-        // Otherwise, build tenant-aware URL only if multi-tenancy is enabled
-        var currentTenant = _tenantAccessor.CurrentTenant;
-        var url = (_multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}{currentPath}"
-            : currentPath;
+        // Build tenant-aware URL using the helper
+        var url = TenantAwareUrlBuilder.BuildTenantPath(
+            currentPath,
+            _tenantAccessor,
+            _multiTenancyOptions);
 
         return Redirect(url);
     }

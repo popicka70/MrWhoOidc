@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -84,10 +85,11 @@ public class AddModel(
         db.IdentityProviders.Add(entity);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}/Admin/Providers"
-            : "/Admin/Providers";
+        // Build tenant-aware redirect URL
+        var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Providers",
+            tenantAccessor,
+            multiTenancyOptions);
         return Redirect(redirectUrl);
     }
 

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
@@ -60,11 +61,11 @@ public class AddModel(
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}/Admin/Realms/Edit/{realm.Id}"
-            : $"/Admin/Realms/Edit/{realm.Id}";
+        // Build tenant-aware redirect URL
+        var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+            $"/Admin/Realms/Edit/{realm.Id}",
+            tenantAccessor,
+            multiTenancyOptions);
         return Redirect(redirectUrl);
     }
 

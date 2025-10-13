@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
 using System.IO;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -190,11 +191,11 @@ public class EditModel(
 
         TempData["Success"] = "Provider updated.";
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}/Admin/Providers"
-            : "/Admin/Providers";
+        // Build tenant-aware redirect URL
+        var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Providers",
+            tenantAccessor,
+            multiTenancyOptions);
         return Redirect(redirectUrl);
     }
 

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
@@ -94,11 +95,11 @@ public class EditModel(
         realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var currentTenant = tenantAccessor.CurrentTenant;
-        var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}/Admin/Realms"
-            : "/Admin/Realms";
+        // Build tenant-aware redirect URL
+        var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Realms",
+            tenantAccessor,
+            multiTenancyOptions);
         return Redirect(redirectUrl);
     }
 

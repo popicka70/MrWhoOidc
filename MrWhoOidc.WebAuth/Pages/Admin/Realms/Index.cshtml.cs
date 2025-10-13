@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
@@ -88,21 +89,23 @@ public class IndexModel(
         var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
         if (realm is null)
         {
-            // Build tenant-aware redirect URL (only in multi-tenant mode)
-            var currentTenant = tenantAccessor.CurrentTenant;
-            var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-                ? $"/t/{currentTenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
-                : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
+            // Build tenant-aware redirect URL with optional TenantId parameter
+            var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+                "/Admin/Realms",
+                tenantAccessor,
+                multiTenancyOptions,
+                ("TenantId", TenantId?.ToString()));
             return Redirect(redirectUrl);
         }
         db.Realms.Remove(realm);
         await db.SaveChangesAsync();
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var tenant = tenantAccessor.CurrentTenant;
-        var url = (multiTenancyOptions.Enabled && tenant != null)
-            ? $"/t/{tenant.Slug}/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "")
-            : "/Admin/Realms" + (TenantId.HasValue ? $"?TenantId={TenantId}" : "");
+        // Build tenant-aware redirect URL with optional TenantId parameter
+        var url = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Realms",
+            tenantAccessor,
+            multiTenancyOptions,
+            ("TenantId", TenantId?.ToString()));
         return Redirect(url);
     }
 }

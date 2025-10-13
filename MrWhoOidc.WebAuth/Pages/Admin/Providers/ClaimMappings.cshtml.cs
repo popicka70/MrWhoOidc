@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -36,10 +37,11 @@ public class ClaimMappingsModel(
     /// </summary>
     private IActionResult RedirectToClaimMappings()
     {
-        var currentTenant = tenantAccessor.CurrentTenant;
-        var url = (multiTenancyOptions.Enabled && currentTenant != null)
-            ? $"/t/{currentTenant.Slug}/Admin/Providers/ClaimMappings?id={Id}"
-            : $"/Admin/Providers/ClaimMappings?id={Id}";
+        var url = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Providers/ClaimMappings",
+            tenantAccessor,
+            multiTenancyOptions,
+            ("id", Id.ToString()));
         return Redirect(url);
     }
 

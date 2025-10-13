@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -62,11 +63,11 @@ public class DeleteModel(
         {
             TempData["Error"] = "Cannot delete a provider that is mapped to clients.";
             
-            // Build tenant-aware redirect URL (only in multi-tenant mode)
-            var currentTenant = tenantAccessor.CurrentTenant;
-            var redirectUrl = (multiTenancyOptions.Enabled && currentTenant != null)
-                ? $"/t/{currentTenant.Slug}/Admin/Providers"
-                : "/Admin/Providers";
+            // Build tenant-aware redirect URL
+            var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
+                "/Admin/Providers",
+                tenantAccessor,
+                multiTenancyOptions);
             return Redirect(redirectUrl);
         }
 
@@ -77,11 +78,11 @@ public class DeleteModel(
             await db.SaveChangesAsync();
         }
         
-        // Build tenant-aware redirect URL (only in multi-tenant mode)
-        var tenant = tenantAccessor.CurrentTenant;
-        var url = (multiTenancyOptions.Enabled && tenant != null)
-            ? $"/t/{tenant.Slug}/Admin/Providers"
-            : "/Admin/Providers";
+        // Build tenant-aware redirect URL
+        var url = TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/Providers",
+            tenantAccessor,
+            multiTenancyOptions);
         return Redirect(url);
     }
 }
