@@ -25,6 +25,11 @@ public abstract class TenantAwarePageModel : PageModel
     protected ITenantAccessor TenantAccessor => _tenantAccessor;
 
     /// <summary>
+    /// Gets the multi-tenancy options for checking if multi-tenancy is enabled.
+    /// </summary>
+    protected IMultiTenancyOptions MultiTenancyOptions => _multiTenancyOptions;
+
+    /// <summary>
     /// Redirects to a page within the current tenant context.
     /// In single-tenant mode: redirects to root-level path
     /// In multi-tenant mode: redirects to tenant-prefixed path

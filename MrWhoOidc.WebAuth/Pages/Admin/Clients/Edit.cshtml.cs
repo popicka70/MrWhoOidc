@@ -116,7 +116,7 @@ public class EditModel(
         var baseUrl = issuer.TrimEnd('/');
         
         // If multi-tenancy is enabled, append tenant path to the issuer
-        if (multiTenancyOptions.Enabled && TenantAccessor.CurrentTenant != null)
+        if (MultiTenancyOptions.Enabled && TenantAccessor.CurrentTenant != null)
         {
             var tenantSlug = TenantAccessor.CurrentTenant.Slug;
             baseUrl = $"{baseUrl}/t/{tenantSlug}";
