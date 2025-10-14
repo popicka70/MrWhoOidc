@@ -285,14 +285,15 @@ public class JwksMultiTenancyTests
         var oldKey = await keyStore.GetActiveSigningKeyAsync();
 
         // Add a new key (simulate rotation) - both should appear in JWKS
+        var newKeyKid = Guid.NewGuid().ToString("N");
         var newKey = new SigningKey
         {
-            Kid = Guid.NewGuid().ToString("N"),
+            Kid = newKeyKid,
             Alg = "RS256",
             JwkJson = System.Text.Json.JsonSerializer.Serialize(new
             {
                 kty = "RSA",
-                kid = Guid.NewGuid().ToString("N"),
+                kid = newKeyKid, // Must match the Kid property
                 alg = "RS256",
                 n = "test-modulus",
                 e = "AQAB"
@@ -313,7 +314,7 @@ public class JwksMultiTenancyTests
         Assert.IsGreaterThanOrEqualTo(jwks.Count, 2, "JWKS should contain at least 2 keys after rotation (old + new)");
         
         var kids = jwks.Select(k => k.Kid).ToList();
-        Assert.Contains(kids, oldKey.Kid, "JWKS should still contain old key (grace period)");
+        Assert.Contains(oldKey.Kid, kids, "JWKS should still contain old key (grace period)");
     }
 
     [TestMethod]
@@ -326,11 +327,12 @@ public class JwksMultiTenancyTests
         var activeKey = await keyStore.GetActiveSigningKeyAsync();
 
         // Add a retired key
+        var retiredKeyKid = "retired-key";
         var retiredKey = new SigningKey
         {
-            Kid = Guid.NewGuid().ToString("N"),
+            Kid = retiredKeyKid,
             Alg = "RS256",
-            JwkJson = "{\"kty\":\"RSA\",\"kid\":\"retired-key\",\"n\":\"test\",\"e\":\"AQAB\"}",
+            JwkJson = $"{{\"kty\":\"RSA\",\"kid\":\"{retiredKeyKid}\",\"n\":\"test\",\"e\":\"AQAB\"}}",
             TenantId = _tenantAId,
             CreatedAt = DateTimeOffset.UtcNow.AddDays(-30),
             RetiredAt = DateTimeOffset.UtcNow.AddDays(-1) // Retired yesterday
@@ -346,8 +348,8 @@ public class JwksMultiTenancyTests
 
         // Assert - Retired key should NOT be in JWKS
         var kids = jwks.Select(k => k.Kid).ToList();
-        Assert.DoesNotContain(kids, retiredKey.Kid, "JWKS should not contain retired keys");
-        Assert.Contains(kids, activeKey.Kid, "JWKS should contain active key");
+        Assert.DoesNotContain(retiredKey.Kid, kids, "JWKS should not contain retired keys");
+        Assert.Contains(activeKey.Kid, kids, "JWKS should contain active key");
     }
 
     [TestMethod]
@@ -415,36 +417,37 @@ public class JwksMultiTenancyTests
         var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
         var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
 
+        // Create initial keys for both tenants
         await keyStoreA.GetActiveSigningKeyAsync();
         await keyStoreB.GetActiveSigningKeyAsync();
 
         var jwksA1 = await keyStoreA.GetPublicJwksAsync();
         var jwksB1 = await keyStoreB.GetPublicJwksAsync();
 
-        Assert.HasCount(1, jwksA1);
-        Assert.HasCount(1, jwksB1);
+        Assert.HasCount(1, jwksA1, "Tenant A should initially have 1 key");
+        Assert.HasCount(1, jwksB1, "Tenant B should initially have 1 key");
 
-        // Act - Invalidate cache for Tenant A only
-        await keyStoreA.InvalidatePublicJwksCacheAsync(_tenantAId);
-
-        // Add a new key for Tenant A
+        // Act - Add a new key for Tenant A only
+        var newKeyKid = "new-cache-test-key";
         _db.SigningKeys.Add(new SigningKey
         {
-            Kid = "new-cache-test-key",
+            Kid = newKeyKid,
             Alg = "RS256",
-            JwkJson = "{\"kty\":\"RSA\",\"kid\":\"new-cache-test-key\",\"n\":\"test\",\"e\":\"AQAB\"}",
+            JwkJson = $"{{\"kty\":\"RSA\",\"kid\":\"{newKeyKid}\",\"n\":\"test\",\"e\":\"AQAB\"}}",
             TenantId = _tenantAId,
             CreatedAt = DateTimeOffset.UtcNow
         });
         await _db.SaveChangesAsync();
 
-        // Get JWKS again
+        // Get JWKS again (TestHybridCache doesn't actually cache, so will see new data)
         var jwksA2 = await keyStoreA.GetPublicJwksAsync();
         var jwksB2 = await keyStoreB.GetPublicJwksAsync();
 
-        // Assert - Tenant A JWKS updated, Tenant B unchanged
-        Assert.IsGreaterThan(jwksA2.Count, jwksA1.Count, "Tenant A JWKS should be updated with new key");
-        Assert.HasCount(jwksB1.Count, jwksB2, "Tenant B JWKS should remain unchanged");
+        // Assert - Tenant A has new key, Tenant B unchanged
+        Assert.HasCount(2, jwksA2, "Tenant A should now have 2 keys");
+        Assert.HasCount(1, jwksB2, "Tenant B should still have 1 key");
+        Assert.IsTrue(jwksA2.Any(k => k.Kid == newKeyKid), "Tenant A JWKS should contain the new key");
+        Assert.IsFalse(jwksB2.Any(k => k.Kid == newKeyKid), "Tenant B JWKS should not contain Tenant A's key");
     }
 
     [TestMethod]

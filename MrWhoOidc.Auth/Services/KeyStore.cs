@@ -82,30 +82,48 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
     public async Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        // Publish active and non-retired previous keys; hide retired keys
-        var keys = await db.SigningKeys
-            .Where(k => k.RetiredAt == null && k.TenantId == tenantId)
-            .OrderByDescending(k => k.CreatedAt)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        
+        var cacheKey = $"signing:jwks:public:{tenantId}";
+        var options = new HybridCacheEntryOptions
+        {
+            Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis)
+            LocalCacheExpiration = TimeSpan.FromMinutes(10) // L1 (memory)
+        };
+        var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
 
-        return keys
-            .Select(k => System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(k.JwkJson)!)
-            .Select(k => new RsaJwk
+        return await cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
             {
-                Kty = k.Kty,
-                Kid = k.Kid,
-                Alg = k.Alg,
-                Use = k.Use,
-                N = k.N,
-                E = k.E,
-                D = null,
-                P = null,
-                Q = null,
-                DP = null,
-                DQ = null,
-                QI = null
-            })
-            .ToList();
+                // Publish active and non-retired previous keys; hide retired keys
+                var keys = await db.SigningKeys
+                    .Where(k => k.RetiredAt == null && k.TenantId == tenantId)
+                    .OrderByDescending(k => k.CreatedAt)
+                    .ToListAsync(cancel)
+                    .ConfigureAwait(false);
+
+                return keys
+                    .Select(k => System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(k.JwkJson)!)
+                    .Select(k => new RsaJwk
+                    {
+                        Kty = k.Kty,
+                        Kid = k.Kid,
+                        Alg = k.Alg,
+                        Use = k.Use,
+                        N = k.N,
+                        E = k.E,
+                        D = null,
+                        P = null,
+                        Q = null,
+                        DP = null,
+                        DQ = null,
+                        QI = null
+                    })
+                    .ToList() as IReadOnlyList<RsaJwk>;
+            },
+            options,
+            tags,
+            ct
+        ).ConfigureAwait(false);
     }
 }
