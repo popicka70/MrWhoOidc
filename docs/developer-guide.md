@@ -127,20 +127,231 @@ Additional detail: `docs/jar-replay-cache.md`
 
 ## 4) Correlation IDs and `cid_ref` Handles
 
-- Every call to `/authorize`, `/token`, `/admin/api/*`, and external OIDC handlers participates in the correlation pipeline.
-- Clients may supply `X-Correlation-Id` (<= 64 chars, characters `[A-Za-z0-9-_]`). Invalid values are ignored and a new ID is generated.
-- The server echoes the chosen ID back on `X-Correlation-Id` in the response for downstream logging; logs include `correlation_id` in their structured scope.
-- For the browser flow, the correlation ID is never embedded directly on the front channel. Instead a short-lived opaque handle (`cid_ref`) is carried inside the `state` payload (and appended to return URLs) and maps to the actual CID via an in-memory/Redis cache (TTL 10 minutes).
-- On callback, the handle is resolved and the same CID is reattached; stale handles fall back to a new CID and emit `oidc.correlation.cache.misses` for observability.
-- Admin APIs only read `X-Correlation-Id`; callers should supply the value they receive from `/authorize` when reproducing issues end-to-end.
-- Design rationale, trade-offs, and future work live in [ADR-0008](./adr/ADR-0008-correlation-handles.md).
+### Overview
 
-Example (PowerShell) propagating the header:
+MrWhoOidc implements comprehensive correlation tracking (per ADR-0008) to enable end-to-end debugging across distributed OIDC flows involving external IdPs, token exchanges, and multi-hop delegation.
 
-```powershell
-$cid = [System.Guid]::NewGuid().ToString('N').Substring(0,26)
-Invoke-WebRequest -Headers @{ 'X-Correlation-Id' = $cid } "https://as.example.com/authorize?client_id=web&response_type=code"
+**Key Principles**:
+- Every HTTP request to `/authorize`, `/token`, `/admin/api/*`, and external OIDC handlers participates in the correlation pipeline.
+- Clients MAY supply `X-Correlation-Id` request header; server ALWAYS responds with `X-Correlation-Id` (either echo or generated).
+- Correlation IDs are ephemeral (10-minute TTL) and never stored long-term; they exist solely for operational debugging.
+- Front-channel flows (browser redirects) use opaque `cid_ref` handles to avoid exposing raw correlation IDs in URLs.
+
+### Header Format & Validation
+
+**Request Header**: `X-Correlation-Id: <value>`
+
+**Validation Rules**:
+- Maximum length: 64 characters
+- Allowed characters: `[A-Za-z0-9-_]` (alphanumeric, hyphen, underscore)
+- Invalid headers are silently rejected; server generates new 26-char Base32 ID
+
+**Examples** (valid):
 ```
+X-Correlation-Id: test-correlation-123
+X-Correlation-Id: T0SDEC90BD1G1SAXA1JS6619RM
+X-Correlation-Id: user_flow_checkout_20251014
+```
+
+**Examples** (invalid, will be rejected):
+```
+X-Correlation-Id: contains spaces invalid
+X-Correlation-Id: <script>alert('xss')</script>
+X-Correlation-Id: [65+ chars will exceed maximum and be rejected...]
+```
+
+### Response Header
+
+Server ALWAYS includes `X-Correlation-Id` in HTTP responses:
+```
+HTTP/1.1 302 Found
+Location: https://upstream.idp.com/authorize?...
+X-Correlation-Id: T0SDEC90BD1G1SAXA1JS6619RM
+```
+
+Clients should:
+1. **Capture** the response header value for logging/support tickets
+2. **Propagate** to downstream API calls (e.g., `/token`, `/userinfo`, custom APIs)
+3. **Include** in error reports submitted to administrators
+
+### Browser Flow (`cid_ref` Handles)
+
+For security and privacy, correlation IDs are NOT exposed in front-channel URLs (browser address bar). Instead:
+
+1. **Start** (`/authorize` or `/Auth/External/Start`):
+   - Server stores CID → opaque handle mapping in cache (10-min TTL)
+   - Handle embedded in encrypted `state` parameter
+   - Example: `state=CfDJ8...` (data-protected JWT containing `CorrelationId` field)
+
+2. **Callback** (`/Auth/External/Callback`):
+   - Server decrypts `state`, extracts handle, retrieves CID from cache
+   - If cache miss (expired/evicted), generates new CID and logs `oidc.correlation.cache.misses` metric
+   - Attaches CID to HTTP context for remaining request processing
+
+3. **Return URL**:
+   - Server appends `cid_ref=<handle>` query parameter to final redirect
+   - Example: `https://app.example.com/cb?code=...&state=...&cid_ref=abc123`
+   - Client can resolve via `/correlation/resolve?handle=abc123` (future admin endpoint)
+
+**Cache Characteristics**:
+- **TTL**: 10 minutes (sufficient for typical OAuth flows; upstream IdP timeouts usually < 5 minutes)
+- **Storage**: In-memory (L1) + Redis (L2, if configured)
+- **Eviction**: LRU with size limit; stale handles degrade gracefully (new CID generated)
+
+### Retention Policy & Privacy
+
+**Retention**:
+- Correlation IDs exist ONLY in memory/Redis with 10-minute TTL
+- Logs containing `correlation_id` follow standard log retention (typically 30-90 days)
+- No long-term database persistence; cannot reconstruct flows after log retention expires
+
+**Privacy Considerations**:
+- Correlation IDs are **pseudonymous** (cannot identify users without corresponding logs)
+- Never include PII (email, username, SSN) in custom correlation IDs
+- Log scrubbing applies to correlation context (e.g., PII in adjacent fields hashed)
+- GDPR/privacy requests: correlation IDs automatically expire; no manual deletion needed
+
+**Compliance**:
+- Treat correlation IDs as operational metadata, not personal data
+- If auditor requires justification: cite operational debugging necessity per ADR-0008
+- Log export: correlation IDs included in structured logs but scrubbed during export (per `LogScrubber`)
+
+### Best Practices
+
+**For Client Applications**:
+```csharp
+// Generate deterministic correlation ID from request context
+var correlationId = $"user-flow-{requestId.ToString("N")[..16]}";
+
+// Attach to all outbound requests
+var request = new HttpRequestMessage(HttpMethod.Get, "/authorize?...");
+request.Headers.Add("X-Correlation-Id", correlationId);
+
+var response = await httpClient.SendAsync(request);
+
+// Capture response header for logging
+var serverCid = response.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
+_logger.LogInformation("Authorization initiated: correlation_id={CorrelationId}", serverCid);
+```
+
+**For Troubleshooting**:
+```bash
+# Step 1: Capture correlation ID from initial authorize request
+curl -v -H "X-Correlation-Id: debug-issue-12345" \
+  "https://as.example.com/authorize?client_id=web&response_type=code&..." \
+  2>&1 | grep -i x-correlation-id
+
+# Step 2: Follow redirects preserving correlation ID
+# (Correlation propagates automatically via state/cid_ref handles)
+
+# Step 3: Query logs with captured correlation ID
+kubectl logs -l app=mrwhooidc --since=1h | grep "correlation_id=T0SDEC90BD1G1SAXA1JS6619RM"
+```
+
+**For Admin APIs**:
+```powershell
+# Propagate correlation ID through administrative operations
+$cid = "admin-op-provider-update-001"
+Invoke-RestMethod -Method POST -Uri "https://as.example.com/admin/api/providers/contoso" `
+  -Headers @{ "X-Correlation-Id" = $cid; "Authorization" = "Bearer $adminToken" } `
+  -Body $providerConfig
+```
+
+### Structured Logging Integration
+
+All logs include correlation ID in structured scope:
+
+```json
+{
+  "timestamp": "2025-10-14T12:34:56.789Z",
+  "level": "Information",
+  "message": "External OIDC start: initiating discovery and redirect",
+  "correlation_id": "T0SDEC90BD1G1SAXA1JS6619RM",
+  "provider": "contoso",
+  "client_id": "web-app",
+  "scope": "openid profile email"
+}
+```
+
+**Query Patterns** (Application Insights / Splunk / Elasticsearch):
+```kusto
+// Azure Monitor / Application Insights
+traces
+| where customDimensions.correlation_id == "T0SDEC90BD1G1SAXA1JS6619RM"
+| order by timestamp asc
+| project timestamp, message, client_id, provider
+
+// Splunk
+index=mrwhooidc correlation_id="T0SDEC90BD1G1SAXA1JS6619RM"
+| table _time, message, client_id, provider
+
+// Elasticsearch
+GET /logs-*/_search
+{
+  "query": { "match": { "correlation_id": "T0SDEC90BD1G1SAXA1JS6619RM" } },
+  "sort": [{ "@timestamp": "asc" }]
+}
+```
+
+### Metrics & Observability
+
+**Key Metrics**:
+- `oidc.correlation.cache.hits`: Successful handle resolution on callback
+- `oidc.correlation.cache.misses`: Cache miss (expired/evicted); fallback to new CID
+- `oidc.correlation.cache.writes`: New handle stored during authorize/start
+- `oidc.correlation.cache.stale`: Handle exists but TTL expired (subset of misses)
+
+**Alerting Thresholds** (recommended):
+- `cache.misses` > 5% of `cache.hits` → investigate cache eviction pressure or TTL tuning
+- `cache.stale` > 1% → upstream IdP response times exceeding 10-min TTL (adjust TTL)
+
+### Further Reading
+
+- **Design Rationale**: [ADR-0008: Correlation Handles](./adr/ADR-0008-correlation-handles.md)
+- **Implementation**: `MrWhoOidc.WebAuth/Observability/CorrelationTrackingMiddleware.cs`
+- **Cache Implementation**: `MrWhoOidc.WebAuth/Observability/CorrelationStateCache.cs`
+- **Test Coverage**: `MrWhoOidc.UnitTests/CorrelationPipelineTests.cs` (unit), `ExternalOidcIntegrationTests.cs` (integration)
+
+---
+
+### Example: End-to-End Correlation Flow
+
+```
+1. Client → AS:
+   GET /authorize?client_id=web&response_type=code&idp=contoso
+   X-Correlation-Id: debug-login-20251014
+
+2. AS → Client:
+   HTTP/1.1 302 Found
+   Location: https://login.contoso.com/authorize?...&state=CfDJ8...
+   X-Correlation-Id: debug-login-20251014
+   
+   (state contains encrypted handle mapping to correlation ID)
+
+3. User authenticates at Contoso...
+
+4. Contoso → AS:
+   GET /Auth/External/Callback?code=abc&state=CfDJ8...
+   
+   (AS decrypts state, resolves handle → correlation ID from cache)
+
+5. AS → Client:
+   HTTP/1.1 302 Found
+   Location: https://app.example.com/cb?code=xyz&cid_ref=handle123
+   X-Correlation-Id: debug-login-20251014
+
+6. Client → AS:
+   POST /token
+   X-Correlation-Id: debug-login-20251014
+   code=xyz&client_id=web&...
+
+7. AS → Client:
+   HTTP/1.1 200 OK
+   X-Correlation-Id: debug-login-20251014
+   {"access_token":"...","id_token":"..."}
+```
+
+All logs from steps 1-7 tagged with `correlation_id=debug-login-20251014` for unified trace reconstruction.
 
 ## 5) Token Exchange (OBO)
 
