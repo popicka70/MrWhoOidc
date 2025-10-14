@@ -146,11 +146,11 @@ public class DataIsolationTests
             .ToListAsync();
 
         // Assert
-        Assert.AreEqual(1, tenant1Consents.Count);
+        Assert.HasCount(1, tenant1Consents);
         Assert.AreEqual(user1.Id, tenant1Consents[0].UserId);
         Assert.AreEqual("""["openid", "profile"]""", tenant1Consents[0].ScopesJson);
         
-        Assert.AreEqual(1, tenant2Consents.Count);
+        Assert.HasCount(1, tenant2Consents);
         Assert.AreEqual(user2.Id, tenant2Consents[0].UserId);
         Assert.AreEqual("""["openid", "email"]""", tenant2Consents[0].ScopesJson);
     }
@@ -209,11 +209,11 @@ public class DataIsolationTests
         var tenant1Consents = await _db.Consents.Where(c => c.TenantId == tenant1.Id).ToListAsync();
         var tenant2Consents = await _db.Consents.Where(c => c.TenantId == tenant2.Id).ToListAsync();
         
-        Assert.AreEqual(1, tenant1Consents.Count);
+        Assert.HasCount(1, tenant1Consents);
         Assert.AreEqual(tenant1.Id, tenant1Consents[0].TenantId);
         Assert.AreEqual(user1.Id, tenant1Consents[0].UserId);
         
-        Assert.AreEqual(1, tenant2Consents.Count);
+        Assert.HasCount(1, tenant2Consents);
         Assert.AreEqual(tenant2.Id, tenant2Consents[0].TenantId);
         Assert.AreEqual(user2.Id, tenant2Consents[0].UserId);
     }
@@ -322,11 +322,11 @@ public class DataIsolationTests
             .ToListAsync();
 
         // Assert
-        Assert.AreEqual(1, tenant1Tokens.Count);
+        Assert.HasCount(1, tenant1Tokens);
         Assert.AreEqual(user1.Id, tenant1Tokens[0].UserId);
         Assert.AreEqual("hash1", tenant1Tokens[0].TokenHash);
         
-        Assert.AreEqual(1, tenant2Tokens.Count);
+        Assert.HasCount(1, tenant2Tokens);
         Assert.AreEqual(user2.Id, tenant2Tokens[0].UserId);
         Assert.AreEqual("hash2", tenant2Tokens[0].TokenHash);
     }
@@ -373,12 +373,12 @@ public class DataIsolationTests
         var tenant1Tokens = await _db.Tokens.Where(t => t.TenantId == tenant1.Id).ToListAsync();
         var tenant2Tokens = await _db.Tokens.Where(t => t.TenantId == tenant2.Id).ToListAsync();
         
-        Assert.AreEqual(1, tenant1Tokens.Count);
+        Assert.HasCount(1, tenant1Tokens);
         Assert.AreEqual(tenant1.Id, tenant1Tokens[0].TenantId);
         Assert.AreEqual(hash1, tenant1Tokens[0].TokenHash);
         Assert.AreEqual(user1.Id, tenant1Tokens[0].UserId);
         
-        Assert.AreEqual(1, tenant2Tokens.Count);
+        Assert.HasCount(1, tenant2Tokens);
         Assert.AreEqual(tenant2.Id, tenant2Tokens[0].TenantId);
         Assert.AreEqual(hash2, tenant2Tokens[0].TokenHash);
         Assert.AreEqual(user2.Id, tenant2Tokens[0].UserId);
@@ -489,11 +489,11 @@ public class DataIsolationTests
             .ToListAsync();
 
         // Assert
-        Assert.AreEqual(1, tenant1Codes.Count);
+        Assert.HasCount(1, tenant1Codes);
         Assert.AreEqual("code1", tenant1Codes[0].Code);
         Assert.AreEqual(user1.Id, tenant1Codes[0].UserId);
         
-        Assert.AreEqual(1, tenant2Codes.Count);
+        Assert.HasCount(1, tenant2Codes);
         Assert.AreEqual("code2", tenant2Codes[0].Code);
         Assert.AreEqual(user2.Id, tenant2Codes[0].UserId);
     }
@@ -552,11 +552,11 @@ public class DataIsolationTests
         var tenant1Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant1.Id).ToListAsync();
         var tenant2Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant2.Id).ToListAsync();
         
-        Assert.AreEqual(1, tenant1Codes.Count);
+        Assert.HasCount(1, tenant1Codes);
         Assert.AreEqual(tenant1.Id, tenant1Codes[0].TenantId);
         Assert.AreEqual("code-tenant1", tenant1Codes[0].Code);
         
-        Assert.AreEqual(1, tenant2Codes.Count);
+        Assert.HasCount(1, tenant2Codes);
         Assert.AreEqual(tenant2.Id, tenant2Codes[0].TenantId);
         Assert.AreEqual("code-tenant2", tenant2Codes[0].Code);
     }
@@ -649,10 +649,10 @@ public class DataIsolationTests
         var tenant2Users = await _db.Users.Where(u => u.TenantId == tenant2.Id).ToListAsync();
 
         // Assert
-        Assert.AreEqual(2, tenant1Users.Count);
+        Assert.HasCount(2, tenant1Users);
         Assert.IsTrue(tenant1Users.All(u => u.TenantId == tenant1.Id));
         
-        Assert.AreEqual(1, tenant2Users.Count);
+        Assert.HasCount(1, tenant2Users);
         Assert.AreEqual("alice", tenant2Users[0].Username);
         Assert.AreEqual(tenant2.Id, tenant2Users[0].TenantId);
     }
@@ -760,9 +760,9 @@ public class DataIsolationTests
             .ToListAsync();
 
         // Assert: No cross-tenant data leakage
-        Assert.AreEqual(0, tenant2Consents.Count, "No consents should exist in Tenant 2 for Tenant 1 user");
-        Assert.AreEqual(0, tenant2Tokens.Count, "No tokens should exist in Tenant 2 for Tenant 1 user");
-        Assert.AreEqual(0, tenant2Codes.Count, "No auth codes should exist in Tenant 2 for Tenant 1 user");
+        Assert.IsEmpty(tenant2Consents, "No consents should exist in Tenant 2 for Tenant 1 user");
+        Assert.IsEmpty(tenant2Tokens, "No tokens should exist in Tenant 2 for Tenant 1 user");
+        Assert.IsEmpty(tenant2Codes, "No auth codes should exist in Tenant 2 for Tenant 1 user");
     }
 
     [TestMethod]
@@ -802,7 +802,7 @@ public class DataIsolationTests
 
         // Assert: Tenant 2 data remains intact
         var remainingConsents = await _db.Consents.ToListAsync();
-        Assert.AreEqual(1, remainingConsents.Count);
+        Assert.HasCount(1, remainingConsents);
         Assert.AreEqual(tenant2.Id, remainingConsents[0].TenantId);
         Assert.AreEqual(user2.Id, remainingConsents[0].UserId);
     }

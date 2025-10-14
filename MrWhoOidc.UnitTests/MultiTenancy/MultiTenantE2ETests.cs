@@ -505,8 +505,8 @@ public class MultiTenantE2ETests
             .ToListAsync();
 
         // Assert
-        Assert.AreEqual(1, tenant1Codes.Count, "Tenant 1 should have 1 auth code");
-        Assert.AreEqual(1, tenant2Codes.Count, "Tenant 2 should have 1 auth code");
+        Assert.HasCount(1, tenant1Codes, "Tenant 1 should have 1 auth code");
+        Assert.HasCount(1, tenant2Codes, "Tenant 2 should have 1 auth code");
         Assert.AreEqual("code-tenant1", tenant1Codes[0].Code);
         Assert.AreEqual("code-tenant2", tenant2Codes[0].Code);
 
@@ -539,8 +539,8 @@ public class MultiTenantE2ETests
         var tenant1Keys = keysInDb.Where(k => k.TenantId == _tenant1Id).ToList();
         var tenant2Keys = keysInDb.Where(k => k.TenantId == _tenant2Id).ToList();
 
-        Assert.IsTrue(tenant1Keys.Count > 0, "Tenant 1 should have signing keys");
-        Assert.IsTrue(tenant2Keys.Count > 0, "Tenant 2 should have signing keys");
+        Assert.IsNotEmpty(tenant1Keys, "Tenant 1 should have signing keys");
+        Assert.IsNotEmpty(tenant2Keys, "Tenant 2 should have signing keys");
         Assert.IsTrue(tenant1Keys.All(k => k.TenantId == _tenant1Id), "All tenant 1 keys should have correct tenant ID");
         Assert.IsTrue(tenant2Keys.All(k => k.TenantId == _tenant2Id), "All tenant 2 keys should have correct tenant ID");
     }

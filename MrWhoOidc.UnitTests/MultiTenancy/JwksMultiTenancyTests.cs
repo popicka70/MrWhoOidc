@@ -310,10 +310,10 @@ public class JwksMultiTenancyTests
         var jwks = await keyStore.GetPublicJwksAsync();
 
         // Assert - Both keys should be present (grace period)
-        Assert.IsTrue(jwks.Count >= 2, "JWKS should contain at least 2 keys after rotation (old + new)");
+        Assert.IsGreaterThanOrEqualTo(jwks.Count, 2, "JWKS should contain at least 2 keys after rotation (old + new)");
         
         var kids = jwks.Select(k => k.Kid).ToList();
-        Assert.IsTrue(kids.Contains(oldKey.Kid), "JWKS should still contain old key (grace period)");
+        Assert.Contains(kids, oldKey.Kid, "JWKS should still contain old key (grace period)");
     }
 
     [TestMethod]
@@ -346,8 +346,8 @@ public class JwksMultiTenancyTests
 
         // Assert - Retired key should NOT be in JWKS
         var kids = jwks.Select(k => k.Kid).ToList();
-        Assert.IsFalse(kids.Contains(retiredKey.Kid), "JWKS should not contain retired keys");
-        Assert.IsTrue(kids.Contains(activeKey.Kid), "JWKS should contain active key");
+        Assert.DoesNotContain(kids, retiredKey.Kid, "JWKS should not contain retired keys");
+        Assert.Contains(kids, activeKey.Kid, "JWKS should contain active key");
     }
 
     [TestMethod]
@@ -397,7 +397,7 @@ public class JwksMultiTenancyTests
             .ToListAsync();
 
         // Assert - Tenant A has 3 keys, Tenant B has 1
-        Assert.IsTrue(tenantAKeyHistory.Count >= 3, "Tenant A should have at least 3 keys (historical + current)");
+        Assert.IsGreaterThanOrEqualTo(tenantAKeyHistory.Count, 3, "Tenant A should have at least 3 keys (historical + current)");
         Assert.HasCount(1, tenantBKeyHistory, "Tenant B should have exactly 1 key");
 
         // Verify all Tenant A keys belong to Tenant A
@@ -443,8 +443,8 @@ public class JwksMultiTenancyTests
         var jwksB2 = await keyStoreB.GetPublicJwksAsync();
 
         // Assert - Tenant A JWKS updated, Tenant B unchanged
-        Assert.IsTrue(jwksA2.Count > jwksA1.Count, "Tenant A JWKS should be updated with new key");
-        Assert.AreEqual(jwksB1.Count, jwksB2.Count, "Tenant B JWKS should remain unchanged");
+        Assert.IsGreaterThan(jwksA2.Count, jwksA1.Count, "Tenant A JWKS should be updated with new key");
+        Assert.HasCount(jwksB1.Count, jwksB2, "Tenant B JWKS should remain unchanged");
     }
 
     [TestMethod]
@@ -486,7 +486,7 @@ public class JwksMultiTenancyTests
         // Verify the kid from token A is not in Tenant B's JWKS
         var jwksB = await keyStoreB.GetPublicJwksAsync();
         var kidB = jwksB.Select(k => k.Kid).ToList();
-        Assert.IsFalse(kidB.Contains(keyA.Kid), "Tenant B JWKS should not contain Tenant A's key");
+        Assert.DoesNotContain(kidB, keyA.Kid, "Tenant B JWKS should not contain Tenant A's key");
     }
 
     [TestMethod]
@@ -568,14 +568,14 @@ public class JwksMultiTenancyTests
         var jwks = await keyStore.GetPublicJwksAsync();
 
         // Assert - Should contain multiple keys (all non-retired)
-        Assert.IsTrue(jwks.Count >= 3, $"JWKS should contain at least 3 keys after rotation, but has {jwks.Count}");
+        Assert.IsGreaterThanOrEqualTo(jwks.Count, 3, $"JWKS should contain at least 3 keys after rotation, but has {jwks.Count}");
 
         // Verify all keys belong to Tenant A
         var keysInDb = await _db.SigningKeys
             .Where(k => k.TenantId == _tenantAId && k.RetiredAt == null)
             .ToListAsync();
         
-        Assert.AreEqual(keysInDb.Count, jwks.Count, "JWKS count should match non-retired keys in DB");
+        Assert.HasCount(keysInDb.Count, jwks, "JWKS count should match non-retired keys in DB");
     }
 
     #endregion
