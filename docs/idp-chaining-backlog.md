@@ -1,6 +1,6 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
-Updated: 2025-09-29 (post-correlation refresh)
+Updated: 2025-10-14 (Q4 status and prioritization refresh)
 
 Status legend
 - [x] Done
@@ -445,30 +445,182 @@ Non-functional requirements
 - Observability and correlation across upstream/downstream requests.
 
 Next steps (proposed)
-- Target milestone: Phase 3 (Multi-provider GA)
-- P0 (2 weeks)
-  - [x] Keys UI: PEM import, pretty-print/compact toggle, alg/kty/use validation & thumbprint preview (DONE 2025-09-27). Remaining: enhanced JWKS visual preview.
-  - [~] External OIDC UX: structured logs/metrics with correlation scopes now live; still need localization + richer cancel/timeout telemetry.
-  - [x] JAR hardening: Redis-backed replay cache auto-enabled when `ConnectionStrings:redis` present (falls back to in-memory for dev); TTL (`RequestObjectReplayTtlSeconds`) and clock skew (`RequestObjectClockSkewSeconds`) exposed via `AuthOptions` (DONE 2025-09-27 – see `docs/jar-replay-cache.md`).
-  - [x] Provider picker polish: remembered provider hint UI, a11y fixes, mobile layout. (DONE 2025-09-27 – UI updated in Select.cshtml/Select.cshtml.cs + site.css; accessibility & mobile responsive grid; remembered provider banner)
-  - [x] Tests: add integration (two OIDC providers happy path + cancel), discovery doc verification; wire into CI gates for PRs. (DONE 2025-09-27 – see ExternalOidcIntegrationTests: 3 new tests; suite now 107 passing)
-  - [x] Docs: Admin guide + Developer guide drafts published 2025-09-27; follow-up: add CID propagation guidance & screenshots.
-  - [x] Discovery: align `request_object_signing_alg_values_supported` with the allowed alg set (DiscoveryHandler now mirrors `AuthOptions.RequestObjectAllowedAlgorithms`).
-  - [~] Correlation propagation: core middleware + state handle shipped (see story); pending automated coverage, docs, security review.
-  - [x] External callback metrics: duration histogram + outcome counters with provider/correlation tags implemented (`OidcMetrics`).
-- P1 (next 2–4 weeks)
-  - [~] Provider JWKS endpoint (see Story: JWKS endpoints subtasks) – endpoints live; outstanding: publish rotation playbook + add composite index optimization.
-  - [ ] External flow telemetry expansion: provider selection latency, upstream token exchange latency, cancellation taxonomy; structured log events with event IDs & stable schema.
-  - [x] Outbound JAR: sign upstream auth requests when `UseJAR`; key selection by `kid`.
-  - [x] Outbound PAR: push to PAR endpoint when `UsePAR`; fallback behavior.
-  - [ ] Subject linking options: email-based linking (opt-in) and per-client auto-provision toggle.
-  - [x] OBO/Token Exchange MVP: implement grant, minimal policy (allow-list callers + audience narrowing), `act` claim, discovery update; single-hop only. (Done; extended with DPoP bridging modes and `ath` enforcement.)
-  - [ ] M2M polish: Admin UI & policy (allowed scopes/audiences, auth methods, token lifetime/format, optional mTLS), tests and sample docs, discovery validation.
-  - [ ] Key expiry monitor: background service scanning `IdentityProviderKeys` & client keys for upcoming expiry (< N days) emitting structured warning & metric; integration test with simulated near-expiry.
-  - [ ] Rotation playbook docs + sample timeline (T-7 generate, T-2 publish new, T+0 switch active, T+2 retire old).
-  - [ ] ADR: Correlation & telemetry model for external IdP chaining (fields, sampling, PII policy).
-  - [ ] Admin UI polish: provider logo upload & ordering drag/drop accessibility improvements.
-  - [ ] Emit consistent `amr` claim across all flows (see Claim mapping pending item) + tests.
+- Target milestone: Phase 3 GA + Q4 2025 Hardening
+- Priority: P0 (immediate), P1 (Q4 2025), P2 (Q1 2026)
+
+## P0 – Production Readiness (Immediate – 2 weeks)
+These items block production deployment and must be completed first:
+
+1. **JWKS Endpoint Optimization** [Critical Performance]
+   - [ ] Add composite index migration for `(IdentityProviderId, Active, Publishable, Purpose)` on `IdentityProviderKeys`
+   - [ ] Document rotation playbook with overlap strategy and cache/ETag semantics
+   - [ ] Add curl examples and guidance for enabling aggregated JWKS
+   - [ ] Author ADR-0009 capturing per-provider vs aggregated JWKS rationale and feature flag decisions
+   - Rationale: Live endpoints need index for production query performance; operators need clear rotation procedures
+
+2. **Correlation Testing & Documentation** [Critical Observability]
+   - [ ] Add unit/integration tests for invalid `X-Correlation-Id` header and cache miss scenarios
+   - [ ] Update developer guide with CID propagation best practices and header usage examples
+   - [ ] Document CID retention policy and privacy expectations
+   - Rationale: Correlation is core to production debugging but lacks automated coverage
+
+3. **External OIDC Integration Test Fix** [Critical CI/CD]
+   - [ ] Re-enable `ExternalOidcIntegrationTests` happy-path test (currently `Ignore`)
+   - [ ] Fix release build redirect issue blocking test execution
+   - [ ] Add regression guard to prevent future breakage
+   - Rationale: CI must validate core external IdP flow before production
+
+4. **Admin UI Security Audit** [Critical Security]
+   - [ ] Review RBAC enforcement on all Admin API endpoints (provider, client, keys)
+   - [ ] Verify CSRF protection on state-changing operations
+   - [ ] Run axe-core CI scan and address critical accessibility violations
+   - Rationale: Admin surface manages secrets and must meet security baseline
+
+## P1 – Q4 2025 Polish (4-6 weeks)
+Complete feature set and production hardening:
+
+5. **Key Expiry Monitoring** [Operations]
+   - [ ] Background service scanning `IdentityProviderKeys` and client keys for expiry < 7 days
+   - [ ] Emit structured warning logs and `oidc.keys.expiry_warning` metric
+   - [ ] Integration test with simulated near-expiry scenario
+   - [ ] Admin UI dashboard showing upcoming expirations
+
+6. **AMR Claim Consistency** [Protocol Compliance]
+   - [ ] Emit `amr` consistently across authorization code, refresh, token exchange, and client credentials flows
+   - [ ] Unit tests validating `amr` presence/absence per `AuthOptions.EmitAmr*` flags
+   - [ ] Update token service to merge upstream + local authentication methods
+   - Rationale: Downstream RPs rely on `amr` for step-up authentication decisions
+
+7. **Subject Linking Enhancements** [User Experience]
+   - [ ] Implement optional email-based account linking with confirmation flow
+   - [ ] Add per-client auto-provision toggle (`AutoProvisionExternalUsers` flag)
+   - [ ] UI for users to manage linked external identities
+   - [ ] Audit logging for account linking/unlinking events
+
+8. **M2M Admin UI & Policy** [Feature Completeness]
+   - [ ] Client Credentials admin page: allowed scopes/audiences, lifetime, required auth methods
+   - [ ] Support optional mTLS thumbprint validation per client
+   - [ ] Per-client token format preference (JWT vs opaque)
+   - [ ] Unit + integration tests for scope/audience validation and DPoP with M2M
+
+9. **Telemetry Expansion** [Observability]
+   - [ ] Provider selection latency histogram with outcome tags
+   - [ ] Upstream token exchange duration metric (external IdP callback)
+   - [ ] Structured cancellation taxonomy (user cancel vs timeout vs upstream error)
+   - [ ] M2M-specific metrics (audience/scope buckets, auth method distribution)
+   - [ ] Document recommended dashboard queries and alerting thresholds
+
+10. **E2E Test Suite** [Quality Assurance]
+    - [ ] Set up two live upstream OIDC test providers (e.g., Azure AD + Auth0 dev tenants)
+    - [ ] Test matrix: JAR + PAR combinations, multi-provider flows, DPoP bridging
+    - [ ] Automated CI pipeline for E2E tests (nightly or on-demand)
+    - [ ] Document E2E setup and maintenance procedures
+
+## P2 – Q1 2026 Advanced Features (Future)
+Defer unless specific customer/compliance requirement emerges:
+
+11. **Admin UI UX Polish** [Nice-to-Have]
+    - [ ] Drag & drop provider ordering with keyboard accessibility (ARIA `aria-grabbed`)
+    - [ ] Claim mapping test mode (preview transforms on sample input)
+    - [ ] Advanced JWKS visual preview (structured table: kid/alg/kty/use/expires)
+    - [ ] Logo upload size/type validation, thumbnail generation, alt text field
+    - [ ] Dark mode styling parity for keys & mapping pages
+
+12. **Provider Picker A11y Polish** [Accessibility]
+    - [ ] Focus management on page load and error states
+    - [ ] Semantic button markup review (ensure no div/link misuse)
+    - [ ] Screen reader testing and ARIA live region for recommendation badge
+    - [ ] High-contrast theme compatibility
+
+13. **W3C Trace Context Bridge** [Advanced Observability]
+    - [ ] Map CID into `ActivityTraceId` when absent
+    - [ ] Add baggage item `cid` for distributed tracing exporters
+    - [ ] Optional CID header propagation to downstream APIs (config flag)
+    - [ ] Admin UI diagnostic panel showing current CID
+
+14. **Multi-Hop Token Exchange** [Advanced Scenarios]
+    - [ ] Support `act` claim chains (delegation depth > 1)
+    - [ ] Update policy model to allow/deny multi-hop per client
+    - [ ] Token introspection includes full actor chain
+    - [ ] Security review and documentation for delegation audit trail
+
+---
+
+## Rollout Status Summary
+
+| Phase | Status | Completion | Notes |
+|-------|--------|------------|-------|
+| Phase 1: Schema + Discovery | ✅ Done | 100% | Feature flags operational |
+| Phase 2: Single Provider + Admin CRUD | ✅ Done | 100% | External flow working |
+| Phase 3: Multi-Provider + Picker UI | 🟡 90% | Functional; polish pending | Core UX complete; tests needed |
+| Phase 4: Inbound JAR | ✅ Done | 100% | Redis replay cache live |
+| Phase 5: Outbound JAR/PAR | ✅ Done | 100% | Tested with upstream IdPs |
+| Phase 6: Production Hardening | 🔴 40% | P0 items block deployment | See P0 checklist above |
+
+---
+
+## Technical Debt & Risks
+
+### High Priority
+1. **Missing Composite Index**: `PublicJwksCache` queries will degrade under load without index on `(IdentityProviderId, Active, Publishable)`
+2. **Ignored Integration Test**: `ExternalOidcIntegrationTests` happy path currently disabled; silently breaks external IdP flow validation
+3. **No Key Expiry Alerts**: Operators have no proactive warning when signing keys near expiration; risk of service outage
+4. **Incomplete Correlation Coverage**: Cache miss and invalid header paths lack test coverage; production debugging could fail
+
+### Medium Priority
+5. **M2M Policy Gaps**: Client Credentials works but has no admin UI for policy; manual DB edits required
+6. **AMR Claim Inconsistency**: Not emitted consistently across flows; downstream step-up logic unreliable
+7. **External Cancel Telemetry**: Cancel/timeout events logged but lack structured taxonomy for alerting
+
+### Low Priority
+8. **Admin UI Polish Backlog**: Drag-drop ordering, claim test mode, enhanced JWKS preview are deferred nice-to-haves
+9. **Provider Picker A11y**: Functional but needs screen reader testing and high-contrast theme validation
+
+---
+
+## Acceptance Criteria for Phase 3 GA
+
+Before marking Phase 3 complete and enabling production deployment:
+
+**Must Have (P0)**
+- [ ] All P0 items complete (JWKS index, correlation tests, integration test fix, security audit)
+- [ ] CI pipeline green with no ignored tests
+- [ ] Documentation published: developer guide (CID propagation), admin guide (key rotation playbook)
+- [ ] Security review sign-off on admin endpoints and correlation handling
+- [ ] Performance test: provider picker with 10+ providers, JWKS endpoint under load
+
+**Should Have (P1 subset)**
+- [ ] Key expiry monitoring live with integration test
+- [ ] AMR claim emitted consistently with unit test coverage
+- [ ] M2M admin UI operational (scopes/audiences/lifetime)
+- [ ] E2E test suite running against at least one live upstream IdP
+
+**Nice to Have (Defer to post-GA)**
+- Admin UI polish (drag-drop, claim test mode, enhanced JWKS preview)
+- W3C Trace Context bridge
+- Multi-hop token exchange
+
+---
+
+## Recommended Next Steps (Immediate Action – Next 2 Weeks)
+
+### Week 1: Critical Infrastructure
+1. **Day 1-2**: Add composite index migration for JWKS lookup optimization + deploy to staging
+2. **Day 3**: Author ADR-0009 (JWKS endpoint design) and key rotation playbook docs
+3. **Day 4-5**: Fix `ExternalOidcIntegrationTests` redirect issue and re-enable CI validation
+
+### Week 2: Testing & Documentation
+4. **Day 1-2**: Add correlation unit/integration tests (invalid header, cache miss, stale handle)
+5. **Day 3**: Update developer guide with CID propagation examples and retention policy
+6. **Day 4**: Admin UI security audit (RBAC, CSRF, axe-core scan) + remediation
+7. **Day 5**: Run JWKS endpoint performance test and validate index effectiveness
+
+### Post-Sprint Checkpoint
+- Review P0 completion status
+- Decide go/no-go for Phase 3 GA deployment
+- Prioritize P1 items based on production feedback
+
+---
 
 Risks and decisions
 - Decide whether to expose JWKS publicly or rely on admin-imported keys only for inbound JAR. (Current: provider/client JWKS endpoints exist but feature-flagged.)
