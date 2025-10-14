@@ -4,9 +4,9 @@
 
 This document outlines the architectural changes and implementation roadmap to transform MrWhoOidc.WebAuth from a single-tenant OIDC Provider into a full multi-tenant SaaS authorization server. The solution will support isolated tenant contexts with per-tenant configuration, branding, user bases, client applications, and independent administration.
 
-**Status:** Phase 1 - COMPLETE ✅ (100%) | Phase 2 - IN PROGRESS 🔄 (70%)  
+**Status:** Phase 1 - COMPLETE ✅ (100%) | Phase 2 - COMPLETE ✅ (100%) | Phase 3 - READY 📋  
 **Created:** October 4, 2025  
-**Updated:** October 9, 2025  
+**Updated:** October 14, 2025  
 **Target:** Production-ready multi-tenant OIDC Provider
 
 **Phase 1 Complete - Foundation & Core Features:** ✅ 100%
@@ -30,14 +30,23 @@ This document outlines the architectural changes and implementation roadmap to t
 - ✅ **Security/authorization tests** (11 tests covering access control and data isolation)
 - ✅ **All 349 tests passing** (331 existing + 18 new multi-tenant tests)
 
-**Phase 2 In Progress - Branding & Customization:** 🔄 70%
+**Phase 2 Complete - Branding & Customization:** ✅ 100%
 - ✅ Branding service layer (ITenantBrandingService, TenantBrandingService)
 - ✅ Branding admin UI (/t/{slug}/admin/branding) with live preview
 - ✅ Dynamic branding display (CSS variables, navbar logo)
 - ✅ Settings override system (TenantSettings, cascading platform → tenant)
 - ✅ Settings admin UI (/t/{slug}/admin/settings)
-- 📋 Settings integration with token handlers (Phase 3)
-- 📋 Tenant setup wizard (PLANNED FOR LATER)
+- ✅ Settings integration with token handlers (TokenService, password policy, MFA enforcement)
+- ✅ Password policy validation (12 tests passing)
+- ✅ MFA requirement enforcement (5 tests passing)
+- 📋 Tenant setup wizard (DEFERRED - Future enhancement)
+
+**Phase 3 Ready - Production Readiness & Polish:** 📋 0%
+- 📋 Performance optimization and caching (Redis, query optimization)
+- 📋 Comprehensive E2E testing (multi-tenant flows, data isolation)
+- 📋 Security hardening (cross-tenant leak detection, penetration testing)
+- 📋 Observability enhancements (tenant-scoped metrics, structured logging)
+- 📋 Documentation finalization (admin guide, developer guide, API reference)
 
 **Implementation Decision:** Path-based tenant identification (`/t/{tenant-slug}/...`) selected as the primary strategy. Subdomain and custom domain options documented for future consideration but not in current scope.
 
@@ -2433,3 +2442,453 @@ Cross-Tenant (Platform Admin only):
 - Let's Encrypt ACME Protocol: https://letsencrypt.org/docs/client-options/
 - ASP.NET Core Multi-Tenancy: https://www.finbuckle.com/MultiTenant/Docs/
 - OWASP Multi-Tenancy Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Multitenancy_Security_Cheat_Sheet.html
+
+---
+
+## 22. Current Status & Phase 3 Next Steps (October 14, 2025)
+
+### 📊 Overall Progress Summary
+
+**Phase 1 (Foundation):** ✅ 100% COMPLETE  
+**Phase 2 (Branding & Settings):** ✅ 100% COMPLETE  
+**Phase 3 (Production Readiness):** 📋 READY TO START  
+**All Tests:** ✅ 366 passing (100% success rate)
+
+### ✅ Phase 2 Final Achievements (October 9-14, 2025)
+
+**Settings Integration Complete:**
+- ✅ Token lifetime settings applied in `TokenService.cs`
+  - `expires_in` now reflects tenant-specific values (not hardcoded 900s)
+  - Opaque token lifetime uses tenant settings
+  - Refresh token exchange honors tenant settings
+- ✅ Password policy validation service (`PasswordPolicyService`)
+  - Comprehensive validation (min length, uppercase, lowercase, digit, special char)
+  - Integration with password change page
+  - 12 unit tests covering all policy rules
+- ✅ MFA requirement enforcement
+  - Login flow checks `RequireMfa` setting
+  - Forces enrollment before authentication
+  - Prevents MFA disable when required by tenant
+  - 5 unit tests covering enforcement logic
+
+**Test Coverage Expansion:**
+- 366 total tests (up from 349 on Oct 9)
+- +17 new tests for settings integration
+- 100% pass rate maintained
+
+**Documentation:**
+- ✅ `phase2-settings-integration-progress.md` - Implementation log
+- ✅ `phase2-mfa-enforcement-complete.md` - MFA enforcement details
+- ✅ `phase2-settings-implementation.md` - Settings system architecture
+- ✅ `branding-quick-reference.md` - Branding quick reference
+
+### 🎯 Phase 3: Production Readiness & Polish
+
+**Goal:** Prepare the multi-tenant OIDC Provider for production deployment with comprehensive testing, performance optimization, security hardening, and complete documentation.
+
+**Estimated Duration:** 3-4 weeks  
+**Priority:** HIGH (Required before production launch)
+
+---
+
+### 📋 Phase 3 Task Breakdown
+
+#### **Milestone 3.1: Comprehensive E2E Testing** (Week 1: Oct 14-18, 2025)
+
+**Priority:** CRITICAL  
+**Estimated Effort:** 3-4 days
+
+**Tasks:**
+
+1. **Multi-Tenant Flow Tests** (8-12 hours)
+   - [ ] Create 2+ tenants via Platform Admin UI
+   - [ ] Create clients in each tenant (public, confidential, M2M)
+   - [ ] Issue tokens for each tenant (authorization code, client credentials)
+   - [ ] Verify issuer URIs differ by tenant
+   - [ ] Verify tokens from Tenant A rejected by Tenant B (issuer mismatch)
+   - [ ] Verify JWKS contains only tenant-specific keys
+   - [ ] Test discovery endpoint per tenant (`.well-known/openid-configuration`)
+   - [ ] Test cross-tenant token introspection (should fail)
+
+2. **Data Isolation Verification** (4-6 hours)
+   - [ ] Audit all database queries for `TenantId` filtering
+   - [ ] Create automated "cross-tenant leak" detection tests
+   - [ ] Test that User A (Tenant 1) cannot access User B (Tenant 2) data
+   - [ ] Test that Client A (Tenant 1) cannot access Client B (Tenant 2) data
+   - [ ] Verify admin UI queries respect tenant boundaries
+   - [ ] Test consent, session, and token isolation
+
+3. **Mode Switching Tests** (4-6 hours)
+   - [ ] Test single-tenant mode behavior (root issuer, no `/t/{slug}`)
+   - [ ] Test multi-tenant mode behavior (path-based issuers)
+   - [ ] Document mode switching procedure (config + issuer implications)
+   - [ ] Test fallback routes to default tenant
+   - [ ] Verify issuer consistency after mode change
+   - [ ] Test discovery endpoint in both modes
+
+4. **Settings Override E2E Tests** (4-6 hours)
+   - [ ] Test token lifetime overrides (platform → tenant → actual token)
+   - [ ] Test password policy enforcement (create user with weak password, expect rejection)
+   - [ ] Test MFA enforcement (login without MFA when required, expect redirect)
+   - [ ] Test OIDC settings (PKCE requirement, CORS origins)
+   - [ ] Test QR login settings per tenant
+   - [ ] Verify settings admin UI saves and loads correctly
+
+**Deliverables:**
+- E2E test suite (target: 30+ new tests)
+- Data isolation report (no leaks detected)
+- Mode switching guide
+- Settings integration test report
+
+**Success Criteria:**
+- All E2E tests passing
+- Zero cross-tenant data leaks detected
+- Documented mode switching procedure
+- Settings override verified end-to-end
+
+---
+
+#### **Milestone 3.2: Security Hardening** (Week 2: Oct 21-25, 2025)
+
+**Priority:** CRITICAL  
+**Estimated Effort:** 3-4 days
+
+**Tasks:**
+
+1. **Cross-Tenant Access Control Audit** (6-8 hours)
+   - [ ] Review all controllers and Razor Pages for tenant context checks
+   - [ ] Ensure all data access goes through tenant-aware services
+   - [ ] Add authorization checks to admin endpoints
+   - [ ] Verify platform admin vs tenant admin separation
+   - [ ] Test user self-service portal authorization (users can only see own data)
+   - [ ] Verify impersonation security (only platform admins, audit logging)
+
+2. **Platform Admin Security Tests** (4-6 hours)
+   - [ ] Verify non-platform-admin users cannot access `/PlatformAdmin/*`
+   - [ ] Test impersonation authorization (only platform admins)
+   - [ ] Test impersonation audit logging (all actions logged)
+   - [ ] Verify impersonation session isolation (impersonator != impersonated user)
+   - [ ] Test "stop impersonation" cleanup (session, cookies, context reset)
+
+3. **User Self-Service Authorization Tests** (2-3 hours)
+   - [ ] Verify any authenticated user can access `/Account/*`
+   - [ ] Verify users can only see their own data (profile, sessions, consents)
+   - [ ] Test session revocation (cannot revoke current session)
+   - [ ] Test consent revocation (only own consents)
+   - [ ] Verify tenant admins cannot access other users' `/Account` pages
+
+4. **Penetration Testing & Honeypots** (4-6 hours)
+   - [ ] Add honeypot queries to detect cross-tenant attempts
+   - [ ] Test SQL injection attacks on tenant resolution
+   - [ ] Test path traversal attacks (e.g., `/t/../../other-tenant`)
+   - [ ] Test CSRF on tenant admin actions
+   - [ ] Test XSS on tenant branding fields (logo URL, colors)
+   - [ ] Document security audit findings
+
+**Deliverables:**
+- Security audit report (cross-tenant access control)
+- Platform admin authorization test suite
+- User self-service authorization test suite
+- Penetration testing report
+
+**Success Criteria:**
+- Zero authorization bypass vulnerabilities
+- All security tests passing
+- Honeypot detection working (logged and blocked)
+- Security audit report with no critical findings
+
+---
+
+#### **Milestone 3.3: Performance Optimization** (Week 3: Oct 28 - Nov 1, 2025)
+
+**Priority:** HIGH  
+**Estimated Effort:** 3-4 days
+
+**Tasks:**
+
+1. **Caching Strategy** (8-10 hours)
+   - [ ] Add Redis caching for tenant resolution (currently in-memory only)
+   - [ ] Cache tenant settings (1-hour TTL, invalidate on update)
+   - [ ] Cache JWKS per tenant (24-hour TTL, invalidate on key rotation)
+   - [ ] Cache discovery document per tenant
+   - [ ] Add cache invalidation on tenant updates (branding, settings)
+   - [ ] Monitor cache hit rates
+
+2. **Query Optimization** (6-8 hours)
+   - [ ] Analyze slow queries (> 100ms) using EF logging
+   - [ ] Add missing indexes (e.g., `TenantId + Email` for user lookups)
+   - [ ] Optimize N+1 queries (use `.Include()` for related entities)
+   - [ ] Review service layer queries for unnecessary DB roundtrips
+   - [ ] Add query result caching where appropriate
+
+3. **Load Testing** (6-8 hours)
+   - [ ] Create load test scenarios (1000+ tenants, 10k+ users per tenant)
+   - [ ] Test token issuance rate (target: 100+ tokens/sec)
+   - [ ] Test discovery endpoint under load (target: P95 < 50ms)
+   - [ ] Test tenant resolution latency (target: P95 < 10ms with cache)
+   - [ ] Test database connection pooling under load
+   - [ ] Document load testing results
+
+4. **Performance Monitoring** (4-6 hours)
+   - [ ] Add tenant-scoped metrics (token issuance, login attempts, errors)
+   - [ ] Add database query duration metrics
+   - [ ] Add cache hit/miss metrics
+   - [ ] Set up performance dashboards (Grafana or App Insights)
+   - [ ] Define performance SLOs (P95 latency targets)
+
+**Deliverables:**
+- Redis caching implementation
+- Query optimization report (before/after metrics)
+- Load testing report (1000+ tenants)
+- Performance monitoring dashboards
+
+**Success Criteria:**
+- Token issuance P95 < 200ms (multi-tenant mode)
+- Tenant resolution P95 < 10ms (with Redis cache)
+- Discovery endpoint P95 < 50ms
+- No N+1 query patterns detected
+- Cache hit rate > 80% for tenant resolution
+
+---
+
+#### **Milestone 3.4: Observability & Monitoring** (Week 4: Nov 4-8, 2025)
+
+**Priority:** MEDIUM  
+**Estimated Effort:** 2-3 days
+
+**Tasks:**
+
+1. **Structured Logging** (4-6 hours)
+   - [ ] Add tenant context to all logs (TenantId, TenantSlug)
+   - [ ] Add correlation IDs for request tracing
+   - [ ] Add audit logging for admin actions (tenant CRUD, impersonation)
+   - [ ] Add security event logging (failed login, MFA bypass attempts)
+   - [ ] Configure log levels per environment (dev/staging/prod)
+
+2. **Tenant-Scoped Metrics** (6-8 hours)
+   - [ ] Track Monthly Active Users (MAU) per tenant
+   - [ ] Track token issuance volume per tenant
+   - [ ] Track API call volume per tenant
+   - [ ] Track error rates per tenant
+   - [ ] Track authentication attempts (success/failure) per tenant
+   - [ ] Create tenant health dashboard
+
+3. **Alerting** (4-6 hours)
+   - [ ] Set up alerts for high error rates (> 5% per tenant)
+   - [ ] Set up alerts for quota exceeded (users, clients, IdPs)
+   - [ ] Set up alerts for performance degradation (P95 > SLO)
+   - [ ] Set up alerts for security events (cross-tenant attempts)
+   - [ ] Configure alert routing (email, Slack, PagerDuty)
+
+4. **Admin Dashboards** (4-6 hours)
+   - [ ] Platform admin cross-tenant usage dashboard
+   - [ ] Platform admin tenant health dashboard (uptime, errors, latency)
+   - [ ] Tenant admin own usage dashboard (MAU, token volume)
+   - [ ] Billing metrics dashboard (usage by plan tier)
+
+**Deliverables:**
+- Structured logging with tenant context
+- Tenant-scoped metrics (Prometheus/App Insights)
+- Alerting rules and routing
+- Admin dashboards (cross-tenant and per-tenant)
+
+**Success Criteria:**
+- All logs include tenant context
+- Metrics collected per tenant
+- Alerts configured and tested
+- Dashboards accessible to platform and tenant admins
+
+---
+
+#### **Milestone 3.5: Documentation Finalization** (Week 4: Nov 4-8, 2025)
+
+**Priority:** MEDIUM  
+**Estimated Effort:** 2-3 days
+
+**Tasks:**
+
+1. **Administrator Documentation** (6-8 hours)
+   - [ ] Multi-tenancy admin guide (tenant CRUD, impersonation, settings)
+   - [ ] Platform admin user guide (cross-tenant management)
+   - [ ] Tenant admin user guide (branding, settings, users, clients)
+   - [ ] Mode switching guide (single ↔ multi-tenant)
+   - [ ] Troubleshooting guide (common issues, logs, diagnostics)
+
+2. **Developer Documentation** (6-8 hours)
+   - [ ] Multi-tenancy architecture guide (data model, resolution, isolation)
+   - [ ] Settings cascade architecture (platform → tenant → client)
+   - [ ] API reference for tenant management (create, update, delete)
+   - [ ] Integration guide (how to add tenant filtering to new services)
+   - [ ] Migration guide for existing deployments (single → multi-tenant)
+
+3. **End-User Documentation** (4-6 hours)
+   - [ ] User self-service portal guide (profile, MFA, sessions, consents)
+   - [ ] Password policy guide (requirements per tenant)
+   - [ ] MFA setup guide (TOTP enrollment)
+   - [ ] Linked accounts guide (external IdP management)
+
+4. **Operations Documentation** (4-6 hours)
+   - [ ] Deployment guide (Docker, Kubernetes, Azure)
+   - [ ] Performance tuning guide (Redis, query optimization)
+   - [ ] Monitoring and alerting guide (Prometheus, App Insights)
+   - [ ] Backup and restore guide (tenant data isolation)
+   - [ ] Disaster recovery guide
+
+**Deliverables:**
+- Administrator guides (platform and tenant admin)
+- Developer documentation (architecture, API reference)
+- End-user guides (self-service portal)
+- Operations documentation (deployment, monitoring, DR)
+
+**Success Criteria:**
+- All user roles have comprehensive documentation
+- Architectural decisions documented
+- Deployment and operations procedures documented
+- Troubleshooting guides available
+
+---
+
+### 🚀 Recommended Phase 3 Execution Plan (4 Weeks)
+
+**Week 1 (Oct 14-18): E2E Testing**
+- Days 1-2: Multi-tenant flow tests (tokens, issuer, JWKS)
+- Days 3-4: Data isolation verification (cross-tenant leak detection)
+- Day 5: Mode switching tests, settings override E2E tests
+
+**Week 2 (Oct 21-25): Security Hardening**
+- Days 1-2: Cross-tenant access control audit
+- Days 3-4: Platform admin and user self-service security tests
+- Day 5: Penetration testing and honeypot implementation
+
+**Week 3 (Oct 28 - Nov 1): Performance Optimization**
+- Days 1-2: Redis caching implementation
+- Days 3-4: Query optimization and load testing
+- Day 5: Performance monitoring and dashboards
+
+**Week 4 (Nov 4-8): Observability & Documentation**
+- Days 1-2: Structured logging, tenant-scoped metrics, alerting
+- Days 3-5: Documentation finalization (admin, developer, operations)
+
+---
+
+### 📊 Phase 3 Success Metrics
+
+**Quality Metrics:**
+- ✅ All E2E tests passing (target: 400+ total tests)
+- ✅ Zero cross-tenant data leaks (verified by automated tests)
+- ✅ Security audit with no critical findings
+- ✅ All documentation complete and reviewed
+
+**Performance Metrics:**
+- ✅ Token issuance P95 < 200ms (multi-tenant mode)
+- ✅ Tenant resolution P95 < 10ms (with cache)
+- ✅ Discovery endpoint P95 < 50ms
+- ✅ Load tested with 1000+ tenants (10k+ users per tenant)
+
+**Observability Metrics:**
+- ✅ All logs include tenant context
+- ✅ Tenant-scoped metrics collected (MAU, token volume, errors)
+- ✅ Alerting configured and tested
+- ✅ Admin dashboards operational
+
+---
+
+### 🚨 Phase 3 Risks & Mitigation
+
+**Risk 1: E2E Tests Reveal Critical Issues**
+- **Likelihood:** Medium
+- **Impact:** High (delays production launch)
+- **Mitigation:** Budget extra time (1-2 days) for test fixes; prioritize critical path tests first
+
+**Risk 2: Performance Degradation at Scale**
+- **Likelihood:** Medium
+- **Impact:** High (poor user experience)
+- **Mitigation:** Early load testing (Week 3); aggressive caching; query optimization
+
+**Risk 3: Security Vulnerabilities Discovered**
+- **Likelihood:** Low-Medium
+- **Impact:** Critical (blocks production launch)
+- **Mitigation:** Systematic security audit; penetration testing; honeypot detection; external security review
+
+**Risk 4: Documentation Incomplete**
+- **Likelihood:** Medium
+- **Impact:** Medium (poor adoption, support burden)
+- **Mitigation:** Parallel documentation work (during implementation); review by stakeholders
+
+---
+
+### 🎯 Post-Phase 3: Future Enhancements (Backlog)
+
+**Not in Phase 3 Scope (Future Consideration):**
+
+1. **Phase 4: Billing Integration** (3-4 weeks)
+   - Stripe integration (customers, subscriptions, webhooks)
+   - Usage tracking and metering (MAU, token volume)
+   - Tenant billing dashboard
+   - Self-service tenant signup
+
+2. **Phase 5: Advanced Features** (4-6 weeks)
+   - Subdomain-based tenant identification
+   - Custom domain support per tenant
+   - Tenant lifecycle management (suspension, soft delete, grace period)
+   - Quota enforcement (users, clients, IdPs)
+   - Tenant usage dashboard (cross-tenant analytics)
+
+3. **Phase 6: Scale & Hardening** (2-3 weeks)
+   - Global EF query filters (safety net for tenant isolation)
+   - Multi-region deployment support
+   - Tenant data export/import (GDPR compliance)
+   - Tenant cloning/templating
+
+---
+
+### ✅ Immediate Next Steps (This Week: Oct 14-18)
+
+**Priority Order:**
+
+1. **Start Milestone 3.1: E2E Testing** (HIGHEST PRIORITY)
+   - Create test project structure for E2E tests
+   - Write multi-tenant flow tests (2 tenants, tokens, issuer verification)
+   - Write data isolation tests (cross-tenant leak detection)
+   - Run tests and document results
+
+2. **Create Phase 3 Project Board** (30 min)
+   - Break down Phase 3 tasks into GitHub issues or Jira tickets
+   - Assign to team members
+   - Set up weekly sync meetings
+
+3. **Review and Approve Phase 3 Plan** (1 hour)
+   - Present Phase 3 plan to stakeholders
+   - Get approval for 4-week timeline
+   - Confirm success criteria and deliverables
+
+4. **Set Up Performance Testing Environment** (2-3 hours)
+   - Provision load testing tools (JMeter, k6, or Azure Load Testing)
+   - Seed test database with 1000+ tenants
+   - Configure monitoring (Prometheus, App Insights)
+
+---
+
+### 📝 Summary
+
+**Current State:**
+- ✅ Phase 1 (Foundation): 100% Complete
+- ✅ Phase 2 (Branding & Settings): 100% Complete
+- 📋 Phase 3 (Production Readiness): Ready to Start
+- 🎉 366 tests passing (100% success rate)
+
+**Next Milestone:**
+- **Milestone 3.1: Comprehensive E2E Testing** (Week of Oct 14-18, 2025)
+
+**Expected Completion:**
+- **Phase 3 Complete:** November 8, 2025 (4 weeks)
+- **Production Launch:** November 15, 2025 (after final review)
+
+**Key Deliverables:**
+- E2E test suite (30+ tests)
+- Security audit report (no critical findings)
+- Performance tuning (Redis, query optimization)
+- Complete documentation (admin, developer, operations)
+
+---
+
