@@ -309,5 +309,298 @@ public class MultiTenantE2ETests
         // Assert
         Assert.IsNull(result, "Should return null for non-existent tenant");
     }
+
+    #region Authorization Flow E2E Tests (Phase 3 - Week 1)
+
+    [TestMethod]
+    public async Task FullAuthFlow_TokenIssuer_MatchesTenantIssuer_Tenant1()
+    {
+        // Arrange - Set up user and client for tenant 1
+        var user1 = new User
+        {
+            Username = "alice@acme.com",
+            Email = "alice@acme.com",
+            Name = "Alice",
+            TenantId = _tenant1Id,
+            PasswordHash = "hash"
+        };
+        _db.Users.Add(user1);
+
+        var client1 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant1Id);
+        
+        // Add scope assignments
+        var openidScope = new Scope { Name = "openid", Description = "OpenID Connect" };
+        var profileScope = new Scope { Name = "profile", Description = "Profile" };
+        _db.Scopes.AddRange(openidScope, profileScope);
+        _db.ClientScopes.AddRange(
+            new ClientScope { ClientId = client1.Id, ScopeName = "openid" },
+            new ClientScope { ClientId = client1.Id, ScopeName = "profile" }
+        );
+        await _db.SaveChangesAsync();
+
+        // Create authorization code
+        var authCode = new AuthorizationCode
+        {
+            Code = "test-code-tenant1",
+            ClientId = client1.ClientId,
+            UserId = user1.Id,
+            RedirectUri = "https://acme-app.com/callback",
+            ScopesJson = System.Text.Json.JsonSerializer.Serialize(new[] { "openid", "profile" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            TenantId = _tenant1Id
+        };
+        _db.AuthorizationCodes.Add(authCode);
+        await _db.SaveChangesAsync();
+
+        // Set up services with tenant 1 context
+        var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", "Acme Corporation", "https://localhost:5001/t/acme");
+        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var jwtService = new JwtService(keyStore);
+
+        // Act - Create ID token using JwtService
+        var claims = new[]
+        {
+            new System.Security.Claims.Claim("sub", user1.Id.ToString()),
+            new System.Security.Claims.Claim("email", user1.Email)
+        };
+        var idToken = jwtService.CreateJwt(
+            issuer: "https://localhost:5001/t/acme",
+            audience: client1.ClientId,
+            claims: claims,
+            expires: DateTimeOffset.UtcNow.AddHours(1)
+        );
+
+        // Assert - Parse token and verify issuer
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(idToken);
+
+        Assert.AreEqual("https://localhost:5001/t/acme", jwt.Issuer, "Token issuer should match tenant 1 issuer");
+        Assert.IsTrue(jwt.Claims.Any(c => c.Type == "email" && c.Value == "alice@acme.com"));
+    }
+
+    [TestMethod]
+    public async Task FullAuthFlow_TokenIssuer_MatchesTenantIssuer_Tenant2()
+    {
+        // Arrange - Set up user and client for tenant 2
+        var user2 = new User
+        {
+            Username = "bob@contoso.com",
+            Email = "bob@contoso.com",
+            Name = "Bob",
+            TenantId = _tenant2Id,
+            PasswordHash = "hash"
+        };
+        _db.Users.Add(user2);
+
+        var client2 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant2Id);
+        
+        // Add scope assignments
+        var openidScope = await _db.Scopes.FirstOrDefaultAsync(s => s.Name == "openid");
+        if (openidScope == null)
+        {
+            openidScope = new Scope { Name = "openid", Description = "OpenID Connect" };
+            _db.Scopes.Add(openidScope);
+        }
+        _db.ClientScopes.Add(new ClientScope { ClientId = client2.Id, ScopeName = "openid" });
+        await _db.SaveChangesAsync();
+
+        // Set up services with tenant 2 context
+        var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", "Contoso Ltd", "https://localhost:5001/t/contoso");
+        var keyStore = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var jwtService = new JwtService(keyStore);
+
+        // Act - Create ID token
+        var claims = new[]
+        {
+            new System.Security.Claims.Claim("sub", user2.Id.ToString()),
+            new System.Security.Claims.Claim("email", user2.Email)
+        };
+        var idToken = jwtService.CreateJwt(
+            issuer: "https://localhost:5001/t/contoso",
+            audience: client2.ClientId,
+            claims: claims,
+            expires: DateTimeOffset.UtcNow.AddHours(1)
+        );
+
+        // Assert - Verify issuer is different from tenant 1
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(idToken);
+
+        Assert.AreEqual("https://localhost:5001/t/contoso", jwt.Issuer, "Token issuer should match tenant 2 issuer");
+        Assert.AreNotEqual("https://localhost:5001/t/acme", jwt.Issuer, "Token issuer should differ from tenant 1");
+    }
+
+    [TestMethod]
+    public async Task CrossTenant_TokenValidation_Fails_IssuerMismatch()
+    {
+        // Arrange - Create token in tenant 1
+        var user1 = await _db.Users.FirstAsync(u => u.TenantId == _tenant1Id);
+        var client1 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant1Id);
+
+        var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var jwtService1 = new JwtService(keyStore1);
+
+        var claims = new[] { new System.Security.Claims.Claim("sub", user1.Id.ToString()) };
+        var tenant1Token = jwtService1.CreateJwt(
+            issuer: "https://localhost:5001/t/acme",
+            audience: client1.ClientId,
+            claims: claims,
+            expires: DateTimeOffset.UtcNow.AddHours(1)
+        );
+
+        // Act - Try to validate tenant 1 token in tenant 2 context
+        var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", issuerUri: "https://localhost:5001/t/contoso");
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var validator2 = new TokenValidator(keyStore2);
+
+        var (valid, principal, error) = validator2.Validate(tenant1Token, "https://localhost:5001/t/acme");
+
+        // Assert - Validation should fail (tenant 2 doesn't have tenant 1's keys)
+        Assert.IsFalse(valid, "Token from tenant 1 should fail validation in tenant 2 context");
+        Assert.IsNotNull(error, "Error message should be present");
+    }
+
+    [TestMethod]
+    public async Task AuthorizationCode_IsolatedByTenant()
+    {
+        // Arrange - Create auth codes for both tenants
+        var user1 = await _db.Users.FirstAsync(u => u.TenantId == _tenant1Id);
+        var user2 = await _db.Users.FirstAsync(u => u.TenantId == _tenant2Id);
+        var client1 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant1Id);
+        var client2 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant2Id);
+
+        var code1 = new AuthorizationCode
+        {
+            Code = "code-tenant1",
+            ClientId = client1.ClientId,
+            UserId = user1.Id,
+            RedirectUri = "https://app1.com/callback",
+            ScopesJson = "[]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            TenantId = _tenant1Id
+        };
+
+        var code2 = new AuthorizationCode
+        {
+            Code = "code-tenant2",
+            ClientId = client2.ClientId,
+            UserId = user2.Id,
+            RedirectUri = "https://app2.com/callback",
+            ScopesJson = "[]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10),
+            TenantId = _tenant2Id
+        };
+
+        _db.AuthorizationCodes.AddRange(code1, code2);
+        await _db.SaveChangesAsync();
+
+        // Act - Query codes with tenant filter
+        var tenant1Codes = await _db.AuthorizationCodes
+            .Where(c => c.TenantId == _tenant1Id)
+            .ToListAsync();
+
+        var tenant2Codes = await _db.AuthorizationCodes
+            .Where(c => c.TenantId == _tenant2Id)
+            .ToListAsync();
+
+        // Assert
+        Assert.AreEqual(1, tenant1Codes.Count, "Tenant 1 should have 1 auth code");
+        Assert.AreEqual(1, tenant2Codes.Count, "Tenant 2 should have 1 auth code");
+        Assert.AreEqual("code-tenant1", tenant1Codes[0].Code);
+        Assert.AreEqual("code-tenant2", tenant2Codes[0].Code);
+
+        // Verify no overlap
+        Assert.IsFalse(tenant1Codes.Any(c => c.Code == "code-tenant2"), "Tenant 1 should not see tenant 2's code");
+        Assert.IsFalse(tenant2Codes.Any(c => c.Code == "code-tenant1"), "Tenant 2 should not see tenant 1's code");
+    }
+
+    [TestMethod]
+    public async Task SigningKeys_IsolatedByTenant_DifferentKids()
+    {
+        // Arrange - Get keys for both tenants
+        var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
+        var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
+
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+
+        // Act - Generate keys for both tenants
+        var key1 = await keyStore1.GetActiveSigningKeyAsync();
+        var key2 = await keyStore2.GetActiveSigningKeyAsync();
+
+        // Assert - Keys should have different key IDs
+        Assert.IsNotNull(key1);
+        Assert.IsNotNull(key2);
+        Assert.AreNotEqual(key1.Kid, key2.Kid, "Different tenants should have different signing keys");
+
+        // Verify keys are stored with correct tenant ID
+        var keysInDb = await _db.SigningKeys.ToListAsync();
+        var tenant1Keys = keysInDb.Where(k => k.TenantId == _tenant1Id).ToList();
+        var tenant2Keys = keysInDb.Where(k => k.TenantId == _tenant2Id).ToList();
+
+        Assert.IsTrue(tenant1Keys.Count > 0, "Tenant 1 should have signing keys");
+        Assert.IsTrue(tenant2Keys.Count > 0, "Tenant 2 should have signing keys");
+        Assert.IsTrue(tenant1Keys.All(k => k.TenantId == _tenant1Id), "All tenant 1 keys should have correct tenant ID");
+        Assert.IsTrue(tenant2Keys.All(k => k.TenantId == _tenant2Id), "All tenant 2 keys should have correct tenant ID");
+    }
+
+    [TestMethod]
+    public async Task JWKS_Endpoint_ReturnsOnlyTenantKeys()
+    {
+        // Arrange - Generate keys for both tenants
+        var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
+        var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
+
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+
+        await keyStore1.GetActiveSigningKeyAsync();
+        await keyStore2.GetActiveSigningKeyAsync();
+
+        // Act - Get JWKS for each tenant
+        var jwks1 = await keyStore1.GetPublicJwksAsync();
+        var jwks2 = await keyStore2.GetPublicJwksAsync();
+
+        // Assert - Each JWKS should only contain its own tenant's keys
+        Assert.IsNotEmpty(jwks1, "Tenant 1 JWKS should contain keys");
+        Assert.IsNotEmpty(jwks2, "Tenant 2 JWKS should contain keys");
+
+        var kidSet1 = jwks1.Select(k => k.Kid).ToHashSet();
+        var kidSet2 = jwks2.Select(k => k.Kid).ToHashSet();
+
+        // Verify no overlap between tenant JWKS
+        Assert.IsFalse(kidSet1.Overlaps(kidSet2), "Tenant JWKS should not contain keys from other tenants");
+    }
+
+    [TestMethod]
+    public async Task Token_Kid_Header_MatchesTenantKey()
+    {
+        // Arrange
+        var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
+        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var jwtService = new JwtService(keyStore);
+
+        // Get the active signing key to know its kid
+        var signingKey = await keyStore.GetActiveSigningKeyAsync();
+        var expectedKid = signingKey.Kid;
+
+        // Act - Create token
+        var claims = new[] { new System.Security.Claims.Claim("sub", "user123") };
+        var token = jwtService.CreateJwt(
+            issuer: "https://localhost:5001/t/acme",
+            audience: "test-client",
+            claims: claims,
+            expires: DateTimeOffset.UtcNow.AddHours(1)
+        );
+
+        // Assert - Verify kid in token header
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+
+        Assert.AreEqual(expectedKid, jwt.Header.Kid, "Token kid should match tenant's active signing key");
+    }
+
+    #endregion
 }
 
