@@ -499,4 +499,66 @@ public sealed class ExternalOidcIntegrationTests
         var callbackCid = cb.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
         Assert.AreEqual(generatedCid, callbackCid, "Callback must recover same generated correlation ID from cache");
     }
+
+    /// <summary>
+    /// Regression test for release build redirect issue.
+    /// Validates complete redirect chain: Start -> Upstream Authorize -> Callback -> Final Return URL
+    /// This test serves as a regression guard to ensure Debug/Release builds behave identically
+    /// for the external OIDC happy path flow.
+    /// </summary>
+    [TestMethod]
+    public async Task RegressionGuard_RedirectChain_WorksInDebugAndRelease()
+    {
+        var env = await CreateAsync();
+        using var _ = env.Host;
+        var client = env.Client;
+        var returnUrl = "/authorize?client_id=" + ClientPublicId;
+
+        // Step 1: External Start - should return 302 with upstream authorization URL
+        var start = await client.GetAsync($"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start must return 302 redirect");
+        
+        var startLocation = start.Headers.Location;
+        Assert.IsNotNull(startLocation, "Start response must include Location header");
+        Assert.IsTrue(startLocation!.ToString().Contains("/up1/authorize"), "Start must redirect to upstream authorize endpoint");
+
+        // Step 2: Upstream Authorize - should return 302 with callback URL + code
+        var upstreamUri = startLocation.IsAbsoluteUri ? startLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), startLocation);
+        var upstreamAuth = await client.GetAsync(upstreamUri);
+        Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize must return 302 redirect");
+        
+        var callbackLocation = upstreamAuth.Headers.Location;
+        Assert.IsNotNull(callbackLocation, "Upstream authorize must include Location header with callback URL");
+        
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
+        Assert.AreEqual("/Auth/External/Callback", callbackUri.AbsolutePath, "Must redirect to callback endpoint");
+        
+        var callbackQuery = System.Web.HttpUtility.ParseQueryString(callbackUri.Query);
+        Assert.IsFalse(string.IsNullOrEmpty(callbackQuery["code"]), "Callback URL must include code parameter");
+        Assert.IsFalse(string.IsNullOrEmpty(callbackQuery["state"]), "Callback URL must include state parameter");
+
+        // Step 3: Callback - should return 302 with final return URL
+        var callback = await client.GetAsync(callbackUri);
+        Assert.AreEqual(HttpStatusCode.Redirect, callback.StatusCode, "Callback must return 302 redirect to return URL");
+        
+        var finalLocation = callback.Headers.Location;
+        Assert.IsNotNull(finalLocation, "Callback must include Location header with return URL");
+        
+        var finalUri = finalLocation!.IsAbsoluteUri ? finalLocation : new Uri(baseUri, finalLocation);
+        Assert.AreEqual("/authorize", finalUri.AbsolutePath, "Must redirect to original authorize endpoint");
+        
+        var finalQuery = System.Web.HttpUtility.ParseQueryString(finalUri.Query);
+        Assert.AreEqual(ClientPublicId, finalQuery["client_id"], "client_id must be preserved in return URL");
+        Assert.IsFalse(string.IsNullOrEmpty(finalQuery["cid_ref"]), "cid_ref must be present for correlation tracking");
+
+        // Regression Guard: Validate no NullReferenceException or unexpected status codes in redirect chain
+        // This ensures consistent behavior across Debug/Release builds
+        Assert.IsTrue(
+            start.StatusCode == HttpStatusCode.Redirect &&
+            upstreamAuth.StatusCode == HttpStatusCode.Redirect &&
+            callback.StatusCode == HttpStatusCode.Redirect,
+            "All steps in redirect chain must return 302 (guards against release build redirect issue)"
+        );
+    }
 }
