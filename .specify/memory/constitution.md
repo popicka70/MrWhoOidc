@@ -82,13 +82,22 @@ MrWhoOidc.Web/            # Sample RP (Relying Party) client
 - Never hardcode connection strings
 - Migrations live in `MrWhoOidc.Auth/Persistence/Migrations`
 
+**Migration Creation (MANDATORY)**:
+- **ALWAYS use EF Core migrations tool** to generate migration files
+- **NEVER create migration files from scratch manually**
+- Generated files can be edited if necessary (e.g., for custom SQL, index tuning)
+- This ensures migrations are properly tracked and DbContext stays in sync
+
 **Migration Commands**:
 ```bash
-# Add migration
+# Add migration (ALWAYS use this tool)
 dotnet ef migrations add <Name> --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations
 
 # Update database
 dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth
+
+# Remove last migration (if not applied to database)
+dotnet ef migrations remove --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth
 ```
 
 ### Key Features & Endpoints
@@ -140,6 +149,19 @@ dotnet run --project MrWhoOidc.AppHost
 - Security audit reports (RBAC, CSRF, accessibility)
 - Developer guide for integration patterns
 - Update docs when changing protocols/endpoints
+
+**Backlog Management**:
+- Use Markdown checkboxes to track backlog item states
+- `[ ]` = Not started / To-do
+- `[x]` = Completed / Done
+- `[~]` = In progress / Partially complete / Deferred
+- Update backlog documents when items change status
+- Example:
+  ```markdown
+  - [ ] Implement refresh token rotation
+  - [~] Add device flow support (in progress)
+  - [x] Complete BCL implementation
+  ```
 
 ### Security Practices
 **Defense in depth across all layers.**
