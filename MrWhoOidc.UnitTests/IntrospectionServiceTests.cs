@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
@@ -397,7 +398,7 @@ public sealed class IntrospectionServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var clientStore = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache());
+        var clientStore = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Act: Validate correct secret
         var foundClient = await clientStore.FindByClientIdAsync("confidential-client");
@@ -431,7 +432,7 @@ public sealed class IntrospectionServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var clientStore = new ClientStore(db, new Argon2PasswordHasher(), tenantAccessor, new TestHybridCache());
+        var clientStore = new ClientStore(db, new Argon2PasswordHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Act: Find public client
         var foundClient = await clientStore.FindByClientIdAsync("public-client");

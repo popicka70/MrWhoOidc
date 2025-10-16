@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
@@ -34,7 +35,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
         var reqMissingPkce = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -80,7 +81,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -119,7 +120,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",
@@ -156,7 +157,7 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache()));
+        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
         var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
         {
             response_type = "code",

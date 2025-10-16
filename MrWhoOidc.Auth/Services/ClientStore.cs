@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
-using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Observability;
+using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -26,7 +28,13 @@ public interface IClientStore
     Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default);
 }
 
-internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, HybridCache cache) : IClientStore
+internal sealed class ClientStore(
+    AuthDbContext db, 
+    IPasswordHasher hasher, 
+    ITenantAccessor tenantAccessor, 
+    HybridCache cache,
+    ILogger<ClientStore> logger,
+    IClientSecretMetrics? metrics = null) : IClientStore
 {
     public async Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
     {
@@ -82,11 +90,13 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITen
         var client = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (client is null) return false;
         
+        var now = DateTime.UtcNow;
+        
         // Check new ClientSecrets collection first
         var activeSecrets = client.ClientSecrets
             .Where(s => s.ActivatedAtUtc != null 
                      && s.RevokedAtUtc == null 
-                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > DateTime.UtcNow))
+                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now))
             .ToList();
         
         if (activeSecrets.Any())
@@ -96,11 +106,42 @@ internal sealed class ClientStore(AuthDbContext db, IPasswordHasher hasher, ITen
             {
                 if (!string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, secret.SecretHash))
                 {
+                    // Record success metric
+                    metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", secret.IsPrimary));
+                    
                     // Fire-and-forget usage tracking (consider queueing in production)
                     _ = Task.Run(() => RecordSecretUsageAsync(secret.Id, ct), ct);
                     return true;
                 }
             }
+            
+            // Check if secret matched but was expired/revoked
+            var expiredSecrets = client.ClientSecrets
+                .Where(s => s.ActivatedAtUtc != null 
+                         && s.RevokedAtUtc == null 
+                         && s.ExpiresAtUtc != null 
+                         && s.ExpiresAtUtc <= now)
+                .ToList();
+            
+            foreach (var expiredSecret in expiredSecrets)
+            {
+                if (!string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, expiredSecret.SecretHash))
+                {
+                    // Record failure metric for expired secret
+                    metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "expired"));
+                    
+                    logger.LogWarning(
+                        "Client secret expired: ClientId={ClientId}, SecretId={SecretId}, ExpiredAt={ExpiredAt}, Description={Description}",
+                        clientId,
+                        expiredSecret.Id,
+                        expiredSecret.ExpiresAtUtc,
+                        expiredSecret.Description);
+                    return false;
+                }
+            }
+            
+            // No matching secret found
+            metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "invalid"));
             return false;
         }
         

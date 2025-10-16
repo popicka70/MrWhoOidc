@@ -620,6 +620,89 @@ public static class AdminApiEndpointMappingExtensions
                 .ToList();
             return Results.Ok(new { enabled = state.EmissionEnabled, backlog, openCircuits });
         }).WithName("BackchannelHealth");
+        
+        // Client secret health endpoint
+        app.MapGet("/health/client-secrets", async (AuthDbContext db, CancellationToken ct) =>
+        {
+            var now = DateTime.UtcNow;
+            var degradedThreshold = now.AddDays(3); // Degraded if secrets expire within 3 days
+            var warningThreshold = now.AddDays(7);   // Warning if secrets expire within 7 days
+            
+            // Check for clients with all secrets expired
+            var clientsWithSecrets = await db.Clients
+                .AsNoTracking()
+                .Include(c => c.ClientSecrets)
+                .Where(c => c.ClientSecrets.Any())
+                .ToListAsync(ct);
+            
+            var criticalClients = clientsWithSecrets
+                .Where(c => !c.ClientSecrets.Any(s => 
+                    s.ActivatedAtUtc != null 
+                    && s.RevokedAtUtc == null 
+                    && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now)))
+                .Select(c => new { clientId = c.ClientId, tenantId = c.TenantId })
+                .ToList();
+            
+            // Check for secrets expiring soon
+            var degradedSecrets = await db.ClientSecrets
+                .AsNoTracking()
+                .Include(s => s.Client)
+                .Where(s => s.ActivatedAtUtc != null 
+                         && s.RevokedAtUtc == null 
+                         && s.ExpiresAtUtc != null 
+                         && s.ExpiresAtUtc > now 
+                         && s.ExpiresAtUtc <= degradedThreshold)
+                .ToListAsync(ct);
+            
+            var warningSecrets = await db.ClientSecrets
+                .AsNoTracking()
+                .Include(s => s.Client)
+                .Where(s => s.ActivatedAtUtc != null 
+                         && s.RevokedAtUtc == null 
+                         && s.ExpiresAtUtc != null 
+                         && s.ExpiresAtUtc > degradedThreshold 
+                         && s.ExpiresAtUtc <= warningThreshold)
+                .ToListAsync(ct);
+            
+            var status = criticalClients.Count > 0 ? "unhealthy" 
+                       : degradedSecrets.Count > 0 ? "degraded" 
+                       : "healthy";
+            
+            var response = new
+            {
+                status,
+                criticalClients = criticalClients.Count,
+                degradedSecrets = degradedSecrets.Count,
+                warningSecrets = warningSecrets.Count,
+                details = new
+                {
+                    clientsWithoutActiveSecrets = criticalClients,
+                    secretsExpiringWithin3Days = degradedSecrets.Select(s => new
+                    {
+                        clientId = s.Client.ClientId,
+                        secretId = s.Id,
+                        description = s.Description,
+                        expiresAt = s.ExpiresAtUtc,
+                        daysRemaining = (s.ExpiresAtUtc!.Value - now).TotalDays
+                    }),
+                    secretsExpiringWithin7Days = warningSecrets.Select(s => new
+                    {
+                        clientId = s.Client.ClientId,
+                        secretId = s.Id,
+                        description = s.Description,
+                        expiresAt = s.ExpiresAtUtc,
+                        daysRemaining = (s.ExpiresAtUtc!.Value - now).TotalDays
+                    })
+                }
+            };
+            
+            return status == "unhealthy" ? Results.Problem(
+                statusCode: 503, 
+                title: "Unhealthy", 
+                detail: $"{criticalClients.Count} client(s) have no active secrets",
+                instance: "/health/client-secrets")
+                : Results.Ok(response);
+        }).WithName("ClientSecretHealth");
 
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");

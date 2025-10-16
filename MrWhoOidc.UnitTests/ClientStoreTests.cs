@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
@@ -28,7 +29,7 @@ public sealed class ClientStoreTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, new DummyHasher(), tenantAccessor, new TestHybridCache());
+        var store = new ClientStore(db, new DummyHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
         var ok = await store.ValidateClientSecretAsync("public-app", null);
         Assert.IsTrue(ok);
 
@@ -45,7 +46,7 @@ public sealed class ClientStoreTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache());
+        var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
         Assert.IsTrue(await store.ValidateClientSecretAsync("conf-app", "top-secret"));
         Assert.IsFalse(await store.ValidateClientSecretAsync("conf-app", "wrong"));
         Assert.IsFalse(await store.ValidateClientSecretAsync("conf-app", null));

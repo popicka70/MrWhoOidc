@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Caching.Hybrid;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
@@ -48,6 +49,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
+        
+        // Metrics (singleton for lifetime of app)
+        services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
@@ -78,6 +82,10 @@ public static class AuthServiceCollectionExtensions
         services.AddOptions<KeyRotationOptions>();
         services.AddScoped<IKeyRotationService, KeyRotationService>();
         services.AddHostedService<KeyRotationHostedService>();
+        
+        // Client secret expiry monitoring
+        services.AddOptions<ClientSecretExpiryMonitorOptions>();
+        services.AddHostedService<ClientSecretExpiryMonitor>();
 
         return services;
     }
