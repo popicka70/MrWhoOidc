@@ -130,8 +130,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
         // Ensure blazor-web client exists as a confidential client with an initial constant secret
         var blazorWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == "blazor-web" && c.TenantId == tenantId, ct).ConfigureAwait(false);
-        if (blazorWebClient is null)
+        if (blazorWebClient == null)
         {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             blazorWebClient = new Client
             {
                 ClientId = "blazor-web",
@@ -174,6 +175,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 blazorWebClient.ClientSecretHash = hasher.Hash(InitialBlazorWebClientSecret);
                 blazorWebClient.RequirePkce = true;
             }
+#pragma warning restore CS0618
             if (string.IsNullOrEmpty(blazorWebClient.IntrospectionAudiencesJson))
             {
                 // Enable introspection against default API audience
@@ -222,6 +224,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         var adminClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == AdminClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (adminClient is null)
         {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             adminClient = new Client
             {
                 ClientId = AdminClientId,
@@ -259,6 +262,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             // Backfill a secret if missing
             m2m.ClientSecretHash = hasher.Hash(M2MClientSecret);
         }
+#pragma warning restore CS0618
 
         // Backfill RealmId for any existing client rows missing it (within current tenant)
         var clientsWithoutRealm = await db.Clients.Where(c => c.TenantId == tenantId && c.RealmId == Guid.Empty).ToListAsync(ct).ConfigureAwait(false);
@@ -273,6 +277,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         var testApiClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == TestApiClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (testApiClient is null)
         {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             testApiClient = new Client
             {
                 ClientId = TestApiClientId,
@@ -290,6 +295,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         {
             testApiClient.ClientSecretHash = hasher.Hash(TestApiClientSecret);
         }
+#pragma warning restore CS0618
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 

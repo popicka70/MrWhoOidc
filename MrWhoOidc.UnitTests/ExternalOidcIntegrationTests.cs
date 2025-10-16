@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;

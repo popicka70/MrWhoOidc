@@ -40,11 +40,13 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
             return new(true, false, ErrorResults.UnsupportedGrantType());
         }
 
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
         if (!usedPrivateKeyJwt && string.IsNullOrEmpty(client?.ClientSecretHash))
         {
             logger.LogWarning("/token unauthorized_client: public client not allowed for token-exchange {ClientIdHash}", Bucketization.Bucket(clientId));
             return new(true, false, ErrorResults.UnauthorizedClient());
         }
+#pragma warning restore CS0618
 
         // Externalized rate limiting
         var clientBucket = Bucketization.Bucket(clientId);

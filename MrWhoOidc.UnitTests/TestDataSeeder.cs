@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+
 namespace MrWhoOidc.UnitTests;
 
 /// <summary>

@@ -60,7 +60,9 @@ public class AddModel(
             RealmId = Input.RealmId,
             RequirePkce = Input.RequirePkce,
             RequireConsent = Input.RequireConsent,
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
+#pragma warning restore CS0618
         };
         db.Clients.Add(entity);
         await db.SaveChangesAsync();

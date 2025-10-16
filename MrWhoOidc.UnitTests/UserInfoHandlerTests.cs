@@ -8,6 +8,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Handlers;
+
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using MrWhoOidc.WebAuth.Observability;
 using System.Security.Claims;
 using System.Text.Json;

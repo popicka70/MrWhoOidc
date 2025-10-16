@@ -115,6 +115,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                 if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
                 if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
                 {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
                     if (string.IsNullOrEmpty(clientEntity.ClientSecretHash))
                     {
                         logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucketization.Bucket(clientId!));
@@ -122,6 +123,7 @@ public sealed class TokenHandler(OidcOptions options, ITokenService tokens, ICli
                         _metrics.RecordTokenFailure(grantType);
                         return ErrorResults.UnauthorizedClient();
                     }
+#pragma warning restore CS0618
                     var usedBasic = http.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.Ordinal);
                     if (usedBasic && !clientEntity.AllowClientSecretBasic)
                     {

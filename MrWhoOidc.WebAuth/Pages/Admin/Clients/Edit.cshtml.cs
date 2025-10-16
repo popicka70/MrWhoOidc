@@ -915,7 +915,9 @@ public class EditModel(
         client.AutoApprovalMode = Input.AutoApprovalMode;
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             client.ClientSecretHash = hasher.Hash(Input.ClientSecret);
+#pragma warning restore CS0618
         }
 
         // Introspection audiences: comma/space separated list -> json array

@@ -13,6 +13,8 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
+
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using System.Security.Claims;
 
 namespace MrWhoOidc.UnitTests;

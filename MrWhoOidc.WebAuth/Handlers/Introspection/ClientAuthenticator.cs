@@ -47,10 +47,12 @@ public sealed class ClientAuthenticator(
         }
 
         // Fall back to client_secret authentication
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
         if (string.IsNullOrEmpty(client.ClientSecretHash))
         {
             return (false, Results.BadRequest(new { error = "unauthorized_client" }));
         }
+#pragma warning restore CS0618
 
         var secretValid = await clientStore.ValidateClientSecretAsync(request.ClientId, request.ClientSecret).ConfigureAwait(false);
         if (!secretValid)

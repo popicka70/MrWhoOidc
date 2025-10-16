@@ -12,6 +12,8 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Text;
 
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
