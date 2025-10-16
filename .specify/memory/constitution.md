@@ -142,6 +142,12 @@ dotnet run --project MrWhoOidc.AppHost
 - `*IntegrationTests.cs` for integration tests
 - Use `TestDataSeeder.cs` for test data setup
 
+**OIDC RFC Documentation (MANDATORY)**:
+- **ALWAYS include RFC references in XML documentation** when tests validate OIDC specification behavior
+- Format: `/// <summary>Tests [behavior]. See RFC XXXX Section X.X.</summary>`
+- Example: `/// <summary>Validates authorization code flow. See RFC 6749 Section 4.1.</summary>`
+- Ensures traceability between test coverage and specification compliance
+
 ### Documentation Requirements
 **Comprehensive documentation in `/docs`.**
 - Architectural Decision Records (ADRs) in `/docs/adr/`
