@@ -12,6 +12,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
+    public DbSet<ClientSecret> ClientSecrets => Set<ClientSecret>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
     public DbSet<Consent> Consents => Set<Consent>();
@@ -180,7 +181,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasKey(x => x.Id);
             b.Property(x => x.ClientId).IsRequired().HasMaxLength(200);
             b.HasIndex(x => x.ClientId).IsUnique();
+#pragma warning disable CS0618 // Type or member is obsolete - retained for backward compatibility
             b.Property(x => x.ClientSecretHash).HasMaxLength(500);
+#pragma warning restore CS0618 // Type or member is obsolete
             b.Property(x => x.RealmId).IsRequired();
             b.HasIndex(x => x.RealmId);
             b.Property(x => x.IntrospectionAudiencesJson).HasMaxLength(2000);
@@ -267,6 +270,32 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasOne<Scope>()
                 .WithMany()
                 .HasForeignKey(x => x.ScopeName)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // New: ClientSecret (overlapping secrets with expiry)
+        modelBuilder.Entity<ClientSecret>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.SecretHash).IsRequired().HasMaxLength(500);
+            b.Property(x => x.Description).HasMaxLength(100);
+            b.Property(x => x.CreatedBy).HasMaxLength(200);
+            b.Property(x => x.ActivatedBy).HasMaxLength(200);
+            b.Property(x => x.RevokedBy).HasMaxLength(200);
+            
+            // Performance index for validation queries (active secrets)
+            b.HasIndex(x => new { x.ClientId, x.ActivatedAtUtc, x.RevokedAtUtc, x.ExpiresAtUtc })
+                .HasDatabaseName("IX_ClientSecrets_Active");
+            
+            // Uniqueness: Only one primary secret per client (if not revoked)
+            b.HasIndex(x => new { x.ClientId, x.IsPrimary })
+                .IsUnique()
+                .HasFilter("\"IsPrimary\" = TRUE AND \"RevokedAtUtc\" IS NULL")
+                .HasDatabaseName("IX_ClientSecrets_PrimaryPerClient");
+            
+            b.HasOne(x => x.Client)
+                .WithMany(x => x.ClientSecrets)
+                .HasForeignKey(x => x.ClientId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -770,6 +799,7 @@ public class Client
     public bool RequirePkce { get; set; } = true;
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]
+    [Obsolete("Use ClientSecrets collection instead. Retained for backward compatibility during migration.")]
     public string? ClientSecretHash { get; set; } // null => public client
     public Guid RealmId { get; set; } // parent realm (now required)
     [MaxLength(2000)]
@@ -851,6 +881,41 @@ public class Client
     /// No = manual approval required (default), OnlyExternalIdp = auto-approve external IdP logins only, All = auto-approve all registrations.
     /// </summary>
     public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
+
+    // Navigation properties
+    public List<ClientSecret> ClientSecrets { get; set; } = new();
+}
+
+public class ClientSecret
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ClientId { get; set; }          // FK to Client.Id
+    public Client Client { get; set; } = null!; // Navigation property
+    
+    [MaxLength(500)]
+    public string SecretHash { get; set; } = string.Empty; // Argon2id/BCrypt hash
+    
+    [MaxLength(100)]
+    public string? Description { get; set; }    // User-friendly label ("Production secret Q4 2025")
+    
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ActivatedAtUtc { get; set; }  // null => not yet active
+    public DateTime? ExpiresAtUtc { get; set; }    // null => no expiry
+    public DateTime? RevokedAtUtc { get; set; }    // null => not revoked
+    
+    public bool IsPrimary { get; set; } = false;   // Only one primary per client (recommended for new usage)
+    
+    // Audit fields
+    [MaxLength(200)]
+    public string? CreatedBy { get; set; }         // Username/subject who created
+    [MaxLength(200)]
+    public string? ActivatedBy { get; set; }
+    [MaxLength(200)]
+    public string? RevokedBy { get; set; }
+    
+    // Usage tracking (optional)
+    public DateTime? LastUsedAtUtc { get; set; }
+    public long UsageCount { get; set; } = 0;
 }
 
 public class ClientScope
