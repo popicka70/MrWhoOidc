@@ -197,11 +197,13 @@ RequireAdmin(app.MapPost("/admin/clients", async (AuthDbContext db, Client input
     };
 
     // If a raw secret is provided, hash with Argon2
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility
     var secret = (input.ClientSecretHash ?? string.Empty).Trim();
     if (!string.IsNullOrEmpty(secret))
     {
         entity.ClientSecretHash = Argon2.Hash(secret);
     }
+#pragma warning restore CS0618
 
     db.Clients.Add(entity);
     await db.SaveChangesAsync();
@@ -231,11 +233,13 @@ RequireAdmin(app.MapPut("/admin/clients/{id:guid}", async (AuthDbContext db, Gui
     entity.RequirePar = input.RequirePar;
 
     // If a new raw secret is provided, hash and replace
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility
     var secret = (input.ClientSecretHash ?? string.Empty).Trim();
     if (!string.IsNullOrEmpty(secret))
     {
         entity.ClientSecretHash = Argon2.Hash(secret);
     }
+#pragma warning restore CS0618
 
     await db.SaveChangesAsync();
     return Results.NoContent();

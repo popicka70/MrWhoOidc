@@ -436,6 +436,43 @@ public sealed class RevocationHandlerTests
         {
             return Task.CompletedTask;
         }
+
+        // New methods for client secret rotation - stubs for test purposes
+        public Task<MrWhoOidc.Auth.Persistence.ClientSecret?> GetPrimarySecretAsync(Guid clientId, CancellationToken ct = default)
+        {
+            return Task.FromResult<MrWhoOidc.Auth.Persistence.ClientSecret?>(null);
+        }
+
+        public Task<List<MrWhoOidc.Auth.Persistence.ClientSecret>> GetActiveSecretsAsync(Guid clientId, CancellationToken ct = default)
+        {
+            return Task.FromResult(new List<MrWhoOidc.Auth.Persistence.ClientSecret>());
+        }
+
+        public Task<MrWhoOidc.Auth.Persistence.ClientSecret> CreateSecretAsync(
+            Guid clientId, string secretValue, string? description, string? createdBy, DateTime? expiresAtUtc = null, CancellationToken ct = default)
+        {
+            throw new NotImplementedException("CreateSecretAsync not implemented in test stub");
+        }
+
+        public Task<bool> ActivateSecretAsync(Guid secretId, string activatedBy, CancellationToken ct = default)
+        {
+            throw new NotImplementedException("ActivateSecretAsync not implemented in test stub");
+        }
+
+        public Task<bool> SetPrimarySecretAsync(Guid secretId, string setPrimaryBy, CancellationToken ct = default)
+        {
+            throw new NotImplementedException("SetPrimarySecretAsync not implemented in test stub");
+        }
+
+        public Task<bool> RevokeSecretAsync(Guid secretId, string revokedBy, CancellationToken ct = default)
+        {
+            throw new NotImplementedException("RevokeSecretAsync not implemented in test stub");
+        }
+
+        public Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class StubClientAssertionValidator : IClientAssertionValidator
