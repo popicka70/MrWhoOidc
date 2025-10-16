@@ -26,6 +26,9 @@ public static class AdminApiEndpointMappingExtensions
         // Admin Management APIs (tenant-admin, ProblemDetails on errors)
         var admin = app.MapGroup("/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
 
+        // Client Secrets Management (Phase 2: Secret Rotation)
+        MapClientSecretsEndpoints(admin);
+
         // Providers CRUD (tenant-aware)
         admin.MapGet("/providers", async (
             AuthDbContext db,
@@ -688,6 +691,292 @@ public static class AdminApiEndpointMappingExtensions
         return await db.IdentityProviders.AsNoTracking()
             .AnyAsync(p => p.Id == providerId && p.TenantId == currentTenantId.Value, ct);
     }
+
+    // ===== CLIENT SECRETS MANAGEMENT =====
+
+    private static void MapClientSecretsEndpoints(RouteGroupBuilder admin)
+    {
+        // GET /admin/api/clients/{clientId}/secrets - List all secrets for a client
+        admin.MapGet("/clients/{clientId:guid}/secrets", async (
+            Guid clientId,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            // Verify client exists and user has access
+            var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+            }
+
+            var client = await clientQuery.FirstOrDefaultAsync(ct);
+            if (client is null)
+            {
+                return Results.Problem(statusCode: 404, title: "Client not found");
+            }
+
+            // Get all secrets for this client
+            var secrets = await db.ClientSecrets
+                .AsNoTracking()
+                .Where(s => s.ClientId == clientId)
+                .OrderByDescending(s => s.CreatedAtUtc)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.Description,
+                    s.CreatedAtUtc,
+                    s.ActivatedAtUtc,
+                    s.ExpiresAtUtc,
+                    s.RevokedAtUtc,
+                    s.IsPrimary,
+                    s.CreatedBy,
+                    s.ActivatedBy,
+                    s.RevokedBy,
+                    s.LastUsedAtUtc,
+                    s.UsageCount,
+                    Status = s.RevokedAtUtc != null ? "revoked" :
+                             s.ExpiresAtUtc != null && s.ExpiresAtUtc < DateTime.UtcNow ? "expired" :
+                             s.ActivatedAtUtc == null ? "inactive" :
+                             s.IsPrimary ? "primary" : "active"
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(new { clientId, clientName = client.ClientName, secrets });
+        });
+
+        // POST /admin/api/clients/{clientId}/secrets - Create new secret
+        admin.MapPost("/clients/{clientId:guid}/secrets", async (
+            Guid clientId,
+            CreateSecretRequest request,
+            AuthDbContext db,
+            IClientStore clientStore,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+
+            // Verify client exists and user has access
+            var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue)
+                {
+                    return Results.Problem(statusCode: 403, title: "No tenant context");
+                }
+                clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+            }
+
+            var client = await clientQuery.FirstOrDefaultAsync(ct);
+            if (client is null)
+            {
+                return Results.Problem(statusCode: 404, title: "Client not found");
+            }
+
+            // Check max active secrets limit (3)
+            var activeCount = await db.ClientSecrets
+                .Where(s => s.ClientId == clientId && s.ActivatedAtUtc != null && s.RevokedAtUtc == null)
+                .CountAsync(ct);
+
+            if (activeCount >= 3)
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Maximum active secrets reached",
+                    detail: "A client can have a maximum of 3 active secrets. Revoke an existing secret before creating a new one.");
+            }
+
+            // Generate secure random secret (32 bytes = 256 bits)
+            var secretValue = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+            // Calculate expiry if requested
+            DateTime? expiresAtUtc = null;
+            if (request.ExpiresInDays.HasValue)
+            {
+                if (request.ExpiresInDays.Value < 1 || request.ExpiresInDays.Value > 730)
+                {
+                    return Results.Problem(
+                        statusCode: 400,
+                        title: "Invalid expiry period",
+                        detail: "Expiry must be between 1 and 730 days (2 years).");
+                }
+                expiresAtUtc = DateTime.UtcNow.AddDays(request.ExpiresInDays.Value);
+            }
+
+            // Get current user
+            var username = httpContext.User.Identity?.Name ?? "system";
+
+            // Create secret
+            var secret = await clientStore.CreateSecretAsync(
+                clientId,
+                secretValue,
+                request.Description,
+                username,
+                expiresAtUtc,
+                ct);
+
+            // Activate immediately if requested
+            if (request.ActivateImmediately)
+            {
+                await clientStore.ActivateSecretAsync(secret.Id, username, ct);
+                secret.ActivatedAtUtc = DateTime.UtcNow;
+                secret.ActivatedBy = username;
+            }
+
+            // Return secret value (ONLY time it's ever returned!)
+            return Results.Ok(new
+            {
+                secretId = secret.Id,
+                secretValue, // ⚠️ CRITICAL: Only returned once!
+                description = secret.Description,
+                createdAtUtc = secret.CreatedAtUtc,
+                expiresAtUtc = secret.ExpiresAtUtc,
+                activated = secret.ActivatedAtUtc != null,
+                warning = "Save this secret now. You won't be able to see it again."
+            });
+        });
+
+        // POST /admin/api/clients/{clientId}/secrets/{secretId}/activate - Activate a secret
+        admin.MapPost("/clients/{clientId:guid}/secrets/{secretId:guid}/activate", async (
+            Guid clientId,
+            Guid secretId,
+            AuthDbContext db,
+            IClientStore clientStore,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            {
+                return Results.Problem(statusCode: 404, title: "Client not found or access denied");
+            }
+
+            var username = httpContext.User.Identity?.Name ?? "system";
+            var success = await clientStore.ActivateSecretAsync(secretId, username, ct);
+
+            if (!success)
+            {
+                return Results.Problem(statusCode: 404, title: "Secret not found");
+            }
+
+            await clientStore.InvalidateClientCacheAsync(
+                (await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct))?.ClientId ?? string.Empty,
+                tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty,
+                ct);
+
+            return Results.Ok(new { success = true, activatedAtUtc = DateTime.UtcNow });
+        });
+
+        // POST /admin/api/clients/{clientId}/secrets/{secretId}/set-primary - Set secret as primary
+        admin.MapPost("/clients/{clientId:guid}/secrets/{secretId:guid}/set-primary", async (
+            Guid clientId,
+            Guid secretId,
+            AuthDbContext db,
+            IClientStore clientStore,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            {
+                return Results.Problem(statusCode: 404, title: "Client not found or access denied");
+            }
+
+            var username = httpContext.User.Identity?.Name ?? "system";
+            var success = await clientStore.SetPrimarySecretAsync(secretId, username, ct);
+
+            if (!success)
+            {
+                return Results.Problem(statusCode: 404, title: "Secret not found or not active");
+            }
+
+            await clientStore.InvalidateClientCacheAsync(
+                (await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct))?.ClientId ?? string.Empty,
+                tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty,
+                ct);
+
+            return Results.Ok(new { success = true });
+        });
+
+        // DELETE /admin/api/clients/{clientId}/secrets/{secretId} - Revoke a secret
+        admin.MapDelete("/clients/{clientId:guid}/secrets/{secretId:guid}", async (
+            Guid clientId,
+            Guid secretId,
+            AuthDbContext db,
+            IClientStore clientStore,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            {
+                return Results.Problem(statusCode: 404, title: "Client not found or access denied");
+            }
+
+            var username = httpContext.User.Identity?.Name ?? "system";
+            var success = await clientStore.RevokeSecretAsync(secretId, username, ct);
+
+            if (!success)
+            {
+                return Results.Problem(
+                    statusCode: 400,
+                    title: "Cannot revoke secret",
+                    detail: "Secret not found or cannot revoke the last active secret (would lock out client).");
+            }
+
+            await clientStore.InvalidateClientCacheAsync(
+                (await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct))?.ClientId ?? string.Empty,
+                tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty,
+                ct);
+
+            return Results.Ok(new { success = true, revokedAtUtc = DateTime.UtcNow });
+        });
+    }
+
+    private static async Task<bool> VerifyClientAccess(
+        Guid clientId,
+        AuthDbContext db,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+        if (!isPlatformAdmin)
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue) return false;
+            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        return await clientQuery.AnyAsync(ct);
+    }
+
+    public record CreateSecretRequest(
+        string? Description = null,
+        int? ExpiresInDays = null,
+        bool ActivateImmediately = false
+    );
 
     public record SeedTenantRequest(
         string TenantSlug,
