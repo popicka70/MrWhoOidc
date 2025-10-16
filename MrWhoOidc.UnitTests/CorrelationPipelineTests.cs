@@ -239,7 +239,7 @@ public sealed class CorrelationPipelineTests
         var generated = accessor.CorrelationId;
         Assert.IsFalse(string.IsNullOrWhiteSpace(generated));
         Assert.AreNotEqual(new string('A', 65), generated, "Middleware should reject oversized header");
-        Assert.IsTrue(generated.Length <= 64, "Generated correlation ID should respect max length");
+        Assert.IsLessThanOrEqualTo(64, generated.Length, "Generated correlation ID should respect max length");
         Assert.AreEqual(generated, context.Response.Headers["X-Correlation-Id"].ToString());
     }
 

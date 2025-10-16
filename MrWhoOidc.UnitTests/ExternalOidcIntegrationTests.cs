@@ -522,7 +522,7 @@ public sealed class ExternalOidcIntegrationTests
         
         var startLocation = start.Headers.Location;
         Assert.IsNotNull(startLocation, "Start response must include Location header");
-        Assert.IsTrue(startLocation!.ToString().Contains("/up1/authorize"), "Start must redirect to upstream authorize endpoint");
+        Assert.Contains("/up1/authorize", startLocation!.ToString(), "Start must redirect to upstream authorize endpoint");
 
         // Step 2: Upstream Authorize - should return 302 with callback URL + code
         var upstreamUri = startLocation.IsAbsoluteUri ? startLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), startLocation);
