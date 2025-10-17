@@ -599,9 +599,12 @@ Duration: 11.0 seconds
   - Query all clients where `ClientSecretHash IS NOT NULL AND ClientSecrets.Count == 0`
   - Create `ClientSecret` records for each
   - **Decision point**: Run automatically on startup (once) or require manual admin action?
-- [ ] **Task 4.1.3**: Add deprecation warning to Admin UI for clients still using legacy secret
-  - Badge/banner: "This client uses a legacy secret. Migrate to the new secret management system."
-  - Link to migration endpoint/wizard
+- [x] **Task 4.1.3**: Add deprecation warning to Admin UI for clients still using legacy secret
+  - **COMPLETED**: Added prominent warning banner to `Secrets.cshtml` page
+  - Banner displays when `HasLegacyClientSecretHash` is true (non-empty `ClientSecretHash`)
+  - Includes "DEPRECATED" badge, migration benefits, and actionable guidance
+  - Banner is dismissible and explains zero-downtime migration path
+  - Implementation: Added `HasLegacyClientSecretHash` property to `SecretsModel` with CS0618 suppression
 
 #### Epic 4.2: Documentation
 
