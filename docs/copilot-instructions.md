@@ -35,6 +35,7 @@ Security and quality
 - Add input validation for all protocol parameters. Return RFC-compliant error responses.
 - Prefer dependency injection and interfaces to keep protocol logic testable.
 - Leave clear TODOs where stubs are used (e.g., temporary in-memory values).
+- **Zero-warning policy**: All code must compile with zero warnings. Address compiler and analyzer warnings before submitting.
 
 Observability
 - Use `MrWhoOidc.ServiceDefaults` for logging and OpenTelemetry. Add basic metrics for critical endpoints.

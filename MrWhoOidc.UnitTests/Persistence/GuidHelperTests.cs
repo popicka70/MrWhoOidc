@@ -32,7 +32,7 @@ public class GuidHelperTests
         }
         
         // Assert
-        Assert.AreEqual(count, ids.Count, "All generated UUIDs should be unique");
+        Assert.HasCount(count, ids, "All generated UUIDs should be unique");
     }
 
     [TestMethod]
@@ -62,7 +62,7 @@ public class GuidHelperTests
         }
         
         var percentInOrder = (double)inOrder / (ids.Count - 1);
-        Assert.IsTrue(percentInOrder >= 0.95, $"Expected at least 95% monotonic ordering, got {percentInOrder:P2}");
+        Assert.IsGreaterThanOrEqualTo(0.95, percentInOrder, $"Expected at least 95% monotonic ordering, got {percentInOrder:P2}");
     }
 
     [TestMethod]
@@ -79,8 +79,8 @@ public class GuidHelperTests
         });
         
         // Assert
-        Assert.AreEqual(count, ids.Count);
-        Assert.AreEqual(count, ids.Distinct().Count(), "All generated UUIDs should be unique even under concurrent load");
+        Assert.HasCount(count, ids);
+        Assert.HasCount(count, ids.Distinct(), "All generated UUIDs should be unique even under concurrent load");
     }
 
     [TestMethod]
