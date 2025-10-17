@@ -45,13 +45,15 @@ Build, run, and tests
 
 Security conventions
 - Passwords/secrets: Argon2id or BCrypt; never store plaintext.
+- Client secrets: Support multiple active secrets per client (up to 3) for zero-downtime rotation; secrets have expiry dates (default 90 days); multi-secret validation flow in ClientStore.
 - Protocol validation: validate all OIDC/OAuth params; emit RFC-compliant error payloads.
 - Signing keys: strong key mgmt with rotation; include `kid`.
 - Backchannel auditing: structured logs with PII hashing; never log raw JWTs.
 
 Observability
 - Use `MrWhoOidc.ServiceDefaults` for logging and OpenTelemetry setup.
-- BCL metrics/logging via `OidcMetrics` in dispatcher; admin and health endpoints exist. External alerting wiring is TODO (App Insights/Prometheus suggested in docs).
+- BCL metrics/logging via `OidcMetrics` in dispatcher; admin and health endpoints exist.
+- Client secret metrics via `IClientSecretMetrics`: authentication success/failure, expiry warnings, rotation events; expiry monitor runs daily; health endpoint at `/health/client-secrets`.
 
 Project-specific patterns
 - Minimal APIs for protocol endpoints inside MrWhoOidc.WebAuth `Program.cs` and handler classes under `Handlers/*`.

@@ -183,12 +183,123 @@ See also: docs/jar-replay-cache.md for discovery alignment and TTL/skew guidance
 Map relying-party clients to behaviors and capabilities.
 
 Navigation: **Admin → Clients → Edit → Providers tab**
+
 - Configure:
   - Allowed grant types (authorization_code, client_credentials, token-exchange)
   - Redirect URIs and post-logout URIs
   - Authentication methods (secret vs private_key_jwt)
   - Allowed audiences/resources and scopes
   - Token formats (JWT vs opaque) and lifetimes
+
+## 3.1) Client Secret Management
+
+**Navigation**: **Admin → Clients → Edit → Secrets** (via "Manage Secrets" link)
+
+MrWhoOidc supports **multiple active client secrets** per confidential client to enable zero-downtime secret rotation. This follows the overlap strategy used for signing key rotation.
+
+### Secret Lifecycle States
+
+| State | Description | Valid for Auth? |
+|-------|-------------|-----------------|
+| **Inactive** | Generated but not yet activated | ❌ No |
+| **Active** | Activated, not expired, not revoked | ✅ Yes |
+| **Primary** | Active + recommended for new usage (advisory flag) | ✅ Yes |
+| **Expired** | Passed expiry date | ❌ No |
+| **Revoked** | Manually revoked by admin | ❌ No |
+
+### Key Features
+
+- **Up to 3 active secrets** per client (prevents clutter during rotation)
+- **Expiry dates**: Default 90 days from activation (configurable)
+- **One-time display**: Secret value shown ONLY on creation (cannot be retrieved later)
+- **Usage tracking**: Last used timestamp and usage count per secret
+- **Audit trail**: Records who created/activated/revoked each secret
+
+### Rotation Workflow (Zero Downtime)
+
+1. **Generate new secret** (inactive state)
+   - Click "Add Secret" button
+   - Enter description (e.g., "Q4 2025 Production Secret")
+   - Set expiry (optional, default 90 days)
+   - Leave "Activate immediately" unchecked
+   - Copy secret value (shown once with copy button)
+
+2. **Update client application** with new secret
+   - Deploy to dev/staging first for testing
+   - Update production config (Azure Key Vault, K8s Secrets, etc.)
+
+3. **Activate new secret** (starts overlap period)
+   - Click "Activate" button in Secrets table
+   - Both old and new secrets now valid
+
+4. **Set as primary** (optional)
+   - Marks new secret as recommended (visual indicator only)
+
+5. **Monitor usage**
+   - Verify "Last Used" timestamp updates
+   - Check metrics: `oidc.client_secrets.authentication_success`
+
+6. **Revoke old secret** (after 24-48 hour soak period)
+   - Click "Revoke" button on old secret
+   - Confirm revocation
+
+### Security Features
+
+- **Argon2id hashing**: All secrets hashed before storage (never plaintext)
+- **Expiry enforcement**: Expired secrets rejected with specific error code
+- **Self-lockout prevention**: Cannot revoke last active secret
+- **Audit logging**: All lifecycle events logged with operator identity
+
+### Monitoring & Alerts
+
+Health endpoint: `/health/client-secrets`
+
+**Status responses:**
+
+- `Healthy`: All clients have valid secrets
+- `Degraded`: Secrets expiring within 3 days
+- `Unhealthy`: Client has no active secrets (locked out)
+
+**Recommended alerts:**
+
+- **Critical**: Authentication failures due to expired secrets
+- **Warning**: Secrets expiring within 7 days
+- **Info**: Clients with >3 active secrets (cleanup needed)
+
+### Best Practices
+
+- **Rotate regularly**: Every 90 days (or per your security policy)
+- **Use overlap period**: Don't revoke old secret immediately after activating new one
+- **Test first**: Deploy to non-production environments before production
+- **Document secrets**: Use description field to note purpose/environment
+- **Monitor expiry warnings**: Background service emits warnings 7 days before expiry
+
+### Troubleshooting
+
+**"Invalid client credentials" error:**
+
+- Verify application config matches new secret exactly (no spaces/newlines)
+- Ensure application reloaded config (restart if needed)
+- Check "Last Used" timestamp to confirm secret is being tried
+
+**"Cannot revoke last active secret" error:**
+
+- Generate and activate new secret first
+- Then revoke old one
+
+**Legacy clients (single secret):**
+
+- Clients with only `ClientSecretHash` (deprecated field) continue working
+- Admin UI automatically migrates to multi-secret model on first edit
+- No action required unless rotating secret
+
+### Related Documentation
+
+- [Client Secret Rotation Guide](client-secret-rotation-guide.md) — User-facing rotation steps
+- [Client Secret Rotation Playbook](client-secret-rotation-playbook.md) — Operational procedures for admins
+- [Telemetry Taxonomy](telemetry-taxonomy.md) — Metrics and logging reference
+
+---
 
 ## 4) Claim Mappings
 
