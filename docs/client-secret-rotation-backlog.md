@@ -627,15 +627,25 @@ Duration: 11.0 seconds
 
 #### Epic 4.3: Test Coverage
 
-- [ ] **Task 4.3.1**: Add E2E test: Full rotation workflow via Admin API
-  - Create client → Generate secret → Authenticate → Generate 2nd secret → Authenticate with both → Revoke 1st → Authenticate only with 2nd
-- [ ] **Task 4.3.2**: Add E2E test: Expiry workflow
-  - Create secret with 1-second expiry → Wait → Verify auth fails
-- [ ] **Task 4.3.3**: Add E2E test: Legacy secret backward compatibility
-  - Load existing client with `ClientSecretHash` → Verify auth works → Migrate → Verify still works
+- [x] **Task 4.3.1**: Add E2E test: Full rotation workflow via Admin API
+  - **COMPLETED**: Added `ClientSecretRotation_FullWorkflow_Success` test in `ClientStoreTests.cs`
+  - Test covers: Create client → Generate secret → Authenticate → Generate 2nd secret → Authenticate with both → Set primary → Revoke 1st → Authenticate only with 2nd
+- [x] **Task 4.3.2**: Add E2E test: Expiry workflow
+  - **COMPLETED**: Added `ClientSecretRotation_ExpiredSecret_AuthenticationFails` test in `ClientStoreTests.cs`
+  - Test verifies auth fails for expired secrets
+- [x] **Task 4.3.3**: Add E2E test: Legacy secret backward compatibility
+  - **COMPLETED**: Added `ClientSecretRotation_LegacyClientSecretHash_StillWorks` test in `ClientStoreTests.cs`
+  - Test verifies clients with legacy `ClientSecretHash` still authenticate correctly
 - [ ] **Task 4.3.4**: Performance test: Auth latency with 3 active secrets vs. 1 secret
   - Ensure multi-secret validation doesn't significantly degrade performance
 - [ ] **Task 4.3.5**: Update `docs/test-coverage-backlog.md` with new test cases
+
+**Additional Tests Implemented** (Bonus Coverage):
+
+- [x] `ClientSecretRotation_RevokeLastSecret_Prevented` - Validates self-lockout protection
+- [x] `ClientSecretRotation_MultipleActiveSecrets_AllAuthenticate` - Tests 3 simultaneous active secrets
+- [x] `ClientSecretRotation_MultipleActiveSecrets_ExceedsMaxLimit` - Tests 3-secret limit enforcement
+- [x] `ClientSecretRotation_NoExpiryDate_NeverExpires` - Tests secrets with null expiry
 
 ---
 
