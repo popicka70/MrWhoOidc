@@ -109,8 +109,9 @@ internal sealed class ClientStore(
                     // Record success metric
                     metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", secret.IsPrimary));
                     
-                    // Fire-and-forget usage tracking (consider queueing in production)
-                    _ = Task.Run(() => RecordSecretUsageAsync(secret.Id, ct), ct);
+                    // TODO: Fire-and-forget usage tracking causes DbContext concurrency issues.
+                    // Should use separate DbContext scope or queue-based approach.
+                    // _ = Task.Run(() => RecordSecretUsageAsync(secret.Id, ct), ct);
                     return true;
                 }
             }
@@ -213,7 +214,7 @@ internal sealed class ClientStore(
         
         var secret = new ClientSecret
         {
-            Id = Guid.NewGuid(),
+            Id = GuidHelper.NewId(),
             ClientId = clientRecordId,
             SecretHash = secretHash,
             Description = description,

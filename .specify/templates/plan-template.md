@@ -33,6 +33,15 @@
 
 [Gates determined based on constitution file]
 
+**Build Quality Gates**:
+
+- [ ] Zero compiler warnings (Debug and Release configurations)
+- [ ] Zero analyzer warnings (unless documented suppressions in place)
+- [ ] All tests pass without warnings
+- [ ] EF Core migrations generated using `dotnet ef migrations add` (not hand-written)
+- [ ] Entity primary keys use `GuidHelper.NewId()` (not `Guid.NewGuid()`)
+- [ ] OIDC specification compliance validated with RFC references in tests
+
 ## Project Structure
 
 ### Documentation (this feature)

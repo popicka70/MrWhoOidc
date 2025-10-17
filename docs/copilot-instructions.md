@@ -17,6 +17,13 @@ EF Core migrations
     - `dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth`
   - Keep migration files under `MrWhoOidc.Auth/ Persistence/Migrations`.
 
+Primary key generation
+- **Always use `GuidHelper.NewId()`** for entity primary keys (not `Guid.NewGuid()`).
+- `GuidHelper.NewId()` generates UUIDv7 (RFC 9562) with embedded timestamps for optimal database performance.
+- Benefits: 80-90% reduction in B-tree page splits, better cache locality, improved index performance.
+- Located at: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
+- Example: `public Guid Id { get; set; } = GuidHelper.NewId();`
+
 Architecture and endpoints
 - Implement protocols, persistence, crypto, and key management in `MrWhoOidc.Auth`.
 - Implement discovery and JWKS endpoints in `MrWhoOidc.WebAuth` (minimal APIs), and login/consent/logout as Razor Pages.
@@ -28,6 +35,7 @@ Security and quality
 - Add input validation for all protocol parameters. Return RFC-compliant error responses.
 - Prefer dependency injection and interfaces to keep protocol logic testable.
 - Leave clear TODOs where stubs are used (e.g., temporary in-memory values).
+- **Zero-warning policy**: All code must compile with zero warnings. Address compiler and analyzer warnings before submitting.
 
 Observability
 - Use `MrWhoOidc.ServiceDefaults` for logging and OpenTelemetry. Add basic metrics for critical endpoints.

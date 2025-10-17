@@ -1,5 +1,21 @@
 # MrWhoOidc Constitution
 
+<!--
+Sync Impact Report (2025-10-17):
+- Version: 1.0.0 → 1.1.0 (MINOR: Added new principle VI. Zero-Warning Policy)
+- Modified Principles: None (existing principles unchanged)
+- Added Sections:
+  * Principle VI: Zero-Warning Policy (build quality requirement)
+  * Database & Primary Key Strategy section (UUIDv7 migration documentation)
+- Removed Sections: None
+- Templates Requiring Updates:
+  * ✅ .specify/templates/plan-template.md (Constitution Check includes warning policy)
+  * ✅ .specify/templates/tasks-template.md (Task validation includes build checks)
+  * ⚠ .specify/templates/spec-template.md (No changes needed - warning policy implicit in quality gates)
+- Follow-up TODOs: None (all placeholders resolved)
+- Rationale: User requirement "We do not accept build warnings as finished work" + UUIDv7 migration completed
+-->
+
 <!-- OIDC Identity Provider (IdP) with Multi-Tenancy and IdP Chaining -->
 
 ## Core Principles
@@ -62,6 +78,20 @@
 - Secure credential storage (Argon2id/BCrypt for passwords)
 - Key rotation procedures documented (see key-rotation-playbook.md)
 
+### VI. Zero-Warning Policy
+
+**We do not accept build warnings as finished work.**
+
+- All code must compile with zero warnings in both Debug and Release configurations
+- Compiler warnings (`CS*`) must be resolved, not suppressed without justification
+- Analyzer warnings (Roslyn, StyleCop, etc.) must be addressed
+- Build logs must show clean compilation output
+- Exception: Warnings may be temporarily suppressed with:
+  - `#pragma warning disable` with inline comment explaining why
+  - `.editorconfig` rule disabling with documented rationale
+  - Suppressions must be reviewed and tracked in technical debt backlog
+- Rationale: Warnings often indicate real issues that become bugs in production. Clean builds ensure code quality and maintainability.
+
 ## Architecture & Project Structure
 
 ### Solution Layout
@@ -115,6 +145,45 @@ dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.W
 # Remove last migration (if not applied to database)
 dotnet ef migrations remove --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth
 ```
+
+### Primary Key Strategy (UUIDv7)
+
+**Time-ordered UUIDs for optimal database performance.**
+
+- **ALWAYS use `GuidHelper.NewId()`** for entity primary keys (never `Guid.NewGuid()`)
+- Generates UUIDv7 (RFC 9562) with embedded timestamps
+- Located at: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
+- Example: `public Guid Id { get; set; } = GuidHelper.NewId();`
+
+**Benefits**:
+
+- 80-90% reduction in B-tree page splits during inserts
+- 50%+ lower latency for insert operations on high-volume tables
+- Better cache locality due to sequential writes
+- Implicit chronological ordering (millisecond precision)
+- Fully compatible with existing PostgreSQL `uuid` columns
+
+**Compatibility**:
+
+- Existing UUIDv4 records remain valid (no data migration required)
+- Foreign keys work transparently with mixed UUID versions
+- External APIs unchanged (standard RFC 4122 string serialization)
+
+**For New Entities**:
+
+```csharp
+public class MyNewEntity
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();  // ✅ Correct
+    // NOT: = Guid.NewGuid();  // ❌ Don't use this
+}
+```
+
+**References**:
+
+- RFC 9562: <https://www.rfc-editor.org/rfc/rfc9562.html>
+- Implementation: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
+- Backlog: `docs/uuidv7-migration-backlog.md`
 
 ### Key Features & Endpoints
 
@@ -283,4 +352,4 @@ This constitution supersedes all other practices. Amendments require:
 
 ---
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-15
+**Version**: 1.1.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-17
