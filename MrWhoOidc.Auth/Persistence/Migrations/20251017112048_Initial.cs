@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace MrWhoOidc.Auth.Migrations
+namespace MrWhoOidc.Auth.Persistence.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration
@@ -12,43 +12,6 @@ namespace MrWhoOidc.Auth.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "AuthorizationCodes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Code = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    ClientId = table.Column<string>(type: "text", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    RedirectUri = table.Column<string>(type: "text", nullable: false),
-                    ScopesJson = table.Column<string>(type: "text", nullable: false),
-                    Nonce = table.Column<string>(type: "text", nullable: true),
-                    CodeChallenge = table.Column<string>(type: "text", nullable: true),
-                    CodeChallengeMethod = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Consumed = table.Column<bool>(type: "boolean", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AuthorizationCodes", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Consents",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClientId = table.Column<string>(type: "text", nullable: false),
-                    ScopesJson = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Consents", x => x.Id);
-                });
-
             migrationBuilder.CreateTable(
                 name: "DataProtectionKeys",
                 columns: table => new
@@ -61,27 +24,6 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DataProtectionKeys", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "IdentityProviders",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    Type = table.Column<int>(type: "integer", nullable: false),
-                    Enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    IsDefault = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    LogoUrl = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
-                    SortOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
-                    ConfigJson = table.Column<string>(type: "character varying(8000)", maxLength: 8000, nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IdentityProviders", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -102,10 +44,136 @@ namespace MrWhoOidc.Auth.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "RevocationAudits",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClientId = table.Column<string>(type: "text", nullable: false),
+                    TokenHash = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    TokenType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    IpAddress = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RevocationAudits", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Tenants",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Slug = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    IssuerUri = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    SuspendedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LogoUrl = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    PrimaryColor = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    AccentColor = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    SettingsJson = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
+                    MaxUsers = table.Column<int>(type: "integer", nullable: false),
+                    MaxClients = table.Column<int>(type: "integer", nullable: false),
+                    MaxIdentityProviders = table.Column<int>(type: "integer", nullable: false),
+                    AdminEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    BillingPlan = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    TrialEndsAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    MetadataJson = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Tenants", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AuthorizationCodes",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Code = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    ClientId = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    RedirectUri = table.Column<string>(type: "text", nullable: false),
+                    ScopesJson = table.Column<string>(type: "text", nullable: false),
+                    Nonce = table.Column<string>(type: "text", nullable: true),
+                    CodeChallenge = table.Column<string>(type: "text", nullable: true),
+                    CodeChallengeMethod = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    Consumed = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AuthorizationCodes", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AuthorizationCodes_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Consents",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClientId = table.Column<string>(type: "text", nullable: false),
+                    ScopesJson = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Consents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Consents_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "IdentityProviders",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    IsDefault = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    LogoUrl = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    SortOrder = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    ConfigJson = table.Column<string>(type: "character varying(8000)", maxLength: 8000, nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_IdentityProviders", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_IdentityProviders_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "PushedAuthorizationRequests",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     RequestUri = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
                     ClientId = table.Column<string>(type: "text", nullable: false),
                     RequestJson = table.Column<string>(type: "text", nullable: false),
@@ -116,6 +184,12 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_PushedAuthorizationRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_PushedAuthorizationRequests_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -123,6 +197,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     SessionToken = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     SessionTokenHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     ClientId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
@@ -145,6 +220,12 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_QrLoginSessions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_QrLoginSessions_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -152,6 +233,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     DisplayName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -159,22 +241,12 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Realms", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RevocationAudits",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClientId = table.Column<string>(type: "text", nullable: false),
-                    TokenHash = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    TokenType = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    IpAddress = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevocationAudits", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Realms_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -182,12 +254,20 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
+                    IsGlobal = table.Column<bool>(type: "boolean", nullable: false),
                     Description = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     IsExposed = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Scopes", x => x.Name);
+                    table.ForeignKey(
+                        name: "FK_Scopes_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -195,6 +275,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: true),
                     Kid = table.Column<string>(type: "text", nullable: false),
                     Alg = table.Column<string>(type: "text", nullable: false),
                     JwkJson = table.Column<string>(type: "text", nullable: false),
@@ -204,6 +285,12 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_SigningKeys", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_SigningKeys_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -211,6 +298,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     Type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     TokenHash = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
@@ -224,11 +312,19 @@ namespace MrWhoOidc.Auth.Migrations
                     RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ReplacedById = table.Column<Guid>(type: "uuid", nullable: true),
                     ActJson = table.Column<string>(type: "text", nullable: true),
-                    DelegationDepth = table.Column<int>(type: "integer", nullable: false, defaultValue: 0)
+                    DelegationDepth = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    IpAddress = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UserAgent = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tokens", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Tokens_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -236,6 +332,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     Username = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     PasswordHash = table.Column<string>(type: "text", nullable: false),
                     PasswordSalt = table.Column<string>(type: "text", nullable: true),
@@ -252,6 +349,12 @@ namespace MrWhoOidc.Auth.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -307,6 +410,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     ClientId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     ClientName = table.Column<string>(type: "text", nullable: true),
                     RequirePkce = table.Column<bool>(type: "boolean", nullable: false),
@@ -357,6 +461,12 @@ namespace MrWhoOidc.Auth.Migrations
                         principalTable: "Realms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Clients_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -364,6 +474,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     RealmId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false)
@@ -377,6 +488,12 @@ namespace MrWhoOidc.Auth.Migrations
                         principalTable: "Realms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Roles_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -401,6 +518,41 @@ namespace MrWhoOidc.Auth.Migrations
                         principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ImpersonationAuditLogs",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    PlatformAdminUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PlatformAdminUsername = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantName = table.Column<string>(type: "text", nullable: false),
+                    TenantSlug = table.Column<string>(type: "text", nullable: false),
+                    Action = table.Column<int>(type: "integer", nullable: false),
+                    Timestamp = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    IpAddress = table.Column<string>(type: "text", nullable: true),
+                    UserAgent = table.Column<string>(type: "text", nullable: true),
+                    StartLogId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Duration = table.Column<TimeSpan>(type: "interval", nullable: true),
+                    Notes = table.Column<string>(type: "text", nullable: true),
+                    PlatformAdminId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ImpersonationAuditLogs", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ImpersonationAuditLogs_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ImpersonationAuditLogs_Users_PlatformAdminId",
+                        column: x => x.PlatformAdminId,
+                        principalTable: "Users",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -430,6 +582,7 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     ClientDbId = table.Column<Guid>(type: "uuid", nullable: false),
                     ClientId = table.Column<string>(type: "text", nullable: false),
                     TargetUri = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
@@ -454,6 +607,12 @@ namespace MrWhoOidc.Auth.Migrations
                         principalTable: "Clients",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_BackchannelLogoutNotifications_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -532,10 +691,41 @@ namespace MrWhoOidc.Auth.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ClientSecrets",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClientId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SecretHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    Description = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ActivatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    RevokedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsPrimary = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    ActivatedBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    RevokedBy = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    LastUsedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UsageCount = table.Column<long>(type: "bigint", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ClientSecrets", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ClientSecrets_Clients_ClientId",
+                        column: x => x.ClientId,
+                        principalTable: "Clients",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Registrations",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     NormalizedEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
@@ -558,6 +748,12 @@ namespace MrWhoOidc.Auth.Migrations
                         principalTable: "Clients",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Registrations_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -702,6 +898,11 @@ namespace MrWhoOidc.Auth.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_AuthorizationCodes_TenantId",
+                table: "AuthorizationCodes",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BackchannelLogoutNotifications_ClientDbId",
                 table: "BackchannelLogoutNotifications",
                 column: "ClientDbId");
@@ -715,6 +916,11 @@ namespace MrWhoOidc.Auth.Migrations
                 name: "IX_BackchannelLogoutNotifications_Status_NextAttemptAt",
                 table: "BackchannelLogoutNotifications",
                 columns: new[] { "Status", "NextAttemptAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BackchannelLogoutNotifications_TenantId",
+                table: "BackchannelLogoutNotifications",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ClientIdentityProviders_IdentityProviderId",
@@ -738,9 +944,31 @@ namespace MrWhoOidc.Auth.Migrations
                 column: "RealmId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Clients_TenantId",
+                table: "Clients",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ClientScopes_ScopeName",
                 table: "ClientScopes",
                 column: "ScopeName");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ClientSecrets_Active",
+                table: "ClientSecrets",
+                columns: new[] { "ClientId", "ActivatedAtUtc", "RevokedAtUtc", "ExpiresAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ClientSecrets_PrimaryPerClient",
+                table: "ClientSecrets",
+                columns: new[] { "ClientId", "IsPrimary" },
+                unique: true,
+                filter: "\"IsPrimary\" = TRUE AND \"RevokedAtUtc\" IS NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Consents_TenantId",
+                table: "Consents",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Consents_UserId_ClientId",
@@ -776,6 +1004,21 @@ namespace MrWhoOidc.Auth.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_IdentityProviders_TenantId",
+                table: "IdentityProviders",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ImpersonationAuditLogs_PlatformAdminId",
+                table: "ImpersonationAuditLogs",
+                column: "PlatformAdminId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ImpersonationAuditLogs_TenantId",
+                table: "ImpersonationAuditLogs",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LogoutRedirectReferences_ExpiresAt",
                 table: "LogoutRedirectReferences",
                 column: "ExpiresAt");
@@ -784,6 +1027,11 @@ namespace MrWhoOidc.Auth.Migrations
                 name: "IX_PushedAuthorizationRequests_ExpiresAt",
                 table: "PushedAuthorizationRequests",
                 column: "ExpiresAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PushedAuthorizationRequests_TenantId",
+                table: "PushedAuthorizationRequests",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_QrLoginSessions_SessionToken",
@@ -802,9 +1050,19 @@ namespace MrWhoOidc.Auth.Migrations
                 columns: new[] { "Status", "ExpiresAt" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Realms_Name",
+                name: "IX_QrLoginSessions_TenantId",
+                table: "QrLoginSessions",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Realms_TenantId",
                 table: "Realms",
-                column: "Name",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Realms_TenantId_Name",
+                table: "Realms",
+                columns: new[] { "TenantId", "Name" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -818,6 +1076,11 @@ namespace MrWhoOidc.Auth.Migrations
                 column: "NormalizedEmail");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Registrations_TenantId",
+                table: "Registrations",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RevocationAudits_TokenHash_ClientId",
                 table: "RevocationAudits",
                 columns: new[] { "TokenHash", "ClientId" });
@@ -829,10 +1092,55 @@ namespace MrWhoOidc.Auth.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_Roles_TenantId",
+                table: "Roles",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Scopes_Name",
+                table: "Scopes",
+                column: "Name",
+                unique: true,
+                filter: "\"TenantId\" IS NULL AND \"IsGlobal\" = true");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Scopes_TenantId",
+                table: "Scopes",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Scopes_TenantId_Name",
+                table: "Scopes",
+                columns: new[] { "TenantId", "Name" },
+                unique: true,
+                filter: "\"TenantId\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_SigningKeys_Kid",
                 table: "SigningKeys",
                 column: "Kid",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SigningKeys_TenantId",
+                table: "SigningKeys",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tenants_Slug",
+                table: "Tenants",
+                column: "Slug",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tenants_Status",
+                table: "Tenants",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tokens_TenantId",
+                table: "Tokens",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tokens_TokenHash",
@@ -903,15 +1211,20 @@ namespace MrWhoOidc.Auth.Migrations
                 column: "RoleId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Users_NormalizedEmail",
+                name: "IX_Users_TenantId",
                 table: "Users",
-                column: "NormalizedEmail",
+                column: "TenantId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_TenantId_NormalizedEmail",
+                table: "Users",
+                columns: new[] { "TenantId", "NormalizedEmail" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Users_Username",
+                name: "IX_Users_TenantId_Username",
                 table: "Users",
-                column: "Username",
+                columns: new[] { "TenantId", "Username" },
                 unique: true);
         }
 
@@ -934,6 +1247,9 @@ namespace MrWhoOidc.Auth.Migrations
                 name: "ClientScopes");
 
             migrationBuilder.DropTable(
+                name: "ClientSecrets");
+
+            migrationBuilder.DropTable(
                 name: "Consents");
 
             migrationBuilder.DropTable(
@@ -947,6 +1263,9 @@ namespace MrWhoOidc.Auth.Migrations
 
             migrationBuilder.DropTable(
                 name: "IdentityProviderKeys");
+
+            migrationBuilder.DropTable(
+                name: "ImpersonationAuditLogs");
 
             migrationBuilder.DropTable(
                 name: "LogoutRedirectReferences");
@@ -1001,6 +1320,9 @@ namespace MrWhoOidc.Auth.Migrations
 
             migrationBuilder.DropTable(
                 name: "Realms");
+
+            migrationBuilder.DropTable(
+                name: "Tenants");
         }
     }
 }
