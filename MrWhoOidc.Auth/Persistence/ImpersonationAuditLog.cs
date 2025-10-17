@@ -9,7 +9,7 @@ public class ImpersonationAuditLog
     /// <summary>
     /// Unique identifier for this audit log entry.
     /// </summary>
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     /// <summary>
     /// The platform admin user who performed the impersonation.

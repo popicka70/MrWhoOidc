@@ -715,7 +715,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
 public class User
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -744,7 +744,7 @@ public class User
 
 public class Realm
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -758,7 +758,7 @@ public class Realm
 
 public class Role
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -788,7 +788,7 @@ public class Scope
 
 public class Client
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -888,7 +888,7 @@ public class Client
 
 public class ClientSecret
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid ClientId { get; set; }          // FK to Client.Id
     public Client Client { get; set; } = null!; // Navigation property
     
@@ -927,7 +927,7 @@ public class ClientScope
 
 public class UserAlternativeEmail
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid UserId { get; set; }
     [MaxLength(256)]
     public string Email { get; set; } = string.Empty;
@@ -972,7 +972,7 @@ public class UserClientRoleAssignment
 
 public class SigningKey
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy: nullable for backward compat, but should always be set in multi-tenant mode
     public Guid? TenantId { get; set; }
@@ -986,7 +986,7 @@ public class SigningKey
 
 public class AuthorizationCode
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1007,7 +1007,7 @@ public class AuthorizationCode
 
 public class Consent
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1021,7 +1021,7 @@ public class Consent
 
 public class Token
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1056,7 +1056,7 @@ public class Token
 [Microsoft.EntityFrameworkCore.Index(nameof(RevocationAudit.TokenHash), nameof(RevocationAudit.ClientId))]
 public class RevocationAudit
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     [Required]
     public string ClientId { get; set; } = string.Empty;
     [MaxLength(200)]
@@ -1070,7 +1070,7 @@ public class RevocationAudit
 
 public class PushedAuthorizationRequest
 {
-    public Guid Id { get; set; } = Guid.NewGuid(); // opaque identifier
+    public Guid Id { get; set; } = GuidHelper.NewId(); // opaque identifier
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1086,7 +1086,7 @@ public class PushedAuthorizationRequest
 
 public class Registration
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1121,7 +1121,7 @@ public enum IdentityProviderType
 
 public class IdentityProvider
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1156,7 +1156,7 @@ public class ClientIdentityProvider
 
 public class IdentityProviderClaimMapping
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid IdentityProviderId { get; set; }
     [MaxLength(200)]
     public string ExternalClaim { get; set; } = string.Empty;
@@ -1175,7 +1175,7 @@ public enum IdentityProviderKeyPurpose
 
 public class IdentityProviderKey
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid IdentityProviderId { get; set; }
     public IdentityProviderKeyPurpose Purpose { get; set; } = IdentityProviderKeyPurpose.Signing;
     [MaxLength(8000)]
@@ -1193,7 +1193,7 @@ public class IdentityProviderKey
 
 public class ClientJwksHistory
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid ClientId { get; set; }
     [MaxLength(8000)]
     public string JwksJson { get; set; } = string.Empty;
@@ -1214,7 +1214,7 @@ public enum OboDpopMode
 
 public class ExternalIdentity
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
     [MaxLength(2000)] public string Issuer { get; set; } = string.Empty; // upstream iss
     [MaxLength(400)] public string Subject { get; set; } = string.Empty; // upstream sub
     public Guid UserId { get; set; }
@@ -1227,7 +1227,7 @@ public class ExternalIdentity
 // New: Outbox entity for back-channel logout delivery
 public class BackchannelLogoutNotification
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }
@@ -1266,7 +1266,7 @@ public class LogoutRedirectReference
 // New: QR code login session entity
 public class QrLoginSession
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Multi-tenancy
     public Guid TenantId { get; set; }

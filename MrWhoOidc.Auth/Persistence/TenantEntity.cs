@@ -9,7 +9,7 @@ namespace MrWhoOidc.Auth.Persistence;
 /// </summary>
 public class Tenant
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; } = GuidHelper.NewId();
 
     // Identification
     [MaxLength(100)]
