@@ -119,6 +119,61 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/clients/{clientId:guid}/secrets",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/secrets",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/secrets/{secretId:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/secrets/{secretId:guid}/activate",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{clientId:guid}/secrets/{secretId:guid}/set-primary",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/providers",
     "Methods": "GET",
     "RateLimiters": [
@@ -381,6 +436,15 @@
   },
   {
     "Pattern": "/health/backchannel",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/health/client-secrets",
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,
@@ -675,6 +739,15 @@
   },
   {
     "Pattern": "Admin/Clients/Index",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Admin/Clients/Secrets/{id:guid}",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",

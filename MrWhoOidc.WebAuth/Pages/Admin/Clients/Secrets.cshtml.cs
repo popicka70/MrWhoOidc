@@ -34,6 +34,7 @@ public class SecretsModel : PageModel
     public Guid ClientId => Id;
     public string ClientName { get; set; } = string.Empty;
     public string ClientClientId { get; set; } = string.Empty;
+    public bool HasLegacyClientSecretHash { get; set; }
 
     public List<ClientSecretViewModel> Secrets { get; set; } = new();
 
@@ -46,14 +47,34 @@ public class SecretsModel : PageModel
     [TempData]
     public string? NewSecretValue { get; set; }
 
-    [TempData]
-    public string? NewSecretId { get; set; }
+    // Note: Not using [TempData] attribute to avoid casting issues during property binding
+    // Instead, we manually read/write to TempData in OnGetAsync/OnPostCreateAsync
+    public string? NewSecretIdentifier { get; set; }
 
     [BindProperty]
     public CreateSecretInput Input { get; set; } = new();
 
     public async Task<IActionResult> OnGetAsync()
     {
+        // Manually read NewSecretIdentifier from TempData (avoids automatic binding issues)
+        if (TempData.ContainsKey("NewSecretIdentifier"))
+        {
+            NewSecretIdentifier = TempData["NewSecretIdentifier"]?.ToString();
+        }
+
+        // Safety: Clear any malformed TempData from old property names
+        try
+        {
+            if (TempData.ContainsKey("NewSecretId"))
+            {
+                TempData.Remove("NewSecretId");
+            }
+        }
+        catch
+        {
+            // Ignore any TempData errors during cleanup
+        }
+
         var client = await LoadClientAsync();
         if (client == null) return NotFound();
 
@@ -120,7 +141,7 @@ public class SecretsModel : PageModel
 
             // Store secret value in TempData to display once
             NewSecretValue = secretValue;
-            NewSecretId = secret.Id.ToString();
+            TempData["NewSecretIdentifier"] = secret.Id.ToString(); // Manually set in TempData
             SuccessMessage = "Secret generated successfully. Save it now — you won't see it again!";
 
             return RedirectToPage(new { id = Id });
@@ -236,6 +257,9 @@ public class SecretsModel : PageModel
         {
             ClientName = client.ClientName ?? client.ClientId;
             ClientClientId = client.ClientId;
+#pragma warning disable CS0618 // Type or member is obsolete
+            HasLegacyClientSecretHash = !string.IsNullOrEmpty(client.ClientSecretHash);
+#pragma warning restore CS0618 // Type or member is obsolete
         }
 
         return client;

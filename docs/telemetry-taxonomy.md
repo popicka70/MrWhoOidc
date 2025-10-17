@@ -98,6 +98,78 @@ Implementation guidance:
 
 Dashboards should map `outcome` → `cancel bucket` using the table above. Alert when `user_cancel` ratio spikes (>30 % over 5 min) or `session_expired` exceeds 1 % baseline.
 
+## Client Secret Metrics
+
+> **Added:** October 17, 2025 (Client Secret Rotation feature)
+
+Client secret rotation and expiry tracking uses dedicated metrics via `IClientSecretMetrics`. These are critical for preventing authentication outages due to expired secrets.
+
+### Client Secret Counters and Gauges
+
+| Metric | Instrument | Tags | Description |
+|--------|------------|------|-------------|
+| `oidc.client_secrets.authentication_success` | Counter | `client_id`, `secret_id`, `is_primary` | Incremented when a client successfully authenticates with a secret. Use `is_primary` tag to track usage of primary vs. secondary secrets. |
+| `oidc.client_secrets.authentication_failure` | Counter | `client_id`, `reason` | Incremented when client authentication fails. Reason values: `expired`, `revoked`, `invalid`, `missing`. |
+| `oidc.client_secrets.active_count` | Gauge | `client_id` | Current number of active (non-expired, non-revoked) secrets per client. Monitor for values >3 (indicates misconfiguration). |
+| `oidc.client_secrets.days_until_expiry` | Gauge | (global minimum) | Minimum days until any secret expires across all clients. Alert when <7 days. Updated by `ClientSecretExpiryMonitor` background service. |
+| `oidc.client_secrets.rotation_events` | Counter | `action` | Lifecycle event counter. Action values: `created`, `activated`, `revoked`, `set_primary`. |
+| `oidc.client_secrets.total_active` | Gauge | (none) | Total count of active secrets across all clients (snapshot). Updated by expiry monitor. |
+
+### Alert Recommendations
+
+| Alert | Condition | Severity | Action |
+|-------|-----------|----------|--------|
+| **Secret Expiring Soon** | `oidc.client_secrets.days_until_expiry < 7` | Warning | Notify admins to rotate affected client secrets. |
+| **Secret Expired** | `oidc.client_secrets.authentication_failure{reason="expired"} > 0` | Critical | Client authentication blocked; immediate rotation required. |
+| **Too Many Active Secrets** | `oidc.client_secrets.active_count > 3` for any client | Info | Review client secret management; may indicate incomplete rotation. |
+| **Secondary Secret High Usage** | `oidc.client_secrets.authentication_success{is_primary="false"} / total_auth > 0.5` | Info | Clients may not have switched to new primary secret after rotation. |
+
+### Structured Logging
+
+Client secret authentication events are logged with correlation to secret lifecycle:
+
+**Success:**
+
+```log
+Client secret authenticated: ClientId={ClientIdHash}, SecretId={SecretId}, IsPrimary={IsPrimary}
+```
+
+**Expiry:**
+
+```log
+Client secret expired: ClientId={ClientId}, SecretId={SecretId}, ExpiredAt={ExpiredAt}, Description={Description}
+```
+
+**Rotation Events (via Admin API):**
+
+```log
+Client secret created: ClientId={ClientId}, SecretId={SecretId}, Description={Description}, ExpiresAt={ExpiresAt}, CreatedBy={User}
+Client secret activated: ClientId={ClientId}, SecretId={SecretId}, ActivatedBy={User}
+Client secret revoked: ClientId={ClientId}, SecretId={SecretId}, RevokedBy={User}
+Client secret set as primary: ClientId={ClientId}, SecretId={SecretId}, UpdatedBy={User}
+```
+
+> **PII Handling:** `ClientId` values are bucketed/hashed in logs. `SecretId` is a GUID (non-PII). Secret values/hashes are NEVER logged.
+
+### Dashboard Queries
+
+**Prometheus/Grafana examples:**
+
+```promql
+# Secrets expiring within 7 days
+oidc_client_secrets_days_until_expiry < 7
+
+# Authentication failure rate by reason
+rate(oidc_client_secrets_authentication_failure[5m])
+
+# Primary vs secondary secret usage ratio
+sum(rate(oidc_client_secrets_authentication_success{is_primary="true"}[5m]))
+/ sum(rate(oidc_client_secrets_authentication_success[5m]))
+
+# Clients with >2 active secrets (potential rotation issues)
+oidc_client_secrets_active_count > 2
+```
+
 ---
 
 Maintainers: update this document whenever new events or outcomes are introduced. Keep the taxonomy stable—renaming an outcome/event without updating collectors is a breaking change for dashboards.
