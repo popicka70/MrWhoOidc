@@ -1,19 +1,16 @@
 # MrWhoOidc Constitution
 
 <!--
-Sync Impact Report (2025-10-17):
-- Version: 1.0.0 → 1.1.0 (MINOR: Added new principle VI. Zero-Warning Policy)
-- Modified Principles: None (existing principles unchanged)
-- Added Sections:
-  * Principle VI: Zero-Warning Policy (build quality requirement)
-  * Database & Primary Key Strategy section (UUIDv7 migration documentation)
+Sync Impact Report (2025-10-18):
+
+- Version: 1.1.0 → 1.1.1 (PATCH: Markdown formatting fixes for proper MdMcp compliance)
+- Modified Principles: None (content unchanged)
+- Added Sections: None
 - Removed Sections: None
-- Templates Requiring Updates:
-  * ✅ .specify/templates/plan-template.md (Constitution Check includes warning policy)
-  * ✅ .specify/templates/tasks-template.md (Task validation includes build checks)
-  * ⚠ .specify/templates/spec-template.md (No changes needed - warning policy implicit in quality gates)
-- Follow-up TODOs: None (all placeholders resolved)
-- Rationale: User requirement "We do not accept build warnings as finished work" + UUIDv7 migration completed
+- Templates Requiring Updates: None (formatting fixes only)
+- Follow-up TODOs: None
+- Rationale: Applied MdMcp formatting fixes to resolve MD022, MD032, MD036 violations
+
 -->
 
 <!-- OIDC Identity Provider (IdP) with Multi-Tenancy and IdP Chaining -->
@@ -22,7 +19,7 @@ Sync Impact Report (2025-10-17):
 
 ### I. OIDC Specification Compliance (NON-NEGOTIABLE)
 
-**We follow the OpenID Connect specification strictly.**
+We follow the OpenID Connect specification strictly.
 
 - All protocol implementations must conform to [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - OAuth 2.0 flows must follow [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) and related RFCs
@@ -32,7 +29,7 @@ Sync Impact Report (2025-10-17):
 
 ### II. Domain-Driven Architecture
 
-**Separation of concerns: Domain logic vs HTTP handling.**
+Separation of concerns: Domain logic vs HTTP handling.
 
 - **MrWhoOidc.Auth**: Core OIDC domain logic, protocols, persistence, crypto, key management, services
   - EF Core + PostgreSQL via Aspire connection "authdb"
@@ -47,7 +44,7 @@ Sync Impact Report (2025-10-17):
 
 ### III. .NET 9 Technology Stack
 
-**Modern .NET stack with Aspire orchestration.**
+Modern .NET stack with Aspire orchestration.
 
 - **Framework**: .NET 9 across all projects
 - **Database**: PostgreSQL with EF Core migrations
@@ -58,7 +55,7 @@ Sync Impact Report (2025-10-17):
 
 ### IV. Integration Test Coverage
 
-**We aim to cover the solution with integration tests.**
+We aim to cover the solution with integration tests.
 
 - Protocol flows tested end-to-end (authorize → token → userinfo)
 - Multi-tenant scenarios validated
@@ -69,7 +66,7 @@ Sync Impact Report (2025-10-17):
 
 ### V. Security & Multi-Tenancy
 
-**Production-grade security with tenant isolation.**
+Production-grade security with tenant isolation.
 
 - Role-based authorization: `tenant-admin`, `platform-admin` policies
 - CSRF protection via automatic antiforgery token validation
@@ -80,7 +77,7 @@ Sync Impact Report (2025-10-17):
 
 ### VI. Zero-Warning Policy
 
-**We do not accept build warnings as finished work.**
+We do not accept build warnings as finished work.
 
 - All code must compile with zero warnings in both Debug and Release configurations
 - Compiler warnings (`CS*`) must be resolved, not suppressed without justification
@@ -120,20 +117,20 @@ MrWhoOidc.Web/            # Sample RP (Relying Party) client
 
 ### Database Management
 
-**PostgreSQL via Aspire-provided connection.**
+PostgreSQL via Aspire-provided connection.
 
 - Connection name: `authdb`
 - Never hardcode connection strings
 - Migrations live in `MrWhoOidc.Auth/Persistence/Migrations`
 
-**Migration Creation (MANDATORY)**:
+#### Migration Creation (MANDATORY)
 
 - **ALWAYS use EF Core migrations tool** to generate migration files
 - **NEVER create migration files from scratch manually**
 - Generated files can be edited if necessary (e.g., for custom SQL, index tuning)
 - This ensures migrations are properly tracked and DbContext stays in sync
 
-**Migration Commands**:
+#### Migration Commands
 
 ```bash
 # Add migration (ALWAYS use this tool)
@@ -148,14 +145,14 @@ dotnet ef migrations remove --project MrWhoOidc.Auth --startup-project MrWhoOidc
 
 ### Primary Key Strategy (UUIDv7)
 
-**Time-ordered UUIDs for optimal database performance.**
+Time-ordered UUIDs for optimal database performance.
 
 - **ALWAYS use `GuidHelper.NewId()`** for entity primary keys (never `Guid.NewGuid()`)
 - Generates UUIDv7 (RFC 9562) with embedded timestamps
 - Located at: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
 - Example: `public Guid Id { get; set; } = GuidHelper.NewId();`
 
-**Benefits**:
+#### Benefits
 
 - 80-90% reduction in B-tree page splits during inserts
 - 50%+ lower latency for insert operations on high-volume tables
@@ -163,13 +160,13 @@ dotnet ef migrations remove --project MrWhoOidc.Auth --startup-project MrWhoOidc
 - Implicit chronological ordering (millisecond precision)
 - Fully compatible with existing PostgreSQL `uuid` columns
 
-**Compatibility**:
+#### Compatibility
 
 - Existing UUIDv4 records remain valid (no data migration required)
 - Foreign keys work transparently with mixed UUID versions
 - External APIs unchanged (standard RFC 4122 string serialization)
 
-**For New Entities**:
+#### For New Entities
 
 ```csharp
 public class MyNewEntity
@@ -179,7 +176,7 @@ public class MyNewEntity
 }
 ```
 
-**References**:
+#### References
 
 - RFC 9562: <https://www.rfc-editor.org/rfc/rfc9562.html>
 - Implementation: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
@@ -187,7 +184,7 @@ public class MyNewEntity
 
 ### Key Features & Endpoints
 
-**Core OIDC Endpoints** (in MrWhoOidc.WebAuth):
+#### Core OIDC Endpoints (in MrWhoOidc.WebAuth)
 
 - Discovery: `/.well-known/openid-configuration`
 - JWKS: `/jwks`, `/{providerId}/jwks` (per-provider)
@@ -197,7 +194,7 @@ public class MyNewEntity
 - Logout: `/logout`, `/logout/callback`
 - Back-Channel Logout (BCL): Durable outbox + dispatcher with retries
 
-**Admin APIs** (REST):
+#### Admin APIs (REST)
 
 - `/admin/api/providers` (CRUD for identity providers)
 - `/admin/api/clients` (CRUD for OAuth clients)
@@ -221,20 +218,20 @@ dotnet run --project MrWhoOidc.AppHost
 
 ### Testing Standards
 
-**MSTest with TestServer for integration tests.**
+MSTest with TestServer for integration tests.
 
 - Unit tests: Mock external dependencies, test domain logic
 - Integration tests: Use TestServer + in-memory DB or test DB
 - Test naming: `[Method]_[Scenario]_[ExpectedOutcome]`
 - Example: `OnPostAsync_ValidInput_RedirectsToIndex`
 
-**Test Organization** (in MrWhoOidc.UnitTests):
+#### Test Organization (in MrWhoOidc.UnitTests)
 
 - `*Tests.cs` for unit tests
 - `*IntegrationTests.cs` for integration tests
 - Use `TestDataSeeder.cs` for test data setup
 
-**OIDC RFC Documentation (MANDATORY)**:
+#### OIDC RFC Documentation (MANDATORY)
 
 - **ALWAYS include RFC references in XML documentation** when tests validate OIDC specification behavior
 - Format: `/// <summary>Tests [behavior]. See RFC XXXX Section X.X.</summary>`
@@ -243,7 +240,7 @@ dotnet run --project MrWhoOidc.AppHost
 
 ### Documentation Requirements
 
-**Comprehensive documentation in `/docs`.**
+Comprehensive documentation in `/docs`.
 
 - Architectural Decision Records (ADRs) in `/docs/adr/`
 - Operational playbooks (e.g., key-rotation-playbook.md)
@@ -251,7 +248,7 @@ dotnet run --project MrWhoOidc.AppHost
 - Developer guide for integration patterns
 - Update docs when changing protocols/endpoints
 
-**Markdown Formatting Standards (MANDATORY)**:
+#### Markdown Formatting Standards (MANDATORY)
 
 - **ALWAYS follow Markdown specification** to avoid lint warnings
 - Add blank lines before and after headings (MD022)
@@ -261,7 +258,7 @@ dotnet run --project MrWhoOidc.AppHost
 - Files must end with single newline character (MD047)
 - Use linters (markdownlint) to validate before committing
 
-**Backlog Management**:
+#### Backlog Management
 
 - Use Markdown checkboxes to track backlog item states
 - `[ ]` = Not started / To-do
@@ -278,7 +275,7 @@ dotnet run --project MrWhoOidc.AppHost
 
 ### Security Practices
 
-**Defense in depth across all layers.**
+Defense in depth across all layers.
 
 - Passwords: Argon2id or BCrypt (never plaintext)
 - Protocol validation: Validate all OIDC/OAuth params
@@ -307,7 +304,7 @@ dotnet run --project MrWhoOidc.AppHost
 
 ### Adding Features
 
-**When adding new OIDC features:**
+When adding new OIDC features:
 
 1. Place core logic in `MrWhoOidc.Auth` (domain)
 2. Expose via `MrWhoOidc.WebAuth` minimal APIs
@@ -326,7 +323,7 @@ dotnet run --project MrWhoOidc.AppHost
 
 ## Key Reference Documents
 
-**Essential reading for contributors:**
+### Essential reading for contributors
 
 - `.github/copilot-instructions.md` – AI assistant guidance
 - `docs/key-rotation-playbook.md` – Operational procedures
@@ -335,7 +332,7 @@ dotnet run --project MrWhoOidc.AppHost
 - `docs/admin-api-rbac-audit-2025-10-15.md` – Security baseline
 - `docs/p0-production-readiness-summary.md` – Production checklist
 
-**OpenID Connect Specifications**:
+### OpenID Connect Specifications
 
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 - [OAuth 2.0 (RFC 6749)](https://datatracker.ietf.org/doc/html/rfc6749)
@@ -352,4 +349,4 @@ This constitution supersedes all other practices. Amendments require:
 
 ---
 
-**Version**: 1.1.0 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-17
+**Version**: 1.1.1 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-18
