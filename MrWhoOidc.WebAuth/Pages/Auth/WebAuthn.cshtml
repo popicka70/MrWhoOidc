@@ -158,7 +158,8 @@
                         headers: WebAuthnUtils.createHeaders(),
                         body: JSON.stringify({
                             sessionId: challengeData.sessionId,
-                            assertionResponse: WebAuthnUtils.formatAssertionResponse(assertion)
+                            assertionResponse: WebAuthnUtils.formatAssertionResponse(assertion),
+                            returnUrl: this.returnUrl
                         })
                     });
 
@@ -170,12 +171,26 @@
                     const result = await completionResponse.json();
                     
                     if (result.success) {
-                        this.showSuccess('Authentication successful! Redirecting...');
-                        
-                        // Redirect to return URL or default page
-                        setTimeout(() => {
-                            window.location.href = this.returnUrl || '/';
-                        }, 1000);
+                        // Handle different response types
+                        if (result.requiresMfaEnrollment) {
+                            this.showSuccess('Authentication successful! MFA enrollment required. Redirecting...');
+                            setTimeout(() => {
+                                window.location.href = result.redirectUrl;
+                            }, 1000);
+                        } else if (result.requiresTotp) {
+                            this.showSuccess('Authentication successful! TOTP verification required. Redirecting...');
+                            setTimeout(() => {
+                                window.location.href = result.redirectUrl;
+                            }, 1000);
+                        } else {
+                            this.showSuccess('Authentication successful! Redirecting...');
+                            
+                            // Use provided redirect URL or fall back to return URL or default
+                            const redirectUrl = result.redirectUrl || this.returnUrl || '/';
+                            setTimeout(() => {
+                                window.location.href = redirectUrl;
+                            }, 1000);
+                        }
                     } else {
                         throw new Error('Authentication was not successful');
                     }

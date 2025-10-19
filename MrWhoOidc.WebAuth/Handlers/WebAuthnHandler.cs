@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Fido2NetLib;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -23,7 +26,9 @@ public sealed class WebAuthnHandler(
     IWebAuthnService webAuthnService,
     ITenantAccessor tenantAccessor,
     AuthDbContext dbContext,
-    ILogger<WebAuthnHandler> logger) : IWebAuthnHandler
+    ILogger<WebAuthnHandler> logger,
+    IMultiTenancyOptions multiTenancyOptions,
+    ITenantSettingsService settingsService) : IWebAuthnHandler
 {
     public async Task<IResult> RegistrationChallengeAsync(HttpContext context)
     {
@@ -174,6 +179,11 @@ public sealed class WebAuthnHandler(
             // Extract sessionId from request
             var sessionId = requestBody.GetProperty("sessionId").GetString();
             
+            // Extract optional return URL from request
+            var returnUrl = requestBody.TryGetProperty("returnUrl", out var returnUrlElement) 
+                ? returnUrlElement.GetString() 
+                : null;
+            
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
             var assertionResponse = JsonSerializer.Deserialize<AuthenticatorAssertionRawResponse>(assertionElement);
@@ -186,17 +196,114 @@ public sealed class WebAuthnHandler(
             var (success, user, errorMessage) = await webAuthnService.CompleteAuthenticationAsync(
                 assertionResponse, sessionId!, context.RequestAborted);
 
-            if (success && user != null)
+            if (!success || user == null)
             {
+                return Results.BadRequest(errorMessage ?? "Authentication failed");
+            }
+
+            logger.LogInformation("✅ [WebAuthn] User {Username} authenticated successfully with WebAuthn", user.Username);
+
+            // Check tenant MFA requirement (similar to password login)
+            var settings = await settingsService.GetCurrentTenantSettingsAsync();
+            var mfaRequired = settings.Auth?.RequireMfa ?? false;
+
+            // If MFA is required but user doesn't have it enabled, redirect to enrollment
+            if (mfaRequired && !user.TotpEnabled)
+            {
+                // Issue short-lived preauth to allow MFA enrollment
+                var preauthClaims = new List<Claim>
+                {
+                    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new(ClaimTypes.Name, user.Username),
+                    new("amr", "webauthn"),
+                    new("mfa_enrollment_required", "true")
+                };
+                var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
+                await context.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
+
+                logger.LogInformation("⚠️ [WebAuthn] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
+                
                 return Results.Json(new 
                 { 
-                    success = true, 
-                    userId = user.Id,
-                    username = user.Username
+                    success = true,
+                    requiresMfaEnrollment = true,
+                    redirectUrl = "/Mfa/Index?required=true"
                 });
             }
 
-            return Results.BadRequest(errorMessage ?? "Authentication failed");
+            // If TOTP enabled, issue short-lived preauth and redirect to TOTP page
+            if (user.TotpEnabled)
+            {
+                var claims = new List<Claim>
+                {
+                    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new(ClaimTypes.Name, user.Username),
+                    new("amr", "webauthn")
+                };
+                var identity = new ClaimsIdentity(claims, "preauth");
+                await context.SignInAsync("preauth", new ClaimsPrincipal(identity));
+                
+                logger.LogInformation("🔐 [WebAuthn] User {User} requires TOTP verification", user.Username);
+                
+                return Results.Json(new 
+                { 
+                    success = true,
+                    requiresTotp = true,
+                    redirectUrl = "/LoginTotp"
+                });
+            }
+
+            // Complete authentication - sign user in
+            var finalClaims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Username),
+                new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+                new("amr", "webauthn"),
+                new("idp", "local")
+            };
+
+            var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(finalIdentity);
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+            logger.LogInformation("✅ [WebAuthn] User {User} signed in successfully", user.Username);
+
+            // Build redirect URL based on return URL or default
+            string redirectUrl;
+            
+            if (!string.IsNullOrEmpty(returnUrl) && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative))
+            {
+                redirectUrl = returnUrl;
+                logger.LogInformation("➡️ [WebAuthn] Redirecting to provided ReturnUrl: {ReturnUrl}", returnUrl);
+            }
+            else
+            {
+                // Build default redirect URL based on tenant mode (similar to password login)
+                var currentTenant = tenantAccessor.CurrentTenant;
+
+                if (multiTenancyOptions.Enabled && currentTenant != null)
+                {
+                    // Multi-tenant mode: redirect to /t/{slug}/
+                    redirectUrl = $"/t/{currentTenant.Slug}/";
+                    logger.LogInformation("➡️ [WebAuthn] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})",
+                        redirectUrl, currentTenant.Slug);
+                }
+                else
+                {
+                    // Single-tenant mode: redirect to root /
+                    redirectUrl = "/";
+                    logger.LogInformation("➡️ [WebAuthn] Single-tenant mode: redirecting to {DefaultUrl}", redirectUrl);
+                }
+            }
+
+            return Results.Json(new 
+            { 
+                success = true,
+                userId = user.Id,
+                username = user.Username,
+                redirectUrl = redirectUrl
+            });
         }
         catch (ArgumentException ex)
         {
