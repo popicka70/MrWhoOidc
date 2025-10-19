@@ -1,0 +1,576 @@
+openapi: 3.0.3
+info:
+  title: MrWhoOidc License Management API
+  description: REST API for managing license keys and license-related operations in MrWhoOidc
+  version: 1.0.0
+  contact:
+    name: MrWhoOidc Support
+    url: https://github.com/popicka70/MrWhoOidc
+
+servers:
+  - url: https://localhost:7155
+    description: Local development server
+  - url: https://your-domain.com
+    description: Production server
+
+security:
+  - TenantAdminAuth: []
+  - PlatformAdminAuth: []
+
+paths:
+  /admin/api/license:
+    get:
+      summary: Get current license information
+      description: Retrieve the currently active license for the tenant or platform
+      tags:
+        - License Management
+      responses:
+        '200':
+          description: Current license information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseInfo'
+        '404':
+          description: No active license found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Install or update license
+      description: Install a new license key or update the existing license
+      tags:
+        - License Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstallLicenseRequest'
+      responses:
+        '200':
+          description: License installed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseInfo'
+        '400':
+          description: Invalid license key or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseValidationError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/api/license/validate:
+    post:
+      summary: Validate license key
+      description: Validate a license key without installing it
+      tags:
+        - License Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateLicenseRequest'
+      responses:
+        '200':
+          description: License validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseValidationResult'
+        '400':
+          description: Invalid request format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/license/history:
+    get:
+      summary: Get license history
+      description: Retrieve the history of license changes and events
+      tags:
+        - License Management
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: action
+          in: query
+          description: Filter by action type
+          schema:
+            type: string
+            enum: [installed, updated, expired, revoked, validated]
+      responses:
+        '200':
+          description: License history entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/api/license/usage:
+    get:
+      summary: Get feature usage metrics
+      description: Retrieve feature usage statistics and metrics
+      tags:
+        - License Analytics
+      parameters:
+        - name: feature
+          in: query
+          description: Filter by specific feature
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Start date for metrics (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End date for metrics (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Feature usage metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureUsageResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/api/license/limits:
+    get:
+      summary: Get current usage vs limits
+      description: Get current usage statistics compared to license limits
+      tags:
+        - License Analytics
+      responses:
+        '200':
+          description: Usage vs limits data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageLimitsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/api/license/tiers:
+    get:
+      summary: Get available license tiers
+      description: Retrieve information about all available license tiers and their features
+      tags:
+        - License Information
+      responses:
+        '200':
+          description: License tier information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseTiersResponse'
+
+components:
+  securitySchemes:
+    TenantAdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with tenant-admin role
+    PlatformAdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with platform-admin role
+
+  schemas:
+    LicenseInfo:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [community, professional, enterprise, enterprise+]
+          description: License tier
+        organizationName:
+          type: string
+          nullable: true
+          description: Organization name from license
+        validFrom:
+          type: string
+          format: date-time
+          description: License valid from date
+        validUntil:
+          type: string
+          format: date-time
+          description: License expiration date
+        isExpired:
+          type: boolean
+          description: Whether the license has expired
+        isValid:
+          type: boolean
+          description: Whether the license is currently valid
+        daysUntilExpiry:
+          type: integer
+          nullable: true
+          description: Days until license expires (null if expired)
+        enabledFeatures:
+          type: array
+          items:
+            type: string
+          description: List of enabled feature flags
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+          description: License limits (key-value pairs)
+      required:
+        - tier
+        - validFrom
+        - validUntil
+        - isExpired
+        - isValid
+        - enabledFeatures
+        - limits
+
+    InstallLicenseRequest:
+      type: object
+      properties:
+        licenseKey:
+          type: string
+          description: License key in JWS format
+          maxLength: 2000
+        notes:
+          type: string
+          description: Optional notes about the license installation
+          maxLength: 1000
+      required:
+        - licenseKey
+
+    ValidateLicenseRequest:
+      type: object
+      properties:
+        licenseKey:
+          type: string
+          description: License key to validate
+          maxLength: 2000
+      required:
+        - licenseKey
+
+    LicenseValidationResult:
+      type: object
+      properties:
+        isValid:
+          type: boolean
+          description: Whether the license is valid
+        errorCode:
+          type: string
+          nullable: true
+          description: Error code if validation failed
+        errorMessage:
+          type: string
+          nullable: true
+          description: Human-readable error message
+        licenseInfo:
+          $ref: '#/components/schemas/LicenseInfo'
+          nullable: true
+          description: License information if valid
+      required:
+        - isValid
+
+    LicenseValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        errorDescription:
+          type: string
+          description: Detailed error description
+        validationErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+      required:
+        - error
+        - errorDescription
+
+    LicenseHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Entry ID
+        action:
+          type: string
+          enum: [installed, updated, expired, revoked, validated]
+          description: Action performed
+        oldTier:
+          type: string
+          nullable: true
+          description: Previous license tier
+        newTier:
+          type: string
+          nullable: true
+          description: New license tier
+        notes:
+          type: string
+          nullable: true
+          description: Notes about the change
+        reason:
+          type: string
+          nullable: true
+          description: Reason for the change
+        createdAt:
+          type: string
+          format: date-time
+          description: When the action occurred
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who performed the action
+        createdByName:
+          type: string
+          nullable: true
+          description: Name of user who performed the action
+        ipAddress:
+          type: string
+          nullable: true
+          description: IP address of the request
+      required:
+        - id
+        - action
+        - createdAt
+
+    LicenseHistoryResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LicenseHistoryEntry'
+        totalCount:
+          type: integer
+          description: Total number of history entries
+        page:
+          type: integer
+          description: Current page number
+        pageSize:
+          type: integer
+          description: Items per page
+        totalPages:
+          type: integer
+          description: Total number of pages
+      required:
+        - entries
+        - totalCount
+        - page
+        - pageSize
+        - totalPages
+
+    FeatureUsageMetric:
+      type: object
+      properties:
+        featureName:
+          type: string
+          description: Feature identifier
+        usageCount:
+          type: integer
+          description: Number of times feature was used
+        firstUsed:
+          type: string
+          format: date-time
+          description: First usage timestamp
+        lastUsed:
+          type: string
+          format: date-time
+          description: Most recent usage timestamp
+      required:
+        - featureName
+        - usageCount
+        - firstUsed
+        - lastUsed
+
+    FeatureUsageResponse:
+      type: object
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureUsageMetric'
+        aggregationPeriod:
+          type: string
+          enum: [daily, weekly, monthly]
+          description: Time period for aggregation
+        fromDate:
+          type: string
+          format: date-time
+          description: Start date of metrics
+        toDate:
+          type: string
+          format: date-time
+          description: End date of metrics
+      required:
+        - metrics
+        - aggregationPeriod
+        - fromDate
+        - toDate
+
+    UsageLimit:
+      type: object
+      properties:
+        limitType:
+          type: string
+          description: Type of limit (users, tenants, etc.)
+        currentUsage:
+          type: integer
+          description: Current usage count
+        limitValue:
+          type: integer
+          description: Maximum allowed (-1 for unlimited)
+        utilizationPercentage:
+          type: number
+          format: float
+          description: Usage as percentage of limit
+        isNearLimit:
+          type: boolean
+          description: Whether usage is near the limit (>80%)
+        isAtLimit:
+          type: boolean
+          description: Whether usage has reached the limit
+      required:
+        - limitType
+        - currentUsage
+        - limitValue
+        - utilizationPercentage
+        - isNearLimit
+        - isAtLimit
+
+    UsageLimitsResponse:
+      type: object
+      properties:
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageLimit'
+        licenseInfo:
+          $ref: '#/components/schemas/LicenseInfo'
+      required:
+        - limits
+        - licenseInfo
+
+    LicenseTier:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [community, professional, enterprise, enterprise+]
+          description: Tier identifier
+        displayName:
+          type: string
+          description: Human-readable tier name
+        description:
+          type: string
+          description: Tier description
+        features:
+          type: array
+          items:
+            type: string
+          description: Features included in this tier
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Default limits for this tier
+        pricing:
+          type: object
+          properties:
+            currency:
+              type: string
+              example: USD
+            amount:
+              type: number
+              format: float
+            period:
+              type: string
+              enum: [monthly, annually]
+          description: Pricing information (if applicable)
+      required:
+        - tier
+        - displayName
+        - features
+        - limits
+
+    LicenseTiersResponse:
+      type: object
+      properties:
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/LicenseTier'
+      required:
+        - tiers
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        errorDescription:
+          type: string
+          description: Human-readable error description
+        correlationId:
+          type: string
+          format: uuid
+          description: Correlation ID for tracking
+      required:
+        - error
+        - errorDescription
+
+  responses:
+    Forbidden:
+      description: Insufficient permissions to access this resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: License Management
+    description: Core license management operations
+  - name: License Analytics
+    description: License usage and analytics
+  - name: License Information
+    description: License tier and feature information
