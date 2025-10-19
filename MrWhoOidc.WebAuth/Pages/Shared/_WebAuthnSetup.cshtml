@@ -1,0 +1,47 @@
+@model bool
+@{
+    var hasWebAuthn = Model;
+}
+
+<div class="card border-primary" id="webauthn-setup-card">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">
+            <i class="bi bi-shield-check me-2"></i>
+            Enhanced Security with WebAuthn
+        </h6>
+    </div>
+    <div class="card-body">
+        @if (hasWebAuthn)
+        {
+            <div class="d-flex align-items-center text-success mb-2">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                <span>Security keys are configured</span>
+            </div>
+            <p class="small text-muted mb-3">
+                You can sign in using your registered security keys for enhanced security.
+            </p>
+            <div class="d-grid gap-2">
+                <a asp-page="/Account/WebAuthn" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-gear me-1"></i>
+                    Manage Security Keys
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="d-flex align-items-center text-warning mb-2">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <span>No security keys configured</span>
+            </div>
+            <p class="small text-muted mb-3">
+                Add a security key (hardware key, Windows Hello, Touch ID) for passwordless, phishing-resistant authentication.
+            </p>
+            <div class="d-grid gap-2">
+                <a asp-page="/Account/WebAuthn" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Set up Security Key
+                </a>
+            </div>
+        }
+    </div>
+</div>

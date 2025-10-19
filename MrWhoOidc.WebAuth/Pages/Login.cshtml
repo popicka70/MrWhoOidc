@@ -64,6 +64,24 @@
                        autofocus="@(!string.IsNullOrEmpty(Model.Email))" />
                 <span asp-validation-for="Password" class="text-danger"></span>
             </div>
+            
+            <!-- WebAuthn Alternative -->
+            <div class="text-center mb-3">
+                <div class="position-relative">
+                    <hr class="my-3">
+                    <span class="position-absolute top-50 start-50 translate-middle bg-white px-2 text-muted small">
+                        or
+                    </span>
+                </div>
+                <a asp-page="/Auth/WebAuthn" 
+                   asp-route-returnUrl="@Model.ReturnUrl" 
+                   asp-route-username="@Model.Username"
+                   class="btn btn-outline-primary w-100 mb-3">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Sign in with Security Key
+                </a>
+            </div>
+            
             <button type="submit" class="btn btn-primary w-100 auth-btn">
                 <i class="bi bi-box-arrow-in-right"></i> Sign in
             </button>
