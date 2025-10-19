@@ -22,6 +22,7 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="9.0.9" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.9" />
     <PackageReference Include="UUIDNext" Version="1.0.0" />
+    <PackageReference Include="Fido2" Version="4.0.0" />
   </ItemGroup>
 
 </Project>
