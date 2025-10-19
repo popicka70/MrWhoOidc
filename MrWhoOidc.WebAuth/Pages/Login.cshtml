@@ -8,8 +8,21 @@
 <div class="auth-card">
     <div class="card-body p-4">
         <div class="text-center mb-4">
-            <i class="bi bi-box-arrow-in-right text-primary" style="font-size: 3rem;"></i>
-            <h2 class="mt-3 mb-2 auth-heading">Sign in to your account</h2>
+            @if (!string.IsNullOrEmpty(Model.TenantBranding?.LogoUrl))
+            {
+                <div class="mb-3">
+                    <img src="@Model.TenantBranding.LogoUrl" 
+                         alt="@Model.TenantBranding.TenantName Logo" 
+                         class="tenant-logo"
+                         style="max-width: 120px; max-height: 80px; object-fit: contain;" />
+                </div>
+                <h2 class="mt-3 mb-2 auth-heading">Sign in to @Model.TenantBranding.TenantName</h2>
+            }
+            else
+            {
+                <i class="bi bi-box-arrow-in-right text-primary" style="font-size: 3rem;"></i>
+                <h2 class="mt-3 mb-2 auth-heading">Sign in to your account</h2>
+            }
             @if (!string.IsNullOrEmpty(Model.Email))
             {
                 <p class="text-muted">

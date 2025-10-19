@@ -14,7 +14,8 @@ public class LoginModel(
     ILogger<LoginModel> logger,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
-    ITenantSettingsService settingsService) : PageModel
+    ITenantSettingsService settingsService,
+    ITenantBrandingService brandingService) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -35,7 +36,9 @@ public class LoginModel(
 
     public bool ShowNotYouLink => !string.IsNullOrEmpty(Email);
 
-    public void OnGet()
+    public TenantBranding? TenantBranding { get; set; }
+
+    public async Task OnGetAsync()
     {
         logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}",
             ReturnUrl ?? "(null)",
@@ -45,6 +48,17 @@ public class LoginModel(
         if (!string.IsNullOrEmpty(Email))
         {
             Username = Email;
+        }
+
+        // Load tenant branding for display
+        try
+        {
+            TenantBranding = await brandingService.GetCurrentTenantBrandingAsync();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load tenant branding, using default");
+            TenantBranding = null;
         }
     }
 
