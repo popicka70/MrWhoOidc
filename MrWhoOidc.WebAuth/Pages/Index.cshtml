@@ -4,7 +4,8 @@
 @model IndexModel
 @{
     ViewData["Title"] = "Home page";
-    ViewData["HideNavbar"] = true; // Use tight landing layout (no navbar/sidebar)
+    // Show navbar for authenticated users, hide for unauthenticated users
+    ViewData["HideNavbar"] = !(User?.Identity?.IsAuthenticated ?? false);
     var currentTenant = TenantAccessor.CurrentTenant;
     var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
         ? $"/t/{currentTenant.Slug}" 
