@@ -14,6 +14,7 @@ public class IndexModel(AuthDbContext db) : PageModel
     public string? Email { get; private set; }
     public bool EmailVerified { get; private set; }
     public bool MfaEnabled { get; private set; }
+    public int WebAuthnCredentialsCount { get; private set; }
     public int ActiveSessionsCount { get; private set; }
     public int ActiveConsentsCount { get; private set; }
     public int LinkedAccountsCount { get; private set; }
@@ -31,6 +32,11 @@ public class IndexModel(AuthDbContext db) : PageModel
         EmailVerified = user.EmailVerified;
         MfaEnabled = user.TotpEnabled;
         AccountCreatedAt = user.CreatedAt;
+
+        // Count WebAuthn credentials
+        WebAuthnCredentialsCount = await db.WebAuthnCredentials
+            .Where(c => c.UserId == user.Id)
+            .CountAsync();
 
         // Count active sessions (tokens)
         ActiveSessionsCount = await db.Tokens

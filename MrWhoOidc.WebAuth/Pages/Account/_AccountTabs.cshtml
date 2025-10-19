@@ -30,6 +30,11 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link @(active=="webauthn"?"active":"")" href="@(tenantPrefix)/Account/WebAuthn">
+            <i class="bi bi-shield-check me-1"></i>Security Keys
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link @(active=="sessions"?"active":"")" href="@(tenantPrefix)/Account/Sessions">
             <i class="bi bi-phone me-1"></i>Sessions
         </a>

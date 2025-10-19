@@ -2,10 +2,14 @@
 @model MrWhoOidc.WebAuth.Pages.Account.WebAuthnModel
 @{
     ViewData["Title"] = "WebAuthn Security Keys";
+    ViewData["ActiveAccountTab"] = "webauthn";
     Layout = "~/Pages/Shared/_Layout.cshtml";
 }
 
-<div class="container">
+<h1 class="mb-3">Security Keys</h1>
+<partial name="~/Pages/Account/_AccountTabs.cshtml" />
+
+<div class="container-fluid px-0">
     <div class="row">
         <div class="col-lg-8">
             <div class="card">
@@ -269,7 +273,7 @@
             }
 
             showGlobalError(message) {
-                const container = document.querySelector('.container');
+                const container = document.querySelector('.container-fluid') || document.querySelector('.container');
                 const alertDiv = document.createElement('div');
                 alertDiv.className = 'alert alert-warning alert-dismissible fade show';
                 alertDiv.innerHTML = `

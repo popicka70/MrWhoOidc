@@ -76,17 +76,36 @@
                         }
                     </dd>
                     
+                    <dt class="small text-muted">Security Keys (WebAuthn)</dt>
+                    <dd class="mb-2">
+                        @if (Model.WebAuthnCredentialsCount > 0)
+                        {
+                            <span class="badge bg-success">
+                                <i class="bi bi-shield-check"></i> @Model.WebAuthnCredentialsCount key@(Model.WebAuthnCredentialsCount == 1 ? "" : "s")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-shield"></i> None
+                            </span>
+                        }
+                    </dd>
+                    
                     <dt class="small text-muted">Password</dt>
                     <dd class="mb-0">
                         <i class="bi bi-key"></i> •••••••••
                     </dd>
                 </dl>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <a href="@(tenantPrefix)/Mfa" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-shield me-1"></i>Manage MFA
+                        <i class="bi bi-shield me-1"></i>MFA
+                    </a>
+                    <a href="@(tenantPrefix)/Account/WebAuthn" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-shield-check me-1"></i>Keys
                     </a>
                     <a href="@(tenantPrefix)/Password" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-key me-1"></i>Change Password
+                        <i class="bi bi-key me-1"></i>Password
                     </a>
                 </div>
             </div>
