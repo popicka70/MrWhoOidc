@@ -12,6 +12,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<TenantIcon> TenantIcons => Set<TenantIcon>();
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<ClientSecret> ClientSecrets => Set<ClientSecret>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
@@ -763,6 +764,47 @@ public class User
     [MaxLength(200)]
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
+    
+    // WebAuthn credentials
+    public ICollection<WebAuthnCredential> WebAuthnCredentials { get; set; } = new List<WebAuthnCredential>();
+}
+
+public class WebAuthnCredential
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+    
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+    
+    // User association
+    public Guid UserId { get; set; }
+    public User User { get; set; } = null!;
+    
+    // WebAuthn credential data
+    [MaxLength(256)]
+    public string CredentialId { get; set; } = string.Empty; // Base64URL encoded credential ID
+    [MaxLength(1024)]
+    public string PublicKey { get; set; } = string.Empty; // Base64 encoded public key
+    [MaxLength(100)]
+    public string Type { get; set; } = "public-key"; // Credential type
+    [MaxLength(100)]
+    public string? AttestationType { get; set; } // Attestation type (none, self, indirect, direct)
+    [MaxLength(256)]
+    public string? AaguidBase64 { get; set; } // Authenticator AAGUID as Base64
+    public uint SignatureCounter { get; set; } // Signature counter for replay protection
+    [MaxLength(500)]
+    public string? Transport { get; set; } // JSON array of transports (usb, nfc, ble, internal)
+    
+    // User-friendly metadata
+    [MaxLength(200)]
+    public string? FriendlyName { get; set; } // User-assigned name for the credential
+    [MaxLength(100)]
+    public string? DeviceType { get; set; } // Device type hint (security-key, platform, cross-platform)
+    
+    // Management
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastUsedAt { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public class Realm

@@ -46,6 +46,9 @@ builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth")
 // Bind QrLoginOptions
 builder.Services.Configure<QrLoginOptions>(builder.Configuration.GetSection("QrLogin"));
 
+// Bind WebAuthnOptions
+builder.Services.Configure<WebAuthnOptions>(builder.Configuration.GetSection("WebAuthn"));
+
 // Auth/admin (Phase 2 extracted extension – limited scope)
 builder.Services.AddMrWhoOidcAuthAndAdmin(builder.Configuration);
 

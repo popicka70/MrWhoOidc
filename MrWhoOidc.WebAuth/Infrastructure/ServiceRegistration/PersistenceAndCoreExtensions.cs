@@ -65,6 +65,7 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
+        services.AddScoped<IWebAuthnHandler, WebAuthnHandler>();
 
         // Introspection services
         services.AddScoped<IIntrospectionHandler, Handlers.Introspection.IntrospectionHandler>();
