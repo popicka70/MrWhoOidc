@@ -38,6 +38,17 @@ public class Tenant
     [MaxLength(200)]
     public string? LogoUrl { get; set; }
 
+    /// <summary>
+    /// Reference to uploaded tenant icon/logo. 
+    /// Takes precedence over LogoUrl when both are present.
+    /// </summary>
+    public Guid? TenantIconId { get; set; }
+
+    /// <summary>
+    /// Navigation property to the uploaded tenant icon
+    /// </summary>
+    public TenantIcon? TenantIcon { get; set; }
+
     [MaxLength(50)]
     public string? PrimaryColor { get; set; }
 

@@ -9,6 +9,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 {
     // Multi-tenancy
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantIcon> TenantIcons => Set<TenantIcon>();
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Client> Clients => Set<Client>();
@@ -91,6 +92,28 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.MetadataJson).HasMaxLength(2000);
             b.HasIndex(x => x.Slug).IsUnique();
             b.HasIndex(x => x.Status);
+            // Relationship to TenantIcon
+            b.HasOne(x => x.TenantIcon)
+                .WithOne(x => x.Tenant)
+                .HasForeignKey<Tenant>(x => x.TenantIconId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Multi-tenancy: TenantIcon
+        modelBuilder.Entity<TenantIcon>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.FileName).IsRequired().HasMaxLength(255);
+            b.Property(x => x.ContentType).IsRequired().HasMaxLength(100);
+            b.Property(x => x.FileData).IsRequired();
+            b.Property(x => x.FileSize).IsRequired();
+            b.Property(x => x.UploadedAt).IsRequired();
+            b.HasIndex(x => x.TenantId);
+            // Foreign key relationship
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<User>(b =>

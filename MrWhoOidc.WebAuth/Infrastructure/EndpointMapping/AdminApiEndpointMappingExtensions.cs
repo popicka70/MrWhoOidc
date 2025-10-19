@@ -2,7 +2,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Admin.Dto;
@@ -26,8 +28,16 @@ public static class AdminApiEndpointMappingExtensions
         // Admin Management APIs (tenant-admin, ProblemDetails on errors)
         var admin = app.MapGroup("/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
 
+        // Multi-tenant admin API routes for tenant-aware endpoints
+        var tenantAdmin = app.MapGroup("/t/{slug}/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
+
         // Client Secrets Management (Phase 2: Secret Rotation)
         MapClientSecretsEndpoints(admin);
+        MapClientSecretsEndpoints(tenantAdmin);
+
+        // Tenant Icon Endpoints (mapped to both admin groups)
+        MapTenantIconEndpoints(admin);
+        MapTenantIconEndpoints(tenantAdmin);
 
         // Providers CRUD (tenant-aware)
         admin.MapGet("/providers", async (
@@ -1067,4 +1077,164 @@ public static class AdminApiEndpointMappingExtensions
         string? AdminEmail = null,
         string? AdminPassword = null
     );
+
+    private static void MapTenantIconEndpoints(RouteGroupBuilder admin)
+    {
+        // GET /admin/api/tenants/{tenantId}/icon - Serve tenant icon
+        admin.MapGet("/tenants/{tenantId:guid}/icon", async (
+            Guid tenantId,
+            MrWhoOidc.Auth.Services.ITenantIconService iconService,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("TenantIcon");
+            logger.LogInformation("GET tenant icon request for tenant {TenantId} from user {UserId}", 
+                tenantId, httpContext.User.Identity?.Name ?? "anonymous");
+
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+            logger.LogDebug("User is platform admin: {IsPlatformAdmin}", isPlatformAdmin);
+
+            // Tenant access validation for non-platform admins
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
+                {
+                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                        tenantId, currentTenantId);
+                    return Results.Problem(statusCode: 403, title: "Access denied");
+                }
+            }
+
+            var icon = await iconService.GetTenantIconAsync(tenantId, ct);
+            if (icon == null)
+            {
+                logger.LogDebug("No icon found for tenant {TenantId}", tenantId);
+                return Results.NotFound();
+            }
+
+            logger.LogDebug("Serving icon {IconId} for tenant {TenantId}", icon.Id, tenantId);
+            return Results.File(icon.FileData, icon.ContentType, icon.FileName);
+        });
+
+        // POST /admin/api/tenants/{tenantId}/icon - Upload tenant icon
+        admin.MapPost("/tenants/{tenantId:guid}/icon", async (
+            Guid tenantId,
+            MrWhoOidc.Auth.Services.ITenantIconService iconService,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("TenantIcon");
+            logger.LogInformation("POST tenant icon upload request for tenant {TenantId} from user {UserId}", 
+                tenantId, httpContext.User.Identity?.Name ?? "anonymous");
+
+            try
+            {
+                // Check if user is platform admin
+                var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+                var isPlatformAdmin = platformAdminResult.Succeeded;
+                logger.LogDebug("User is platform admin: {IsPlatformAdmin}", isPlatformAdmin);
+
+                // Tenant access validation for non-platform admins
+                if (!isPlatformAdmin)
+                {
+                    var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                    if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
+                    {
+                        logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                            tenantId, currentTenantId);
+                        return Results.Problem(statusCode: 403, title: "Access denied");
+                    }
+                }
+
+                // Check if request has file
+                if (!httpContext.Request.HasFormContentType)
+                {
+                    logger.LogWarning("Invalid content type for tenant {TenantId}", tenantId);
+                    return Results.Problem(statusCode: 400, title: "Invalid content type", detail: "Expected multipart/form-data");
+                }
+
+                var form = await httpContext.Request.ReadFormAsync(ct);
+                var file = form.Files.FirstOrDefault();
+                if (file == null || file.Length == 0)
+                {
+                    logger.LogWarning("No file provided for tenant {TenantId}", tenantId);
+                    return Results.Problem(statusCode: 400, title: "No file provided");
+                }
+
+                logger.LogDebug("Processing file upload for tenant {TenantId}: {FileName}, Size: {FileSize}, ContentType: {ContentType}", 
+                    tenantId, file.FileName, file.Length, file.ContentType);
+
+                using var stream = file.OpenReadStream();
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream, ct);
+                var fileData = memoryStream.ToArray();
+
+                var iconId = await iconService.UploadIconAsync(tenantId, file.FileName ?? "icon", file.ContentType ?? "image/png", fileData, ct);
+
+                logger.LogInformation("Successfully uploaded icon {IconId} for tenant {TenantId}", iconId, tenantId);
+                return Results.Created($"/admin/api/tenants/{tenantId}/icon", new { id = iconId, fileName = file.FileName });
+            }
+            catch (ArgumentException ex)
+            {
+                logger.LogWarning(ex, "Invalid file upload for tenant {TenantId}: {ErrorMessage}", tenantId, ex.Message);
+                return Results.Problem(statusCode: 400, title: "Invalid file", detail: ex.Message);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error uploading icon for tenant {TenantId}: {ErrorMessage}", tenantId, ex.Message);
+                return Results.Problem(statusCode: 500, title: "Upload failed", detail: "An error occurred while uploading the icon");
+            }
+        });
+
+        // DELETE /admin/api/tenants/{tenantId}/icon - Delete tenant icon
+        admin.MapDelete("/tenants/{tenantId:guid}/icon", async (
+            Guid tenantId,
+            MrWhoOidc.Auth.Services.ITenantIconService iconService,
+            ITenantAccessor tenantAccessor,
+            IAuthorizationService authorizationService,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("TenantIcon");
+            logger.LogInformation("DELETE tenant icon request for tenant {TenantId} from user {UserId}", 
+                tenantId, httpContext.User.Identity?.Name ?? "anonymous");
+
+            // Check if user is platform admin
+            var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+            var isPlatformAdmin = platformAdminResult.Succeeded;
+            logger.LogDebug("User is platform admin: {IsPlatformAdmin}", isPlatformAdmin);
+
+            // Tenant access validation for non-platform admins
+            if (!isPlatformAdmin)
+            {
+                var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+                if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
+                {
+                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                        tenantId, currentTenantId);
+                    return Results.Problem(statusCode: 403, title: "Access denied");
+                }
+            }
+
+            var success = await iconService.DeleteTenantIconAsync(tenantId, ct);
+            if (!success)
+            {
+                logger.LogWarning("Icon not found for tenant {TenantId}", tenantId);
+                return Results.NotFound();
+            }
+
+            logger.LogInformation("Successfully deleted icon for tenant {TenantId}", tenantId);
+            return Results.NoContent();
+        });
+    }
 }

@@ -4,11 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
 [Authorize(Policy = "platform-admin")]
-public class EditModel(AuthDbContext db) : PageModel
+public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
 {
     [BindProperty]
     public TenantInput Input { get; set; } = new();
@@ -18,6 +19,16 @@ public class EditModel(AuthDbContext db) : PageModel
     public int CurrentClientCount { get; private set; }
 
     public int CurrentIdPCount { get; private set; }
+
+    /// <summary>
+    /// Current tenant slug for building tenant-aware API URLs
+    /// </summary>
+    public string CurrentTenantSlug => tenantAccessor.CurrentTenant?.Slug ?? "default";
+
+    /// <summary>
+    /// Indicates whether the tenant has an uploaded icon (not just a URL)
+    /// </summary>
+    public bool HasUploadedIcon => Input.TenantIconId.HasValue;
 
     public class TenantInput
     {
@@ -51,6 +62,11 @@ public class EditModel(AuthDbContext db) : PageModel
         [MaxLength(200)]
         [Url]
         public string? LogoUrl { get; set; }
+
+        /// <summary>
+        /// Reference to uploaded tenant icon (takes precedence over LogoUrl)
+        /// </summary>
+        public Guid? TenantIconId { get; set; }
 
         [MaxLength(50)]
         [RegularExpression(@"^#[0-9A-Fa-f]{6}$", ErrorMessage = "Must be a valid hex color")]
@@ -196,6 +212,7 @@ public class EditModel(AuthDbContext db) : PageModel
             MaxClients = tenant.MaxClients,
             MaxIdentityProviders = tenant.MaxIdentityProviders,
             LogoUrl = tenant.LogoUrl,
+            TenantIconId = tenant.TenantIconId,
             PrimaryColor = tenant.PrimaryColor,
             AccentColor = tenant.AccentColor,
             AdminEmail = tenant.AdminEmail,

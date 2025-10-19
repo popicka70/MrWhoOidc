@@ -41,6 +41,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
+        services.AddScoped<ITenantIconService, TenantIconService>();
 
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();

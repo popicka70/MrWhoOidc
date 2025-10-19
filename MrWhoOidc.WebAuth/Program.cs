@@ -157,16 +157,45 @@ var app = builder.Build();
 // Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())
 {
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+    
+    logger.LogInformation("Checking database migration status...");
+    
     if (db.Database.IsRelational())
     {
-        await db.Database.MigrateAsync();
+        logger.LogInformation("Database is relational, applying migrations...");
+        try
+        {
+            await db.Database.MigrateAsync();
+            logger.LogInformation("Database migrations applied successfully");
+            
+            // Check if TenantIcon table exists
+            var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+            var appliedMigrations = await db.Database.GetAppliedMigrationsAsync();
+            
+            logger.LogInformation("Applied migrations: {AppliedMigrations}", string.Join(", ", appliedMigrations));
+            if (pendingMigrations.Any())
+            {
+                logger.LogWarning("Pending migrations detected: {PendingMigrations}", string.Join(", ", pendingMigrations));
+            }
+            else
+            {
+                logger.LogInformation("All migrations are up to date");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to apply database migrations: {Message}", ex.Message);
+            throw;
+        }
         
         // Auto-seed default tenant immediately after migrations if database is empty
         // This ensures background services have a tenant to work with
         var needsSeeding = !await db.Tenants.AnyAsync();
         if (needsSeeding)
         {
+            logger.LogInformation("Database is empty, seeding default tenant...");
             var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>();
             var defaultSlug = multiTenancyOptions.Value.DefaultTenantSlug ?? "default";
             
@@ -206,9 +235,16 @@ using (var scope = app.Services.CreateScope())
             
             await seeder.SeedAsync();
             
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
             logger.LogInformation("Auto-seeded default tenant '{TenantSlug}' with platform admin on startup", defaultSlug);
         }
+        else
+        {
+            logger.LogInformation("Database already contains tenants, skipping seeding");
+        }
+    }
+    else
+    {
+        logger.LogInformation("Database is not relational (in-memory), skipping migrations");
     }
 }
 

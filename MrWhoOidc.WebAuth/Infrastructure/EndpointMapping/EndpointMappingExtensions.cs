@@ -241,6 +241,33 @@ internal static class EndpointMappingExtensions
             .RequireRateLimiting("rl-qr-confirm");
         routes.MapPost("/api/qr/cancel", (IQrLoginHandler h, HttpContext ctx) => h.CancelAsync(ctx))
             .RequireRateLimiting("rl-qr-cancel");
+
+        // Tenant icon endpoint (public access for display in UI)
+        routes.MapGet("/api/icon/{iconId:guid}", async (
+            Guid iconId, 
+            MrWhoOidc.Auth.Services.ITenantIconService iconService,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            var icon = await iconService.GetIconAsync(iconId, ct);
+            if (icon == null)
+            {
+                return Results.NotFound();
+            }
+
+            // Set cache headers for icon serving
+            ctx.Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
+            ctx.Response.Headers["ETag"] = $"\"{iconId}\"";
+
+            // Check if client has cached version
+            var ifNoneMatch = ctx.Request.Headers["If-None-Match"].FirstOrDefault();
+            if (ifNoneMatch == $"\"{iconId}\"")
+            {
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
+
+            return Results.File(icon.FileData, icon.ContentType, icon.FileName);
+        });
     }
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).

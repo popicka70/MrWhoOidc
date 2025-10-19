@@ -1,0 +1,50 @@
+{
+  "Added": [
+    {
+      "Pattern": "/admin/api/tenants/{tenantId:guid}/icon",
+      "Methods": "DELETE",
+      "RateLimiters": [
+        "rl-admin"
+      ],
+      "Authz": "tenant-admin",
+      "HasAntiforgery": false,
+      "HasCors": false,
+      "IsAnonymous": false
+    },
+    {
+      "Pattern": "/admin/api/tenants/{tenantId:guid}/icon",
+      "Methods": "GET",
+      "RateLimiters": [
+        "rl-admin"
+      ],
+      "Authz": "tenant-admin",
+      "HasAntiforgery": false,
+      "HasCors": false,
+      "IsAnonymous": false
+    },
+    {
+      "Pattern": "/admin/api/tenants/{tenantId:guid}/icon",
+      "Methods": "POST",
+      "RateLimiters": [
+        "rl-admin"
+      ],
+      "Authz": "tenant-admin",
+      "HasAntiforgery": false,
+      "HasCors": false,
+      "IsAnonymous": false
+    },
+    {
+      "Pattern": "/api/icon/{iconId:guid}",
+      "Methods": "GET",
+      "RateLimiters": [],
+      "Authz": null,
+      "HasAntiforgery": false,
+      "HasCors": false,
+      "IsAnonymous": false
+    }
+  ],
+  "Removed": [],
+  "Changed": [],
+  "DuplicateGroups": [],
+  "IgnoredPresent": 0
+}
