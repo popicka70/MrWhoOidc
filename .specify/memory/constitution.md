@@ -1,15 +1,15 @@
 # MrWhoOidc Constitution
 
 <!--
-Sync Impact Report (2025-10-18):
+Sync Impact Report (2025-10-19):
 
-- Version: 1.1.0 → 1.1.1 (PATCH: Markdown formatting fixes for proper MdMcp compliance)
+- Version: 1.1.1 → 1.1.2 (PATCH: Complete MdMcp compliance for remaining validation issues)
 - Modified Principles: None (content unchanged)
 - Added Sections: None
 - Removed Sections: None
-- Templates Requiring Updates: None (formatting fixes only)
+- Templates Requiring Updates: ✅ plan-template.md (validated - consistent with constitution)
 - Follow-up TODOs: None
-- Rationale: Applied MdMcp formatting fixes to resolve MD022, MD032, MD036 violations
+- Rationale: Final MdMcp compliance pass to resolve remaining MD001, MD025, MD009, MD039, MD033, MD013, MD054 violations
 
 -->
 
@@ -123,23 +123,27 @@ PostgreSQL via Aspire-provided connection.
 - Never hardcode connection strings
 - Migrations live in `MrWhoOidc.Auth/Persistence/Migrations`
 
-#### Migration Creation (MANDATORY)
+### Migration Creation (MANDATORY)
 
 - **ALWAYS use EF Core migrations tool** to generate migration files
 - **NEVER create migration files from scratch manually**
 - Generated files can be edited if necessary (e.g., for custom SQL, index tuning)
 - This ensures migrations are properly tracked and DbContext stays in sync
 
-#### Migration Commands
+### Migration Commands
 
 ```bash
+
 # Add migration (ALWAYS use this tool)
+
 dotnet ef migrations add <Name> --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations
 
 # Update database
+
 dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth
 
 # Remove last migration (if not applied to database)
+
 dotnet ef migrations remove --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth
 ```
 
@@ -152,7 +156,7 @@ Time-ordered UUIDs for optimal database performance.
 - Located at: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
 - Example: `public Guid Id { get; set; } = GuidHelper.NewId();`
 
-#### Benefits
+### Benefits
 
 - 80-90% reduction in B-tree page splits during inserts
 - 50%+ lower latency for insert operations on high-volume tables
@@ -160,13 +164,13 @@ Time-ordered UUIDs for optimal database performance.
 - Implicit chronological ordering (millisecond precision)
 - Fully compatible with existing PostgreSQL `uuid` columns
 
-#### Compatibility
+### Compatibility
 
 - Existing UUIDv4 records remain valid (no data migration required)
 - Foreign keys work transparently with mixed UUID versions
 - External APIs unchanged (standard RFC 4122 string serialization)
 
-#### For New Entities
+### For New Entities
 
 ```csharp
 public class MyNewEntity
@@ -176,7 +180,7 @@ public class MyNewEntity
 }
 ```
 
-#### References
+### References
 
 - RFC 9562: <https://www.rfc-editor.org/rfc/rfc9562.html>
 - Implementation: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
@@ -184,7 +188,7 @@ public class MyNewEntity
 
 ### Key Features & Endpoints
 
-#### Core OIDC Endpoints (in MrWhoOidc.WebAuth)
+### Core OIDC Endpoints (in MrWhoOidc.WebAuth)
 
 - Discovery: `/.well-known/openid-configuration`
 - JWKS: `/jwks`, `/{providerId}/jwks` (per-provider)
@@ -194,7 +198,7 @@ public class MyNewEntity
 - Logout: `/logout`, `/logout/callback`
 - Back-Channel Logout (BCL): Durable outbox + dispatcher with retries
 
-#### Admin APIs (REST)
+### Admin APIs (REST)
 
 - `/admin/api/providers` (CRUD for identity providers)
 - `/admin/api/clients` (CRUD for OAuth clients)
@@ -206,13 +210,17 @@ public class MyNewEntity
 ### Building & Running
 
 ```bash
+
 # Build entire solution
+
 dotnet build
 
 # Run tests
+
 dotnet test
 
 # Run with Aspire (recommended for development)
+
 dotnet run --project MrWhoOidc.AppHost
 ```
 
@@ -225,13 +233,13 @@ MSTest with TestServer for integration tests.
 - Test naming: `[Method]_[Scenario]_[ExpectedOutcome]`
 - Example: `OnPostAsync_ValidInput_RedirectsToIndex`
 
-#### Test Organization (in MrWhoOidc.UnitTests)
+### Test Organization (in MrWhoOidc.UnitTests)
 
 - `*Tests.cs` for unit tests
 - `*IntegrationTests.cs` for integration tests
 - Use `TestDataSeeder.cs` for test data setup
 
-#### OIDC RFC Documentation (MANDATORY)
+### OIDC RFC Documentation (MANDATORY)
 
 - **ALWAYS include RFC references in XML documentation** when tests validate OIDC specification behavior
 - Format: `/// <summary>Tests [behavior]. See RFC XXXX Section X.X.</summary>`
@@ -248,17 +256,17 @@ Comprehensive documentation in `/docs`.
 - Developer guide for integration patterns
 - Update docs when changing protocols/endpoints
 
-#### Markdown Formatting Standards (MANDATORY)
+### Markdown Formatting Standards (MANDATORY)
 
 - **ALWAYS follow Markdown specification** to avoid lint warnings
 - Add blank lines before and after headings (MD022)
 - Add blank lines before and after lists (MD032)
 - Add blank lines before and after code fences (MD031)
-- Specify language for code blocks (MD040): ` ```bash `, ` ```csharp `, ` ```text `
+- Specify language for code blocks (MD040): ```bash```,```csharp```,```text```
 - Files must end with single newline character (MD047)
 - Use linters (markdownlint) to validate before committing
 
-#### Backlog Management
+### Backlog Management
 
 - Use Markdown checkboxes to track backlog item states
 - `[ ]` = Not started / To-do
@@ -267,11 +275,11 @@ Comprehensive documentation in `/docs`.
 - Update backlog documents when items change status
 - Example:
 
-  ```markdown
-  - [ ] Implement refresh token rotation
-  - [~] Add device flow support (in progress)
-  - [x] Complete BCL implementation
-  ```
+```markdown
+- [ ] Implement refresh token rotation
+- [~] Add device flow support (in progress)
+- [x] Complete BCL implementation
+```
 
 ### Security Practices
 
@@ -349,4 +357,5 @@ This constitution supersedes all other practices. Amendments require:
 
 ---
 
-**Version**: 1.1.1 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-18
+**Version**: 1.1.2 | **Ratified**: 2025-10-15 | **Last Amended**: 2025-10-19
+
