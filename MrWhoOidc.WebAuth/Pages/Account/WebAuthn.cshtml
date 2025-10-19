@@ -1,0 +1,289 @@
+@page "/Account/WebAuthn"
+@model MrWhoOidc.WebAuth.Pages.Account.WebAuthnModel
+@{
+    ViewData["Title"] = "WebAuthn Security Keys";
+    Layout = "~/Pages/Shared/_Layout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-shield-check text-primary me-2"></i>
+                        WebAuthn Security Keys
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Security keys provide strong, phishing-resistant authentication using FIDO2/WebAuthn standards. 
+                        You can use hardware security keys, platform authenticators (like Windows Hello, Touch ID), or mobile device authenticators.
+                    </p>
+
+                    @if (Model.Credentials.Any())
+                    {
+                        <div class="mb-4">
+                            <h5>Your registered security keys</h5>
+                            <div class="list-group">
+                                @foreach (var credential in Model.Credentials)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <h6 class="mb-1">
+                                                    <i class="bi bi-key-fill text-success me-2"></i>
+                                                    @credential.FriendlyName
+                                                </h6>
+                                                <p class="mb-1 text-muted small">
+                                                    Device Type: @(credential.DeviceType ?? "Unknown")
+                                                </p>
+                                                <small class="text-muted">
+                                                    Registered: @credential.CreatedAt.ToString("MMM dd, yyyy")
+                                                    @if (credential.LastUsedAt.HasValue)
+                                                    {
+                                                        <span> • Last used: @credential.LastUsedAt.Value.ToString("MMM dd, yyyy")</span>
+                                                    }
+                                                </small>
+                                            </div>
+                                            <div>
+                                                @if (credential.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Active</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Inactive</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            You don't have any security keys registered yet. Register your first security key to enable passwordless authentication.
+                        </div>
+                    }
+
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-primary" id="registerKeyBtn">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Register New Security Key
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle text-info me-2"></i>
+                        About Security Keys
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>What are security keys?</h6>
+                    <p class="small text-muted mb-3">
+                        Security keys are physical or built-in devices that provide strong authentication. 
+                        They're more secure than passwords and SMS codes because they can't be phished or intercepted.
+                    </p>
+
+                    <h6>Supported devices:</h6>
+                    <ul class="small text-muted">
+                        <li>Hardware security keys (YubiKey, etc.)</li>
+                        <li>Windows Hello (fingerprint, face, PIN)</li>
+                        <li>Touch ID / Face ID on Mac</li>
+                        <li>Android/iOS device authenticators</li>
+                    </ul>
+
+                    <div class="alert alert-warning small" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>Important:</strong> Keep your security keys safe and consider registering multiple keys as backups.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Registration Modal -->
+<div class="modal fade" id="registerModal" tabindex="-1" aria-labelledby="registerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="registerModalLabel">Register Security Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="registerForm">
+                    <div class="mb-3">
+                        <label for="friendlyName" class="form-label">Key Name</label>
+                        <input type="text" class="form-control" id="friendlyName" 
+                               placeholder="e.g., My YubiKey, Windows Hello" required>
+                        <div class="form-text">Choose a name to help you identify this security key.</div>
+                    </div>
+                </form>
+                <div id="registrationStatus" class="alert" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmRegisterBtn">
+                    <i class="bi bi-shield-plus me-2"></i>
+                    Register Key
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/webauthn-utils.js" asp-append-version="true"></script>
+    <script>
+        class WebAuthnManager {
+            constructor() {
+                this.registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+                this.initializeEventListeners();
+                this.checkWebAuthnSupport();
+            }
+
+            checkWebAuthnSupport() {
+                if (!WebAuthnUtils.isSupported()) {
+                    this.showGlobalError('WebAuthn is not supported by your browser. Please use a modern browser to manage security keys.');
+                    document.getElementById('registerKeyBtn').disabled = true;
+                }
+            }
+
+            initializeEventListeners() {
+                document.getElementById('registerKeyBtn').addEventListener('click', () => {
+                    this.showRegisterModal();
+                });
+
+                document.getElementById('confirmRegisterBtn').addEventListener('click', () => {
+                    this.registerKey();
+                });
+            }
+
+            showRegisterModal() {
+                document.getElementById('friendlyName').value = '';
+                this.hideStatus();
+                this.registerModal.show();
+            }
+
+            async registerKey() {
+                const friendlyName = document.getElementById('friendlyName').value.trim();
+                if (!friendlyName) {
+                    this.showError('Please enter a name for your security key.');
+                    return;
+                }
+
+                try {
+                    this.showProgress('Preparing registration...');
+                    
+                    // Get registration challenge
+                    const challengeResponse = await fetch('/api/webauthn/registration/challenge', {
+                        method: 'POST',
+                        headers: WebAuthnUtils.createHeaders()
+                    });
+
+                    if (!challengeResponse.ok) {
+                        const errorData = await challengeResponse.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Failed to get registration challenge');
+                    }
+
+                    const challengeData = await challengeResponse.json();
+                    
+                    this.showProgress('Touch your security key or complete the authentication prompt...');
+
+                    // Prepare credential creation options
+                    const credentialOptions = WebAuthnUtils.prepareCredentialCreationOptions(challengeData.options);
+
+                    // Create credential
+                    const credential = await navigator.credentials.create({
+                        publicKey: credentialOptions
+                    });
+
+                    if (!credential) {
+                        throw new Error('No credential was created');
+                    }
+
+                    this.showProgress('Completing registration...');
+
+                    // Complete registration
+                    const completionResponse = await fetch('/api/webauthn/registration/complete', {
+                        method: 'POST',
+                        headers: WebAuthnUtils.createHeaders(),
+                        body: JSON.stringify({
+                            sessionId: challengeData.sessionId,
+                            friendlyName: friendlyName,
+                            attestationResponse: WebAuthnUtils.formatCredentialResponse(credential)
+                        })
+                    });
+
+                    if (!completionResponse.ok) {
+                        const errorData = await completionResponse.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Registration failed');
+                    }
+
+                    this.showSuccess('Security key registered successfully!');
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+
+                } catch (error) {
+                    console.error('WebAuthn registration error:', error);
+                    this.showError(WebAuthnUtils.getErrorMessage(error));
+                }
+            }
+
+            showProgress(message) {
+                const statusDiv = document.getElementById('registrationStatus');
+                statusDiv.className = 'alert alert-info';
+                statusDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+
+            showError(message) {
+                const statusDiv = document.getElementById('registrationStatus');
+                statusDiv.className = 'alert alert-danger';
+                statusDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+
+            showSuccess(message) {
+                const statusDiv = document.getElementById('registrationStatus');
+                statusDiv.className = 'alert alert-success';
+                statusDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+
+            hideStatus() {
+                document.getElementById('registrationStatus').style.display = 'none';
+            }
+
+            showGlobalError(message) {
+                const container = document.querySelector('.container');
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                container.insertBefore(alertDiv, container.firstChild);
+            }
+        }
+
+        // Initialize WebAuthn manager when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new WebAuthnManager();
+        });
+    </script>
+}

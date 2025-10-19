@@ -1,0 +1,232 @@
+@page "/Auth/WebAuthn"
+@model MrWhoOidc.WebAuth.Pages.Auth.WebAuthnModel
+@{
+    ViewData["Title"] = "Sign in with Security Key";
+    Layout = "_AuthLayout";
+}
+
+<div class="auth-card">
+    <div class="card-body p-4">
+        <div class="text-center mb-4">
+            @if (!string.IsNullOrEmpty(Model.TenantBranding?.LogoUrl))
+            {
+                <div class="mb-3">
+                    <img src="@Model.TenantBranding.LogoUrl" 
+                         alt="@Model.TenantBranding.TenantName Logo" 
+                         class="tenant-logo"
+                         style="max-width: 120px; max-height: 80px; object-fit: contain;" />
+                </div>
+                <h2 class="mt-3 mb-2 auth-heading">Sign in to @Model.TenantBranding.TenantName</h2>
+            }
+            else
+            {
+                <i class="bi bi-shield-check text-primary" style="font-size: 3rem;"></i>
+                <h2 class="mt-3 mb-2 auth-heading">Sign in with Security Key</h2>
+            }
+            <p class="text-muted">Use your registered security key, Windows Hello, Touch ID, or mobile authenticator</p>
+        </div>
+
+        <div id="webauthn-container">
+            <!-- Username input for usernameless flow -->
+            @if (string.IsNullOrEmpty(Model.Username))
+            {
+                <div class="mb-3" id="username-section">
+                    <label for="username" class="form-label">
+                        <i class="bi bi-person me-1"></i>Username or Email (Optional)
+                    </label>
+                    <input type="text" id="username" class="form-control" 
+                           placeholder="Leave empty for usernameless authentication" 
+                           autocomplete="username webauthn">
+                    <div class="form-text">
+                        Enter your username/email to filter your keys, or leave empty to see all available keys.
+                    </div>
+                </div>
+            }
+            else
+            {
+                <input type="hidden" id="username" value="@Model.Username" />
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Signing in as <strong>@Model.Username</strong>
+                </div>
+            }
+
+            <div class="d-grid gap-2 mb-3">
+                <button type="button" class="btn btn-primary btn-lg" id="webauthnSignInBtn">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Sign in with Security Key
+                </button>
+            </div>
+
+            <div id="authenticationStatus" class="alert" style="display: none;"></div>
+        </div>
+
+        <div class="text-center mt-4">
+            <div class="border-top pt-3">
+                <small class="text-muted">
+                    Don't have a security key? 
+                    <a asp-page="/Login" asp-route-returnUrl="@Model.ReturnUrl" 
+                       class="text-decoration-none">Use password instead</a>
+                </small>
+                @if (!string.IsNullOrEmpty(Model.ReturnUrl))
+                {
+                    <br />
+                    <small class="text-muted">
+                        <a asp-page="/Auth/Qr" asp-route-returnUrl="@Model.ReturnUrl" 
+                           class="text-decoration-none">
+                            <i class="bi bi-qr-code me-1"></i>QR Code login
+                        </a>
+                    </small>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/webauthn-utils.js" asp-append-version="true"></script>
+    <script>
+        class WebAuthnAuth {
+            constructor(returnUrl) {
+                this.returnUrl = returnUrl;
+                this.initializeEventListeners();
+                this.checkWebAuthnSupport();
+            }
+
+            checkWebAuthnSupport() {
+                if (!WebAuthnUtils.isSupported()) {
+                    this.showError('WebAuthn is not supported by your browser. Please use a modern browser or try password authentication.');
+                    document.getElementById('webauthnSignInBtn').disabled = true;
+                }
+            }
+
+            initializeEventListeners() {
+                document.getElementById('webauthnSignInBtn').addEventListener('click', () => {
+                    this.authenticate();
+                });
+
+                // Allow Enter key to trigger authentication
+                document.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.authenticate();
+                    }
+                });
+            }
+
+            async authenticate() {
+                try {
+                    this.showProgress('Preparing authentication...');
+                    
+                    const username = document.getElementById('username').value.trim() || undefined;
+                    
+                    // Get authentication challenge
+                    const challengeUrl = username 
+                        ? `/api/webauthn/authentication/challenge?username=${encodeURIComponent(username)}`
+                        : '/api/webauthn/authentication/challenge';
+                        
+                    const challengeResponse = await fetch(challengeUrl, {
+                        method: 'POST',
+                        headers: WebAuthnUtils.createHeaders()
+                    });
+
+                    if (!challengeResponse.ok) {
+                        const errorData = await challengeResponse.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Failed to get authentication challenge');
+                    }
+
+                    const challengeData = await challengeResponse.json();
+                    
+                    this.showProgress('Touch your security key or complete the authentication prompt...');
+
+                    // Prepare assertion options
+                    const assertionOptions = WebAuthnUtils.prepareAssertionOptions(challengeData.options);
+
+                    // Get assertion
+                    const assertion = await navigator.credentials.get({
+                        publicKey: assertionOptions
+                    });
+
+                    if (!assertion) {
+                        throw new Error('No assertion was received');
+                    }
+
+                    this.showProgress('Completing authentication...');
+
+                    // Complete authentication
+                    const completionResponse = await fetch('/api/webauthn/authentication/complete', {
+                        method: 'POST',
+                        headers: WebAuthnUtils.createHeaders(),
+                        body: JSON.stringify({
+                            sessionId: challengeData.sessionId,
+                            assertionResponse: WebAuthnUtils.formatAssertionResponse(assertion),
+                            returnUrl: this.returnUrl
+                        })
+                    });
+
+                    if (!completionResponse.ok) {
+                        const errorData = await completionResponse.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Authentication failed');
+                    }
+
+                    const result = await completionResponse.json();
+                    
+                    if (result.success) {
+                        // Handle different response types
+                        if (result.requiresMfaEnrollment) {
+                            this.showSuccess('Authentication successful! MFA enrollment required. Redirecting...');
+                            setTimeout(() => {
+                                window.location.href = result.redirectUrl;
+                            }, 1000);
+                        } else if (result.requiresTotp) {
+                            this.showSuccess('Authentication successful! TOTP verification required. Redirecting...');
+                            setTimeout(() => {
+                                window.location.href = result.redirectUrl;
+                            }, 1000);
+                        } else {
+                            this.showSuccess('Authentication successful! Redirecting...');
+                            
+                            // Use provided redirect URL or fall back to return URL or default
+                            const redirectUrl = result.redirectUrl || this.returnUrl || '/';
+                            setTimeout(() => {
+                                window.location.href = redirectUrl;
+                            }, 1000);
+                        }
+                    } else {
+                        throw new Error('Authentication was not successful');
+                    }
+
+                } catch (error) {
+                    console.error('WebAuthn authentication error:', error);
+                    this.showError(WebAuthnUtils.getErrorMessage(error));
+                }
+            }
+
+            showProgress(message) {
+                const statusDiv = document.getElementById('authenticationStatus');
+                statusDiv.className = 'alert alert-info';
+                statusDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+
+            showError(message) {
+                const statusDiv = document.getElementById('authenticationStatus');
+                statusDiv.className = 'alert alert-danger';
+                statusDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+
+            showSuccess(message) {
+                const statusDiv = document.getElementById('authenticationStatus');
+                statusDiv.className = 'alert alert-success';
+                statusDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
+                statusDiv.style.display = 'block';
+            }
+        }
+
+        // Initialize WebAuthn authentication when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const returnUrl = '@Html.Raw(Model.ReturnUrl)';
+            new WebAuthnAuth(returnUrl);
+        });
+    </script>
+}

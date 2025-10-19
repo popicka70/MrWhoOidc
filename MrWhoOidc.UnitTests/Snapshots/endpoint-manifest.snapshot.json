@@ -20,6 +20,61 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/api/webauthn/authentication/challenge",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/authentication/complete",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/credentials",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/registration/challenge",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/registration/complete",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/bcl/alerts/snapshot",
     "Methods": "GET",
     "RateLimiters": [
@@ -805,6 +860,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "Account/WebAuthn",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Admin/Backchannel",
     "Methods": "",
     "RateLimiters": [],
@@ -1283,6 +1347,15 @@
   },
   {
     "Pattern": "Auth/QrMobile",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Auth/WebAuthn",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
