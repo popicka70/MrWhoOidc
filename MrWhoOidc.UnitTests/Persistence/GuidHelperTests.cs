@@ -52,10 +52,14 @@ public class GuidHelperTests
         var sortedIds = ids.OrderBy(g => g).ToList();
         
         // Check that at least 95% of IDs are in monotonic order
+        // UUIDv7 uses timestamp in first 48 bits, so we need to compare timestamps
         int inOrder = 0;
         for (int i = 0; i < ids.Count - 1; i++)
         {
-            if (string.Compare(ids[i].ToString(), ids[i + 1].ToString(), StringComparison.Ordinal) <= 0)
+            var ts1 = GuidHelper.ExtractTimestamp(ids[i]);
+            var ts2 = GuidHelper.ExtractTimestamp(ids[i + 1]);
+            
+            if (ts1 != null && ts2 != null && ts1.Value <= ts2.Value)
             {
                 inOrder++;
             }
