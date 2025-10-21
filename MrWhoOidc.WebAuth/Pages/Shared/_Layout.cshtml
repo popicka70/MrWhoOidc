@@ -18,7 +18,7 @@
     @* Inject tenant branding CSS variables *@
     @await Component.InvokeAsync("TenantBranding")
 </head>
-<body>
+<body class="d-flex flex-column min-vh-100">
     @{
         var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false;
         // Get tenant context from middleware (set by TenantResolutionMiddleware)
@@ -170,18 +170,19 @@
         </header>
     }
 
-    @if (User?.Identity?.IsAuthenticated ?? false && !hideNavbar)
-    {
-        <div class="container-fluid">
-            <div class="row">
-                <!-- Sidebar: Offcanvas on mobile, always visible on desktop -->
-                <aside class="offcanvas-md offcanvas-start col-md-3 col-lg-2 border-end p-0" id="sidebarNav" tabindex="-1" aria-labelledby="sidebarNavLabel">
+    <div class="flex-grow-1 d-flex flex-column">
+        @if (User?.Identity?.IsAuthenticated ?? false && !hideNavbar)
+        {
+            <div class="container-fluid flex-grow-1">
+                <div class="row h-100">
+                    <!-- Sidebar: Offcanvas on mobile, always visible on desktop -->
+                    <aside class="offcanvas-md offcanvas-start col-md-3 col-lg-2 border-end p-0 d-flex flex-column" id="sidebarNav" tabindex="-1" aria-labelledby="sidebarNavLabel">
                     <div class="offcanvas-header d-md-none">
                         <h5 class="offcanvas-title" id="sidebarNavLabel">Navigation</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebarNav" aria-label="Close"></button>
                     </div>
-                    <div class="offcanvas-body p-0">
-                        <div class="list-group list-group-flush rounded-0">
+                        <div class="offcanvas-body p-0 d-flex flex-column flex-grow-1">
+                            <div class="list-group list-group-flush rounded-0 d-flex flex-column flex-grow-1 overflow-auto">
                             <a class="list-group-item list-group-item-action" asp-page="/Index"><i class="bi bi-house-door me-2"></i>Home</a>
                             <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
                             <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
@@ -241,15 +242,15 @@
                                 }
                             }
                             
-                            <div class="mt-auto border-top">
+                            <div class="mt-auto border-top flex-shrink-0">
                                 <div class="list-group-item fw-semibold text-uppercase small bg-secondary text-white">Account</div>
                                 <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString("/")"><i class="bi bi-box-arrow-right me-2"></i>Log out</a>
                             </div>
                         </div>
                     </div>
-                </aside>
-                <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4">
-                    <div class="py-3">
+                    </aside>
+                    <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4 pb-5 d-flex flex-column">
+                    <div class="py-3 flex-grow-1">
                         @* Impersonation Banner - Shows when platform admin is impersonating *@
                         <partial name="_ImpersonationBanner" />
                         
@@ -265,25 +266,26 @@
                         }
                         @RenderBody()
                     </div>
-                </main>
+                    </main>
+                </div>
             </div>
-        </div>
-    }
-    else
-    {
-        <!-- Tight centered landing layout (unauthenticated) -->
-        <div class="d-flex flex-column align-items-center justify-content-start py-4" style="min-height:70vh;">
-            <div class="w-100" style="max-width:750px;">
-                @if (TempData.ContainsKey("Error"))
-                {
-                    <div class="alert alert-danger">@TempData["Error"]</div>
-                }
-                @RenderBody()
+        }
+        else
+        {
+            <!-- Tight centered landing layout (unauthenticated) -->
+            <div class="d-flex flex-column align-items-center justify-content-start py-4 flex-grow-1" style="min-height:70vh;">
+                <div class="w-100" style="max-width:750px;">
+                    @if (TempData.ContainsKey("Error"))
+                    {
+                        <div class="alert alert-danger">@TempData["Error"]</div>
+                    }
+                    @RenderBody()
+                </div>
             </div>
-        </div>
-    }
+        }
+    </div>
 
-    <footer class="border-top footer text-muted">
+    <footer class="border-top footer text-muted mt-auto">
         <div class="container py-2">
             &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
         </div>
