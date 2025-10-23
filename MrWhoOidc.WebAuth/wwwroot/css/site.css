@@ -46,8 +46,7 @@ html {
 }
 
 body {
-  margin-bottom: 0;
-  padding-bottom: 4rem; /* Space for footer */
+  margin: 0;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
@@ -243,7 +242,10 @@ body {
 }
 
 /* Provide a neutral backdrop behind the centered auth card */
-.auth-scheme-body .auth-card { backdrop-filter: saturate(1.4) brightness(1.02); }
+.auth-scheme-body .auth-card {
+  -webkit-backdrop-filter: saturate(1.4) brightness(1.02);
+  backdrop-filter: saturate(1.4) brightness(1.02);
+}
 
 /* Classic (default) gets gentle rounding/shadow too */
 .scheme-classic .auth-card {

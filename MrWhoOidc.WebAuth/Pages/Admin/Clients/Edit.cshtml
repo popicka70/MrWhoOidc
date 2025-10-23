@@ -16,7 +16,7 @@
 <form method="post" autocomplete="off">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    <ul class="nav nav-tabs" id="clientTab" role="tablist">
+    <ul class="nav nav-tabs" id="clientTab" role="tablist" data-active-tab="@Model.ActiveTab">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#tab-general" type="button" role="tab" aria-controls="tab-general" aria-selected="true">
                 <i class="bi bi-gear me-1"></i> General
@@ -43,9 +43,9 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <a class="nav-link" href="@Url.Page("Secrets", new { id = Model.Id })" role="tab">
+            <button class="nav-link" id="secrets-tab" data-bs-toggle="tab" data-bs-target="#tab-secrets" type="button" role="tab" aria-controls="tab-secrets" aria-selected="false">
                 <i class="bi bi-shield-lock me-1"></i> Secrets
-            </a>
+            </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="introspection-tab" data-bs-toggle="tab" data-bs-target="#tab-introspection" type="button" role="tab" aria-controls="tab-introspection" aria-selected="false">
@@ -620,6 +620,212 @@
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.OboAllowedSourceAudiences" class="form-label"></label>
+
+        <div class="tab-pane fade" id="tab-secrets" role="tabpanel" aria-labelledby="secrets-tab" tabindex="0">
+            <div class="d-flex flex-column gap-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                    <div>
+                        <h5 class="mb-1">Client secrets</h5>
+                        <p class="text-muted mb-0">
+                            Manage secrets for <strong>@Model.ClientDisplayName</strong>
+                            <span class="font-monospace">(@Model.ClientPublicId)</span>
+                        </p>
+                    </div>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSecretModal">
+                        <i class="bi bi-plus-circle me-1"></i> Generate New Secret
+                    </button>
+                </div>
+
+                @if (Model.HasLegacyClientSecretHash)
+                {
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <span class="badge bg-warning text-dark me-2">DEPRECATED</span>
+                            Legacy Single Secret Detected
+                        </h5>
+                        <p class="mb-2">
+                            This client is using the deprecated single <code>ClientSecretHash</code> field.
+                            While it will continue to work for backward compatibility, we recommend migrating to the new multi-secret system for:
+                        </p>
+                        <ul class="mb-2">
+                            <li><strong>Zero-downtime rotation</strong> — overlap old and new secrets during rotation</li>
+                            <li><strong>Expiry enforcement</strong> — automatically reject expired secrets</li>
+                            <li><strong>Better audit trail</strong> — track secret creation, activation, usage, and revocation</li>
+                            <li><strong>Enhanced security</strong> — up to 3 active secrets with individual lifecycle management</li>
+                        </ul>
+                        <p class="mb-0">
+                            <strong>Action:</strong> Generate a new secret below, test it with your client application, then the legacy secret will be automatically ignored once you have active secrets in the new system.
+                        </p>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.SecretErrorMessage))
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        @Model.SecretErrorMessage
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.SecretSuccessMessage))
+                {
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        @Model.SecretSuccessMessage
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.SecretNewSecretValue))
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Save This Secret Now!</h5>
+                        <p><strong>You won't be able to see this secret again.</strong> Copy it to a secure location.</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control font-monospace" id="newSecret" value="@Model.SecretNewSecretValue" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copySecretBtn">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+                        </div>
+                        <small class="text-muted">Secret ID: @Model.SecretNewSecretIdentifier</small>
+                    </div>
+                }
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Description</th>
+                                <th>Created</th>
+                                <th>Activated</th>
+                                <th>Expires</th>
+                                <th>Last Used</th>
+                                <th>Usage</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.ClientSecrets is null || !Model.ClientSecrets.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    <i class="bi bi-info-circle me-2"></i>No secrets configured for this client.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var secret in Model.ClientSecrets)
+                            {
+                                <tr>
+                                    <td>
+                                        @switch (secret.Status)
+                                        {
+                                            case "primary":
+                                                <span class="badge bg-success"><i class="bi bi-star-fill me-1"></i>Primary</span>;
+                                                break;
+                                            case "active":
+                                                <span class="badge bg-info">Active</span>;
+                                                break;
+                                            case "inactive":
+                                                <span class="badge bg-secondary">Inactive</span>;
+                                                break;
+                                            case "expired":
+                                                <span class="badge bg-warning text-dark">Expired</span>;
+                                                break;
+                                            case "revoked":
+                                                <span class="badge bg-danger">Revoked</span>;
+                                                break;
+                                        }
+                                    </td>
+                                    <td>
+                                        @(string.IsNullOrEmpty(secret.Description) ? "<em>No description</em>" : secret.Description)
+                                    </td>
+                                    <td>
+                                        <small>@secret.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</small><br />
+                                        <small class="text-muted">by @secret.CreatedBy</small>
+                                    </td>
+                                    <td>
+                                        @if (secret.ActivatedAtUtc.HasValue)
+                                        {
+                                            <small>@secret.ActivatedAtUtc.Value.ToString("yyyy-MM-dd HH:mm")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (secret.ExpiresAtUtc.HasValue)
+                                        {
+                                            var daysUntilExpiry = (secret.ExpiresAtUtc.Value - DateTime.UtcNow).Days;
+                                            <small>@secret.ExpiresAtUtc.Value.ToString("yyyy-MM-dd")</small>
+                                            if (daysUntilExpiry < 7 && daysUntilExpiry > 0)
+                                            {
+                                                <br /><span class="badge bg-warning text-dark">Expires in @daysUntilExpiry days</span>
+                                            }
+                                            else if (daysUntilExpiry <= 0)
+                                            {
+                                                <br /><span class="badge bg-danger">Expired</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Never</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (secret.LastUsedAtUtc.HasValue)
+                                        {
+                                            <small>@secret.LastUsedAtUtc.Value.ToString("yyyy-MM-dd HH:mm")</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Never</span>
+                                        }
+                                    </td>
+                                    <td>@secret.UsageCount</td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            @if (secret.Status == "inactive")
+                                            {
+                                                <form method="post" asp-page-handler="ActivateSecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id" class="d-inline">
+                                                    <button type="submit" class="btn btn-outline-success" title="Activate">
+                                                        <i class="bi bi-check-circle"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            @if (secret.Status == "active" || secret.Status == "primary")
+                                            {
+                                                <form method="post" asp-page-handler="SetPrimarySecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id" class="d-inline">
+                                                    <button type="submit" class="btn btn-outline-warning" title="Set as Primary" @(secret.Status == "primary" ? "disabled" : null)>
+                                                        <i class="bi bi-star"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            @if (secret.Status != "revoked")
+                                            {
+                                                <button type="button" class="btn btn-outline-danger" title="Revoke"
+                                                        data-bs-toggle="modal" data-bs-target="#revokeModal"
+                                                        data-secret-id="@secret.Id"
+                                                        data-secret-desc="@(string.IsNullOrEmpty(secret.Description) ? "this secret" : secret.Description)">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
                     <input asp-for="Input.OboAllowedSourceAudiences" class="form-control" placeholder="api-a, https://api-a.example.com" />
                     <small class="form-text text-muted">Subject token must target one of these audiences.</small>
                     <span asp-validation-for="Input.OboAllowedSourceAudiences" class="text-danger"></span>
@@ -689,6 +895,65 @@
     </div>
 </form>
 
+<!-- Create Secret Modal -->
+<div class="modal fade" id="createSecretModal" tabindex="-1" aria-labelledby="createSecretModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="CreateSecret" asp-route-id="@Model.Id">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createSecretModalLabel">Generate New Secret</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label asp-for="SecretInput.Description" class="form-label">Description (optional)</label>
+                        <input asp-for="SecretInput.Description" class="form-control" placeholder="Production secret Q4 2025">
+                        <small class="form-text text-muted">Give this secret a friendly label to help operators identify it later.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="SecretInput.ExpiresInDays" class="form-label">Expires in (days, optional)</label>
+                        <input asp-for="SecretInput.ExpiresInDays" class="form-control" type="number" min="1" max="730" placeholder="90">
+                        <small class="form-text text-muted">Leave empty for no expiry. Range: 1-730 days (2 years).</small>
+                    </div>
+                    <div class="form-check">
+                        <input asp-for="SecretInput.ActivateImmediately" class="form-check-input" type="checkbox">
+                        <label asp-for="SecretInput.ActivateImmediately" class="form-check-label">Activate immediately</label>
+                        <small class="form-text text-muted d-block">Uncheck to keep the secret inactive until you are ready to switch.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Generate Secret</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Revoke Confirmation Modal -->
+<div class="modal fade" id="revokeModal" tabindex="-1" aria-labelledby="revokeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="revokeModalLabel">Confirm Revocation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger"><strong>Warning:</strong> This action cannot be undone.</p>
+                <p>Are you sure you want to revoke <strong id="revokeSecretDesc"></strong>?</p>
+                <p class="text-muted">After revocation, the secret instantly stops authenticating this client.</p>
+            </div>
+            <div class="modal-footer">
+                <form id="revokeForm" method="post" asp-page-handler="RevokeSecret" asp-route-id="@Model.Id">
+                    <input type="hidden" id="revokeSecretId" name="secretId" value="" />
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Revoke Secret</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
     <script>
@@ -696,6 +961,7 @@
             // Tab persistence: activate tab from URL parameter or restore from previous selection
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
+            const tabList = document.getElementById('clientTab');
             
             if (tabParam) {
                 // Activate tab from URL parameter
@@ -703,6 +969,15 @@
                 if (tabButton) {
                     const tab = new bootstrap.Tab(tabButton);
                     tab.show();
+                }
+            } else if (tabList && tabList.dataset && tabList.dataset.activeTab) {
+                const serverTab = tabList.dataset.activeTab;
+                if (serverTab) {
+                    const tabButton = document.getElementById(serverTab + '-tab');
+                    if (tabButton) {
+                        const tab = new bootstrap.Tab(tabButton);
+                        tab.show();
+                    }
                 }
             }
             
@@ -814,6 +1089,49 @@
                 });
                 updateSecretButtons(input, copyBtn, revealBtn);
             }
+
+            const newSecretField = document.getElementById('newSecret');
+            const newSecretCopyBtn = document.getElementById('copySecretBtn');
+            if (newSecretField && newSecretCopyBtn){
+                newSecretCopyBtn.addEventListener('click', async function(){
+                    try {
+                        const value = newSecretField.value;
+                        if (!value) { return; }
+
+                        if (navigator.clipboard && navigator.clipboard.writeText){
+                            await navigator.clipboard.writeText(value);
+                        } else {
+                            newSecretField.select();
+                            document.execCommand('copy');
+                            window.getSelection().removeAllRanges();
+                        }
+
+                        const original = newSecretCopyBtn.innerHTML;
+                        newSecretCopyBtn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                        newSecretCopyBtn.classList.remove('btn-outline-secondary');
+                        newSecretCopyBtn.classList.add('btn-success');
+                        setTimeout(() => {
+                            newSecretCopyBtn.innerHTML = original;
+                            newSecretCopyBtn.classList.add('btn-outline-secondary');
+                            newSecretCopyBtn.classList.remove('btn-success');
+                        }, 1500);
+                    } catch (err) {
+                        console.error('Failed to copy secret', err);
+                    }
+                });
+            }
+
+            const revokeModal = document.getElementById('revokeModal');
+            revokeModal?.addEventListener('show.bs.modal', function(event){
+                const trigger = event.relatedTarget;
+                if (!trigger) { return; }
+                const secretId = trigger.getAttribute('data-secret-id');
+                const secretDesc = trigger.getAttribute('data-secret-desc');
+                const hiddenField = document.getElementById('revokeSecretId');
+                const descField = document.getElementById('revokeSecretDesc');
+                if (hiddenField){ hiddenField.value = secretId || ''; }
+                if (descField){ descField.textContent = secretDesc || 'this secret'; }
+            });
         })();
 
         // IdP Chaining URL copy function

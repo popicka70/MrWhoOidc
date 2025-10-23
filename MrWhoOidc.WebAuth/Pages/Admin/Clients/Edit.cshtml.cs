@@ -49,6 +49,14 @@ public class EditModel(
 
     public string? GeneratedPrivateJwk { get; private set; }
 
+    public List<ClientSecretViewModel> ClientSecrets { get; private set; } = new();
+
+    public string ClientDisplayName { get; private set; } = string.Empty;
+
+    public string ClientPublicId { get; private set; } = string.Empty;
+
+    public bool HasLegacyClientSecretHash { get; private set; }
+
     // Scopes tab model
     public List<Scope> AvailableScopes { get; private set; } = new();
     public List<Scope> GlobalAvailableScopes { get; private set; } = new();
@@ -78,11 +86,26 @@ public class EditModel(
     [BindProperty]
     public string? RemoveKid { get; set; }
 
+    [BindProperty]
+    public SecretInputModel SecretInput { get; set; } = new();
+
     public JwksValidationStatus? JwksStatus { get; private set; }
 
     // IdP Chaining URLs (tenant-aware)
     public string IdpChainingAuthorizationUrl { get; private set; } = string.Empty;
     public string IdpChainingEndSessionUrl { get; private set; } = string.Empty;
+
+    [TempData]
+    public string? SecretErrorMessage { get; set; }
+
+    [TempData]
+    public string? SecretSuccessMessage { get; set; }
+
+    [TempData]
+    public string? SecretNewSecretValue { get; set; }
+
+    [TempData]
+    public string? SecretNewSecretIdentifier { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -107,9 +130,10 @@ public class EditModel(
         var client = await clientQuery.FirstOrDefaultAsync();
         if (client is null) return NotFound();
 
-        await LoadRealmsAsync();
-        await LoadScopesAsync(client.Id);
-        await LoadProviderMappingsAsync(client.Id);
+    await LoadRealmsAsync();
+    await LoadScopesAsync(client.Id);
+    await LoadProviderMappingsAsync(client.Id);
+    await LoadClientSecretsAsync(client.Id);
 
         // Build tenant-aware IdP chaining URLs
         var issuer = HttpContext.GetIssuer(oidcOptions);
@@ -243,6 +267,17 @@ public class EditModel(
 
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
         JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+
+    ClientDisplayName = client.ClientName ?? client.ClientId;
+    ClientPublicId = client.ClientId;
+#pragma warning disable CS0618
+    HasLegacyClientSecretHash = !string.IsNullOrEmpty(client.ClientSecretHash);
+#pragma warning restore CS0618
+
+    if (SecretInput is null)
+    {
+        SecretInput = new SecretInputModel();
+    }
 
         return Page();
     }
@@ -1222,6 +1257,74 @@ public class EditModel(
             .ToListAsync();
     }
 
+    private async Task LoadClientSecretsAsync(Guid clientId)
+    {
+        ClientSecrets = await db.ClientSecrets
+            .AsNoTracking()
+            .Where(s => s.ClientId == clientId)
+            .OrderByDescending(s => s.CreatedAtUtc)
+            .Select(s => new ClientSecretViewModel
+            {
+                Id = s.Id,
+                Description = s.Description,
+                CreatedAtUtc = s.CreatedAtUtc,
+                ActivatedAtUtc = s.ActivatedAtUtc,
+                ExpiresAtUtc = s.ExpiresAtUtc,
+                RevokedAtUtc = s.RevokedAtUtc,
+                IsPrimary = s.IsPrimary,
+                CreatedBy = s.CreatedBy,
+                ActivatedBy = s.ActivatedBy,
+                RevokedBy = s.RevokedBy,
+                LastUsedAtUtc = s.LastUsedAtUtc,
+                UsageCount = s.UsageCount,
+                Status = s.RevokedAtUtc != null ? "revoked" :
+                         (s.ExpiresAtUtc != null && s.ExpiresAtUtc < DateTime.UtcNow) ? "expired" :
+                         s.ActivatedAtUtc == null ? "inactive" :
+                         s.IsPrimary ? "primary" : "active"
+            })
+            .ToListAsync();
+    }
+
+    private async Task<Client?> LoadClientEntityAsync(Guid clientId)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+        var query = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+
+        if (!platformAdminResult.Succeeded)
+        {
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return null;
+            }
+
+            query = query.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        return await query.FirstOrDefaultAsync();
+    }
+
+    private async Task ReloadPageDataAsync()
+    {
+        await LoadRealmsAsync();
+        await LoadScopesAsync(Id);
+        await LoadProviderMappingsAsync(Id);
+        await LoadClientSecretsAsync(Id);
+
+        var client = await LoadClientEntityAsync(Id);
+        if (client is not null)
+        {
+            ClientDisplayName = client.ClientName ?? client.ClientId;
+            ClientPublicId = client.ClientId;
+#pragma warning disable CS0618
+            HasLegacyClientSecretHash = !string.IsNullOrEmpty(client.ClientSecretHash);
+#pragma warning restore CS0618
+        }
+
+        KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+        JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+    }
+
     public async Task<IActionResult> OnPostAddProviderAsync()
     {
         if (!await ValidateTenantAccessAsync())
@@ -1275,6 +1378,209 @@ public class EditModel(
             await db.SaveChangesAsync();
         }
         return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=providers");
+    }
+
+    public async Task<IActionResult> OnPostCreateSecretAsync()
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var client = await LoadClientEntityAsync(Id);
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var activeCount = await db.ClientSecrets
+                .Where(s => s.ClientId == Id && s.ActivatedAtUtc != null && s.RevokedAtUtc == null)
+                .CountAsync();
+
+            if (activeCount >= 3)
+            {
+                SecretErrorMessage = "Maximum active secrets reached (3). Revoke an existing secret before creating a new one.";
+                await ReloadPageDataAsync();
+                ActiveTab = "secrets";
+                return Page();
+            }
+
+            if (SecretInput.ExpiresInDays.HasValue && (SecretInput.ExpiresInDays.Value < 1 || SecretInput.ExpiresInDays.Value > 730))
+            {
+                SecretErrorMessage = "Expiry must be between 1 and 730 days (2 years).";
+                await ReloadPageDataAsync();
+                ActiveTab = "secrets";
+                return Page();
+            }
+
+            var secretValue = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+            DateTime? expiresAtUtc = SecretInput.ExpiresInDays.HasValue
+                ? DateTime.UtcNow.AddDays(SecretInput.ExpiresInDays.Value)
+                : null;
+
+            var username = User.Identity?.Name ?? "system";
+            var secret = await clientStore.CreateSecretAsync(
+                Id,
+                secretValue,
+                SecretInput.Description,
+                username,
+                expiresAtUtc);
+
+            if (SecretInput.ActivateImmediately)
+            {
+                await clientStore.ActivateSecretAsync(secret.Id, username);
+            }
+
+            await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
+
+            SecretNewSecretValue = secretValue;
+            SecretNewSecretIdentifier = secret.Id.ToString();
+            SecretSuccessMessage = "Secret generated successfully. Save it now — you won't see it again!";
+            SecretInput = new SecretInputModel();
+
+            return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=secrets");
+        }
+        catch (Exception ex)
+        {
+            SecretErrorMessage = $"Failed to create secret: {ex.Message}";
+            await ReloadPageDataAsync();
+            ActiveTab = "secrets";
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostActivateSecretAsync(Guid secretId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var client = await LoadClientEntityAsync(Id);
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var username = User.Identity?.Name ?? "system";
+            var success = await clientStore.ActivateSecretAsync(secretId, username);
+
+            if (!success)
+            {
+                SecretErrorMessage = "Failed to activate secret. Secret not found.";
+            }
+            else
+            {
+                await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
+                SecretSuccessMessage = "Secret activated successfully.";
+            }
+        }
+        catch (Exception ex)
+        {
+            SecretErrorMessage = $"Failed to activate secret: {ex.Message}";
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=secrets");
+    }
+
+    public async Task<IActionResult> OnPostSetPrimarySecretAsync(Guid secretId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var client = await LoadClientEntityAsync(Id);
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var username = User.Identity?.Name ?? "system";
+            var success = await clientStore.SetPrimarySecretAsync(secretId, username);
+
+            if (!success)
+            {
+                SecretErrorMessage = "Failed to set primary secret. Secret not found or not active.";
+            }
+            else
+            {
+                await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
+                SecretSuccessMessage = "Primary secret updated successfully.";
+            }
+        }
+        catch (Exception ex)
+        {
+            SecretErrorMessage = $"Failed to set primary secret: {ex.Message}";
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=secrets");
+    }
+
+    public async Task<IActionResult> OnPostRevokeSecretAsync(Guid secretId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var client = await LoadClientEntityAsync(Id);
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var username = User.Identity?.Name ?? "system";
+            var success = await clientStore.RevokeSecretAsync(secretId, username);
+
+            if (!success)
+            {
+                SecretErrorMessage = "Failed to revoke secret. Cannot revoke the last active secret (would lock out client).";
+            }
+            else
+            {
+                await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
+                SecretSuccessMessage = "Secret revoked successfully.";
+            }
+        }
+        catch (Exception ex)
+        {
+            SecretErrorMessage = $"Failed to revoke secret: {ex.Message}";
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=secrets");
+    }
+
+    public class SecretInputModel
+    {
+        public string? Description { get; set; }
+        public int? ExpiresInDays { get; set; }
+        public bool ActivateImmediately { get; set; } = true;
+    }
+
+    public class ClientSecretViewModel
+    {
+        public Guid Id { get; set; }
+        public string? Description { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+        public DateTime? ActivatedAtUtc { get; set; }
+        public DateTime? ExpiresAtUtc { get; set; }
+        public DateTime? RevokedAtUtc { get; set; }
+        public bool IsPrimary { get; set; }
+        public string? CreatedBy { get; set; }
+        public string? ActivatedBy { get; set; }
+        public string? RevokedBy { get; set; }
+        public DateTime? LastUsedAtUtc { get; set; }
+        public long UsageCount { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 
     /// <summary>

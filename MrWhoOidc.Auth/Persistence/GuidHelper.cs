@@ -1,5 +1,3 @@
-using UUIDNext;
-
 namespace MrWhoOidc.Auth.Persistence;
 
 /// <summary>
@@ -33,8 +31,9 @@ public static class GuidHelper
     /// <remarks>
     /// Thread-safe and monotonic within the same millisecond. Generated IDs are compatible
     /// with PostgreSQL's uuid type and standard Guid operations.
+    /// Uses the native .NET 9 Guid.CreateVersion7() implementation.
     /// </remarks>
-    public static Guid NewId() => Uuid.NewSequential();
+    public static Guid NewId() => Guid.CreateVersion7();
 
     /// <summary>
     /// Legacy method for backward compatibility.

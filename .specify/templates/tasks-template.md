@@ -247,20 +247,5 @@ With multiple developers:
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
 
-## Build Quality Validation (Pre-Commit Checklist)
-
-Before marking any task as complete, verify:
-
-- [ ] **Zero compiler warnings**: Code compiles cleanly in both Debug and Release
-- [ ] **Zero analyzer warnings**: All Roslyn/StyleCop warnings addressed or documented
-- [ ] **All tests pass**: Unit, integration, and contract tests passing
-- [ ] **No suppressions without justification**: Any `#pragma warning disable` has inline comment
-- [ ] **Primary key convention**: Entity IDs use `GuidHelper.NewId()` (not `Guid.NewGuid()`)
-- [ ] **EF migrations**: Generated using `dotnet ef migrations add` (not hand-written)
-- [ ] **RFC references**: OIDC-related tests include specification references in XML docs
-
-**Build command**: `dotnet build --warnaserror` (fails on any warnings)
-
-**Constitution Reference**: See Principle VI (Zero-Warning Policy) in `.specify/memory/constitution.md`
 
 
