@@ -18,9 +18,16 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     private readonly ILogger<EmailsModel> _logger = logger;
 
     public List<AlternativeEmailViewModel> AlternativeEmails { get; private set; } = new();
-    public string? Message { get; private set; }
-    public string? ErrorMessage { get; private set; }
+
+    [TempData]
+    public string? Message { get; set; }
+
+    [TempData]
+    public string? ErrorMessage { get; set; }
+
     public string? PrimaryEmail { get; private set; }
+    public bool PrimaryEmailVerified { get; private set; }
+    public DateTimeOffset? PrimaryEmailVerifiedAt { get; private set; }
 
     [BindProperty]
     [Required(ErrorMessage = "Email address is required")]
@@ -30,13 +37,15 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
 
     public async Task OnGetAsync()
     {
-    var user = await GetCurrentUserAsync();
+        var user = await GetCurrentUserAsync();
         if (user is null) return;
 
         PrimaryEmail = user.Email;
+        PrimaryEmailVerified = user.EmailVerified;
+        PrimaryEmailVerifiedAt = user.EmailVerifiedAt;
 
         // Get all alternative emails for the user
-    var emails = await _db.UserAlternativeEmails
+        var emails = await _db.UserAlternativeEmails
             .AsNoTracking()
             .Where(e => e.UserId == user.Id)
             .OrderByDescending(e => e.IsVerified)
@@ -66,8 +75,8 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
         var normalizedEmail = NewEmail.ToUpperInvariant();
 
         // Check if email already exists (primary or alternative)
-    var emailExists = user.NormalizedEmail == normalizedEmail ||
-             await _db.UserAlternativeEmails.AnyAsync(e => e.UserId == user.Id && e.NormalizedEmail == normalizedEmail);
+        var emailExists = user.NormalizedEmail == normalizedEmail ||
+            await _db.UserAlternativeEmails.AnyAsync(e => e.UserId == user.Id && e.NormalizedEmail == normalizedEmail);
 
         if (emailExists)
         {
@@ -77,7 +86,7 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
         }
 
         // Check if email is used by another user (tenant-scoped uniqueness)
-    var emailUsedByOther = await _db.Users.AnyAsync(u => u.TenantId == user.TenantId && u.NormalizedEmail == normalizedEmail);
+        var emailUsedByOther = await _db.Users.AnyAsync(u => u.TenantId == user.TenantId && u.NormalizedEmail == normalizedEmail);
         if (emailUsedByOther)
         {
             ErrorMessage = "This email address is already in use by another account.";
@@ -109,6 +118,40 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
         }
 
         NewEmail = string.Empty;
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostResendPrimaryAsync()
+    {
+        var user = await GetCurrentUserAsync();
+        if (user is null)
+        {
+            return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+        }
+
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            ErrorMessage = "No primary email address is configured.";
+            return RedirectToPage();
+        }
+
+        if (user.EmailVerified)
+        {
+            Message = $"Primary email {user.Email} is already verified.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await _emailWorkflow.SendPrimaryAsync(user, HttpContext.RequestAborted);
+            Message = $"Verification email sent to {user.Email}.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "We couldn't send the verification email. Please try again.";
+            _logger.LogWarning(ex, "Failed to resend primary email verification for user {UserId}", user.Id);
+        }
 
         return RedirectToPage();
     }
