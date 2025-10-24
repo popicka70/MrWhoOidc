@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.UnitTests.TestDoubles;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.AspNetCore.Http;
@@ -29,6 +30,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -76,7 +78,8 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-        services.AddExternalOidcHandler(); // Use DI registration
+    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+    services.AddExternalOidcHandler(); // Use DI registration
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();

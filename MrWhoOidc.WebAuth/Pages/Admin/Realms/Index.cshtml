@@ -66,6 +66,9 @@
                     <th class="d-none d-md-table-cell">
                         <i class="bi bi-calendar me-1"></i>Created
                     </th>
+                    <th class="d-none d-lg-table-cell">
+                        <i class="bi bi-envelope-check me-1"></i>Unconfirmed Login
+                    </th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -79,6 +82,16 @@
                         <span class="badge text-bg-info">@r.TenantName</span>
                     </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@r.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td data-label="Unconfirmed Login" class="d-none d-lg-table-cell">
+                        @if (r.AllowUnconfirmedLogin)
+                        {
+                            <span class="badge text-bg-success">Allowed</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-warning">Blocked</span>
+                        }
+                    </td>
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/Admin/Realms/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>

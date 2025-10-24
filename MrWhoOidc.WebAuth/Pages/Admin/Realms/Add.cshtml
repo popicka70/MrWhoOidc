@@ -25,6 +25,14 @@
         <input asp-for="Input.DisplayName" class="form-control" autocomplete="off" />
         <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
     </div>
+    <div class="form-check form-switch mb-3">
+        <input asp-for="Input.AllowUnconfirmedLogin" class="form-check-input" type="checkbox" role="switch" />
+        <label asp-for="Input.AllowUnconfirmedLogin" class="form-check-label"></label>
+        <span asp-validation-for="Input.AllowUnconfirmedLogin" class="text-danger"></span>
+        <div class="form-text">
+            Controls whether users with unconfirmed primary emails may complete client sign-in flows.
+        </div>
+    </div>
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary" asp-page-handler="Create">Create</button>
         <a asp-page="Index" class="btn btn-secondary">Back</a>

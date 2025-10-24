@@ -3,14 +3,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class EmailsModel(AuthDbContext db) : PageModel
+public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkflow, ILogger<EmailsModel> logger) : PageModel
 {
+    private readonly AuthDbContext _db = db;
+    private readonly IEmailConfirmationWorkflow _emailWorkflow = emailWorkflow;
+    private readonly ILogger<EmailsModel> _logger = logger;
+
     public List<AlternativeEmailViewModel> AlternativeEmails { get; private set; } = new();
     public string? Message { get; private set; }
     public string? ErrorMessage { get; private set; }
@@ -24,13 +30,13 @@ public class EmailsModel(AuthDbContext db) : PageModel
 
     public async Task OnGetAsync()
     {
-        var user = await GetCurrentUserAsync();
+    var user = await GetCurrentUserAsync();
         if (user is null) return;
 
         PrimaryEmail = user.Email;
 
         // Get all alternative emails for the user
-        var emails = await db.UserAlternativeEmails
+    var emails = await _db.UserAlternativeEmails
             .AsNoTracking()
             .Where(e => e.UserId == user.Id)
             .OrderByDescending(e => e.IsVerified)
@@ -60,8 +66,8 @@ public class EmailsModel(AuthDbContext db) : PageModel
         var normalizedEmail = NewEmail.ToUpperInvariant();
 
         // Check if email already exists (primary or alternative)
-        var emailExists = user.NormalizedEmail == normalizedEmail ||
-                         await db.UserAlternativeEmails.AnyAsync(e => e.UserId == user.Id && e.NormalizedEmail == normalizedEmail);
+    var emailExists = user.NormalizedEmail == normalizedEmail ||
+             await _db.UserAlternativeEmails.AnyAsync(e => e.UserId == user.Id && e.NormalizedEmail == normalizedEmail);
 
         if (emailExists)
         {
@@ -71,7 +77,7 @@ public class EmailsModel(AuthDbContext db) : PageModel
         }
 
         // Check if email is used by another user (tenant-scoped uniqueness)
-        var emailUsedByOther = await db.Users.AnyAsync(u => u.TenantId == user.TenantId && u.NormalizedEmail == normalizedEmail);
+    var emailUsedByOther = await _db.Users.AnyAsync(u => u.TenantId == user.TenantId && u.NormalizedEmail == normalizedEmail);
         if (emailUsedByOther)
         {
             ErrorMessage = "This email address is already in use by another account.";
@@ -88,10 +94,20 @@ public class EmailsModel(AuthDbContext db) : PageModel
             VerifiedAt = null
         };
 
-        db.UserAlternativeEmails.Add(alternativeEmail);
-        await db.SaveChangesAsync();
+        _db.UserAlternativeEmails.Add(alternativeEmail);
+        await _db.SaveChangesAsync();
 
-        Message = $"Alternative email {NewEmail} added successfully. A verification email will be sent shortly.";
+        try
+        {
+            await _emailWorkflow.SendAlternativeAsync(user, alternativeEmail, HttpContext.RequestAborted);
+            Message = $"Alternative email {NewEmail} added successfully. We've sent a verification link.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Alternative email {NewEmail} added, but we couldn't send the verification email. Please try resending.";
+            _logger.LogWarning(ex, "Failed to send alternative email verification for user {UserId}", user.Id);
+        }
+
         NewEmail = string.Empty;
 
         return RedirectToPage();
@@ -102,7 +118,7 @@ public class EmailsModel(AuthDbContext db) : PageModel
         var user = await GetCurrentUserAsync();
         if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
 
-        var email = await db.UserAlternativeEmails
+        var email = await _db.UserAlternativeEmails
             .FirstOrDefaultAsync(e => e.Id == emailId && e.UserId == user.Id);
 
         if (email is null)
@@ -111,10 +127,44 @@ public class EmailsModel(AuthDbContext db) : PageModel
             return RedirectToPage();
         }
 
-        db.UserAlternativeEmails.Remove(email);
-        await db.SaveChangesAsync();
+        _db.UserAlternativeEmails.Remove(email);
+        await _db.SaveChangesAsync();
 
         Message = $"Email address {email.Email} removed successfully.";
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostResendAsync(Guid emailId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+
+        var email = await _db.UserAlternativeEmails
+            .FirstOrDefaultAsync(e => e.Id == emailId && e.UserId == user.Id);
+
+        if (email is null)
+        {
+            ErrorMessage = "Email address not found.";
+            return RedirectToPage();
+        }
+
+        if (email.IsVerified)
+        {
+            Message = $"Email address {email.Email} is already verified.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            await _emailWorkflow.SendAlternativeAsync(user, email, HttpContext.RequestAborted);
+            Message = $"Verification email resent to {email.Email}.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"We couldn't resend the verification email to {email.Email}. Please try again.";
+            _logger.LogWarning(ex, "Failed to resend alternative email verification for user {UserId}", user.Id);
+        }
 
         return RedirectToPage();
     }
@@ -124,7 +174,7 @@ public class EmailsModel(AuthDbContext db) : PageModel
         var sub = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId)) return null;
 
-        return await db.Users
+        return await _db.Users
             .FirstOrDefaultAsync(u => u.Id == userId);
     }
 }

@@ -71,7 +71,8 @@ public class TenantSeedingService : ITenantSeedingService
             {
                 Name = "default",
                 DisplayName = "Default Realm",
-                TenantId = tenant.Id
+                TenantId = tenant.Id,
+                AllowUnconfirmedLogin = true
             };
             _db.Realms.Add(defaultRealm);
 
@@ -80,7 +81,8 @@ public class TenantSeedingService : ITenantSeedingService
             {
                 Name = "admin",
                 DisplayName = "Admin Realm",
-                TenantId = tenant.Id
+                TenantId = tenant.Id,
+                AllowUnconfirmedLogin = true
             };
             _db.Realms.Add(adminRealm);
 

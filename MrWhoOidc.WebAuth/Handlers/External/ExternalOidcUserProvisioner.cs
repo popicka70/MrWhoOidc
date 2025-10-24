@@ -48,17 +48,20 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     private readonly AuthDbContext _db;
     private readonly ILogger<ExternalOidcUserProvisioner> _logger;
     private readonly IRegistrationService _registrationService;
+    private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly ITenantAccessor _tenantAccessor;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
         ILogger<ExternalOidcUserProvisioner> logger,
-        IRegistrationService registrationService,
+    IRegistrationService registrationService,
+    IEmailConfirmationWorkflow emailWorkflow,
         ITenantAccessor tenantAccessor)
     {
         _db = db;
         _logger = logger;
-        _registrationService = registrationService;
+    _registrationService = registrationService;
+    _emailWorkflow = emailWorkflow;
         _tenantAccessor = tenantAccessor;
     }
 
@@ -273,6 +276,18 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             };
             _db.Users.Add(user);
             await _db.SaveChangesAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                try
+                {
+                    await _emailWorkflow.SendPrimaryAsync(user, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to dispatch confirmation email for externally provisioned user {UserId}", user.Id);
+                }
+            }
         }
 
         var ext = new ExternalIdentity

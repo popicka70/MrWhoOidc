@@ -131,7 +131,8 @@ public partial class CreateModel(
         {
             TenantId = tenant.Id,
             Name = "default",
-            DisplayName = $"{Input.Name} Default Realm"
+            DisplayName = $"{Input.Name} Default Realm",
+            AllowUnconfirmedLogin = true
         };
         db.Realms.Add(defaultRealm);
 
@@ -140,7 +141,8 @@ public partial class CreateModel(
         {
             TenantId = tenant.Id,
             Name = "admin",
-            DisplayName = $"{Input.Name} Admin Realm"
+            DisplayName = $"{Input.Name} Admin Realm",
+            AllowUnconfirmedLogin = true
         };
         db.Realms.Add(adminRealm);
         await db.SaveChangesAsync();

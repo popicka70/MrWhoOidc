@@ -20,6 +20,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "account/confirm-email",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [

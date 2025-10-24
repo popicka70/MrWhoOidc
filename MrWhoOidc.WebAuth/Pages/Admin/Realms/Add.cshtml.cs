@@ -56,7 +56,8 @@ public class AddModel(
         {
             TenantId = Input.TenantId,
             Name = Input.Name,
-            DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName
+            DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName,
+            AllowUnconfirmedLogin = Input.AllowUnconfirmedLogin
         };
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
@@ -88,5 +89,8 @@ public class AddModel(
 
         [StringLength(200)]
         public string? DisplayName { get; set; }
+
+        [Display(Name = "Allow unconfirmed email logins")]
+        public bool AllowUnconfirmedLogin { get; set; } = true;
     }
 }

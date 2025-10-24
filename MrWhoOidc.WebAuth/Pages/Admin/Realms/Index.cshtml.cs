@@ -17,7 +17,7 @@ public class IndexModel(
     IAuthorizationService authorizationService,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
-    public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
+    public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName, bool AllowUnconfirmedLogin);
 
     public IReadOnlyList<RealmRow> Realms { get; private set; } = Array.Empty<RealmRow>();
     public List<SelectListItem> TenantOptions { get; private set; } = new();
@@ -79,7 +79,8 @@ public class IndexModel(
                 x.Realm.DisplayName,
                 x.Realm.CreatedAt,
                 x.Realm.TenantId,
-                x.Tenant.Name
+                x.Tenant.Name,
+                x.Realm.AllowUnconfirmedLogin
             ))
             .ToListAsync();
     }

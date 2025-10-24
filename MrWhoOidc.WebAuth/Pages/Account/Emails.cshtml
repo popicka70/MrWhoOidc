@@ -91,7 +91,15 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="ms-3">
+                                    <div class="ms-3 d-flex align-items-center gap-2">
+                                        @if (!email.IsVerified)
+                                        {
+                                            <form method="post" asp-page-handler="Resend" asp-route-emailId="@email.Id">
+                                                <button type="submit" class="btn btn-sm btn-outline-primary" title="Resend verification email">
+                                                    <i class="bi bi-envelope-arrow-up"></i>
+                                                </button>
+                                            </form>
+                                        }
                                         <form method="post" asp-page-handler="Remove" asp-route-emailId="@email.Id" 
                                               onsubmit="return confirm('Are you sure you want to remove this email address?');">
                                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove email">

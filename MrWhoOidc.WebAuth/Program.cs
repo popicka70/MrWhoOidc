@@ -73,6 +73,7 @@ builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
 builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
+builder.Services.AddMrWhoOidcMail(builder.Configuration);
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))
