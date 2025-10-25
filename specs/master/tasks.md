@@ -56,13 +56,13 @@
 
 ### Implementation Tasks (US2)
 
-- [ ] T017 [P] [US2] Add FeatureFlags and UsageLimitInfo models per spec in MrWhoOidc.Auth/Licensing/Models/
-- [ ] T018 [US2] Implement FeatureService to resolve enabled features via LicenseInfo in MrWhoOidc.Auth/Licensing/Services/FeatureService.cs
-- [ ] T019 [US2] Implement LimitService enforcing numeric limits in MrWhoOidc.Auth/Licensing/Services/LimitService.cs
-- [ ] T020 [US2] Add FeatureGatingMiddleware enforcing disabled features in MrWhoOidc.WebAuth/Middleware/FeatureGatingMiddleware.cs
-- [ ] T021 [US2] Inject license limit checks into tenant and authorization flows in MrWhoOidc.Auth/Services/TenantService.cs and MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs
-- [ ] T022 [US2] Update pipeline wiring and advanced endpoint guards in MrWhoOidc.WebAuth/Program.cs to use feature gating middleware and services
-- [ ] T023 [P] [US2] Add unit tests for feature gating and limit enforcement scenarios in MrWhoOidc.UnitTests/Licensing/FeatureGatingTests.cs
+- [X] T017 [P] [US2] Add FeatureFlags and UsageLimitInfo models per spec in MrWhoOidc.Auth/Licensing/Models/
+- [X] T018 [US2] Implement FeatureService to resolve enabled features via LicenseInfo in MrWhoOidc.Auth/Licensing/Services/FeatureService.cs
+- [X] T019 [US2] Implement LimitService enforcing numeric limits in MrWhoOidc.Auth/Licensing/Services/LimitService.cs
+- [X] T020 [US2] Add FeatureGatingMiddleware enforcing disabled features in MrWhoOidc.WebAuth/Middleware/FeatureGatingMiddleware.cs
+- [X] T021 [US2] Inject license limit checks into tenant and authorization flows in MrWhoOidc.Auth/Services/TenantService.cs and MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs
+- [X] T022 [US2] Update pipeline wiring and advanced endpoint guards in MrWhoOidc.WebAuth/Program.cs to use feature gating middleware and services
+- [X] T023 [P] [US2] Add unit tests for feature gating and limit enforcement scenarios in MrWhoOidc.UnitTests/Licensing/FeatureGatingTests.cs
 
 ---
 
