@@ -74,13 +74,13 @@
 
 ### Implementation Tasks (US3)
 
-- [ ] T024 [P] [US3] Implement license management minimal APIs per contract in MrWhoOidc.WebAuth/Admin/Api/LicenseEndpoints.cs
-- [ ] T025 [US3] Add admin DTOs and mapping helpers in MrWhoOidc.WebAuth/Admin/Api/LicenseDtos.cs
-- [ ] T026 [US3] Register license API endpoints and policies in MrWhoOidc.WebAuth/Program.cs
-- [ ] T027 [US3] Build license admin Razor pages (Index, Install, History) under MrWhoOidc.WebAuth/Pages/Admin/License/
-- [ ] T028 [US3] Surface license navigation links within admin sidebar in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml
-- [ ] T029 [US3] Implement Razor page models orchestrating services in MrWhoOidc.WebAuth/Pages/Admin/License/Index.cshtml.cs and companions
-- [ ] T030 [P] [US3] Add admin API integration tests covering install/validate/history in MrWhoOidc.UnitTests/Licensing/LicenseAdminApiTests.cs
+- [X] T024 [P] [US3] Implement license management minimal APIs per contract in MrWhoOidc.WebAuth/Admin/Api/LicenseEndpoints.cs
+- [X] T025 [US3] Add admin DTOs and mapping helpers in MrWhoOidc.WebAuth/Admin/Api/LicenseDtos.cs
+- [X] T026 [US3] Register license API endpoints and policies in MrWhoOidc.WebAuth/Program.cs
+- [X] T027 [US3] Build license admin Razor pages (Index, Install, History) under MrWhoOidc.WebAuth/Pages/Admin/License/
+- [X] T028 [US3] Surface license navigation links within admin sidebar in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml
+- [X] T029 [US3] Implement Razor page models orchestrating services in MrWhoOidc.WebAuth/Pages/Admin/License/Index.cshtml.cs and companions
+- [X] T030 [P] [US3] Add admin API integration tests covering install/validate/history in MrWhoOidc.UnitTests/Licensing/LicenseAdminApiTests.cs
 
 ---
 
