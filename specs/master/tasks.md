@@ -97,7 +97,7 @@
 - [X] T033 [US4] Extend license endpoints with usage, limits, and tiers routes in MrWhoOidc.WebAuth/Admin/Api/LicenseEndpoints.cs
 - [X] T034 [US4] Feed analytics data into admin dashboard widgets in MrWhoOidc.WebAuth/Pages/Admin/License/Index.cshtml
 - [X] T035 [US4] Record feature usage at critical entry points (e.g., DPoP/JAR handlers) in MrWhoOidc.WebAuth/Handlers/TokenHandler.cs and related services
-- [ ] T036 [P] [US4] Add analytics service unit tests validating aggregation logic in MrWhoOidc.UnitTests/Licensing/LicenseAnalyticsServiceTests.cs
+- [X] T036 [P] [US4] Add analytics service unit tests validating aggregation logic in MrWhoOidc.UnitTests/Licensing/LicenseAnalyticsServiceTests.cs
 
 ---
 
