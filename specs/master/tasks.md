@@ -105,7 +105,7 @@
 
 **Purpose**: Harden observability, documentation, and ops readiness across stories.
 
-- [ ] T037 Add structured logging and OTel metrics for licensing flows in MrWhoOidc.Auth/Licensing/Services/LicenseService.cs and MrWhoOidc.ServiceDefaults/Observability/
+- [X] T037 Add structured logging and OTel metrics for licensing flows in MrWhoOidc.Auth/Licensing/Services/LicenseService.cs and MrWhoOidc.ServiceDefaults/Observability/
 - [ ] T038 Document license installation and feature gating workflows in docs/admin-guide.md and docs/developer-guide.md
 - [ ] T039 Provide sample license configuration guidance in MrWhoOidc.WebAuth/appsettings.Sample.json (create if missing)
 

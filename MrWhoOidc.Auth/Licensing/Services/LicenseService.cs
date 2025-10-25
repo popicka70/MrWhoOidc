@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,6 +11,7 @@ using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Validators;
+using MrWhoOidc.ServiceDefaults.Observability;
 
 namespace MrWhoOidc.Auth.Licensing.Services;
 
@@ -45,7 +47,7 @@ internal sealed class LicenseService : ILicenseService
     public async Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
     {
         var cacheKey = BuildCacheKey(tenantId);
-    if (_cache.TryGetValue(cacheKey, out LicenseInfo? cached) && cached is not null)
+        if (_cache.TryGetValue(cacheKey, out LicenseInfo? cached) && cached is not null)
         {
             return cached;
         }
@@ -65,7 +67,7 @@ internal sealed class LicenseService : ILicenseService
         var parsed = await _validator.ParseLicenseAsync(license.LicenseKey, cancellationToken).ConfigureAwait(false);
         if (parsed is null)
         {
-            _logger.LogWarning("Failed to parse stored license for tenant {Tenant}", tenantId?.ToString() ?? "platform");
+            _logger.LogWarning("Failed to parse stored license for tenant {Tenant}.", TenantScope(tenantId));
             return null;
         }
 
@@ -74,7 +76,7 @@ internal sealed class LicenseService : ILicenseService
         {
             _logger.LogWarning(
                 "Stored license failed business validation for tenant {Tenant}: {ErrorCode}",
-                tenantId?.ToString() ?? "platform",
+                TenantScope(tenantId),
                 validation.ErrorCode);
             return null;
         }
@@ -90,142 +92,211 @@ internal sealed class LicenseService : ILicenseService
         string? notes = null,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(licenseKey))
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var success = false;
+
+        try
         {
-            return LicenseValidationResult.InvalidFormat();
-        }
-
-        var signatureResult = await _validator.ValidateSignatureAsync(licenseKey, cancellationToken).ConfigureAwait(false);
-        if (!signatureResult.IsValid)
-        {
-            return signatureResult;
-        }
-
-        var licenseInfo = signatureResult.LicenseInfo
-            ?? await _validator.ParseLicenseAsync(licenseKey, cancellationToken).ConfigureAwait(false);
-        if (licenseInfo is null)
-        {
-            return LicenseValidationResult.InvalidFormat();
-        }
-
-        var businessResult = await _validator.ValidateBusinessRulesAsync(licenseInfo, cancellationToken).ConfigureAwait(false);
-        if (!businessResult.IsValid || businessResult.LicenseInfo is null)
-        {
-            return businessResult;
-        }
-
-        var now = _timeProvider.GetUtcNow();
-        var existing = await _repository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
-
-        if (existing is not null && !string.Equals(existing.LicenseKey, licenseKey, StringComparison.Ordinal))
-        {
-            existing.IsActive = false;
-            existing.RevokedAt = now;
-            existing.RevocationReason = "Replaced by new license";
-            existing.UpdatedAt = now;
-            existing.UpdatedBy = installedBy;
-            await _repository.UpdateLicenseAsync(existing, cancellationToken).ConfigureAwait(false);
-
-            await AddHistoryAsync(
-                existing.Id,
-                LicenseRevokedAction,
-                existing.LicenseKey,
-                null,
-                existing.Tier,
-                null,
-                existing.RevocationReason,
-                existing.RevocationReason,
-                installedBy,
-                null,
-                null,
-                now,
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        if (existing is not null && string.Equals(existing.LicenseKey, licenseKey, StringComparison.Ordinal))
-        {
-            existing.Tier = businessResult.LicenseInfo.Tier;
-            existing.OrganizationName = businessResult.LicenseInfo.OrganizationName;
-            existing.ValidFrom = businessResult.LicenseInfo.ValidFrom;
-            existing.ValidUntil = businessResult.LicenseInfo.ValidUntil;
-            existing.IsActive = true;
-            existing.RevokedAt = null;
-            existing.RevocationReason = null;
-            existing.UpdatedAt = now;
-            existing.UpdatedBy = installedBy;
-
-            await _repository.UpdateLicenseAsync(existing, cancellationToken).ConfigureAwait(false);
-
-            await AddHistoryAsync(
-                existing.Id,
-                LicenseUpdatedAction,
-                existing.LicenseKey,
-                existing.LicenseKey,
-                existing.Tier,
-                businessResult.LicenseInfo.Tier,
-                notes,
-                null,
-                installedBy,
-                null,
-                null,
-                now,
-                cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            var entity = new License
+            if (string.IsNullOrWhiteSpace(licenseKey))
             {
-                TenantId = tenantId,
-                LicenseKey = licenseKey,
-                Tier = businessResult.LicenseInfo.Tier,
-                OrganizationName = businessResult.LicenseInfo.OrganizationName,
-                ValidFrom = businessResult.LicenseInfo.ValidFrom,
-                ValidUntil = businessResult.LicenseInfo.ValidUntil,
-                IsActive = true,
-                CreatedAt = now,
-                CreatedBy = installedBy,
-                UpdatedAt = null,
-                UpdatedBy = null,
-                RevokedAt = null,
-                RevocationReason = null
-            };
+                _logger.LogWarning("License install rejected for {Tenant} due to empty key.", TenantScope(tenantId));
+                var invalid = LicenseValidationResult.InvalidFormat();
+                success = invalid.IsValid;
+                return invalid;
+            }
 
-            entity = await _repository.CreateLicenseAsync(entity, cancellationToken).ConfigureAwait(false);
+            var signatureResult = await _validator.ValidateSignatureAsync(licenseKey, cancellationToken).ConfigureAwait(false);
+            if (!signatureResult.IsValid)
+            {
+                _logger.LogWarning("License install signature validation failed for {Tenant}: {ErrorCode}.", TenantScope(tenantId), signatureResult.ErrorCode);
+                success = signatureResult.IsValid;
+                return signatureResult;
+            }
 
-            await AddHistoryAsync(
-                entity.Id,
-                LicenseInstalledAction,
-                existing?.LicenseKey,
-                entity.LicenseKey,
-                existing?.Tier,
-                entity.Tier,
-                notes,
-                null,
-                installedBy,
-                null,
-                null,
-                now,
-                cancellationToken).ConfigureAwait(false);
+            var licenseInfo = signatureResult.LicenseInfo
+                ?? await _validator.ParseLicenseAsync(licenseKey, cancellationToken).ConfigureAwait(false);
+            if (licenseInfo is null)
+            {
+                _logger.LogWarning("License install parse failed for {Tenant}.", TenantScope(tenantId));
+                var invalid = LicenseValidationResult.InvalidFormat();
+                success = invalid.IsValid;
+                return invalid;
+            }
+
+            var businessResult = await _validator.ValidateBusinessRulesAsync(licenseInfo, cancellationToken).ConfigureAwait(false);
+            if (!businessResult.IsValid || businessResult.LicenseInfo is null)
+            {
+                _logger.LogWarning("License install business validation failed for {Tenant}: {ErrorCode}.", TenantScope(tenantId), businessResult.ErrorCode);
+                success = businessResult.IsValid;
+                return businessResult;
+            }
+
+            var now = _timeProvider.GetUtcNow();
+            var existing = await _repository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
+
+            if (existing is not null && !string.Equals(existing.LicenseKey, licenseKey, StringComparison.Ordinal))
+            {
+                existing.IsActive = false;
+                existing.RevokedAt = now;
+                existing.RevocationReason = "Replaced by new license";
+                existing.UpdatedAt = now;
+                existing.UpdatedBy = installedBy;
+                await _repository.UpdateLicenseAsync(existing, cancellationToken).ConfigureAwait(false);
+
+                await AddHistoryAsync(
+                    existing.Id,
+                    LicenseRevokedAction,
+                    existing.LicenseKey,
+                    null,
+                    existing.Tier,
+                    null,
+                    existing.RevocationReason,
+                    existing.RevocationReason,
+                    installedBy,
+                    null,
+                    null,
+                    now,
+                    cancellationToken).ConfigureAwait(false);
+
+                _logger.LogInformation("Deactivated previous license {LicenseId} for {Tenant}.", existing.Id, TenantScope(tenantId));
+            }
+
+            if (existing is not null && string.Equals(existing.LicenseKey, licenseKey, StringComparison.Ordinal))
+            {
+                existing.Tier = businessResult.LicenseInfo.Tier;
+                existing.OrganizationName = businessResult.LicenseInfo.OrganizationName;
+                existing.ValidFrom = businessResult.LicenseInfo.ValidFrom;
+                existing.ValidUntil = businessResult.LicenseInfo.ValidUntil;
+                existing.IsActive = true;
+                existing.RevokedAt = null;
+                existing.RevocationReason = null;
+                existing.UpdatedAt = now;
+                existing.UpdatedBy = installedBy;
+
+                await _repository.UpdateLicenseAsync(existing, cancellationToken).ConfigureAwait(false);
+
+                await AddHistoryAsync(
+                    existing.Id,
+                    LicenseUpdatedAction,
+                    existing.LicenseKey,
+                    existing.LicenseKey,
+                    existing.Tier,
+                    businessResult.LicenseInfo.Tier,
+                    notes,
+                    null,
+                    installedBy,
+                    null,
+                    null,
+                    now,
+                    cancellationToken).ConfigureAwait(false);
+
+                _logger.LogInformation("Refreshed existing license {LicenseId} for {Tenant} with tier {Tier}.", existing.Id, TenantScope(tenantId), existing.Tier);
+            }
+            else
+            {
+                var entity = new License
+                {
+                    TenantId = tenantId,
+                    LicenseKey = licenseKey,
+                    Tier = businessResult.LicenseInfo.Tier,
+                    OrganizationName = businessResult.LicenseInfo.OrganizationName,
+                    ValidFrom = businessResult.LicenseInfo.ValidFrom,
+                    ValidUntil = businessResult.LicenseInfo.ValidUntil,
+                    IsActive = true,
+                    CreatedAt = now,
+                    CreatedBy = installedBy,
+                    UpdatedAt = null,
+                    UpdatedBy = null,
+                    RevokedAt = null,
+                    RevocationReason = null
+                };
+
+                entity = await _repository.CreateLicenseAsync(entity, cancellationToken).ConfigureAwait(false);
+
+                await AddHistoryAsync(
+                    entity.Id,
+                    LicenseInstalledAction,
+                    existing?.LicenseKey,
+                    entity.LicenseKey,
+                    existing?.Tier,
+                    entity.Tier,
+                    notes,
+                    null,
+                    installedBy,
+                    null,
+                    null,
+                    now,
+                    cancellationToken).ConfigureAwait(false);
+
+                _logger.LogInformation("Created new license {LicenseId} for {Tenant} with tier {Tier}.", entity.Id, TenantScope(tenantId), entity.Tier);
+            }
+
+            InvalidateCache(tenantId);
+
+            var result = LicenseValidationResult.Success(businessResult.LicenseInfo);
+            success = result.IsValid;
+            _logger.LogInformation(
+                "License install completed for {Tenant} with tier {Tier} (organization {Organization}).",
+                TenantScope(tenantId),
+                businessResult.LicenseInfo.Tier,
+                businessResult.LicenseInfo.OrganizationName ?? "unknown");
+            return result;
         }
-
-        InvalidateCache(tenantId);
-        return LicenseValidationResult.Success(businessResult.LicenseInfo);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error installing license for {Tenant}.", TenantScope(tenantId));
+            throw;
+        }
+        finally
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            LicensingMetrics.RecordInstallResult(success, elapsed);
+        }
     }
 
     public async Task<LicenseValidationResult> ValidateLicenseKeyAsync(string licenseKey, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(licenseKey))
-        {
-            return LicenseValidationResult.InvalidFormat();
-        }
+        LicenseValidationResult result = LicenseValidationResult.InvalidFormat();
 
-        var signatureResult = await _validator.ValidateSignatureAsync(licenseKey, cancellationToken).ConfigureAwait(false);
-        if (!signatureResult.IsValid || signatureResult.LicenseInfo is null)
+        try
         {
-            return signatureResult;
-        }
+            if (string.IsNullOrWhiteSpace(licenseKey))
+            {
+                _logger.LogWarning("License validation rejected due to empty key.");
+                result = LicenseValidationResult.InvalidFormat();
+                return result;
+            }
 
-        return await _validator.ValidateBusinessRulesAsync(signatureResult.LicenseInfo, cancellationToken).ConfigureAwait(false);
+            var signatureResult = await _validator.ValidateSignatureAsync(licenseKey, cancellationToken).ConfigureAwait(false);
+            if (!signatureResult.IsValid || signatureResult.LicenseInfo is null)
+            {
+                _logger.LogWarning("License validation signature check failed: {ErrorCode}.", signatureResult.ErrorCode);
+                result = signatureResult;
+                return result;
+            }
+
+            result = await _validator.ValidateBusinessRulesAsync(signatureResult.LicenseInfo, cancellationToken).ConfigureAwait(false);
+            if (!result.IsValid)
+            {
+                _logger.LogWarning("License validation business rules failed: {ErrorCode}.", result.ErrorCode);
+            }
+            else if (result.LicenseInfo is not null)
+            {
+                _logger.LogInformation("License key validated successfully with tier {Tier} (organization {Organization}).", result.LicenseInfo.Tier, result.LicenseInfo.OrganizationName ?? "unknown");
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error validating license key.");
+            result = LicenseValidationResult.InvalidFormat();
+            throw;
+        }
+        finally
+        {
+            LicensingMetrics.RecordValidationResult(result.IsValid);
+        }
     }
 
     public async Task<bool> RevokeLicenseAsync(
@@ -234,38 +305,62 @@ internal sealed class LicenseService : ILicenseService
         Guid? revokedBy = null,
         CancellationToken cancellationToken = default)
     {
-        var license = await _repository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
-        if (license is null)
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var success = false;
+
+        try
         {
-            return false;
+            var license = await _repository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
+            if (license is null)
+            {
+                _logger.LogInformation("No active license found to revoke for {Tenant}.", TenantScope(tenantId));
+                return false;
+            }
+
+            var now = _timeProvider.GetUtcNow();
+            license.IsActive = false;
+            license.RevokedAt = now;
+            license.RevocationReason = reason;
+            license.UpdatedAt = now;
+            license.UpdatedBy = revokedBy;
+
+            await _repository.UpdateLicenseAsync(license, cancellationToken).ConfigureAwait(false);
+
+            await AddHistoryAsync(
+                license.Id,
+                LicenseRevokedAction,
+                license.LicenseKey,
+                null,
+                license.Tier,
+                null,
+                reason,
+                reason,
+                revokedBy,
+                null,
+                null,
+                now,
+                cancellationToken).ConfigureAwait(false);
+
+            InvalidateCache(tenantId);
+
+            success = true;
+            _logger.LogInformation(
+                "License revoked for {Tenant} with reason '{Reason}' by {UserId}.",
+                TenantScope(tenantId),
+                reason,
+                revokedBy);
+            return true;
         }
-
-        var now = _timeProvider.GetUtcNow();
-        license.IsActive = false;
-        license.RevokedAt = now;
-        license.RevocationReason = reason;
-        license.UpdatedAt = now;
-        license.UpdatedBy = revokedBy;
-
-        await _repository.UpdateLicenseAsync(license, cancellationToken).ConfigureAwait(false);
-
-        await AddHistoryAsync(
-            license.Id,
-            LicenseRevokedAction,
-            license.LicenseKey,
-            null,
-            license.Tier,
-            null,
-            reason,
-            reason,
-            revokedBy,
-            null,
-            null,
-            now,
-            cancellationToken).ConfigureAwait(false);
-
-        InvalidateCache(tenantId);
-        return true;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error revoking license for {Tenant}.", TenantScope(tenantId));
+            throw;
+        }
+        finally
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
+            LicensingMetrics.RecordRevokeResult(success, elapsed);
+        }
     }
 
     public Task<PagedResult<LicenseHistoryEntry>> GetLicenseHistoryAsync(
@@ -339,6 +434,8 @@ internal sealed class LicenseService : ILicenseService
     private static string BuildCacheKey(Guid? tenantId) => tenantId.HasValue
         ? $"license:{tenantId.Value}"
         : "license:platform";
+
+    private static string TenantScope(Guid? tenantId) => tenantId?.ToString() ?? "platform";
 
     private LicenseInfo? CreateDefaultLicenseInfo()
     {

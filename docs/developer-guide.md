@@ -1,6 +1,6 @@
 # Developer guide: Integrating with MrWhoOidc
 
-Updated: 2025-09-27 (expanded draft)
+Updated: 2025-10-25 (adds licensing analytics integration)
 
 This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flows, request parameters, JAR/JARM, token exchange (OBO), DPoP, and discovery.
 
@@ -353,7 +353,70 @@ GET /logs-*/_search
 
 All logs from steps 1-7 tagged with `correlation_id=debug-login-20251014` for unified trace reconstruction.
 
-## 5) Token Exchange (OBO)
+## 5) Licensing APIs & Observability
+
+### 5.1 Current License Endpoint
+
+- `GET /admin/api/license/current`
+- Returns the active license (tier, organization, validity period, features, limits)
+- Use in operational tooling to verify tier when troubleshooting access issues.
+- Response mirrors `LicenseInfo` model.
+
+### 5.2 Usage Analytics
+
+- `GET /admin/api/license/usage?from=<ISO-8601>&to=<ISO-8601>`
+- Aggregates feature usage metrics recorded via `FeatureUsageRepository`.
+- Response fields:
+  - `aggregationPeriod` (currently `daily`)
+  - `metrics[]` with `featureName`, `usageCount`, `firstUsed`, `lastUsed`
+- Use to drive custom dashboards or alerts when premium features are exercised.
+
+### 5.3 Usage Limits
+
+- `GET /admin/api/license/limits`
+- Combines current license limit values with live usage counts (tenants, users, clients, custom entries).
+- Response includes:
+  - `limitType`
+  - `currentUsage`
+  - `limitValue`
+  - `utilization` (0–1 ratio)
+  - `isNearLimit` (>=80%)
+  - `isAtLimit`
+- Suggested usage: pre-flight checks in provisioning pipelines to prevent hitting hard limits.
+
+### 5.4 Tier Reference
+
+- `GET /admin/api/license/tiers`
+- Returns descriptive catalog of license tiers (features, default limits, summary text).
+- Ideal for UI tooltips or developer documentation.
+
+### 5.5 Recording Feature Usage
+
+- Call `IFeatureUsageRepository.RecordUsageAsync` when implementing new premium features.
+- Parameters:
+  - `featureName`: string key matching `FeatureFlags` constants
+  - `tenantId`: optional for tenant-scoped metrics
+  - `licenseId`: optional correlation when multi-tenant licensing introduced
+  - `occurredAt`: timestamp
+  - `increment`: default `1`
+- Repository is resilient to duplicate inserts for the same day/feature; aggregates counts.
+
+### 5.6 Metrics & Logging
+
+- Service layer emits:
+  - `licensing.license.install.*`
+  - `licensing.license.revoke.*`
+  - `licensing.license.validate.*`
+- Consume via OTLP/Prometheus exporter configured in `MrWhoOidc.ServiceDefaults`.
+- Logs include structured fields: `tenant`, `license_tier`, `organization` (when present).
+
+### 5.7 Error Handling
+
+- Install/Validate error codes (HTTP 400): `invalid_signature`, `expired_license`, `tier_mismatch`, `invalid_format`.
+- Revocation returns HTTP 404 when no active license exists.
+- All endpoints require Admin scope; include `X-Correlation-Id` for traceability.
+
+## 6) Token Exchange (OBO)
 
 Use OAuth 2.0 Token Exchange to obtain a token for a downstream audience on behalf of a user.
 
@@ -372,7 +435,7 @@ Server behavior (summary)
 
 Reference policy fields and examples: `docs/obo-client-policy.md`
 
-## 6) DPoP and bridging modes
+## 7) DPoP and bridging modes
 
 If the subject token is DPoP-bound (`cnf.jkt`), the server enforces a bridging policy per client.
 
@@ -384,7 +447,7 @@ Security note: `/token` DPoP proof must include `ath` = base64url(SHA-256(subjec
 
 End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
 
-## 7) Error Handling & UX
+## 8) Error Handling & UX
 
 - User flows: cancellation/timeouts/invalid_scope produce friendly error pages; correlate via request IDs in logs
 - API calls: map OAuth error codes to client behavior (retry, prompt, or fail fast)
@@ -393,7 +456,7 @@ End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
   - `insufficient_scope` when scopes are not permitted
   - `dpop_same_key_required` / `dpop_bridging_not_supported` per policy
 
-## 8) Minimal Client Snippets
+## 9) Minimal Client Snippets
 
 PowerShell example for TE with DPoP (pseudo): see `docs/obo-dpop-requiresamejkt-e2e.md`.
 

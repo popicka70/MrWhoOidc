@@ -59,7 +59,8 @@ public static class Extensions
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
                     // Register custom meters from services
-                    .AddMeter("MrWhoOidc.WebAuth");
+                    .AddMeter("MrWhoOidc.WebAuth")
+                    .AddMeter(MrWhoOidc.ServiceDefaults.Observability.LicensingMetrics.MeterName);
             })
             .WithTracing(tracing =>
             {
