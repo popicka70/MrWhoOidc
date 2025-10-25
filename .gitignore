@@ -54,5 +54,22 @@ TestResult.xml
 nunit-*.xml
 /.vs
 
+# IDE metadata
+.vscode/
+.idea/
+
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# User-specific
+*.user
+*.suo
+*.userprefs
+
+# Temporary editor files
+*.tmp
+*.swp
+
 # SBOM generation output
 sbom/

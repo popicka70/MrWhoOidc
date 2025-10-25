@@ -1,7 +1,10 @@
 using MrWhoOidc.WebAuth.Observability;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Security.Claims;
+using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -35,7 +38,8 @@ public sealed class AuthorizeHandler(
     IClientStore clients,
     AuthDbContext db,
     IQrLoginHandler qrLoginHandler,
-    ITenantAccessor tenantAccessor
+    ITenantAccessor tenantAccessor,
+    IFeatureService featureService
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
@@ -71,6 +75,20 @@ public sealed class AuthorizeHandler(
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
         string outcome = "redirect";
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+
+        bool? advancedSecurityEnabled = null;
+        async Task<bool> EnsureAdvancedSecurityAsync()
+        {
+            if (advancedSecurityEnabled is null)
+            {
+                advancedSecurityEnabled = await featureService
+                    .IsFeatureEnabledAsync(FeatureFlags.AdvancedSecurity, tenantId, http.RequestAborted)
+                    .ConfigureAwait(false);
+            }
+
+            return advancedSecurityEnabled.Value;
+        }
 
         // Compute initial client bucket from query (may be refined later for JAR/PAR)
         string rawClientId = http.Request.Query[OAuthConstants.Parameters.ClientId].ToString();
@@ -125,6 +143,16 @@ public sealed class AuthorizeHandler(
                 }
             }
 
+            if (!string.IsNullOrEmpty(requestUriRaw))
+            {
+                if (!await EnsureAdvancedSecurityAsync().ConfigureAwait(false))
+                {
+                    outcome = "error";
+                    logger.LogWarning("/authorize 403: PAR requires advanced_security feature corr={Corr} tenant={Tenant}", corr, tenantId?.ToString() ?? "platform");
+                    return ErrorResults.AccessDenied("Pushed authorization requests require an advanced security license.", correlationId: corr);
+                }
+            }
+
             // Optional: max request object size for query param 'request'
             var roJwtFromQuery = http.Request.Query[OAuthConstants.Parameters.Request].ToString();
             var maxBytes = authOptions.Value.RequestObjectMaxBytes;
@@ -137,6 +165,12 @@ public sealed class AuthorizeHandler(
                     return ErrorResults.InvalidRequest($"request object too large (corr={corr})");
                 }
                 metrics.JarRequestSizeBytes.Record(Encoding.UTF8.GetByteCount(roJwtFromQuery), new TagList { new("client", clientBucket) });
+                if (!await EnsureAdvancedSecurityAsync().ConfigureAwait(false))
+                {
+                    outcome = "error";
+                    logger.LogWarning("/authorize 403: JAR requires advanced_security feature corr={Corr} tenant={Tenant}", corr, tenantId?.ToString() ?? "platform");
+                    return ErrorResults.AccessDenied("JWT request objects require an advanced security license.", correlationId: corr);
+                }
             }
 
             // If request_uri is provided, try to resolve the pushed request and merge it

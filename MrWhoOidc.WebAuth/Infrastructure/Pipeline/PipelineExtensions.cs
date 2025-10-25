@@ -72,6 +72,7 @@ public static class PipelineExtensions
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
+    app.UseMiddleware<FeatureGatingMiddleware>();
 
         // Tenant-aware redirect: redirect users from tenant-unaware URLs to tenant-specific versions
         app.UseTenantAwareRedirect();
