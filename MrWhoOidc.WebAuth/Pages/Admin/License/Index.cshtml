@@ -1,0 +1,145 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Admin.License.IndexModel
+@{
+    ViewData["Title"] = "License";
+}
+
+<h1 class="mb-3">License management</h1>
+
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@Model.SuccessMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.InfoMessage))
+{
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle-fill me-2"></i>@Model.InfoMessage
+    </div>
+}
+
+@if (Model.IsPlatformAdmin)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4 col-lg-3">
+                    <label class="form-label" asp-for="Scope">Scope</label>
+                    <select class="form-select" asp-for="Scope" asp-items="Model.ScopeOptions"></select>
+                </div>
+                @if (string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="col-md-5 col-lg-4">
+                        <label class="form-label" asp-for="TenantId">Tenant</label>
+                        <select class="form-select" asp-for="TenantId" asp-items="Model.TenantOptions"></select>
+                    </div>
+                }
+                <div class="col-md-3 col-lg-2">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="bi bi-arrow-repeat me-1"></i>Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.Summary is not null)
+{
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">@Model.Summary.TierDisplay</h5>
+                <div class="small text-muted">@((Model.IsViewingPlatform ? "Platform-wide" : Model.TenantName) ?? "Tenant")</div>
+            </div>
+            <span class="badge @Model.Summary.StatusCssClass fs-6">@Model.Summary.StatusText</span>
+        </div>
+        <div class="card-body">
+            @if (!Model.Summary.Info.IsValid || Model.Summary.Info.IsExpired || Model.Summary.IsExpiringSoon)
+            {
+                <div class="alert @(Model.Summary.Info.IsExpired || !Model.Summary.Info.IsValid ? "alert-danger" : "alert-warning")" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    @if (!Model.Summary.Info.IsValid)
+                    {
+                        <text>The current license failed validation and some premium features may be unavailable.</text>
+                    }
+                    else if (Model.Summary.Info.IsExpired)
+                    {
+                        <text>The license expired on @Model.FormatDate(Model.Summary.Info.ValidUntil). Please install an updated license.</text>
+                    }
+                    else if (Model.Summary.IsExpiringSoon)
+                    {
+                        <text>The license will expire soon. Plan a renewal before @Model.FormatDate(Model.Summary.Info.ValidUntil).</text>
+                    }
+                </div>
+            }
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Organization</dt>
+                        <dd class="col-sm-8">@(!string.IsNullOrWhiteSpace(Model.Summary.Info.OrganizationName) ? Model.Summary.Info.OrganizationName : "—")</dd>
+                        <dt class="col-sm-4">Valid from</dt>
+                        <dd class="col-sm-8">@Model.FormatDate(Model.Summary.Info.ValidFrom)</dd>
+                        <dt class="col-sm-4">Valid until</dt>
+                        <dd class="col-sm-8">@Model.Summary.ExpiryText</dd>
+                    </dl>
+                </div>
+                <div class="col-lg-6">
+                    <div class="mb-2 fw-semibold">Enabled features</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var feature in Model.Summary.Features)
+                        {
+                            <span class="badge text-bg-light border">@feature.DisplayName</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Limit</th>
+                            <th scope="col">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var limit in Model.Summary.Limits)
+                        {
+                            <tr>
+                                <th scope="row">@limit.DisplayName</th>
+                                <td>
+                                    @if (limit.IsUnlimited)
+                                    {
+                                        <span class="badge text-bg-success">Unlimited</span>
+                                    }
+                                    else if (limit.IsDisabled)
+                                    {
+                                        <span class="badge text-bg-secondary">Disabled</span>
+                                    }
+                                    else
+                                    {
+                                        @limit.ValueDisplay
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-primary" asp-page="Install" asp-route-scope="@Model.Scope" asp-route-tenantId="@(string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase) ? Model.TenantId : null)">
+        <i class="bi bi-cloud-upload me-1"></i>Install or update license
+    </a>
+    <a class="btn btn-outline-secondary" asp-page="History" asp-route-scope="@Model.Scope" asp-route-tenantId="@(string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase) ? Model.TenantId : null)">
+        <i class="bi bi-clock-history me-1"></i>View history
+    </a>
+</div>
