@@ -19,40 +19,42 @@ internal static class LicenseEndpoints
     {
         ArgumentNullException.ThrowIfNull(adminGroup);
 
-        MapGroup(adminGroup);
+        MapGroup(adminGroup, null);
 
         if (tenantAdminGroup is not null)
         {
-            MapGroup(tenantAdminGroup);
+            MapGroup(tenantAdminGroup, "Tenant");
         }
 
         if (platformAdminGroup is not null)
         {
-            MapGroup(platformAdminGroup);
+            MapGroup(platformAdminGroup, "Platform");
         }
     }
 
-    private static void MapGroup(RouteGroupBuilder group)
+    private static void MapGroup(RouteGroupBuilder group, string? nameSuffix)
     {
+        var suffix = string.IsNullOrEmpty(nameSuffix) ? string.Empty : $"_{nameSuffix}";
+
         group.MapGet("/license", GetLicenseAsync)
-            .WithName("License_Get")
+            .WithName($"License_Get{suffix}")
             .Produces<LicenseInfoDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/license", InstallLicenseAsync)
-            .WithName("License_Install")
+            .WithName($"License_Install{suffix}")
             .Produces<LicenseInfoDto>(StatusCodes.Status200OK)
             .Produces<LicenseValidationErrorDto>(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapPost("/license/validate", ValidateLicenseAsync)
-            .WithName("License_Validate")
+            .WithName($"License_Validate{suffix}")
             .Produces<LicenseValidationResponseDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/license/history", GetLicenseHistoryAsync)
-            .WithName("License_History")
+            .WithName($"License_History{suffix}")
             .Produces<LicenseHistoryResponseDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden);
@@ -91,7 +93,7 @@ internal static class LicenseEndpoints
         ITenantAccessor tenantAccessor,
         IAuthorizationService authorizationService,
     TimeProvider timeProvider,
-    ILogger logger,
+    ILogger<LicenseEndpointsLogger> logger,
         CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.LicenseKey))
@@ -121,8 +123,8 @@ internal static class LicenseEndpoints
             return Results.Json(errorDto, statusCode: StatusCodes.Status400BadRequest);
         }
 
-    var dto = LicenseDtoMapper.ToDto(result.LicenseInfo, timeProvider.GetUtcNow());
-    logger.LogInformation("License installed for tenant {Tenant}", resolution.TenantId?.ToString() ?? "platform");
+        var dto = LicenseDtoMapper.ToDto(result.LicenseInfo, timeProvider.GetUtcNow());
+        logger.LogInformation("License installed for tenant {Tenant}", resolution.TenantId?.ToString() ?? "platform");
         return Results.Ok(dto);
     }
 
@@ -217,5 +219,9 @@ internal static class LicenseEndpoints
         var sub = principal.FindFirstValue(ClaimTypes.NameIdentifier)
                   ?? principal.FindFirstValue("sub");
         return Guid.TryParse(sub, out var id) ? id : null;
+    }
+
+    private sealed class LicenseEndpointsLogger
+    {
     }
 }

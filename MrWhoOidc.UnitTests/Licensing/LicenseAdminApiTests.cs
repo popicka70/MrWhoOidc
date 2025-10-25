@@ -91,8 +91,8 @@ public sealed class LicenseAdminApiTests
         Assert.AreEqual("Test Org", dto.OrganizationName);
         Assert.AreEqual(now.AddDays(-3), dto.ValidFrom);
         Assert.AreEqual(now.AddDays(30), dto.ValidUntil);
-        Assert.AreEqual(false, dto.IsExpired);
-        Assert.AreEqual(true, dto.IsValid);
+    Assert.IsFalse(dto.IsExpired);
+    Assert.IsTrue(dto.IsValid);
         Assert.AreEqual(30, dto.DaysUntilExpiry);
         CollectionAssert.AreEquivalent(new[] { "feature-one" }, dto.EnabledFeatures.ToArray());
         Assert.IsTrue(dto.Limits.TryGetValue("seats", out var limit) && limit == 1000);
@@ -220,7 +220,7 @@ public sealed class LicenseAdminApiTests
 
         var dto = await response.Content.ReadFromJsonAsync<LicenseValidationResponseDto>(JsonOptions);
         Assert.IsNotNull(dto);
-        Assert.AreEqual(true, dto!.IsValid);
+    Assert.IsTrue(dto!.IsValid);
         Assert.IsNull(dto.ErrorCode);
         Assert.IsNull(dto.ErrorMessage);
         Assert.IsNotNull(dto.License);
@@ -283,7 +283,7 @@ public sealed class LicenseAdminApiTests
         Assert.AreEqual(2, dto.Page);
         Assert.AreEqual(5, dto.PageSize);
         Assert.AreEqual(2, dto.TotalPages);
-        Assert.AreEqual(1, dto.Entries.Count);
+    Assert.HasCount(1, dto.Entries);
         var entry = dto.Entries.Single();
         Assert.AreEqual(historyEntry.Id, entry.Id);
         Assert.AreEqual("installed", entry.Action);
@@ -304,10 +304,10 @@ public sealed class LicenseAdminApiTests
                 {
                     services.AddAuthentication(options =>
                     {
-                        options.DefaultAuthenticateScheme = TestAuthHandler.Scheme;
-                        options.DefaultChallengeScheme = TestAuthHandler.Scheme;
-                        options.DefaultScheme = TestAuthHandler.Scheme;
-                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.Scheme, _ => { });
+                        options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                        options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                        options.DefaultScheme = TestAuthHandler.SchemeName;
+                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 
                     services.RemoveAll<IAuthorizationHandler>();
                     services.AddSingleton<IAuthorizationHandler, AllowAllAdminHandler>();
@@ -326,7 +326,7 @@ public sealed class LicenseAdminApiTests
         {
             AllowAutoRedirect = false
         });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthHandler.Scheme);
+    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthHandler.SchemeName);
         return client;
     }
 
@@ -343,12 +343,12 @@ public sealed class LicenseAdminApiTests
 
         public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
 
-    public override long GetTimestamp() => _utcNow.UtcDateTime.Ticks;
+        public override long GetTimestamp() => _utcNow.UtcDateTime.Ticks;
     }
 
     private sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
-        public const string Scheme = "Test";
+    public const string SchemeName = "Test";
         public static Guid CurrentUserId;
 
         public TestAuthHandler(
@@ -367,9 +367,9 @@ public sealed class LicenseAdminApiTests
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Name, "test-user")
             };
-            var identity = new ClaimsIdentity(claims, Scheme);
+            var identity = new ClaimsIdentity(claims, SchemeName);
             var principal = new ClaimsPrincipal(identity);
-            var ticket = new AuthenticationTicket(principal, Scheme);
+            var ticket = new AuthenticationTicket(principal, SchemeName);
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
     }
