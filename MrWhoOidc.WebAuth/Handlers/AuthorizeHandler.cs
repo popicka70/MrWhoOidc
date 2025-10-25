@@ -78,6 +78,7 @@ public sealed class AuthorizeHandler(
         var tenantId = tenantAccessor.CurrentTenant?.TenantId;
 
         bool? advancedSecurityEnabled = null;
+        var advancedSecurityRecorded = false;
         async Task<bool> EnsureAdvancedSecurityAsync()
         {
             if (advancedSecurityEnabled is null)
@@ -87,7 +88,31 @@ public sealed class AuthorizeHandler(
                     .ConfigureAwait(false);
             }
 
+            if (advancedSecurityEnabled.Value)
+            {
+                await RecordAdvancedSecurityUsageAsync().ConfigureAwait(false);
+            }
+
             return advancedSecurityEnabled.Value;
+        }
+
+        async Task RecordAdvancedSecurityUsageAsync()
+        {
+            if (advancedSecurityRecorded)
+            {
+                return;
+            }
+
+            try
+            {
+                await featureService.RecordFeatureUsageAsync(FeatureFlags.AdvancedSecurity, tenantId, http.RequestAborted).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to record advanced security usage for tenant {TenantId}", tenantId);
+            }
+
+            advancedSecurityRecorded = true;
         }
 
         // Compute initial client bucket from query (may be refined later for JAR/PAR)

@@ -27,6 +27,37 @@ public sealed record LicenseValidationResponseDto(
     string? ErrorMessage,
     LicenseInfoDto? License);
 
+public sealed record FeatureUsageSummaryDto(
+    string FeatureName,
+    long UsageCount,
+    DateTimeOffset FirstUsed,
+    DateTimeOffset LastUsed);
+
+public sealed record FeatureUsageReportDto(
+    IReadOnlyList<FeatureUsageSummaryDto> Metrics,
+    string AggregationPeriod,
+    DateTimeOffset FromDate,
+    DateTimeOffset ToDate);
+
+public sealed record UsageLimitInfoDto(
+    string Key,
+    long CurrentUsage,
+    long Limit,
+    double Utilization,
+    bool IsNearLimit,
+    bool IsAtLimit);
+
+public sealed record UsageLimitsReportDto(
+    LicenseInfoDto License,
+    IReadOnlyList<UsageLimitInfoDto> Limits);
+
+public sealed record LicenseTierDescriptorDto(
+    string TierKey,
+    string DisplayName,
+    string Description,
+    IReadOnlyList<string> Features,
+    IReadOnlyDictionary<string, long> DefaultLimits);
+
 public sealed record FieldValidationErrorDto(string Field, string Message);
 
 public sealed record LicenseValidationErrorDto(
@@ -128,5 +159,34 @@ internal static class LicenseDtoMapper
         ArgumentNullException.ThrowIfNull(history);
         var entries = history.Items.Select(ToDto).ToList();
         return new LicenseHistoryResponseDto(entries, history.TotalCount, history.Page, history.PageSize, history.TotalPages);
+    }
+
+    public static FeatureUsageReportDto ToDto(FeatureUsageReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var metrics = report.Metrics
+            .Select(m => new FeatureUsageSummaryDto(m.FeatureName, m.UsageCount, m.FirstUsed, m.LastUsed))
+            .ToList();
+
+        return new FeatureUsageReportDto(metrics, report.AggregationPeriod, report.FromDate, report.ToDate);
+    }
+
+    public static UsageLimitsReportDto ToDto(UsageLimitsReport report, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        var licenseDto = ToDto(report.License, now);
+        var limits = report.Limits
+            .Select(l => new UsageLimitInfoDto(l.LimitType, l.CurrentUsage, l.LimitValue, l.UtilizationPercentage, l.IsNearLimit, l.IsAtLimit))
+            .ToList();
+        return new UsageLimitsReportDto(licenseDto, limits);
+    }
+
+    public static IReadOnlyList<LicenseTierDescriptorDto> ToDto(IReadOnlyList<LicenseTierDescriptor> descriptors)
+    {
+        ArgumentNullException.ThrowIfNull(descriptors);
+        return descriptors
+            .Select(d => new LicenseTierDescriptorDto(d.TierKey, d.DisplayName, d.Description, d.Features, d.DefaultLimits))
+            .ToList();
     }
 }

@@ -4,6 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.Auth.Licensing.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
@@ -11,6 +15,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Text;
+using MrWhoOidc.UnitTests.Helpers;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 
@@ -35,7 +40,9 @@ public sealed class TokenHandlerTests
         IDPoPValidator? dpop = null,
         IEnumerable<ITokenGrantHandler>? grantHandlers = null,
         IEnumerable<ITokenMetricsRecorder>? tokenMetrics = null,
-        IOptions<OidcOptions>? options = null)
+        IOptions<OidcOptions>? options = null,
+        IFeatureService? featureService = null,
+        ITenantAccessor? tenantAccessor = null)
     {
         var logger = NullLogger<TokenHandler>.Instance;
 
@@ -46,8 +53,10 @@ public sealed class TokenHandlerTests
         grantHandlers ??= new[] { new StubTokenGrantHandler() };
         tokenMetrics ??= new[] { new StubTokenMetricsRecorder() };
         options ??= Options.Create(new OidcOptions { Issuer = "https://test.example.com" });
+        featureService ??= new StubFeatureService();
+        tenantAccessor ??= MockTenantAccessor.CreateSingleTenantMode();
 
-        return new TokenHandler(options.Value, tokens, clients, assertions, dpop, grantHandlers, tokenMetrics, logger);
+        return new TokenHandler(options.Value, tokens, clients, assertions, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -89,6 +98,21 @@ public sealed class TokenHandlerTests
         var credentials = $"{clientId}:{clientSecret}";
         var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials));
         return $"Basic {encoded}";
+    }
+
+    private sealed class StubFeatureService : IFeatureService
+    {
+        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(FeatureFlags.AllFeatures);
+
+        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
     }
 
     [TestMethod]

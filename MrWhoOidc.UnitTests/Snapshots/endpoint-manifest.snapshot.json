@@ -207,6 +207,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/license/limits",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/license/tiers",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/license/usage",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/license/validate",
     "Methods": "POST",
     "RateLimiters": [
@@ -694,6 +727,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/license/limits",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/license/tiers",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/license/usage",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/license/validate",
     "Methods": "POST",
     "RateLimiters": [
@@ -825,6 +891,39 @@
   },
   {
     "Pattern": "/t/{slug}/admin/api/license/history",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/license/limits",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/license/tiers",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/license/usage",
     "Methods": "GET",
     "RateLimiters": [
       "rl-admin"

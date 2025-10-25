@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
@@ -58,6 +59,23 @@ internal static class LicenseEndpoints
             .Produces<LicenseHistoryResponseDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        group.MapGet("/license/usage", GetLicenseUsageAsync)
+            .WithName($"License_Usage{suffix}")
+            .Produces<FeatureUsageReportDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        group.MapGet("/license/limits", GetLicenseLimitsAsync)
+            .WithName($"License_Limits{suffix}")
+            .Produces<UsageLimitsReportDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapGet("/license/tiers", GetLicenseTiersAsync)
+            .WithName($"License_Tiers{suffix}")
+            .Produces<IReadOnlyList<LicenseTierDescriptorDto>>(StatusCodes.Status200OK);
     }
 
     private static async Task<IResult> GetLicenseAsync(
@@ -182,6 +200,105 @@ internal static class LicenseEndpoints
 
         var dto = LicenseDtoMapper.ToDto(history);
         return Results.Ok(dto);
+    }
+
+    private static async Task<IResult> GetLicenseUsageAsync(
+        HttpContext httpContext,
+        [FromQuery] Guid? tenantId,
+        [FromQuery] string? feature,
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        ILicenseAnalyticsService analyticsService,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        ILogger<LicenseEndpointsLogger> logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resolution = await ResolveTenantAsync(httpContext, tenantAccessor, authorizationService, tenantId, cancellationToken).ConfigureAwait(false);
+            if (resolution.Error is not null)
+            {
+                return resolution.Error;
+            }
+
+            var report = await analyticsService
+                .GetFeatureUsageAsync(resolution.TenantId, feature, from, to, cancellationToken)
+                .ConfigureAwait(false);
+
+            var dto = LicenseDtoMapper.ToDto(report);
+            return Results.Ok(dto);
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogDebug(ex, "Invalid arguments supplied for license usage analytics.");
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve license usage analytics.");
+            return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Unable to retrieve usage analytics");
+        }
+    }
+
+    private static async Task<IResult> GetLicenseLimitsAsync(
+        HttpContext httpContext,
+        [FromQuery] Guid? tenantId,
+        ILicenseAnalyticsService analyticsService,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        TimeProvider timeProvider,
+        ILogger<LicenseEndpointsLogger> logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var resolution = await ResolveTenantAsync(httpContext, tenantAccessor, authorizationService, tenantId, cancellationToken).ConfigureAwait(false);
+            if (resolution.Error is not null)
+            {
+                return resolution.Error;
+            }
+
+            var report = await analyticsService
+                .GetUsageLimitsAsync(resolution.TenantId, cancellationToken)
+                .ConfigureAwait(false);
+
+            var dto = LicenseDtoMapper.ToDto(report, timeProvider.GetUtcNow());
+            return Results.Ok(dto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogDebug(ex, "No license data available while retrieving limit analytics.");
+            return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            logger.LogDebug(ex, "Invalid arguments supplied for license limit analytics.");
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve license limit analytics.");
+            return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Unable to retrieve limit analytics");
+        }
+    }
+
+    private static async Task<IResult> GetLicenseTiersAsync(
+        ILicenseAnalyticsService analyticsService,
+        ILogger<LicenseEndpointsLogger> logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var descriptors = await analyticsService.GetLicenseTiersAsync(cancellationToken).ConfigureAwait(false);
+            var dto = LicenseDtoMapper.ToDto(descriptors);
+            return Results.Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to retrieve license tier descriptors.");
+            return Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Unable to retrieve tier catalog");
+        }
     }
 
     private static async Task<(Guid? TenantId, IResult? Error)> ResolveTenantAsync(

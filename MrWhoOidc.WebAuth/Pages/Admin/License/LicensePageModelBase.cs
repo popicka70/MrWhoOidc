@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.WebAuth.Admin.Dto;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.License;
@@ -233,6 +234,58 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
             limits);
     }
 
+    protected FeatureUsageReportModel BuildFeatureUsageReport(FeatureUsageReport report, DateTimeOffset reference)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var rows = report.Metrics
+            .Select(metric => new FeatureUsageRow(
+                metric.FeatureName,
+                GetFeatureDisplayName(metric.FeatureName),
+                metric.UsageCount,
+                metric.FirstUsed,
+                metric.LastUsed,
+                FormatRelative(metric.FirstUsed, reference),
+                FormatRelative(metric.LastUsed, reference)))
+            .ToList();
+
+        return new FeatureUsageReportModel(report.FromDate, report.ToDate, rows);
+    }
+
+    protected IReadOnlyList<UsageLimitStatusModel> BuildUsageLimitStatus(UsageLimitsReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        return report.Limits
+            .Select(limit => new UsageLimitStatusModel(
+                limit.LimitType,
+                GetLimitDisplayName(limit.LimitType),
+                limit.CurrentUsage,
+                limit.LimitValue,
+                FormatLimitValue(limit.LimitValue),
+                limit.UtilizationPercentage,
+                limit.IsNearLimit,
+                limit.IsAtLimit))
+            .ToList();
+    }
+
+    protected IReadOnlyList<LicenseTierDisplayModel> BuildTierDisplay(IReadOnlyList<LicenseTierDescriptor> descriptors)
+    {
+        ArgumentNullException.ThrowIfNull(descriptors);
+
+        return descriptors
+            .Select(tier => new LicenseTierDisplayModel(
+                tier.TierKey,
+                tier.DisplayName,
+                tier.Description,
+                tier.Features.Select(GetFeatureDisplayName).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList(),
+                tier.DefaultLimits
+                    .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(kv => new LimitDisplay(kv.Key, GetLimitDisplayName(kv.Key), FormatLimitValue(kv.Value), kv.Value == -1, kv.Value == 0))
+                    .ToList()))
+            .ToList();
+    }
+
     protected static string NormalizeActionFilter(string? action)
     {
         if (string.IsNullOrWhiteSpace(action))
@@ -405,4 +458,35 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
         bool IsExpiringSoon,
         IReadOnlyList<FeatureDisplay> Features,
         IReadOnlyList<LimitDisplay> Limits);
+
+    public sealed record FeatureUsageRow(
+        string Key,
+        string DisplayName,
+        long UsageCount,
+        DateTimeOffset FirstUsed,
+        DateTimeOffset LastUsed,
+        string FirstUsedRelative,
+        string LastUsedRelative);
+
+    public sealed record FeatureUsageReportModel(
+        DateTimeOffset FromDate,
+        DateTimeOffset ToDate,
+        IReadOnlyList<FeatureUsageRow> Rows);
+
+    public sealed record UsageLimitStatusModel(
+        string Key,
+        string DisplayName,
+        long CurrentUsage,
+        long LimitValue,
+        string LimitDisplay,
+        double Utilization,
+        bool IsNearLimit,
+        bool IsAtLimit);
+
+    public sealed record LicenseTierDisplayModel(
+        string TierKey,
+        string DisplayName,
+        string Description,
+        IReadOnlyList<string> Features,
+        IReadOnlyList<LimitDisplay> DefaultLimits);
 }

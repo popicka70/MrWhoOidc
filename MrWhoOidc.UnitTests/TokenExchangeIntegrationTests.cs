@@ -174,7 +174,9 @@ public sealed class TokenExchangeIntegrationTests
             {
                 FeatureFlags.TokenExchange,
                 FeatureFlags.BasicOidc,
-                FeatureFlags.BasicAdminUi
+                FeatureFlags.BasicAdminUi,
+                FeatureFlags.AdvancedSecurity,
+                FeatureFlags.DPoP
             };
             return Task.FromResult(enabled);
         }

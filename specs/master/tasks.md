@@ -92,11 +92,11 @@
 
 ### Implementation Tasks (US4)
 
-- [ ] T031 [P] [US4] Implement FeatureUsageRepository persisting metrics in MrWhoOidc.Auth/Licensing/Repositories/FeatureUsageRepository.cs
-- [ ] T032 [US4] Add LicenseAnalyticsService aggregating usage/limits in MrWhoOidc.Auth/Licensing/Services/LicenseAnalyticsService.cs
-- [ ] T033 [US4] Extend license endpoints with usage, limits, and tiers routes in MrWhoOidc.WebAuth/Admin/Api/LicenseEndpoints.cs
-- [ ] T034 [US4] Feed analytics data into admin dashboard widgets in MrWhoOidc.WebAuth/Pages/Admin/License/Index.cshtml
-- [ ] T035 [US4] Record feature usage at critical entry points (e.g., DPoP/JAR handlers) in MrWhoOidc.WebAuth/Handlers/TokenHandler.cs and related services
+- [X] T031 [P] [US4] Implement FeatureUsageRepository persisting metrics in MrWhoOidc.Auth/Licensing/Repositories/FeatureUsageRepository.cs
+- [X] T032 [US4] Add LicenseAnalyticsService aggregating usage/limits in MrWhoOidc.Auth/Licensing/Services/LicenseAnalyticsService.cs
+- [X] T033 [US4] Extend license endpoints with usage, limits, and tiers routes in MrWhoOidc.WebAuth/Admin/Api/LicenseEndpoints.cs
+- [X] T034 [US4] Feed analytics data into admin dashboard widgets in MrWhoOidc.WebAuth/Pages/Admin/License/Index.cshtml
+- [X] T035 [US4] Record feature usage at critical entry points (e.g., DPoP/JAR handlers) in MrWhoOidc.WebAuth/Handlers/TokenHandler.cs and related services
 - [ ] T036 [P] [US4] Add analytics service unit tests validating aggregation logic in MrWhoOidc.UnitTests/Licensing/LicenseAnalyticsServiceTests.cs
 
 ---

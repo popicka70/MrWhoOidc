@@ -135,6 +135,179 @@
     </div>
 }
 
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Feature usage</h5>
+                @if (Model.UsageReport is not null)
+                {
+                    <div class="small text-muted">@Model.FormatDate(Model.UsageReport.FromDate) – @Model.FormatDate(Model.UsageReport.ToDate)</div>
+                }
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrWhiteSpace(Model.UsageMessage))
+                {
+                    <div class="text-muted">@Model.UsageMessage</div>
+                }
+                else if (Model.UsageReport is not null && Model.UsageReport.Rows.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Feature</th>
+                                    <th scope="col" class="text-end">Calls</th>
+                                    <th scope="col">First seen</th>
+                                    <th scope="col">Last seen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.UsageReport.Rows)
+                                {
+                                    <tr>
+                                        <th scope="row">@row.DisplayName</th>
+                                        <td class="text-end fw-semibold">@row.UsageCount.ToString("N0")</td>
+                                        <td>
+                                            <div>@Model.FormatDate(row.FirstUsed)</div>
+                                            <div class="text-muted small">@row.FirstUsedRelative</div>
+                                        </td>
+                                        <td>
+                                            <div>@Model.FormatDate(row.LastUsed)</div>
+                                            <div class="text-muted small">@row.LastUsedRelative</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted">Feature usage data is not available.</div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Limit utilization</h5>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrWhiteSpace(Model.LimitsMessage))
+                {
+                    <div class="text-muted">@Model.LimitsMessage</div>
+                }
+                else if (Model.UsageLimits.Count > 0)
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Limit</th>
+                                    <th scope="col" class="text-end">Usage</th>
+                                    <th scope="col">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var limit in Model.UsageLimits)
+                                {
+                                    var percentage = limit.LimitValue <= 0 ? 0 : Math.Clamp((int)Math.Round(limit.Utilization * 100, MidpointRounding.AwayFromZero), 0, 100);
+                                    var barClass = limit.IsAtLimit ? "bg-danger" : limit.IsNearLimit ? "bg-warning" : "bg-success";
+                                    <tr>
+                                        <th scope="row">@limit.DisplayName</th>
+                                        <td class="text-end">
+                                            <div>@limit.CurrentUsage.ToString("N0")</div>
+                                            <div class="text-muted small">Limit: @limit.LimitDisplay</div>
+                                        </td>
+                                        <td>
+                                            @if (limit.LimitValue <= 0)
+                                            {
+                                                <span class="badge text-bg-secondary">No cap</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="progress" style="height: 6px;">
+                                                    <div class="progress-bar @barClass" role="progressbar" style="width: @percentage%" aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <div class="small text-muted mt-1">@percentage% used</div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted">Limit usage data is not available.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Tier reference</h5>
+    </div>
+    <div class="card-body">
+        @if (!string.IsNullOrWhiteSpace(Model.TierMessage))
+        {
+            <div class="text-muted">@Model.TierMessage</div>
+        }
+        else if (Model.TierCatalog.Count > 0)
+        {
+            <div class="accordion" id="tierCatalog">
+                @for (var i = 0; i < Model.TierCatalog.Count; i++)
+                {
+                    var tier = Model.TierCatalog[i];
+                    var collapseId = $"tier-{i}";
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading-@collapseId">
+                            <button class="accordion-button @(i == 0 ? string.Empty : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId" aria-expanded="@(i == 0 ? "true" : "false")" aria-controls="@collapseId">
+                                <span class="fw-semibold me-2">@tier.DisplayName</span>
+                                <span class="text-muted small">@tier.Description</span>
+                            </button>
+                        </h2>
+                        <div id="@collapseId" class="accordion-collapse collapse @(i == 0 ? "show" : string.Empty)" aria-labelledby="heading-@collapseId" data-bs-parent="#tierCatalog">
+                            <div class="accordion-body">
+                                <div class="mb-2 fw-semibold">Included features</div>
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    @foreach (var feature in tier.Features)
+                                    {
+                                        <span class="badge text-bg-light border">@feature</span>
+                                    }
+                                </div>
+                                <div class="mb-2 fw-semibold">Default limits</div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm mb-0">
+                                        <tbody>
+                                            @foreach (var limit in tier.DefaultLimits)
+                                            {
+                                                <tr>
+                                                    <th scope="row">@limit.DisplayName</th>
+                                                    <td>@limit.ValueDisplay</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-muted">Tier reference data is not available.</div>
+        }
+    </div>
+</div>
+
 <div class="d-flex flex-wrap gap-2">
     <a class="btn btn-primary" asp-page="Install" asp-route-scope="@Model.Scope" asp-route-tenantId="@(string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase) ? Model.TenantId : null)">
         <i class="bi bi-cloud-upload me-1"></i>Install or update license
