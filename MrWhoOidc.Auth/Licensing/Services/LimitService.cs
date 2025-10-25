@@ -10,35 +10,6 @@ namespace MrWhoOidc.Auth.Licensing.Services;
 
 internal sealed class LimitService : ILimitService
 {
-    private static readonly IReadOnlyDictionary<LicenseTier, IReadOnlyDictionary<string, long>> DefaultLimits =
-        new Dictionary<LicenseTier, IReadOnlyDictionary<string, long>>
-        {
-            [LicenseTier.Community] = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                [LicenseLimitTypes.Users] = 100,
-                [LicenseLimitTypes.Tenants] = 1,
-                [LicenseLimitTypes.Clients] = 25
-            },
-            [LicenseTier.Professional] = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                [LicenseLimitTypes.Users] = 10_000,
-                [LicenseLimitTypes.Tenants] = 5,
-                [LicenseLimitTypes.Clients] = 250
-            },
-            [LicenseTier.Enterprise] = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                [LicenseLimitTypes.Users] = -1,
-                [LicenseLimitTypes.Tenants] = -1,
-                [LicenseLimitTypes.Clients] = -1
-            },
-            [LicenseTier.EnterprisePlus] = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase)
-            {
-                [LicenseLimitTypes.Users] = -1,
-                [LicenseLimitTypes.Tenants] = -1,
-                [LicenseLimitTypes.Clients] = -1
-            }
-        };
-
     private readonly ILicenseService _licenseService;
     private readonly ILogger<LimitService> _logger;
 
@@ -126,9 +97,7 @@ internal sealed class LimitService : ILimitService
 
     private static IReadOnlyDictionary<string, long> MergeLimits(LicenseInfo? license, LicenseTier tier)
     {
-        var defaults = DefaultLimits.TryGetValue(tier, out var table)
-            ? table
-            : DefaultLimits[LicenseTier.Community];
+        var defaults = LicenseDefaultLimits.GetDefaults(tier);
 
         if (license is null)
         {
@@ -151,12 +120,14 @@ internal sealed class LimitService : ILimitService
 
     private static long GetDefaultLimit(LicenseTier tier, string limitType)
     {
-        if (DefaultLimits.TryGetValue(tier, out var limits) && limits.TryGetValue(limitType, out var value))
+        var limits = LicenseDefaultLimits.GetDefaults(tier);
+        if (limits.TryGetValue(limitType, out var value))
         {
             return value;
         }
 
-        if (DefaultLimits[LicenseTier.Community].TryGetValue(limitType, out var fallback))
+        var fallbackLimits = LicenseDefaultLimits.GetDefaults(LicenseTier.Community);
+        if (fallbackLimits.TryGetValue(limitType, out var fallback))
         {
             return fallback;
         }

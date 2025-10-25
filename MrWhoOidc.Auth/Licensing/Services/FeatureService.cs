@@ -5,18 +5,30 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.Auth.Licensing.Repositories;
 
 namespace MrWhoOidc.Auth.Licensing.Services;
 
 internal sealed class FeatureService : IFeatureService
 {
     private readonly ILicenseService _licenseService;
+    private readonly ILicenseRepository _licenseRepository;
+    private readonly IFeatureUsageRepository _usageRepository;
     private readonly ILogger<FeatureService> _logger;
+    private readonly TimeProvider _timeProvider;
 
-    public FeatureService(ILicenseService licenseService, ILogger<FeatureService> logger)
+    public FeatureService(
+        ILicenseService licenseService,
+        ILicenseRepository licenseRepository,
+        IFeatureUsageRepository usageRepository,
+        ILogger<FeatureService> logger,
+        TimeProvider? timeProvider = null)
     {
         _licenseService = licenseService ?? throw new ArgumentNullException(nameof(licenseService));
+        _licenseRepository = licenseRepository ?? throw new ArgumentNullException(nameof(licenseRepository));
+        _usageRepository = usageRepository ?? throw new ArgumentNullException(nameof(usageRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -55,22 +67,65 @@ internal sealed class FeatureService : IFeatureService
         return features;
     }
 
-    public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+    public async Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
     {
-        // Usage collection will be implemented with analytics work (US4).
-        _logger.LogDebug("Feature usage recording deferred until analytics implementation. Feature={Feature} Tenant={Tenant}", featureName, tenantId);
-        return Task.CompletedTask;
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureName);
+
+        Guid? licenseId = null;
+        try
+        {
+            var license = await _licenseRepository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
+            licenseId = license?.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to resolve license id while recording feature usage for {Feature} (tenant {Tenant}).", featureName, tenantId);
+        }
+
+        try
+        {
+            await _usageRepository.RecordUsageAsync(
+                featureName,
+                tenantId,
+                licenseId,
+                _timeProvider.GetUtcNow(),
+                1,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to record feature usage for {Feature} (tenant {Tenant}).", featureName, tenantId);
+        }
     }
 
-    public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(
+    public async Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(
         Guid? tenantId = null,
         string? featureName = null,
         DateTimeOffset? fromDate = null,
         DateTimeOffset? toDate = null,
         CancellationToken cancellationToken = default)
     {
-        // Analytics service will provide meaningful data in US4; return empty set for now.
-        _logger.LogDebug("Feature usage retrieval deferred until analytics implementation. Tenant={Tenant} Feature={Feature}", tenantId, featureName);
-        return Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
+        var now = _timeProvider.GetUtcNow();
+        var to = toDate ?? now;
+        var from = fromDate ?? to.AddDays(-30);
+
+        if (from > to)
+        {
+            throw new ArgumentException("fromDate must be earlier than or equal to toDate.", nameof(fromDate));
+        }
+
+        try
+        {
+            var fromOnly = DateOnly.FromDateTime(from.UtcDateTime);
+            var toOnly = DateOnly.FromDateTime(to.UtcDateTime);
+            return await _usageRepository
+                .GetUsageAsync(tenantId, featureName, fromOnly, toOnly, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load feature usage for {Feature} (tenant {Tenant}).", featureName ?? "all", tenantId);
+            return Array.Empty<FeatureUsageMetric>();
+        }
     }
 }

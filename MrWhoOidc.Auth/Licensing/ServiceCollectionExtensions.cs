@@ -15,9 +15,11 @@ public static class LicensingServiceCollectionExtensions
 
         services.AddMemoryCache();
         services.TryAddScoped<ILicenseRepository, LicenseRepository>();
+        services.TryAddScoped<IFeatureUsageRepository, FeatureUsageRepository>();
         services.TryAddScoped<ILicenseService, LicenseService>();
         services.TryAddScoped<IFeatureService, FeatureService>();
         services.TryAddScoped<ILimitService, LimitService>();
+        services.TryAddScoped<ILicenseAnalyticsService, LicenseAnalyticsService>();
         services.TryAddScoped<ILicenseValidator, LicenseValidator>();
 
         return services;

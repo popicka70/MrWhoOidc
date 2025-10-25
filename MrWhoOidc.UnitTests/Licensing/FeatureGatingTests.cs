@@ -23,7 +23,11 @@ public sealed class FeatureGatingTests
     public async Task FeatureService_ReturnsCommunityDefaults_WhenLicenseMissing()
     {
         var licenseService = new StubLicenseService(null);
-        var service = new FeatureService(licenseService, NullLogger<FeatureService>.Instance);
+        var service = new FeatureService(
+            licenseService,
+            new StubLicenseRepository(),
+            new NullFeatureUsageRepository(),
+            NullLogger<FeatureService>.Instance);
 
         var features = await service.GetEnabledFeaturesAsync();
 
@@ -47,7 +51,12 @@ public sealed class FeatureGatingTests
             true);
 
         var licenseService = new StubLicenseService(info);
-        var service = new FeatureService(licenseService, NullLogger<FeatureService>.Instance);
+        var license = new License { Id = Guid.NewGuid(), Tier = info.Tier };
+        var service = new FeatureService(
+            licenseService,
+            new StubLicenseRepository(license),
+            new NullFeatureUsageRepository(),
+            NullLogger<FeatureService>.Instance);
 
         var features = await service.GetEnabledFeaturesAsync();
 
@@ -217,5 +226,42 @@ public sealed class FeatureGatingTests
         {
             CurrentTenant = context;
         }
+    }
+
+    private sealed class StubLicenseRepository : ILicenseRepository
+    {
+        private readonly License? _license;
+
+        public StubLicenseRepository(License? license = null)
+        {
+            _license = license;
+        }
+
+        public Task<License?> GetActiveLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(_license);
+
+        public Task<License> CreateLicenseAsync(License license, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+
+        public Task<License> UpdateLicenseAsync(License license, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+
+        public Task<bool> DeactivateLicenseAsync(Guid? tenantId, string reason, Guid? deactivatedBy = null, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+
+        public Task<PagedResult<LicenseHistoryEntry>> GetLicenseHistoryAsync(Guid? tenantId = null, int page = 1, int pageSize = 20, string? actionFilter = null, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+
+        public Task<LicenseHistoryEntry> AddHistoryEntryAsync(LicenseHistoryEntry historyEntry, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
+    }
+
+    private sealed class NullFeatureUsageRepository : IFeatureUsageRepository
+    {
+        public Task RecordUsageAsync(string featureName, Guid? tenantId, Guid? licenseId, DateTimeOffset occurredAt, long increment, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<FeatureUsageMetric>> GetUsageAsync(Guid? tenantId, string? featureName, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
     }
 }
