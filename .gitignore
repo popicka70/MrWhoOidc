@@ -73,3 +73,6 @@ Thumbs.db
 
 # SBOM generation output
 sbom/
+
+# Local secrets (keys, certificates, env overrides)
+secrets/
