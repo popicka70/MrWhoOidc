@@ -26,11 +26,6 @@ services:
       Mail__SmtpPort: "1025"
       Mail__FromAddress: "no-reply@mrwho.local"
       Mail__FromName: "MrWhoOidc"
-      Licensing__PublicKeyPem: |-
-        -----BEGIN PUBLIC KEY-----
-        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEy1QDfXjTcxgIzqvTMSD4lINslz33
-        +VNv3p7FmTpn79UhyQ3x5UqudN81WQi0XVYVGtEETtADyJcgbDSeYNC3rA==
-        -----END PUBLIC KEY-----
     ports:
       - "8443:8443"
     volumes:
