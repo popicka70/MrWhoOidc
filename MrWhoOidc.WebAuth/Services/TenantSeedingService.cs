@@ -16,12 +16,14 @@ public class TenantSeedingService : ITenantSeedingService
 {
     private readonly AuthDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ITenantService _tenantService;
     private readonly ILogger<TenantSeedingService> _logger;
 
-    public TenantSeedingService(AuthDbContext db, IPasswordHasher passwordHasher, ILogger<TenantSeedingService> logger)
+    public TenantSeedingService(AuthDbContext db, IPasswordHasher passwordHasher, ITenantService tenantService, ILogger<TenantSeedingService> logger)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _tenantService = tenantService;
         _logger = logger;
     }
 
@@ -50,6 +52,11 @@ public class TenantSeedingService : ITenantSeedingService
 
         try
         {
+            if (!await _tenantService.CanProvisionTenantAsync(1, ct))
+            {
+                return TenantSeedResult.Failure("Tenant limit reached for the current license tier.");
+            }
+
             // Create tenant
             var tenant = new Tenant
             {
@@ -71,7 +78,8 @@ public class TenantSeedingService : ITenantSeedingService
             {
                 Name = "default",
                 DisplayName = "Default Realm",
-                TenantId = tenant.Id
+                TenantId = tenant.Id,
+                AllowUnconfirmedLogin = true
             };
             _db.Realms.Add(defaultRealm);
 
@@ -80,7 +88,8 @@ public class TenantSeedingService : ITenantSeedingService
             {
                 Name = "admin",
                 DisplayName = "Admin Realm",
-                TenantId = tenant.Id
+                TenantId = tenant.Id,
+                AllowUnconfirmedLogin = true
             };
             _db.Realms.Add(adminRealm);
 

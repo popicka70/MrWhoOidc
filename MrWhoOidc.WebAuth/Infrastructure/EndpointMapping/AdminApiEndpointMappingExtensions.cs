@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Admin.Api;
 using MrWhoOidc.WebAuth.Admin.Dto;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Background;
@@ -714,8 +715,10 @@ public static class AdminApiEndpointMappingExtensions
                 : Results.Ok(response);
         }).WithName("ClientSecretHealth");
 
-        // Platform Admin: On-demand tenant seeding (platform-admin only)
-        var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
+    // Platform Admin: On-demand tenant seeding (platform-admin only)
+    var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
+
+    LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
 
         platformAdmin.MapPost("/seed-tenant", async (
             MrWhoOidc.WebAuth.Services.ITenantSeedingService seedingService,

@@ -56,7 +56,12 @@ public class EditModel(
         if (result is null) return NotFound();
 
         TenantName = result.Tenant.Name;
-        Input = new RealmInput { Name = result.Realm.Name, DisplayName = result.Realm.DisplayName };
+        Input = new RealmInput
+        {
+            Name = result.Realm.Name,
+            DisplayName = result.Realm.DisplayName,
+            AllowUnconfirmedLogin = result.Realm.AllowUnconfirmedLogin
+        };
         return Page();
     }
 
@@ -91,8 +96,9 @@ public class EditModel(
             }
         }
 
-        realm.Name = Input.Name;
-        realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
+    realm.Name = Input.Name;
+    realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
+    realm.AllowUnconfirmedLogin = Input.AllowUnconfirmedLogin;
         await db.SaveChangesAsync();
         
         // Build tenant-aware redirect URL
@@ -117,5 +123,8 @@ public class EditModel(
         public string Name { get; set; } = string.Empty;
         [StringLength(200)]
         public string? DisplayName { get; set; }
+
+        [Display(Name = "Allow unconfirmed email logins")]
+        public bool AllowUnconfirmedLogin { get; set; }
     }
 }

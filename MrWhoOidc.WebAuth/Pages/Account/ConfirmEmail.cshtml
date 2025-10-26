@@ -1,0 +1,76 @@
+@page "/account/confirm-email"
+@using MrWhoOidc.Auth.Services
+@model MrWhoOidc.WebAuth.Pages.Account.ConfirmEmailModel
+@{
+    ViewData["Title"] = "Confirm Email";
+    var result = Model.Result;
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h1 class="h4 mb-3">Email confirmation</h1>
+
+                    @if (result is null)
+                    {
+                        <div class="alert alert-danger d-flex align-items-center" role="alert">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            We could not process this confirmation link.
+                        </div>
+                        <p class="mb-4">The link may be incomplete or already used. Try copying the full URL from your email.</p>
+                    }
+                    else
+                    {
+                        switch (result.Status)
+                        {
+                            case EmailConfirmationVerifyStatus.Success:
+                                <div class="alert alert-success d-flex align-items-center" role="alert">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Email <strong>@result.Email</strong> confirmed successfully.
+                                </div>
+                                <p class="mb-4">Thanks for verifying your email address. You can close this tab or return to your account.</p>
+                                break;
+                            case EmailConfirmationVerifyStatus.AlreadyVerified:
+                                <div class="alert alert-info d-flex align-items-center" role="alert">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Email <strong>@result.Email</strong> is already verified.
+                                </div>
+                                <p class="mb-4">You do not need to take any further action.</p>
+                                break;
+                            case EmailConfirmationVerifyStatus.Expired:
+                                <div class="alert alert-warning d-flex align-items-center" role="alert">
+                                    <i class="bi bi-hourglass-split me-2"></i>
+                                    This confirmation link has expired.
+                                </div>
+                                <p class="mb-4">Request a new confirmation email from your account settings.</p>
+                                break;
+                            case EmailConfirmationVerifyStatus.EmailMismatch:
+                                <div class="alert alert-warning d-flex align-items-center" role="alert">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    We could not verify this address because it no longer matches our records.
+                                </div>
+                                <p class="mb-4">If you recently changed this email address, request a new confirmation link.</p>
+                                break;
+                            case EmailConfirmationVerifyStatus.Cancelled:
+                            case EmailConfirmationVerifyStatus.NotFound:
+                            case EmailConfirmationVerifyStatus.InvalidToken:
+                                <div class="alert alert-danger d-flex align-items-center" role="alert">
+                                    <i class="bi bi-x-octagon me-2"></i>
+                                    This confirmation link is no longer valid.
+                                </div>
+                                <p class="mb-4">Please request a new confirmation email from your account settings.</p>
+                                break;
+                        }
+                    }
+
+                    <a class="btn btn-primary" href="@Url.Page("/Account/Emails")">
+                        <i class="bi bi-envelope-check me-1"></i>
+                        Manage email addresses
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

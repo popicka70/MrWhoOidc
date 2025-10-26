@@ -24,7 +24,7 @@ public static class TestDataSeeder
     public static async Task<SeedData> SeedBasicAsync(AuthDbContext db, bool hashClientSecret = true)
     {
         // Realms
-        var realm = new Realm { Name = "default", DisplayName = "Default" };
+    var realm = new Realm { Name = "default", DisplayName = "Default", AllowUnconfirmedLogin = true };
         db.Realms.Add(realm);
 
         // Scopes
@@ -118,8 +118,8 @@ public static class TestDataSeeder
     /// </summary>
     public static async Task<MultiRealmSeed> SeedMultiRealmAsync(AuthDbContext db)
     {
-        var r1 = new Realm { Name = "r1", DisplayName = "Realm1" };
-        var r2 = new Realm { Name = "r2", DisplayName = "Realm2" };
+    var r1 = new Realm { Name = "r1", DisplayName = "Realm1", AllowUnconfirmedLogin = true };
+    var r2 = new Realm { Name = "r2", DisplayName = "Realm2", AllowUnconfirmedLogin = true };
         db.Realms.AddRange(r1, r2);
 
         var scopes = new[] { new Scope { Name = "openid" }, new Scope { Name = "roles" } };

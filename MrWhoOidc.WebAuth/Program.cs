@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth;
+using MrWhoOidc.Auth.Licensing;
+using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -34,6 +36,9 @@ builder.AddServiceDefaults();
 builder.Services.AddMrWhoOidcObservability(builder.Configuration);
 // Ensure IOidcMetrics is always available (NoOp fallback if concrete not registered elsewhere)
 builder.Services.AddOidcMetricsIfMissing();
+
+builder.Services.AddLicensingOptions(builder.Configuration);
+builder.Services.AddMrWhoOidcLicensing();
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
@@ -73,6 +78,7 @@ builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 // Persistence & core protocol services extracted
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
 builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
+builder.Services.AddMrWhoOidcMail(builder.Configuration);
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))

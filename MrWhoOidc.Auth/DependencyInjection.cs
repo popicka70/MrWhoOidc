@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
@@ -35,6 +36,19 @@ public static class AuthServiceCollectionExtensions
         // In production, WebAuth will override this with a Redis-backed version, but for unit tests
         // and basic scenarios, this provides a default memory-only hybrid cache implementation.
         services.AddHybridCache();
+
+        services.AddOptions<EmailConfirmationOptions>();
+        if (configuration != null)
+        {
+            services.Configure<EmailConfirmationOptions>(configuration.GetSection("EmailConfirmation"));
+        }
+        else
+        {
+            services.Configure<EmailConfirmationOptions>(_ => { });
+        }
+
+        services.TryAddSingleton<IEmailSender, NullEmailSender>();
+        services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
 
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();

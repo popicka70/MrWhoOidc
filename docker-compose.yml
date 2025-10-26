@@ -21,6 +21,11 @@ services:
       # Multi-tenancy configuration
       MultiTenancy__Enabled: "true"
       MultiTenancy__DefaultTenantSlug: "default"
+      Mail__Enabled: "true"
+      Mail__SmtpHost: "mailhog"
+      Mail__SmtpPort: "1025"
+      Mail__FromAddress: "no-reply@mrwho.local"
+      Mail__FromName: "MrWhoOidc"
     ports:
       - "8443:8443"
     volumes:
@@ -61,6 +66,16 @@ services:
     restart: unless-stopped
     networks:
       - internal
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+    networks:
+      - internal
+      - edge
 
 volumes:
   postgres-data:

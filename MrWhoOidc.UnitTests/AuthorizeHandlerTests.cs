@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,6 +11,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
@@ -37,11 +45,12 @@ public sealed class AuthorizeHandlerTests
         IConsentService? consents = null,
         IAuthorizationCodeMetadataStore? meta = null,
         IPushedAuthorizationRequestStore? parStore = null,
-        IRequestObjectValidator? requestObjects = null,
-        IOptions<AuthOptions>? authOptions = null,
-        IJwtService? jwt = null,
-        IClientStore? clients = null,
-        IQrLoginHandler? qrLoginHandler = null)
+    IRequestObjectValidator? requestObjects = null,
+    IOptions<AuthOptions>? authOptions = null,
+    IJwtService? jwt = null,
+    IClientStore? clients = null,
+    IQrLoginHandler? qrLoginHandler = null,
+    IFeatureService? featureService = null)
     {
         var metrics = new OidcMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
@@ -56,6 +65,7 @@ public sealed class AuthorizeHandlerTests
         jwt ??= new StubJwtService();
         clients ??= new StubClientStore();
         qrLoginHandler ??= new StubQrLoginHandler();
+    featureService ??= new StubFeatureService();
 
         // Create a mock tenant accessor with default tenant
         var tenantAccessor = new MockTenantAccessor();
@@ -68,7 +78,7 @@ public sealed class AuthorizeHandlerTests
             IsMultiTenantMode = false
         });
 
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler, tenantAccessor);
+    return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler, tenantAccessor, featureService);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -701,6 +711,38 @@ public sealed class AuthorizeHandlerTests
     }
 
     // Stub implementations
+    private sealed class StubFeatureService : IFeatureService
+    {
+        private readonly IReadOnlySet<string> _features;
+
+        public StubFeatureService(params string[] features)
+        {
+            _features = features.Length > 0
+                ? new HashSet<string>(features, StringComparer.OrdinalIgnoreCase)
+                : FeatureFlags.AllFeatures;
+        }
+
+        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_features.Contains(featureName));
+        }
+
+        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_features);
+        }
+
+        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
+        }
+    }
+
     private sealed class StubAuthorizeService : IAuthorizeService
     {
         private readonly bool _isValid;

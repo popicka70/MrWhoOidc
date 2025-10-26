@@ -15,10 +15,12 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -138,7 +140,8 @@ public sealed class CorrelationPipelineTests
         // Register ITenantAccessor for multi-tenant support
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
         
-        services.AddExternalOidcHandler(); // Use DI registration
+    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+    services.AddExternalOidcHandler(); // Use DI registration
 
         var provider = services.BuildServiceProvider();
         var scope = provider.CreateScope();

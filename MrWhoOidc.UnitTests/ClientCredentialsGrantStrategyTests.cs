@@ -12,12 +12,14 @@ using Microsoft.Extensions.DependencyInjection;
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.Extensions.Hosting;
 using MrWhoOidc.Auth;
+using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
+using MrWhoOidc.UnitTests.TestDoubles;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -59,6 +61,7 @@ public sealed class ClientCredentialsGrantStrategyTests
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
+                    services.AddSingleton<IFeatureService, StubFeatureService>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();

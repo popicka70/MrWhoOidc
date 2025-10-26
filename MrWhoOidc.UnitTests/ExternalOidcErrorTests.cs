@@ -9,12 +9,14 @@ using Microsoft.AspNetCore.DataProtection;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.WebAuth.Observability;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -39,7 +41,8 @@ public class ExternalOidcErrorTests
         // Register ITenantAccessor for multi-tenant support
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
         
-        services.AddExternalOidcHandler(); // Use DI registration
+    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+    services.AddExternalOidcHandler(); // Use DI registration
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();
         var scoped = scope.ServiceProvider;

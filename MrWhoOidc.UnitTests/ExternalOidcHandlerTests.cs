@@ -11,10 +11,12 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using System.Net;
 using System.Text.Json;
 
@@ -231,7 +233,8 @@ public class ExternalOidcHandlerTests
         // Register ITenantAccessor for multi-tenant support
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
         
-        services.AddExternalOidcHandler(); // Use DI registration
+    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+    services.AddExternalOidcHandler(); // Use DI registration
 
         var sp = services.BuildServiceProvider();
         var scope = sp.CreateScope();

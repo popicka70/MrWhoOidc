@@ -1,7 +1,10 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography; // added for future cryptographic helpers if needed
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.Persistence.Configurations;
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -27,6 +30,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Scope> Scopes => Set<Scope>();
     public DbSet<ClientScope> ClientScopes => Set<ClientScope>();
     public DbSet<UserAlternativeEmail> UserAlternativeEmails => Set<UserAlternativeEmail>();
+    public DbSet<EmailConfirmation> EmailConfirmations => Set<EmailConfirmation>();
     public DbSet<UserClientAssignment> UserClientAssignments => Set<UserClientAssignment>();
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
     // New: split role assignments
@@ -51,6 +55,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
     // New: Impersonation audit logs
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
+    // Licensing
+    public DbSet<License> Licenses => Set<License>();
+    public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
+    public DbSet<FeatureUsageMetric> FeatureUsageMetrics => Set<FeatureUsageMetric>();
+    public DbSet<LicenseLimit> LicenseLimits => Set<LicenseLimit>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -146,6 +155,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Name).IsRequired().HasMaxLength(100);
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.Property(x => x.DisplayName).HasMaxLength(200);
+            b.Property(x => x.AllowUnconfirmedLogin).HasDefaultValue(true).IsRequired();
             // Multi-tenancy FK
             b.HasOne<Tenant>()
                 .WithMany()
@@ -331,6 +341,32 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.NormalizedEmail).IsRequired().HasMaxLength(256);
             b.HasIndex(x => new { x.UserId, x.NormalizedEmail }).IsUnique();
             b.HasIndex(x => x.NormalizedEmail).IsUnique();
+        });
+
+        modelBuilder.Entity<EmailConfirmation>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.TokenHash).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Purpose).IsRequired().HasMaxLength(50);
+            b.Property(x => x.Email).IsRequired().HasMaxLength(256);
+            b.Property(x => x.CreatedAt).IsRequired();
+            b.Property(x => x.ExpiresAt).IsRequired();
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.HasIndex(x => new { x.UserId, x.Purpose, x.Email })
+                .HasDatabaseName("IX_EmailConfirmations_UserPurposeEmail");
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<UserAlternativeEmail>()
+                .WithMany()
+                .HasForeignKey(x => x.UserAlternativeEmailId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => x.TenantId);
         });
 
         // New: User-client assignment (optionally realm-bound)
@@ -691,7 +727,18 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.TenantId);
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
-    }
+
+            ConfigureLicenseEntities(modelBuilder);
+        }
+
+        static void ConfigureLicenseEntities(ModelBuilder modelBuilder)
+        {
+            ArgumentNullException.ThrowIfNull(modelBuilder);
+            modelBuilder.ApplyConfiguration(new LicenseConfiguration());
+            modelBuilder.ApplyConfiguration(new LicenseHistoryEntryConfiguration());
+            modelBuilder.ApplyConfiguration(new FeatureUsageMetricConfiguration());
+            modelBuilder.ApplyConfiguration(new LicenseLimitConfiguration());
+        }
 
     void NormalizeEmailFields()
     {
@@ -819,6 +866,7 @@ public class Realm
     [MaxLength(200)]
     public string? DisplayName { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool AllowUnconfirmedLogin { get; set; } = true;
 }
 
 public class Role
@@ -1000,6 +1048,32 @@ public class UserAlternativeEmail
     public string NormalizedEmail { get; set; } = string.Empty;
     public bool IsVerified { get; set; }
     public DateTimeOffset? VerifiedAt { get; set; }
+}
+
+public static class EmailConfirmationPurposes
+{
+    public const string Primary = "primary";
+    public const string Alternative = "alternative";
+}
+
+public class EmailConfirmation
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+    public Guid TenantId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid? UserAlternativeEmailId { get; set; }
+    [MaxLength(256)]
+    public string Email { get; set; } = string.Empty;
+    [MaxLength(100)]
+    public string TokenHash { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string Purpose { get; set; } = EmailConfirmationPurposes.Primary;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RedeemedAt { get; set; }
+    public DateTimeOffset? CancelledAt { get; set; }
+    [MaxLength(2000)]
+    public string? MetadataJson { get; set; }
 }
 
 public class UserClientAssignment

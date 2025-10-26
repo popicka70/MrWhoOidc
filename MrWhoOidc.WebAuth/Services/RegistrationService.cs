@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
 using System.ComponentModel.DataAnnotations;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -44,11 +44,13 @@ internal sealed class RegistrationService : IRegistrationService
 {
     private readonly AuthDbContext _db;
     private readonly ILogger<RegistrationService> _logger;
+    private readonly IEmailConfirmationWorkflow _emailWorkflow;
 
-    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger)
+    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow)
     {
         _db = db;
         _logger = logger;
+        _emailWorkflow = emailWorkflow;
     }
 
     public async Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
@@ -164,6 +166,18 @@ internal sealed class RegistrationService : IRegistrationService
         };
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            try
+            {
+                await _emailWorkflow.SendPrimaryAsync(user, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispatch confirmation email for user {UserId}", user.Id);
+            }
+        }
 
         // Optional assign to client
         if (registration.ClientId is Guid clientId)

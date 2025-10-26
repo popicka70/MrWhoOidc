@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Security;
@@ -13,6 +14,7 @@ using MrWhoOidc.WebAuth.Admin.Helpers;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.WebAuth.Infrastructure.Http;
 using Microsoft.AspNetCore.Mvc;
+using MrWhoOidc.WebAuth.Middleware;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -223,7 +225,8 @@ internal static class EndpointMappingExtensions
 
         routes.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
-            .RequireRateLimiting("rl-par");
+            .RequireRateLimiting("rl-par")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.AdvancedSecurity));
         routes.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
@@ -245,21 +248,26 @@ internal static class EndpointMappingExtensions
         // WebAuthn/FIDO2 endpoints
         routes.MapPost("/api/webauthn/registration/challenge", (IWebAuthnHandler h, HttpContext ctx) => h.RegistrationChallengeAsync(ctx))
             .RequireAuthorization()
-            .RequireRateLimiting("rl-authorize");
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
         
         routes.MapPost("/api/webauthn/registration/complete", (IWebAuthnHandler h, HttpContext ctx) => h.RegistrationCompletionAsync(ctx))
             .RequireAuthorization()
-            .RequireRateLimiting("rl-authorize");
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
         
         routes.MapPost("/api/webauthn/authentication/challenge", (IWebAuthnHandler h, HttpContext ctx) => h.AuthenticationChallengeAsync(ctx))
-            .RequireRateLimiting("rl-authorize");
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
         
         routes.MapPost("/api/webauthn/authentication/complete", (IWebAuthnHandler h, HttpContext ctx) => h.AuthenticationCompletionAsync(ctx))
-            .RequireRateLimiting("rl-authorize");
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
         
         routes.MapGet("/api/webauthn/credentials", (IWebAuthnHandler h, HttpContext ctx) => h.GetUserCredentialsAsync(ctx))
             .RequireAuthorization()
-            .RequireRateLimiting("rl-authorize");
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
 
         // Tenant icon endpoint (public access for display in UI)
         routes.MapGet("/api/icon/{iconId:guid}", async (
