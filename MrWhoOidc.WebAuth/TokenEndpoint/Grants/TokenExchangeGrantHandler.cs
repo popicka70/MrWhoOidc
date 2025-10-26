@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Extensions;
@@ -15,6 +17,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Mirrors prior inline implementation; future: externalize rate limit.
 /// </summary>
 public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
+    IFeatureService featureService,
     IDPoPValidator dpop,
     ITokenMetricsRecorder metrics,
     ITokenExchangeRateLimiter rateLimiter,
@@ -128,6 +131,12 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var sourceTokenType = InferSourceTokenType(subjectTokenType, subjectToken);
         var dpopMode = client?.OboDpopMode?.ToString() ?? "unknown";
         metrics.RecordTokenExchange(outcome, clientBucket, targetBucket, dpopMode, sourceTokenType, sw.Elapsed.TotalMilliseconds);
+
+        if (result.ok)
+        {
+            var tenantId = context.ClientEntity?.TenantId;
+            await featureService.RecordFeatureUsageAsync(FeatureFlags.TokenExchange, tenantId, http.RequestAborted);
+        }
 
         var corr = http.Request.Headers["x-correlation-id"].ToString();
         if (string.IsNullOrWhiteSpace(corr)) corr = http.TraceIdentifier;

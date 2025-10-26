@@ -1,7 +1,10 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography; // added for future cryptographic helpers if needed
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.Persistence.Configurations;
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -52,6 +55,11 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
     // New: Impersonation audit logs
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
+    // Licensing
+    public DbSet<License> Licenses => Set<License>();
+    public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
+    public DbSet<FeatureUsageMetric> FeatureUsageMetrics => Set<FeatureUsageMetric>();
+    public DbSet<LicenseLimit> LicenseLimits => Set<LicenseLimit>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -719,7 +727,18 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.TenantId);
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
         });
-    }
+
+            ConfigureLicenseEntities(modelBuilder);
+        }
+
+        static void ConfigureLicenseEntities(ModelBuilder modelBuilder)
+        {
+            ArgumentNullException.ThrowIfNull(modelBuilder);
+            modelBuilder.ApplyConfiguration(new LicenseConfiguration());
+            modelBuilder.ApplyConfiguration(new LicenseHistoryEntryConfiguration());
+            modelBuilder.ApplyConfiguration(new FeatureUsageMetricConfiguration());
+            modelBuilder.ApplyConfiguration(new LicenseLimitConfiguration());
+        }
 
     void NormalizeEmailFields()
     {

@@ -1,6 +1,6 @@
 # Admin guide: Providers, Keys, Claim Mappings & OBO Policy (Draft)
 
-Updated: 2025-09-27 (expanded draft)
+Updated: 2025-10-25 (analytics & licensing instrumentation)
 
 This guide helps administrators configure providers, keys, client mappings, claim mapping, and OBO (token exchange) policy for common scenarios. Screenshots will be added; for now, follow the steps and examples.
 
@@ -322,6 +322,7 @@ Health endpoint: `/health/client-secrets`
 - [Client Secret Rotation Guide](client-secret-rotation-guide.md) — User-facing rotation steps
 - [Client Secret Rotation Playbook](client-secret-rotation-playbook.md) — Operational procedures for admins
 - [Telemetry Taxonomy](telemetry-taxonomy.md) — Metrics and logging reference
+- [License Analytics Dashboard](license-analytics-overview.md) — Usage/Limits cards surfaced in Admin UI
 
 ---
 
@@ -338,7 +339,66 @@ Navigation: **Admin → Providers → Claim Mappings** (scoped to a provider) OR
 
 Validate via a test login and inspect the issued ID/access token in your app or via test utilities.
 
-## 5) OBO Policy (Token Exchange)
+## 5) License Management & Analytics
+
+### 5.1 License Installation & Validation
+
+- Navigation: **Admin → License → Install**
+- Requirements: obtain a signed license file (ECDSA JWS) from licensing portal.
+- Steps:
+  1. Paste the license payload into the Install form (or upload once file upload enabled).
+  2. Optionally add operator notes (stored in history).
+  3. Submit to trigger signature + business validation (tier/expiry/grace checks).
+- Outcomes:
+  - Success: active license stored, previous license (if any) revoked automatically with reason `Replaced by new license`.
+  - Known error codes: `invalid_signature`, `expired_license`, `tier_mismatch`, `invalid_format` (see UI error banner).
+- Observability: `licensing.license.install.success|failure` counters and `licensing.license.install.duration.ms` histogram emitted.
+- Logs: search structured logs for `message="License install completed"` with `tenant` scope and `license_tier` fields.
+
+### 5.2 License Revocation
+
+- Navigation: **Admin → License → Actions → Revoke**.
+- Required: reason text (stored for audit).
+- Effects: license marked inactive, history entry appended, cache invalidated so future requests fall back to default tier (if configured).
+- Observability: `licensing.license.revoke.success|failure` counters plus latency histogram.
+- Log pattern: `message="License revoked"` with `reason` attribute.
+
+### 5.3 License Validation (Dry Run)
+
+- Admin API (POST `/admin/api/license/validate`) accepts a license payload and returns validation result without persisting it.
+- Use to pre-flight check staged licenses; surfaced in UI as “Validate Only”.
+- Metric: `licensing.license.validate.success|failure` counters.
+
+### 5.4 License History
+
+- Grid displays chronological events (install/update/revoke) with operator, timestamp, and notes.
+- Backed by durable repository; supports pagination and filtering by action.
+- API: GET `/admin/api/license/history?page=1&pageSize=20`.
+
+### 5.5 Usage Analytics Dashboard
+
+- Cards on **Admin → License → Overview** visualize:
+  - Feature usage (aggregated by feature flag) for selectable time window.
+  - Usage limits (users, clients, tenants, custom metrics) with utilisation bars.
+  - Tier reference panel summarizing capabilities per tier.
+- Backend service: `LicenseAnalyticsService` aggregates metrics from feature usage repository and current license.
+- Metric source: `FeatureUsageMetric` entries recorded via instrumented feature checkpoints (e.g., DPoP, JAR).
+- API endpoints:
+  - `GET /admin/api/license/usage?from=2025-10-01&to=2025-10-25`
+  - `GET /admin/api/license/limits`
+  - `GET /admin/api/license/tiers`
+- Troubleshooting:
+  - Empty charts: verify feature usage recording is enabled and licensing analytics feature flag is on.
+  - Limits showing zero usage: ensure nightly usage job or on-demand recalculation executed (`LicenseAnalyticsService.GetUsageLimitsAsync`).
+  - Metrics mismatches: inspect raw records via database or call analytics API directly.
+- Observability: rely on general licensing metrics above plus `oidc` counters for feature triggers (DPoP, token flows).
+
+### 5.6 Alerts
+
+- Recommend alerting when `LicenseValidationResult` indicates upcoming expiry (UI banner also warns 14 days before).
+- Future work: emit gauge for days-to-expiry; until then, rely on scheduled automation hitting validation endpoint.
+
+## 6) OBO Policy (Token Exchange)
 
 Configure per-client OBO rules that constrain exchanges, audiences, scopes, lifetimes, and DPoP bridging.
 
@@ -354,7 +414,7 @@ Configure per-client OBO rules that constrain exchanges, audiences, scopes, life
 
 Reference: docs/obo-client-policy.md for full field descriptions and examples.
 
-## 6) Provider Picker UX (Accessibility & Mobile)
+## 7) Provider Picker UX (Accessibility & Mobile)
 
 Users see a list of available providers. The picker supports accessibility basics and mobile layout.
 
@@ -362,7 +422,7 @@ Users see a list of available providers. The picker supports accessibility basic
 - A11y: labels, roles, tab order, focus visible
 - Mobile: responsive layout and touch targets
 
-## 7) Inbound JAR & Replay Protection
+## 8) Inbound JAR & Replay Protection
 
 If clients send JWT-secured authorization requests (JAR), enable replay protection.
 
@@ -376,11 +436,11 @@ If clients send JWT-secured authorization requests (JAR), enable replay protecti
 
 See: docs/jar-replay-cache.md
 
-## 8) Rate Limiting & Headers (Token / Introspect)
+## 9) Rate Limiting & Headers (Token / Introspect)
 
 When enabled with Redis, endpoints like /token and /introspect return appropriate rate-limit headers and 429 with Retry-After.
 
-## 9) Troubleshooting
+## 10) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed back on every response and surfaces in structured logs/telemetry.

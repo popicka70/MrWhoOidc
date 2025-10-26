@@ -24,6 +24,9 @@ using MrWhoOidc.Auth;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using MrWhoOidc.Auth.Licensing.Services;
+using MrWhoOidc.Auth.Licensing.Entities;
+using MrWhoOidc.Auth.Licensing.Models;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -52,6 +55,7 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
                     // Core auth services (TokenService, JwtService, etc.)
                     services.AddMrWhoOidcAuthCore();
+                    services.AddSingleton<IFeatureService, StubFeatureService>();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
                     services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
@@ -157,6 +161,31 @@ public sealed class TokenExchangeIntegrationTests
     {
         var raw = Convert.ToBase64String(Encoding.UTF8.GetBytes(id + ":" + secret));
         return new AuthenticationHeaderValue("Basic", raw);
+    }
+
+    private sealed class StubFeatureService : IFeatureService
+    {
+        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+        {
+            IReadOnlySet<string> enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                FeatureFlags.TokenExchange,
+                FeatureFlags.BasicOidc,
+                FeatureFlags.BasicAdminUi,
+                FeatureFlags.AdvancedSecurity,
+                FeatureFlags.DPoP
+            };
+            return Task.FromResult(enabled);
+        }
+
+        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<FeatureUsageMetric>> GetFeatureUsageAsync(Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<FeatureUsageMetric>>(Array.Empty<FeatureUsageMetric>());
     }
 
     [TestMethod]
