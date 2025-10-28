@@ -1,0 +1,50 @@
+# .NET build artifacts
+bin/
+obj/
+out/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# User secrets and sensitive data
+*.pfx
+*.pem
+secrets/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Temporary files
+*.tmp
+*.temp
+*.log
