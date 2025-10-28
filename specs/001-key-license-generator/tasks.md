@@ -24,15 +24,15 @@ This project uses a standalone service structure:
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create MrWhoOidc.KeyGen web project using `dotnet new webapp -n MrWhoOidc.KeyGen -f net9.0`
-- [ ] T002 Create MrWhoOidc.KeyGen.Tests test project using `dotnet new mstest -n MrWhoOidc.KeyGen.Tests -f net9.0`
-- [ ] T003 Add project references and update solution file MrWhoOidc.slnx
-- [ ] T004 [P] Install NuGet packages: Microsoft.EntityFrameworkCore.Sqlite, Microsoft.EntityFrameworkCore.Design in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
-- [ ] T005 [P] Install NuGet packages: System.IdentityModel.Tokens.Jwt, Microsoft.IdentityModel.Tokens in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
-- [ ] T006 [P] Install NuGet packages: Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
-- [ ] T007 [P] Install test packages: Microsoft.AspNetCore.Mvc.Testing, Microsoft.EntityFrameworkCore.InMemory in MrWhoOidc.KeyGen.Tests/MrWhoOidc.KeyGen.Tests.csproj
-- [ ] T008 Copy GuidHelper.cs from MrWhoOidc.Auth/Persistence/GuidHelper.cs to MrWhoOidc.KeyGen/Persistence/GuidHelper.cs
-- [ ] T009 Create directory structure: Domain/, Domain/Models/, Domain/Services/, Domain/Cryptography/, Persistence/, Persistence/Migrations/, Pages/, Pages/Shared/, Pages/KeyGeneration/, Pages/LicenseGeneration/, Api/, Configuration/, wwwroot/ in MrWhoOidc.KeyGen/
+- [x] T001 Create MrWhoOidc.KeyGen web project using `dotnet new webapp -n MrWhoOidc.KeyGen -f net9.0`
+- [x] T002 Create MrWhoOidc.KeyGen.Tests test project using `dotnet new mstest -n MrWhoOidc.KeyGen.Tests -f net9.0`
+- [x] T003 Add project references and update solution file MrWhoOidc.slnx
+- [x] T004 [P] Install NuGet packages: Microsoft.EntityFrameworkCore.Sqlite, Microsoft.EntityFrameworkCore.Design in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
+- [x] T005 [P] Install NuGet packages: System.IdentityModel.Tokens.Jwt, Microsoft.IdentityModel.Tokens in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
+- [x] T006 [P] Install NuGet packages: Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore in MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj
+- [x] T007 [P] Install test packages: Microsoft.AspNetCore.Mvc.Testing, Microsoft.EntityFrameworkCore.InMemory in MrWhoOidc.KeyGen.Tests/MrWhoOidc.KeyGen.Tests.csproj
+- [x] T008 Copy GuidHelper.cs from MrWhoOidc.Auth/Persistence/GuidHelper.cs to MrWhoOidc.KeyGen/Persistence/GuidHelper.cs
+- [x] T009 Create directory structure: Domain/, Domain/Models/, Domain/Services/, Domain/Cryptography/, Persistence/, Persistence/Migrations/, Pages/, Pages/Shared/, Pages/KeyGeneration/, Pages/LicenseGeneration/, Api/, Configuration/, wwwroot/ in MrWhoOidc.KeyGen/
 
 ---
 
@@ -42,19 +42,19 @@ This project uses a standalone service structure:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T010 Create KeyPairMetadata entity in MrWhoOidc.KeyGen/Domain/Models/KeyPairMetadata.cs with Id, Kid, Algorithm, KeyType, KeySize, Curve, PublicKeyJwks, CreatedAt, Status, RevokedAt, CreatedBy, DownloadCount properties
-- [ ] T011 [P] Create KeyDownloadRecord entity in MrWhoOidc.KeyGen/Domain/Models/KeyDownloadRecord.cs with Id, KeyPairMetadataId, DownloadType, DownloadedAt, DownloadedBy, IpAddress, UserAgent properties
-- [ ] T012 [P] Create LicenseTokenMetadata entity in MrWhoOidc.KeyGen/Domain/Models/LicenseTokenMetadata.cs with Id, TokenId, Tier, Organization, ValidFrom, ValidUntil, Features, Limits, GeneratedAt, GeneratedBy properties
-- [ ] T013 Create KeyGenDbContext in MrWhoOidc.KeyGen/Persistence/KeyGenDbContext.cs with DbSet properties and OnModelCreating configuration (unique indexes, relationships, constraints)
-- [ ] T014 Configure SQLite connection string in MrWhoOidc.KeyGen/appsettings.json (Data Source=/data/keygen.db) and MrWhoOidc.KeyGen/appsettings.Development.json (Data Source=keygen-dev.db)
-- [ ] T015 Create KeyGenOptions configuration model in MrWhoOidc.KeyGen/Configuration/KeyGenOptions.cs with LicensingPrivateKeyPath property
-- [ ] T016 Register DbContext and services in MrWhoOidc.KeyGen/Program.cs with SQLite provider, health checks, and antiforgery configuration
-- [ ] T017 Generate initial EF Core migration using `dotnet ef migrations add InitialCreate --project MrWhoOidc.KeyGen --output-dir Persistence/Migrations`
-- [ ] T018 Apply migration to create development database using `dotnet ef database update --project MrWhoOidc.KeyGen`
-- [ ] T019 [P] Create Razor Pages layout in MrWhoOidc.KeyGen/Pages/Shared/\_Layout.cshtml with navigation menu and Bootstrap/Tailwind styling
-- [ ] T020 [P] Create \_ViewImports.cshtml and \_ViewStart.cshtml in MrWhoOidc.KeyGen/Pages/ for Razor Pages configuration
-- [ ] T021 [P] Create Index landing page in MrWhoOidc.KeyGen/Pages/Index.cshtml and Index.cshtml.cs with links to key generation and license generation
-- [ ] T022 Create health check endpoint in MrWhoOidc.KeyGen/Program.cs that validates database connectivity and licensing key availability
+- [x] T010 Create KeyPairMetadata entity in MrWhoOidc.KeyGen/Domain/Models/KeyPairMetadata.cs with Id, Kid, Algorithm, KeyType, KeySize, Curve, PublicKeyJwks, CreatedAt, Status, RevokedAt, CreatedBy, DownloadCount properties
+- [x] T011 [P] Create KeyDownloadRecord entity in MrWhoOidc.KeyGen/Domain/Models/KeyDownloadRecord.cs with Id, KeyPairMetadataId, DownloadType, DownloadedAt, DownloadedBy, IpAddress, UserAgent properties
+- [x] T012 [P] Create LicenseTokenMetadata entity in MrWhoOidc.KeyGen/Domain/Models/LicenseTokenMetadata.cs with Id, TokenId, Tier, Organization, ValidFrom, ValidUntil, Features, Limits, GeneratedAt, GeneratedBy properties
+- [x] T013 Create KeyGenDbContext in MrWhoOidc.KeyGen/Persistence/KeyGenDbContext.cs with DbSet properties and OnModelCreating configuration (unique indexes, relationships, constraints)
+- [x] T014 Configure SQLite connection string in MrWhoOidc.KeyGen/appsettings.json (Data Source=/data/keygen.db) and MrWhoOidc.KeyGen/appsettings.Development.json (Data Source=keygen-dev.db)
+- [x] T015 Create KeyGenOptions configuration model in MrWhoOidc.KeyGen/Configuration/KeyGenOptions.cs with LicensingPrivateKeyPath property
+- [x] T016 Register DbContext and services in MrWhoOidc.KeyGen/Program.cs with SQLite provider, health checks, and antiforgery configuration
+- [x] T017 Generate initial EF Core migration using `dotnet ef migrations add InitialCreate --project MrWhoOidc.KeyGen --output-dir Persistence/Migrations`
+- [x] T018 Apply migration to create development database using `dotnet ef database update --project MrWhoOidc.KeyGen`
+- [x] T019 [P] Create Razor Pages layout in MrWhoOidc.KeyGen/Pages/Shared/\_Layout.cshtml with navigation menu and Bootstrap/Tailwind styling
+- [x] T020 [P] Create \_ViewImports.cshtml and \_ViewStart.cshtml in MrWhoOidc.KeyGen/Pages/ for Razor Pages configuration
+- [x] T021 [P] Create Index landing page in MrWhoOidc.KeyGen/Pages/Index.cshtml and Index.cshtml.cs with links to key generation and license generation
+- [x] T022 Create health check endpoint in MrWhoOidc.KeyGen/Program.cs that validates database connectivity and licensing key availability
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
