@@ -68,35 +68,35 @@ This project uses a standalone service structure:
 
 ### Cryptography Layer for User Story 1
 
-- [ ] T023 [P] [US1] Create RsaKeyGenerator class in MrWhoOidc.KeyGen/Domain/Cryptography/RsaKeyGenerator.cs with Generate(keySize) method returning RSA key pair
-- [ ] T024 [P] [US1] Create EcdsaKeyGenerator class in MrWhoOidc.KeyGen/Domain/Cryptography/EcdsaKeyGenerator.cs with Generate(curve) method returning ECDSA key pair
-- [ ] T025 [US1] Create JwkSerializer class in MrWhoOidc.KeyGen/Domain/Cryptography/JwkSerializer.cs with SerializePrivateKey and SerializePublicKey methods for JWK/JWKS format
+- [x] T023 [P] [US1] Create RsaKeyGenerator class in MrWhoOidc.KeyGen/Domain/Cryptography/RsaKeyGenerator.cs with Generate(keySize) method returning RSA key pair
+- [x] T024 [P] [US1] Create EcdsaKeyGenerator class in MrWhoOidc.KeyGen/Domain/Cryptography/EcdsaKeyGenerator.cs with Generate(curve) method returning ECDSA key pair
+- [x] T025 [US1] Create JwkSerializer class in MrWhoOidc.KeyGen/Domain/Cryptography/JwkSerializer.cs with SerializePrivateKey and SerializePublicKey methods for JWK/JWKS format
 
 ### Domain Services for User Story 1
 
-- [ ] T026 [US1] Create IKeyGenerationService interface in MrWhoOidc.KeyGen/Domain/Services/IKeyGenerationService.cs with GenerateKeyPairAsync method signature
-- [ ] T027 [US1] Implement KeyGenerationService in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that generates kid using GuidHelper.NewId(), creates KeyPairMetadata, saves to DB, returns private JWK and public JWKS
-- [ ] T028 [US1] Register IKeyGenerationService as scoped service in MrWhoOidc.KeyGen/Program.cs
+- [x] T026 [US1] Create IKeyGenerationService interface in MrWhoOidc.KeyGen/Domain/Services/IKeyGenerationService.cs with GenerateKeyPairAsync method signature
+- [x] T027 [US1] Implement KeyGenerationService in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that generates kid using GuidHelper.NewId(), creates KeyPairMetadata, saves to DB, returns private JWK and public JWKS
+- [x] T028 [US1] Register IKeyGenerationService as scoped service in MrWhoOidc.KeyGen/Program.cs
 
 ### UI Pages for User Story 1
 
-- [ ] T029 [US1] Create key generation form page in MrWhoOidc.KeyGen/Pages/KeyGeneration/Generate.cshtml with dropdowns for algorithm (RS256/RS384/RS512/ES256/ES384/ES512/PS256), key type (RSA/EC), key size (2048/3072/4096), and curve (P-256/P-384/P-521)
-- [ ] T030 [US1] Implement Generate.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync and OnPostAsync methods, form validation, call to KeyGenerationService, and display of generated kid with download links
-- [ ] T031 [US1] Add form validation logic in Generate.cshtml.cs: validate algorithm selection, require key size for RSA, require curve for EC, display validation errors on page reload
-- [ ] T032 [US1] Add antiforgery token to key generation form in Generate.cshtml using @Html.AntiForgeryToken()
+- [x] T029 [US1] Create key generation form page in MrWhoOidc.KeyGen/Pages/KeyGeneration/Generate.cshtml with dropdowns for algorithm (RS256/RS384/RS512/ES256/ES384/ES512/PS256), key type (RSA/EC), key size (2048/3072/4096), and curve (P-256/P-384/P-521)
+- [x] T030 [US1] Implement Generate.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync and OnPostAsync methods, form validation, call to KeyGenerationService, and display of generated kid with download links
+- [x] T031 [US1] Add form validation logic in Generate.cshtml.cs: validate algorithm selection, require key size for RSA, require curve for EC, display validation errors on page reload
+- [x] T032 [US1] Add antiforgery token to key generation form in Generate.cshtml using @Html.AntiForgeryToken()
 
 ### Download API Endpoints for User Story 1
 
-- [ ] T033 [US1] Create KeyDownloadEndpoints class in MrWhoOidc.KeyGen/Api/KeyDownloadEndpoints.cs with MapGet methods for /api/keys/{kid}/private and /api/keys/{kid}/public
-- [ ] T034 [US1] Implement GET /api/keys/{kid}/private endpoint that fetches KeyPairMetadata, regenerates private JWK from stored data, records download in KeyDownloadRecord, returns JWK with Content-Disposition: attachment
-- [ ] T035 [US1] Implement GET /api/keys/{kid}/public endpoint that fetches KeyPairMetadata, returns stored PublicKeyJwks with Content-Disposition: attachment
-- [ ] T036 [US1] Add error handling in KeyDownloadEndpoints: return 404 Not Found for invalid kid, return 403 Forbidden for revoked keys, return 500 with error details for internal errors
-- [ ] T037 [US1] Register download endpoints in MrWhoOidc.KeyGen/Program.cs using app.MapGroup("/api/keys")
+- [x] T033 [US1] Create KeyDownloadEndpoints class in MrWhoOidc.KeyGen/Api/KeyDownloadEndpoints.cs with MapGet methods for /api/keys/{kid}/private and /api/keys/{kid}/public
+- [x] T034 [US1] Implement GET /api/keys/{kid}/private endpoint that fetches KeyPairMetadata, regenerates private JWK from stored data, records download in KeyDownloadRecord, returns JWK with Content-Disposition: attachment
+- [x] T035 [US1] Implement GET /api/keys/{kid}/public endpoint that fetches KeyPairMetadata, returns stored PublicKeyJwks with Content-Disposition: attachment
+- [x] T036 [US1] Add error handling in KeyDownloadEndpoints: return 404 Not Found for invalid kid, return 403 Forbidden for revoked keys, return 500 with error details for internal errors
+- [x] T037 [US1] Register download endpoints in MrWhoOidc.KeyGen/Program.cs using app.MapGroup("/api/keys")
 
 ### Key Listing Page for User Story 1
 
-- [ ] T038 [US1] Create key management list page in MrWhoOidc.KeyGen/Pages/KeyGeneration/List.cshtml with table displaying kid, algorithm, key type, key size/curve, created date, status, download count
-- [ ] T039 [US1] Implement List.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method, query parameters for filtering (status, algorithm, page, pageSize), pagination logic, fetch keys from DbContext
+- [x] T038 [US1] Create key management list page in MrWhoOidc.KeyGen/Pages/KeyGeneration/List.cshtml with table displaying kid, algorithm, key type, key size/curve, created date, status, download count
+- [x] T039 [US1] Implement List.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method, query parameters for filtering (status, algorithm, page, pageSize), pagination logic, fetch keys from DbContext
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - administrators can generate RSA/ECDSA key pairs, download them, and view the key list
 

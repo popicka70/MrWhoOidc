@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.KeyGen.Api;
 using MrWhoOidc.KeyGen.Configuration;
+using MrWhoOidc.KeyGen.Domain.Services;
 using MrWhoOidc.KeyGen.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,9 @@ builder.Services.AddDbContext<KeyGenDbContext>(options =>
 // Configure options
 builder.Services.Configure<KeyGenOptions>(
     builder.Configuration.GetSection(KeyGenOptions.SectionName));
+
+// Register domain services
+builder.Services.AddScoped<IKeyGenerationService, KeyGenerationService>();
 
 // Add health checks
 builder.Services.AddHealthChecks()
@@ -47,6 +52,9 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+
+// Map API endpoints
+app.MapKeyDownloadEndpoints();
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
