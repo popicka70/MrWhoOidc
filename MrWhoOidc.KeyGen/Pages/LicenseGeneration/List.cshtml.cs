@@ -64,9 +64,9 @@ public class ListModel : PageModel
             }
 
             // Order by most recently generated first
-            query = query.OrderByDescending(l => l.GeneratedAt);
-
-            Licenses = await query.ToListAsync();
+            // Load to memory first since SQLite doesn't support DateTimeOffset ordering
+            var allLicenses = await query.ToListAsync();
+            Licenses = allLicenses.OrderByDescending(l => l.GeneratedAt).ToList();
 
             _logger.LogInformation(
                 "Retrieved {Count} license tokens with filters: Tier={Tier}, Org={Organization}, Status={Status}",

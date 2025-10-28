@@ -64,11 +64,13 @@ public class ListModel : PageModel
         if (CurrentPage > TotalPages && TotalPages > 0) CurrentPage = TotalPages;
 
         // Order by created date descending (newest first) and apply pagination
-        Keys = await query
+        // AsEnumerable() to switch to client-side evaluation for DateTimeOffset ordering
+        var allKeys = await query.ToListAsync();
+        Keys = allKeys
             .OrderByDescending(k => k.CreatedAt)
             .Skip((CurrentPage - 1) * PageSize)
             .Take(PageSize)
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(string kid)
