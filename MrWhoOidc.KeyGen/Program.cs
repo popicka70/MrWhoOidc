@@ -22,6 +22,7 @@ builder.Services.Configure<KeyGenOptions>(
 
 // Register domain services
 builder.Services.AddScoped<IKeyGenerationService, KeyGenerationService>();
+builder.Services.AddScoped<ILicenseGenerationService, LicenseGenerationService>();
 
 // Add health checks
 builder.Services.AddHealthChecks()
@@ -55,6 +56,7 @@ app.MapRazorPages()
 
 // Map API endpoints
 app.MapKeyDownloadEndpoints();
+app.MapLicenseDownloadEndpoints();
 
 // Map health check endpoint
 app.MapHealthChecks("/health");

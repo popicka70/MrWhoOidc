@@ -110,26 +110,31 @@ This project uses a standalone service structure:
 
 ### Domain Services for User Story 2
 
-- [ ] T040 [P] [US2] Create ILicenseGenerationService interface in MrWhoOidc.KeyGen/Domain/Services/ILicenseGenerationService.cs with GenerateLicenseAsync method signature
-- [ ] T041 [US2] Implement LicenseGenerationService in MrWhoOidc.KeyGen/Domain/Services/LicenseGenerationService.cs that loads licensing private key from configured path, builds JWT payload with iss/nbf/iat/exp/jti/tier/organization/features/limits claims, signs with ECDSA P-256, creates LicenseTokenMetadata, saves to DB, returns signed JWT
-- [ ] T042 [US2] Add licensing key loading logic in LicenseGenerationService constructor: read PEM file from KeyGenOptions.LicensingPrivateKeyPath, parse using ECDsa.ImportFromPem, fail fast if missing or invalid
-- [ ] T043 [US2] Register ILicenseGenerationService as scoped service in MrWhoOidc.KeyGen/Program.cs
+- [x] T040 [P] [US2] Create ILicenseGenerationService interface in MrWhoOidc.KeyGen/Domain/Services/ILicenseGenerationService.cs with GenerateLicenseAsync method signature
+- [x] T041 [US2] Implement LicenseGenerationService in MrWhoOidc.KeyGen/Domain/Services/LicenseGenerationService.cs that loads licensing private key from configured path, builds JWT payload with iss/nbf/iat/exp/jti/tier/organization/features/limits claims, signs with ECDSA P-256, creates LicenseTokenMetadata, saves to DB, returns signed JWT
+- [x] T042 [US2] Add licensing key loading logic in LicenseGenerationService constructor: read PEM file from KeyGenOptions.LicensingPrivateKeyPath, parse using ECDsa.ImportFromPem, fail fast if missing or invalid
+- [x] T043 [US2] Register ILicenseGenerationService as scoped service in MrWhoOidc.KeyGen/Program.cs
 - [ ] T044 [US2] Update health check in Program.cs to validate licensing private key existence and validity on startup
 
 ### UI Pages for User Story 2
 
-- [ ] T045 [US2] Create license generation form page in MrWhoOidc.KeyGen/Pages/LicenseGeneration/Generate.cshtml with fields for tier (dropdown: community/professional/enterprise), organization (text), valid-from (date), valid-until (date), valid-days (number), features (comma-separated text), limits (JSON text area)
-- [ ] T046 [US2] Implement Generate.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/LicenseGeneration/ with OnGetAsync and OnPostAsync methods, form validation, call to LicenseGenerationService, display generated JWT with copy-to-clipboard button
-- [ ] T047 [US2] Add form validation logic in Generate.cshtml.cs: validate tier selection, validate date range (ValidFrom < ValidUntil), parse and validate features (comma-separated), parse and validate limits (JSON format), display validation errors on page reload
-- [ ] T048 [US2] Add antiforgery token to license generation form in Generate.cshtml using @Html.AntiForgeryToken()
-- [ ] T049 [US2] Add JavaScript for copy-to-clipboard functionality in Generate.cshtml for the generated JWT token
+- [x] T045 [US2] Create license generation form page in MrWhoOidc.KeyGen/Pages/LicenseGeneration/Generate.cshtml with fields for tier (dropdown: community/professional/enterprise), organization (text), valid-from (date), valid-until (date), valid-days (number), features (comma-separated text), limits (JSON text area)
+- [x] T046 [US2] Implement Generate.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/LicenseGeneration/ with OnGetAsync and OnPostAsync methods, form validation, call to LicenseGenerationService, display generated JWT with copy-to-clipboard button
+- [x] T047 [US2] Add form validation logic in Generate.cshtml.cs: validate tier selection, validate date range (ValidFrom < ValidUntil), parse and validate features (comma-separated), parse and validate limits (JSON format), display validation errors on page reload
+- [x] T048 [US2] Add antiforgery token to license generation form in Generate.cshtml using @Html.AntiForgeryToken()
+- [x] T049 [US2] Add JavaScript for copy-to-clipboard functionality in Generate.cshtml for the generated JWT token
 
 ### Download API Endpoints for User Story 2
 
-- [ ] T050 [US2] Create LicenseDownloadEndpoints class in MrWhoOidc.KeyGen/Api/LicenseDownloadEndpoints.cs with MapGet method for /api/licenses/{tokenId}/download
-- [ ] T051 [US2] Implement GET /api/licenses/{tokenId}/download endpoint that fetches LicenseTokenMetadata, reconstructs JWT from stored metadata (or stores JWT during generation), returns JWT with Content-Type: text/plain and Content-Disposition: attachment filename=license-{organization}-{tokenId}.jwt
-- [ ] T052 [US2] Add error handling in LicenseDownloadEndpoints: return 404 Not Found for invalid tokenId, return 500 with error details for internal errors
-- [ ] T053 [US2] Register license download endpoints in MrWhoOidc.KeyGen/Program.cs using app.MapGroup("/api/licenses")
+- [x] T050 [US2] Create LicenseDownloadEndpoints class in MrWhoOidc.KeyGen/Api/LicenseDownloadEndpoints.cs with MapGet method for /api/licenses/{tokenId}/download
+- [x] T051 [US2] Implement GET /api/licenses/{tokenId}/download endpoint that fetches LicenseTokenMetadata, reconstructs JWT from stored metadata (or stores JWT during generation), returns JWT with Content-Type: text/plain and Content-Disposition: attachment filename=license-{organization}-{tokenId}.jwt
+- [x] T052 [US2] Add error handling in LicenseDownloadEndpoints: return 404 Not Found for invalid tokenId, return 500 with error details for internal errors
+- [x] T053 [US2] Register license download endpoints in MrWhoOidc.KeyGen/Program.cs using app.MapGroup("/api/licenses")
+
+### License Listing Page for User Story 2
+
+- [x] T054 [US2] Create license management list page in MrWhoOidc.KeyGen/Pages/LicenseGeneration/List.cshtml with table displaying tokenId, tier, organization, features, valid-from, valid-until, status (valid/expired), generated date, generated by
+- [x] T055 [US2] Implement List.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/LicenseGeneration/ with OnGetAsync method, query parameters for filtering (tier, organization, expiry status), fetch licenses from DbContext
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - key generation and license generation are both fully functional
 
@@ -143,21 +148,21 @@ This project uses a standalone service structure:
 
 ### Key Revocation Feature for User Story 3
 
-- [ ] T054 [US3] Add revocation support to KeyGenerationService: create RevokeKeyAsync method in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that updates KeyPairMetadata.Status to "Revoked" and sets RevokedAt timestamp
-- [ ] T055 [US3] Update List.cshtml in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add "Revoke" button for active keys in the table
-- [ ] T056 [US3] Create Revoke.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnPostAsync method that calls RevokeKeyAsync, redirects to List page with success message
-- [ ] T057 [US3] Add revocation check in KeyDownloadEndpoints private key endpoint: query KeyPairMetadata.Status, return 403 Forbidden if Status = "Revoked" with error message
+- [ ] T056 [US3] Add revocation support to KeyGenerationService: create RevokeKeyAsync method in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that updates KeyPairMetadata.Status to "Revoked" and sets RevokedAt timestamp
+- [ ] T057 [US3] Update List.cshtml in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add "Revoke" button for active keys in the table
+- [ ] T058 [US3] Create Revoke.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnPostAsync method that calls RevokeKeyAsync, redirects to List page with success message
+- [ ] T059 [US3] Add revocation check in KeyDownloadEndpoints private key endpoint: query KeyPairMetadata.Status, return 403 Forbidden if Status = "Revoked" with error message
 
 ### Enhanced Key Listing and Filtering for User Story 3
 
-- [ ] T058 [US3] Update List.cshtml.cs in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add filtering by status (active/revoked/all via query parameter), filtering by algorithm (RS256/ES256/etc. via query parameter)
-- [ ] T059 [US3] Add filter UI controls in List.cshtml: dropdown for status filter, dropdown for algorithm filter, "Apply Filters" button
-- [ ] T060 [US3] Implement pagination logic in List.cshtml.cs: page number and page size query parameters (default 20 items per page), calculate total pages, add Previous/Next navigation
+- [ ] T060 [US3] Update List.cshtml.cs in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add filtering by status (active/revoked/all via query parameter), filtering by algorithm (RS256/ES256/etc. via query parameter)
+- [ ] T061 [US3] Add filter UI controls in List.cshtml: dropdown for status filter, dropdown for algorithm filter, "Apply Filters" button
+- [ ] T062 [US3] Implement pagination logic in List.cshtml.cs: page number and page size query parameters (default 20 items per page), calculate total pages, add Previous/Next navigation
 
 ### Key Details and Audit Trail for User Story 3
 
-- [ ] T061 [US3] Create Details.cshtml page in MrWhoOidc.KeyGen/Pages/KeyGeneration/ that displays full key metadata: kid, algorithm, key type, key size/curve, created date, status, revoked date, created by, download count
-- [ ] T062 [US3] Implement Details.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method that fetches KeyPairMetadata by kid, loads related KeyDownloadRecord entries
+- [ ] T063 [US3] Create Details.cshtml page in MrWhoOidc.KeyGen/Pages/KeyGeneration/ that displays full key metadata: kid, algorithm, key type, key size/curve, created date, status, revoked date, created by, download count
+- [ ] T064 [US3] Implement Details.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method that fetches KeyPairMetadata by kid, loads related KeyDownloadRecord entries
 - [ ] T063 [US3] Display download history table in Details.cshtml showing download type (private/public), downloaded date, downloaded by, IP address, user agent for each KeyDownloadRecord
 - [ ] T064 [US3] Add "View Details" link in List.cshtml table for each key that navigates to Details page with kid parameter
 
