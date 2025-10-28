@@ -20,4 +20,12 @@ public interface IKeyGenerationService
         int? keySize,
         string? curve,
         string? createdBy = null);
+
+    /// <summary>
+    /// Revokes a key pair, preventing further downloads of private keys.
+    /// </summary>
+    /// <param name="kid">The key identifier to revoke.</param>
+    /// <param name="revokedBy">Optional user/identity who revoked the key.</param>
+    /// <returns>True if the key was revoked successfully; false if not found.</returns>
+    Task<bool> RevokeKeyAsync(string kid, string? revokedBy = null);
 }

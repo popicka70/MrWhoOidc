@@ -66,6 +66,15 @@ public static class KeyDownloadEndpoints
                 return Results.NotFound(new { error = "key_not_found", message = $"Key with kid '{kid}' not found" });
             }
 
+            // Check if key is revoked
+            if (metadata.Status == "Revoked")
+            {
+                return Results.Problem(
+                    detail: $"Key '{kid}' has been revoked and can no longer be downloaded.",
+                    statusCode: StatusCodes.Status403Forbidden,
+                    title: "Key Revoked");
+            }
+
             // Record download
             var downloadRecord = new KeyDownloadRecord
             {

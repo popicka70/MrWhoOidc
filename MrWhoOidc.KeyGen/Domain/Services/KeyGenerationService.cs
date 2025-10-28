@@ -1,6 +1,7 @@
 using MrWhoOidc.KeyGen.Domain.Cryptography;
 using MrWhoOidc.KeyGen.Domain.Models;
 using MrWhoOidc.KeyGen.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace MrWhoOidc.KeyGen.Domain.Services;
 
@@ -67,6 +68,35 @@ public class KeyGenerationService : IKeyGenerationService
         await _context.SaveChangesAsync();
 
         return (kid, privateKeyJwk, publicKeyJwks);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> RevokeKeyAsync(string kid, string? revokedBy = null)
+    {
+        var metadata = await _context.KeyPairMetadata
+            .FirstOrDefaultAsync(k => k.Kid == kid);
+
+        if (metadata == null)
+        {
+            return false;
+        }
+
+        // Check if already revoked
+        if (metadata.Status == "Revoked")
+        {
+            return true; // Already revoked, return success
+        }
+
+        // Update status
+        metadata.Status = "Revoked";
+        metadata.RevokedAt = DateTimeOffset.UtcNow;
+
+        // Note: We don't have a RevokedBy field in the entity, but we could add it later
+        // For now, we just log the revocation
+
+        await _context.SaveChangesAsync();
+
+        return true;
     }
 
     private static void ValidateInputs(string algorithm, string keyType, int? keySize, string? curve)

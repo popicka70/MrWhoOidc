@@ -148,23 +148,23 @@ This project uses a standalone service structure:
 
 ### Key Revocation Feature for User Story 3
 
-- [ ] T056 [US3] Add revocation support to KeyGenerationService: create RevokeKeyAsync method in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that updates KeyPairMetadata.Status to "Revoked" and sets RevokedAt timestamp
-- [ ] T057 [US3] Update List.cshtml in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add "Revoke" button for active keys in the table
-- [ ] T058 [US3] Create Revoke.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnPostAsync method that calls RevokeKeyAsync, redirects to List page with success message
-- [ ] T059 [US3] Add revocation check in KeyDownloadEndpoints private key endpoint: query KeyPairMetadata.Status, return 403 Forbidden if Status = "Revoked" with error message
+- [x] T056 [US3] Add revocation support to KeyGenerationService: create RevokeKeyAsync method in MrWhoOidc.KeyGen/Domain/Services/KeyGenerationService.cs that updates KeyPairMetadata.Status to "Revoked" and sets RevokedAt timestamp
+- [x] T057 [US3] Update List.cshtml in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add "Revoke" button for active keys in the table
+- [x] T058 [US3] Create Revoke page handler in List.cshtml.cs with OnPostAsync method that calls RevokeKeyAsync, redirects to List page with success message
+- [x] T059 [US3] Add revocation check in KeyDownloadEndpoints private key endpoint: query KeyPairMetadata.Status, return 403 Forbidden if Status = "Revoked" with error message
 
 ### Enhanced Key Listing and Filtering for User Story 3
 
-- [ ] T060 [US3] Update List.cshtml.cs in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add filtering by status (active/revoked/all via query parameter), filtering by algorithm (RS256/ES256/etc. via query parameter)
-- [ ] T061 [US3] Add filter UI controls in List.cshtml: dropdown for status filter, dropdown for algorithm filter, "Apply Filters" button
-- [ ] T062 [US3] Implement pagination logic in List.cshtml.cs: page number and page size query parameters (default 20 items per page), calculate total pages, add Previous/Next navigation
+- [x] T060 [US3] Update List.cshtml.cs in MrWhoOidc.KeyGen/Pages/KeyGeneration/ to add filtering by status (active/revoked/all via query parameter), filtering by algorithm (RS256/ES256/etc. via query parameter)
+- [x] T061 [US3] Add filter UI controls in List.cshtml: dropdown for status filter, dropdown for algorithm filter, "Apply Filters" button
+- [x] T062 [US3] Implement pagination logic in List.cshtml.cs: page number and page size query parameters (default 20 items per page), calculate total pages, add Previous/Next navigation
 
 ### Key Details and Audit Trail for User Story 3
 
-- [ ] T063 [US3] Create Details.cshtml page in MrWhoOidc.KeyGen/Pages/KeyGeneration/ that displays full key metadata: kid, algorithm, key type, key size/curve, created date, status, revoked date, created by, download count
-- [ ] T064 [US3] Implement Details.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method that fetches KeyPairMetadata by kid, loads related KeyDownloadRecord entries
-- [ ] T063 [US3] Display download history table in Details.cshtml showing download type (private/public), downloaded date, downloaded by, IP address, user agent for each KeyDownloadRecord
-- [ ] T064 [US3] Add "View Details" link in List.cshtml table for each key that navigates to Details page with kid parameter
+- [x] T063 [US3] Create Details.cshtml page in MrWhoOidc.KeyGen/Pages/KeyGeneration/ that displays full key metadata: kid, algorithm, key type, key size/curve, created date, status, revoked date, created by, download count
+- [x] T064 [US3] Implement Details.cshtml.cs page model in MrWhoOidc.KeyGen/Pages/KeyGeneration/ with OnGetAsync method that fetches KeyPairMetadata by kid, loads related KeyDownloadRecord entries
+- [x] T065 [US3] Display download history table in Details.cshtml showing download type (private/public), downloaded date, downloaded by, IP address, user agent for each KeyDownloadRecord
+- [x] T066 [US3] Add "View Details" link in List.cshtml table for each key that navigates to Details page with kid parameter
 
 **Checkpoint**: All user stories should now be independently functional - key generation, license generation, and key lifecycle management are complete
 
@@ -174,14 +174,14 @@ This project uses a standalone service structure:
 
 **Purpose**: Package the service as a Docker container for deployment
 
-- [ ] T065 [P] Create Dockerfile in MrWhoOidc.KeyGen/Dockerfile with multi-stage build (build stage with SDK, runtime stage with aspnet:9.0 base image)
-- [ ] T066 [P] Create .dockerignore in MrWhoOidc.KeyGen/.dockerignore to exclude bin/, obj/, *.db, .git/
-- [ ] T067 Configure Dockerfile to expose port 8080 for HTTP (or 8443 for HTTPS), set ASPNETCORE_URLS environment variable
-- [ ] T068 Add volume mount instructions in Dockerfile comments for /data (SQLite database) and /secrets (licensing private key)
-- [ ] T069 Add HEALTHCHECK instruction in Dockerfile that calls /health endpoint with 30-second interval
-- [ ] T070 [P] Create docker-compose.yml (optional) in repository root for local development with keygen service, volume mounts, and environment variables
-- [ ] T071 Test Docker build: run `docker build -t mrwhooidc-keygen:latest -f MrWhoOidc.KeyGen/Dockerfile .` and verify image size < 200MB
-- [ ] T072 Test Docker run: start container with volume mounts, access service on localhost:8080, verify database persistence across container restarts
+- [ ] T067 [P] Create Dockerfile in MrWhoOidc.KeyGen/Dockerfile with multi-stage build (build stage with SDK, runtime stage with aspnet:9.0 base image)
+- [ ] T068 [P] Create .dockerignore in MrWhoOidc.KeyGen/.dockerignore to exclude bin/, obj/, *.db, .git/
+- [ ] T069 Configure Dockerfile to expose port 8080 for HTTP (or 8443 for HTTPS), set ASPNETCORE_URLS environment variable
+- [ ] T070 Add volume mount instructions in Dockerfile comments for /data (SQLite database) and /secrets (licensing private key)
+- [ ] T071 Add HEALTHCHECK instruction in Dockerfile that calls /health endpoint with 30-second interval
+- [ ] T072 [P] Create docker-compose.yml (optional) in repository root for local development with keygen service, volume mounts, and environment variables
+- [ ] T073 Test Docker build: run `docker build -t mrwhooidc-keygen:latest -f MrWhoOidc.KeyGen/Dockerfile .` and verify image size < 200MB
+- [ ] T074 Test Docker run: start container with volume mounts, access service on localhost:8080, verify database persistence across container restarts
 
 ---
 
