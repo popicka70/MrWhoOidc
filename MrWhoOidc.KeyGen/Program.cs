@@ -2,9 +2,16 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.KeyGen.Api;
 using MrWhoOidc.KeyGen.Configuration;
 using MrWhoOidc.KeyGen.Domain.Services;
+using MrWhoOidc.KeyGen.Middleware;
 using MrWhoOidc.KeyGen.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure structured logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+builder.Logging.AddEventSourceLogger();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -44,12 +51,37 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+
+// Add correlation ID middleware first
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// Add security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    
+    // Content Security Policy - restrictive policy for this admin app
+    context.Response.Headers.Append("Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; " +
+        "font-src 'self'; " +
+        "connect-src 'self'; " +
+        "frame-ancestors 'none'");
+    
+    await next();
+});
 
 app.UseHttpsRedirection();
 
