@@ -1,0 +1,44 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Key & License Management Service</h1>
+    <p class="lead">Generate cryptographic key pairs for OIDC client JAR/JARM and license tokens</p>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Key Pair Generation</h5>
+                <p class="card-text">Generate RSA or ECDSA key pairs for OIDC client authentication and signing.</p>
+                <a asp-page="/KeyGeneration/Generate" class="btn btn-primary">Generate Key Pair</a>
+                <a asp-page="/KeyGeneration/List" class="btn btn-outline-secondary">View All Keys</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">License Token Generation</h5>
+                <p class="card-text">Generate license tokens with custom parameters for feature enablement.</p>
+                <a asp-page="/LicenseGeneration/Generate" class="btn btn-primary">Generate License</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-info" role="alert">
+            <h5 class="alert-heading">Security Notice</h5>
+            <p class="mb-0">
+                <strong>Private keys are provided as one-time downloads.</strong> Make sure to save them securely immediately after generation.
+                This service does not store private keys after they are generated.
+            </p>
+        </div>
+    </div>
+</div>

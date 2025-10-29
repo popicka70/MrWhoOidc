@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  keygen:
+    build:
+      context: .
+      dockerfile: MrWhoOidc.KeyGen/Dockerfile
+    image: mrwhooidc-keygen:latest
+    container_name: mrwhooidc-keygen
+    ports:
+      - "8090:8080"
+    volumes:
+      # Database persistence
+      - keygen-data:/data
+      # Licensing private key (mount your key file here)
+      - ./secrets:/secrets:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__KeyGenDb=Data Source=/data/keygen.db
+      - KeyGen__LicensingPrivateKeyPath=/secrets/licensing-private-key.pem
+      - ASPNETCORE_URLS=http://+:8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - keygen-network
+
+networks:
+  keygen-network:
+    driver: bridge
+
+volumes:
+  keygen-data:
+    driver: local
+
+# Usage:
+# 1. Create secrets directory with licensing key:
+#    mkdir secrets
+#    # Place your licensing-private-key.pem in secrets/
+#
+# 2. Build and start:
+#    docker-compose up -d
+#
+# 3. View logs:
+#    docker-compose logs -f keygen
+#
+# 4. Stop:
+#    docker-compose down
+#
+# 5. Stop and remove volumes (WARNING: deletes database):
+#    docker-compose down -v

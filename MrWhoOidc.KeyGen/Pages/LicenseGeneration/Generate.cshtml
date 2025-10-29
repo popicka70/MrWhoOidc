@@ -1,0 +1,163 @@
+@page
+@model MrWhoOidc.KeyGen.Pages.LicenseGeneration.GenerateModel
+@{
+    ViewData["Title"] = "Generate License Token";
+}
+
+<h1 class="mb-4">Generate License Token</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">License Parameters</h5>
+                <form method="post">
+                    @Html.AntiForgeryToken()
+
+                    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @Model.ErrorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.GeneratedTokenId))
+                    {
+                        <div class="alert alert-success" role="alert">
+                            <h5 class="alert-heading">✅ License Token Generated Successfully!</h5>
+                            <p class="mb-2"><strong>Token ID:</strong> <code>@Model.GeneratedTokenId</code></p>
+                            <hr>
+                            <p class="mb-0">
+                                <button type="button" class="btn btn-primary" onclick="downloadLicenseToken()">
+                                    📥 Download License Token (JWT)
+                                </button>
+                            </p>
+                        </div>
+                        <script id="licenseTokenData" type="application/json">@Html.Raw(Model.JwtToken)</script>
+                        <script>
+                            function downloadLicenseToken() {
+                                var tokenElement = document.getElementById('licenseTokenData');
+                                var token = tokenElement.textContent;
+                                var filename = 'license-@(Model.GeneratedTokenId).txt';
+                                downloadFile(token, filename, 'text/plain');
+                            }
+
+                            function downloadFile(content, filename, contentType) {
+                                var blob = new Blob([content], { type: contentType });
+                                var url = window.URL.createObjectURL(blob);
+                                var a = document.createElement('a');
+                                a.style.display = 'none';
+                                a.href = url;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
+                            }
+                        </script>
+                    }
+
+                    <div class="mb-3">
+                        <label for="Tier" class="form-label">License Tier <span class="text-danger">*</span></label>
+                        <select class="form-select" id="Tier" name="Tier" asp-for="Tier" required>
+                            <option value="">-- Select Tier --</option>
+                            <option value="Free">Free</option>
+                            <option value="Developer">Developer</option>
+                            <option value="Pro">Pro</option>
+                            <option value="Enterprise">Enterprise</option>
+                        </select>
+                        <span asp-validation-for="Tier" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Organization" class="form-label">Organization Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="Organization" name="Organization" asp-for="Organization" 
+                               placeholder="e.g., Acme Corp" required>
+                        <span asp-validation-for="Organization" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="NotBefore" class="form-label">Valid From (Not Before) <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="NotBefore" name="NotBefore" asp-for="NotBefore" required>
+                                <span asp-validation-for="NotBefore" class="text-danger"></span>
+                                <small class="form-text text-muted">License becomes valid from this date</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="ExpiresAt" class="form-label">Expires At <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="ExpiresAt" name="ExpiresAt" asp-for="ExpiresAt" required>
+                                <span asp-validation-for="ExpiresAt" class="text-danger"></span>
+                                <small class="form-text text-muted">License expires after this date</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Features" class="form-label">Enabled Features (Optional)</label>
+                        <input type="text" class="form-control" id="Features" name="Features" asp-for="Features" 
+                               placeholder="e.g., sso,mfa,audit-logs">
+                        <span asp-validation-for="Features" class="text-danger"></span>
+                        <small class="form-text text-muted">Comma-separated list of feature identifiers</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Limits" class="form-label">Resource Limits (Optional, JSON)</label>
+                        <textarea class="form-control" id="Limits" name="Limits" asp-for="Limits" rows="3"
+                                  placeholder='{"clients":10,"users":100,"requests_per_hour":1000}'></textarea>
+                        <span asp-validation-for="Limits" class="text-danger"></span>
+                        <small class="form-text text-muted">JSON object defining resource quotas</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="CreatedBy" class="form-label">Generated By (Optional)</label>
+                        <input type="text" class="form-control" id="CreatedBy" name="CreatedBy" asp-for="CreatedBy" 
+                               placeholder="e.g., admin@example.com">
+                        <span asp-validation-for="CreatedBy" class="text-danger"></span>
+                        <small class="form-text text-muted">Email or username of the person generating this license</small>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            🔐 Generate License Token
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">ℹ️ About License Tokens</h5>
+                <p class="card-text">
+                    License tokens are signed JWT tokens containing licensing metadata for your organization.
+                </p>
+                <hr>
+                <h6>Token Claims</h6>
+                <ul class="small">
+                    <li><strong>iss:</strong> Issuer (MrWhoOidc-KeyGen)</li>
+                    <li><strong>jti:</strong> Unique token identifier (UUIDv7)</li>
+                    <li><strong>nbf:</strong> Not valid before timestamp</li>
+                    <li><strong>exp:</strong> Expiration timestamp</li>
+                    <li><strong>tier:</strong> License tier level</li>
+                    <li><strong>organization:</strong> Organization name</li>
+                    <li><strong>features:</strong> Enabled features (optional)</li>
+                    <li><strong>limits:</strong> Resource quotas (optional)</li>
+                </ul>
+                <hr>
+                <h6>Signature Algorithm</h6>
+                <p class="small mb-0">
+                    Tokens are signed using <strong>ECDSA P-256 (ES256)</strong> with the licensing private key.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
