@@ -112,6 +112,7 @@ builder.Services.AddAuthentication(options =>
         options.ClientId = builder.Configuration["Oidc:ClientId"] ?? builder.Configuration["OIDC:ClientId"] ?? "blazor-web";
         options.ClientSecret = builder.Configuration["Oidc:ClientSecret"] ?? builder.Configuration["OIDC:ClientSecret"]; // optional for public client
         options.ResponseType = OpenIdConnectResponseType.Code;
+        options.ResponseMode = "form_post.jwt"; // JARM: JWT-secured authorization response
         options.UsePkce = true;
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
@@ -120,6 +121,9 @@ builder.Services.AddAuthentication(options =>
         options.Scope.Add("profile");
         options.Scope.Add("email");
         options.Scope.Add("roles");
+
+        // Disable framework-level PAR (OP doesn't support it; use custom PAR via OnRedirectToIdentityProvider if needed)
+        options.PushedAuthorizationBehavior = Microsoft.AspNetCore.Authentication.OpenIdConnect.PushedAuthorizationBehavior.Disable;
 
         // Ensure Identity.Name reads from the 'name' claim in ID token/userinfo
         options.TokenValidationParameters.NameClaimType = "name";
@@ -140,13 +144,52 @@ builder.Services.AddAuthentication(options =>
 
         options.Events = new OpenIdConnectEvents
         {
+            OnMessageReceived = ctx =>
+            {
+                // JARM: Decode JWT authorization response (form_post.jwt or query.jwt)
+                // The OP returns a JWT containing the authorization code, state, etc.
+                var request = ctx.HttpContext.Request;
+                var response = request.HasFormContentType ? request.Form["response"].ToString() : request.Query["response"].ToString();
+                
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    try
+                    {
+                        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                        var jwt = handler.ReadJwtToken(response);
+                        
+                        // Extract claims from JWT and populate ProtocolMessage
+                        ctx.ProtocolMessage.Code = jwt.Claims.FirstOrDefault(c => c.Type == "code")?.Value;
+                        ctx.ProtocolMessage.State = jwt.Claims.FirstOrDefault(c => c.Type == "state")?.Value;
+                        ctx.ProtocolMessage.Iss = jwt.Claims.FirstOrDefault(c => c.Type == "iss")?.Value;
+                        
+                        // Handle any error in the JWT
+                        var error = jwt.Claims.FirstOrDefault(c => c.Type == "error")?.Value;
+                        if (!string.IsNullOrWhiteSpace(error))
+                        {
+                            ctx.ProtocolMessage.Error = error;
+                            ctx.ProtocolMessage.ErrorDescription = jwt.Claims.FirstOrDefault(c => c.Type == "error_description")?.Value;
+                            ctx.ProtocolMessage.ErrorUri = jwt.Claims.FirstOrDefault(c => c.Type == "error_uri")?.Value;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("OIDC").LogError(ex, "Failed to decode JARM response");
+                    }
+                }
+                
+                return Task.CompletedTask;
+            },
             OnRedirectToIdentityProvider = async ctx =>
             {
                 try
                 {
                     var config = ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
                     var privateJwk = config["Oidc:PrivateJwk"] ?? config["OIDC:PrivateJwk"];
-                    if (!string.IsNullOrWhiteSpace(privateJwk))
+                    var usePar = bool.TryParse(config["Oidc:UsePar"] ?? config["OIDC:UsePar"], out var parFlag) && parFlag;
+                    
+                    if (!string.IsNullOrWhiteSpace(privateJwk) && usePar)
                     {
                         var jar = ctx.HttpContext.RequestServices.GetRequiredService<JarParService>();
                         var authority = ctx.Options.Authority!;
