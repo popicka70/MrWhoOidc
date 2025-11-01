@@ -229,7 +229,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
+        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/auth/external/callback";
         
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
             code.Length > 10 ? code.Substring(0, 10) + "..." : code, 

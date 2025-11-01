@@ -424,7 +424,7 @@ public class EditModel(
             : $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
 
         // The callback paths
-        var authCallbackPath = "/Auth/External/Callback";
+        var authCallbackPath = "/auth/external/callback";
         var logoutCallbackPath = "/logout/federated-callback";
 
         // In multi-tenant mode, add tenant-specific URIs
