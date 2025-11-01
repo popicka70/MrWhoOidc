@@ -100,8 +100,8 @@ public class IndexModel : PageModel
 
         _logger.LogInformation("Successfully seeded tenant {Slug} (ID: {TenantId})", result.TenantSlug, result.TenantId);
 
-        var loginUrl = $"https://localhost:8443/t/{result.TenantSlug}/Login";
-        var adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/Admin/Users";
+        var loginUrl = $"https://localhost:8443/t/{result.TenantSlug}/login";
+        var adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/admin/users";
 
         TempData["SuccessMessage"] = $"✅ Tenant '{result.TenantName}' created successfully! " +
             $"Login at: {loginUrl} | " +

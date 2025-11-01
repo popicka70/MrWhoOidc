@@ -211,7 +211,7 @@ public class EditModel(
         
         // Build tenant-aware redirect URL
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
-            "/Admin/Providers",
+            "/admin/providers",
             tenantAccessor,
             multiTenancyOptions);
         return Redirect(redirectUrl);

@@ -47,12 +47,12 @@ public class StartImpersonationModel(
         }
 
         // Default: redirect to tenant's admin dashboard
-        // In multi-tenant mode: /t/{slug}/Admin/Index
-        // In single-tenant mode: /Admin/Index
+        // In multi-tenant mode: /t/{slug}/admin
+        // In single-tenant mode: /admin
         if (multiTenancyOptions.Value.Enabled)
         {
-            return Redirect($"/t/{tenantSlug}/Admin/Index");
+            return Redirect($"/t/{tenantSlug}/admin");
         }
-        return RedirectToPage("/Admin/Index");
+        return RedirectToPage("/admin");
     }
 }
