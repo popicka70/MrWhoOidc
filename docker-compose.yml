@@ -1,33 +1,19 @@
 services:
   webauth:
-    build:
-      context: .
-      dockerfile: MrWhoOidc.WebAuth/Dockerfile
+    image: ghcr.io/popicka70/mrwhooidc:latest
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: https://+:8443
-      ASPNETCORE_HTTPS_PORTS: 8443
-      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
-      ConnectionStrings__redis: redis:6379,abortConnect=false
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: https://+:8443;http://+:8080
+      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${POSTGRES_PASSWORD};Include Error Detail=false
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
-      # OIDC configuration
-      Oidc__PublicBaseUrl: "https://localhost:8443"
-      # Multi-tenancy configuration
-      MultiTenancy__Enabled: "true"
-      MultiTenancy__DefaultTenantSlug: "default"
-      Mail__Enabled: "true"
-      Mail__SmtpHost: "mailhog"
-      Mail__SmtpPort: "1025"
-      Mail__FromAddress: "no-reply@mrwho.local"
-      Mail__FromName: "MrWhoOidc"
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD}
+      Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL}
     ports:
       - "8443:8443"
+      - "8080:8080"
     volumes:
       - ./certs:/https:ro
     restart: unless-stopped
@@ -40,7 +26,7 @@ services:
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: oidcPass!
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -53,33 +39,9 @@ services:
     networks:
       - internal
 
-  redis:
-    image: redis:7.2-alpine
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - internal
-
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    restart: unless-stopped
-    networks:
-      - internal
-      - edge
-
 volumes:
   postgres-data:
-  redis-data:
+    driver: local
 
 networks:
   internal:

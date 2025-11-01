@@ -19,9 +19,9 @@
 
 **Purpose**: Project initialization for Docker deployment infrastructure
 
-- [ ] T001 Create `.dockerignore` file in repository root to exclude unnecessary files from build context
-- [ ] T002 [P] Backup existing `docker-compose.yml` to `docker-compose.dev.yml` for development use
-- [ ] T003 [P] Create `.github/workflows/` directory if it doesn't exist
+- [x] T001 Create `.dockerignore` file in repository root to exclude unnecessary files from build context
+- [x] T002 [P] Backup existing `docker-compose.yml` to `docker-compose.dev.yml` for development use
+- [x] T003 [P] Create `.github/workflows/` directory if it doesn't exist
 
 ---
 
@@ -31,16 +31,16 @@
 
 **⚠️ CRITICAL**: No user story work can begin until Dockerfile and base compose configuration exist
 
-- [ ] T004 Create multi-stage `Dockerfile` in repository root targeting MrWhoOidc.WebAuth with .NET 9 chiseled runtime
-- [ ] T005 Add build stage in Dockerfile: restore dependencies, build solution, publish WebAuth project
-- [ ] T006 Add runtime stage in Dockerfile: use mcr.microsoft.com/dotnet/aspnet:9.0-jammy-chiseled, copy published output
-- [ ] T007 Configure Dockerfile to run as non-root user for security
-- [ ] T008 Add Docker image labels (version, license, source URL, description) to Dockerfile
-- [ ] T009 Create production `docker-compose.yml` in repository root with PostgreSQL service configuration
-- [ ] T010 Add PostgreSQL health check to docker-compose.yml using pg_isready command
-- [ ] T011 Add named volume `postgres-data` for PostgreSQL persistence in docker-compose.yml
-- [ ] T012 Configure internal network in docker-compose.yml for database tier isolation
-- [ ] T013 Configure edge network in docker-compose.yml for public service access
+- [x] T004 Create multi-stage `Dockerfile` in repository root targeting MrWhoOidc.WebAuth with .NET 9 chiseled runtime
+- [x] T005 Add build stage in Dockerfile: restore dependencies, build solution, publish WebAuth project
+- [x] T006 Add runtime stage in Dockerfile: use mcr.microsoft.com/dotnet/aspnet:9.0-jammy-chiseled, copy published output
+- [x] T007 Configure Dockerfile to run as non-root user for security
+- [x] T008 Add Docker image labels (version, license, source URL, description) to Dockerfile
+- [x] T009 Create production `docker-compose.yml` in repository root with PostgreSQL service configuration
+- [x] T010 Add PostgreSQL health check to docker-compose.yml using pg_isready command
+- [x] T011 Add named volume `postgres-data` for PostgreSQL persistence in docker-compose.yml
+- [x] T012 Configure internal network in docker-compose.yml for database tier isolation
+- [x] T013 Configure edge network in docker-compose.yml for public service access
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -54,16 +54,16 @@
 
 ### Implementation for User Story 4
 
-- [ ] T014 [US4] Create `.github/workflows/docker-publish.yml` GitHub Actions workflow file
-- [ ] T015 [US4] Configure workflow triggers in docker-publish.yml: push to main, tags matching v*, pull requests
-- [ ] T016 [US4] Add checkout step to docker-publish.yml workflow
-- [ ] T017 [US4] Add Docker Buildx setup step to docker-publish.yml for multi-platform builds
-- [ ] T018 [US4] Add GitHub Container Registry login step using GITHUB_TOKEN to docker-publish.yml
-- [ ] T019 [US4] Add metadata extraction step to docker-publish.yml using docker/metadata-action
-- [ ] T020 [US4] Configure metadata action to generate tags: latest, v1.2.3, v1.2, v1, main, sha-commit
-- [ ] T021 [US4] Add build and push step to docker-publish.yml with platform support for linux/amd64,linux/arm64
-- [ ] T022 [US4] Configure build to use Dockerfile from repository root
-- [ ] T023 [US4] Update production docker-compose.yml to reference `ghcr.io/popicka70/mrwhooidc:latest` image instead of build context
+- [x] T014 [US4] Create `.github/workflows/docker-publish.yml` GitHub Actions workflow file
+- [x] T015 [US4] Configure workflow triggers in docker-publish.yml: push to main, tags matching v*, pull requests
+- [x] T016 [US4] Add checkout step to docker-publish.yml workflow
+- [x] T017 [US4] Add Docker Buildx setup step to docker-publish.yml for multi-platform builds
+- [x] T018 [US4] Add GitHub Container Registry login step using GITHUB_TOKEN to docker-publish.yml
+- [x] T019 [US4] Add metadata extraction step to docker-publish.yml using docker/metadata-action
+- [x] T020 [US4] Configure metadata action to generate tags: latest, v1.2.3, v1.2, v1, main, sha-commit
+- [x] T021 [US4] Add build and push step to docker-publish.yml with platform support for linux/amd64,linux/arm64
+- [x] T022 [US4] Configure build to use Dockerfile from repository root
+- [x] T023 [US4] Update production docker-compose.yml to reference `ghcr.io/popicka70/mrwhooidc:latest` image instead of build context
 
 **Checkpoint**: At this point, CI/CD pipeline publishes images and users can pull from registry
 
@@ -77,23 +77,23 @@
 
 ### Implementation for User Story 1
 
-- [ ] T024 [US1] Add webauth service to docker-compose.yml referencing ghcr.io/popicka70/mrwhooidc:latest image
-- [ ] T025 [US1] Configure webauth service depends_on PostgreSQL with health check condition in docker-compose.yml
-- [ ] T026 [US1] Add webauth service environment variables to docker-compose.yml: ASPNETCORE_ENVIRONMENT, ASPNETCORE_URLS, ConnectionStrings__authdb
-- [ ] T027 [US1] Configure PostgreSQL connection string in docker-compose.yml using service name hostname
-- [ ] T028 [US1] Add TLS certificate volume mount to webauth service: ./certs:/https:ro in docker-compose.yml
-- [ ] T029 [US1] Configure Kestrel certificate path environment variables in webauth service
-- [ ] T030 [US1] Add OIDC public base URL environment variable to webauth service
-- [ ] T031 [US1] Configure ports mapping 8443:8443 for webauth service in docker-compose.yml
-- [ ] T032 [US1] Add webauth service to both internal and edge networks in docker-compose.yml
-- [ ] T033 [US1] Configure restart policy `unless-stopped` for all services in docker-compose.yml
-- [ ] T034 [US1] Create `.env.example` file in repository root with required environment variables documented
-- [ ] T035 [US1] Add POSTGRES_PASSWORD, OIDC_PUBLIC_BASE_URL, CERT_PASSWORD to .env.example with placeholder values
-- [ ] T036 [US1] Create basic `docs/deployment-guide.md` with prerequisites, quick start, and configuration sections
-- [ ] T037 [US1] Document minimum system requirements in docs/deployment-guide.md
-- [ ] T038 [US1] Document PostgreSQL configuration and connection strings in docs/deployment-guide.md
-- [ ] T039 [US1] Document TLS certificate requirements and setup in docs/deployment-guide.md
-- [ ] T040 [US1] Add troubleshooting section to docs/deployment-guide.md for common startup issues
+- [x] T024 [US1] Add webauth service to docker-compose.yml referencing ghcr.io/popicka70/mrwhooidc:latest image
+- [x] T025 [US1] Configure webauth service depends_on PostgreSQL with health check condition in docker-compose.yml
+- [x] T026 [US1] Add webauth service environment variables to docker-compose.yml: ASPNETCORE_ENVIRONMENT, ASPNETCORE_URLS, ConnectionStrings__authdb
+- [x] T027 [US1] Configure PostgreSQL connection string in docker-compose.yml using service name hostname
+- [x] T028 [US1] Add TLS certificate volume mount to webauth service: ./certs:/https:ro in docker-compose.yml
+- [x] T029 [US1] Configure Kestrel certificate path environment variables in webauth service
+- [x] T030 [US1] Add OIDC public base URL environment variable to webauth service
+- [x] T031 [US1] Configure ports mapping 8443:8443 for webauth service in docker-compose.yml
+- [x] T032 [US1] Add webauth service to both internal and edge networks in docker-compose.yml
+- [x] T033 [US1] Configure restart policy `unless-stopped` for all services in docker-compose.yml
+- [x] T034 [US1] Create `.env.example` file in repository root with required environment variables documented
+- [x] T035 [US1] Add POSTGRES_PASSWORD, OIDC_PUBLIC_BASE_URL, CERT_PASSWORD to .env.example with placeholder values
+- [x] T036 [US1] Create basic `docs/deployment-guide.md` with prerequisites, quick start, and configuration sections
+- [x] T037 [US1] Document minimum system requirements in docs/deployment-guide.md
+- [x] T038 [US1] Document PostgreSQL configuration and connection strings in docs/deployment-guide.md
+- [x] T039 [US1] Document TLS certificate requirements and setup in docs/deployment-guide.md
+- [x] T040 [US1] Add troubleshooting section to docs/deployment-guide.md for common startup issues
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can deploy OIDC server with PostgreSQL and access discovery endpoint
 
