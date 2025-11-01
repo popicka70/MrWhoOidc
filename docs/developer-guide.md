@@ -1,6 +1,9 @@
 # Developer guide: Integrating with MrWhoOidc
 
-Updated: 2025-10-25 (adds licensing analytics integration)
+Updated: 2025-11-01 (URL convention migration to kebab-case)
+
+> **⚠️ URL Convention Change (November 2025)**  
+> All URLs now use kebab-case (e.g., `/auth/external/callback` instead of `/Auth/External/Callback`). External IdPs must update registered callback URLs. See [URL Mappings Reference](../specs/002-url-kebab-case-conversion/url-mappings.md) for complete migration guide.
 
 This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flows, request parameters, JAR/JARM, token exchange (OBO), DPoP, and discovery.
 

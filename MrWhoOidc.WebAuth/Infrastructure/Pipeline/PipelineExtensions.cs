@@ -105,8 +105,7 @@ public static class PipelineExtensions
                 p.StartsWithSegments("/userinfo", out _) ||
                 p.StartsWithSegments("/api", out _) ||
                 p.StartsWithSegments("/connect", out _) ||
-                p.StartsWithSegments("/auth/external", out _) ||
-                p.StartsWithSegments("/Auth/External", out _)) // Legacy: remove after migration
+                p.StartsWithSegments("/auth/external", out _))
             {
                 return; // leave status code and body untouched
             }

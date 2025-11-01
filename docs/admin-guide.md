@@ -1,6 +1,9 @@
 # Admin guide: Providers, Keys, Claim Mappings & OBO Policy (Draft)
 
-Updated: 2025-10-25 (analytics & licensing instrumentation)
+Updated: 2025-11-01 (URL convention migration to kebab-case)
+
+> **⚠️ URL Convention Change (November 2025)**  
+> All admin URLs now use kebab-case (e.g., `/admin/providers` instead of `/Admin/Providers`). Update bookmarks and scripts. See [URL Mappings Reference](../specs/002-url-kebab-case-conversion/url-mappings.md) for complete list.
 
 This guide helps administrators configure providers, keys, client mappings, claim mapping, and OBO (token exchange) policy for common scenarios. Screenshots will be added; for now, follow the steps and examples.
 
