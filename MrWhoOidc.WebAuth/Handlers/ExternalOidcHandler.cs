@@ -229,7 +229,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/Auth/External/Callback";
+        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/auth/external/callback";
         
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
             code.Length > 10 ? code.Substring(0, 10) + "..." : code, 
@@ -353,7 +353,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (!string.IsNullOrEmpty(cancel))
         {
-            var picker = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(model.ReturnUrl ?? "/")}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
+            var picker = $"/auth/providers/select?client_id={Uri.EscapeDataString(model.ClientId ?? string.Empty)}&ReturnUrl={Uri.EscapeDataString(model.ReturnUrl ?? "/")}&info={Uri.EscapeDataString("Linking canceled. Choose a different provider.")}{(string.IsNullOrEmpty(model.CorrelationId) ? string.Empty : "&cid=" + Uri.EscapeDataString(model.CorrelationId))}";
             return Results.Redirect(picker);
         }
 

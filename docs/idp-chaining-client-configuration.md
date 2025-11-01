@@ -1,5 +1,8 @@
 # IdP Chaining Client Configuration Guide
 
+> **⚠️ URL Convention Change (November 2025)**  
+> Admin URLs now use kebab-case (e.g., `/admin/clients` instead of `/Admin/Clients`). This guide reflects the new convention.
+
 ## Problem
 
 When chaining two MrWhoOidc IdP instances (IdP #1 → IdP #2), the second IdP may bypass its provider picker and go directly to username/password login, skipping configured login options like QR code and other external IdPs.
@@ -26,7 +29,7 @@ In **IdP #2**, you need to properly configure the client that represents **IdP #
 ### Step 1: Find the Client in IdP #2
 
 1. Navigate to IdP #2's Admin UI
-2. Go to **Admin → Clients**
+2. Go to **Admin → Clients** (route: `/admin/clients`)
 3. Find the client with `ClientId` matching the `ClientId` configured in IdP #1's external provider settings
 
 ### Step 2: Enable Login Methods
@@ -43,7 +46,7 @@ Edit the client configuration and ensure these flags are set correctly:
 
 If IdP #2 has external providers configured, you need to map them to the client representing IdP #1:
 
-1. Go to **Admin → Provider Mappings**
+1. Go to **Admin → Provider Mappings** (route: `/admin/provider-mappings`)
 2. Find or create mappings for the client representing IdP #1
 3. Add the external providers you want to be available during IdP chaining
 4. Set `Order`, `AutoRedirectIfSingle`, and other flags as needed
@@ -117,7 +120,7 @@ After configuration, test the flow:
 
 **Problem:** IdP #2 has external providers configured, but they're not mapped to the client representing IdP #1.
 
-**Solution:** Go to Admin → Provider Mappings and add mappings.
+**Solution:** Go to **Admin → Provider Mappings** (route: `/admin/provider-mappings`) and add mappings.
 
 ### ❌ Mistake 3: Auto-Redirect Settings
 

@@ -1,4 +1,4 @@
-@page
+﻿@page "/admin/roles"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Roles.IndexModel
@@ -18,7 +18,7 @@
         </h1>
         <p class="text-muted mb-0">Manage user roles and permissions</p>
     </div>
-    <a class="btn btn-success" href="@tenantPrefix/Admin/Roles/Add">
+    <a class="btn btn-success" href="@tenantPrefix/admin/roles/add">
         <i class="bi bi-plus-lg"></i> Add Role
     </a>
 </div>
@@ -112,7 +112,7 @@
                     </td>
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group">
-                            <a href="@(tenantPrefix)/Admin/Roles/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                            <a href="@(tenantPrefix)/admin/roles/edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                             <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                         </div>
                     </td>

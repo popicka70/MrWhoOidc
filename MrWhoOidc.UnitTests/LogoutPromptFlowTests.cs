@@ -91,7 +91,7 @@ public class LogoutPromptFlowTests
         var rdProp = result.GetType().GetProperty("Url");
         Assert.IsNotNull(rdProp, "Redirect result missing Url property");
         var url = rdProp!.GetValue(result) as string;
-        StringAssert.Contains(url!, "/Logout/Prompt");
+        StringAssert.Contains(url!, "/logout/prompt");
         StringAssert.Contains(url!, "style=dark");
     }
 }

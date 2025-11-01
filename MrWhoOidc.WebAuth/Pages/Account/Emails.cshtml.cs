@@ -64,7 +64,7 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     public async Task<IActionResult> OnPostAddAsync()
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/emails") });
 
         if (!ModelState.IsValid)
         {
@@ -127,7 +127,7 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
         var user = await GetCurrentUserAsync();
         if (user is null)
         {
-            return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+            return RedirectToPage("/login", new { returnUrl = Url.Page("/account/emails") });
         }
 
         if (string.IsNullOrWhiteSpace(user.Email))
@@ -159,7 +159,7 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     public async Task<IActionResult> OnPostRemoveAsync(Guid emailId)
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/emails") });
 
         var email = await _db.UserAlternativeEmails
             .FirstOrDefaultAsync(e => e.Id == emailId && e.UserId == user.Id);
@@ -181,7 +181,7 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     public async Task<IActionResult> OnPostResendAsync(Guid emailId)
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Emails") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/emails") });
 
         var email = await _db.UserAlternativeEmails
             .FirstOrDefaultAsync(e => e.Id == emailId && e.UserId == user.Id);

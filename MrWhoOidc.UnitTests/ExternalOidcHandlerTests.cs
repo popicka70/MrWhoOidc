@@ -45,7 +45,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") ?? false, "Expected redirect to error page");
+        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
     }
 
     [TestMethod]
@@ -62,7 +62,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") ?? false, "Expected redirect to error page");
+        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
     }
 
     [TestMethod]
@@ -79,7 +79,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") ?? false, "Expected redirect to error page for unknown provider");
+        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for unknown provider");
     }
 
     [TestMethod]
@@ -111,7 +111,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") ?? false, "Expected redirect to error page for disabled provider");
+        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for disabled provider");
     }
 
     [TestMethod]
@@ -139,7 +139,7 @@ public class ExternalOidcHandlerTests
         Assert.IsNotNull(result);
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/Auth/External/Error") ?? false, "Expected redirect to error page for invalid config");
+        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for invalid config");
     }
 
     #endregion

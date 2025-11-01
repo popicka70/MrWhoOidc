@@ -37,6 +37,28 @@
                 </div>
             </div>
         }
+
+        @if (!string.IsNullOrEmpty(Model.SuggestedPath))
+        {
+            <div class="alert alert-warning">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-lightbulb-fill me-3 mt-1" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h5 class="alert-heading mb-2">Did you mean this URL?</h5>
+                        <p class="mb-2">
+                            This site uses <strong>kebab-case</strong> URL convention. Your requested URL contains PascalCase segments.
+                        </p>
+                        <p class="mb-2"><strong>Try this instead:</strong></p>
+                        <div class="d-flex align-items-center gap-2">
+                            <code class="flex-grow-1 p-2 bg-light border">@Model.SuggestedPath</code>
+                            <a href="@Model.SuggestedPath" class="btn btn-sm btn-warning">
+                                <i class="bi bi-box-arrow-up-right"></i> Go There
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
         
         <div class="text-center mt-4">
             <a href="@(tenantPrefix)/" class="btn btn-primary">

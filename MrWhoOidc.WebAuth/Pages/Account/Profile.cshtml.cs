@@ -40,7 +40,7 @@ public class ProfileModel(AuthDbContext db) : PageModel
     public async Task<IActionResult> OnPostAsync()
     {
         var user = await GetCurrentUserAsync(tracked: true);
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Profile") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/profile") });
 
         if (!ModelState.IsValid)
         {

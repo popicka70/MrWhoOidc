@@ -1,4 +1,4 @@
-@page
+﻿@page "/platform-admin"
 @model MrWhoOidc.WebAuth.Pages.PlatformAdmin.IndexModel
 @{
     ViewData["Title"] = "Platform Administration";
@@ -138,7 +138,7 @@
                                     <p class="card-text small text-muted">
                                         View, create, edit, and manage all tenants in the system. Monitor tenant status and configuration.
                                     </p>
-                                    <a href="/PlatformAdmin/Tenants" class="btn btn-primary btn-sm">
+                                    <a href="/platform-admin/tenants" class="btn btn-primary btn-sm">
                                         <i class="bi bi-list-ul me-1"></i>View Tenants
                                     </a>
                                 </div>
@@ -218,7 +218,7 @@
                                             <td>@tenant.UserCount</td>
                                             <td>@tenant.ClientCount</td>
                                             <td>
-                                                <a href="/PlatformAdmin/Tenants/Edit/@tenant.Id" class="btn btn-sm btn-outline-primary">
+                                                <a href="/platform-admin/tenants/edit/@tenant.Id" class="btn btn-sm btn-outline-primary">
                                                     <i class="bi bi-pencil"></i>
                                                 </a>
                                             </td>

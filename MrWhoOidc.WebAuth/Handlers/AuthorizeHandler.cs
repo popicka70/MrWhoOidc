@@ -402,7 +402,7 @@ public sealed class AuthorizeHandler(
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
                     // Remember last provider for this client
                     SetLastProviderCookie(http, validationResult.ClientId!, idpParam);
-                    var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpParam)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                    var url = $"/auth/external/start?provider={Uri.EscapeDataString(idpParam)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                     return Results.Redirect(url);
                 }
 
@@ -435,7 +435,7 @@ public sealed class AuthorizeHandler(
                     {
                         var retUrlHint = http.Request.Path + http.Request.QueryString.ToUriComponent();
                         SetLastProviderCookie(http, validationResult.ClientId!, idpHint);
-                        var hintUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idpHint)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retUrlHint)}";
+                        var hintUrl = $"/auth/external/start?provider={Uri.EscapeDataString(idpHint)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retUrlHint)}";
                         return Results.Redirect(hintUrl);
                     }
 
@@ -444,7 +444,7 @@ public sealed class AuthorizeHandler(
                     {
                         var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
                         SetLastProviderCookie(http, validationResult.ClientId!, providerLinks[0].Name);
-                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
+                        var url = $"/auth/external/start?provider={Uri.EscapeDataString(providerLinks[0].Name)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(returnUrl)}";
                         return Results.Redirect(url);
                     }
 
@@ -456,13 +456,13 @@ public sealed class AuthorizeHandler(
                     {
                         logger.LogWarning("⚠️ Auto-redirecting to last-used provider '{LastProvider}' due to cookie (even though providerLinks is empty). This may cause a loop!", last);
                         var retCookie = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                        var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
+                        var url = $"/auth/external/start?provider={Uri.EscapeDataString(last)}&clientId={Uri.EscapeDataString(validationResult.ClientId!)}&returnUrl={Uri.EscapeDataString(retCookie)}";
                         return Results.Redirect(url);
                     }
 
                     // Show provider picker (includes QR option if allowQr is true)
                     var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                    var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+                    var url2 = $"/auth/providers/select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
                     if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
                     logger.LogInformation("Redirecting to provider picker (allowQr={AllowQr}, providerCount={Count})", allowQr, providerLinks.Count);
                     return Results.Redirect(url2);

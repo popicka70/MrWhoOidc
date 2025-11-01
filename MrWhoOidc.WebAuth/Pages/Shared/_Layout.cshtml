@@ -191,11 +191,11 @@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
                                 <div class="list-group-item fw-semibold text-uppercase small bg-info text-white">My Account</div>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account"><i class="bi bi-person-circle me-2"></i>Dashboard</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Profile"><i class="bi bi-person me-2"></i>Profile</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Password"><i class="bi bi-key me-2"></i>Password</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Mfa"><i class="bi bi-shield-lock me-2"></i>Security</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Account/Sessions"><i class="bi bi-phone me-2"></i>Sessions</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account"><i class="bi bi-person-circle me-2"></i>Dashboard</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account/profile"><i class="bi bi-person me-2"></i>Profile</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/password"><i class="bi bi-key me-2"></i>Password</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/mfa"><i class="bi bi-shield-lock me-2"></i>Security</a>
+                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account/sessions"><i class="bi bi-phone me-2"></i>Sessions</a>
                             }
                             
                             @* Platform Admin Section - Only visible to platform admins *@
@@ -205,13 +205,13 @@
                                 if (platformAdminResult.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                                     @if (MultiTenancyOptions.Value.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
+                                        <a class="list-group-item list-group-item-action" asp-page="/platform-admin/tenants"><i class="bi bi-building me-2"></i>Tenants</a>
                                     }
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation-history"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
                                 }
                             }
                             
@@ -223,24 +223,24 @@
                                 if (tenantAdminResult.Succeeded || platformAdminCheck.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-success text-white">Admin</div>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Clients"><i class="bi bi-people me-2"></i>Clients</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Providers"><i class="bi bi-shield-lock me-2"></i>Providers</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/ProviderMappings"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Scopes"><i class="bi bi-tags me-2"></i>Scopes</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Roles"><i class="bi bi-person-badge me-2"></i>Roles</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Users"><i class="bi bi-people-fill me-2"></i>Users</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/Backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/Admin/License"><i class="bi bi-award me-2"></i>License</a>
-                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/Admin/License/Install"><i class="bi bi-cloud-upload me-2"></i>Install or update</a>
-                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/Admin/License/History"><i class="bi bi-clock-history me-2"></i>History</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/clients"><i class="bi bi-people me-2"></i>Clients</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/providers"><i class="bi bi-shield-lock me-2"></i>Providers</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/provider-mappings"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/scopes"><i class="bi bi-tags me-2"></i>Scopes</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/roles"><i class="bi bi-person-badge me-2"></i>Roles</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/users"><i class="bi bi-people-fill me-2"></i>Users</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
+                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/license"><i class="bi bi-award me-2"></i>License</a>
+                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/install"><i class="bi bi-cloud-upload me-2"></i>Install or update</a>
+                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
                                     
                                     @* Branding - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Value.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
-                                        <a class="list-group-item list-group-item-action" asp-page="/Admin/Settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
+                                        <a class="list-group-item list-group-item-action" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
+                                        <a class="list-group-item list-group-item-action" asp-page="/admin/settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
                                     }
                                 }
                             }

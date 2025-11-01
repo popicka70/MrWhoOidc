@@ -1,4 +1,4 @@
-@page
+﻿@page "/account/profile"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Account.ProfileModel
@@ -100,7 +100,7 @@
                 <ul class="small mb-0 ps-3">
                     <li class="mb-2">Use your real name to help others identify you</li>
                     <li class="mb-2">Keep your email address up to date for security notifications</li>
-                    <li class="mb-2">Consider adding alternative emails in the <a href="@(tenantPrefix)/Account/Emails">Emails</a> section</li>
+                    <li class="mb-2">Consider adding alternative emails in the <a href="@(tenantPrefix)/account/emails">Emails</a> section</li>
                     <li>Your username is permanent and cannot be changed</li>
                 </ul>
             </div>
@@ -110,13 +110,13 @@
             <div class="card-body">
                 <h6 class="card-title"><i class="bi bi-link-45deg me-2"></i>Related Settings</h6>
                 <div class="list-group list-group-flush">
-                    <a href="@(tenantPrefix)/Password" class="list-group-item list-group-item-action">
+                    <a href="@(tenantPrefix)/password" class="list-group-item list-group-item-action">
                         <i class="bi bi-key me-2"></i>Change Password
                     </a>
-                    <a href="@(tenantPrefix)/Mfa" class="list-group-item list-group-item-action">
+                    <a href="@(tenantPrefix)/mfa" class="list-group-item list-group-item-action">
                         <i class="bi bi-shield-lock me-2"></i>Security Settings
                     </a>
-                    <a href="@(tenantPrefix)/Account/Emails" class="list-group-item list-group-item-action">
+                    <a href="@(tenantPrefix)/account/emails" class="list-group-item list-group-item-action">
                         <i class="bi bi-envelope me-2"></i>Alternative Emails
                     </a>
                 </div>

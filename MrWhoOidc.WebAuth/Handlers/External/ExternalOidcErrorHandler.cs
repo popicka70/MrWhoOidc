@@ -31,7 +31,7 @@ internal sealed class ExternalOidcErrorHandler : IExternalOidcErrorHandler
                 qb[kv.Key] = kv.Value;
         }
 
-        var url = "/Auth/External/Error?" + qb.ToString();
+        var url = "/auth/external/error?" + qb.ToString();
         return Results.Redirect(url);
     }
 
@@ -48,8 +48,8 @@ internal sealed class ExternalOidcErrorHandler : IExternalOidcErrorHandler
         builder.Append(System.Web.HttpUtility.HtmlEncode(targetUserDisplay));
         builder.Append("\"). Do you want to link this external identity to your existing account?</p>");
         builder.Append("<div class=\"mt-3\">");
-        builder.Append($"<a class=\"btn btn-primary me-2\" href=\"/Auth/External/Confirm?t={Uri.EscapeDataString(token)}\">Yes, link and continue</a>");
-        builder.Append($"<a class=\"btn btn-secondary\" href=\"/Auth/External/Confirm?t={Uri.EscapeDataString(token)}&cancel=1\">Cancel</a>");
+        builder.Append($"<a class=\"btn btn-primary me-2\" href=\"/auth/external/confirm?t={Uri.EscapeDataString(token)}\">Yes, link and continue</a>");
+        builder.Append($"<a class=\"btn btn-secondary\" href=\"/auth/external/confirm?t={Uri.EscapeDataString(token)}&cancel=1\">Cancel</a>");
         builder.Append("</div>");
         builder.Append("</body></html>");
 

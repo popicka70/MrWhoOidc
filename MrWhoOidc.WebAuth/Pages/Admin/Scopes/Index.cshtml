@@ -1,4 +1,4 @@
-@page
+﻿@page "/admin/scopes"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Scopes.IndexModel
@@ -65,7 +65,7 @@
                         @if (Model.IsPlatformAdmin)
                         {
                             <div class="btn-group btn-group-sm" role="group">
-                                <a href="@(tenantPrefix)/Admin/Scopes/Edit/@s.Name" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                                <a href="@(tenantPrefix)/admin/scopes/edit/@s.Name" class="btn btn-outline-secondary" title="Edit">Edit</a>
                                 <a asp-page="Delete" asp-route-name="@s.Name" class="btn btn-outline-danger" title="Delete">Del</a>
                             </div>
                         }

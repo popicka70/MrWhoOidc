@@ -155,8 +155,8 @@ public sealed class ExternalOidcIntegrationTests
 
         // Discovery (downstream)
         app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx));
-        app.MapGet("/Auth/External/Start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
-        app.MapGet("/Auth/External/Callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
+        app.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
+        app.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
 
         // In-memory upstream code->nonce store (simulates upstream authorization server transient storage)
         var codeNonceStore = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
@@ -332,7 +332,7 @@ public sealed class ExternalOidcIntegrationTests
         using var _ = env.Host;
         var client = env.Client;
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
-        var start = await client.GetAsync($"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode);
         var upstreamLocation = start.Headers.Location;
         Assert.IsNotNull(upstreamLocation, "Start redirect is missing location header");
@@ -349,7 +349,7 @@ public sealed class ExternalOidcIntegrationTests
         Assert.IsNotNull(callbackLocation, "Callback redirect missing location header");
         var baseUri = client.BaseAddress ?? new Uri("http://localhost");
         var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
-        Assert.AreEqual("/Auth/External/Callback", callbackUri.AbsolutePath, "Callback should redirect to external callback endpoint");
+        Assert.AreEqual("/auth/external/callback", callbackUri.AbsolutePath, "Callback should redirect to external callback endpoint");
         var cb = await client.GetAsync(callbackUri);
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
         var finalLocation = cb.Headers.Location;
@@ -381,13 +381,13 @@ public sealed class ExternalOidcIntegrationTests
         using var _ = env.Host;
         var client = env.Client;
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
-        var start = await client.GetAsync($"/Auth/External/Start?provider=up2&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var start = await client.GetAsync($"/auth/external/start?provider=up2&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         var loc = start.Headers.Location!.ToString();
         var uri = new Uri(loc); var qs = System.Web.HttpUtility.ParseQueryString(uri.Query); var state = qs["state"]!;
-        var cb = await client.GetAsync($"/Auth/External/Callback?error=access_denied&error_description=User%20cancelled&state={Uri.EscapeDataString(state)}");
+        var cb = await client.GetAsync($"/auth/external/callback?error=access_denied&error_description=User%20cancelled&state={Uri.EscapeDataString(state)}");
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
         var errLoc = cb.Headers.Location!.ToString();
-        Assert.IsTrue(errLoc.StartsWith("/Auth/External/Error", StringComparison.OrdinalIgnoreCase));
+        Assert.IsTrue(errLoc.StartsWith("/auth/external/error", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("code=upstream_error", errLoc);
     }
 
@@ -418,10 +418,10 @@ public sealed class ExternalOidcIntegrationTests
         using var _ = env.Host;
         var client = env.Client;
         
-        // Step 1: /Auth/External/Start - verify X-Correlation-Id header is present in response
+        // Step 1: /auth/external/start - verify X-Correlation-Id header is present in response
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
         var providedCid = "test-correlation-e2e-123";
-        var startRequest = new HttpRequestMessage(HttpMethod.Get, $"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var startRequest = new HttpRequestMessage(HttpMethod.Get, $"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         startRequest.Headers.Add("X-Correlation-Id", providedCid);
         
         var start = await client.SendAsync(startRequest);
@@ -478,9 +478,9 @@ public sealed class ExternalOidcIntegrationTests
         using var _ = env.Host;
         var client = env.Client;
         
-        // Step 1: Call /Auth/External/Start WITHOUT X-Correlation-Id header
+        // Step 1: Call /auth/external/start WITHOUT X-Correlation-Id header
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
-        var start = await client.GetAsync($"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start should redirect to upstream");
         
@@ -520,7 +520,7 @@ public sealed class ExternalOidcIntegrationTests
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
 
         // Step 1: External Start - should return 302 with upstream authorization URL
-        var start = await client.GetAsync($"/Auth/External/Start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start must return 302 redirect");
         
         var startLocation = start.Headers.Location;
@@ -537,7 +537,7 @@ public sealed class ExternalOidcIntegrationTests
         
         var baseUri = client.BaseAddress ?? new Uri("http://localhost");
         var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
-        Assert.AreEqual("/Auth/External/Callback", callbackUri.AbsolutePath, "Must redirect to callback endpoint");
+        Assert.AreEqual("/auth/external/callback", callbackUri.AbsolutePath, "Must redirect to callback endpoint");
         
         var callbackQuery = System.Web.HttpUtility.ParseQueryString(callbackUri.Query);
         Assert.IsFalse(string.IsNullOrEmpty(callbackQuery["code"]), "Callback URL must include code parameter");

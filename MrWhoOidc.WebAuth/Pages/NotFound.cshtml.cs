@@ -6,8 +6,9 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class NotFoundModel : PageModel
 {
     public string? RequestedPath { get; set; }
+    public string? SuggestedPath { get; set; }
 
-    public IActionResult OnGet(string? path = null)
+    public IActionResult OnGet(string? path = null, string? suggestion = null)
     {
         // Get original path from query string (set by UseStatusCodePagesWithReExecute)
         // or from route parameter
@@ -15,6 +16,13 @@ public class NotFoundModel : PageModel
         if (string.IsNullOrEmpty(RequestedPath))
         {
             RequestedPath = path ?? HttpContext.Request.Path.Value;
+        }
+
+        // Get kebab-case suggestion if provided
+        SuggestedPath = Request.Query["suggestion"].ToString();
+        if (string.IsNullOrEmpty(SuggestedPath))
+        {
+            SuggestedPath = suggestion;
         }
 
         // IMPORTANT: If this is an API/OIDC protocol endpoint, return raw 404
@@ -35,4 +43,3 @@ public class NotFoundModel : PageModel
         return Page();
     }
 }
-

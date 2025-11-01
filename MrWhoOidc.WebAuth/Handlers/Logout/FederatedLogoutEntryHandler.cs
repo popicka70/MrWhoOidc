@@ -49,6 +49,6 @@ public sealed class FederatedLogoutEntryHandler(
         var qClient = string.IsNullOrEmpty(request.ClientId) ? string.Empty : $"&client_id={HttpUtility.UrlEncode(request.ClientId)}";
         var qPlru = string.IsNullOrEmpty(request.PostLogoutRedirectUri) ? string.Empty : $"&post_logout_redirect_uri={HttpUtility.UrlEncode(request.PostLogoutRedirectUri)}";
 
-        return Results.Redirect($"/Logout/Prompt?provider={HttpUtility.UrlEncode(idpDisplay)}&ret={HttpUtility.UrlEncode(formReturn)}{qStyle}{qClient}{qPlru}");
+        return Results.Redirect($"/logout/prompt?provider={HttpUtility.UrlEncode(idpDisplay)}&ret={HttpUtility.UrlEncode(formReturn)}{qStyle}{qClient}{qPlru}");
     }
 }

@@ -60,7 +60,7 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
     public async Task<IActionResult> OnPostRevokeAsync(Guid sessionId)
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Sessions") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/sessions") });
 
         var token = await db.Tokens
             .FirstOrDefaultAsync(t => t.Id == sessionId && t.UserId == user.Id);
@@ -84,7 +84,7 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
     public async Task<IActionResult> OnPostRevokeAllAsync()
     {
         var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Account/Sessions") });
+        if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/sessions") });
 
         var currentSessionJti = GetCurrentSessionJti();
 

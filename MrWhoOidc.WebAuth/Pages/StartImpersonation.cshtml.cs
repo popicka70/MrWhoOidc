@@ -25,7 +25,7 @@ public class StartImpersonationModel(
         if (!success)
         {
             TempData["Error"] = "Failed to start impersonation. You may not have permission or the tenant may be inactive.";
-            return RedirectToPage("/PlatformAdmin/Tenants/Index");
+            return RedirectToPage("/platform-admin/tenants");
         }
 
         // Redirect to tenant admin UI
@@ -43,16 +43,16 @@ public class StartImpersonationModel(
         if (tenantSlug == null)
         {
             TempData["Error"] = "Tenant not found.";
-            return RedirectToPage("/PlatformAdmin/Tenants/Index");
+            return RedirectToPage("/platform-admin/tenants");
         }
 
         // Default: redirect to tenant's admin dashboard
-        // In multi-tenant mode: /t/{slug}/Admin/Index
-        // In single-tenant mode: /Admin/Index
+        // In multi-tenant mode: /t/{slug}/admin
+        // In single-tenant mode: /admin
         if (multiTenancyOptions.Value.Enabled)
         {
-            return Redirect($"/t/{tenantSlug}/Admin/Index");
+            return Redirect($"/t/{tenantSlug}/admin");
         }
-        return RedirectToPage("/Admin/Index");
+        return RedirectToPage("/admin");
     }
 }

@@ -105,15 +105,37 @@ public static class PipelineExtensions
                 p.StartsWithSegments("/userinfo", out _) ||
                 p.StartsWithSegments("/api", out _) ||
                 p.StartsWithSegments("/connect", out _) ||
-                p.StartsWithSegments("/Auth/External", out _))
+                p.StartsWithSegments("/auth/external", out _))
             {
                 return; // leave status code and body untouched
             }
 
-            // For user-facing routes, re-execute pipeline to render NotFound page
+            // For user-facing routes, re-execute pipeline to render error page
+            // For 404 errors, include kebab-case URL suggestion if applicable
             var originalPath = request.Path.Value ?? "/";
-            request.Path = "/NotFound";
-            request.QueryString = new QueryString($"?path={Uri.EscapeDataString(originalPath)}");
+            
+            if (response.StatusCode == 404)
+            {
+                // Check if PascalCase URL might have kebab-case equivalent
+                var suggestion = MrWhoOidc.WebAuth.Extensions.UrlConversionHelper.SuggestKebabCase(originalPath);
+                
+                request.Path = "/NotFound";
+                if (!string.IsNullOrEmpty(suggestion))
+                {
+                    request.QueryString = new QueryString($"?path={Uri.EscapeDataString(originalPath)}&suggestion={Uri.EscapeDataString(suggestion)}");
+                }
+                else
+                {
+                    request.QueryString = new QueryString($"?path={Uri.EscapeDataString(originalPath)}");
+                }
+            }
+            else
+            {
+                // Other status codes (401, 403, 500, etc.)
+                request.Path = "/Error";
+                request.QueryString = new QueryString($"?statusCode={response.StatusCode}");
+            }
+            
             await context.Next(http);
         });
 
