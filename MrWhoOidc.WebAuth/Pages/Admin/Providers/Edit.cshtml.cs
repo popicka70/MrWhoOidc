@@ -49,6 +49,12 @@ public class EditModel(
     public List<string> RedirectUris { get; private set; } = new();
 
     /// <summary>
+    /// The logout callback URI(s) that the external IDP should be configured with for federated logout.
+    /// This is computed based on the current tenant context and multi-tenancy settings.
+    /// </summary>
+    public List<string> LogoutCallbackUris { get; private set; } = new();
+
+    /// <summary>
     /// Validates that the current user has access to the provider based on tenant filtering.
     /// </summary>
     private async Task<bool> ValidateTenantAccessAsync(Guid providerId)
@@ -410,25 +416,29 @@ public class EditModel(
     private void ComputeRedirectUris()
     {
         RedirectUris.Clear();
+        LogoutCallbackUris.Clear();
 
         // Get the base URL (public-facing URL or current request URL)
         var baseUrl = !string.IsNullOrEmpty(oidcOptions.Value.PublicBaseUrl)
             ? oidcOptions.Value.PublicBaseUrl.TrimEnd('/')
             : $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
 
-        // The callback path is always /Auth/External/Callback
-        var callbackPath = "/Auth/External/Callback";
+        // The callback paths
+        var authCallbackPath = "/Auth/External/Callback";
+        var logoutCallbackPath = "/logout/federated-callback";
 
-        // In multi-tenant mode, add tenant-specific URI
+        // In multi-tenant mode, add tenant-specific URIs
         if (multiTenancyOptions.Enabled && tenantAccessor.CurrentTenant != null)
         {
             var tenantSlug = tenantAccessor.CurrentTenant.Slug;
-            RedirectUris.Add($"{baseUrl}/t/{tenantSlug}{callbackPath}");
+            RedirectUris.Add($"{baseUrl}/t/{tenantSlug}{authCallbackPath}");
+            LogoutCallbackUris.Add($"{baseUrl}/t/{tenantSlug}{logoutCallbackPath}");
         }
         else
         {
             // Single-tenant mode or no tenant context
-            RedirectUris.Add($"{baseUrl}{callbackPath}");
+            RedirectUris.Add($"{baseUrl}{authCallbackPath}");
+            LogoutCallbackUris.Add($"{baseUrl}{logoutCallbackPath}");
         }
     }
 

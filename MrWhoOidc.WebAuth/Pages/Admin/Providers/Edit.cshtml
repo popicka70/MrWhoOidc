@@ -70,7 +70,7 @@ else
         @* General Tab *@
         <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
             @* Redirect URI Configuration Card *@
-            @if (Model.RedirectUris != null && Model.RedirectUris.Count > 0)
+            @if ((Model.RedirectUris != null && Model.RedirectUris.Count > 0) || (Model.LogoutCallbackUris != null && Model.LogoutCallbackUris.Count > 0))
             {
                 <div class="card mb-4 border-primary">
                     <div class="card-header bg-primary text-white">
@@ -78,29 +78,62 @@ else
                         <strong>Configuration for External Identity Provider</strong>
                     </div>
                     <div class="card-body">
-                        <p class="mb-2">
+                        <p class="mb-3">
                             <i class="bi bi-info-circle text-primary me-1"></i>
-                            Configure the following redirect URI(s) in your external identity provider:
+                            Configure the following callback URI(s) in your external identity provider:
                         </p>
-                        @foreach (var uri in Model.RedirectUris)
+                        
+                        @if (Model.RedirectUris != null && Model.RedirectUris.Count > 0)
                         {
-                            <div class="input-group mb-2">
-                                <input type="text" 
-                                       class="form-control font-monospace" 
-                                       value="@uri" 
-                                       readonly 
-                                       id="redirect-uri-@Model.RedirectUris.IndexOf(uri)" />
-                                <button class="btn btn-outline-secondary" 
-                                        type="button" 
-                                        onclick="copyToClipboard('redirect-uri-@Model.RedirectUris.IndexOf(uri)', this)"
-                                        title="Copy to clipboard">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
-                            </div>
+                            <h6 class="fw-bold mb-2">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>
+                                Authentication Redirect URI
+                            </h6>
+                            @foreach (var uri in Model.RedirectUris)
+                            {
+                                <div class="input-group mb-3">
+                                    <input type="text" 
+                                           class="form-control font-monospace" 
+                                           value="@uri" 
+                                           readonly 
+                                           id="redirect-uri-@Model.RedirectUris.IndexOf(uri)" />
+                                    <button class="btn btn-outline-secondary" 
+                                            type="button" 
+                                            onclick="copyToClipboard('redirect-uri-@Model.RedirectUris.IndexOf(uri)', this)"
+                                            title="Copy to clipboard">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            }
                         }
-                        <small class="text-muted">
+                        
+                        @if (Model.LogoutCallbackUris != null && Model.LogoutCallbackUris.Count > 0)
+                        {
+                            <h6 class="fw-bold mb-2 mt-3">
+                                <i class="bi bi-box-arrow-left me-1"></i>
+                                Logout Callback URI (Post-Logout Redirect URI)
+                            </h6>
+                            @foreach (var uri in Model.LogoutCallbackUris)
+                            {
+                                <div class="input-group mb-2">
+                                    <input type="text" 
+                                           class="form-control font-monospace" 
+                                           value="@uri" 
+                                           readonly 
+                                           id="logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)" />
+                                    <button class="btn btn-outline-secondary" 
+                                            type="button" 
+                                            onclick="copyToClipboard('logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)', this)"
+                                            title="Copy to clipboard">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
+                        
+                        <small class="text-muted mt-2 d-block">
                             <i class="bi bi-shield-check me-1"></i>
-                            This URI is tenant-aware and matches your current configuration.
+                            These URIs are tenant-aware and match your current configuration.
                         </small>
                     </div>
                 </div>
