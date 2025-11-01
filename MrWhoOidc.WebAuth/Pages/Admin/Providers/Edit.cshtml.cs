@@ -11,6 +11,8 @@ using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
 using System.IO;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -22,7 +24,8 @@ public class EditModel(
     IWebHostEnvironment env,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
-    IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
+    IMultiTenancyOptions multiTenancyOptions,
+    IOptions<OidcOptions> oidcOptions) : ReadOnlyAdminPageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -38,6 +41,12 @@ public class EditModel(
     public bool DiscoveryOk { get; private set; }
     public string? DiscoverySummary { get; private set; }
     public string? DiscoveryJson { get; private set; }
+
+    /// <summary>
+    /// The redirect URI(s) that the external IDP should be configured with.
+    /// This is computed based on the current tenant context and multi-tenancy settings.
+    /// </summary>
+    public List<string> RedirectUris { get; private set; } = new();
 
     /// <summary>
     /// Validates that the current user has access to the provider based on tenant filtering.
@@ -112,6 +121,9 @@ public class EditModel(
                 };
             }
         }
+
+        // Compute redirect URIs for display
+        ComputeRedirectUris();
 
         return Page();
     }
@@ -389,6 +401,35 @@ public class EditModel(
             new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
         };
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Computes the redirect URI(s) that should be configured in the external IDP.
+    /// Takes into account the current tenant context and multi-tenancy settings.
+    /// </summary>
+    private void ComputeRedirectUris()
+    {
+        RedirectUris.Clear();
+
+        // Get the base URL (public-facing URL or current request URL)
+        var baseUrl = !string.IsNullOrEmpty(oidcOptions.Value.PublicBaseUrl)
+            ? oidcOptions.Value.PublicBaseUrl.TrimEnd('/')
+            : $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
+
+        // The callback path is always /Auth/External/Callback
+        var callbackPath = "/Auth/External/Callback";
+
+        // In multi-tenant mode, add tenant-specific URI
+        if (multiTenancyOptions.Enabled && tenantAccessor.CurrentTenant != null)
+        {
+            var tenantSlug = tenantAccessor.CurrentTenant.Slug;
+            RedirectUris.Add($"{baseUrl}/t/{tenantSlug}{callbackPath}");
+        }
+        else
+        {
+            // Single-tenant mode or no tenant context
+            RedirectUris.Add($"{baseUrl}{callbackPath}");
+        }
     }
 
     private OidcConfigForm? JsonToForm(string json)

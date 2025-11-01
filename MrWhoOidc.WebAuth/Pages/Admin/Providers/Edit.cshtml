@@ -69,6 +69,43 @@ else
     <div class="tab-content border-start border-end border-bottom p-3" id="providerTabsContent">
         @* General Tab *@
         <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
+            @* Redirect URI Configuration Card *@
+            @if (Model.RedirectUris != null && Model.RedirectUris.Count > 0)
+            {
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-link-45deg me-1"></i>
+                        <strong>Configuration for External Identity Provider</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            <i class="bi bi-info-circle text-primary me-1"></i>
+                            Configure the following redirect URI(s) in your external identity provider:
+                        </p>
+                        @foreach (var uri in Model.RedirectUris)
+                        {
+                            <div class="input-group mb-2">
+                                <input type="text" 
+                                       class="form-control font-monospace" 
+                                       value="@uri" 
+                                       readonly 
+                                       id="redirect-uri-@Model.RedirectUris.IndexOf(uri)" />
+                                <button class="btn btn-outline-secondary" 
+                                        type="button" 
+                                        onclick="copyToClipboard('redirect-uri-@Model.RedirectUris.IndexOf(uri)', this)"
+                                        title="Copy to clipboard">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        }
+                        <small class="text-muted">
+                            <i class="bi bi-shield-check me-1"></i>
+                            This URI is tenant-aware and matches your current configuration.
+                        </small>
+                    </div>
+                </div>
+            }
+
             <div class="mb-3">
                 <label asp-for="Input.Name" class="form-label"></label>
                 <input asp-for="Input.Name" class="form-control" />
@@ -310,6 +347,31 @@ else
 
 @* JSON Formatting & Tab Coordination Script *@
 <script>
+    function copyToClipboard(inputId, button) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.select();
+            input.setSelectionRange(0, 99999); // For mobile devices
+            
+            navigator.clipboard.writeText(input.value).then(function() {
+                // Visual feedback
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-check-lg"></i>';
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-success');
+                
+                setTimeout(function() {
+                    button.innerHTML = originalHTML;
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-outline-secondary');
+                }, 1500);
+            }).catch(function(err) {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const formatBtn = document.getElementById('formatJsonBtn');
         const textarea = document.getElementById('configJsonTextarea');
