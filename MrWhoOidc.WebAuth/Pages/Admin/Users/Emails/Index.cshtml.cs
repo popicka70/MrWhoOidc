@@ -43,7 +43,7 @@ public class IndexModel(
     public async Task<IActionResult> OnGetAsync()
     {
         var user = await GetUserWithTenantFilterAsync();
-        if (user is null) return RedirectToPage("/Admin/Users/Index");
+        if (user is null) return RedirectToPage("/admin/users");
         SetHeading(user.Username, user.Name);
         Items = await db.UserAlternativeEmails.AsNoTracking()
             .Where(a => a.UserId == UserId)
@@ -62,7 +62,7 @@ public class IndexModel(
         var user = await GetUserWithTenantFilterAsync();
         if (user is null)
         {
-            return RedirectToPage("/Admin/Users/Index");
+            return RedirectToPage("/admin/users");
         }
 
         try

@@ -21,6 +21,6 @@ public class StopImpersonationModel(IImpersonationService impersonationService) 
         }
 
         // Default: redirect to platform admin dashboard
-        return RedirectToPage("/PlatformAdmin/Index");
+        return RedirectToPage("/platform-admin");
     }
 }
