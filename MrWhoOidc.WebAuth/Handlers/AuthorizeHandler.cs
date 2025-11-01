@@ -462,7 +462,7 @@ public sealed class AuthorizeHandler(
 
                     // Show provider picker (includes QR option if allowQr is true)
                     var ret = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                    var url2 = $"/Auth/Providers/Select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
+                    var url2 = $"/auth/providers/select?client_id={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(ret)}";
                     if (!string.IsNullOrEmpty(idpHint)) url2 += $"&idp_hint={Uri.EscapeDataString(idpHint)}";
                     logger.LogInformation("Redirecting to provider picker (allowQr={AllowQr}, providerCount={Count})", allowQr, providerLinks.Count);
                     return Results.Redirect(url2);

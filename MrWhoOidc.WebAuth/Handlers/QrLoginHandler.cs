@@ -193,9 +193,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
             });
 
             // Pass data via query parameters to the Razor page
-            var qrPageUrl = $"/Auth/Qr?token={Uri.EscapeDataString(sessionToken)}&qr={Uri.EscapeDataString(qrCodeDataUri)}&interval={opts.PollIntervalSeconds}";
+            var qrPageUrl = $"/auth/qr?token={Uri.EscapeDataString(sessionToken)}&qr={Uri.EscapeDataString(qrCodeDataUri)}&interval={opts.PollIntervalSeconds}";
 
-            _logger.LogDebug("Redirecting to /Auth/Qr Razor page with QR data in query");
+            _logger.LogDebug("Redirecting to /auth/qr Razor page with QR data in query");
             return Results.Redirect(qrPageUrl);
         }
         catch (Exception ex)
@@ -446,7 +446,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         if (!isAuthenticated)
         {
             // Redirect to login with return URL
-            var returnUrl = $"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}";
+            var returnUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
             var loginUrl = $"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}";
             _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to LOGIN. ReturnUrl: {ReturnUrl}, Full login URL: {LoginUrl}",
                 returnUrl, loginUrl);
@@ -454,19 +454,19 @@ public sealed class QrLoginHandler : IQrLoginHandler
         }
 
         // User is authenticated, redirect to confirmation page
-        var confirmUrl = $"/Auth/QrConfirm?session={Uri.EscapeDataString(sessionToken)}";
+        var confirmUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
         _logger.LogInformation("➡️ [QR Mobile Landing] User already authenticated, redirecting to CONFIRM: {ConfirmUrl}", confirmUrl);
         return Results.Redirect(confirmUrl);
     }
 
     /// <summary>
-    /// NOTE: This method is no longer used - the Razor Page at /Auth/QrConfirm handles requests directly.
+    /// NOTE: This method is no longer used - the Razor Page at /auth/qr-confirm handles requests directly.
     /// It's kept here for interface compatibility but should not be called.
     /// </summary>
     public Task<IResult> ConfirmPageAsync(HttpContext http)
     {
-        _logger.LogWarning("⚠️ ConfirmPageAsync called but is deprecated - Razor Page should handle /Auth/QrConfirm directly");
-        return Task.FromResult(Results.Redirect("/Auth/QrConfirm") as IResult);
+        _logger.LogWarning("⚠️ ConfirmPageAsync called but is deprecated - Razor Page should handle /auth/qr-confirm directly");
+        return Task.FromResult(Results.Redirect("/auth/qr-confirm") as IResult);
     }
 
     private string BuildCallbackUrl(QrLoginSession session)

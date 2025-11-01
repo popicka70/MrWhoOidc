@@ -8,7 +8,7 @@
     var clientId = Model.ClientId;
     var returnUrl = Model.ReturnUrl;
     var pickerUrl = (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(returnUrl))
-        ? $"/Auth/Providers/Select?client_id={System.Uri.EscapeDataString(clientId)}&ReturnUrl={System.Uri.EscapeDataString(returnUrl)}&cid={System.Uri.EscapeDataString(cid ?? string.Empty)}"
+        ? $"/auth/providers/select?client_id={System.Uri.EscapeDataString(clientId)}&ReturnUrl={System.Uri.EscapeDataString(returnUrl)}&cid={System.Uri.EscapeDataString(cid ?? string.Empty)}"
         : null;
 }
 <!DOCTYPE html>

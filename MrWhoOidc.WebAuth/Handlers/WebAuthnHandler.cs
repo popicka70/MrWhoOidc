@@ -227,7 +227,7 @@ public sealed class WebAuthnHandler(
                 { 
                     success = true,
                     requiresMfaEnrollment = true,
-                    redirectUrl = "/Mfa/Index?required=true"
+                    redirectUrl = "/mfa?required=true"
                 });
             }
 

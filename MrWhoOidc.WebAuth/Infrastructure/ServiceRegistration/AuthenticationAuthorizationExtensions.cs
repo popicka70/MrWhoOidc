@@ -55,8 +55,8 @@ public static class AuthenticationAuthorizationExtensions
 
                         var currentTenant = tenantAccessor?.CurrentTenant;
                         var accessDeniedPath = currentTenant != null && multiTenancyOptions?.Enabled == true
-                            ? $"/t/{currentTenant.Slug}/Account/AccessDenied"
-                            : "/Account/AccessDenied";
+                            ? $"/t/{currentTenant.Slug}/account/access-denied"
+                            : "/account/access-denied";
 
                         // Build redirect with returnUrl
                         var returnUrl = context.Request.Path + context.Request.QueryString;
