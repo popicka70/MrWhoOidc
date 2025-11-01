@@ -1091,7 +1091,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "Account/WebAuthn",
+    "Pattern": "account/web-authn",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
