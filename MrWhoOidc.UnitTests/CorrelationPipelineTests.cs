@@ -85,7 +85,7 @@ public sealed class CorrelationPipelineTests
         var result = await handler.CallbackAsync(ctx);
 
         AssertRedirect(result, out var redirectUrl);
-        StringAssert.StartsWith(redirectUrl, "/Auth/External/Error");
+        StringAssert.StartsWith(redirectUrl, "/auth/external/error");
 
         Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Cache miss should be recorded once");
         Assert.HasCount(1, metrics.GetCounterEvents("oidc.correlation.cache.misses"), "Expected a single miss measurement");
@@ -111,7 +111,7 @@ public sealed class CorrelationPipelineTests
         var result = await handler.CallbackAsync(ctx);
 
         AssertRedirect(result, out var redirectUrl);
-        StringAssert.StartsWith(redirectUrl, "/Auth/External/Error");
+        StringAssert.StartsWith(redirectUrl, "/auth/external/error");
 
         Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Invalid handles should be ignored without cache lookup");
         Assert.IsEmpty(metrics.GetCounterEvents("oidc.correlation.cache.misses"), "Invalid handles should not record miss measurements");
@@ -377,7 +377,7 @@ public sealed class CorrelationPipelineTests
         var result = await handler.CallbackAsync(ctx);
 
         AssertRedirect(result, out var redirectUrl);
-        StringAssert.StartsWith(redirectUrl, "/Auth/External/Error");
+        StringAssert.StartsWith(redirectUrl, "/auth/external/error");
 
         // Empty handle should be ignored without cache lookup
         Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Empty handles should skip cache lookup");
