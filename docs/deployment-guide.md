@@ -625,6 +625,69 @@ environment:
 
 Ship logs to centralized system (ELK, Splunk, CloudWatch).
 
+### 8. Production Configuration Checklist
+
+Use this checklist before deploying to production:
+
+#### Pre-Deployment Configuration
+
+- [ ] **Strong Passwords**: Generated 32+ character random passwords for PostgreSQL
+- [ ] **TLS Certificates**: Valid production certificates from trusted CA installed in `./certs/`
+- [ ] **Base URL**: `OIDC_PUBLIC_BASE_URL` matches actual production domain
+- [ ] **Certificate Password**: `CERT_PASSWORD` set correctly for production certificate
+- [ ] **Environment File**: `.env` file permissions set to 600 (owner read/write only)
+- [ ] **Git Ignore**: Confirmed `.env` is in `.gitignore` (never commit secrets)
+
+#### Feature Configuration
+
+- [ ] **Multi-Tenancy**: `MULTITENANT_ENABLED` configured per requirements
+- [ ] **Redis**: `REDIS_ENABLED=true` for production performance (recommended)
+- [ ] **Email/SMTP**: `MAIL_ENABLED=true` and SMTP credentials configured
+- [ ] **Logging Level**: `LOGGING_LEVEL=Warning` or `Error` for production (reduce noise)
+
+#### Security Hardening
+
+- [ ] **Network Isolation**: Database on internal network only (no external access)
+- [ ] **Firewall Rules**: Only ports 8443/443 accessible externally
+- [ ] **TLS Version**: TLS 1.2+ enforced (disable TLS 1.0/1.1)
+- [ ] **Container Security**: Running as non-root user (verified in Dockerfile)
+- [ ] **Read-Only Volumes**: Certificate volumes mounted as `:ro` (read-only)
+
+#### Resource Management
+
+- [ ] **Resource Limits**: CPU and memory limits configured (see docker-compose-examples.md)
+- [ ] **Health Checks**: Enabled for all services (webauth, postgres, redis)
+- [ ] **Log Rotation**: Configured to prevent disk space exhaustion
+- [ ] **Restart Policies**: Set to `unless-stopped` for all services
+
+#### Operational Readiness
+
+- [ ] **Backup Procedures**: Database backup script created and scheduled (daily recommended)
+- [ ] **Monitoring**: External monitoring/alerting configured (Prometheus, Grafana, CloudWatch, etc.)
+- [ ] **Log Aggregation**: Logs shipped to centralized system (ELK, Splunk, Datadog, etc.)
+- [ ] **Secrets Management**: Production secrets stored in secure vault (not just .env file)
+- [ ] **Documentation**: Team trained on deployment, backup, and recovery procedures
+- [ ] **Rollback Plan**: Documented rollback procedure for failed deployments
+
+#### Verification
+
+- [ ] **Discovery Endpoint**: `curl https://yourdomain/.well-known/openid-configuration` returns valid JSON
+- [ ] **SSL/TLS**: No browser certificate warnings (valid chain of trust)
+- [ ] **Database Connection**: Application logs show successful database connection
+- [ ] **Redis Connection**: (if enabled) Application logs show successful Redis connection
+- [ ] **Email Sending**: (if enabled) Test email delivery works
+- [ ] **Health Endpoint**: `curl https://yourdomain/health` returns HTTP 200
+- [ ] **Admin UI Access**: Admin interface accessible and functional
+
+#### Post-Deployment
+
+- [ ] **Security Scan**: Container image scanned for vulnerabilities
+- [ ] **Penetration Testing**: Security assessment completed (if required)
+- [ ] **Performance Testing**: Load testing confirms performance targets met
+- [ ] **Update Schedule**: Regular security update schedule established
+
+**Tip**: Save this checklist and review it for each deployment or upgrade.
+
 ---
 
 ## Monitoring and Logging

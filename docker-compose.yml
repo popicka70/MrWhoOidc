@@ -5,12 +5,39 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Core Configuration
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: https://+:8443;http://+:8080
-      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${POSTGRES_PASSWORD};Include Error Detail=false
-      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ConnectionStrings__authdb: ${CONNECTION_STRING_AUTHDB:-Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${POSTGRES_PASSWORD};Include Error Detail=false}
+      
+      # TLS/HTTPS Configuration
+      ASPNETCORE_Kestrel__Certificates__Default__Path: ${ASPNETCORE_Kestrel__Certificates__Default__Path:-/https/aspnetapp.pfx}
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD}
+      
+      # OIDC Configuration
       Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL}
+      
+      # Multi-Tenancy Configuration
+      MultiTenant__Enabled: ${MULTITENANT_ENABLED:-false}
+      MultiTenant__DefaultTenantSlug: ${MULTITENANT_DEFAULT_TENANT_SLUG:-default}
+      
+      # Redis Configuration (Optional)
+      Redis__Enabled: ${REDIS_ENABLED:-false}
+      Redis__ConnectionString: ${REDIS_CONNECTION_STRING:-redis:6379,abortConnect=false}
+      
+      # Email/SMTP Configuration (Optional)
+      Mail__Enabled: ${MAIL_ENABLED:-false}
+      Mail__SmtpHost: ${MAIL_SMTP_HOST}
+      Mail__SmtpPort: ${MAIL_SMTP_PORT:-587}
+      Mail__UseSsl: ${MAIL_SMTP_USE_SSL:-true}
+      Mail__FromAddress: ${MAIL_FROM_ADDRESS}
+      Mail__FromName: ${MAIL_FROM_NAME:-MrWhoOidc}
+      Mail__SmtpUsername: ${MAIL_SMTP_USERNAME}
+      Mail__SmtpPassword: ${MAIL_SMTP_PASSWORD}
+      
+      # Logging Configuration
+      Logging__LogLevel__Default: ${LOGGING_LEVEL:-Information}
+      Logging__LogLevel__Microsoft.AspNetCore: ${LOGGING_LEVEL:-Warning}
     ports:
       - "8443:8443"
       - "8080:8080"
