@@ -94,21 +94,21 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 #### Additional Docker Compose Variants
 
-- [ ] T020 [P] [US2] Create MrWho/docker-compose.redis.yml extending basic config with Redis service, Redis connection configuration, performance notes (30-50% faster, 60-80% DB load reduction)
-- [ ] T021 [P] [US2] Create MrWho/docker-compose.production.yml with Redis, multi-tenant mode enabled, security hardening (non-root containers, read-only volumes, network isolation), resource limits, comprehensive health checks
-- [ ] T022 [P] [US2] Create MrWho/docker-compose.dev.yml extending basic config with MailHog service for email testing, development logging enabled, hot-reload configuration
-- [ ] T023 [US2] Add inline comments to all docker-compose variants (20-30 comments per file) explaining configuration choices and customization points
-- [ ] T024 [US2] Validate all docker-compose variants with docker-compose config command (must pass without errors)
+- [x] T020 [P] [US2] Create MrWho/docker-compose.redis.yml extending basic config with Redis service, Redis connection configuration, performance notes (30-50% faster, 60-80% DB load reduction)
+- [x] T021 [P] [US2] Create MrWho/docker-compose.production.yml with Redis, multi-tenant mode enabled, security hardening (non-root containers, read-only volumes, network isolation), resource limits, comprehensive health checks
+- [x] T022 [P] [US2] Create MrWho/docker-compose.dev.yml extending basic config with MailHog service for email testing, development logging enabled, hot-reload configuration
+- [x] T023 [US2] Add inline comments to all docker-compose variants (20-30 comments per file) explaining configuration choices and customization points
+- [x] T024 [US2] Validate all docker-compose variants with docker-compose config command (must pass without errors)
 
 #### Documentation Copying and Adaptation
 
-- [ ] T025 [P] [US2] Copy docs/deployment-guide.md from main solution to MrWho/docs/deployment-guide.md
-- [ ] T026 [P] [US2] Copy docs/upgrade-guide.md from main solution to MrWho/docs/upgrade-guide.md
-- [ ] T027 [P] [US2] Copy docs/docker-compose-examples.md from main solution to MrWho/docs/docker-compose-examples.md
-- [ ] T028 [P] [US2] Copy docs/docker-security-best-practices.md from main solution to MrWho/docs/docker-security-best-practices.md
-- [ ] T029 [P] [US2] Copy docs/admin-guide.md from main solution to MrWho/docs/admin-guide.md
-- [ ] T030 [P] [US2] Copy docs/multitenancy-quick-reference.md from main solution to MrWho/docs/multitenancy-quick-reference.md
-- [ ] T031 [P] [US2] Copy docs/key-rotation-playbook.md from main solution to MrWho/docs/key-rotation-playbook.md
+- [x] T025 [P] [US2] Copy docs/deployment-guide.md from main solution to MrWho/docs/deployment-guide.md
+- [x] T026 [P] [US2] Copy docs/upgrade-guide.md from main solution to MrWho/docs/upgrade-guide.md
+- [x] T027 [P] [US2] Copy docs/docker-compose-examples.md from main solution to MrWho/docs/docker-compose-examples.md
+- [x] T028 [P] [US2] Copy docs/docker-security-best-practices.md from main solution to MrWho/docs/docker-security-best-practices.md
+- [x] T029 [P] [US2] Copy docs/admin-guide.md from main solution to MrWho/docs/admin-guide.md
+- [x] T030 [P] [US2] Copy docs/multitenancy-quick-reference.md from main solution to MrWho/docs/multitenancy-quick-reference.md
+- [x] T031 [P] [US2] Copy docs/key-rotation-playbook.md from main solution to MrWho/docs/key-rotation-playbook.md
 
 #### Documentation Adaptation
 
