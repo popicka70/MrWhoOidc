@@ -186,14 +186,22 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 - [x] T060 [US3] Test dotnet-mvc-client demo: run with docker-compose, register client in admin UI, verify authentication flow works, verify logout works
 - [x] T061 [US3] Test react-client demo: run with docker-compose, register client in admin UI, verify authentication flow works, verify silent refresh works
 - [x] T062 [US3] Test go-client demo: run with docker-compose, register client in admin UI, verify authentication flow works, verify token validation works
-- [ ] T063 [US3] Verify all demo README instructions are accurate and complete by following them step-by-step
+- [x] T063 [US3] Verify all demo README instructions are accurate and complete by following them step-by-step
 
 **Infrastructure Validation Complete**:
+
 - ✓ Docker Compose configurations validated (all 3 demos, no syntax errors)
 - ✓ All required files present (READMEs, Dockerfiles, docker-compose.demo.yml)
 - ✓ Configuration files present (.env.example or config.json)
 - ✓ nginx.conf exists for React demo
 - ✓ Parent docker-compose.yml copied to demos/ directory for easier usage
+
+**Documentation Verification Complete**:
+
+- ✓ Internal links validated (demos/README.md, integration-examples.md, developer-guide.md exist)
+- ✓ Docker Compose commands tested (`docker compose -f ../docker-compose.yml -f docker-compose.demo.yml`)
+- ✓ Local dev commands present (npm install, go mod download)
+- ✓ All demo READMEs have consistent structure (Prerequisites, Quick Start, Configuration, Troubleshooting)
 
 **Checkpoint**: User Story 3 complete - demos and NuGet package documentation enable developer integration
 
