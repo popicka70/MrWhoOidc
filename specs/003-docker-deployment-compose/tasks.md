@@ -163,18 +163,18 @@
 
 ### Implementation for User Story 5
 
-- [ ] T071 [US5] Create `docs/upgrade-guide.md` with upgrade procedures
-- [ ] T072 [US5] Document pre-upgrade checklist in docs/upgrade-guide.md (backup database, review changelog, check compatibility)
-- [ ] T073 [US5] Add database backup procedure to docs/upgrade-guide.md using pg_dump command
-- [ ] T074 [US5] Document upgrade steps in docs/upgrade-guide.md: update image tag, pull new image, restart services
-- [ ] T075 [US5] Add automatic migration documentation to docs/upgrade-guide.md explaining startup behavior
-- [ ] T076 [US5] Document version pinning strategy in docs/upgrade-guide.md (v1.2.3 vs v1.2 vs v1 vs latest)
-- [ ] T077 [US5] Add rollback procedure to docs/upgrade-guide.md (restore previous image, restore database backup)
-- [ ] T078 [US5] Document verification steps in docs/upgrade-guide.md (check logs, test discovery endpoint, verify admin UI)
-- [ ] T079 [US5] Add troubleshooting section for failed upgrades to docs/upgrade-guide.md
-- [ ] T080 [US5] Create upgrade testing checklist in docs/upgrade-guide.md
-- [ ] T081 [US5] Add database restore procedure to docs/deployment-guide.md
-- [ ] T082 [US5] Document backup retention policy recommendations in docs/upgrade-guide.md
+- [x] T071 [US5] Create `docs/upgrade-guide.md` with upgrade procedures
+- [x] T072 [US5] Document pre-upgrade checklist in docs/upgrade-guide.md (backup database, review changelog, check compatibility)
+- [x] T073 [US5] Add database backup procedure to docs/upgrade-guide.md using pg_dump command
+- [x] T074 [US5] Document upgrade steps in docs/upgrade-guide.md: update image tag, pull new image, restart services
+- [x] T075 [US5] Add automatic migration documentation to docs/upgrade-guide.md explaining startup behavior
+- [x] T076 [US5] Document version pinning strategy in docs/upgrade-guide.md (v1.2.3 vs v1.2 vs v1 vs latest)
+- [x] T077 [US5] Add rollback procedure to docs/upgrade-guide.md (restore previous image, restore database backup)
+- [x] T078 [US5] Document verification steps in docs/upgrade-guide.md (check logs, test discovery endpoint, verify admin UI)
+- [x] T079 [US5] Add troubleshooting section for failed upgrades to docs/upgrade-guide.md
+- [x] T080 [US5] Create upgrade testing checklist in docs/upgrade-guide.md
+- [x] T081 [US5] Add database restore procedure to docs/deployment-guide.md
+- [x] T082 [US5] Document backup retention policy recommendations in docs/upgrade-guide.md
 
 **Checkpoint**: All user stories should now be independently functional - complete deployment lifecycle supported
 
@@ -309,8 +309,8 @@ Task T089: "Document secrets management"
 ## Task Summary
 
 **Total Tasks**: 100  
-**Completed**: 70 tasks (70%)  
-**Remaining**: 30 tasks
+**Completed**: 82 tasks (82%)  
+**Remaining**: 18 tasks
 
 **Breakdown by Phase**:
 
@@ -320,23 +320,24 @@ Task T089: "Document secrets management"
 - Phase 4 (US1 - Base Deployment): 17 tasks ✅ **COMPLETE**
 - Phase 5 (US3 - Configuration): 14 tasks ✅ **COMPLETE**
 - Phase 6 (US2 - Redis): 16 tasks ✅ **COMPLETE**
-- Phase 7 (US5 - Upgrades): 12 tasks (0% complete)
+- Phase 7 (US5 - Upgrades): 12 tasks ✅ **COMPLETE**
 - Phase 8 (Polish): 18 tasks (0% complete)
 
 **MVP Scope** (Phases 1-5): 54 tasks ✅ **COMPLETE**  
-**Enhanced Scope** (Phases 1-6): 70 tasks ✅ **COMPLETE** - Includes Redis performance optimization
+**Enhanced Scope** (Phases 1-7): 82 tasks ✅ **COMPLETE** - Includes Redis + Upgrade procedures
 
 **Current Status**:
 
-- ✅ Phase 1-6 Complete: **Enhanced production deployment with Redis caching**
-- 🎯 Next: Phase 7 (US5) - Upgrade procedures (12 tasks) OR Phase 8 - Polish (18 tasks)
-- 📦 All Deliverables Ready:
+- ✅ Phase 1-7 Complete: **Full production deployment with Redis caching and upgrade lifecycle**
+- 🎯 Next: Phase 8 - Polish (18 tasks): README updates, security docs, final validation
+- 📦 All Core Deliverables Ready:
   - Dockerfile (multi-stage, chiseled runtime, security hardened)
   - docker-compose.yml (production configuration with PostgreSQL + Redis)
   - .env.example (comprehensive template with all options)
-  - deployment-guide.md (complete guide with Redis configuration, monitoring, troubleshooting)
-  - docker-compose-examples.md (all deployment scenarios including Redis)
-  - GitHub Actions workflow (automated builds and publishing)
+  - deployment-guide.md (1200+ lines: complete guide with Redis, monitoring, troubleshooting, restore procedures)
+  - docker-compose-examples.md (all deployment scenarios including Redis with persistence options)
+  - upgrade-guide.md (complete upgrade lifecycle: pre-upgrade, backup, upgrade, rollback, verification, retention policy)
+  - GitHub Actions workflow (automated multi-arch builds and publishing)
 
 **Parallel Tasks Identified**: 28 tasks marked with [P] can run concurrently
 
@@ -344,10 +345,10 @@ Task T089: "Document secrets management"
 
 **User Stories Mapped**:
 
-- US1 (Deploy with PostgreSQL): 17 implementation tasks
-- US2 (Redis Performance): 16 implementation tasks
-- US3 (Production Config): 14 implementation tasks
-- US4 (Pull from Registry): 10 implementation tasks
-- US5 (Upgrade Deployment): 12 implementation tasks
+- US1 (Deploy with PostgreSQL): 17 implementation tasks ✅
+- US2 (Redis Performance): 16 implementation tasks ✅
+- US3 (Production Config): 14 implementation tasks ✅
+- US4 (Pull from Registry): 10 implementation tasks ✅
+- US5 (Upgrade Deployment): 12 implementation tasks ✅
 
 Each user story is independently testable per the acceptance scenarios in spec.md.

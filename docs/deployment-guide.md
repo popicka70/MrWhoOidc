@@ -1141,14 +1141,19 @@ crontab -e
 0 2 * * * /path/to/backup-db.sh >> /var/log/mrwhooidc-backup.log 2>&1
 ```
 
-### Restore Procedure
+### Database Restore Procedure
+
+#### Quick Restore (Services Running)
+
+Use this procedure when PostgreSQL is running:
 
 ```bash
-# 1. Stop application
+# 1. Stop application (keeps database running)
 docker compose stop webauth
 
-# 2. Restore database
-gunzip < backup-file.sql.gz | docker exec -i mrwhooidc-postgres psql -U oidc authdb
+# 2. Restore from compressed backup
+gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
+  docker compose exec -T postgres psql -U oidc authdb
 
 # 3. Restart application
 docker compose start webauth
@@ -1156,6 +1161,112 @@ docker compose start webauth
 # 4. Verify
 curl -k https://localhost:8443/.well-known/openid-configuration
 ```
+
+#### Full Restore (Services Stopped)
+
+Use this procedure after `docker compose down`:
+
+```bash
+# 1. Start PostgreSQL only
+docker compose up -d postgres
+
+# 2. Wait for PostgreSQL healthy
+docker compose ps postgres
+# Wait until status shows "(healthy)"
+
+# 3. Restore from compressed backup
+gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
+  docker compose run --rm -T postgres psql -h postgres -U oidc authdb
+
+# 4. Start application
+docker compose up -d webauth
+
+# 5. Verify
+curl -k https://localhost:8443/.well-known/openid-configuration
+```
+
+#### Restore from Uncompressed Backup
+
+```bash
+# If backup is not compressed (.sql file)
+docker compose exec -T postgres psql -U oidc authdb < backups/backup-file.sql
+```
+
+#### Restore with Database Drop/Recreate
+
+Use if you need to clear all data first:
+
+```bash
+# 1. Stop application
+docker compose stop webauth
+
+# 2. Drop and recreate database
+docker compose exec postgres psql -U oidc -c "DROP DATABASE IF EXISTS authdb;"
+docker compose exec postgres psql -U oidc -c "CREATE DATABASE authdb;"
+
+# 3. Restore backup
+gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
+  docker compose exec -T postgres psql -U oidc authdb
+
+# 4. Restart application
+docker compose start webauth
+```
+
+#### Restore Verification
+
+After restore, verify data integrity:
+
+```bash
+# 1. Check table counts
+docker compose exec postgres psql -U oidc authdb -c "\
+  SELECT 'clients' AS table, COUNT(*) FROM clients \
+  UNION ALL \
+  SELECT 'users', COUNT(*) FROM users \
+  UNION ALL \
+  SELECT 'consent_grants', COUNT(*) FROM consent_grants;"
+
+# 2. Test authentication
+# - Open admin UI: https://localhost:8443/admin
+# - Verify can login
+# - Check client list displays
+
+# 3. Check logs for errors
+docker compose logs --tail=50 webauth | grep -i error
+# Should show no errors related to database
+```
+
+#### Restore Troubleshooting
+
+**Problem**: "database authdb already exists"
+
+```bash
+# Solution: Drop existing database first
+docker compose exec postgres psql -U oidc -c "DROP DATABASE authdb;"
+docker compose exec postgres psql -U oidc -c "CREATE DATABASE authdb;"
+# Then restore
+```
+
+**Problem**: "permission denied"
+
+```bash
+# Solution: Use -T flag to disable pseudo-TTY
+gunzip < backup.sql.gz | docker compose exec -T postgres psql -U oidc authdb
+```
+
+**Problem**: Restore hangs or times out
+
+```bash
+# Check PostgreSQL health
+docker compose ps postgres
+
+# Check PostgreSQL logs
+docker compose logs postgres
+
+# Restart PostgreSQL if needed
+docker compose restart postgres
+```
+
+**See Also**: [upgrade-guide.md](./upgrade-guide.md) for upgrade-specific restore procedures
 
 ### Disaster Recovery
 
