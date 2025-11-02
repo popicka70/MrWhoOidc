@@ -1,33 +1,49 @@
 services:
   webauth:
-    build:
-      context: .
-      dockerfile: MrWhoOidc.WebAuth/Dockerfile
+    image: ghcr.io/popicka70/mrwhooidc:latest
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+        required: false
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: https://+:8443
-      ASPNETCORE_HTTPS_PORTS: 8443
-      ConnectionStrings__authdb: Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=oidcPass!;Include Error Detail=true
-      ConnectionStrings__redis: redis:6379,abortConnect=false
-      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
-      # OIDC configuration
-      Oidc__PublicBaseUrl: "https://localhost:8443"
-      # Multi-tenancy configuration
-      MultiTenancy__Enabled: "true"
-      MultiTenancy__DefaultTenantSlug: "default"
-      Mail__Enabled: "true"
-      Mail__SmtpHost: "mailhog"
-      Mail__SmtpPort: "1025"
-      Mail__FromAddress: "no-reply@mrwho.local"
-      Mail__FromName: "MrWhoOidc"
+      # Core Configuration
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_URLS: https://+:8443;http://+:8080
+      ConnectionStrings__authdb: ${CONNECTION_STRING_AUTHDB:-Host=postgres;Port=5432;Database=authdb;Username=oidc;Password=${POSTGRES_PASSWORD};Include Error Detail=false}
+      
+      # TLS/HTTPS Configuration
+      ASPNETCORE_Kestrel__Certificates__Default__Path: ${ASPNETCORE_Kestrel__Certificates__Default__Path:-/https/aspnetapp.pfx}
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD}
+      
+      # OIDC Configuration
+      Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL}
+      
+      # Multi-Tenancy Configuration
+      MultiTenant__Enabled: ${MULTITENANT_ENABLED:-false}
+      MultiTenant__DefaultTenantSlug: ${MULTITENANT_DEFAULT_TENANT_SLUG:-default}
+      
+      # Redis Configuration (Optional)
+      Redis__Enabled: ${REDIS_ENABLED:-false}
+      Redis__ConnectionString: ${REDIS_CONNECTION_STRING:-redis:6379,abortConnect=false}
+      
+      # Email/SMTP Configuration (Optional)
+      Mail__Enabled: ${MAIL_ENABLED:-false}
+      Mail__SmtpHost: ${MAIL_SMTP_HOST}
+      Mail__SmtpPort: ${MAIL_SMTP_PORT:-587}
+      Mail__UseSsl: ${MAIL_SMTP_USE_SSL:-true}
+      Mail__FromAddress: ${MAIL_FROM_ADDRESS}
+      Mail__FromName: ${MAIL_FROM_NAME:-MrWhoOidc}
+      Mail__SmtpUsername: ${MAIL_SMTP_USERNAME}
+      Mail__SmtpPassword: ${MAIL_SMTP_PASSWORD}
+      
+      # Logging Configuration
+      Logging__LogLevel__Default: ${LOGGING_LEVEL:-Information}
+      Logging__LogLevel__Microsoft.AspNetCore: ${LOGGING_LEVEL:-Warning}
     ports:
       - "8443:8443"
+      - "8080:8080"
     volumes:
       - ./certs:/https:ro
     restart: unless-stopped
@@ -40,7 +56,7 @@ services:
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: oidcPass!
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -61,25 +77,18 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
+      start_period: 5s
     restart: unless-stopped
     networks:
       - internal
-
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-    restart: unless-stopped
-    networks:
-      - internal
-      - edge
 
 volumes:
   postgres-data:
+    driver: local
   redis-data:
+    driver: local
 
 networks:
   internal:
