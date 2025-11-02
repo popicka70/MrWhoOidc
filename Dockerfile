@@ -27,8 +27,9 @@ RUN dotnet publish "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" \
     -p:UseAppHost=false \
     --no-restore
 
-# Runtime stage: Use chiseled Ubuntu image for minimal attack surface
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-noble-chiseled AS final
+# Runtime stage: Use Ubuntu noble image with full globalization support
+# Note: Chiseled images don't include ICU libraries needed for culture-specific formatting
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-noble AS final
 
 # Add OCI labels for metadata
 LABEL org.opencontainers.image.title="MrWhoOidc" \
