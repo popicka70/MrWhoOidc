@@ -148,15 +148,15 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 #### Demo Applications Preparation
 
-- [ ] T043 [P] [US3] Copy Examples/MrWhoOidc.RazorClient to MrWho/demos/dotnet-mvc-client
-- [ ] T044 [P] [US3] Copy Examples/ReactOidcClient to MrWho/demos/react-client
-- [ ] T045 [P] [US3] Copy Examples/MrWhoOidc.GoWebClient to MrWho/demos/go-client
+- [x] T043 [P] [US3] Copy Examples/MrWhoOidc.RazorClient to MrWho/demos/dotnet-mvc-client
+- [x] T044 [P] [US3] Copy Examples/ReactOidcClient to MrWho/demos/react-client
+- [x] T045 [P] [US3] Copy Examples/MrWhoOidc.GoWebClient to MrWho/demos/go-client
 
 #### Demo Configuration Updates
 
-- [ ] T046 [P] [US3] Update MrWho/demos/dotnet-mvc-client configuration: change OIDC authority to environment variable, update appsettings.json with docker-compose defaults, add .env.example for demo
-- [ ] T047 [P] [US3] Update MrWho/demos/react-client configuration: update OIDC configuration to use environment variables, add .env.example for demo, update build scripts
-- [ ] T048 [P] [US3] Update MrWho/demos/go-client configuration: update OIDC configuration to use environment variables, add .env.example for demo
+- [x] T046 [P] [US3] Update MrWho/demos/dotnet-mvc-client configuration: change OIDC authority to environment variable, update appsettings.json with docker-compose defaults, add .env.example for demo
+- [x] T047 [P] [US3] Update MrWho/demos/react-client configuration: update OIDC configuration to use environment variables, add .env.example for demo, update build scripts
+- [x] T048 [P] [US3] Update MrWho/demos/go-client configuration: update OIDC configuration to use environment variables, add .env.example for demo
 
 #### Demo Docker Integration
 
