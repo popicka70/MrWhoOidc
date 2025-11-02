@@ -25,9 +25,9 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 **Purpose**: Initialize the /MrWho folder structure for the public repository
 
-- [ ] T001 Create /MrWho directory structure with subdirectories: docs/, demos/, packages/, scripts/
-- [ ] T002 [P] Create LICENSE file in MrWho/ (MIT license)
-- [ ] T003 [P] Create .gitignore file in MrWho/ with Docker, IDE, and OS-specific patterns
+- [x] T001 Create /MrWho directory structure with subdirectories: docs/, demos/, packages/, scripts/
+- [x] T002 [P] Create LICENSE file in MrWho/ (MIT license)
+- [x] T003 [P] Create .gitignore file in MrWho/ with Docker, IDE, and OS-specific patterns
 
 ---
 
@@ -37,12 +37,13 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Create MrWho/.env.example with all environment variables documented (60+ variables in 7 groups: Core, TLS, OIDC, Multi-Tenancy, Redis, Email, Logging)
-- [ ] T005 Create MrWho/scripts/health-check.sh script for deployment verification with tests for discovery endpoint, health endpoint, and container status
-- [ ] T006 [P] Create MrWho/scripts/generate-cert.sh script for TLS certificate generation with OpenSSL commands
-- [ ] T007 [P] Create MrWho/scripts/README.md documenting health-check.sh and generate-cert.sh usage
+- [x] T004 Create MrWho/.env.example with all environment variables documented (60+ variables in 7 groups: Core, TLS, OIDC, Multi-Tenancy, Redis, Email, Logging)
+- [x] T005 Create MrWho/scripts/health-check.sh script for deployment verification with tests for discovery endpoint, health endpoint, and container status
+- [x] T006 [P] Create MrWho/scripts/generate-cert.sh script for TLS certificate generation with OpenSSL commands
+- [x] T007 [P] Create MrWho/scripts/README.md documenting health-check.sh and generate-cert.sh usage
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+
 
 ---
 
@@ -56,21 +57,21 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 #### Docker Compose Configuration
 
-- [ ] T008 [US1] Create MrWho/docker-compose.yml (basic configuration) with PostgreSQL service, webauth service (ghcr.io/popicka70/mrwhooidc:latest), networks (edge, internal), volumes (postgres-data), health checks
-- [ ] T009 [US1] Add inline comments to MrWho/docker-compose.yml explaining 30+ environment variables with [REQUIRED]/[OPTIONAL] markers and when to customize each setting
-- [ ] T010 [US1] Validate MrWho/docker-compose.yml with docker-compose config command (must pass without errors)
+- [x] T008 [US1] Create MrWho/docker-compose.yml (basic configuration) with PostgreSQL service, webauth service (ghcr.io/popicka70/mrwhooidc:latest), networks (edge, internal), volumes (postgres-data), health checks
+- [x] T009 [US1] Add inline comments to MrWho/docker-compose.yml explaining 30+ environment variables with [REQUIRED]/[OPTIONAL] markers and when to customize each setting
+- [x] T010 [US1] Validate MrWho/docker-compose.yml with docker-compose config command (must pass without errors)
 
 #### README Creation
 
-- [ ] T011 [US1] Create MrWho/README.md with header section: project title, badges (Docker, license, version, multi-arch), brief description, key features list (10 items)
-- [ ] T012 [US1] Add Quick Start section to MrWho/README.md: prerequisites (Docker 20.10+, Docker Compose V2+, 4GB RAM), 4-step deployment (clone, configure, start, verify), expected outputs for each command
-- [ ] T013 [US1] Add Features section to MrWho/README.md: Core OIDC/OAuth 2.0 features, Enterprise features (multi-tenancy, high performance, observability), Identity provider chaining
-- [ ] T014 [US1] Add Docker Deployment section to MrWho/README.md: pull from GHCR instructions, docker-compose.yml example with inline explanation, environment variable highlights (15 most important)
-- [ ] T015 [US1] Add Troubleshooting section to MrWho/README.md: 5 common issues (port conflict, database connection, certificate errors, migrations failed, missing env vars) with causes and solutions
-- [ ] T016 [US1] Add Contributing & License section to MrWho/README.md: issue reporting, contribution guidelines, license information, community links
-- [ ] T017 [US1] Test end-to-end deployment following README Quick Start: time the process (must be ≤10 minutes), verify discovery endpoint returns valid JSON, verify admin UI loads, verify health check passes
-- [ ] T018 [US1] Run MrWho/scripts/health-check.sh against deployed instance and verify all checks pass
-- [ ] T019 [US1] Validate all internal links in MrWho/README.md are correct (to /docs, /demos, /packages directories)
+- [x] T011 [US1] Create MrWho/README.md with header section: project title, badges (Docker, license, version, multi-arch), brief description, key features list (10 items)
+- [x] T012 [US1] Add Quick Start section to MrWho/README.md: prerequisites (Docker 20.10+, Docker Compose V2+, 4GB RAM), 4-step deployment (clone, configure, start, verify), expected outputs for each command
+- [x] T013 [US1] Add Features section to MrWho/README.md: Core OIDC/OAuth 2.0 features, Enterprise features (multi-tenancy, high performance, observability), Identity provider chaining
+- [x] T014 [US1] Add Docker Deployment section to MrWho/README.md: pull from GHCR instructions, docker-compose.yml example with inline explanation, environment variable highlights (15 most important)
+- [x] T015 [US1] Add Troubleshooting section to MrWho/README.md: 5 common issues (port conflict, database connection, certificate errors, migrations failed, missing env vars) with causes and solutions
+- [x] T016 [US1] Add Contributing & License section to MrWho/README.md: issue reporting, contribution guidelines, license information, community links
+- [x] T017 [US1] Test end-to-end deployment following README Quick Start: time the process (must be ≤10 minutes), verify discovery endpoint returns valid JSON, verify admin UI loads, verify health check passes
+- [x] T018 [US1] Run MrWho/scripts/health-check.sh against deployed instance and verify all checks pass
+- [x] T019 [US1] Validate all internal links in MrWho/README.md are correct (to /docs, /demos, /packages directories)
 
 **Checkpoint**: User Story 1 complete - basic deployment working with 10-minute Quick Start
 
