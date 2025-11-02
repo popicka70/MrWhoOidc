@@ -173,13 +173,13 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 #### NuGet Package Documentation
 
-- [ ] T056 [US3] Create MrWho/packages/README.md: available packages table (name, version, description, NuGet link), installation instructions for each package (MrWhoOidc.Client, MrWhoOidc.Security, MrWhoOidc.AspNetCore placeholder), basic usage examples (15-20 lines code per package), version compatibility matrix
-- [ ] T057 [US3] Create MrWho/packages/integration-examples.md: detailed code examples for common scenarios (authorization code flow, token exchange, logout, DPoP configuration), links to demo applications, troubleshooting integration issues
+- [x] T056 [US3] Create MrWho/packages/README.md: available packages table (name, version, description, NuGet link), installation instructions for each package (MrWhoOidc.Client, MrWhoOidc.Security, MrWhoOidc.AspNetCore placeholder), basic usage examples (15-20 lines code per package), version compatibility matrix
+- [x] T057 [US3] Create MrWho/packages/integration-examples.md: detailed code examples for common scenarios (authorization code flow, token exchange, logout, DPoP configuration), links to demo applications, troubleshooting integration issues
 
 #### README Updates
 
-- [ ] T058 [US3] Add Integration & Demos section to MrWho/README.md: demo applications overview (3 demos with technology stack), NuGet packages section with installation commands, code snippet for basic client setup (10-15 lines), links to /demos and /packages directories
-- [ ] T059 [US3] Copy developer-guide.md from main solution to MrWho/docs/developer-guide.md and adapt: update paths, add public repo context, link to demos and packages
+- [x] T058 [US3] Add Integration & Demos section to MrWho/README.md: demo applications overview (3 demos with technology stack), NuGet packages section with installation commands, code snippet for basic client setup (10-15 lines), links to /demos and /packages directories
+- [x] T059 [US3] Copy developer-guide.md from main solution to MrWho/docs/developer-guide.md and adapt: update paths, add public repo context, link to demos and packages
 
 #### Validation
 
