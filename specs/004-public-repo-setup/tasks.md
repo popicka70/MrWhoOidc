@@ -160,16 +160,16 @@ All work is in the `/MrWho` folder which will become a separate public repositor
 
 #### Demo Docker Integration
 
-- [ ] T049 [P] [US3] Create MrWho/demos/dotnet-mvc-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
-- [ ] T050 [P] [US3] Create MrWho/demos/react-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
-- [ ] T051 [P] [US3] Create MrWho/demos/go-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
+- [x] T049 [P] [US3] Create MrWho/demos/dotnet-mvc-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
+- [x] T050 [P] [US3] Create MrWho/demos/react-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
+- [x] T051 [P] [US3] Create MrWho/demos/go-client/docker-compose.demo.yml extending parent docker-compose.yml with demo-client service, network configuration, environment variables
 
 #### Demo Documentation
 
-- [ ] T052 [P] [US3] Create MrWho/demos/dotnet-mvc-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
-- [ ] T053 [P] [US3] Create MrWho/demos/react-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
-- [ ] T054 [P] [US3] Create MrWho/demos/go-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
-- [ ] T055 [US3] Create MrWho/demos/README.md: overview of all demos, technology stack for each, links to individual demo READMEs, general integration guidance
+- [x] T052 [P] [US3] Create MrWho/demos/dotnet-mvc-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
+- [x] T053 [P] [US3] Create MrWho/demos/react-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
+- [x] T054 [P] [US3] Create MrWho/demos/go-client/README.md: prerequisites, quick run with docker-compose, local development setup, client registration steps, expected behavior
+- [x] T055 [US3] Create MrWho/demos/README.md: overview of all demos, technology stack for each, links to individual demo READMEs, general integration guidance
 
 #### NuGet Package Documentation
 
