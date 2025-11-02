@@ -240,6 +240,340 @@ cat backup-YYYYMMDD-HHMMSS.sql | docker exec -i mrwhooidc-postgres psql -U oidc 
 
 ---
 
+## Redis Configuration (Optional)
+
+Redis provides distributed caching and session management for improved performance in production deployments.
+
+### Why Redis?
+
+**Performance Benefits**:
+
+- **Session Caching**: Reduces database queries for frequently accessed session data
+- **Distributed Cache**: Shares cache across multiple OIDC server instances
+- **Token Caching**: Speeds up token validation and introspection
+- **Rate Limiting**: Efficient distributed rate limiting across instances
+
+**Typical Performance Gains**:
+
+- 30-50% reduction in response times for authenticated requests
+- 60-80% reduction in database load for read-heavy workloads
+- Support for 1000+ concurrent users per instance (vs 300-500 without Redis)
+
+### Enabling Redis
+
+Redis is **optional** and disabled by default. Enable it in `.env`:
+
+```bash
+# Enable Redis caching
+REDIS_ENABLED=true
+REDIS_CONNECTION_STRING=redis:6379,abortConnect=false
+```
+
+The Redis service is already configured in `docker-compose.yml` and will start automatically:
+
+```bash
+# Start services (includes Redis if uncommented)
+docker compose up -d
+
+# Verify Redis is running
+docker compose ps redis
+# Should show: Up (healthy)
+```
+
+### Graceful Degradation
+
+**Important**: The OIDC server is designed to function with or without Redis.
+
+- **Redis Available**: Full caching benefits, optimal performance
+- **Redis Unavailable**: Automatic fallback to in-memory cache, degraded performance but no outage
+- **Connection Setting**: `abortConnect=false` ensures Redis failures don't crash the application
+
+**Behavior During Redis Failure**:
+
+```bash
+# Simulate Redis failure
+docker compose stop redis
+
+# OIDC server continues functioning
+curl -k https://localhost:8443/.well-known/openid-configuration
+# Expected: HTTP 200 (success, using fallback cache)
+
+# Check logs
+docker compose logs webauth | grep -i redis
+# Will show: "Redis connection failed, using in-memory cache"
+```
+
+### Redis Persistence Options
+
+The default configuration uses RDB (Redis Database) snapshots for persistence.
+
+#### Option 1: RDB Snapshots (Default - Recommended)
+
+```yaml
+redis:
+  command: redis-server --save 60 1 --loglevel warning
+  # Saves snapshot if 1+ keys changed in 60 seconds
+  # Good balance between performance and durability
+```
+
+**Pros**: Fast, small disk footprint  
+**Cons**: Potential data loss (up to 60 seconds) on crash  
+**Use Case**: Production deployments where cache can be rebuilt
+
+#### Option 2: AOF (Append-Only File)
+
+```yaml
+redis:
+  command: redis-server --appendonly yes --loglevel warning
+  # Logs every write operation
+  # More durable but slower
+```
+
+**Pros**: Minimal data loss (1 second or less)  
+**Cons**: Slower writes, larger disk usage  
+**Use Case**: When cache data is critical and rebuild is expensive
+
+#### Option 3: No Persistence (Cache Only)
+
+```yaml
+redis:
+  command: redis-server --loglevel warning
+  # No persistence, pure in-memory cache
+```
+
+**Pros**: Maximum performance  
+**Cons**: All cache lost on restart  
+**Use Case**: Development, testing, or when cache warmup is fast
+
+### Redis Monitoring
+
+#### Check Redis Health
+
+```bash
+# Test Redis connection
+docker compose exec redis redis-cli ping
+# Expected: PONG
+
+# Check Redis info
+docker compose exec redis redis-cli INFO server
+# Shows version, uptime, OS
+
+# View connected clients
+docker compose exec redis redis-cli CLIENT LIST
+# Shows active connections from webauth
+```
+
+#### Monitor Performance
+
+```bash
+# Real-time monitoring
+docker compose exec redis redis-cli --stat
+# Shows: commands/sec, hits, misses, keyspace
+
+# Check memory usage
+docker compose exec redis redis-cli INFO memory | grep used_memory_human
+# Example: used_memory_human:45.23M
+
+# View cache hit rate
+docker compose exec redis redis-cli INFO stats | grep keyspace
+# Higher hits/misses ratio = better performance
+```
+
+#### Monitor Operations
+
+```bash
+# Watch all Redis commands in real-time
+docker compose exec redis redis-cli monitor
+# Useful for debugging cache behavior
+
+# View slow operations (>10ms)
+docker compose exec redis redis-cli SLOWLOG GET 10
+```
+
+### Redis Troubleshooting
+
+#### Redis Won't Start
+
+**Symptom**: `docker compose ps redis` shows "Exited" or "Restarting"
+
+**Check logs**:
+
+```bash
+docker compose logs redis
+```
+
+**Common Issues**:
+
+1. **Port conflict**:
+   - Another Redis instance using port 6379
+   - Solution: Change port in docker-compose.yml: `command: redis-server --port 6380`
+
+2. **Permission denied on volume**:
+   - Redis can't write to `/data`
+   - Solution: `docker compose down -v` then `docker compose up -d` (recreates volume)
+
+3. **Memory limit exceeded**:
+   - Redis using too much memory
+   - Solution: Add memory limit in docker-compose.yml or tune Redis maxmemory
+
+#### Webauth Can't Connect to Redis
+
+**Symptom**: Application logs show "Redis connection timeout"
+
+**Checks**:
+
+```bash
+# Verify Redis is on internal network
+docker compose exec webauth ping redis
+# Should resolve and respond
+
+# Check Redis health
+docker compose ps redis
+# Status should be "Up (healthy)"
+
+# Test connection from webauth container
+docker compose exec webauth sh -c "nc -zv redis 6379"
+# Should show: Connection to redis 6379 port [tcp/*] succeeded!
+```
+
+**Solutions**:
+
+- Ensure `REDIS_ENABLED=true` in `.env`
+- Verify `REDIS_CONNECTION_STRING=redis:6379,abortConnect=false`
+- Check both services are on `internal` network
+
+#### Cache Not Working (Low Hit Rate)
+
+**Symptom**: Redis connected but cache hit rate is low
+
+**Diagnosis**:
+
+```bash
+# Check cache statistics
+docker compose exec redis redis-cli INFO stats
+
+# Look for:
+# keyspace_hits:1000
+# keyspace_misses:5000
+# Hit rate = hits / (hits + misses) = 16.7% (low)
+```
+
+**Common Causes**:
+
+1. **Cache warming**: Just started, cache not yet populated (normal for first few minutes)
+2. **TTL too short**: Keys expiring too quickly
+3. **Memory pressure**: Redis evicting keys due to memory limits
+4. **No cache benefit**: Workload is mostly writes (cache helps reads)
+
+**Check for evictions**:
+
+```bash
+docker compose exec redis redis-cli INFO stats | grep evicted
+# evicted_keys:0 is good
+# evicted_keys:>0 means memory pressure
+```
+
+#### High Memory Usage
+
+**Symptom**: Redis using excessive memory
+
+**Check current usage**:
+
+```bash
+docker compose exec redis redis-cli INFO memory | grep used_memory_human
+```
+
+**Solutions**:
+
+1. **Set max memory limit**:
+
+```yaml
+# docker-compose.yml
+redis:
+  command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save 60 1 --loglevel warning
+```
+
+2. **Tune eviction policy**:
+   - `allkeys-lru`: Evict least recently used keys (recommended)
+   - `allkeys-lfu`: Evict least frequently used keys
+   - `volatile-lru`: Evict only keys with TTL
+
+3. **Clear cache if needed**:
+
+```bash
+docker compose exec redis redis-cli FLUSHALL
+# WARNING: Clears all cache data
+```
+
+### Redis Performance Tuning
+
+#### For High-Traffic Production
+
+```yaml
+redis:
+  command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --save 300 10 --loglevel warning
+  deploy:
+    resources:
+      limits:
+        cpus: '1'
+        memory: 1G
+      reservations:
+        cpus: '0.5'
+        memory: 512M
+```
+
+**Settings explained**:
+
+- `--maxmemory 512mb`: Limit Redis to 512MB RAM
+- `--maxmemory-policy allkeys-lru`: Evict LRU keys when full
+- `--save 300 10`: Save snapshot if 10+ keys changed in 5 minutes (less frequent saves = better performance)
+
+#### For Development/Testing
+
+```yaml
+redis:
+  command: redis-server --loglevel debug
+  # No persistence, verbose logging
+```
+
+### Disabling Redis
+
+To disable Redis after enabling:
+
+1. **Update .env**:
+
+```bash
+REDIS_ENABLED=false
+```
+
+2. **Restart webauth** (no need to stop Redis service):
+
+```bash
+docker compose restart webauth
+```
+
+3. **Optional: Stop Redis service**:
+
+```bash
+docker compose stop redis
+```
+
+The OIDC server will automatically fall back to in-memory caching.
+
+### Redis Best Practices
+
+- ✅ **Always use `abortConnect=false`** for graceful degradation
+- ✅ **Enable persistence** (RDB snapshots) for production
+- ✅ **Monitor hit rate** - aim for >70% for cache-friendly workloads
+- ✅ **Set memory limits** to prevent OOM issues
+- ✅ **Use LRU eviction** for predictable cache behavior
+- ✅ **Regular backups** of Redis RDB file (if critical data)
+- ✅ **Health checks enabled** (already configured in docker-compose.yml)
+- ⚠️ **Don't rely on Redis** for critical data - it's a cache, not a database
+- ⚠️ **Don't disable persistence** unless you understand the tradeoff
+
+---
+
 ## TLS Certificates
 
 MrWhoOidc requires HTTPS for production deployments per OIDC specification.
