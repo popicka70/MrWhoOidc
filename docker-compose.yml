@@ -47,8 +47,7 @@ services:
       Logging__LogLevel__Microsoft.AspNetCore: ${LOGGING_LEVEL:-Warning}
     ports:
       - "8443:8443"
-      # HTTP port 8080 commented out for local testing (port conflict)
-      # - "8080:8080"
+      - "8081:8080"  # HTTP port for automatic redirect to HTTPS (mapped to 8081 on host to avoid conflicts)
     volumes:
       - ./certs:/https:ro
     restart: unless-stopped
