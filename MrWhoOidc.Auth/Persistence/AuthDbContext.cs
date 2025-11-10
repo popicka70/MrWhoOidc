@@ -467,6 +467,17 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.TenantId);
+
+            // New: Tenant creation fields
+            b.Property(x => x.IsTenantAdmin).HasDefaultValue(false);
+            b.Property(x => x.TenantSlug).HasMaxLength(100);
+            b.Property(x => x.TenantName).HasMaxLength(200);
+            b.Property(x => x.TenantDescription).HasMaxLength(500);
+            // Index for tenant slug uniqueness (only for tenant admin registrations)
+            b.HasIndex(x => x.TenantSlug)
+                .IsUnique()
+                .HasFilter("\"TenantSlug\" IS NOT NULL")
+                .HasDatabaseName("IX_Registrations_TenantSlug_Unique");
         });
 
         modelBuilder.Entity<SigningKey>(b =>
@@ -1249,6 +1260,15 @@ public class Registration
     public Guid? ApprovedByUserId { get; set; }
     public DateTimeOffset? RejectedAt { get; set; }
     public Guid? RejectedByUserId { get; set; }
+
+    // New: Tenant creation fields for anonymous tenant admin registration
+    public bool IsTenantAdmin { get; set; } = false;
+    [MaxLength(100)]
+    public string? TenantSlug { get; set; }
+    [MaxLength(200)]
+    public string? TenantName { get; set; }
+    [MaxLength(500)]
+    public string? TenantDescription { get; set; }
 }
 
 // New: IdP chaining entities
