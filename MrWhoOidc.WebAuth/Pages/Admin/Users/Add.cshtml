@@ -4,32 +4,43 @@
     ViewData["Title"] = "Add user";
 }
 
-<h1>Add user</h1>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="bi bi-person-plus icon-md icon-primary"></i>
+            Add user
+        </h1>
+    </div>
+</div>
 
 <form method="post" class="mt-3">
-    <div class="mb-3">
+    <div class="form-group">
         <label asp-for="Input.TenantId" class="form-label">Tenant <span class="text-danger">*</span></label>
         <select asp-for="Input.TenantId" asp-items="Model.TenantOptions" class="form-select">
             <option value="">-- Select Tenant --</option>
         </select>
         <span asp-validation-for="Input.TenantId" class="text-danger"></span>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label class="form-label">Username <span class="text-danger">*</span></label>
         <input asp-for="Input.Username" class="form-control" />
         <span asp-validation-for="Input.Username" class="text-danger"></span>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label class="form-label">Email (optional)</label>
         <input asp-for="Input.Email" class="form-control" />
         <span asp-validation-for="Input.Email" class="text-danger"></span>
     </div>
-    <div class="mb-3">
+    <div class="form-group">
         <label class="form-label">Name (display)</label>
         <input asp-for="Input.Name" class="form-control" />
     </div>
-    <button class="btn btn-primary" type="submit">Save</button>
-    <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+    <div class="action-buttons">
+        <button class="btn btn-primary" type="submit">
+            <i class="bi bi-check-lg"></i> Save
+        </button>
+        <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+    </div>
 </form>
 
 @section Scripts{

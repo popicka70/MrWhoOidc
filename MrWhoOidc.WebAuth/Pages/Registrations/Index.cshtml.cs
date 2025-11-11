@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
 
 [AllowAnonymous]
-public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor) : PageModel
+public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IRegistrationService registrationService) : PageModel
 {
     public List<SelectListItem> ClientOptions { get; private set; } = new();
 
@@ -34,62 +35,74 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccesso
             return Page();
         }
 
-        var email = Input.Email.Trim();
-        var normalized = EmailNormalizer.NormalizeForLookup(email);
-        if (string.IsNullOrEmpty(normalized))
+        try
         {
-            ModelState.AddModelError(nameof(Input.Email), "Invalid email address.");
-            return Page();
+            string? passwordHash = null;
+            if (!string.IsNullOrWhiteSpace(Input.Password))
+            {
+                passwordHash = hasher.Hash(Input.Password);
+            }
+
+            // Determine tenant creation parameters
+            string? tenantSlug = null;
+            string? tenantName = null;
+            string? tenantDescription = null;
+
+            if (Input.CreateTenant)
+            {
+                tenantSlug = Input.TenantSlug?.Trim().ToLowerInvariant();
+                tenantName = Input.TenantName?.Trim();
+                tenantDescription = Input.TenantDescription?.Trim();
+
+                // Validate tenant fields when creating tenant
+                if (string.IsNullOrWhiteSpace(tenantSlug))
+                {
+                    ModelState.AddModelError(nameof(Input.TenantSlug), "Tenant slug is required.");
+                    return Page();
+                }
+                if (string.IsNullOrWhiteSpace(tenantName))
+                {
+                    ModelState.AddModelError(nameof(Input.TenantName), "Tenant name is required.");
+                    return Page();
+                }
+            }
+
+            // Use the registration service instead of direct DB operations
+            var userId = await registrationService.CreateAndMaybeApproveRegistrationAsync(
+                email: Input.Email.Trim(),
+                firstName: string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
+                lastName: string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
+                clientId: Input.ClientId,
+                passwordHash: passwordHash,
+                isExternalIdp: false, // Local registration
+                autoApprove: true, // Auto-approve tenant admin registrations
+                tenantSlug: tenantSlug,
+                tenantName: tenantName,
+                tenantDescription: tenantDescription);
+
+            if (userId.HasValue)
+            {
+                SuccessMessage = Input.CreateTenant
+                    ? $"Registration successful! You've been automatically approved as the tenant admin for '{tenantName}'. Please check your email for confirmation instructions."
+                    : "Registration successful! Please check your email for confirmation instructions.";
+            }
+            else
+            {
+                InfoMessage = "Registration submitted. You'll be notified when it's approved.";
+            }
+
+            ModelState.Clear();
+            Input = new();
+        }
+        catch (ValidationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+        }
+        catch (Exception)
+        {
+            ModelState.AddModelError(string.Empty, "An error occurred during registration. Please try again.");
         }
 
-        // Get current tenant context
-        var currentTenant = tenantAccessor.CurrentTenant;
-        if (currentTenant == null)
-        {
-            ModelState.AddModelError(string.Empty, "Unable to determine tenant context.");
-            return Page();
-        }
-
-        // If user exists already in this tenant, reject with a warning
-        var userExists = await db.Users.AsNoTracking()
-            .AnyAsync(u => u.TenantId == currentTenant.TenantId && u.NormalizedEmail == normalized);
-        if (userExists)
-        {
-            ModelState.AddModelError(string.Empty, "A user with this email already exists. Registration rejected.");
-            return Page();
-        }
-
-        // If there's already a pending registration for this email in this tenant, skip creating a duplicate
-        var pending = await db.Set<Registration>().AsNoTracking()
-            .FirstOrDefaultAsync(r => r.TenantId == currentTenant.TenantId && r.NormalizedEmail == normalized && r.State == "pending");
-        if (pending is not null)
-        {
-            InfoMessage = "A pending registration already exists for this email.";
-            return Page();
-        }
-
-        string? passwordHash = null;
-        if (!string.IsNullOrWhiteSpace(Input.Password))
-        {
-            passwordHash = hasher.Hash(Input.Password);
-        }
-
-        var entity = new Registration
-        {
-            TenantId = currentTenant.TenantId,
-            Email = email,
-            FirstName = string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
-            LastName = string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
-            ClientId = Input.ClientId,
-            PasswordHash = passwordHash,
-            State = "pending",
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-        db.Set<Registration>().Add(entity);
-        await db.SaveChangesAsync();
-        SuccessMessage = "Registration submitted. You'll be notified when it's approved.";
-        ModelState.Clear();
-        Input = new();
         return Page();
     }
 
@@ -121,5 +134,14 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccesso
         [StringLength(200)]
         [DataType(DataType.Password)]
         public string? Password { get; set; }
+
+        // New: Tenant creation options
+        public bool CreateTenant { get; set; }
+        [StringLength(100)]
+        public string? TenantSlug { get; set; }
+        [StringLength(200)]
+        public string? TenantName { get; set; }
+        [StringLength(500)]
+        public string? TenantDescription { get; set; }
     }
 }

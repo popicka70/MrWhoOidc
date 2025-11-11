@@ -22,6 +22,9 @@ public interface IRegistrationService
     /// <param name="passwordHash">Optional password hash (for local registrations)</param>
     /// <param name="isExternalIdp">Whether registration comes from external IdP</param>
     /// <param name="autoApprove">Whether to immediately approve based on client policy</param>
+    /// <param name="tenantSlug">Optional tenant slug for new tenant creation</param>
+    /// <param name="tenantName">Optional tenant name for new tenant creation</param>
+    /// <param name="tenantDescription">Optional tenant description for new tenant creation</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The created user ID if approved, null if pending manual approval</returns>
     Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
@@ -32,6 +35,9 @@ public interface IRegistrationService
         string? passwordHash,
         bool isExternalIdp,
         bool autoApprove,
+        string? tenantSlug = null,
+        string? tenantName = null,
+        string? tenantDescription = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -61,6 +67,9 @@ internal sealed class RegistrationService : IRegistrationService
         string? passwordHash,
         bool isExternalIdp,
         bool autoApprove,
+        string? tenantSlug = null,
+        string? tenantName = null,
+        string? tenantDescription = null,
         CancellationToken cancellationToken = default)
     {
         var normalized = EmailNormalizer.NormalizeForLookup(email);
@@ -86,6 +95,68 @@ internal sealed class RegistrationService : IRegistrationService
             return null; // Existing pending registration
         }
 
+        // Validate tenant creation parameters if provided
+        Guid? tenantId = null;
+        if (!string.IsNullOrWhiteSpace(tenantSlug))
+        {
+            if (string.IsNullOrWhiteSpace(tenantName))
+            {
+                throw new ValidationException("Tenant name is required when creating a new tenant.");
+            }
+
+            // Validate tenant slug format (URL-safe: lowercase, alphanumeric, hyphens)
+            if (!System.Text.RegularExpressions.Regex.IsMatch(tenantSlug, @"^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$"))
+            {
+                throw new ValidationException("Tenant slug must be URL-safe (lowercase letters, numbers, and hyphens only, cannot start or end with hyphen).");
+            }
+
+            // Check tenant slug uniqueness
+            var existingTenant = await _db.Tenants.FirstOrDefaultAsync(t => t.Slug == tenantSlug, cancellationToken);
+            if (existingTenant != null)
+            {
+                throw new ValidationException($"A tenant with slug '{tenantSlug}' already exists.");
+            }
+
+            // Create the tenant
+            var tenant = new Tenant
+            {
+                Slug = tenantSlug,
+                Name = tenantName,
+                Description = tenantDescription,
+                IssuerUri = $"https://localhost:8443/t/{tenantSlug}", // TODO: Make configurable
+                Status = TenantStatus.Active,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            _db.Tenants.Add(tenant);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            // Create default realm
+            var defaultRealm = new Realm
+            {
+                TenantId = tenant.Id,
+                Name = "default",
+                DisplayName = "Default Realm",
+                AllowUnconfirmedLogin = true,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            _db.Realms.Add(defaultRealm);
+
+            // Create tenant-admin role
+            var tenantAdminRole = new Role
+            {
+                TenantId = tenant.Id,
+                RealmId = defaultRealm.Id,
+                Name = "tenant-admin",
+                IsActive = true
+            };
+            _db.Roles.Add(tenantAdminRole);
+
+            await _db.SaveChangesAsync(cancellationToken);
+
+            tenantId = tenant.Id;
+            _logger.LogInformation("Created new tenant {TenantSlug} (ID: {TenantId}) for registration", tenantSlug, tenant.Id);
+        }
+
         var registration = new Registration
         {
             Email = email,
@@ -95,7 +166,12 @@ internal sealed class RegistrationService : IRegistrationService
             ClientId = clientId,
             PasswordHash = passwordHash,
             State = "pending",
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            IsTenantAdmin = tenantId.HasValue,
+            TenantSlug = tenantSlug,
+            TenantName = tenantName,
+            TenantDescription = tenantDescription,
+            TenantId = tenantId ?? Guid.Empty // Will be set properly during approval if not tenant admin
         };
 
         _db.Set<Registration>().Add(registration);
@@ -154,9 +230,24 @@ internal sealed class RegistrationService : IRegistrationService
             throw new InvalidOperationException("Registration rejected because a user with this email already exists.");
         }
 
+        // Determine tenant for user
+        Guid userTenantId;
+        if (registration.IsTenantAdmin && registration.TenantId != Guid.Empty)
+        {
+            // User is tenant admin of newly created tenant
+            userTenantId = registration.TenantId;
+        }
+        else
+        {
+            // TODO: For regular registrations, determine tenant context from middleware or default
+            // For now, assume single tenant or handle via middleware
+            throw new NotImplementedException("Regular user registration without tenant context not yet implemented for multi-tenant mode.");
+        }
+
         // Create user
         var user = new User
         {
+            TenantId = userTenantId,
             Username = normalized,
             Email = emailForUser,
             EmailVerified = false,
@@ -176,6 +267,26 @@ internal sealed class RegistrationService : IRegistrationService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to dispatch confirmation email for user {UserId}", user.Id);
+            }
+        }
+
+        // Assign tenant-admin role if this is a tenant admin registration
+        if (registration.IsTenantAdmin)
+        {
+            var tenantAdminRole = await _db.Roles.FirstOrDefaultAsync(
+                r => r.TenantId == user.TenantId && r.Name == "tenant-admin",
+                cancellationToken);
+            if (tenantAdminRole != null)
+            {
+                _db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+                {
+                    UserId = user.Id,
+                    RoleId = tenantAdminRole.Id,
+                    RealmId = tenantAdminRole.RealmId,
+                    IsActive = true
+                });
+                await _db.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Assigned tenant-admin role to user {UserId} for tenant {TenantId}", user.Id, user.TenantId);
             }
         }
 

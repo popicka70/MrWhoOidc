@@ -12,6 +12,7 @@
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
+    <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
     
@@ -76,11 +77,11 @@
                     <a class="navbar-brand d-flex align-items-center gap-2" href="@(tenantPrefix)/">
                         @if (!string.IsNullOrEmpty(tenantBranding.LogoUrl))
                         {
-                            <img src="@tenantBranding.LogoUrl" alt="@tenantBranding.TenantName Logo" style="max-height: 40px; max-width: 150px;" />
+                            <img src="@tenantBranding.LogoUrl" alt="@tenantBranding.TenantName Logo" class="navbar-logo" />
                         }
                         else
                         {
-                            <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
+                            <i class="bi bi-shield-lock-fill icon-md text-primary"></i>
                             @if (currentTenant != null)
                             {
                                 <span class="text-muted small">@currentTenant.Name</span>
@@ -205,13 +206,13 @@
                                 if (platformAdminResult.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                                     @if (MultiTenancyOptions.Value.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/platform-admin/tenants"><i class="bi bi-building me-2"></i>Tenants</a>
+                                        <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
                                     }
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation-history"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
                                 }
                             }
                             
@@ -277,7 +278,7 @@
         {
             <!-- Tight centered landing layout (unauthenticated) -->
             <div class="d-flex flex-column align-items-center justify-content-start py-4 flex-grow-1" style="min-height:70vh;">
-                <div class="w-100" style="max-width:750px;">
+                <div class="w-100 content-container">
                     @if (TempData.ContainsKey("Error"))
                     {
                         <div class="alert alert-danger">@TempData["Error"]</div>

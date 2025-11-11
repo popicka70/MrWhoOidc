@@ -13,27 +13,27 @@
 {
     <div class="alert alert-info alert-dismissible fade show border-start border-5 border-info mb-4" role="alert">
         <div class="d-flex align-items-center flex-wrap gap-2">
-            <i class="bi bi-building-gear fs-4 text-info"></i>
+            <i class="bi bi-building-gear icon-md text-info"></i>
             <div class="flex-grow-1">
                 <h6 class="alert-heading mb-1">
                     <strong>@tenant.Name</strong>
                     @if (isPlatformAdmin)
                     {
-                        <span class="badge bg-primary ms-2"><i class="bi bi-shield-check me-1"></i>Platform Admin</span>
+                        <span class="badge bg-primary ms-2"><i class="bi bi-shield-check icon-xs me-1"></i>Platform Admin</span>
                     }
                 </h6>
                 <small class="text-muted d-block">
-                    <i class="bi bi-tag me-1"></i><strong>Slug:</strong> @tenant.Slug
+                    <i class="bi bi-tag icon-xs me-1"></i><strong>Slug:</strong> @tenant.Slug
                     <span class="mx-2 d-none d-sm-inline">|</span>
                     <span class="d-block d-sm-inline">
-                        <i class="bi bi-link-45deg me-1"></i><strong>Issuer:</strong> 
+                        <i class="bi bi-link-45deg icon-xs me-1"></i><strong>Issuer:</strong> 
                         <code class="text-muted">@tenant.IssuerUri</code>
                     </span>
                 </small>
             </div>
             @if (isPlatformAdmin)
             {
-                <a class="btn btn-sm btn-outline-secondary" asp-page="/platform-admin/tenants" title="View all tenants">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="/PlatformAdmin/Tenants/Index" title="View all tenants">
                     <i class="bi bi-arrow-left me-1"></i><span class="d-none d-sm-inline">All Tenants</span>
                 </a>
             }

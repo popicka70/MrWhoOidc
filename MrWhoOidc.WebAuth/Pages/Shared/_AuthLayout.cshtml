@@ -6,13 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MrWhoOidc.WebAuth</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/design-system.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
 <body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) auth-scheme-body">
     <div class="d-flex flex-column min-vh-100">
         <main role="main" class="flex-grow-1 d-flex align-items-center justify-content-center py-4">
-            <div class="w-100 px-3" style="max-width: 420px;">
+            <div class="w-100 px-3 auth-container">
                 @RenderBody()
             </div>
         </main>

@@ -10,17 +10,19 @@
         : "";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="m-0">
-            <i class="bi bi-person-badge text-primary me-2"></i>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="bi bi-person-badge icon-md icon-primary"></i>
             Roles
         </h1>
-        <p class="text-muted mb-0">Manage user roles and permissions</p>
+        <p class="page-header__subtitle">Manage user roles and permissions</p>
     </div>
-    <a class="btn btn-success" href="@tenantPrefix/admin/roles/add">
-        <i class="bi bi-plus-lg"></i> Add Role
-    </a>
+    <div class="page-header__actions">
+        <a class="btn btn-success" href="@tenantPrefix/admin/roles/add">
+            <i class="bi bi-plus-lg"></i> Add Role
+        </a>
+    </div>
 </div>
 
 <div class="card mb-4">
@@ -69,7 +71,7 @@
 
 <div class="card">
     <div class="table-responsive table-responsive-cards">
-        <table class="table table-hover align-middle mb-0">
+        <table class="data-table align-middle mb-0">
             <thead>
                 <tr>
                     <th>

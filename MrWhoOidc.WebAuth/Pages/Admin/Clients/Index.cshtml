@@ -10,17 +10,19 @@
         : "";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="m-0">
-            <i class="bi bi-people text-primary me-2"></i>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="bi bi-people icon-md icon-primary"></i>
             Clients
         </h1>
-        <p class="text-muted mb-0">Manage OAuth2/OIDC client applications</p>
+        <p class="page-header__subtitle">Manage OAuth2/OIDC client applications</p>
     </div>
-    <a class="btn btn-success" href="@(tenantPrefix)/admin/clients/add">
-        <i class="bi bi-plus-lg"></i> Add Client
-    </a>
+    <div class="page-header__actions">
+        <a class="btn btn-success" href="@(tenantPrefix)/admin/clients/add">
+            <i class="bi bi-plus-lg"></i> Add Client
+        </a>
+    </div>
 </div>
 
 @if (Model.IsPlatformAdmin)
@@ -50,26 +52,26 @@
 }
 
 <div class="card">
-    <div class="table-responsive table-responsive-cards">
-        <table class="table table-hover align-middle mb-0">
+    <div class="table-responsive">
+        <table class="data-table">
             <thead>
                 <tr>
                     <th>
-                        <i class="bi bi-key me-1"></i>Client ID
+                        <i class="bi bi-key icon-sm"></i> Client ID
                     </th>
                     <th>
-                        <i class="bi bi-tag me-1"></i>Name
+                        <i class="bi bi-tag icon-sm"></i> Name
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-diagram-3 me-1"></i>Realm
+                        <i class="bi bi-diagram-3 icon-sm"></i> Realm
                     </th>
                     <th class="d-none d-lg-table-cell">
-                        <i class="bi bi-building me-1"></i>Tenant
+                        <i class="bi bi-building icon-sm"></i> Tenant
                     </th>
                     <th class="d-none d-md-table-cell">PKCE</th>
                     <th class="d-none d-md-table-cell">Consent</th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-gear me-1"></i>Status
+                        <i class="bi bi-gear icon-sm"></i> Status
                     </th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -77,7 +79,7 @@
             <tbody>
             @foreach (var c in Model.Clients)
             {
-                <tr>
+                <tr class="data-table__row">
                     <td data-label="Client ID"><code>@c.ClientId</code></td>
                     <td data-label="Name"><strong>@c.ClientName</strong></td>
                     <td data-label="Realm" class="d-none d-md-table-cell">

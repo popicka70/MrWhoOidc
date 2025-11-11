@@ -177,6 +177,9 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         null, // no password for external IdP users
                         isExternalIdp: true,
                         autoApprove: true,
+                        tenantSlug: null,
+                        tenantName: null,
+                        tenantDescription: null,
                         cancellationToken);
 
                     if (userId.HasValue)

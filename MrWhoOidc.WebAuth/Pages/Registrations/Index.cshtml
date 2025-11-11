@@ -59,6 +59,48 @@
                 <input asp-for="Input.Password" class="form-control" type="password" autocomplete="new-password" />
                 <span asp-validation-for="Input.Password" class="text-danger"></span>
             </div>
+
+            <!-- Tenant Creation Section -->
+            <div class="col-12">
+                <div class="form-check">
+                    <input asp-for="Input.CreateTenant" class="form-check-input" type="checkbox" id="createTenantCheck" />
+                    <label class="form-check-label fw-bold" for="createTenantCheck">
+                        <i class="bi bi-building me-2"></i>
+                        Create new tenant and become admin
+                    </label>
+                    <small class="form-text text-muted d-block">
+                        Check this option if you want to create a new organization and automatically become its administrator.
+                    </small>
+                </div>
+            </div>
+
+            <div id="tenantFields" class="col-12" style="display: none;">
+                <div class="border rounded p-3 bg-light">
+                    <h5 class="mb-3">
+                        <i class="bi bi-building-gear me-2"></i>
+                        Tenant Information
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label asp-for="Input.TenantSlug" class="form-label">Tenant Slug *</label>
+                            <input asp-for="Input.TenantSlug" class="form-control" placeholder="mycompany" />
+                            <small class="form-text text-muted">URL-safe identifier (lowercase, no spaces)</small>
+                            <span asp-validation-for="Input.TenantSlug" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-8">
+                            <label asp-for="Input.TenantName" class="form-label">Tenant Name *</label>
+                            <input asp-for="Input.TenantName" class="form-control" placeholder="My Company Inc." />
+                            <span asp-validation-for="Input.TenantName" class="text-danger"></span>
+                        </div>
+                        <div class="col-12">
+                            <label asp-for="Input.TenantDescription" class="form-label">Description (optional)</label>
+                            <textarea asp-for="Input.TenantDescription" class="form-control" rows="2" placeholder="Brief description of your organization"></textarea>
+                            <span asp-validation-for="Input.TenantDescription" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-check-lg"></i> Submit Registration
@@ -73,4 +115,25 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+    <script>
+        document.getElementById('createTenantCheck').addEventListener('change', function() {
+            const tenantFields = document.getElementById('tenantFields');
+            if (this.checked) {
+                tenantFields.style.display = 'block';
+                // Focus on tenant slug field
+                document.querySelector('[asp-for="Input.TenantSlug"]').focus();
+            } else {
+                tenantFields.style.display = 'none';
+                // Clear tenant fields when unchecked
+                document.querySelector('[asp-for="Input.TenantSlug"]').value = '';
+                document.querySelector('[asp-for="Input.TenantName"]').value = '';
+                document.querySelector('[asp-for="Input.TenantDescription"]').value = '';
+            }
+        });
+
+        // Auto-convert tenant slug to lowercase and replace spaces
+        document.querySelector('[asp-for="Input.TenantSlug"]').addEventListener('input', function() {
+            this.value = this.value.toLowerCase().replace(/[^a-z0-9\-]/g, '');
+        });
+    </script>
 }

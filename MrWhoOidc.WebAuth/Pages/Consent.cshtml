@@ -2,18 +2,17 @@
 @model MrWhoOidc.WebAuth.Pages.ConsentModel
 @{
     ViewData["Title"] = "Consent";
+    Layout = "_AuthLayout";
 }
 
-<div class="card">
+<div class="auth-card">
     <div class="card-body p-4">
-        <h2 class="card-title mb-4">
-            <i class="bi bi-shield-check text-primary me-2"></i>
-            Authorization Request
-        </h2>
-        
-        <div class="alert alert-info mb-4">
-            <i class="bi bi-info-circle me-2"></i>
-            Application <strong>@Model.ClientId</strong> is requesting access to your account.
+        <div class="auth-card__header">
+            <i class="bi bi-shield-check icon-xl icon-primary"></i>
+            <h2 class="auth-card__title">Authorization Request</h2>
+            <p class="auth-card__subtitle">
+                Application <strong>@Model.ClientId</strong> is requesting access to your account.
+            </p>
         </div>
 
         <h5 class="mb-3">Requested Permissions:</h5>
@@ -21,7 +20,7 @@
         @foreach (var scope in Model.Scopes)
         {
             <li class="list-group-item d-flex align-items-center">
-                <i class="bi bi-check2 text-success me-2"></i>
+                <i class="bi bi-check2 icon-sm icon-success me-2"></i>
                 <span>@scope</span>
             </li>
         }
@@ -34,7 +33,7 @@
             {
                 <input type="hidden" name="Scopes" value="@scope" />
             }
-            <div class="d-flex gap-3">
+            <div class="action-buttons">
                 <button type="submit" class="btn btn-success flex-fill">
                     <i class="bi bi-check-lg"></i> Allow Access
                 </button>
