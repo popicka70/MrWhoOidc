@@ -7,12 +7,12 @@
 
 <div class="auth-card">
     <div class="card-body p-4">
-        <div class="text-center mb-4">
-            <i class="bi bi-building text-primary" style="font-size: 3rem;"></i>
-            <h2 class="mt-3 mb-2 auth-heading">Select your organization</h2>
+        <div class="auth-card__header">
+            <i class="bi bi-building icon-xl icon-primary"></i>
+            <h2 class="auth-card__title">Select your organization</h2>
             @if (!string.IsNullOrEmpty(Model.Email))
             {
-                <p class="text-muted">
+                <p class="auth-card__subtitle">
                     <i class="bi bi-envelope me-1"></i>
                     @Model.Email
                 </p>
@@ -34,7 +34,8 @@
                 {
                     <div class="tenant-card mb-3" data-tenant-slug="@tenant.Slug">
                         <div class="card h-100 tenant-card-inner" 
-                             style="cursor: pointer;"
+                             role="button"
+                             tabindex="0"
                              onclick="selectTenant('@tenant.Slug', '@tenant.LoginUrl')">
                             <div class="card-body d-flex align-items-center">
                                 <div class="tenant-logo me-3">
@@ -42,33 +43,32 @@
                                     {
                                         <img src="@tenant.LogoUrl" 
                                              alt="@tenant.Name logo" 
-                                             class="rounded"
-                                             style="width: 48px; height: 48px; object-fit: contain;" />
+                                             class="rounded icon-lg"
+                                             style="object-fit: contain;" />
                                     }
                                     else
                                     {
-                                        <div class="bg-primary bg-opacity-10 rounded d-flex align-items-center justify-content-center" 
-                                             style="width: 48px; height: 48px;">
-                                            <i class="bi bi-building text-primary" style="font-size: 24px;"></i>
+                                        <div class="bg-primary bg-opacity-10 rounded d-flex align-items-center justify-content-center icon-lg">
+                                            <i class="bi bi-building icon-md icon-primary"></i>
                                         </div>
                                     }
                                 </div>
                                 <div class="tenant-info flex-grow-1">
                                     <h5 class="card-title mb-1">@tenant.Name</h5>
                                     <p class="card-text text-muted small mb-0">
-                                        <i class="bi bi-link-45deg me-1"></i>
+                                        <i class="bi bi-link-45deg icon-sm me-1"></i>
                                         @tenant.Slug
                                     </p>
                                     @if (tenant.LastLoginAt.HasValue)
                                     {
                                         <p class="card-text text-muted small mb-0">
-                                            <i class="bi bi-clock me-1"></i>
+                                            <i class="bi bi-clock icon-sm me-1"></i>
                                             Last login: @tenant.LastLoginAt.Value.ToString("MMM d, yyyy")
                                         </p>
                                     }
                                 </div>
                                 <div class="tenant-action">
-                                    <i class="bi bi-arrow-right-circle text-primary" style="font-size: 24px;"></i>
+                                    <i class="bi bi-arrow-right-circle icon-md icon-primary"></i>
                                 </div>
                             </div>
                         </div>
@@ -76,7 +76,7 @@
                 }
             </div>
 
-            <form method="post" id="tenantSelectionForm" style="display: none;">
+            <form method="post" id="tenantSelectionForm" class="d-none">
                 <input type="hidden" name="SelectedTenantSlug" id="selectedTenantSlug" />
                 <input type="hidden" asp-for="Email" />
                 <input type="hidden" asp-for="ReturnUrl" />
