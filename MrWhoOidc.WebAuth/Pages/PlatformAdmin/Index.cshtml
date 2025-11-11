@@ -4,13 +4,14 @@
     ViewData["Title"] = "Platform Administration";
 }
 
-<div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col">
-            <h1 class="display-5 fw-bold text-primary">
-                <i class="bi bi-gear-fill me-2"></i>Platform Administration
+<div class="content-container py-4">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="bi bi-gear-fill icon-md icon-primary"></i>
+                Platform Administration
             </h1>
-            <p class="lead text-muted">Manage tenants, monitor system health, and configure platform-wide settings</p>
+            <p class="page-header__subtitle">Manage tenants, monitor system health, and configure platform-wide settings</p>
         </div>
     </div>
 
@@ -178,7 +179,7 @@
                     @if (Model.RecentTenants.Any())
                     {
                         <div class="table-responsive">
-                            <table class="table table-hover">
+                            <table class="data-table">
                                 <thead>
                                     <tr>
                                         <th>Slug</th>

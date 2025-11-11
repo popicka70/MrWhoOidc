@@ -206,13 +206,13 @@
                                 if (platformAdminResult.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                                     @if (MultiTenancyOptions.Value.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/platform-admin/tenants"><i class="bi bi-building me-2"></i>Tenants</a>
+                                        <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
                                     }
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
-                                    <a class="list-group-item list-group-item-action" asp-page="/platform-admin/impersonation-history"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
+                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
                                 }
                             }
                             

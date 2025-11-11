@@ -4,25 +4,23 @@
     ViewData["Title"] = "Impersonation History";
 }
 
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-12">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h1 class="h2">
-                        <i class="bi bi-clock-history me-2"></i>Impersonation History
-                    </h1>
-                    <p class="text-muted mb-0">Audit log of all platform admin impersonation sessions</p>
-                </div>
-                <div>
-                    @if (Model.Logs.Any())
-                    {
-                        <form method="post" asp-page-handler="ExportCsv" class="d-inline">
-                            <input type="hidden" name="startDate" value="@Model.Filter.StartDate?.ToString("yyyy-MM-dd")" />
-                            <input type="hidden" name="endDate" value="@Model.Filter.EndDate?.ToString("yyyy-MM-dd")" />
-                            <input type="hidden" name="adminUsername" value="@Model.Filter.AdminUsername" />
-                            <input type="hidden" name="tenantSlug" value="@Model.Filter.TenantSlug" />
+<div class="content-container mt-4">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="bi bi-clock-history icon-md icon-primary"></i>
+                Impersonation History
+            </h1>
+            <p class="page-header__subtitle">Audit log of all platform admin impersonation sessions</p>
+        </div>
+        <div class="page-header__actions">
+            @if (Model.Logs.Any())
+            {
+                <form method="post" asp-page-handler="ExportCsv" class="d-inline">
+                    <input type="hidden" name="startDate" value="@Model.Filter.StartDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="endDate" value="@Model.Filter.EndDate?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="adminUsername" value="@Model.Filter.AdminUsername" />
+                    <input type="hidden" name="tenantSlug" value="@Model.Filter.TenantSlug" />
                             <button type="submit" class="btn btn-outline-primary">
                                 <i class="bi bi-download me-1"></i>Export CSV
                             </button>
@@ -30,9 +28,11 @@
                     }
                 </div>
             </div>
-
-            <!-- Filters -->
-            <div class="card mb-4">
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="card mb-4">
                 <div class="card-header">
                     <h6 class="mb-0">
                         <i class="bi bi-funnel me-2"></i>Filters
@@ -112,7 +112,7 @@
             {
                 <div class="card">
                     <div class="card-body table-responsive">
-                        <table class="table table-hover">
+                        <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Timestamp</th>

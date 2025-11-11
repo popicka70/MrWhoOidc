@@ -275,6 +275,19 @@
   cursor: pointer;
 }
 
+/* Object Fit Utilities */
+.object-fit-contain {
+  object-fit: contain;
+}
+
+/* Image Preview Utilities */
+.image-preview {
+  max-height: 60px;
+  max-width: 200px;
+  border: 1px solid var(--color-light);
+  border-radius: var(--radius-sm);
+}
+
 /* ============================================
    5. ACCESSIBILITY FEATURES
    ============================================ */
