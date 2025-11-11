@@ -77,11 +77,11 @@
                     <a class="navbar-brand d-flex align-items-center gap-2" href="@(tenantPrefix)/">
                         @if (!string.IsNullOrEmpty(tenantBranding.LogoUrl))
                         {
-                            <img src="@tenantBranding.LogoUrl" alt="@tenantBranding.TenantName Logo" style="max-height: 40px; max-width: 150px;" />
+                            <img src="@tenantBranding.LogoUrl" alt="@tenantBranding.TenantName Logo" class="navbar-logo" />
                         }
                         else
                         {
-                            <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
+                            <i class="bi bi-shield-lock-fill icon-md text-primary"></i>
                             @if (currentTenant != null)
                             {
                                 <span class="text-muted small">@currentTenant.Name</span>
@@ -278,7 +278,7 @@
         {
             <!-- Tight centered landing layout (unauthenticated) -->
             <div class="d-flex flex-column align-items-center justify-content-start py-4 flex-grow-1" style="min-height:70vh;">
-                <div class="w-100" style="max-width:750px;">
+                <div class="w-100 content-container">
                     @if (TempData.ContainsKey("Error"))
                     {
                         <div class="alert alert-danger">@TempData["Error"]</div>

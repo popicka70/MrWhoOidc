@@ -13,7 +13,7 @@
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle me-2"></i>
+        <i class="bi bi-check-circle icon-sm"></i>
         @Html.Raw(TempData["Success"])
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -22,23 +22,25 @@
 @if (TempData["Error"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle me-2"></i>
+        <i class="bi bi-exclamation-triangle icon-sm"></i>
         @TempData["Error"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="m-0">
-            <i class="bi bi-people-fill text-primary me-2"></i>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="bi bi-people-fill icon-md icon-primary"></i>
             Users
         </h1>
-        <p class="text-muted mb-0">Manage user accounts and permissions</p>
+        <p class="page-header__subtitle">Manage user accounts and permissions</p>
     </div>
-    <a class="btn btn-success" asp-page="Add">
-        <i class="bi bi-plus-lg"></i> Add User
-    </a>
+    <div class="page-header__actions">
+        <a class="btn btn-success" asp-page="Add">
+            <i class="bi bi-plus-lg"></i> Add User
+        </a>
+    </div>
 </div>
 
 <div class="card mb-4">
@@ -48,7 +50,7 @@
             {
                 <div class="col-md-4">
                     <label class="form-label">
-                        <i class="bi bi-building me-1"></i>Tenant Filter
+                        <i class="bi bi-building icon-sm"></i> Tenant Filter
                     </label>
                     <select class="form-select" name="tenantId" onchange="this.form.submit()">
                         @foreach (var opt in Model.TenantOptions)
@@ -60,7 +62,7 @@
             }
             <div class="@(Model.IsPlatformAdmin ? "col-md-5" : "col-md-9")">
                 <label class="form-label">
-                    <i class="bi bi-search me-1"></i>Search
+                    <i class="bi bi-search icon-sm"></i> Search
                 </label>
                 <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search by username, email, or name..." />
             </div>
@@ -74,24 +76,24 @@
 </div>
 
 <div class="card">
-    <div class="table-responsive table-responsive-cards">
-        <table class="table table-hover align-middle mb-0">
+    <div class="table-responsive">
+        <table class="data-table">
             <thead>
                 <tr>
                     <th>
-                        <i class="bi bi-person me-1"></i>Username
+                        <i class="bi bi-person icon-sm"></i> Username
                     </th>
                     <th>
-                        <i class="bi bi-envelope me-1"></i>Email
+                        <i class="bi bi-envelope icon-sm"></i> Email
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-card-text me-1"></i>Name
+                        <i class="bi bi-card-text icon-sm"></i> Name
                     </th>
                     <th class="d-none d-lg-table-cell">
-                        <i class="bi bi-building me-1"></i>Tenant
+                        <i class="bi bi-building icon-sm"></i> Tenant
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-calendar me-1"></i>Created
+                        <i class="bi bi-calendar icon-sm"></i> Created
                     </th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -99,7 +101,7 @@
             <tbody>
             @foreach (var u in Model.Users)
             {
-                <tr>
+                <tr class="data-table__row">
                     <td data-label="Username"><strong>@u.Username</strong></td>
                     <td data-label="Email">@u.Email</td>
                     <td data-label="Name" class="d-none d-md-table-cell">@u.Name</td>
@@ -108,26 +110,26 @@
                     </td>
                     <td data-label="Created" class="d-none d-md-table-cell">@u.CreatedAt.ToLocalTime().ToString("g")</td>
                     <td data-label="Actions" class="text-end">
-                        <div class="btn-group btn-group-sm" role="group">
-                            <a href="@(tenantPrefix)/admin/users/edit/@u.Id" class="btn btn-outline-secondary" title="Edit">
+                        <div class="action-buttons">
+                            <a href="@(tenantPrefix)/admin/users/edit/@u.Id" class="btn btn-sm btn-outline-secondary" title="Edit">
                                 <i class="bi bi-pencil"></i> Edit
                             </a>
                             @if (Model.IsPlatformAdmin)
                             {
-                                <button type="button" class="btn btn-outline-warning" title="Reset Password" 
+                                <button type="button" class="btn btn-sm btn-outline-warning" title="Reset Password" 
                                         onclick="if(confirm('Reset password for @u.Username?')) { document.getElementById('resetForm_@u.Id').submit(); }">
                                     <i class="bi bi-key"></i> Reset
                                 </button>
                             }
-                            <button type="button" class="btn btn-outline-danger" title="Delete" 
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" 
                                     onclick="if(confirm('Delete user @u.Username? This cannot be undone.')) { document.getElementById('deleteForm_@u.Id').submit(); }">
                                 <i class="bi bi-trash"></i> Del
                             </button>
                         </div>
-                        <form id="deleteForm_@u.Id" method="post" asp-page-handler="Delete" asp-route-id="@u.Id" style="display:none;"></form>
+                        <form id="deleteForm_@u.Id" method="post" asp-page-handler="Delete" asp-route-id="@u.Id" class="d-none"></form>
                         @if (Model.IsPlatformAdmin)
                         {
-                            <form id="resetForm_@u.Id" method="post" asp-page-handler="ResetPassword" asp-route-id="@u.Id" style="display:none;"></form>
+                            <form id="resetForm_@u.Id" method="post" asp-page-handler="ResetPassword" asp-route-id="@u.Id" class="d-none"></form>
                         }
                     </td>
                 </tr>

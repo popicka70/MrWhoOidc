@@ -263,6 +263,13 @@
   padding: var(--space-md);
 }
 
+/* Navbar Logo */
+.navbar-logo {
+  max-height: 40px;
+  max-width: 150px;
+  object-fit: contain;
+}
+
 /* Interactive Elements - cursor styles */
 [role="button"] {
   cursor: pointer;

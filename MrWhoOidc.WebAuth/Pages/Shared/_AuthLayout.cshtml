@@ -13,7 +13,7 @@
 <body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) auth-scheme-body">
     <div class="d-flex flex-column min-vh-100">
         <main role="main" class="flex-grow-1 d-flex align-items-center justify-content-center py-4">
-            <div class="w-100 px-3" style="max-width: 420px;">
+            <div class="w-100 px-3 auth-container">
                 @RenderBody()
             </div>
         </main>
