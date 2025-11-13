@@ -1,0 +1,530 @@
+/*!
+ * Fluent Design System - Base Styles
+ * Version: 2.0.0
+ * 
+ * Foundation styles that apply Fluent Design tokens to base HTML elements
+ * and establish the core visual language for the application
+ */
+
+/* ============================================
+   BASE RESET & NORMALIZATION
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ============================================
+   ROOT & BODY SETUP
+   ============================================ */
+
+html {
+  font-size: var(--fluent-font-size-300); /* 14px base */
+  line-height: var(--fluent-line-height-300);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: var(--fluent-font-size-400); /* 16px on larger screens */
+    line-height: var(--fluent-line-height-400);
+  }
+}
+
+body {
+  margin: 0;
+  font-family: var(--fluent-font-family-base);
+  font-weight: var(--fluent-font-weight-regular);
+  color: var(--fluent-color-neutral-foreground-1);
+  background-color: var(--fluent-color-canvas);
+  transition: background-color var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+}
+
+/* ============================================
+   TYPOGRAPHY ELEMENTS
+   ============================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: var(--fluent-space-16);
+  font-weight: var(--fluent-font-weight-semibold);
+  line-height: 1.2;
+  color: var(--fluent-color-neutral-foreground-1);
+}
+
+h1 {
+  font-size: var(--fluent-font-size-900); /* 40px */
+  line-height: var(--fluent-line-height-900);
+  font-weight: var(--fluent-font-weight-bold);
+}
+
+h2 {
+  font-size: var(--fluent-font-size-800); /* 32px */
+  line-height: var(--fluent-line-height-800);
+}
+
+h3 {
+  font-size: var(--fluent-font-size-700); /* 28px */
+  line-height: var(--fluent-line-height-700);
+}
+
+h4 {
+  font-size: var(--fluent-font-size-600); /* 24px */
+  line-height: var(--fluent-line-height-600);
+}
+
+h5 {
+  font-size: var(--fluent-font-size-500); /* 20px */
+  line-height: var(--fluent-line-height-500);
+}
+
+h6 {
+  font-size: var(--fluent-font-size-400); /* 16px */
+  line-height: var(--fluent-line-height-400);
+}
+
+p {
+  margin-top: 0;
+  margin-bottom: var(--fluent-space-16);
+  color: var(--fluent-color-neutral-foreground-2);
+}
+
+small,
+.text-small {
+  font-size: var(--fluent-font-size-200); /* 12px */
+  line-height: var(--fluent-line-height-200);
+}
+
+/* ============================================
+   LINKS
+   ============================================ */
+
+a {
+  color: var(--fluent-color-brand-primary);
+  text-decoration: none;
+  transition: color var(--fluent-duration-faster) var(--fluent-curve-easy-ease);
+}
+
+a:hover {
+  color: var(--fluent-color-brand-primary-hover);
+  text-decoration: underline;
+}
+
+a:active {
+  color: var(--fluent-color-brand-primary-pressed);
+}
+
+a:focus-visible {
+  outline: var(--fluent-stroke-width-focus) solid var(--fluent-color-focus-stroke);
+  outline-offset: 2px;
+  border-radius: var(--fluent-border-radius-small);
+}
+
+/* ============================================
+   CODE & PREFORMATTED TEXT
+   ============================================ */
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--fluent-font-family-monospace);
+  font-size: var(--fluent-font-size-200);
+}
+
+code {
+  background-color: var(--fluent-color-neutral-background-5);
+  color: var(--fluent-color-error);
+  padding: 2px 6px;
+  border-radius: var(--fluent-border-radius-small);
+}
+
+pre {
+  background-color: var(--fluent-color-neutral-background-3);
+  border: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  border-radius: var(--fluent-border-radius-medium);
+  padding: var(--fluent-space-16);
+  overflow-x: auto;
+  margin: 0 0 var(--fluent-space-16) 0;
+}
+
+pre code {
+  background-color: transparent;
+  color: var(--fluent-color-neutral-foreground-1);
+  padding: 0;
+}
+
+/* ============================================
+   HORIZONTAL RULES
+   ============================================ */
+
+hr {
+  border: 0;
+  border-top: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  margin: var(--fluent-space-24) 0;
+}
+
+/* ============================================
+   LISTS
+   ============================================ */
+
+ul,
+ol {
+  margin: 0 0 var(--fluent-space-16) 0;
+  padding-left: var(--fluent-space-32);
+}
+
+li {
+  margin-bottom: var(--fluent-space-8);
+  color: var(--fluent-color-neutral-foreground-2);
+}
+
+/* ============================================
+   IMAGES & MEDIA
+   ============================================ */
+
+img,
+svg,
+video {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+/* ============================================
+   FOCUS VISIBLE (GLOBAL)
+   ============================================ */
+
+:focus-visible {
+  outline: var(--fluent-stroke-width-focus) solid var(--fluent-color-focus-stroke);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================
+   DISABLED STATE (GLOBAL)
+   ============================================ */
+
+[disabled],
+[aria-disabled="true"],
+.disabled {
+  opacity: var(--fluent-opacity-disabled);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ============================================
+   SELECTION
+   ============================================ */
+
+::selection {
+  background-color: var(--fluent-color-selection-background);
+  color: var(--fluent-color-selection-foreground);
+}
+
+/* ============================================
+   SCROLLBAR STYLING (WEBKIT)
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--fluent-color-neutral-background-2);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--fluent-color-neutral-stroke-1);
+  border-radius: var(--fluent-border-radius-large);
+  border: 2px solid var(--fluent-color-neutral-background-2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--fluent-color-neutral-foreground-3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fluent-color-neutral-stroke-1) var(--fluent-color-neutral-background-2);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Text Colors */
+.text-primary {
+  color: var(--fluent-color-brand-primary) !important;
+}
+
+.text-success {
+  color: var(--fluent-color-success) !important;
+}
+
+.text-warning {
+  color: var(--fluent-color-warning) !important;
+}
+
+.text-error,
+.text-danger {
+  color: var(--fluent-color-error) !important;
+}
+
+.text-info {
+  color: var(--fluent-color-info) !important;
+}
+
+.text-muted {
+  color: var(--fluent-color-neutral-foreground-3) !important;
+}
+
+.text-disabled {
+  color: var(--fluent-color-neutral-foreground-disabled) !important;
+}
+
+/* Background Colors */
+.bg-canvas {
+  background-color: var(--fluent-color-canvas) !important;
+}
+
+.bg-card {
+  background-color: var(--fluent-color-card) !important;
+}
+
+.bg-primary {
+  background-color: var(--fluent-color-brand-primary) !important;
+  color: #FFFFFF !important;
+}
+
+.bg-success {
+  background-color: var(--fluent-color-success-background) !important;
+  color: var(--fluent-color-success-foreground) !important;
+}
+
+.bg-warning {
+  background-color: var(--fluent-color-warning-background) !important;
+  color: var(--fluent-color-warning-foreground) !important;
+}
+
+.bg-error,
+.bg-danger {
+  background-color: var(--fluent-color-error-background) !important;
+  color: var(--fluent-color-error-foreground) !important;
+}
+
+.bg-info {
+  background-color: var(--fluent-color-info-background) !important;
+  color: var(--fluent-color-info-foreground) !important;
+}
+
+/* Font Weights */
+.font-regular {
+  font-weight: var(--fluent-font-weight-regular) !important;
+}
+
+.font-semibold {
+  font-weight: var(--fluent-font-weight-semibold) !important;
+}
+
+.font-bold {
+  font-weight: var(--fluent-font-weight-bold) !important;
+}
+
+/* Elevation Shadows */
+.elevation-2 {
+  box-shadow: var(--fluent-shadow-2);
+}
+
+.elevation-4 {
+  box-shadow: var(--fluent-shadow-4);
+}
+
+.elevation-8 {
+  box-shadow: var(--fluent-shadow-8);
+}
+
+.elevation-16 {
+  box-shadow: var(--fluent-shadow-16);
+}
+
+.elevation-32 {
+  box-shadow: var(--fluent-shadow-32);
+}
+
+.elevation-64 {
+  box-shadow: var(--fluent-shadow-64);
+}
+
+/* Border Radius Utilities */
+.rounded-none {
+  border-radius: var(--fluent-border-radius-none) !important;
+}
+
+.rounded-sm {
+  border-radius: var(--fluent-border-radius-small) !important;
+}
+
+.rounded-md {
+  border-radius: var(--fluent-border-radius-medium) !important;
+}
+
+.rounded-lg {
+  border-radius: var(--fluent-border-radius-large) !important;
+}
+
+.rounded-xl {
+  border-radius: var(--fluent-border-radius-xl) !important;
+}
+
+.rounded-full {
+  border-radius: var(--fluent-border-radius-circular) !important;
+}
+
+/* ============================================
+   ACRYLIC MATERIAL EFFECT
+   ============================================ */
+
+.acrylic {
+  background-color: var(--fluent-color-acrylic-background);
+  backdrop-filter: blur(var(--fluent-blur-acrylic)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--fluent-blur-acrylic)) saturate(180%);
+  border: var(--fluent-stroke-width-thin) solid var(--fluent-color-acrylic-border);
+}
+
+/* ============================================
+   MICA EFFECT (SUBTLE BACKGROUND TEXTURE)
+   ============================================ */
+
+.mica {
+  background: 
+    linear-gradient(
+      90deg,
+      var(--fluent-color-neutral-background-1) 0%,
+      var(--fluent-color-neutral-background-2) 50%,
+      var(--fluent-color-neutral-background-1) 100%
+    );
+  background-size: 200% 100%;
+  animation: mica-shimmer 8s ease-in-out infinite alternate;
+}
+
+@keyframes mica-shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mica {
+    animation: none;
+    background-position: 50% 50%;
+  }
+}
+
+/* ============================================
+   RESPONSIVE CONTAINERS
+   ============================================ */
+
+.container-fluid {
+  width: 100%;
+  padding-right: var(--fluent-space-16);
+  padding-left: var(--fluent-space-16);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.container {
+  width: 100%;
+  padding-right: var(--fluent-space-16);
+  padding-left: var(--fluent-space-16);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+@media (min-width: 576px) {
+  .container {
+    max-width: 540px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 720px;
+  }
+  
+  .container-fluid,
+  .container {
+    padding-right: var(--fluent-space-24);
+    padding-left: var(--fluent-space-24);
+  }
+}
+
+@media (min-width: 992px) {
+  .container {
+    max-width: 960px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .container {
+    max-width: 1140px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .container {
+    max-width: 1320px;
+  }
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+  * {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+  
+  pre {
+    border: 1px solid #999;
+    page-break-inside: avoid;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tr,
+  img {
+    page-break-inside: avoid;
+  }
+  
+  p,
+  h2,
+  h3 {
+    orphans: 3;
+    widows: 3;
+  }
+  
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

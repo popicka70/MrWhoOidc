@@ -1,0 +1,342 @@
+/*!
+ * Fluent Design System - Card Components
+ * Version: 2.0.0
+ * 
+ * Card component styles following Fluent Design elevation principles
+ */
+
+/* ============================================
+   BASE CARD STYLES
+   ============================================ */
+
+.card,
+.fluent-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: var(--fluent-color-card);
+  border: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  border-radius: var(--fluent-border-radius-card);
+  box-shadow: var(--fluent-shadow-card);
+  transition: box-shadow var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
+              transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+}
+
+.card:hover,
+.fluent-card:hover {
+  box-shadow: var(--fluent-shadow-card-hover);
+}
+
+/* Interactive cards */
+.card-interactive,
+.fluent-card-interactive {
+  cursor: pointer;
+  transition: box-shadow var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
+              transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
+              background-color var(--fluent-duration-faster) var(--fluent-curve-easy-ease);
+}
+
+.card-interactive:hover,
+.fluent-card-interactive:hover {
+  box-shadow: var(--fluent-shadow-card-hover);
+  transform: translateY(-2px);
+  background-color: var(--fluent-color-card-hover);
+}
+
+.card-interactive:active,
+.fluent-card-interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--fluent-shadow-card);
+}
+
+/* ============================================
+   CARD BODY
+   ============================================ */
+
+.card-body,
+.fluent-card-body {
+  flex: 1 1 auto;
+  padding: var(--fluent-space-20);
+}
+
+/* ============================================
+   CARD HEADER
+   ============================================ */
+
+.card-header,
+.fluent-card-header {
+  padding: var(--fluent-space-16) var(--fluent-space-20);
+  background-color: transparent;
+  border-bottom: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  font-weight: var(--fluent-font-weight-semibold);
+  font-size: var(--fluent-font-size-400);
+  color: var(--fluent-color-neutral-foreground-1);
+}
+
+.card-header:first-child {
+  border-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) 
+                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) 
+                 0 0;
+}
+
+/* ============================================
+   CARD FOOTER
+   ============================================ */
+
+.card-footer,
+.fluent-card-footer {
+  padding: var(--fluent-space-16) var(--fluent-space-20);
+  background-color: transparent;
+  border-top: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--fluent-space-8);
+}
+
+.card-footer:last-child {
+  border-radius: 0 0 
+                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin))
+                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+}
+
+/* ============================================
+   CARD TITLE & TEXT
+   ============================================ */
+
+.card-title,
+.fluent-card-title {
+  margin-top: 0;
+  margin-bottom: var(--fluent-space-12);
+  font-size: var(--fluent-font-size-500);
+  font-weight: var(--fluent-font-weight-semibold);
+  line-height: var(--fluent-line-height-500);
+  color: var(--fluent-color-neutral-foreground-1);
+}
+
+.card-subtitle,
+.fluent-card-subtitle {
+  margin-top: calc(var(--fluent-space-8) * -1);
+  margin-bottom: var(--fluent-space-12);
+  font-size: var(--fluent-font-size-300);
+  color: var(--fluent-color-neutral-foreground-3);
+}
+
+.card-text,
+.fluent-card-text {
+  margin-bottom: var(--fluent-space-16);
+  color: var(--fluent-color-neutral-foreground-2);
+}
+
+.card-text:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================
+   CARD VARIANTS
+   ============================================ */
+
+/* Elevated Card (more shadow) */
+.card-elevated {
+  box-shadow: var(--fluent-shadow-8);
+}
+
+.card-elevated:hover {
+  box-shadow: var(--fluent-shadow-16);
+}
+
+/* Flat Card (no shadow) */
+.card-flat {
+  box-shadow: none;
+  border: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+}
+
+/* Outlined Card */
+.card-outlined {
+  box-shadow: none;
+  border: var(--fluent-stroke-width-medium) solid var(--fluent-color-neutral-stroke-1);
+}
+
+/* Subtle Card */
+.card-subtle {
+  background-color: var(--fluent-color-neutral-background-2);
+  box-shadow: none;
+  border: none;
+}
+
+/* ============================================
+   CARD COLORS/SEMANTICS
+   ============================================ */
+
+.card-primary {
+  border-color: var(--fluent-color-brand-primary);
+}
+
+.card-primary .card-header {
+  background-color: var(--fluent-color-brand-primary);
+  color: white;
+  border-bottom-color: var(--fluent-color-brand-primary);
+}
+
+.card-success {
+  border-color: var(--fluent-color-success);
+}
+
+.card-success .card-header {
+  background-color: var(--fluent-color-success-background);
+  color: var(--fluent-color-success-foreground);
+  border-bottom-color: var(--fluent-color-success);
+}
+
+.card-warning {
+  border-color: var(--fluent-color-warning);
+}
+
+.card-warning .card-header {
+  background-color: var(--fluent-color-warning-background);
+  color: var(--fluent-color-warning-foreground);
+  border-bottom-color: var(--fluent-color-warning);
+}
+
+.card-error,
+.card-danger {
+  border-color: var(--fluent-color-error);
+}
+
+.card-error .card-header,
+.card-danger .card-header {
+  background-color: var(--fluent-color-error-background);
+  color: var(--fluent-color-error-foreground);
+  border-bottom-color: var(--fluent-color-error);
+}
+
+.card-info {
+  border-color: var(--fluent-color-info);
+}
+
+.card-info .card-header {
+  background-color: var(--fluent-color-info-background);
+  color: var(--fluent-color-info-foreground);
+  border-bottom-color: var(--fluent-color-info);
+}
+
+/* ============================================
+   CARD IMAGES
+   ============================================ */
+
+.card-img,
+.card-img-top,
+.card-img-bottom {
+  width: 100%;
+  height: auto;
+}
+
+.card-img-top {
+  border-top-left-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+  border-top-right-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+}
+
+.card-img-bottom {
+  border-bottom-left-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+  border-bottom-right-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+}
+
+/* ============================================
+   CARD GROUPS
+   ============================================ */
+
+.card-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fluent-space-16);
+}
+
+@media (min-width: 768px) {
+  .card-group {
+    flex-direction: row;
+    flex-flow: row wrap;
+  }
+  
+  .card-group > .card {
+    flex: 1 0 0%;
+  }
+}
+
+/* ============================================
+   CARD GRID
+   ============================================ */
+
+.card-grid {
+  display: grid;
+  gap: var(--fluent-space-16);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+@media (min-width: 768px) {
+  .card-grid {
+    gap: var(--fluent-space-20);
+  }
+}
+
+/* ============================================
+   CARD LIST (NO GAP)
+   ============================================ */
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.card-list > .card {
+  border-radius: 0;
+  margin-bottom: calc(var(--fluent-stroke-width-thin) * -1);
+}
+
+.card-list > .card:first-child {
+  border-top-left-radius: var(--fluent-border-radius-card);
+  border-top-right-radius: var(--fluent-border-radius-card);
+}
+
+.card-list > .card:last-child {
+  border-bottom-left-radius: var(--fluent-border-radius-card);
+  border-bottom-right-radius: var(--fluent-border-radius-card);
+  margin-bottom: 0;
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 767px) {
+  .card-body,
+  .fluent-card-body {
+    padding: var(--fluent-space-16);
+  }
+  
+  .card-header,
+  .fluent-card-header,
+  .card-footer,
+  .fluent-card-footer {
+    padding: var(--fluent-space-12) var(--fluent-space-16);
+  }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .fluent-card,
+  .card-interactive,
+  .fluent-card-interactive {
+    transition: none;
+  }
+  
+  .card-interactive:hover,
+  .fluent-card-interactive:hover {
+    transform: none;
+  }
+}

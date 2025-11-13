@@ -1,0 +1,420 @@
+/*!
+ * Fluent Design System - Design Tokens
+ * Version: 2.0.0
+ * 
+ * Microsoft Fluent Design System tokens for MrWhoOidc.WebAuth
+ * Includes support for light/dark themes and responsive design
+ */
+
+/* ============================================
+   COLOR TOKENS - LIGHT THEME (DEFAULT)
+   ============================================ */
+
+:root {
+  /* Brand Colors - Fluent Blue Palette */
+  --fluent-color-brand-primary: #0078D4;
+  --fluent-color-brand-primary-hover: #106EBE;
+  --fluent-color-brand-primary-pressed: #005A9E;
+  
+  /* Neutral Colors */
+  --fluent-color-neutral-foreground-1: #242424;
+  --fluent-color-neutral-foreground-2: #424242;
+  --fluent-color-neutral-foreground-3: #616161;
+  --fluent-color-neutral-foreground-disabled: #A6A6A6;
+  
+  --fluent-color-neutral-background-1: #FFFFFF;
+  --fluent-color-neutral-background-2: #FAFAFA;
+  --fluent-color-neutral-background-3: #F5F5F5;
+  --fluent-color-neutral-background-4: #F0F0F0;
+  --fluent-color-neutral-background-5: #EBEBEB;
+  --fluent-color-neutral-background-6: #E6E6E6;
+  
+  --fluent-color-neutral-stroke-1: #D1D1D1;
+  --fluent-color-neutral-stroke-2: #E0E0E0;
+  --fluent-color-neutral-stroke-disabled: #E0E0E0;
+  
+  /* Semantic Colors */
+  --fluent-color-success: #107C10;
+  --fluent-color-success-foreground: #0B6A0B;
+  --fluent-color-success-background: #DFF6DD;
+  
+  --fluent-color-warning: #F7630C;
+  --fluent-color-warning-foreground: #BC4B09;
+  --fluent-color-warning-background: #FFF4CE;
+  
+  --fluent-color-error: #D13438;
+  --fluent-color-error-foreground: #A4262C;
+  --fluent-color-error-background: #FDE7E9;
+  
+  --fluent-color-info: #00B7C3;
+  --fluent-color-info-foreground: #038387;
+  --fluent-color-info-background: #D1F7F9;
+  
+  /* Canvas & Overlay Colors */
+  --fluent-color-canvas: #F3F3F3;
+  --fluent-color-card: #FFFFFF;
+  --fluent-color-card-hover: #FAFAFA;
+  
+  /* Acrylic & Glass Materials */
+  --fluent-color-acrylic-background: rgba(252, 252, 252, 0.85);
+  --fluent-color-acrylic-border: rgba(0, 0, 0, 0.08);
+  --fluent-color-smoke-background: rgba(0, 0, 0, 0.32);
+  
+  /* Focus & Selection */
+  --fluent-color-focus-stroke: #0078D4;
+  --fluent-color-focus-stroke-inner: #FFFFFF;
+  --fluent-color-selection-background: #0078D4;
+  --fluent-color-selection-foreground: #FFFFFF;
+}
+
+/* ============================================
+   COLOR TOKENS - DARK THEME
+   ============================================ */
+
+[data-theme="dark"],
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Brand Colors - Adjusted for dark backgrounds */
+    --fluent-color-brand-primary: #3AA0F3;
+    --fluent-color-brand-primary-hover: #4FB3FF;
+    --fluent-color-brand-primary-pressed: #298FCE;
+    
+    /* Neutral Colors - Dark Mode */
+    --fluent-color-neutral-foreground-1: #FFFFFF;
+    --fluent-color-neutral-foreground-2: #E8E8E8;
+    --fluent-color-neutral-foreground-3: #C8C8C8;
+    --fluent-color-neutral-foreground-disabled: #5C5C5C;
+    
+    --fluent-color-neutral-background-1: #1F1F1F;
+    --fluent-color-neutral-background-2: #292929;
+    --fluent-color-neutral-background-3: #333333;
+    --fluent-color-neutral-background-4: #3D3D3D;
+    --fluent-color-neutral-background-5: #474747;
+    --fluent-color-neutral-background-6: #525252;
+    
+    --fluent-color-neutral-stroke-1: #5C5C5C;
+    --fluent-color-neutral-stroke-2: #474747;
+    --fluent-color-neutral-stroke-disabled: #3D3D3D;
+    
+    /* Semantic Colors - Dark Mode Adjusted */
+    --fluent-color-success: #6CCB5F;
+    --fluent-color-success-foreground: #92E58A;
+    --fluent-color-success-background: #1A3B19;
+    
+    --fluent-color-warning: #FFA348;
+    --fluent-color-warning-foreground: #FFB870;
+    --fluent-color-warning-background: #3D2B1F;
+    
+    --fluent-color-error: #F1707B;
+    --fluent-color-error-foreground: #F48B96;
+    --fluent-color-error-background: #3B2426;
+    
+    --fluent-color-info: #4EC1C8;
+    --fluent-color-info-foreground: #7DD9DF;
+    --fluent-color-info-background: #1F3B3D;
+    
+    /* Canvas & Overlay Colors - Dark */
+    --fluent-color-canvas: #141414;
+    --fluent-color-card: #1F1F1F;
+    --fluent-color-card-hover: #292929;
+    
+    /* Acrylic & Glass Materials - Dark */
+    --fluent-color-acrylic-background: rgba(44, 44, 44, 0.85);
+    --fluent-color-acrylic-border: rgba(255, 255, 255, 0.08);
+    --fluent-color-smoke-background: rgba(0, 0, 0, 0.64);
+    
+    /* Focus & Selection - Dark */
+    --fluent-color-focus-stroke: #3AA0F3;
+    --fluent-color-focus-stroke-inner: #000000;
+  }
+}
+
+/* ============================================
+   SHADOW TOKENS - FLUENT ELEVATION SYSTEM
+   ============================================ */
+
+:root {
+  /* Fluent Design Shadow System (2-64 elevation levels) */
+  --fluent-shadow-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.108),
+                      0 1.6px 3.6px rgba(0, 0, 0, 0.132);
+  
+  --fluent-shadow-4: 0 0.9px 1.5px rgba(0, 0, 0, 0.108),
+                      0 3.6px 6.0px rgba(0, 0, 0, 0.132);
+  
+  --fluent-shadow-8: 0 1.6px 3.6px rgba(0, 0, 0, 0.132),
+                      0 0.3px 0.9px rgba(0, 0, 0, 0.108);
+  
+  --fluent-shadow-16: 0 3.2px 7.2px rgba(0, 0, 0, 0.132),
+                       0 0.6px 1.8px rgba(0, 0, 0, 0.108);
+  
+  --fluent-shadow-32: 0 6.4px 14.4px rgba(0, 0, 0, 0.132),
+                       0 1.2px 3.6px rgba(0, 0, 0, 0.108);
+  
+  --fluent-shadow-64: 0 12.8px 28.8px rgba(0, 0, 0, 0.132),
+                       0 2.4px 7.2px rgba(0, 0, 0, 0.108);
+  
+  /* Contextual Shadows */
+  --fluent-shadow-card: var(--fluent-shadow-4);
+  --fluent-shadow-card-hover: var(--fluent-shadow-8);
+  --fluent-shadow-flyout: var(--fluent-shadow-16);
+  --fluent-shadow-dialog: var(--fluent-shadow-32);
+  --fluent-shadow-overlay: var(--fluent-shadow-64);
+}
+
+/* Dark mode shadow adjustments (more subtle) */
+[data-theme="dark"],
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fluent-shadow-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.216),
+                        0 1.6px 3.6px rgba(0, 0, 0, 0.264);
+    
+    --fluent-shadow-4: 0 0.9px 1.5px rgba(0, 0, 0, 0.216),
+                        0 3.6px 6.0px rgba(0, 0, 0, 0.264);
+    
+    --fluent-shadow-8: 0 1.6px 3.6px rgba(0, 0, 0, 0.264),
+                        0 0.3px 0.9px rgba(0, 0, 0, 0.216);
+    
+    --fluent-shadow-16: 0 3.2px 7.2px rgba(0, 0, 0, 0.264),
+                         0 0.6px 1.8px rgba(0, 0, 0, 0.216);
+    
+    --fluent-shadow-32: 0 6.4px 14.4px rgba(0, 0, 0, 0.264),
+                         0 1.2px 3.6px rgba(0, 0, 0, 0.216);
+    
+    --fluent-shadow-64: 0 12.8px 28.8px rgba(0, 0, 0, 0.264),
+                         0 2.4px 7.2px rgba(0, 0, 0, 0.216);
+  }
+}
+
+/* ============================================
+   BORDER RADIUS TOKENS
+   ============================================ */
+
+:root {
+  --fluent-border-radius-none: 0;
+  --fluent-border-radius-small: 2px;
+  --fluent-border-radius-medium: 4px;
+  --fluent-border-radius-large: 8px;
+  --fluent-border-radius-xl: 12px;
+  --fluent-border-radius-circular: 50%;
+  
+  /* Contextual Radius */
+  --fluent-border-radius-button: var(--fluent-border-radius-medium);
+  --fluent-border-radius-card: var(--fluent-border-radius-large);
+  --fluent-border-radius-input: var(--fluent-border-radius-medium);
+  --fluent-border-radius-dialog: var(--fluent-border-radius-large);
+}
+
+/* ============================================
+   SPACING TOKENS
+   ============================================ */
+
+:root {
+  --fluent-space-0: 0;
+  --fluent-space-4: 4px;
+  --fluent-space-8: 8px;
+  --fluent-space-12: 12px;
+  --fluent-space-16: 16px;
+  --fluent-space-20: 20px;
+  --fluent-space-24: 24px;
+  --fluent-space-28: 28px;
+  --fluent-space-32: 32px;
+  --fluent-space-36: 36px;
+  --fluent-space-40: 40px;
+  --fluent-space-48: 48px;
+  --fluent-space-56: 56px;
+  --fluent-space-64: 64px;
+  
+  /* Contextual Spacing */
+  --fluent-space-horizontal-xs: var(--fluent-space-4);
+  --fluent-space-horizontal-sm: var(--fluent-space-8);
+  --fluent-space-horizontal-md: var(--fluent-space-12);
+  --fluent-space-horizontal-lg: var(--fluent-space-16);
+  --fluent-space-horizontal-xl: var(--fluent-space-20);
+  
+  --fluent-space-vertical-xs: var(--fluent-space-4);
+  --fluent-space-vertical-sm: var(--fluent-space-8);
+  --fluent-space-vertical-md: var(--fluent-space-12);
+  --fluent-space-vertical-lg: var(--fluent-space-16);
+  --fluent-space-vertical-xl: var(--fluent-space-20);
+}
+
+/* ============================================
+   TYPOGRAPHY TOKENS
+   ============================================ */
+
+:root {
+  /* Font Families */
+  --fluent-font-family-base: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, 
+                              Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-font-family-monospace: "Consolas", "Courier New", monospace;
+  --fluent-font-family-numeric: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  
+  /* Font Sizes - Fluent Type Ramp */
+  --fluent-font-size-100: 10px;
+  --fluent-font-size-200: 12px;
+  --fluent-font-size-300: 14px;
+  --fluent-font-size-400: 16px;
+  --fluent-font-size-500: 20px;
+  --fluent-font-size-600: 24px;
+  --fluent-font-size-700: 28px;
+  --fluent-font-size-800: 32px;
+  --fluent-font-size-900: 40px;
+  --fluent-font-size-1000: 68px;
+  
+  /* Font Weights */
+  --fluent-font-weight-regular: 400;
+  --fluent-font-weight-semibold: 600;
+  --fluent-font-weight-bold: 700;
+  
+  /* Line Heights */
+  --fluent-line-height-100: 14px;
+  --fluent-line-height-200: 16px;
+  --fluent-line-height-300: 20px;
+  --fluent-line-height-400: 22px;
+  --fluent-line-height-500: 28px;
+  --fluent-line-height-600: 32px;
+  --fluent-line-height-700: 36px;
+  --fluent-line-height-800: 40px;
+  --fluent-line-height-900: 52px;
+  --fluent-line-height-1000: 92px;
+}
+
+/* ============================================
+   ANIMATION & TIMING TOKENS
+   ============================================ */
+
+:root {
+  /* Duration Tokens */
+  --fluent-duration-ultrafast: 50ms;
+  --fluent-duration-faster: 100ms;
+  --fluent-duration-fast: 150ms;
+  --fluent-duration-normal: 200ms;
+  --fluent-duration-gentle: 250ms;
+  --fluent-duration-slow: 300ms;
+  --fluent-duration-slower: 400ms;
+  --fluent-duration-ultraslow: 500ms;
+  
+  /* Easing Functions */
+  --fluent-curve-accelerate-min: cubic-bezier(0.8, 0.0, 1.0, 1.0);
+  --fluent-curve-accelerate-mid: cubic-bezier(0.9, 0.1, 1.0, 0.2);
+  --fluent-curve-accelerate-max: cubic-bezier(1.0, 0.0, 1.0, 1.0);
+  
+  --fluent-curve-decelerate-min: cubic-bezier(0.0, 0.0, 0.0, 1.0);
+  --fluent-curve-decelerate-mid: cubic-bezier(0.1, 0.9, 0.2, 1.0);
+  --fluent-curve-decelerate-max: cubic-bezier(0.0, 0.0, 0.2, 1.0);
+  
+  --fluent-curve-easy-ease-max: cubic-bezier(0.8, 0.0, 0.1, 1.0);
+  --fluent-curve-easy-ease: cubic-bezier(0.33, 0.0, 0.67, 1.0);
+  --fluent-curve-linear: cubic-bezier(0.0, 0.0, 1.0, 1.0);
+  
+  /* Contextual Transitions */
+  --fluent-transition-fade: opacity var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+  --fluent-transition-scale: transform var(--fluent-duration-fast) var(--fluent-curve-decelerate-mid);
+  --fluent-transition-slide: transform var(--fluent-duration-gentle) var(--fluent-curve-decelerate-max);
+  --fluent-transition-color: background-color var(--fluent-duration-faster) var(--fluent-curve-easy-ease),
+                             color var(--fluent-duration-faster) var(--fluent-curve-easy-ease);
+}
+
+/* ============================================
+   Z-INDEX TOKENS
+   ============================================ */
+
+:root {
+  --fluent-z-index-background: -1;
+  --fluent-z-index-content: 0;
+  --fluent-z-index-sticky: 100;
+  --fluent-z-index-dropdown: 1000;
+  --fluent-z-index-flyout: 2000;
+  --fluent-z-index-modal-backdrop: 3000;
+  --fluent-z-index-modal: 3001;
+  --fluent-z-index-toast: 4000;
+  --fluent-z-index-tooltip: 5000;
+}
+
+/* ============================================
+   STROKE WIDTH TOKENS
+   ============================================ */
+
+:root {
+  --fluent-stroke-width-thin: 1px;
+  --fluent-stroke-width-medium: 1.5px;
+  --fluent-stroke-width-thick: 2px;
+  --fluent-stroke-width-thicker: 3px;
+  
+  /* Contextual Strokes */
+  --fluent-stroke-width-focus: var(--fluent-stroke-width-thick);
+  --fluent-stroke-width-divider: var(--fluent-stroke-width-thin);
+}
+
+/* ============================================
+   OPACITY TOKENS
+   ============================================ */
+
+:root {
+  --fluent-opacity-disabled: 0.38;
+  --fluent-opacity-subtle: 0.5;
+  --fluent-opacity-medium: 0.7;
+  --fluent-opacity-full: 1.0;
+}
+
+/* ============================================
+   BACKDROP BLUR TOKENS
+   ============================================ */
+
+:root {
+  --fluent-blur-none: 0;
+  --fluent-blur-subtle: 8px;
+  --fluent-blur-medium: 16px;
+  --fluent-blur-strong: 24px;
+  
+  /* Acrylic Material Blur */
+  --fluent-blur-acrylic: var(--fluent-blur-strong);
+}
+
+/* Support for browsers that don't support backdrop-filter */
+@supports not (backdrop-filter: blur(1px)) {
+  :root {
+    --fluent-color-acrylic-background: rgba(252, 252, 252, 0.95);
+  }
+  
+  [data-theme="dark"],
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --fluent-color-acrylic-background: rgba(44, 44, 44, 0.95);
+    }
+  }
+}
+
+/* ============================================
+   ACCESSIBILITY - REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fluent-duration-ultrafast: 1ms;
+    --fluent-duration-faster: 1ms;
+    --fluent-duration-fast: 1ms;
+    --fluent-duration-normal: 1ms;
+    --fluent-duration-gentle: 1ms;
+    --fluent-duration-slow: 1ms;
+    --fluent-duration-slower: 1ms;
+    --fluent-duration-ultraslow: 1ms;
+  }
+}
+
+/* ============================================
+   ACCESSIBILITY - HIGH CONTRAST MODE
+   ============================================ */
+
+@media (prefers-contrast: high) {
+  :root {
+    /* Increase contrast for better visibility */
+    --fluent-color-brand-primary: #005A9E;
+    --fluent-stroke-width-focus: var(--fluent-stroke-width-thicker);
+    
+    /* More defined shadows */
+    --fluent-shadow-4: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --fluent-shadow-8: 0 4px 8px rgba(0, 0, 0, 0.3);
+    --fluent-shadow-16: 0 8px 16px rgba(0, 0, 0, 0.3);
+  }
+}
