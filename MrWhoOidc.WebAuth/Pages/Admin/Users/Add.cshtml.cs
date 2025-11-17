@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
@@ -13,8 +14,10 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 public class AddModel(
     AuthDbContext db, 
     ITenantAccessor tenantAccessor,
-    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
+    IMultiTenancyOptions multiTenancyOptions,
+    IUserAccountProvisioner accountProvisioner) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
+    private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
     public class AddInput
     {
         [Required]
@@ -76,7 +79,7 @@ public class AddModel(
             return Page();
         }
 
-        db.Users.Add(new User
+        var user = new User
         {
             TenantId = Input.TenantId,
             Username = username,
@@ -85,9 +88,12 @@ public class AddModel(
             EmailVerified = false,
             HashAlgorithm = "argon2id",
             PasswordHash = string.Empty
-        });
+        };
+
+        db.Users.Add(user);
 
         await db.SaveChangesAsync();
+        await _accountProvisioner.EnsureAsync(user, Input.TenantId, defaultRealmId: null, isTenantAdmin: false, HttpContext.RequestAborted);
         return TenantAwareRedirect("/Admin/Users", new { TenantId = Input.TenantId });
     }
 

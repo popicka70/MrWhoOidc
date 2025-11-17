@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.Auth.Services;
 using System.Linq;
 using System.Text.Json;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -12,7 +12,7 @@ public interface ISeeder
     Task SeedAsync(CancellationToken ct = default);
 }
 
-public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor) : ISeeder
+public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IUserAccountProvisioner accountProvisioner) : ISeeder
 {
     // Initial constant secret for the blazor-web client (development only)
     private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
@@ -32,6 +32,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     // Admin client (used to model server management policies)
     private const string AdminClientId = "mrwho-admin";
+
+    private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
@@ -96,7 +98,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         // Seed demo user alice if DB is empty (kept for compatibility)
         if (!await db.Users.AnyAsync(u => u.TenantId == tenantId, ct).ConfigureAwait(false))
         {
-            db.Users.Add(new User
+            var seededAlice = new User
             {
                 Username = "alice",
                 PasswordHash = hasher.Hash("P@ssw0rd!"),
@@ -106,7 +108,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 EmailVerified = true,
                 EmailVerifiedAt = DateTimeOffset.UtcNow,
                 TenantId = tenantId
-            });
+            };
+            db.Users.Add(seededAlice);
+            await _accountProvisioner.EnsureAsync(seededAlice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
         }
 
         // Seed default admin user (idempotent)
@@ -126,6 +130,11 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 TenantId = tenantId
             };
             db.Users.Add(adminUser);
+        }
+
+        if (adminUser is not null)
+        {
+            await _accountProvisioner.EnsureAsync(adminUser, tenantId, adminRealm.Id, isTenantAdmin: true, ct).ConfigureAwait(false);
         }
 
         // Ensure blazor-web client exists as a confidential client with an initial constant secret
@@ -319,6 +328,8 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         var alice = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == "alice" && u.TenantId == tenantId, ct).ConfigureAwait(false);
         if (alice is not null)
         {
+            await _accountProvisioner.EnsureAsync(alice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
+
             var hasAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAssignment)
             {
@@ -332,6 +343,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             {
                 db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = alice.Id, RoleId = adminRole.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
+
         }
 
         // Ensure admin user has client assignment and admin role in admin realm

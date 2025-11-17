@@ -14,6 +14,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantIcon> TenantIcons => Set<TenantIcon>();
 
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<UserTenantMembership> UserTenantMemberships => Set<UserTenantMembership>();
     public DbSet<User> Users => Set<User>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<Client> Clients => Set<Client>();
@@ -124,6 +126,54 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserAccount>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Username).IsRequired().HasMaxLength(200);
+            b.HasIndex(x => x.Username).IsUnique();
+            b.Property(x => x.Email).HasMaxLength(256);
+            b.Property(x => x.NormalizedEmail).HasMaxLength(256);
+            b.HasIndex(x => x.NormalizedEmail);
+            b.Property(x => x.Name).HasMaxLength(200);
+            b.Property(x => x.PasswordHash).IsRequired();
+            b.Property(x => x.PasswordSalt).HasMaxLength(128);
+            b.Property(x => x.HashAlgorithm).IsRequired().HasMaxLength(50);
+            b.Property(x => x.SecurityStamp).HasMaxLength(200);
+            b.Property(x => x.SettingsJson).HasMaxLength(4000);
+            b.Property(x => x.TotpSecret).HasMaxLength(200);
+            b.Property(x => x.LockedOutUntil);
+            b.HasMany(x => x.TenantMemberships)
+                .WithOne(x => x.UserAccount)
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserTenantMembership>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.DisplayName).HasMaxLength(200);
+            b.Property(x => x.SettingsJson).HasMaxLength(2000);
+            b.Property(x => x.Status)
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
+            b.HasIndex(x => new { x.UserAccountId, x.TenantId }).IsUnique();
+            b.HasIndex(x => x.TenantId);
+            b.HasIndex(x => x.Status);
+            b.HasOne(x => x.UserAccount)
+                .WithMany(x => x.TenantMemberships)
+                .HasForeignKey(x => x.UserAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Tenant)
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.DefaultRealm)
+                .WithMany()
+                .HasForeignKey(x => x.DefaultRealmId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<User>(b =>
@@ -753,6 +803,18 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
     void NormalizeEmailFields()
     {
+        foreach (var entry in ChangeTracker.Entries<UserAccount>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                if (entry.State == EntityState.Added || entry.Property(nameof(UserAccount.Email)).IsModified)
+                {
+                    entry.Entity.Email = EmailNormalizer.FormatForStorage(entry.Entity.Email, required: false, out var normalized);
+                    entry.Entity.NormalizedEmail = normalized;
+                }
+            }
+        }
+
         foreach (var entry in ChangeTracker.Entries<User>())
         {
             if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
@@ -793,6 +855,70 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             }
         }
     }
+}
+
+public class UserAccount
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    [MaxLength(200)]
+    public string Username { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    [MaxLength(128)]
+    public string? PasswordSalt { get; set; }
+    [MaxLength(50)]
+    public string HashAlgorithm { get; set; } = "argon2id";
+    [MaxLength(256)]
+    public string? Email { get; set; }
+    [MaxLength(256)]
+    public string? NormalizedEmail { get; set; }
+    public bool EmailVerified { get; set; }
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+    [MaxLength(200)]
+    public string? Name { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    [MaxLength(200)]
+    public string? SecurityStamp { get; set; }
+    [MaxLength(4000)]
+    public string? SettingsJson { get; set; }
+    [MaxLength(200)]
+    public string? TotpSecret { get; set; }
+    public bool TotpEnabled { get; set; }
+    public DateTimeOffset? LockedOutUntil { get; set; }
+
+    public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+public class UserTenantMembership
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    public Guid UserAccountId { get; set; }
+    public UserAccount UserAccount { get; set; } = null!;
+
+    public Guid TenantId { get; set; }
+    public Tenant Tenant { get; set; } = null!;
+
+    public Guid? DefaultRealmId { get; set; }
+    public Realm? DefaultRealm { get; set; }
+
+    [MaxLength(200)]
+    public string? DisplayName { get; set; }
+    public TenantMembershipStatus Status { get; set; } = TenantMembershipStatus.Active;
+    public bool IsTenantAdmin { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ExpiresAt { get; set; }
+    public DateTimeOffset? SuspendedAt { get; set; }
+    [MaxLength(2000)]
+    public string? SettingsJson { get; set; }
+}
+
+public enum TenantMembershipStatus
+{
+    Active = 0,
+    Suspended = 1,
+    Pending = 2,
+    Revoked = 3
 }
 
 public class User

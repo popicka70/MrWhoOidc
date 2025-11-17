@@ -40,6 +40,8 @@ public class ExternalOidcErrorTests
         
         // Register ITenantAccessor for multi-tenant support
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
+        services.AddScoped<RecordingUserAccountProvisioner>();
+        services.AddScoped<IUserAccountProvisioner>(sp => sp.GetRequiredService<RecordingUserAccountProvisioner>());
         
     services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
     services.AddExternalOidcHandler(); // Use DI registration

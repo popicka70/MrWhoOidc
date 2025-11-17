@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
@@ -37,6 +38,16 @@ public static class AuthServiceCollectionExtensions
         // and basic scenarios, this provides a default memory-only hybrid cache implementation.
         services.AddHybridCache();
 
+        services.AddOptions<UserAccountFeatureOptions>();
+        if (configuration != null)
+        {
+            services.Configure<UserAccountFeatureOptions>(configuration.GetSection("Features:UserAccount"));
+        }
+        else
+        {
+            services.Configure<UserAccountFeatureOptions>(_ => { });
+        }
+
         services.AddOptions<EmailConfirmationOptions>();
         if (configuration != null)
         {
@@ -61,6 +72,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
+        services.AddScoped<IUserAccountService, UserAccountService>();
+        services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();
+        services.AddScoped<IUserAccountProvisioner, UserAccountProvisioner>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
