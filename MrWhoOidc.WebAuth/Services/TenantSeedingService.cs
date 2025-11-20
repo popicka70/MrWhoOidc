@@ -18,13 +18,15 @@ public class TenantSeedingService : ITenantSeedingService
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITenantService _tenantService;
     private readonly ILogger<TenantSeedingService> _logger;
+    private readonly IUserAccountProvisioner _accountProvisioner;
 
-    public TenantSeedingService(AuthDbContext db, IPasswordHasher passwordHasher, ITenantService tenantService, ILogger<TenantSeedingService> logger)
+    public TenantSeedingService(AuthDbContext db, IPasswordHasher passwordHasher, ITenantService tenantService, ILogger<TenantSeedingService> logger, IUserAccountProvisioner accountProvisioner)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _tenantService = tenantService;
         _logger = logger;
+        _accountProvisioner = accountProvisioner;
     }
 
     public async Task<TenantSeedResult> SeedSampleTenantAsync(
@@ -135,6 +137,7 @@ public class TenantSeedingService : ITenantSeedingService
             };
             _db.Users.Add(adminUser);
             await _db.SaveChangesAsync(ct);
+            await _accountProvisioner.EnsureAsync(adminUser, tenant.Id, adminRealm.Id, isTenantAdmin: true, ct);
 
             _logger.LogInformation("Created admin user {AdminEmail} for tenant {TenantSlug}", adminEmail, tenantSlug);
 

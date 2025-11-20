@@ -4,6 +4,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -51,12 +52,14 @@ internal sealed class RegistrationService : IRegistrationService
     private readonly AuthDbContext _db;
     private readonly ILogger<RegistrationService> _logger;
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
+    private readonly IUserAccountProvisioner _accountProvisioner;
 
-    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow)
+    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow, IUserAccountProvisioner accountProvisioner)
     {
         _db = db;
         _logger = logger;
         _emailWorkflow = emailWorkflow;
+        _accountProvisioner = accountProvisioner;
     }
 
     public async Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
@@ -271,23 +274,29 @@ internal sealed class RegistrationService : IRegistrationService
         }
 
         // Assign tenant-admin role if this is a tenant admin registration
+        Guid? defaultRealmId = null;
+        Role? tenantAdminRole = null;
         if (registration.IsTenantAdmin)
         {
-            var tenantAdminRole = await _db.Roles.FirstOrDefaultAsync(
+            tenantAdminRole = await _db.Roles.FirstOrDefaultAsync(
                 r => r.TenantId == user.TenantId && r.Name == "tenant-admin",
                 cancellationToken);
-            if (tenantAdminRole != null)
+            defaultRealmId = tenantAdminRole?.RealmId;
+        }
+
+        await _accountProvisioner.EnsureAsync(user, userTenantId, defaultRealmId, registration.IsTenantAdmin, cancellationToken);
+
+        if (registration.IsTenantAdmin && tenantAdminRole != null)
+        {
+            _db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
             {
-                _db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
-                {
-                    UserId = user.Id,
-                    RoleId = tenantAdminRole.Id,
-                    RealmId = tenantAdminRole.RealmId,
-                    IsActive = true
-                });
-                await _db.SaveChangesAsync(cancellationToken);
-                _logger.LogInformation("Assigned tenant-admin role to user {UserId} for tenant {TenantId}", user.Id, user.TenantId);
-            }
+                UserId = user.Id,
+                RoleId = tenantAdminRole.Id,
+                RealmId = tenantAdminRole.RealmId,
+                IsActive = true
+            });
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Assigned tenant-admin role to user {UserId} for tenant {TenantId}", user.Id, user.TenantId);
         }
 
         // Optional assign to client

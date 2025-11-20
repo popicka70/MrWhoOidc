@@ -32,7 +32,7 @@ public static class PipelineExtensions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
         };
-        fwdOptions.KnownNetworks.Clear();
+        fwdOptions.KnownIPNetworks.Clear();
         fwdOptions.KnownProxies.Clear();
         app.UseForwardedHeaders(fwdOptions);
 

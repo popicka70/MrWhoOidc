@@ -50,19 +50,22 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     private readonly IRegistrationService _registrationService;
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly IUserAccountProvisioner _accountProvisioner;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
         ILogger<ExternalOidcUserProvisioner> logger,
-    IRegistrationService registrationService,
-    IEmailConfirmationWorkflow emailWorkflow,
-        ITenantAccessor tenantAccessor)
+        IRegistrationService registrationService,
+        IEmailConfirmationWorkflow emailWorkflow,
+        ITenantAccessor tenantAccessor,
+        IUserAccountProvisioner accountProvisioner)
     {
         _db = db;
         _logger = logger;
-    _registrationService = registrationService;
-    _emailWorkflow = emailWorkflow;
+        _registrationService = registrationService;
+        _emailWorkflow = emailWorkflow;
         _tenantAccessor = tenantAccessor;
+        _accountProvisioner = accountProvisioner;
     }
 
     public async Task<UserProvisioningResult> ProvisionOrLinkUserAsync(
@@ -147,6 +150,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                     };
                     _db.ExternalIdentities.Add(newExt);
                     await _db.SaveChangesAsync(cancellationToken);
+                    await _accountProvisioner.EnsureAsync(existingUser, existingUser.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
 
                     return new UserProvisioningResult
                     {
@@ -198,6 +202,12 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                         _db.ExternalIdentities.Add(newExt);
                         await _db.SaveChangesAsync(cancellationToken);
 
+                        var autoApprovedUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId.Value, cancellationToken);
+                        if (autoApprovedUser is not null)
+                        {
+                            await _accountProvisioner.EnsureAsync(autoApprovedUser, autoApprovedUser.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+                        }
+
                         _logger.LogInformation("Auto-approved registration for external IdP user {Email} from provider {Provider}",
                             userEmail, provider);
 
@@ -217,7 +227,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             }
 
             // Standard auto-provisioning (no registration record, direct user creation)
-            var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, cancellationToken);
+            var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, clientEntity, cancellationToken);
             return new UserProvisioningResult
             {
                 Success = true,
@@ -241,6 +251,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         string subject,
         string? email,
         string? name,
+        Client? clientEntity,
         CancellationToken cancellationToken)
     {
         var baseUsername = !string.IsNullOrEmpty(email) ? email : $"{provider}:{subject}";
@@ -250,6 +261,11 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         var user = await _db.Users.FirstOrDefaultAsync(
             u => u.Username == usernameCandidate || (normalizedEmail != null && u.NormalizedEmail == normalizedEmail),
             cancellationToken);
+
+        var tenantId = clientEntity?.TenantId
+            ?? _tenantAccessor.CurrentTenant?.TenantId
+            ?? Guid.Empty;
+        var userWasCreated = false;
 
         if (user is null)
         {
@@ -270,7 +286,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
             user = new User
             {
-                TenantId = _tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty,
+                TenantId = tenantId,
                 Username = usernameCandidate,
                 Email = emailForUser,
                 Name = name ?? (emailForUser ?? baseUsername),
@@ -279,6 +295,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
             };
             _db.Users.Add(user);
             await _db.SaveChangesAsync(cancellationToken);
+            await _accountProvisioner.EnsureAsync(user, tenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+            userWasCreated = true;
 
             if (!string.IsNullOrWhiteSpace(user.Email))
             {
@@ -305,6 +323,11 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         };
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync(cancellationToken);
+
+        if (!userWasCreated)
+        {
+            await _accountProvisioner.EnsureAsync(user, user.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
+        }
 
         return user.Id;
     }
