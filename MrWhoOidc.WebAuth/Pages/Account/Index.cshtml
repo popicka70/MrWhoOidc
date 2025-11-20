@@ -52,6 +52,28 @@
         </div>
     </div>
 
+    <!-- Organization Card -->
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-building text-primary"></i> Organization
+                </h5>
+                <p class="card-text text-muted">
+                    You are currently managing <strong>@(currentTenant?.Name ?? "Default")</strong>.
+                </p>
+                <div class="d-grid gap-2">
+                    <a href="/select-tenant" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left-right me-1"></i>Switch Organization
+                    </a>
+                    <a href="@(tenantPrefix)/account/create-tenant" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-plus-lg me-1"></i>Create New Organization
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Security Card -->
     <div class="col-md-6 col-lg-4">
         <div class="card h-100">
