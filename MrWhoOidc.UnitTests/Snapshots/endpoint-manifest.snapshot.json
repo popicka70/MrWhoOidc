@@ -1055,6 +1055,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "account/create-tenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "account/emails",
     "Methods": "",
     "RateLimiters": [],
@@ -1723,15 +1732,6 @@
     "IsAnonymous": true
   },
   {
-    "Pattern": "SelectTenant",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "StartImpersonation",
     "Methods": "",
     "RateLimiters": [],
@@ -1751,6 +1751,15 @@
   },
   {
     "Pattern": "SwitchTenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "select-tenant",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
