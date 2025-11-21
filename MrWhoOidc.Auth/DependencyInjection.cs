@@ -21,13 +21,25 @@ public static class AuthServiceCollectionExtensions
         if (configuration != null)
         {
             services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
-            services.AddSingleton<IMultiTenancyOptions>(sp =>
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value);
+            
+            // Register state provider as singleton, initialized with config values as fallback/initial state
+            services.AddSingleton<MultiTenancyStateProvider>(sp => {
+                var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value;
+                return new MultiTenancyStateProvider(options.DefaultTenantSlug, options.Enabled);
+            });
+            
+            services.AddSingleton<IMultiTenancyStateProvider>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
+            services.AddSingleton<IMultiTenancyOptions>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
+            
+            // Initialize state from license at startup
+            services.AddHostedService<MultiTenancyStateInitializer>();
         }
         else
         {
             // Default: single-tenant mode for tests
-            services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
+            var provider = new MultiTenancyStateProvider("default", false);
+            services.AddSingleton<IMultiTenancyStateProvider>(provider);
+            services.AddSingleton<IMultiTenancyOptions>(provider);
         }
 
         // Memory cache needed by TenantResolver

@@ -11,6 +11,7 @@ using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Validators;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.ServiceDefaults.Observability;
 
 namespace MrWhoOidc.Auth.Licensing.Services;
@@ -27,6 +28,7 @@ internal sealed class LicenseService : ILicenseService
     private readonly LicensingOptions _options;
     private readonly ILogger<LicenseService> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly IMultiTenancyStateProvider? _multiTenancyStateProvider;
 
     public LicenseService(
         ILicenseRepository repository,
@@ -34,7 +36,8 @@ internal sealed class LicenseService : ILicenseService
         IMemoryCache cache,
         IOptions<LicensingOptions> options,
         ILogger<LicenseService> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IMultiTenancyStateProvider? multiTenancyStateProvider = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
@@ -42,6 +45,7 @@ internal sealed class LicenseService : ILicenseService
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _multiTenancyStateProvider = multiTenancyStateProvider;
     }
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -233,6 +237,13 @@ internal sealed class LicenseService : ILicenseService
 
             InvalidateCache(tenantId);
 
+            if (tenantId == null && _multiTenancyStateProvider != null)
+            {
+                var enabled = businessResult.LicenseInfo.IsFeatureEnabled(FeatureFlags.MultiTenancy);
+                _multiTenancyStateProvider.UpdateState(enabled);
+                _logger.LogInformation("Updated multi-tenancy state to {Enabled} based on new platform license.", enabled);
+            }
+
             var result = LicenseValidationResult.Success(businessResult.LicenseInfo);
             success = result.IsValid;
             _logger.LogInformation(
@@ -342,6 +353,12 @@ internal sealed class LicenseService : ILicenseService
                 cancellationToken).ConfigureAwait(false);
 
             InvalidateCache(tenantId);
+
+            if (tenantId == null && _multiTenancyStateProvider != null)
+            {
+                _multiTenancyStateProvider.UpdateState(false);
+                _logger.LogInformation("Disabled multi-tenancy state due to platform license revocation.");
+            }
 
             success = true;
             _logger.LogInformation(
