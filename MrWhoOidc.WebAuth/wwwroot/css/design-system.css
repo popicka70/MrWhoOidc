@@ -17,49 +17,49 @@
    ============================================ */
 
 :root {
-  /* Colors */
-  --color-primary: #0d6efd;
-  --color-secondary: #6c757d;
-  --color-success: #198754;
-  --color-danger: #dc3545;
-  --color-warning: #ffc107;
-  --color-info: #0dcaf0;
-  --color-light: #f8f9fa;
-  --color-dark: #212529;
+  /* Colors - Mapped to Fluent Tokens */
+  --color-primary: var(--fluent-color-brand-primary);
+  --color-secondary: var(--fluent-color-neutral-foreground-3);
+  --color-success: var(--fluent-color-success);
+  --color-danger: var(--fluent-color-error);
+  --color-warning: var(--fluent-color-warning);
+  --color-info: var(--fluent-color-info);
+  --color-light: var(--fluent-color-neutral-background-2);
+  --color-dark: var(--fluent-color-neutral-foreground-1);
 
-  /* Spacing Scale */
-  --space-xs: 0.25rem;    /* 4px */
-  --space-sm: 0.5rem;     /* 8px */
-  --space-md: 1rem;       /* 16px */
-  --space-lg: 1.5rem;     /* 24px */
-  --space-xl: 2rem;       /* 32px */
-  --space-2xl: 3rem;      /* 48px */
-  --space-3xl: 4rem;      /* 64px */
+  /* Spacing Scale - Mapped to Fluent Tokens */
+  --space-xs: var(--fluent-space-4);    /* 4px */
+  --space-sm: var(--fluent-space-8);    /* 8px */
+  --space-md: var(--fluent-space-16);   /* 16px */
+  --space-lg: var(--fluent-space-24);   /* 24px */
+  --space-xl: var(--fluent-space-32);   /* 32px */
+  --space-2xl: var(--fluent-space-48);  /* 48px */
+  --space-3xl: var(--fluent-space-64);  /* 64px */
 
-  /* Typography */
-  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-weight-normal: 400;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
+  /* Typography - Mapped to Fluent Tokens */
+  --font-family-base: var(--fluent-font-family-base);
+  --font-size-sm: var(--fluent-font-size-200);
+  --font-size-base: var(--fluent-font-size-300);
+  --font-size-lg: var(--fluent-font-size-400);
+  --font-size-xl: var(--fluent-font-size-500);
+  --font-weight-normal: var(--fluent-font-weight-regular);
+  --font-weight-semibold: var(--fluent-font-weight-semibold);
+  --font-weight-bold: var(--fluent-font-weight-bold);
 
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* Border Radius - Mapped to Fluent Tokens */
+  --radius-sm: var(--fluent-border-radius-small);
+  --radius-md: var(--fluent-border-radius-medium);
+  --radius-lg: var(--fluent-border-radius-large);
+  --radius-xl: var(--fluent-border-radius-xl);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  /* Shadows - Mapped to Fluent Tokens */
+  --shadow-sm: var(--fluent-shadow-2);
+  --shadow-md: var(--fluent-shadow-4);
+  --shadow-lg: var(--fluent-shadow-8);
 
-  /* Transitions */
-  --transition-base: 0.2s ease;
-  --transition-fast: 0.15s ease;
+  /* Transitions - Mapped to Fluent Tokens */
+  --transition-base: var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+  --transition-fast: var(--fluent-duration-fast) var(--fluent-curve-easy-ease);
 }
 
 /* ============================================

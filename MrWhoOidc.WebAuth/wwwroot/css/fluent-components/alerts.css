@@ -1,0 +1,94 @@
+/*!
+ * Fluent Design System - Alert Components
+ * Version: 2.0.0
+ * 
+ * Alert component styles following Fluent Design principles
+ */
+
+.alert {
+  position: relative;
+  padding: var(--fluent-space-12) var(--fluent-space-16);
+  margin-bottom: var(--fluent-space-16);
+  border: none;
+  border-radius: var(--fluent-border-radius-medium);
+  border-left: 4px solid transparent;
+  box-shadow: var(--fluent-shadow-2);
+  font-family: var(--fluent-font-family-base);
+  font-size: var(--fluent-font-size-300);
+  line-height: var(--fluent-line-height-300);
+}
+
+.alert-heading {
+  color: inherit;
+  font-weight: var(--fluent-font-weight-semibold);
+  margin-bottom: var(--fluent-space-8);
+}
+
+.alert-link {
+  font-weight: var(--fluent-font-weight-semibold);
+  color: inherit;
+  text-decoration: underline;
+}
+
+.alert-dismissible {
+  padding-right: var(--fluent-space-48);
+}
+
+.alert-dismissible .btn-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  padding: var(--fluent-space-12) var(--fluent-space-16);
+}
+
+/* Variants */
+
+.alert-primary {
+  background-color: var(--fluent-color-brand-primary-background); /* Need to check if this exists, otherwise fallback */
+  background-color: #EFF6FC; /* Fallback light blue */
+  border-left-color: var(--fluent-color-brand-primary);
+  color: var(--fluent-color-brand-primary-pressed);
+}
+
+.alert-secondary {
+  background-color: var(--fluent-color-neutral-background-3);
+  border-left-color: var(--fluent-color-neutral-foreground-3);
+  color: var(--fluent-color-neutral-foreground-1);
+}
+
+.alert-success {
+  background-color: var(--fluent-color-success-background);
+  border-left-color: var(--fluent-color-success);
+  color: var(--fluent-color-success-foreground);
+}
+
+.alert-danger {
+  background-color: var(--fluent-color-error-background);
+  border-left-color: var(--fluent-color-error);
+  color: var(--fluent-color-error-foreground);
+}
+
+.alert-warning {
+  background-color: var(--fluent-color-warning-background);
+  border-left-color: var(--fluent-color-warning);
+  color: var(--fluent-color-warning-foreground);
+}
+
+.alert-info {
+  background-color: var(--fluent-color-info-background);
+  border-left-color: var(--fluent-color-info);
+  color: var(--fluent-color-info-foreground);
+}
+
+.alert-light {
+  background-color: var(--fluent-color-neutral-background-1);
+  border-left-color: var(--fluent-color-neutral-stroke-1);
+  color: var(--fluent-color-neutral-foreground-2);
+}
+
+.alert-dark {
+  background-color: var(--fluent-color-neutral-background-6);
+  border-left-color: var(--fluent-color-neutral-foreground-1);
+  color: var(--fluent-color-neutral-foreground-1);
+}

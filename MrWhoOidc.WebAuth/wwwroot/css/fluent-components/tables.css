@@ -1,0 +1,97 @@
+/*!
+ * Fluent Design System - Table Components
+ * Version: 2.0.0
+ * 
+ * Table component styles following Fluent Design principles
+ */
+
+.table {
+  width: 100%;
+  margin-bottom: var(--fluent-space-16);
+  color: var(--fluent-color-neutral-foreground-1);
+  vertical-align: top;
+  border-color: var(--fluent-color-neutral-stroke-2);
+  
+  /* Custom styles */
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--fluent-color-neutral-background-1);
+  border-radius: var(--fluent-border-radius-medium);
+  overflow: hidden;
+  box-shadow: var(--fluent-shadow-2);
+}
+
+.table > :not(caption) > * > * {
+  padding: var(--fluent-space-12) var(--fluent-space-16);
+  background-color: transparent;
+  border-bottom-width: var(--fluent-stroke-width-thin);
+  box-shadow: inset 0 0 0 9999px transparent;
+}
+
+.table > tbody {
+  vertical-align: inherit;
+}
+
+.table > thead {
+  vertical-align: bottom;
+}
+
+/* Header styles */
+.table thead th {
+  background-color: var(--fluent-color-neutral-background-2);
+  color: var(--fluent-color-neutral-foreground-1);
+  font-weight: var(--fluent-font-weight-semibold);
+  text-transform: uppercase;
+  font-size: var(--fluent-font-size-200);
+  letter-spacing: 0.05em;
+  border-bottom: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  padding: var(--fluent-space-16);
+  text-align: left;
+}
+
+/* Body styles */
+.table tbody tr {
+  transition: background-color var(--fluent-duration-fast) var(--fluent-curve-easy-ease);
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--fluent-color-neutral-background-2);
+  box-shadow: inset 0 0 0 9999px transparent;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: var(--fluent-color-neutral-background-2); /* Or a specific hover color */
+  box-shadow: inset 0 0 0 9999px transparent;
+}
+
+.table td {
+  vertical-align: middle;
+  border-bottom: var(--fluent-stroke-width-thin) solid var(--fluent-color-neutral-stroke-2);
+  color: var(--fluent-color-neutral-foreground-2);
+}
+
+/* Caption */
+.caption-top {
+  caption-side: top;
+}
+
+.table-caption {
+  font-size: var(--fluent-font-size-400);
+  font-weight: var(--fluent-font-weight-semibold);
+  color: var(--fluent-color-neutral-foreground-1);
+  padding: var(--fluent-space-8) 0;
+}
+
+/* Responsive */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--fluent-border-radius-medium);
+  box-shadow: var(--fluent-shadow-2);
+}
+
+.table-responsive .table {
+  margin-bottom: 0;
+  box-shadow: none;
+  border-radius: 0;
+}

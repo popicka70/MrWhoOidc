@@ -4,19 +4,7 @@
 
 /* Note: Design tokens are now defined in design-system.css */
 
-html {
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
+/* Base HTML styles are handled by fluent-base.css */
 
 html {
   position: relative;
@@ -305,112 +293,8 @@ body {
    MODERN UI ENHANCEMENTS
    ======================================== */
 
-/* CARDS & PANELS */
-.card {
-  border: none;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  transition: var(--transition-base);
-  background: white;
-}
+/* Note: Component styles (Cards, Alerts, Tables, Buttons) are now in fluent-components/ */
 
-.card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.card-header {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-  font-weight: 600;
-  padding: 1rem 1.25rem;
-}
-
-/* ALERTS */
-.alert {
-  border: none;
-  border-radius: var(--radius-md);
-  border-left: 4px solid;
-  box-shadow: var(--shadow-sm);
-}
-
-.alert-success {
-  background-color: #d1e7dd;
-  border-left-color: var(--success-color);
-  color: #0f5132;
-}
-
-.alert-danger {
-  background-color: #f8d7da;
-  border-left-color: var(--danger-color);
-  color: #842029;
-}
-
-.alert-info {
-  background-color: #cff4fc;
-  border-left-color: var(--info-color);
-  color: #055160;
-}
-
-.alert-warning {
-  background-color: #fff3cd;
-  border-left-color: var(--warning-color);
-  color: #664d03;
-}
-
-/* TABLES */
-.table {
-  border-collapse: separate;
-  border-spacing: 0;
-  background: white;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-
-.table thead th {
-  background-color: #f8f9fa;
-  color: var(--dark-color);
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  border-bottom: 2px solid #dee2e6;
-  padding: 1rem;
-}
-
-.table tbody tr {
-  transition: var(--transition-fast);
-}
-
-.table-striped tbody tr:nth-of-type(odd) {
-  background-color: rgba(0, 0, 0, 0.02);
-}
-
-.table tbody tr:hover {
-  background-color: rgba(13, 110, 253, 0.05);
-}
-
-.table td {
-  padding: 0.875rem 1rem;
-  vertical-align: middle;
-}
-
-/* BUTTONS */
-.btn {
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  padding: 0.5rem 1.25rem;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
 
 .btn:active {
   transform: translateY(0);
