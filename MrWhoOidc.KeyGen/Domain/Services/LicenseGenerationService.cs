@@ -80,7 +80,9 @@ public class LicenseGenerationService : ILicenseGenerationService
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            SigningCredentials = signingCredentials
+            SigningCredentials = signingCredentials,
+            NotBefore = notBefore.UtcDateTime,
+            Expires = expiresAt.UtcDateTime
         };
 
         // Generate JWT
