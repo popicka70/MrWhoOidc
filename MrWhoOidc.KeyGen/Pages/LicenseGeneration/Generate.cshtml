@@ -61,10 +61,10 @@
                         <label for="Tier" class="form-label">License Tier <span class="text-danger">*</span></label>
                         <select class="form-select" id="Tier" name="Tier" asp-for="Tier" required>
                             <option value="">-- Select Tier --</option>
-                            <option value="Free">Free</option>
-                            <option value="Developer">Developer</option>
-                            <option value="Pro">Pro</option>
-                            <option value="Enterprise">Enterprise</option>
+                            <option value="community">Community</option>
+                            <option value="professional">Professional</option>
+                            <option value="enterprise">Enterprise</option>
+                            <option value="enterprise+">Enterprise+</option>
                         </select>
                         <span asp-validation-for="Tier" class="text-danger"></span>
                     </div>
@@ -97,11 +97,28 @@
 
                     <div class="mb-3">
                         <label for="Features" class="form-label">Enabled Features (Optional)</label>
-                        <input type="text" class="form-control" id="Features" name="Features" asp-for="Features" 
-                               placeholder="e.g., sso,mfa,audit-logs">
+                        <div class="input-group mb-2">
+                            <input type="text" class="form-control" id="Features" name="Features" asp-for="Features" 
+                                   placeholder="e.g., sso,mfa,audit-logs">
+                            <button class="btn btn-outline-secondary" type="button" onclick="addFeature('multi_tenancy')">+ Multi-Tenancy</button>
+                        </div>
                         <span asp-validation-for="Features" class="text-danger"></span>
                         <small class="form-text text-muted">Comma-separated list of feature identifiers</small>
                     </div>
+
+                    <script>
+                        function addFeature(feature) {
+                            var input = document.getElementById('Features');
+                            var current = input.value.trim();
+                            if (current) {
+                                if (!current.includes(feature)) {
+                                    input.value = current + ',' + feature;
+                                }
+                            } else {
+                                input.value = feature;
+                            }
+                        }
+                    </script>
 
                     <div class="mb-3">
                         <label for="Limits" class="form-label">Resource Limits (Optional, JSON)</label>
