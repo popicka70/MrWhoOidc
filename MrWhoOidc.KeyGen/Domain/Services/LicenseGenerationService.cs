@@ -122,7 +122,7 @@ public class LicenseGenerationService : ILicenseGenerationService
         DateTimeOffset expiresAt)
     {
         // Validate tier
-        var validTiers = new[] { "Free", "Developer", "Pro", "Enterprise" };
+        var validTiers = new[] { "community", "professional", "enterprise", "enterprise+" };
         if (!validTiers.Contains(tier, StringComparer.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
