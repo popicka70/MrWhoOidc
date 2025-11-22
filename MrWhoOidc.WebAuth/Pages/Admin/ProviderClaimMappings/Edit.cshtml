@@ -1,7 +1,16 @@
 @page "{id:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings.EditModel
 @{
     ViewData["Title"] = "Edit Claim Mapping";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var mappingsIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? $"/admin/providerclaimmappings/{Model.ProviderId}"
+        : $"{tenantPrefix}/admin/providerclaimmappings/{Model.ProviderId}";
 }
 
 <h2>Edit Claim Mapping</h2>
@@ -32,6 +41,6 @@ else
         <input asp-for="Input.Order" class="form-control" />
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
-    <a asp-page="Index" asp-route-providerId="@Model.ProviderId" class="btn btn-secondary">Back</a>
+    <a href="@mappingsIndexPath" class="btn btn-secondary">Back</a>
 </form>
 }

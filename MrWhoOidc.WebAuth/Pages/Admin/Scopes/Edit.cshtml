@@ -1,7 +1,16 @@
 @page "{name}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Scopes.EditModel
 @{
     ViewData["Title"] = "Edit scope";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var scopesIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? "/admin/scopes"
+        : $"{tenantPrefix}/admin/scopes";
 }
 
 <h1>Edit scope</h1>
@@ -20,7 +29,7 @@
         <label class="form-check-label" asp-for="Input.IsExposed">Exposed</label>
     </div>
     <button class="btn btn-primary" type="submit">Save</button>
-    <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+    <a class="btn btn-secondary" href="@scopesIndexPath">Cancel</a>
 </form>
 
 @section Scripts{

@@ -43,7 +43,7 @@ public class AddModel(
             return Page();
         }
 
-        var currentTenant = tenantAccessor.CurrentTenant;
+        var currentTenant = TenantAccessor.CurrentTenant;
         if (currentTenant is null)
         {
             ModelState.AddModelError(string.Empty, "Unable to determine current tenant context.");

@@ -52,6 +52,13 @@ public class AddModel(
             return Page();
         }
 
+        var realmAllowed = await db.Realms.AnyAsync(r => r.Id == Input.RealmId && r.TenantId == currentTenant.TenantId);
+        if (!realmAllowed)
+        {
+            ModelState.AddModelError("Input.RealmId", "Selected realm does not belong to the current tenant.");
+            return Page();
+        }
+
         var entity = new Client
         {
             ClientId = Input.ClientId,

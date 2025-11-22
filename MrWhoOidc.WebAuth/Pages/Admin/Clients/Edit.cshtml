@@ -9,6 +9,9 @@
     var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
         ? $"/t/{currentTenant.Slug}" 
         : "";
+    var clientsIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? "/admin/clients"
+        : $"{tenantPrefix}/admin/clients";
 }
 
 <h1>Edit client</h1>
@@ -892,7 +895,7 @@
 
     <div class="mt-3 mb-5 d-flex gap-2">
         <button type="submit" class="btn btn-primary" asp-page-handler="Save">Save</button>
-        <a asp-page="Index" class="btn btn-secondary">Back</a>
+        <a href="@clientsIndexPath" class="btn btn-secondary">Back</a>
     </div>
 </form>
 

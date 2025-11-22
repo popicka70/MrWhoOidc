@@ -1,7 +1,16 @@
 @page "{id:guid}"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Roles.EditModel
 @{
     ViewData["Title"] = "Edit role";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant is not null && MultiTenancyOptions.Value.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var rolesIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? "/admin/roles"
+        : $"{tenantPrefix}/admin/roles";
 }
 
 <h1>Edit role</h1>
@@ -36,7 +45,7 @@
         <label class="form-check-label" asp-for="Input.IsActive">Active</label>
     </div>
     <button class="btn btn-primary" type="submit">Save</button>
-    <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+    <a class="btn btn-secondary" href="@rolesIndexPath">Cancel</a>
 </form>
 
 @section Scripts{
