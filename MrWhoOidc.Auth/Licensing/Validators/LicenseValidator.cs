@@ -18,7 +18,11 @@ namespace MrWhoOidc.Auth.Licensing.Validators;
 
 internal sealed class LicenseValidator : ILicenseValidator
 {
-    private const string ExpectedIssuer = "MrWhoOidc-License-Authority";
+    private const string LegacyIssuer = "MrWhoOidc-License-Authority";
+    private const string KeyGenIssuer = "MrWhoOidc-KeyGen";
+    private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
+
+    internal static IReadOnlyCollection<string> SupportedIssuers => AllowedIssuers;
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
 
     private readonly LicensingOptions _options;
@@ -201,7 +205,8 @@ internal sealed class LicenseValidator : ILicenseValidator
             ValidateAudience = false,
             RequireAudience = false,
             ValidateIssuer = _options.StrictValidation,
-            ValidIssuer = ExpectedIssuer,
+            ValidIssuer = KeyGenIssuer,
+            ValidIssuers = AllowedIssuers,
             ValidateLifetime = true,
             ClockSkew = ClockSkew,
             RequireExpirationTime = true,
