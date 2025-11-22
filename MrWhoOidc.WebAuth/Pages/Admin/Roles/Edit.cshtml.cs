@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 
@@ -12,7 +12,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public class EditInput
@@ -32,27 +31,6 @@ public class EditModel(
     public string TenantName { get; set; } = string.Empty;
     public string RealmName { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Validates that the role belongs to the current tenant (defense in depth).
-    /// Platform admins bypass this check.
-    /// </summary>
-    private async Task<bool> ValidateTenantAccessAsync(Role role)
-    {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        if (platformAdminResult.Succeeded)
-        {
-            return true; // Platform admins can access all roles
-        }
-
-        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-        if (!currentTenantId.HasValue)
-        {
-            return false; // No tenant context
-        }
-
-        return role.TenantId == currentTenantId.Value;
-    }
-
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
         var roleQuery = from role in db.Roles.AsNoTracking()
@@ -63,6 +41,12 @@ public class EditModel(
 
         var result = await roleQuery.FirstOrDefaultAsync();
         if (result is null) return TenantAwareRedirect("/Admin/Roles");
+
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue || result.Role.TenantId != currentTenantId.Value)
+        {
+            return NotFound();
+        }
 
         TenantName = result.Tenant.Name;
         RealmName = result.Realm.Name;
@@ -84,14 +68,14 @@ public class EditModel(
 
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
-        var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id);
-        if (entity is null) return TenantAwareRedirect("/Admin/Roles");
-
-        // Defense in depth: Validate tenant ownership
-        if (!await ValidateTenantAccessAsync(entity))
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            return NotFound(); // Prevents cross-tenant modification
+            return TenantAwareRedirect("/Admin/Roles");
         }
+
+        var entity = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
+        if (entity is null) return TenantAwareRedirect("/Admin/Roles");
 
         // Load tenant and realm info
         await LoadTenantAndRealmAsync(id);

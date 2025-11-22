@@ -1,11 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderMappings;
 
@@ -13,18 +13,13 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderMappings;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record Row(Guid ClientId, Guid IdentityProviderId, string ClientIdVal, string? ClientName, string ProviderName, bool Enabled, bool IsDefaultForClient, bool AutoRedirectIfSingle, string? RequiredAcr, int Order);
 
     public List<SelectListItem> ClientOptions { get; private set; } = new();
     public List<SelectListItem> ProviderOptions { get; private set; } = new();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
     public IReadOnlyList<Row> Rows { get; private set; } = Array.Empty<Row>();
-    public bool IsPlatformAdmin { get; private set; }
-
-    [BindProperty(SupportsGet = true)]
-    public Guid? TenantId { get; set; }
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -36,48 +31,20 @@ public class IndexModel(
 
     private async Task LoadAsync()
     {
-        // Check if user is platform admin
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        IsPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Load tenant options for filter (platform admins only)
-        if (IsPlatformAdmin)
+        var scopeTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!scopeTenantId.HasValue)
         {
-            var tenants = await db.Tenants.AsNoTracking()
-                .Where(t => t.Status == TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
-        }
-
-        // Determine tenant scope
-        Guid? scopeTenantId;
-        if (IsPlatformAdmin)
-        {
-            scopeTenantId = TenantId;
-        }
-        else
-        {
-            scopeTenantId = tenantAccessor.CurrentTenant?.TenantId;
-            if (!scopeTenantId.HasValue)
-            {
-                ClientOptions = new List<SelectListItem>();
-                ProviderOptions = new List<SelectListItem>();
-                Rows = Array.Empty<Row>();
-                return;
-            }
+            ClientOptions = new List<SelectListItem>();
+            ProviderOptions = new List<SelectListItem>();
+            Rows = Array.Empty<Row>();
+            return;
         }
 
         // Load clients and providers scoped to tenant
-        var clientsQuery = db.Clients.AsNoTracking();
-        var providersQuery = db.IdentityProviders.AsNoTracking();
-
-        if (scopeTenantId.HasValue)
-        {
-            clientsQuery = clientsQuery.Where(c => c.TenantId == scopeTenantId.Value);
-            providersQuery = providersQuery.Where(p => p.TenantId == scopeTenantId.Value);
-        }
+        var clientsQuery = db.Clients.AsNoTracking()
+            .Where(c => c.TenantId == scopeTenantId.Value);
+        var providersQuery = db.IdentityProviders.AsNoTracking()
+            .Where(p => p.TenantId == scopeTenantId.Value);
 
         ClientOptions = await clientsQuery
             .OrderBy(c => c.ClientId)
@@ -90,12 +57,8 @@ public class IndexModel(
 
         var mappingsQuery = db.ClientIdentityProviders.AsNoTracking()
             .Join(db.Clients, cip => cip.ClientId, c => c.Id, (cip, c) => new { cip, c })
-            .Join(db.IdentityProviders, cc => cc.cip.IdentityProviderId, p => p.Id, (cc, p) => new { cc.cip, cc.c, p });
-
-        if (scopeTenantId.HasValue)
-        {
-            mappingsQuery = mappingsQuery.Where(x => x.c.TenantId == scopeTenantId.Value);
-        }
+            .Join(db.IdentityProviders, cc => cc.cip.IdentityProviderId, p => p.Id, (cc, p) => new { cc.cip, cc.c, p })
+            .Where(x => x.c.TenantId == scopeTenantId.Value);
 
         Rows = await mappingsQuery
             .OrderBy(x => x.c.ClientId).ThenBy(x => x.cip.Order)
@@ -105,8 +68,32 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
+        var scopeTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!scopeTenantId.HasValue)
+        {
+            ModelState.AddModelError(string.Empty, "Tenant context is required to manage provider mappings.");
+            await LoadAsync();
+            return Page();
+        }
+
         if (!ModelState.IsValid)
         {
+            await LoadAsync();
+            return Page();
+        }
+
+        var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == Input.ClientId && c.TenantId == scopeTenantId.Value);
+        if (client is null)
+        {
+            ModelState.AddModelError("Input.ClientId", "Client not found in current tenant.");
+            await LoadAsync();
+            return Page();
+        }
+
+        var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == Input.IdentityProviderId && p.TenantId == scopeTenantId.Value);
+        if (provider is null)
+        {
+            ModelState.AddModelError("Input.IdentityProviderId", "Identity provider not found in current tenant.");
             await LoadAsync();
             return Page();
         }
@@ -124,18 +111,28 @@ public class IndexModel(
         entity.Order = Input.Order;
 
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        return TenantAwareRedirect("/Admin/ProviderMappings");
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid clientId, Guid identityProviderId)
     {
-        var entity = await db.ClientIdentityProviders.FirstOrDefaultAsync(m => m.ClientId == clientId && m.IdentityProviderId == identityProviderId);
+        var scopeTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!scopeTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/ProviderMappings");
+        }
+
+        var entity = await db.ClientIdentityProviders
+            .Join(db.Clients, m => m.ClientId, c => c.Id, (m, c) => new { Mapping = m, Client = c })
+            .Where(x => x.Mapping.ClientId == clientId && x.Mapping.IdentityProviderId == identityProviderId && x.Client.TenantId == scopeTenantId.Value)
+            .Select(x => x.Mapping)
+            .FirstOrDefaultAsync();
         if (entity is not null)
         {
             db.ClientIdentityProviders.Remove(entity);
             await db.SaveChangesAsync();
         }
-        return RedirectToPage();
+        return TenantAwareRedirect("/Admin/ProviderMappings");
     }
 
     public sealed class InputModel

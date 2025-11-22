@@ -1,7 +1,9 @@
 ﻿@page "/admin/backchannel"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @model MrWhoOidc.WebAuth.Pages.Admin.Backchannel.IndexModel
 @{
     ViewData["Title"] = "Back-channel logout outbox";
+    var currentTenant = TenantAccessor.CurrentTenant;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -13,15 +15,6 @@
         <p class="text-muted mb-0">Monitor and manage backchannel logout requests</p>
     </div>
     <form method="get" class="d-flex gap-2">
-        @if (Model.IsPlatformAdmin)
-        {
-            <select class="form-select" name="tenantId" onchange="this.form.submit()" style="width: auto;">
-                @foreach (var opt in Model.TenantOptions)
-                {
-                    <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
-                }
-            </select>
-        }
         <select class="form-select" name="status" onchange="this.form.submit()" style="width: auto;">
             <option value="" selected="@(Model.Status is null)">All Statuses</option>
             <option value="pending" selected="@(Model.Status=="pending")">Pending</option>
@@ -34,6 +27,16 @@
         </button>
     </form>
 </div>
+
+@if (currentTenant is not null)
+{
+    <div class="alert alert-info d-flex align-items-center gap-2" role="status">
+        <i class="bi bi-building"></i>
+        <div>
+            Monitoring logout notifications for <strong>@currentTenant.Name</strong> (@currentTenant.Slug).
+        </div>
+    </div>
+}
 
 <div class="row mb-4">
     <div class="col-md-6">

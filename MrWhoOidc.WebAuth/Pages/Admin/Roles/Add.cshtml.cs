@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Roles;
 
@@ -18,9 +17,6 @@ public class AddModel(
     public class AddInput
     {
         [Required]
-        public Guid TenantId { get; set; }
-
-        [Required]
         public Guid RealmId { get; set; }
 
         [Required, StringLength(100)]
@@ -30,80 +26,72 @@ public class AddModel(
     }
 
     public IReadOnlyList<Realm> Realms { get; private set; } = Array.Empty<Realm>();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
 
     [BindProperty]
     public AddInput Input { get; set; } = new();
 
-    public async Task OnGetAsync(Guid? tenantId = null)
+    public async Task OnGetAsync()
     {
-        await LoadDataAsync(tenantId);
-        if (tenantId.HasValue)
-        {
-            Input.TenantId = tenantId.Value;
-        }
+        await LoadRealmsAsync();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        if (!ModelState.IsValid)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            await LoadDataAsync(Input.TenantId);
+            ModelState.AddModelError(string.Empty, "Tenant context is required to add a role.");
+            await LoadRealmsAsync();
             return Page();
         }
 
-        // Validate tenant exists and is active
-        var tenantExists = await db.Tenants.AnyAsync(t => t.Id == Input.TenantId && t.Status == TenantStatus.Active);
-        if (!tenantExists)
+        if (!ModelState.IsValid)
         {
-            ModelState.AddModelError("Input.TenantId", "Invalid tenant selected.");
-            await LoadDataAsync(Input.TenantId);
+            await LoadRealmsAsync();
             return Page();
         }
 
         // Validate realm belongs to tenant
-        var realmValid = await db.Realms.AnyAsync(r => r.Id == Input.RealmId && r.TenantId == Input.TenantId);
+        var realmValid = await db.Realms.AnyAsync(r => r.Id == Input.RealmId && r.TenantId == currentTenantId.Value);
         if (!realmValid)
         {
-            ModelState.AddModelError("Input.RealmId", "Realm does not belong to the selected tenant.");
-            await LoadDataAsync(Input.TenantId);
+            ModelState.AddModelError("Input.RealmId", "Realm does not belong to the current tenant.");
+            await LoadRealmsAsync();
             return Page();
         }
 
         Input.Name = Input.Name.Trim();
-        var exists = await db.Roles.AnyAsync(r => r.TenantId == Input.TenantId && r.RealmId == Input.RealmId && r.Name == Input.Name);
+        var exists = await db.Roles.AnyAsync(r => r.TenantId == currentTenantId.Value && r.RealmId == Input.RealmId && r.Name == Input.Name);
         if (exists)
         {
             ModelState.AddModelError("Input.Name", "Role already exists in this realm.");
-            await LoadDataAsync(Input.TenantId);
+            await LoadRealmsAsync();
             return Page();
         }
 
         db.Roles.Add(new Role
         {
-            TenantId = Input.TenantId,
+            TenantId = currentTenantId.Value,
             RealmId = Input.RealmId,
             Name = Input.Name,
             IsActive = Input.IsActive
         });
         await db.SaveChangesAsync();
-        return TenantAwareRedirect("/Admin/Roles", new { TenantId = Input.TenantId });
+        return TenantAwareRedirect("/Admin/Roles");
     }
 
-    private async Task LoadDataAsync(Guid? tenantId)
+    private async Task LoadRealmsAsync()
     {
-        var tenants = await db.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .ToListAsync();
-        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-
-        // Load realms filtered by tenant if provided
-        var realmQuery = db.Realms.AsNoTracking().AsQueryable();
-        if (tenantId.HasValue)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            realmQuery = realmQuery.Where(r => r.TenantId == tenantId.Value);
+            Realms = Array.Empty<Realm>();
+            return;
         }
-        Realms = await realmQuery.OrderBy(r => r.Name).ToListAsync();
+
+        Realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == currentTenantId.Value)
+            .OrderBy(r => r.Name)
+            .ToListAsync();
     }
 }

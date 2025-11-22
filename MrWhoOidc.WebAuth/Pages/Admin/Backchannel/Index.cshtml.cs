@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using System.Net.Http.Json;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Backchannel;
 
@@ -14,7 +13,7 @@ public class IndexModel(
     AuthDbContext db,
     MrWhoOidc.WebAuth.Background.BackchannelRuntimeState state,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record Item(Guid Id, string ClientId, string TargetUri, string Status, int AttemptCount, int MaxAttempts, int? LastHttpStatus, string? LastError, DateTimeOffset CreatedAt, DateTimeOffset? LastAttemptAt, DateTimeOffset? NextAttemptAt);
     public sealed record CircuitItem(string ClientId, int Failures, DateTimeOffset? OpenUntil);
@@ -22,60 +21,24 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
 
-    [BindProperty(SupportsGet = true)]
-    public Guid? TenantId { get; set; }
-
     public long Backlog { get; private set; }
     public bool Enabled { get; private set; }
     public List<Item> Items { get; private set; } = new();
     public List<CircuitItem> OpenCircuits { get; private set; } = new();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
-    public bool IsPlatformAdmin { get; private set; }
 
     public async Task OnGetAsync()
     {
-        // Check if user is platform admin
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        IsPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Load tenant options for filter (platform admins only)
-        if (IsPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var tenants = await db.Tenants.AsNoTracking()
-                .Where(t => t.Status == TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+            Items = new List<Item>();
+            OpenCircuits = new List<CircuitItem>();
+            return;
         }
 
-        // Query API for items and backlog with tenant scoping
-        var q = db.BackchannelLogoutNotifications.AsNoTracking();
-
-        // Automatic tenant scoping
-        if (IsPlatformAdmin)
-        {
-            // Platform admins can optionally filter by tenant
-            if (TenantId.HasValue)
-            {
-                q = q.Where(n => n.TenantId == TenantId.Value);
-            }
-        }
-        else
-        {
-            // Regular tenant admins only see their tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-            if (currentTenantId.HasValue)
-            {
-                q = q.Where(n => n.TenantId == currentTenantId.Value);
-            }
-            else
-            {
-                // No tenant context, return empty
-                Items = new List<Item>();
-                return;
-            }
-        }
+        // Query API for items and backlog scoped to tenant
+        var q = db.BackchannelLogoutNotifications.AsNoTracking()
+            .Where(n => n.TenantId == currentTenantId.Value);
 
         if (!string.IsNullOrWhiteSpace(Status)) q = q.Where(n => n.Status == Status);
         Items = await q.OrderByDescending(n => n.CreatedAt)
@@ -83,12 +46,18 @@ public class IndexModel(
             .Select(n => new Item(n.Id, n.ClientId, n.TargetUri, n.Status, n.AttemptCount, n.MaxAttempts, n.LastHttpStatus, n.LastError, n.CreatedAt, n.LastAttemptAt, n.NextAttemptAt))
             .ToListAsync();
         var now = DateTimeOffset.UtcNow;
-        Backlog = await db.BackchannelLogoutNotifications.LongCountAsync(n => n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now));
+        Backlog = await db.BackchannelLogoutNotifications.LongCountAsync(n => n.TenantId == currentTenantId.Value && n.Status == "pending" && (n.NextAttemptAt == null || n.NextAttemptAt <= now));
 
         // Read runtime state for circuits and flag
         Enabled = state.EmissionEnabled;
+        var tenantClientIds = await db.Clients.AsNoTracking()
+            .Where(c => c.TenantId == currentTenantId.Value)
+            .Select(c => c.ClientId)
+            .ToListAsync();
+        var clientSet = tenantClientIds.ToHashSet(StringComparer.Ordinal);
         OpenCircuits = state.Circuits
             .Where(kv => kv.Value.OpenUntil is not null && kv.Value.OpenUntil > DateTimeOffset.UtcNow)
+            .Where(kv => clientSet.Contains(kv.Key))
             .Select(kv => new CircuitItem(kv.Key, kv.Value.Failures, kv.Value.OpenUntil))
             .OrderByDescending(c => c.Failures)
             .Take(50)
@@ -97,14 +66,20 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostRetryAsync([FromForm] Guid id)
     {
-        var entity = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id);
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Backchannel");
+        }
+
+        var entity = await db.BackchannelLogoutNotifications.FirstOrDefaultAsync(n => n.Id == id && n.TenantId == currentTenantId.Value);
         if (entity is not null)
         {
             entity.Status = "pending";
             entity.NextAttemptAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
         }
-        return RedirectToPage(new { status = Status });
+        return TenantAwareRedirect("/Admin/Backchannel", new { status = Status });
     }
 
     // No DTOs needed; reading state directly

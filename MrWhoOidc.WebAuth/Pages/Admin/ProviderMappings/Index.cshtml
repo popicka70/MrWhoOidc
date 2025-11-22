@@ -1,33 +1,19 @@
 ﻿@page "/admin/provider-mappings"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @model MrWhoOidc.WebAuth.Pages.Admin.ProviderMappings.IndexModel
 @{
     ViewData["Title"] = "Client ? Provider Mappings";
+    var currentTenant = TenantAccessor.CurrentTenant;
 }
 
 <h2>Client ? Provider Mappings</h2>
 
-@if (Model.IsPlatformAdmin)
+@if (currentTenant is not null)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-8">
-                    <label class="form-label">
-                        <i class="bi bi-building me-1"></i>Tenant Filter
-                    </label>
-                    <select class="form-select" name="tenantId" onchange="this.form.submit()">
-                        @foreach (var opt in Model.TenantOptions)
-                        {
-                            <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <button class="btn btn-primary w-100" type="submit">
-                        <i class="bi bi-funnel"></i> Filter
-                    </button>
-                </div>
-            </form>
+    <div class="alert alert-info d-flex align-items-center gap-2" role="status">
+        <i class="bi bi-building"></i>
+        <div>
+            Showing mappings for <strong>@currentTenant.Name</strong> (@currentTenant.Slug).
         </div>
     </div>
 }

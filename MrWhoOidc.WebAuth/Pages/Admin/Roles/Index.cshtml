@@ -27,22 +27,17 @@
 
 <div class="card mb-4">
     <div class="card-body">
-        <form method="get" class="row g-3 align-items-end">
-            @if (Model.IsPlatformAdmin)
-            {
-                <div class="col-md-3">
-                    <label class="form-label">
-                        <i class="bi bi-building me-1"></i>Tenant Filter
-                    </label>
-                    <select class="form-select" name="tenantId" onchange="this.form.submit()">
-                        @foreach (var opt in Model.TenantOptions)
-                        {
-                            <option value="@opt.Value" selected="@(opt.Value == Model.TenantId?.ToString())">@opt.Text</option>
-                        }
-                    </select>
+        @if (currentTenant is not null)
+        {
+            <div class="alert alert-info d-flex align-items-center gap-2" role="status">
+                <i class="bi bi-building"></i>
+                <div>
+                    Showing roles for <strong>@currentTenant.Name</strong> (@currentTenant.Slug).
                 </div>
-            }
-            <div class="@(Model.IsPlatformAdmin ? "col-md-3" : "col-md-4")">
+            </div>
+        }
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
                 <label class="form-label">
                     <i class="bi bi-diagram-3 me-1"></i>Realm
                 </label>
@@ -54,7 +49,7 @@
                     }
                 </select>
             </div>
-            <div class="@(Model.IsPlatformAdmin ? "col-md-5" : "col-md-7")">
+            <div class="col-md-7">
                 <label class="form-label">
                     <i class="bi bi-search me-1"></i>Search
                 </label>

@@ -1,14 +1,18 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings;
 
 [Authorize(Policy = "tenant-admin")]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(
+    AuthDbContext db,
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record Row(Guid Id, int Order, string ExternalClaim, string LocalClaim, string? Transform);
 
@@ -24,20 +28,21 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnGetAsync(Guid providerId)
     {
-        ProviderId = providerId;
-        var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == providerId);
-        if (provider is null) return NotFound();
-        ProviderDisplay = provider.DisplayName ?? provider.Name;
+        if (!await LoadProviderAsync(providerId))
+        {
+            return NotFound();
+        }
+
         await LoadAsync();
         return Page();
     }
 
     public async Task<IActionResult> OnPostAsync(Guid providerId)
     {
-        ProviderId = providerId;
-        var provider = await db.IdentityProviders.AsNoTracking().FirstOrDefaultAsync(p => p.Id == providerId);
-        if (provider is null) return NotFound();
-        ProviderDisplay = provider.DisplayName ?? provider.Name;
+        if (!await LoadProviderAsync(providerId))
+        {
+            return NotFound();
+        }
 
         if (!ModelState.IsValid)
         {
@@ -64,7 +69,11 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id, Guid providerId)
     {
-        ProviderId = providerId;
+        if (!await LoadProviderAsync(providerId))
+        {
+            return NotFound();
+        }
+
         var entity = await db.IdentityProviderClaimMappings.FirstOrDefaultAsync(m => m.Id == id && m.IdentityProviderId == providerId);
         if (entity is not null)
         {
@@ -83,6 +92,26 @@ public class IndexModel(AuthDbContext db) : PageModel
             .OrderBy(m => m.Order)
             .Select(m => new Row(m.Id, m.Order, m.ExternalClaim, m.LocalClaim, m.Transform))
             .ToListAsync();
+    }
+
+    private async Task<bool> LoadProviderAsync(Guid providerId)
+    {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return false;
+        }
+
+        var provider = await db.IdentityProviders.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == providerId && p.TenantId == currentTenantId.Value);
+        if (provider is null)
+        {
+            return false;
+        }
+
+        ProviderId = providerId;
+        ProviderDisplay = provider.DisplayName ?? provider.Name;
+        return true;
     }
 
     public sealed class InputModel

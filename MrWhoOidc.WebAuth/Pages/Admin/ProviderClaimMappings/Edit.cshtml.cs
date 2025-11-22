@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings;
 
@@ -12,7 +12,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.ProviderClaimMappings;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService) : ReadOnlyAdminPageModel
+    IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -21,26 +21,17 @@ public class EditModel(
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
         // Load claim mapping with JOIN to provider for tenant filtering
         var query = from mapping in db.IdentityProviderClaimMappings.AsNoTracking()
                     join provider in db.IdentityProviders on mapping.IdentityProviderId equals provider.Id
                     where mapping.Id == id
                     select new { Mapping = mapping, Provider = provider };
-
-        if (!isPlatformAdmin)
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return NotFound(); // No tenant context
-            }
-            query = query.Where(x => x.Provider.TenantId == currentTenantId.Value);
+            return NotFound();
         }
+        query = query.Where(x => x.Provider.TenantId == currentTenantId.Value);
 
         var result = await query.FirstOrDefaultAsync();
         if (result is null) return NotFound();
@@ -62,26 +53,17 @@ public class EditModel(
     {
         if (!ModelState.IsValid || Input is null) return Page();
 
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
         // Load claim mapping with JOIN to provider for tenant filtering
         var query = from mapping in db.IdentityProviderClaimMappings
                     join provider in db.IdentityProviders on mapping.IdentityProviderId equals provider.Id
                     where mapping.Id == id
                     select new { Mapping = mapping, Provider = provider };
-
-        if (!isPlatformAdmin)
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return NotFound(); // No tenant context
-            }
-            query = query.Where(x => x.Provider.TenantId == currentTenantId.Value);
+            return NotFound();
         }
+        query = query.Where(x => x.Provider.TenantId == currentTenantId.Value);
 
         var result = await query.FirstOrDefaultAsync();
         if (result is null) return NotFound();
@@ -94,7 +76,12 @@ public class EditModel(
         entity.Transform = string.IsNullOrWhiteSpace(Input.Transform) ? null : Input.Transform.Trim();
         entity.Order = Input.Order;
         await db.SaveChangesAsync();
-        return RedirectToPage("Index", new { providerId = ProviderId });
+        var url = MrWhoOidc.WebAuth.Extensions.TenantAwareUrlBuilder.BuildTenantPath(
+            "/Admin/ProviderClaimMappings",
+            tenantAccessor,
+            multiTenancyOptions,
+            ("providerId", ProviderId.ToString()));
+        return Redirect(url);
     }
 
     public sealed class InputModel
