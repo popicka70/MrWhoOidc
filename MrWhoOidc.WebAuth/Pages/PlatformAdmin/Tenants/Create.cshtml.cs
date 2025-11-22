@@ -14,10 +14,12 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public partial class CreateModel(
     AuthDbContext db,
     IOptions<MultiTenancyOptions> multiTenancyOptions,

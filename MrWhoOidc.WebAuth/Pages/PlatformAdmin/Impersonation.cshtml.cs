@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 
@@ -14,6 +15,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 /// Provides a centralized UI for starting/stopping tenant impersonation.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class ImpersonationModel(
     AuthDbContext db,
     IImpersonationService impersonationService,

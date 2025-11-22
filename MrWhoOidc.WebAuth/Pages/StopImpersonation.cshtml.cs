@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -9,6 +10,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 /// Endpoint to stop impersonation and return to platform admin view.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class StopImpersonationModel(IImpersonationService impersonationService) : PageModel
 {
     public async Task<IActionResult> OnPostAsync(string? returnUrl = null)

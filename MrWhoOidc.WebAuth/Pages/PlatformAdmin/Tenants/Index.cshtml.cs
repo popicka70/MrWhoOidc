@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class IndexModel(
     AuthDbContext db,
     IOptions<MultiTenancyOptions> multiTenancyOptions) : PageModel

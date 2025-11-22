@@ -25,11 +25,15 @@ public interface ITenantSwitchingService
     /// Get the user's preferred tenant from session
     /// </summary>
     Guid? GetPreferredTenantId(HttpContext httpContext);
+
+    /// <summary>
+    /// Get the user's preferred tenant slug from session
+    /// </summary>
+    string? GetPreferredTenantSlug(HttpContext httpContext);
 }
 
 public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolver userAccountResolver) : ITenantSwitchingService
 {
-    private const string SessionKey = "PreferredTenantId";
 
     public async Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user)
     {
@@ -132,20 +136,43 @@ public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolve
         return tenants;
     }
 
-    public Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId)
+    public async Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId)
     {
-        httpContext.Session.SetString(SessionKey, tenantId.ToString());
-        return Task.CompletedTask;
+        if (httpContext is null)
+        {
+            throw new ArgumentNullException(nameof(httpContext));
+        }
+
+        httpContext.Session.SetString(TenantSessionKeys.PreferredTenantId, tenantId.ToString());
+
+        var tenantSlug = await db.Tenants.AsNoTracking()
+            .Where(t => t.Id == tenantId)
+            .Select(t => t.Slug)
+            .FirstOrDefaultAsync(httpContext.RequestAborted);
+
+        if (!string.IsNullOrEmpty(tenantSlug))
+        {
+            httpContext.Session.SetString(TenantSessionKeys.PreferredTenantSlug, tenantSlug);
+        }
+        else
+        {
+            httpContext.Session.Remove(TenantSessionKeys.PreferredTenantSlug);
+        }
     }
 
     public Guid? GetPreferredTenantId(HttpContext httpContext)
     {
-        var tenantIdStr = httpContext.Session.GetString(SessionKey);
+        var tenantIdStr = httpContext.Session.GetString(TenantSessionKeys.PreferredTenantId);
         if (Guid.TryParse(tenantIdStr, out var tenantId))
         {
             return tenantId;
         }
         return null;
+    }
+
+    public string? GetPreferredTenantSlug(HttpContext httpContext)
+    {
+        return httpContext.Session.GetString(TenantSessionKeys.PreferredTenantSlug);
     }
 
     private async Task<List<TenantAccessInfo>> GetLegacyTenantsAsync(Guid userId)

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -13,6 +14,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 /// Endpoint for platform admins to start impersonating a tenant admin.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class StartImpersonationModel(
     IImpersonationService impersonationService,
     AuthDbContext db,

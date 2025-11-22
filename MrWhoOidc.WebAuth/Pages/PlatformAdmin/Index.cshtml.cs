@@ -6,10 +6,12 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class IndexModel : PageModel
 {
     private readonly AuthDbContext _db;

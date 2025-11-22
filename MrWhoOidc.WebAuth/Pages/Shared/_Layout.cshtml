@@ -40,6 +40,16 @@
         var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
             ? $"/t/{currentTenant.Slug}" 
             : "";
+
+        string? resolvedTenantSlug = currentTenant?.Slug;
+        if ((User?.Identity?.IsAuthenticated ?? false) && string.IsNullOrEmpty(resolvedTenantSlug))
+        {
+            resolvedTenantSlug = TenantSwitchingService.GetPreferredTenantSlug(Context);
+        }
+
+        var isDefaultTenantContext = !MultiTenancyOptions.Value.Enabled ||
+            (!string.IsNullOrEmpty(resolvedTenantSlug) &&
+             string.Equals(resolvedTenantSlug, MultiTenancyOptions.Value.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase));
         
         // Load user's accessible tenants for tenant switcher
         var userTenants = new List<MrWhoOidc.WebAuth.Services.TenantAccessInfo>();
@@ -216,7 +226,7 @@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
                                 var platformAdminResult = await AuthorizationService.AuthorizeAsync(User, null, "platform-admin");
-                                if (platformAdminResult.Succeeded)
+                                if (platformAdminResult.Succeeded && isDefaultTenantContext)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
                                     <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>

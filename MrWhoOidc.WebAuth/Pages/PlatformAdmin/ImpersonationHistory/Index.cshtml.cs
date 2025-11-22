@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.ImpersonationHistory;
 
@@ -12,6 +13,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.ImpersonationHistory;
 /// Only accessible to platform admins.
 /// </summary>
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class IndexModel(AuthDbContext db) : PageModel
 {
     public List<ImpersonationAuditLog> Logs { get; set; } = new();

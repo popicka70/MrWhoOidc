@@ -61,6 +61,9 @@ public static class PipelineExtensions
         // Session storage (required for tenant discovery flow)
         app.UseSession();
 
+        // Track tenant selections in session for tenant-unaware routes
+        app.UseMiddleware<TenantSelectionTrackingMiddleware>();
+
         // Localization (single supported culture placeholder; future expansion can move to configuration)
         var supportedCultures = new[] { "en-US" };
         var localizationOptions = new RequestLocalizationOptions()

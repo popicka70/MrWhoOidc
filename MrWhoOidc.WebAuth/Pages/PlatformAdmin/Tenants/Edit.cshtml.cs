@@ -5,10 +5,12 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
 [Authorize(Policy = "platform-admin")]
+[RequireDefaultTenantContext]
 public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
 {
     [BindProperty]
