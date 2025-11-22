@@ -39,7 +39,7 @@ internal sealed class RecordingUserAccountProvisioner : IUserAccountProvisioner
         }
     }
 
-    public Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default)
+    public Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default, bool autoSave = true)
     {
         if (user is null)
         {

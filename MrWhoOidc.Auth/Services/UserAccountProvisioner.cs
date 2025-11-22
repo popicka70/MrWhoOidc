@@ -9,7 +9,7 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IUserAccountProvisioner
 {
-    Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default);
+    Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default, bool autoSave = true);
 }
 
 internal sealed class UserAccountProvisioner(
@@ -19,7 +19,13 @@ internal sealed class UserAccountProvisioner(
 {
     private readonly UserAccountFeatureOptions _options = featureOptions.Value ?? new UserAccountFeatureOptions();
 
-    public async Task EnsureAsync(User user, Guid tenantId, Guid? defaultRealmId, bool isTenantAdmin, CancellationToken ct = default)
+    public async Task EnsureAsync(
+        User user,
+        Guid tenantId,
+        Guid? defaultRealmId,
+        bool isTenantAdmin,
+        CancellationToken ct = default,
+        bool autoSave = true)
     {
         ArgumentNullException.ThrowIfNull(user);
         if (!_options.UserAccountDecouplingEnabled)
@@ -95,6 +101,9 @@ internal sealed class UserAccountProvisioner(
             logger.LogDebug("Added tenant membership for user {UserId} tenant {TenantId}", user.Id, tenantId);
         }
 
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (autoSave)
+        {
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
     }
 }

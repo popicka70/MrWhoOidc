@@ -87,6 +87,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();
         services.AddScoped<IUserAccountProvisioner, UserAccountProvisioner>();
+        services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IScopeResolver, ScopeResolver>();

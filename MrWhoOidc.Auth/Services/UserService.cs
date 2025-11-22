@@ -10,6 +10,7 @@ public interface IUserService
     Task<User?> FindByUsernameAsync(string username, CancellationToken ct = default);
     // New: find by username OR primary/alternative email (case-insensitive for email)
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
+    Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default);
     Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default);
     /// <summary>
     /// Invalidates cached user data for the specified user.
@@ -110,6 +111,11 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
             user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == alt, ct).ConfigureAwait(false);
         }
         return user;
+    }
+
+    public async Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default)
+    {
+        return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
     }
 
     public Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default)

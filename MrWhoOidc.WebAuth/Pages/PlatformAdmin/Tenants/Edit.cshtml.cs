@@ -127,7 +127,18 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
         tenant.LogoUrl = Input.LogoUrl;
         tenant.PrimaryColor = Input.PrimaryColor;
         tenant.AccentColor = Input.AccentColor;
-        tenant.AdminEmail = Input.AdminEmail;
+
+        try
+        {
+            tenant.AdminEmail = NormalizeAdminEmail(Input.AdminEmail);
+        }
+        catch (ValidationException ex)
+        {
+            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.AdminEmail)}", ex.Message);
+            await LoadCountsAsync(Input.Id);
+            return Page();
+        }
+
         tenant.BillingPlan = Input.BillingPlan;
 
         // Update status timestamps
@@ -146,6 +157,15 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
         return RedirectToPage("Index");
     }
 
+    private static string? NormalizeAdminEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
+        return EmailNormalizer.FormatForStorage(email, required: true, out _);
+    }
     public async Task<IActionResult> OnPostSuspendAsync()
     {
         var tenant = await db.Tenants.FindAsync(Input.Id);

@@ -1,15 +1,20 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Security.Cryptography; // added for future cryptographic helpers if needed
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.Persistence.Configurations;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Persistence;
 
 public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
+    private ILogger<AuthDbContext>? _logger;
+
     // Multi-tenancy
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantIcon> TenantIcons => Set<TenantIcon>();
@@ -68,21 +73,86 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        EnsureUserPrimaryKeysAvailableAsync(CancellationToken.None).GetAwaiter().GetResult();
         NormalizeEmailFields();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
         NormalizeEmailFields();
-        return base.SaveChangesAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        await EnsureUserPrimaryKeysAvailableAsync(cancellationToken).ConfigureAwait(false);
         NormalizeEmailFields();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
     }
+
+    private async Task EnsureUserPrimaryKeysAvailableAsync(CancellationToken cancellationToken)
+    {
+        var pendingUsers = ChangeTracker.Entries<User>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        if (pendingUsers.Count == 0)
+        {
+            return;
+        }
+
+        var desiredIds = pendingUsers
+            .Select(e => e.Entity.Id == Guid.Empty ? GuidHelper.NewId() : e.Entity.Id)
+            .ToList();
+
+        for (var i = 0; i < pendingUsers.Count; i++)
+        {
+            if (pendingUsers[i].Entity.Id == Guid.Empty)
+            {
+                pendingUsers[i].Entity.Id = desiredIds[i];
+            }
+        }
+
+        var existingIds = await Users.AsNoTracking()
+            .Where(u => desiredIds.Contains(u.Id))
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (existingIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in pendingUsers)
+        {
+            if (!existingIds.Contains(entry.Entity.Id))
+            {
+                continue;
+            }
+
+            Guid newId;
+            do
+            {
+                newId = GuidHelper.NewId();
+            }
+            while (desiredIds.Contains(newId));
+
+            while (await Users.AsNoTracking().AnyAsync(u => u.Id == newId, cancellationToken).ConfigureAwait(false))
+            {
+                newId = GuidHelper.NewId();
+            }
+
+            Logger?.LogWarning("Detected duplicate User.Id {UserId} while saving; reassigned to {NewUserId}", entry.Entity.Id, newId);
+
+            entry.Entity.Id = newId;
+            desiredIds.Add(newId);
+        }
+    }
+
+    private ILogger<AuthDbContext>? Logger => _logger ??= this.GetService<ILogger<AuthDbContext>>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

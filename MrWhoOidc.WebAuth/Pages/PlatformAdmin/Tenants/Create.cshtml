@@ -30,6 +30,15 @@
     </div>
 }
 
+<div class="alert alert-info d-flex align-items-center" role="alert">
+    <i class="bi bi-shield-lock fs-4 me-3"></i>
+    <div>
+        <strong>Heads up:</strong> You're signed in as
+        <span class="fw-semibold">@Model.CurrentUserDisplay</span>. This account will automatically become the
+        tenant administrator for the organization you create.
+    </div>
+</div>
+
 <form method="post" id="createTenantForm">
     <div class="card mb-4">
         <div class="card-header">
@@ -56,22 +65,6 @@
                 <label asp-for="Input.Description" class="form-label">Description</label>
                 <textarea asp-for="Input.Description" class="form-control" rows="3" placeholder="Optional description"></textarea>
                 <span asp-validation-for="Input.Description" class="text-danger small"></span>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label asp-for="Input.AdminEmail" class="form-label">Admin Email <span class="text-danger">*</span></label>
-                    <input asp-for="Input.AdminEmail" type="email" class="form-control" placeholder="admin@acme-corp.com" />
-                    <div class="form-text">Email for first admin user (will be created automatically)</div>
-                    <span asp-validation-for="Input.AdminEmail" class="text-danger small"></span>
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label asp-for="Input.AdminPassword" class="form-label">Admin Password <span class="text-danger">*</span></label>
-                    <input asp-for="Input.AdminPassword" type="password" class="form-control" placeholder="••••••••" />
-                    <div class="form-text">Password for first admin user (min 8 characters)</div>
-                    <span asp-validation-for="Input.AdminPassword" class="text-danger small"></span>
-                </div>
             </div>
         </div>
     </div>

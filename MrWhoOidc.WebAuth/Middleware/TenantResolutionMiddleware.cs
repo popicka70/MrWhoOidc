@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -34,9 +36,17 @@ public class TenantResolutionMiddleware
         ITenantResolver tenantResolver,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions options,
-        HybridCache cache)
+        HybridCache cache,
+        AuthDbContext dbContext,
+        ICurrentUserAccountResolver currentUserAccountResolver)
     {
         var path = context.Request.Path.Value ?? "/";
+
+        UserAccountResolution? resolvedUser = null;
+        if (context.User?.Identity?.IsAuthenticated ?? false)
+        {
+            resolvedUser = await currentUserAccountResolver.ResolveAsync(context.User, context.RequestAborted);
+        }
 
         // Skip tenant resolution for specific paths (health checks, platform admin, static assets)
         if (ShouldSkipTenantResolution(path))
@@ -60,39 +70,34 @@ public class TenantResolutionMiddleware
                 _logger.LogWarning("Tenant not found for path: {Path}", path);
 
                 // Try to determine tenant from authenticated user
-                if (context.User?.Identity?.IsAuthenticated ?? false)
+                if (resolvedUser is not null)
                 {
-                    var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                    if (!string.IsNullOrEmpty(userId))
-                    {
-                        // Use HybridCache to cache user-to-tenant slug mapping (short-term, 2 minutes)
-                        var userTenantSlug = await cache.GetOrCreateAsync(
-                            $"user:tenant:slug:{userId}",
-                            async cancel =>
-                            {
-                                var dbContext = context.RequestServices.GetRequiredService<MrWhoOidc.Auth.Persistence.AuthDbContext>();
-                                var result = await (from u in dbContext.Users
-                                                    join t in dbContext.Tenants on u.TenantId equals t.Id
-                                                    where u.Id.ToString() == userId
-                                                    select t.Slug)
-                                    .FirstOrDefaultAsync(cancel);
-                                return result; // Can be null
-                            },
-                            new HybridCacheEntryOptions
-                            {
-                                Expiration = TimeSpan.FromMinutes(2),
-                                LocalCacheExpiration = TimeSpan.FromMinutes(2)
-                            },
-                            tags: new[] { "user-tenant-mapping", $"user:{userId}" },
-                            cancellationToken: context.RequestAborted
-                        );
+                    var userCacheKey = resolvedUser.Value.UserId.ToString();
 
-                        if (userTenantSlug != null)
+                    var userTenantSlug = await cache.GetOrCreateAsync(
+                        $"user:tenant:slug:{userCacheKey}",
+                        async cancel =>
                         {
-                            // Redirect to tenant-specific NotFound page
-                            context.Response.Redirect($"/t/{userTenantSlug}/NotFound", permanent: false);
-                            return;
-                        }
+                            var result = await (from u in dbContext.Users
+                                                join t in dbContext.Tenants on u.TenantId equals t.Id
+                                                where u.Id == resolvedUser.Value.UserId
+                                                select t.Slug)
+                                .FirstOrDefaultAsync(cancel);
+                            return result; // Can be null
+                        },
+                        new HybridCacheEntryOptions
+                        {
+                            Expiration = TimeSpan.FromMinutes(2),
+                            LocalCacheExpiration = TimeSpan.FromMinutes(2)
+                        },
+                        tags: new[] { "user-tenant-mapping", $"user:{userCacheKey}" },
+                        cancellationToken: context.RequestAborted
+                    );
+
+                    if (userTenantSlug != null)
+                    {
+                        context.Response.Redirect($"/t/{userTenantSlug}/NotFound", permanent: false);
+                        return;
                     }
                 }
 
@@ -129,28 +134,37 @@ public class TenantResolutionMiddleware
             tenantContext.IsMultiTenantMode ? "multi-tenant" : "single-tenant");
 
         // Validate tenant access for authenticated users
-        // SECURITY: User MUST access their own tenant only - no cross-tenant access allowed
-        if (context.User?.Identity?.IsAuthenticated ?? false)
+        // SECURITY: Users may only access tenants they are a member of
+        if (resolvedUser is not null)
         {
-            var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (!string.IsNullOrEmpty(userId))
-            {
-                // Check if user belongs to this tenant
-                var dbContext = context.RequestServices.GetRequiredService<MrWhoOidc.Auth.Persistence.AuthDbContext>();
-                var userTenantId = await dbContext.Users
-                    .Where(u => u.Id.ToString() == userId)
-                    .Select(u => u.TenantId)
-                    .FirstOrDefaultAsync(context.RequestAborted);
+            var userGuid = resolvedUser.Value.UserId;
 
-                if (userTenantId != Guid.Empty && userTenantId != tenantContext.TenantId)
+            // Check if legacy user record already scoped to this tenant
+            var userTenantId = await dbContext.Users
+                .Where(u => u.Id == userGuid)
+                .Select(u => u.TenantId)
+                .FirstOrDefaultAsync(context.RequestAborted);
+
+            if (userTenantId != Guid.Empty && userTenantId != tenantContext.TenantId)
+            {
+                var hasTenantRole = await dbContext.UserRoleAssignments.AsNoTracking()
+                    .Join(dbContext.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+                    .AnyAsync(x => x.a.UserId == userGuid
+                                   && x.a.IsActive
+                                   && x.r.IsActive
+                                   && x.r.TenantId == tenantContext.TenantId,
+                        context.RequestAborted);
+
+                if (hasTenantRole)
                 {
-                    // CRITICAL SECURITY VIOLATION: User is trying to access a different tenant!
+                    _logger.LogDebug("Role assignment permits cross-tenant access for user {UserId} into tenant {TenantId}", userGuid, tenantContext.TenantId);
+                }
+                else
+                {
                     _logger.LogWarning(
                         "SECURITY: User {UserId} attempted to access tenant {RequestedTenant} ({RequestedSlug}) but belongs to tenant {UserTenant}. Request denied.",
-                        userId, tenantContext.TenantId, tenantContext.Slug, userTenantId);
+                        userGuid, tenantContext.TenantId, tenantContext.Slug, userTenantId);
 
-                    // Return 403 Forbidden - DO NOT redirect to correct tenant
-                    // This prevents any possibility of cross-tenant access
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     context.Response.ContentType = "text/html";
                     await context.Response.WriteAsync(@"
@@ -177,6 +191,12 @@ public class TenantResolutionMiddleware
                     return;
                 }
             }
+        }
+        else if (context.User?.Identity?.IsAuthenticated ?? false)
+        {
+            _logger.LogWarning("Authenticated principal could not be linked to a user account; denying access.");
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
         }
 
         // Continue pipeline
