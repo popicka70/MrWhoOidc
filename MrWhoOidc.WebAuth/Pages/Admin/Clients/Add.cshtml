@@ -1,7 +1,16 @@
 ﻿@page "/admin/clients/add"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Clients.AddModel
 @{
     ViewData["Title"] = "Add client";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var clientsIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? "/admin/clients"
+        : $"{tenantPrefix}/admin/clients";
 }
 
 <h1>Add client</h1>
@@ -51,7 +60,7 @@
     </div>
     <div class="mt-3 d-flex gap-2">
         <button type="submit" class="btn btn-primary" asp-page-handler="Create">Create</button>
-        <a asp-page="Index" class="btn btn-secondary">Back</a>
+        <a href="@clientsIndexPath" class="btn btn-secondary">Back</a>
     </div>
 </form>
 

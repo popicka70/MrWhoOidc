@@ -1,9 +1,16 @@
 ﻿@page "/admin/users/add"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Users.AddModel
 @{
     ViewData["Title"] = "Add user";
     var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled
+        ? $"/t/{currentTenant.Slug}"
+        : string.Empty;
+    var usersIndexPath = string.IsNullOrEmpty(tenantPrefix)
+        ? "/admin/users"
+        : $"{tenantPrefix}/admin/users";
 }
 
 <div class="page-header">
@@ -42,7 +49,7 @@
         <button class="btn btn-primary" type="submit">
             <i class="bi bi-check-lg"></i> Save
         </button>
-        <a class="btn btn-secondary" asp-page="Index">Cancel</a>
+        <a class="btn btn-secondary" href="@usersIndexPath">Cancel</a>
     </div>
 </form>
 
