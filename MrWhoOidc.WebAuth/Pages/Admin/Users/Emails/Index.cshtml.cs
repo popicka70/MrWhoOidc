@@ -12,7 +12,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users.Emails;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IMultiTenancyOptions multiTenancyOptions) : UserPageModelBase(tenantAccessor, multiTenancyOptions)
 {
     [FromRoute]
@@ -22,22 +21,15 @@ public class IndexModel(
 
     private async Task<User?> GetUserWithTenantFilterAsync()
     {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
-        var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
-        if (!isPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return null;
-            }
-            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+            return null;
         }
 
-        return await userQuery.FirstOrDefaultAsync();
+        return await db.Users.AsNoTracking()
+            .Where(u => u.Id == UserId && u.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<IActionResult> OnGetAsync()
@@ -93,6 +85,12 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostToggleAsync(Guid emailId)
     {
+        var user = await GetUserWithTenantFilterAsync();
+        if (user is null)
+        {
+            return RedirectToPage("/admin/users");
+        }
+
         var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == UserId);
         if (entity is not null)
         {
@@ -106,6 +104,12 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid emailId)
     {
+        var user = await GetUserWithTenantFilterAsync();
+        if (user is null)
+        {
+            return RedirectToPage("/admin/users");
+        }
+
         var entity = await db.UserAlternativeEmails.FirstOrDefaultAsync(a => a.Id == emailId && a.UserId == UserId);
         if (entity is not null)
         {

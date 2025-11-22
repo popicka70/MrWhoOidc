@@ -27,7 +27,6 @@ public class EditModel(
     MrWhoOidc.WebAuth.Observability.IAuditSink audit, 
     OidcOptions oidcOptions,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IClientStore clientStore,
     IScopeResolver scopeResolver,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
@@ -109,25 +108,15 @@ public class EditModel(
 
     public async Task<IActionResult> OnGetAsync()
     {
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Build query with tenant filtering
-        var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == Id);
-        
-        if (!isPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return NotFound(); // No tenant context
-            }
-            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+            return NotFound();
         }
 
-        var client = await clientQuery.FirstOrDefaultAsync();
+        var client = await db.Clients.AsNoTracking()
+            .Where(c => c.Id == Id && c.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
         if (client is null) return NotFound();
 
     await LoadRealmsAsync();
@@ -898,25 +887,13 @@ public class EditModel(
             }
         }
 
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Build query with tenant filtering
-        var clientQuery = db.Clients.Where(c => c.Id == Id);
-        
-        if (!isPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return NotFound(); // No tenant context
-            }
-            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+            return NotFound();
         }
 
-        var client = await clientQuery.FirstOrDefaultAsync();
+        var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id && c.TenantId == currentTenantId.Value);
         if (client is null) return NotFound();
         // Capture old values for audit comparison
         var oldBclUri = client.BackChannelLogoutUri;
@@ -1196,7 +1173,17 @@ public class EditModel(
 
     private async Task LoadRealmsAsync()
     {
-        var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            RealmOptions = new List<SelectListItem>();
+            return;
+        }
+
+        var realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == currentTenantId.Value)
+            .OrderBy(r => r.Name)
+            .ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
     }
 
@@ -1235,14 +1222,23 @@ public class EditModel(
 
     private async Task LoadProviderMappingsAsync(Guid clientId)
     {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            ProviderOptions = new List<SelectListItem>();
+            ProviderMappings = new List<ProviderRow>();
+            return;
+        }
+
         ProviderOptions = await db.IdentityProviders.AsNoTracking()
+            .Where(p => p.TenantId == currentTenantId.Value)
             .OrderBy(p => p.SortOrder).ThenBy(p => p.Name)
             .Select(p => new SelectListItem(p.DisplayName ?? p.Name, p.Id.ToString()))
             .ToListAsync();
 
         ProviderMappings = await db.ClientIdentityProviders.AsNoTracking()
             .Where(m => m.ClientId == clientId)
-            .Join(db.IdentityProviders.AsNoTracking(), m => m.IdentityProviderId, p => p.Id, (m, p) => new ProviderRow
+            .Join(db.IdentityProviders.AsNoTracking().Where(p => p.TenantId == currentTenantId.Value), m => m.IdentityProviderId, p => p.Id, (m, p) => new ProviderRow
             {
                 IdentityProviderId = p.Id,
                 ProviderName = p.Name,
@@ -1287,21 +1283,15 @@ public class EditModel(
 
     private async Task<Client?> LoadClientEntityAsync(Guid clientId)
     {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var query = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
-
-        if (!platformAdminResult.Succeeded)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return null;
-            }
-
-            query = query.Where(c => c.TenantId == currentTenantId.Value);
+            return null;
         }
 
-        return await query.FirstOrDefaultAsync();
+        return await db.Clients.AsNoTracking()
+            .Where(c => c.Id == clientId && c.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
     }
 
     private async Task ReloadPageDataAsync()
@@ -1589,12 +1579,6 @@ public class EditModel(
     /// </summary>
     private async Task<bool> ValidateTenantAccessAsync()
     {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        if (platformAdminResult.Succeeded)
-        {
-            return true; // Platform admins can access all clients
-        }
-
         var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -21,14 +20,10 @@ public class IndexModel(
     public sealed record UserRow(Guid Id, string Username, string? Email, string? Name, DateTimeOffset CreatedAt, Guid TenantId, string TenantName);
 
     public IReadOnlyList<UserRow> Users { get; private set; } = Array.Empty<UserRow>();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
     public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty(SupportsGet = true)]
     public string? Search { get; set; }
-
-    [BindProperty(SupportsGet = true)]
-    public Guid? TenantId { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -36,45 +31,17 @@ public class IndexModel(
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
 
-        // Load tenant options for filter (platform admins only)
-        if (IsPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var tenants = await db.Tenants.AsNoTracking()
-                .Where(t => t.Status == TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+            Users = Array.Empty<UserRow>();
+            return;
         }
 
         // Build query with tenant JOIN
         var q = db.Users.AsNoTracking()
+            .Where(u => u.TenantId == currentTenantId.Value)
             .Join(db.Tenants, u => u.TenantId, t => t.Id, (u, t) => new { User = u, Tenant = t });
-
-        // Automatic tenant scoping
-        if (IsPlatformAdmin)
-        {
-            // Platform admins can optionally filter by tenant
-            if (TenantId.HasValue)
-            {
-                q = q.Where(x => x.User.TenantId == TenantId.Value);
-            }
-        }
-        else
-        {
-            // Regular tenant admins only see their tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (currentTenantId.HasValue)
-            {
-                q = q.Where(x => x.User.TenantId == currentTenantId.Value);
-            }
-            else
-            {
-                // No tenant context, return empty
-                Users = Array.Empty<UserRow>();
-                return;
-            }
-        }
 
         if (!string.IsNullOrWhiteSpace(Search))
         {
@@ -98,25 +65,13 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Build query with tenant filtering
-        var userQuery = db.Users.Where(u => u.Id == id);
-        
-        if (!isPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return TenantAwareRedirectToPage(); // No tenant context
-            }
-            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+            return TenantAwareRedirectToPage();
         }
 
-        var entity = await userQuery.FirstOrDefaultAsync();
+        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirectToPage();
         
         // Capture for cache invalidation
@@ -139,7 +94,7 @@ public class IndexModel(
         // Invalidate user cache after deletion
         await userService.InvalidateUserCacheAsync(id, username, tenantId);
         
-        return TenantAwareRedirect("/Admin/Users", TenantId.HasValue ? new { TenantId } : null);
+        return TenantAwareRedirect("/Admin/Users");
     }
 
     public async Task<IActionResult> OnPostResetPasswordAsync(Guid id)
@@ -151,7 +106,13 @@ public class IndexModel(
             return Forbid();
         }
 
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirectToPage();
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
         if (user is null)
         {
             TempData["Error"] = "User not found.";
@@ -169,7 +130,7 @@ public class IndexModel(
 
         TempData["Success"] = $"Password reset for user '<strong>{user.Username}</strong>'.<br/>Temporary password: <code class='user-select-all'>{tempPassword}</code><br/><small class='text-warning'><i class='bi bi-exclamation-triangle'></i> Please save this password and share it securely with the user.</small>";
         
-        return TenantAwareRedirect("/Admin/Users", TenantId.HasValue ? new { TenantId } : null);
+        return TenantAwareRedirect("/Admin/Users");
     }
 
     private static string GenerateTemporaryPassword()

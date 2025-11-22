@@ -13,7 +13,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IUserService userService,
     IMultiTenancyOptions multiTenancyOptions) : UserPageModelBase(tenantAccessor, multiTenancyOptions)
 {
@@ -34,9 +33,15 @@ public class EditModel(
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Users");
+        }
+
         var userQuery = from u in db.Users.AsNoTracking()
                         join t in db.Tenants on u.TenantId equals t.Id
-                        where u.Id == id
+                        where u.Id == id && u.TenantId == currentTenantId.Value
                         select new { User = u, Tenant = t };
 
         var result = await userQuery.FirstOrDefaultAsync();
@@ -61,25 +66,13 @@ public class EditModel(
             return Page();
         }
 
-        // Check platform admin status
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        var isPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Build query with tenant filtering
-        var userQuery = db.Users.Where(u => u.Id == id);
-        
-        if (!isPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            // Regular tenant admins: filter by current tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (!currentTenantId.HasValue)
-            {
-                return TenantAwareRedirect("/Admin/Users"); // No tenant context
-            }
-            userQuery = userQuery.Where(u => u.TenantId == currentTenantId.Value);
+            return TenantAwareRedirect("/Admin/Users");
         }
 
-        var entity = await userQuery.FirstOrDefaultAsync();
+        var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirect("/Admin/Users");
 
         // Load tenant name for display
@@ -128,8 +121,15 @@ public class EditModel(
 
     private async Task LoadTenantNameAsync(Guid userId)
     {
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            TenantName = string.Empty;
+            return;
+        }
+
         TenantName = await db.Users.AsNoTracking()
-            .Where(u => u.Id == userId)
+            .Where(u => u.Id == userId && u.TenantId == currentTenantId.Value)
             .Join(db.Tenants, u => u.TenantId, t => t.Id, (u, t) => t.Name)
             .FirstOrDefaultAsync() ?? string.Empty;
     }

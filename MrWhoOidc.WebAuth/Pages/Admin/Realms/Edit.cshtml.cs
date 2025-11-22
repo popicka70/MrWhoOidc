@@ -13,7 +13,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 public class EditModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     [FromRoute]
@@ -26,16 +25,9 @@ public class EditModel(
 
     /// <summary>
     /// Validates that the realm belongs to the current tenant (defense in depth).
-    /// Platform admins bypass this check.
     /// </summary>
     private async Task<bool> ValidateTenantAccessAsync(Realm realm)
     {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        if (platformAdminResult.Succeeded)
-        {
-            return true; // Platform admins can access all realms
-        }
-
         var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {
@@ -54,6 +46,12 @@ public class EditModel(
 
         var result = await realmQuery.FirstOrDefaultAsync();
         if (result is null) return NotFound();
+
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue || result.Realm.TenantId != currentTenantId.Value)
+        {
+            return NotFound();
+        }
 
         TenantName = result.Tenant.Name;
         Input = new RealmInput

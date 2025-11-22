@@ -1,12 +1,10 @@
-using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
-using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Pages.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
@@ -14,64 +12,24 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
-    IMultiTenancyOptions multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record RealmRow(Guid Id, string Name, string? DisplayName, DateTimeOffset CreatedAt, Guid TenantId, string TenantName, bool AllowUnconfirmedLogin);
 
     public IReadOnlyList<RealmRow> Realms { get; private set; } = Array.Empty<RealmRow>();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
-    public bool IsPlatformAdmin { get; private set; }
-
-    [BindProperty(SupportsGet = true)]
-    public Guid? TenantId { get; set; }
 
     public async Task OnGetAsync()
     {
-        // Check if user is platform admin
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        IsPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Load tenant options for filter (platform admins only)
-        if (IsPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var tenants = await db.Tenants.AsNoTracking()
-                .Where(t => t.Status == TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+            Realms = Array.Empty<RealmRow>();
+            return;
         }
 
-        var q = db.Realms.AsNoTracking()
-            .Join(db.Tenants, r => r.TenantId, t => t.Id, (r, t) => new { Realm = r, Tenant = t });
-
-        // Automatic tenant scoping
-        if (IsPlatformAdmin)
-        {
-            // Platform admins can optionally filter by tenant
-            if (TenantId.HasValue)
-            {
-                q = q.Where(x => x.Realm.TenantId == TenantId.Value);
-            }
-        }
-        else
-        {
-            // Regular tenant admins only see their tenant
-            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-            if (currentTenantId.HasValue)
-            {
-                q = q.Where(x => x.Realm.TenantId == currentTenantId.Value);
-            }
-            else
-            {
-                // No tenant context, return empty
-                Realms = Array.Empty<RealmRow>();
-                return;
-            }
-        }
-
-        Realms = await q
+        Realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == currentTenantId.Value)
+            .Join(db.Tenants, r => r.TenantId, t => t.Id, (r, t) => new { Realm = r, Tenant = t })
             .OrderBy(x => x.Realm.Name)
             .Select(x => new RealmRow(
                 x.Realm.Id,
@@ -87,26 +45,20 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
-        var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id);
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirect("/Admin/Realms");
+        }
+
+        var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value);
         if (realm is null)
         {
-            // Build tenant-aware redirect URL with optional TenantId parameter
-            var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
-                "/Admin/Realms",
-                tenantAccessor,
-                multiTenancyOptions,
-                ("TenantId", TenantId?.ToString()));
-            return Redirect(redirectUrl);
+            return TenantAwareRedirect("/Admin/Realms");
         }
         db.Realms.Remove(realm);
         await db.SaveChangesAsync();
-        
-        // Build tenant-aware redirect URL with optional TenantId parameter
-        var url = TenantAwareUrlBuilder.BuildTenantPath(
-            "/Admin/Realms",
-            tenantAccessor,
-            multiTenancyOptions,
-            ("TenantId", TenantId?.ToString()));
-        return Redirect(url);
+
+        return TenantAwareRedirect("/Admin/Realms");
     }
 }

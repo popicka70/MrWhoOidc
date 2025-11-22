@@ -12,7 +12,6 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 public class DeleteModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IMultiTenancyOptions multiTenancyOptions) : ReadOnlyAdminPageModel
 {
     public IdentityProvider? Provider { get; private set; }
@@ -22,12 +21,6 @@ public class DeleteModel(
     /// </summary>
     private async Task<bool> ValidateTenantAccessAsync(Guid providerId)
     {
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        if (platformAdminResult.Succeeded)
-        {
-            return true; // Platform admins can access all providers
-        }
-
         var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
         if (!currentTenantId.HasValue)
         {

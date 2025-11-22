@@ -1,7 +1,9 @@
 ﻿@page "/admin/users/add"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @model MrWhoOidc.WebAuth.Pages.Admin.Users.AddModel
 @{
     ViewData["Title"] = "Add user";
+    var currentTenant = TenantAccessor.CurrentTenant;
 }
 
 <div class="page-header">
@@ -13,14 +15,15 @@
     </div>
 </div>
 
-<form method="post" class="mt-3">
-    <div class="form-group">
-        <label asp-for="Input.TenantId" class="form-label">Tenant <span class="text-danger">*</span></label>
-        <select asp-for="Input.TenantId" asp-items="Model.TenantOptions" class="form-select">
-            <option value="">-- Select Tenant --</option>
-        </select>
-        <span asp-validation-for="Input.TenantId" class="text-danger"></span>
+@if (currentTenant is not null)
+{
+    <div class="alert alert-info d-flex align-items-center gap-2" role="status">
+        <i class="bi bi-building"></i>
+        <div>User will be created in <strong>@currentTenant.Name</strong> (@currentTenant.Slug).</div>
     </div>
+}
+
+<form method="post" class="mt-3">
     <div class="form-group">
         <label class="form-label">Username <span class="text-danger">*</span></label>
         <input asp-for="Input.Username" class="form-control" />

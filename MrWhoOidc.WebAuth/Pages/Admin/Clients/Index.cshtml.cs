@@ -16,7 +16,6 @@ public class IndexModel(
     IPasswordHasher hasher,
     IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
-    IAuthorizationService authorizationService,
     IClientStore clientStore,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
@@ -25,15 +24,9 @@ public class IndexModel(
     public IReadOnlyList<ClientRow> Clients { get; private set; } = Array.Empty<ClientRow>();
 
     public List<SelectListItem> RealmOptions { get; private set; } = new();
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
-
-    public bool IsPlatformAdmin { get; private set; }
 
     [BindProperty]
     public ClientInput Input { get; set; } = new();
-
-    [BindProperty(SupportsGet = true)]
-    public Guid? TenantId { get; set; }
 
     public async Task OnGetAsync()
     {
@@ -42,53 +35,25 @@ public class IndexModel(
 
     private async Task LoadAsync()
     {
-        // Check if user is platform admin
-        var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
-        IsPlatformAdmin = platformAdminResult.Succeeded;
-
-        // Load tenant options for filter (platform admins only)
-        if (IsPlatformAdmin)
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
         {
-            var tenants = await db.Tenants.AsNoTracking()
-                .Where(t => t.Status == TenantStatus.Active)
-                .OrderBy(t => t.Name)
-                .ToListAsync();
-            TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
-            TenantOptions.Insert(0, new SelectListItem("All Tenants", ""));
+            Clients = Array.Empty<ClientRow>();
+            RealmOptions = new List<SelectListItem>();
+            return;
         }
 
-        var realms = await db.Realms.AsNoTracking().OrderBy(r => r.Name).ToListAsync();
+        var realms = await db.Realms.AsNoTracking()
+            .Where(r => r.TenantId == currentTenantId.Value)
+            .OrderBy(r => r.Name)
+            .ToListAsync();
         RealmOptions = realms.Select(r => new SelectListItem(r.Name, r.Id.ToString())).ToList();
 
         // Build query with tenant and realm JOINs
         var q = db.Clients.AsNoTracking()
+            .Where(c => c.TenantId == currentTenantId.Value)
             .Join(db.Tenants, c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
             .Join(db.Realms, x => x.Client.RealmId, r => r.Id, (x, r) => new { x.Client, x.Tenant, Realm = r });
-
-        // Automatic tenant scoping
-        if (IsPlatformAdmin)
-        {
-            // Platform admins can optionally filter by tenant
-            if (TenantId.HasValue)
-            {
-                q = q.Where(x => x.Client.TenantId == TenantId.Value);
-            }
-        }
-        else
-        {
-            // Regular tenant admins only see their tenant
-            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-            if (currentTenantId.HasValue)
-            {
-                q = q.Where(x => x.Client.TenantId == currentTenantId.Value);
-            }
-            else
-            {
-                // No tenant context, return empty
-                Clients = Array.Empty<ClientRow>();
-                return;
-            }
-        }
 
         Clients = await q
             .OrderBy(x => x.Client.ClientId)
@@ -154,7 +119,13 @@ public class IndexModel(
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid id)
     {
-        var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id);
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return TenantAwareRedirectToPage();
+        }
+
+        var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirectToPage();
         
         // Capture for cache invalidation
@@ -167,7 +138,7 @@ public class IndexModel(
         // Invalidate client cache after deletion
         await clientStore.InvalidateClientCacheAsync(clientId, tenantId);
         
-        return TenantAwareRedirect("/Admin/Clients", TenantId.HasValue ? new { TenantId } : null);
+        return TenantAwareRedirect("/Admin/Clients");
     }
 
     public sealed class ClientInput

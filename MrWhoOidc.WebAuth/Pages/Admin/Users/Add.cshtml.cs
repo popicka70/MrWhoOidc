@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -20,9 +19,6 @@ public class AddModel(
     private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
     public class AddInput
     {
-        [Required]
-        public Guid TenantId { get; set; }
-
         [Required, StringLength(200)]
         public string Username { get; set; } = string.Empty;
 
@@ -36,52 +32,44 @@ public class AddModel(
     [BindProperty]
     public AddInput Input { get; set; } = new();
 
-    public List<SelectListItem> TenantOptions { get; private set; } = new();
-
-    public async Task OnGetAsync()
+    public void OnGet()
     {
-        await LoadTenantsAsync();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid)
         {
-            await LoadTenantsAsync();
             return Page();
         }
 
-        // Validate tenant exists and is active
-        var tenantExists = await db.Tenants.AnyAsync(t => t.Id == Input.TenantId && t.Status == TenantStatus.Active);
-        if (!tenantExists)
+        var currentTenant = tenantAccessor.CurrentTenant;
+        if (currentTenant is null)
         {
-            ModelState.AddModelError("Input.TenantId", "Invalid tenant selected.");
-            await LoadTenantsAsync();
+            ModelState.AddModelError(string.Empty, "Unable to determine current tenant context.");
             return Page();
         }
 
         var username = Input.Username.Trim();
 
         // Check uniqueness within tenant
-        if (await db.Users.AnyAsync(u => u.TenantId == Input.TenantId && u.Username == username))
+        if (await db.Users.AnyAsync(u => u.TenantId == currentTenant.TenantId && u.Username == username))
         {
             ModelState.AddModelError("Input.Username", "Username already exists in this tenant.");
-            await LoadTenantsAsync();
             return Page();
         }
 
         var email = string.IsNullOrWhiteSpace(Input.Email) ? null : Input.Email!.Trim();
         var normalized = EmailNormalizer.NormalizeForLookup(email);
-        if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.TenantId == Input.TenantId && u.NormalizedEmail == normalized))
+        if (!string.IsNullOrEmpty(normalized) && await db.Users.AnyAsync(u => u.TenantId == currentTenant.TenantId && u.NormalizedEmail == normalized))
         {
             ModelState.AddModelError("Input.Email", "Email already exists in this tenant.");
-            await LoadTenantsAsync();
             return Page();
         }
 
         var user = new User
         {
-            TenantId = Input.TenantId,
+            TenantId = currentTenant.TenantId,
             Username = username,
             Email = email,
             Name = Input.Name,
@@ -93,16 +81,7 @@ public class AddModel(
         db.Users.Add(user);
 
         await db.SaveChangesAsync();
-        await _accountProvisioner.EnsureAsync(user, Input.TenantId, defaultRealmId: null, isTenantAdmin: false, HttpContext.RequestAborted);
-        return TenantAwareRedirect("/Admin/Users", new { TenantId = Input.TenantId });
-    }
-
-    private async Task LoadTenantsAsync()
-    {
-        var tenants = await db.Tenants.AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active)
-            .OrderBy(t => t.Name)
-            .ToListAsync();
-        TenantOptions = tenants.Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToList();
+        await _accountProvisioner.EnsureAsync(user, currentTenant.TenantId, defaultRealmId: null, isTenantAdmin: false, HttpContext.RequestAborted);
+        return TenantAwareRedirect("/Admin/Users");
     }
 }
