@@ -29,6 +29,7 @@ internal sealed class LicenseService : ILicenseService
     private readonly ILogger<LicenseService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly IMultiTenancyStateProvider? _multiTenancyStateProvider;
+    private readonly IDefaultTenantContext? _defaultTenantContext;
 
     public LicenseService(
         ILicenseRepository repository,
@@ -37,7 +38,8 @@ internal sealed class LicenseService : ILicenseService
         IOptions<LicensingOptions> options,
         ILogger<LicenseService> logger,
         TimeProvider? timeProvider = null,
-        IMultiTenancyStateProvider? multiTenancyStateProvider = null)
+        IMultiTenancyStateProvider? multiTenancyStateProvider = null,
+        IDefaultTenantContext? defaultTenantContext = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
@@ -46,6 +48,7 @@ internal sealed class LicenseService : ILicenseService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? TimeProvider.System;
         _multiTenancyStateProvider = multiTenancyStateProvider;
+        _defaultTenantContext = defaultTenantContext;
     }
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -59,6 +62,16 @@ internal sealed class LicenseService : ILicenseService
         var license = await _repository.GetActiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
         if (license is null)
         {
+            if (tenantId.HasValue)
+            {
+                var derived = await TryBuildDefaultTenantProjectionAsync(tenantId.Value, cancellationToken).ConfigureAwait(false);
+                if (derived is not null)
+                {
+                    SetCache(cacheKey, derived);
+                    return derived;
+                }
+            }
+
             var defaultLicense = CreateDefaultLicenseInfo();
             if (defaultLicense is not null)
             {
@@ -133,6 +146,13 @@ internal sealed class LicenseService : ILicenseService
                 _logger.LogWarning("License install business validation failed for {Tenant}: {ErrorCode}.", TenantScope(tenantId), businessResult.ErrorCode);
                 success = businessResult.IsValid;
                 return businessResult;
+            }
+
+            var applicabilityError = await EnsureLicenseAppliesToTargetAsync(businessResult.LicenseInfo, tenantId, cancellationToken).ConfigureAwait(false);
+            if (applicabilityError is not null)
+            {
+                _logger.LogWarning("License install failed for {Tenant} due to scope mismatch: {Message}", TenantScope(tenantId), applicabilityError.ErrorMessage);
+                return applicabilityError;
             }
 
             var now = _timeProvider.GetUtcNow();
@@ -236,6 +256,7 @@ internal sealed class LicenseService : ILicenseService
             }
 
             InvalidateCache(tenantId);
+            await InvalidateDerivedDefaultTenantCacheAsync(cancellationToken).ConfigureAwait(false);
 
             if (tenantId == null && _multiTenancyStateProvider != null)
             {
@@ -353,6 +374,7 @@ internal sealed class LicenseService : ILicenseService
                 cancellationToken).ConfigureAwait(false);
 
             InvalidateCache(tenantId);
+            await InvalidateDerivedDefaultTenantCacheAsync(cancellationToken).ConfigureAwait(false);
 
             if (tenantId == null && _multiTenancyStateProvider != null)
             {
@@ -480,6 +502,103 @@ internal sealed class LicenseService : ILicenseService
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase),
             false,
-            true);
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            false);
+    }
+
+    private static Task<LicenseValidationResult?> EnsureLicenseAppliesToTargetAsync(LicenseInfo licenseInfo, Guid? tenantId, CancellationToken cancellationToken)
+    {
+        if (licenseInfo.Scope == LicenseScope.Platform)
+        {
+            return Task.FromResult<LicenseValidationResult?>(tenantId.HasValue
+                ? LicenseValidationResult.ScopeMismatch("Platform licenses can only be installed at the platform scope.")
+                : null);
+        }
+
+        if (!tenantId.HasValue)
+        {
+            return Task.FromResult<LicenseValidationResult?>(LicenseValidationResult.ScopeMismatch("Tenant licenses must be installed within a tenant context."));
+        }
+
+        if (licenseInfo.LicensedTenantId.HasValue && licenseInfo.LicensedTenantId.Value != tenantId.Value)
+        {
+            return Task.FromResult<LicenseValidationResult?>(LicenseValidationResult.TenantMismatch("License issued to a different tenant."));
+        }
+
+        return Task.FromResult<LicenseValidationResult?>(null);
+    }
+
+    private async Task<LicenseInfo?> TryBuildDefaultTenantProjectionAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (_defaultTenantContext is null)
+        {
+            return null;
+        }
+
+        var defaultTenantId = await _defaultTenantContext.GetDefaultTenantIdAsync(cancellationToken).ConfigureAwait(false);
+        if (!defaultTenantId.HasValue || defaultTenantId.Value != tenantId)
+        {
+            return null;
+        }
+
+        var platformLicense = await _repository.GetActiveLicenseAsync(null, cancellationToken).ConfigureAwait(false);
+        if (platformLicense is null)
+        {
+            return null;
+        }
+
+        var parsed = await _validator.ParseLicenseAsync(platformLicense.LicenseKey, cancellationToken).ConfigureAwait(false);
+        if (parsed is null)
+        {
+            return null;
+        }
+
+        var validation = await _validator.ValidateBusinessRulesAsync(parsed, cancellationToken).ConfigureAwait(false);
+        if (!validation.IsValid || validation.LicenseInfo is null)
+        {
+            return null;
+        }
+
+        if (validation.LicenseInfo.DefaultTenantFeatures.Count == 0)
+        {
+            return null;
+        }
+
+        var projection = validation.LicenseInfo with
+        {
+            EnabledFeatures = validation.LicenseInfo.DefaultTenantFeatures,
+            Scope = LicenseScope.Tenant,
+            LicensedTenantId = defaultTenantId,
+            LicensedTenantSlug = _defaultTenantContext.DefaultTenantSlug,
+            HasExplicitScopeClaim = true
+        };
+
+        if (!projection.IsValid)
+        {
+            _logger.LogWarning("Derived default-tenant projection from platform license is not valid.");
+            return null;
+        }
+
+        _logger.LogInformation("Resolved default-tenant license projection from platform license for tenant {TenantId}.", tenantId);
+        return projection;
+    }
+
+    private async Task InvalidateDerivedDefaultTenantCacheAsync(CancellationToken cancellationToken)
+    {
+        if (_defaultTenantContext is null)
+        {
+            return;
+        }
+
+        var defaultTenantId = await _defaultTenantContext.GetDefaultTenantIdAsync(cancellationToken).ConfigureAwait(false);
+        if (defaultTenantId.HasValue)
+        {
+            InvalidateCache(defaultTenantId);
+        }
     }
 }

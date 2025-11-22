@@ -20,6 +20,11 @@ internal sealed class LicenseValidator : ILicenseValidator
 {
     private const string LegacyIssuer = "MrWhoOidc-License-Authority";
     private const string KeyGenIssuer = "MrWhoOidc-KeyGen";
+    private const string ScopeClaim = "license_scope";
+    private const string TenantIdClaim = "tenant_id";
+    private const string TenantSlugClaim = "tenant_slug";
+    private const string IssuedToClaim = "issued_to";
+    private const string DefaultTenantFeaturesClaim = "default_tenant_features";
     
     private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
 
@@ -176,6 +181,18 @@ internal sealed class LicenseValidator : ILicenseValidator
             return Task.FromResult(LicenseValidationResult.Expired());
         }
 
+        if (licenseInfo.Scope == LicenseScope.Tenant)
+        {
+            foreach (var feature in licenseInfo.EnabledFeatures)
+            {
+                if (FeatureFlags.IsPlatformOnlyFeature(feature))
+                {
+                    _logger.LogWarning("License contains platform-only feature {Feature} but is scoped to a tenant.", feature);
+                    return Task.FromResult(LicenseValidationResult.PlatformOnlyFeatureNotAllowed(feature));
+                }
+            }
+        }
+
         var updated = licenseInfo with
         {
             IsExpired = expired,
@@ -228,8 +245,14 @@ internal sealed class LicenseValidator : ILicenseValidator
         var validFrom = ResolveValidFrom(token);
         var validUntil = ResolveValidUntil(token);
 
-        var features = ParseFeatures(token.Payload.TryGetValue("features", out var featuresValue) ? featuresValue : null, claims);
+        var features = ParseFeatures(token.Payload.TryGetValue("features", out var featuresValue) ? featuresValue : null, claims, "features");
+        var defaultTenantFeatures = ParseFeatures(token.Payload.TryGetValue(DefaultTenantFeaturesClaim, out var defaultFeaturesValue) ? defaultFeaturesValue : null, claims, DefaultTenantFeaturesClaim);
         var limits = ParseLimits(token.Payload.TryGetValue("limits", out var limitsValue) ? limitsValue : null, claims);
+
+        var scopeInfo = ResolveScope(token, claims);
+        var issuedTo = ResolveIssuedTo(token, claims);
+        var tenantId = ParseGuidClaim(token.Payload.TryGetValue(TenantIdClaim, out var tenantIdValue) ? tenantIdValue?.ToString() : claims.FirstOrDefault(c => c.Type == TenantIdClaim)?.Value);
+        var tenantSlug = ResolveStringClaim(token, TenantSlugClaim, claims);
 
         var now = _timeProvider.GetUtcNow();
         var isExpired = validUntil <= now;
@@ -242,7 +265,13 @@ internal sealed class LicenseValidator : ILicenseValidator
             features,
             limits,
             isExpired,
-            !isExpired);
+            !isExpired,
+            scopeInfo.Scope,
+            issuedTo,
+            tenantId,
+            tenantSlug,
+            defaultTenantFeatures,
+            scopeInfo.HasExplicitScopeClaim);
     }
 
     private static DateTimeOffset ResolveValidFrom(JwtSecurityToken token)
@@ -279,7 +308,7 @@ internal sealed class LicenseValidator : ILicenseValidator
         return new DateTimeOffset(utc);
     }
 
-    private static IReadOnlySet<string> ParseFeatures(object? value, IEnumerable<Claim> claims)
+    private static IReadOnlySet<string> ParseFeatures(object? value, IEnumerable<Claim> claims, string claimType)
     {
         var features = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -289,7 +318,7 @@ internal sealed class LicenseValidator : ILicenseValidator
         }
         else
         {
-            foreach (var claim in claims.Where(c => string.Equals(c.Type, "features", StringComparison.Ordinal)))
+            foreach (var claim in claims.Where(c => string.Equals(c.Type, claimType, StringComparison.Ordinal)))
             {
                 PopulateFeaturesFromValue(features, claim.Value);
             }
@@ -366,6 +395,49 @@ internal sealed class LicenseValidator : ILicenseValidator
         }
 
         return ParseLimitsValue(value);
+    }
+
+    private static (LicenseScope Scope, bool HasExplicitScopeClaim) ResolveScope(JwtSecurityToken token, IEnumerable<Claim> claims)
+    {
+        var scopeClaim = ResolveStringClaim(token, ScopeClaim, claims);
+        if (string.IsNullOrWhiteSpace(scopeClaim))
+        {
+            return (LicenseScope.Platform, false);
+        }
+
+        return scopeClaim.ToLowerInvariant() switch
+        {
+            "platform" => (LicenseScope.Platform, true),
+            "tenant" => (LicenseScope.Tenant, true),
+            _ => throw new FormatException($"Unsupported license scope '{scopeClaim}'.")
+        };
+    }
+
+    private static string? ResolveIssuedTo(JwtSecurityToken token, IEnumerable<Claim> claims)
+    {
+        return ResolveStringClaim(token, IssuedToClaim, claims)
+            ?? ResolveStringClaim(token, TenantSlugClaim, claims)
+            ?? token.Subject;
+    }
+
+    private static string? ResolveStringClaim(JwtSecurityToken token, string claimName, IEnumerable<Claim> claims)
+    {
+        if (token.Payload.TryGetValue(claimName, out var claimValue) && claimValue is not null)
+        {
+            return claimValue.ToString();
+        }
+
+        return claims.FirstOrDefault(c => string.Equals(c.Type, claimName, StringComparison.Ordinal))?.Value;
+    }
+
+    private static Guid? ParseGuidClaim(string? value)
+    {
+        if (Guid.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static IReadOnlyDictionary<string, long> ParseLimitsValue(object value)

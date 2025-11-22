@@ -48,6 +48,12 @@ public sealed class FeatureGatingTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "custom_feature" },
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase),
             false,
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
 
         var licenseService = new StubLicenseService(info);
@@ -77,6 +83,12 @@ public sealed class FeatureGatingTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase),
             false,
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
         var licenseService = new StubLicenseService(info);
         var limitService = new LimitService(licenseService, NullLogger<LimitService>.Instance);
@@ -104,6 +116,12 @@ public sealed class FeatureGatingTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             overrides,
             false,
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
         var licenseService = new StubLicenseService(info);
         var limitService = new LimitService(licenseService, NullLogger<LimitService>.Instance);

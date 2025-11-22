@@ -145,6 +145,12 @@ public sealed class LicenseAnalyticsServiceTests
                 ["custom_reports"] = 99
             },
             false,
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
 
         var usageRepo = new StubFeatureUsageRepository(Array.Empty<FeatureUsageMetric>());

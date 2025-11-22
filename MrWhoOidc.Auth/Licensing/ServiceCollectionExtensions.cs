@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Validators;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Licensing;
 
@@ -16,6 +17,7 @@ public static class LicensingServiceCollectionExtensions
         services.AddMemoryCache();
         services.TryAddScoped<ILicenseRepository, LicenseRepository>();
         services.TryAddScoped<IFeatureUsageRepository, FeatureUsageRepository>();
+        services.TryAddScoped<IDefaultTenantContext, DefaultTenantContext>();
         services.TryAddScoped<ILicenseService, LicenseService>();
         services.TryAddScoped<IFeatureService, FeatureService>();
         services.TryAddScoped<ILimitService, LimitService>();
