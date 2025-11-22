@@ -97,7 +97,8 @@
         }
 
         <div class="text-center mt-4">
-            <a href="/discover-tenant@(string.IsNullOrEmpty(Model.ReturnUrl) ? "" : $"?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}")" 
+            <a asp-page="/DiscoverTenant"
+               asp-route-returnUrl="@Model.ReturnUrl"
                class="btn btn-link text-decoration-none">
                 <i class="bi bi-arrow-left me-1"></i>
                 Back to email entry
