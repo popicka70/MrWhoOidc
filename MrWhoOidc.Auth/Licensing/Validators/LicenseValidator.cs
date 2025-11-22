@@ -20,6 +20,7 @@ internal sealed class LicenseValidator : ILicenseValidator
 {
     private const string LegacyIssuer = "MrWhoOidc-License-Authority";
     private const string KeyGenIssuer = "MrWhoOidc-KeyGen";
+    
     private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
 
     internal static IReadOnlyCollection<string> SupportedIssuers => AllowedIssuers;
