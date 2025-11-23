@@ -3,6 +3,7 @@ using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -26,7 +27,7 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(redirectUri))
         {
             logger.LogWarning("/token {ErrorCode}: missing code or redirect_uri for client {ClientIdHash}",
-                OAuthConstants.ErrorCodes.InvalidRequest, Infrastructure.Bucketization.Bucket(context.ClientId));
+                OAuthConstants.ErrorCodes.InvalidRequest, Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest());
         }
 
@@ -39,7 +40,7 @@ public sealed class AuthorizationCodeGrantHandler(ILogger<AuthorizationCodeGrant
         var (ok, payload, _, status) = await context.Tokens.ExchangeAuthorizationCodeAsync(code, redirectUri, context.ClientId, codeVerifier, issuer, context.DPoPJkt, ipAddress, userAgent);
         if (!ok)
         {
-            logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
+            logger.LogWarning("/token authorization_code exchange failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
         }
         var result = Microsoft.AspNetCore.Http.Results.Json(payload!, statusCode: status);
         return new GrantExecutionResult(true, ok, result);

@@ -54,17 +54,22 @@ public class TenantSettingsService : ITenantSettingsService
             cacheKey,
             async cancel =>
             {
-                var tenant = await _db.Tenants
-                    .Where(t => t.Id == tenantId)
-                    .Select(t => new { t.SettingsJson })
-                    .FirstOrDefaultAsync(cancel);
-
-                if (tenant == null)
+                // Use execution strategy to handle retries and potential transaction requirements
+                var strategy = _db.Database.CreateExecutionStrategy();
+                return await strategy.ExecuteAsync(async ct =>
                 {
-                    return null;
-                }
+                    var tenant = await _db.Tenants
+                        .Where(t => t.Id == tenantId)
+                        .Select(t => new { t.SettingsJson })
+                        .FirstOrDefaultAsync(ct);
 
-                return MergeSettings(_platformDefaults, tenant.SettingsJson);
+                    if (tenant == null)
+                    {
+                        return null;
+                    }
+
+                    return MergeSettings(_platformDefaults, tenant.SettingsJson);
+                }, cancel);
             },
             options,
             tags,

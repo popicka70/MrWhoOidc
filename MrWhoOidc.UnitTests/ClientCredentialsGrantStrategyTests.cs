@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.WebAuth.Services;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.Extensions.Hosting;
@@ -61,6 +62,7 @@ public sealed class ClientCredentialsGrantStrategyTests
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
+                    services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();

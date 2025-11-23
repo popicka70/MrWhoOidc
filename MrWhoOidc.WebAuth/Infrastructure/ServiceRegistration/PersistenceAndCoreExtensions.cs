@@ -40,6 +40,9 @@ public static class PersistenceAndCoreExtensions
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
 
+        // New unified Client Authenticator
+        services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
+
         // Protocol endpoint handlers (discovery, token, etc.)
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();

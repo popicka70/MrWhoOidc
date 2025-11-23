@@ -19,6 +19,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
@@ -66,6 +67,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     // Only register refresh_token handler in this focused dispatch test host to keep scope narrow

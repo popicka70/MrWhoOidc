@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace MrWhoOidc.WebAuth.Infrastructure;
+namespace MrWhoOidc.Auth.Utils;
 
 /// <summary>
 /// Centralized helpers for hashing identifiers into low-cardinality buckets suitable for metrics/logging.

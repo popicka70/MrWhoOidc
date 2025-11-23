@@ -15,7 +15,9 @@ using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -30,8 +32,8 @@ public sealed class AuthorizeHandler(
     IConsentService consents,
     OidcMetrics metrics,
     IAuthorizationCodeMetadataStore meta,
+    IAuthorizeRequestResolver requestResolver,
     IPushedAuthorizationRequestStore parStore,
-    IRequestObjectValidator requestObjects,
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeHandler> logger,
     IClientStore clients,
@@ -198,134 +200,35 @@ public sealed class AuthorizeHandler(
                 }
             }
 
-            // If request_uri is provided, try to resolve the pushed request and merge it
-            string? requestUri = requestUriRaw;
-            string? parId = ExtractParId(requestUri);
-            bool isPar = !string.IsNullOrEmpty(parId);
-            if (isPar)
+            // Resolve request object (Query, PAR, JAR)
+            var issuer = GetIssuer(http);
+            var resolution = await requestResolver.ResolveAsync(
+                http.Request.Query.Select(x => new KeyValuePair<string, string>(x.Key, x.Value.ToString())),
+                requestUriRaw,
+                roJwtFromQuery,
+                issuer,
+                http.RequestAborted);
+
+            clientBucket = resolution.ClientBucket ?? clientBucket;
+            mode = resolution.Mode;
+
+            if (!resolution.IsValid)
             {
-                mode = "par";
+                outcome = "error";
+                if (resolution.Mode == "jar" || resolution.Mode == "par")
+                {
+                     metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
+                }
+                logger.LogWarning("/authorize 400: resolution failed corr={Corr} client={Client} error={Error}", corr, clientBucket, resolution.Error);
+                return ErrorResults.InvalidRequest($"{resolution.ErrorDescription} (corr={corr})");
             }
 
-            // JAR: if a signed request object is provided, validate it and use its parameters
-            string? requestJwt = roJwtFromQuery;
-            AuthorizeRequest? jarRequest = null;
-            string? jarClientId = null;
-            if (!string.IsNullOrEmpty(requestJwt))
+            if (resolution.Mode == "jar" || resolution.Mode == "par")
             {
-                mode = isPar ? "par" : "jar";
-                var issuer = GetIssuer(http);
-                var aud = issuer.TrimEnd('/') + "/authorize";
-                var validation = await requestObjects.ValidateAsync(requestJwt, aud);
-                if (!validation.IsValid)
-                {
-                    outcome = "error";
-                    metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
-                    logger.LogWarning("/authorize 400: invalid request object corr={Corr} client={Client} reason={Reason}", corr, clientBucket, validation.Error ?? "invalid_request_object");
-                    return ErrorResults.InvalidRequest($"{validation.ErrorDescription ?? "Invalid request object"} (corr={corr})");
-                }
-                jarRequest = validation.Request;
-                jarClientId = validation.ClientId;
-
-                // Update client bucket from JAR if available
-                if (!string.IsNullOrEmpty(jarClientId)) clientBucket = Bucketization.BucketizeClientId(jarClientId);
                 metrics.JarValid.Add(1, new TagList { new("client", clientBucket) });
-
-                // If RequirePar is enabled globally or for this client, reject direct request objects
-                var requirePar = authOptions.Value.RequirePar || (jarClientId is not null && authOptions.Value.RequireParClients.Contains(jarClientId, StringComparer.Ordinal));
-                if (requirePar && !isPar)
-                {
-                    outcome = "error";
-                    logger.LogWarning("/authorize 400: PAR required corr={Corr} client={Client}", corr, clientBucket);
-                    return ErrorResults.InvalidRequest($"PAR required for this client (corr={corr})");
-                }
             }
 
-            AuthorizeRequest effectiveReq;
-            if (isPar)
-            {
-                var entry = parStore.TryGetById(parId!);
-                if (entry is null)
-                {
-                    outcome = "error";
-                    logger.LogWarning("/authorize 400: invalid or expired request_uri corr={Corr} client={Client}", corr, clientBucket);
-                    return ErrorResults.InvalidRequest($"Invalid or expired request_uri (corr={corr})");
-                }
-                if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
-                effectiveReq = entry.Request;
-                var stateFromQuery = http.Request.Query[OAuthConstants.Parameters.State].ToString();
-                if (!string.IsNullOrEmpty(stateFromQuery)) effectiveReq.state = stateFromQuery;
-            }
-            else if (jarRequest is not null)
-            {
-                // Merge query params into jarRequest, enforcing immutability (query cannot conflict with values inside request object)
-                var qp = new AuthorizeRequest
-                {
-                    response_type = http.Request.Query[OAuthConstants.Parameters.ResponseType],
-                    client_id = http.Request.Query[OAuthConstants.Parameters.ClientId],
-                    redirect_uri = http.Request.Query[OAuthConstants.Parameters.RedirectUri],
-                    scope = http.Request.Query[OAuthConstants.Parameters.Scope],
-                    state = http.Request.Query[OAuthConstants.Parameters.State],
-                    nonce = http.Request.Query[OAuthConstants.Parameters.Nonce],
-                    code_challenge = http.Request.Query[OAuthConstants.Parameters.CodeChallenge],
-                    code_challenge_method = http.Request.Query[OAuthConstants.Parameters.CodeChallengeMethod],
-                    resource = http.Request.Query[OAuthConstants.Parameters.Resource],
-                    response_mode = http.Request.Query[OAuthConstants.Parameters.ResponseMode]
-                };
-
-                // client_id must match
-                if (!string.IsNullOrEmpty(qp.client_id) && !string.Equals(qp.client_id, jarClientId, StringComparison.Ordinal))
-                {
-                    outcome = "error";
-                    logger.LogWarning("/authorize 400: client_id mismatch corr={Corr} client={Client}", corr, clientBucket);
-                    return ErrorResults.InvalidRequest($"client_id in query does not match request object (corr={corr})");
-                }
-
-                // For each param, if query has value and it's different from request object, fail immutability
-                if (!IsSameOrEmpty(qp.response_type, jarRequest.response_type) ||
-                    !IsSameOrEmpty(qp.redirect_uri, jarRequest.redirect_uri) ||
-                    !IsSameOrEmpty(qp.scope, jarRequest.scope) ||
-                    !IsSameOrEmpty(qp.nonce, jarRequest.nonce) ||
-                    !IsSameOrEmpty(qp.code_challenge, jarRequest.code_challenge) ||
-                    !IsSameOrEmpty(qp.code_challenge_method, jarRequest.code_challenge_method) ||
-                    !IsSameOrEmpty(qp.resource, jarRequest.resource) ||
-                    !IsSameOrEmpty(qp.response_mode, jarRequest.response_mode))
-                {
-                    outcome = "error";
-                    logger.LogWarning("/authorize 400: immutable conflict corr={Corr} client={Client}", corr, clientBucket);
-                    return ErrorResults.InvalidRequest($"Query parameter conflicts with immutable request object (corr={corr})");
-                }
-
-                effectiveReq = jarRequest;
-                // state can be supplied outside and should override if provided
-                if (!string.IsNullOrEmpty(qp.state)) effectiveReq.state = qp.state;
-            }
-            else
-            {
-                effectiveReq = new AuthorizeRequest
-                {
-                    response_type = http.Request.Query[OAuthConstants.Parameters.ResponseType],
-                    client_id = http.Request.Query[OAuthConstants.Parameters.ClientId],
-                    redirect_uri = http.Request.Query[OAuthConstants.Parameters.RedirectUri],
-                    scope = http.Request.Query[OAuthConstants.Parameters.Scope],
-                    state = http.Request.Query[OAuthConstants.Parameters.State],
-                    nonce = http.Request.Query[OAuthConstants.Parameters.Nonce],
-                    code_challenge = http.Request.Query[OAuthConstants.Parameters.CodeChallenge],
-                    code_challenge_method = http.Request.Query[OAuthConstants.Parameters.CodeChallengeMethod],
-                    resource = http.Request.Query[OAuthConstants.Parameters.Resource],
-                    response_mode = http.Request.Query[OAuthConstants.Parameters.ResponseMode]
-                };
-            }
-
-            // If no client_id provided, use admin default so login UX is controlled by admin client
-            if (string.IsNullOrWhiteSpace(effectiveReq.client_id))
-            {
-                effectiveReq.client_id = await db.ResolveDefaultClientIdAsync();
-                if (!string.IsNullOrWhiteSpace(effectiveReq.client_id))
-                {
-                    clientBucket = Bucketization.BucketizeClientId(effectiveReq.client_id);
-                }
-            }
+            var effectiveReq = resolution.Request!;
 
             // Parameter: idp and idp_hint
             var idpParam = http.Request.Query["idp"].ToString();
@@ -343,7 +246,6 @@ public sealed class AuthorizeHandler(
                     // If JARM requested, return a signed/encrypted error JWT instead of parameters
                     if (string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
                     {
-                        var issuer = GetIssuer(http);
                         var jarmJwt = await jarm.CreateErrorResponseAsync(effectiveReq.client_id!, issuer, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state);
                         return JarmRedirect(effectiveReq.redirect_uri!, effectiveReq.response_mode!, jarmJwt);
                     }
@@ -533,23 +435,35 @@ public sealed class AuthorizeHandler(
                 return Results.Redirect(consentUrl);
             }
 
-            string? code;
-            string? redirect;
-            using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
-            {
-                var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
-                if (!ok || r is null) return ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
-                code = c;
-                redirect = r;
+            string? code = null;
+            string? redirect = null;
+            IResult? errorResult = null;
 
-                // Now that authorization succeeded, consume PAR if used
-                if (isPar)
+            var strategy = db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
                 {
-                    parStore.MarkConsumedById(parId!);
-                    metrics.ParConsumed.Add(1);
+                    var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
+                    if (!ok || r is null)
+                    {
+                        errorResult = ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
+                        return;
+                    }
+                    code = c;
+                    redirect = r;
+
+                    // Now that authorization succeeded, consume PAR if used
+                    if (resolution.Mode == "par")
+                    {
+                        parStore.MarkConsumedById(resolution.ParId!);
+                        metrics.ParConsumed.Add(1);
+                    }
+                    await transaction.CommitAsync(http.RequestAborted);
                 }
-                await transaction.CommitAsync(http.RequestAborted);
-            }
+            });
+
+            if (errorResult != null) return errorResult;
 
             // Capture auth_time from login cookie claims
             var authTimeClaim = http.User.FindFirst(OidcConstants.Claims.AuthTime)?.Value;
@@ -595,7 +509,6 @@ public sealed class AuthorizeHandler(
             // JARM response if requested
             if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == OidcConstants.ResponseModes.QueryJwt || validationResult.ResponseMode == OidcConstants.ResponseModes.FormPostJwt))
             {
-                var issuer = GetIssuer(http);
                 var jarmJwt = await jarm.CreateSuccessResponseAsync(validationResult.ClientId!, issuer, code!, validationResult.ResponseMode!, effectiveReq.state);
                 return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarmJwt);
             }
@@ -620,11 +533,7 @@ public sealed class AuthorizeHandler(
         }
     }
 
-    private static bool IsSameOrEmpty(string? queryValue, string? roValue)
-    {
-        if (string.IsNullOrEmpty(queryValue)) return true; // empty query is fine
-        return string.Equals(queryValue, roValue, StringComparison.Ordinal);
-    }
+
 
     private static string GetIssuer(HttpContext http)
     {
@@ -642,31 +551,7 @@ public sealed class AuthorizeHandler(
         return issuerBuilder.BuildIssuer(baseUrl);
     }
 
-    private static string? ExtractParId(string? requestUri)
-    {
-        if (string.IsNullOrEmpty(requestUri)) return null;
 
-        // Absolute URL like https://issuer/par/{id}
-        if (Uri.TryCreate(requestUri, UriKind.Absolute, out var uri))
-        {
-            var segments = uri.AbsolutePath.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-            // Expect .../par/{id}
-            if (segments.Length >= 2 && string.Equals(segments[^2], "par", StringComparison.OrdinalIgnoreCase))
-            {
-                return segments[^1];
-            }
-        }
-
-        // URN form urn:ietf:params:oauth:request_uri:{id}
-        const string urnPrefix = "urn:ietf:params:oauth:request_uri:";
-        if (requestUri.StartsWith(urnPrefix, StringComparison.Ordinal))
-        {
-            return requestUri.Substring(urnPrefix.Length);
-        }
-
-        // Fallback: treat as id directly
-        return requestUri;
-    }
 
     // BucketizeClientId moved to Bucketization utility.
 

@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.Utils;
 using System.Security.Cryptography;
 using System.Text;
 

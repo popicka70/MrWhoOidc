@@ -20,6 +20,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using MrWhoOidc.UnitTests.TestDoubles;
 
@@ -66,6 +67,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();

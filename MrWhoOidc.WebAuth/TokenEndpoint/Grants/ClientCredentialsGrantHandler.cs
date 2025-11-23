@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Utils;
 using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
@@ -25,7 +26,7 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         var resource = form[OAuthConstants.Parameters.Resource].ToString();
         if (!string.IsNullOrEmpty(aud) && !string.IsNullOrEmpty(resource) && !string.Equals(aud, resource, StringComparison.Ordinal))
         {
-            logger.LogWarning("/token invalid_request: audience/resource conflict for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
+            logger.LogWarning("/token invalid_request: audience/resource conflict for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest("audience and resource conflict"));
         }
         var audience = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(aud) ? aud : "api");
@@ -37,7 +38,7 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt);
         if (!ok)
         {
-            logger.LogWarning("/token client_credentials issuance failed for client {ClientIdHash}", Infrastructure.Bucketization.Bucket(context.ClientId));
+            logger.LogWarning("/token client_credentials issuance failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
         }
         var result = Microsoft.AspNetCore.Http.Results.Json(payload!, statusCode: status);
         return new GrantExecutionResult(true, ok, result);

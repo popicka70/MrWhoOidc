@@ -28,6 +28,7 @@ using System.Security.Cryptography;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.Licensing.Models;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -71,6 +72,7 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
+                    services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddScoped<MrWhoOidc.WebAuth.Handlers.ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     // Register grant handlers explicitly for strategy dispatch

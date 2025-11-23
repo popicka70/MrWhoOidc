@@ -7,6 +7,7 @@ using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.RateLimiting;
 

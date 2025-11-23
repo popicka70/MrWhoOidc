@@ -82,7 +82,9 @@ public sealed class AuthorizeHandlerTests
             IsMultiTenantMode = false
         });
 
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm);
+        var resolver = new AuthorizeRequestResolver(requestObjects, parStore, db, authOptions, NullLogger<AuthorizeRequestResolver>.Instance);
+
+        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, resolver, parStore, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm);
     }
 
     private static DefaultHttpContext CreateHttpContext(

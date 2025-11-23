@@ -26,28 +26,31 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
-        using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-        try
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<(bool ok, object? payload, string? error, int status)>(async () =>
         {
-            var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
-        if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
-            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+            using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
+                if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
-        if (!string.Equals(entity.RedirectUri, redirectUri, StringComparison.Ordinal))
-            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                if (!string.Equals(entity.RedirectUri, redirectUri, StringComparison.Ordinal))
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
-        if (!string.Equals(entity.ClientId, clientId, StringComparison.Ordinal))
-            return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                if (!string.Equals(entity.ClientId, clientId, StringComparison.Ordinal))
+                    return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
-        // Validate PKCE S256
-        if (!string.IsNullOrEmpty(entity.CodeChallenge))
-        {
-            var s256 = CryptoHelper.ComputePkceS256(codeVerifier);
-            if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
-                return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
-        }
+                // Validate PKCE S256
+                if (!string.IsNullOrEmpty(entity.CodeChallenge))
+                {
+                    var s256 = CryptoHelper.ComputePkceS256(codeVerifier);
+                    if (!string.Equals(s256, entity.CodeChallenge, StringComparison.Ordinal))
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                }
 
-        var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
+                var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
         // RFC 8707: prefer resource indicator as access token audience when present
         string audience;
@@ -274,11 +277,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             scope = string.Join(' ', scopes)
         };
         return (true, payload, null, 200);
-        }
-        catch
-        {
-            throw;
-        }
+            }
+            catch
+            {
+                throw;
+            }
+        });
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(

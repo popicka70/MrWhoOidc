@@ -12,9 +12,11 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -27,8 +29,7 @@ public sealed class TokenHandler(
     OidcOptions options,
     ITokenService tokens,
     ITokenExchangeService tokenExchange,
-    IClientStore clients,
-    IClientAssertionValidator assertions,
+    IClientAuthenticator authenticator,
     IDPoPValidator dpop,
     IEnumerable<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler> grantHandlers,
     IEnumerable<MrWhoOidc.WebAuth.Observability.ITokenMetricsRecorder> tokenMetrics,
@@ -59,116 +60,24 @@ public sealed class TokenHandler(
             var form = await http.Request.ReadFormAsync();
             grantType = form[OAuthConstants.Parameters.GrantType].ToString();
 
-            var (clientId, clientSecret) = ReadClientCredentials(http);
-            if (string.IsNullOrEmpty(clientId)) clientId = form[OAuthConstants.Parameters.ClientId].ToString();
-
-            if (string.IsNullOrWhiteSpace(clientId))
+            // Authenticate Client
+            var authContext = new ClientAuthenticationContext
             {
-                logger.LogWarning("/token invalid_request: missing client_id from {IP}", http.Connection.RemoteIpAddress?.ToString());
-                _metrics.RecordTokenRequest(grantType, "failure");
-                _metrics.RecordTokenFailure(grantType);
-                return ErrorResults.InvalidRequest("Missing client_id");
-            }
+                Usage = ClientAuthenticationUsage.TokenEndpoint,
+                GrantType = grantType
+            };
 
-            var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
-            var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
-            var tokenEndpoint = http.GetIssuer(options) + "/token";
-
-            // Fetch client once for policy checks
-            var clientEntity = await clients.FindByClientIdAsync(clientId!);
-            if (clientEntity is null)
+            var authResult = await authenticator.AuthenticateAsync(http, authContext);
+            if (!authResult.IsSuccess)
             {
                 _metrics.RecordTokenRequest(grantType, "failure");
                 _metrics.RecordTokenFailure(grantType);
-                return ErrorResults.UnauthorizedClient();
+                return authResult.ErrorResult!;
             }
 
-            // mTLS check for client_credentials when configured
-            if (string.Equals(grantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
-            {
-                string?[] allowedThumbprints = Array.Empty<string?>();
-                if (!string.IsNullOrWhiteSpace(clientEntity.M2MMtlsThumbprintsJson))
-                {
-                    try { allowedThumbprints = System.Text.Json.JsonSerializer.Deserialize<string[]>(clientEntity.M2MMtlsThumbprintsJson) ?? Array.Empty<string>(); }
-                    catch { allowedThumbprints = Array.Empty<string>(); }
-                }
-                if (allowedThumbprints.Length > 0)
-                {
-                    var cert = await http.Connection.GetClientCertificateAsync();
-                    var presented = cert?.Thumbprint;
-                    var ok = !string.IsNullOrEmpty(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase));
-                    if (!ok)
-                    {
-                        logger.LogWarning("/token mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                        _metrics.RecordTokenRequest(grantType, "failure");
-                        _metrics.RecordTokenFailure(grantType);
-                        http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
-                        return Results.Unauthorized();
-                    }
-                }
-            }
-
-            bool authenticated = false;
-            bool usedPrivateKeyJwt = false;
-            if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
-            {
-                if (!clientEntity.AllowPrivateKeyJwt)
-                {
-                    logger.LogWarning("/token unauthorized_client: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                    _metrics.RecordTokenRequest(grantType, "failure");
-                    _metrics.RecordTokenFailure(grantType);
-                    return ErrorResults.UnauthorizedClient();
-                }
-                usedPrivateKeyJwt = true;
-                authenticated = await assertions.ValidateAsync(clientId!, clientAssertion, tokenEndpoint);
-                if (!authenticated)
-                {
-                    logger.LogWarning("/token unauthorized_client: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                }
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(clientSecret)) clientSecret = form["client_secret"].ToString();
-                if (string.Equals(grantType, "client_credentials", StringComparison.Ordinal))
-                {
-#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
-                    if (string.IsNullOrEmpty(clientEntity.ClientSecretHash))
-                    {
-                        logger.LogWarning("/token unauthorized_client: public client not allowed for client_credentials {ClientIdHash}", Bucketization.Bucket(clientId!));
-                        _metrics.RecordTokenRequest(grantType, "failure");
-                        _metrics.RecordTokenFailure(grantType);
-                        return ErrorResults.UnauthorizedClient();
-                    }
-#pragma warning restore CS0618
-                    var usedBasic = http.Request.Headers.Authorization.ToString().StartsWith("Basic ", StringComparison.Ordinal);
-                    if (usedBasic && !clientEntity.AllowClientSecretBasic)
-                    {
-                        logger.LogWarning("/token unauthorized_client: client_secret_basic disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                        _metrics.RecordTokenRequest(grantType, "failure");
-                        _metrics.RecordTokenFailure(grantType);
-                        return ErrorResults.UnauthorizedClient();
-                    }
-                    if (!usedBasic && !clientEntity.AllowClientSecretPost)
-                    {
-                        logger.LogWarning("/token unauthorized_client: client_secret_post disabled for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                        _metrics.RecordTokenRequest(grantType, "failure");
-                        _metrics.RecordTokenFailure(grantType);
-                        return ErrorResults.UnauthorizedClient();
-                    }
-                }
-                authenticated = await clients.ValidateClientSecretAsync(clientId!, clientSecret);
-                if (!authenticated)
-                {
-                    logger.LogWarning("/token unauthorized_client: secret validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId!));
-                }
-            }
-
-            if (!authenticated)
-            {
-                _metrics.RecordTokenRequest(grantType, "failure");
-                _metrics.RecordTokenFailure(grantType);
-                return ErrorResults.UnauthorizedClient();
-            }
+            var clientEntity = authResult.Client!;
+            var clientId = clientEntity.ClientId;
+            var usedPrivateKeyJwt = authResult.Method == ClientAuthenticationMethod.PrivateKeyJwt;
 
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
@@ -219,28 +128,6 @@ public sealed class TokenHandler(
         {
             sw.Stop();
             _metrics.RecordTokenDuration(string.IsNullOrEmpty(grantType) ? "none" : grantType, outcome, sw.Elapsed.TotalMilliseconds);
-        }
-    }
-
-    static (string? clientId, string? clientSecret) ReadClientCredentials(HttpContext http)
-    {
-        var header = http.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(header)) return (null, null);
-        if (!header.StartsWith("Basic ", StringComparison.Ordinal)) return (null, null);
-        try
-        {
-            var raw = header.Substring("Basic ".Length).Trim();
-            var bytes = Convert.FromBase64String(raw);
-            var pair = Encoding.UTF8.GetString(bytes);
-            var idx = pair.IndexOf(':');
-            if (idx < 0) return (null, null);
-            var id = pair[..idx];
-            var secret = pair[(idx + 1)..];
-            return (id, secret);
-        }
-        catch
-        {
-            return (null, null);
         }
     }
 

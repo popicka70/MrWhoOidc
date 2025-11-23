@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 
-namespace MrWhoOidc.WebAuth.Extensions;
+namespace MrWhoOidc.Auth.Persistence.Extensions;
 
 public static class AuthDbContextExtensions
 {

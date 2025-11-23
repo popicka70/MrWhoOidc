@@ -16,6 +16,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Text;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.WebAuth.Services;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 
@@ -58,7 +59,11 @@ public sealed class TokenHandlerTests
         tenantAccessor ??= MockTenantAccessor.CreateSingleTenantMode();
         tokenExchange ??= new StubTokenExchangeService();
 
-        return new TokenHandler(options.Value, tokens, tokenExchange, clients, assertions, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        var authLogger = NullLogger<ClientAuthenticator>.Instance;
+        var authOptions = Options.Create(new AuthOptions());
+        var authenticator = new ClientAuthenticator(clients, assertions, authOptions, authLogger);
+
+        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(

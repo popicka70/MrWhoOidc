@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using System.Security.Cryptography;
 using System.Text;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.Auth.Persistence.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
