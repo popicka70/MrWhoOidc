@@ -78,6 +78,8 @@ public static class OidcConstants
         public const string Roles = "roles";
         public const string Realm = "realm";
         public const string Idp = "idp";
+        public const string TenantId = "tenant_id";
+        public const string Cnf = "cnf";
     }
 
     /// <summary>

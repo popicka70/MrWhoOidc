@@ -514,9 +514,9 @@ public sealed class AuthorizeHandler(
                 {
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
                     var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                    query["error"] = "access_denied";
-                    query["error_description"] = $"User is not assigned to this client (corr={corr})";
-                    if (!string.IsNullOrEmpty(effectiveReq.state)) query["state"] = effectiveReq.state;
+                    query[OAuthConstants.Parameters.Error] = OAuthConstants.ErrorCodes.AccessDenied;
+                    query[OAuthConstants.Parameters.ErrorDescription] = $"User is not assigned to this client (corr={corr})";
+                    if (!string.IsNullOrEmpty(effectiveReq.state)) query[OAuthConstants.Parameters.State] = effectiveReq.state;
                     uri.Query = query.ToString();
                     return Results.Redirect(uri.ToString());
                 }
@@ -552,7 +552,7 @@ public sealed class AuthorizeHandler(
             }
 
             // Capture auth_time from login cookie claims
-            var authTimeClaim = http.User.FindFirst("auth_time")?.Value;
+            var authTimeClaim = http.User.FindFirst(OidcConstants.Claims.AuthTime)?.Value;
             if (!string.IsNullOrEmpty(code) && long.TryParse(authTimeClaim, out var seconds))
             {
                 meta.SetAuthTime(code!, DateTimeOffset.FromUnixTimeSeconds(seconds));
@@ -572,9 +572,9 @@ public sealed class AuthorizeHandler(
             // New: stash upstream identity context (idp/acr/amr) for propagation into tokens
             if (!string.IsNullOrEmpty(code))
             {
-                var idp = http.User.FindFirst("idp")?.Value;
-                var acr = http.User.FindFirst("acr")?.Value;
-                var amrValues = http.User.Claims.Where(c => c.Type == "amr").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+                var idp = http.User.FindFirst(OidcConstants.Claims.Idp)?.Value;
+                var acr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
+                var amrValues = http.User.Claims.Where(c => c.Type == OidcConstants.Claims.Amr).Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
                 var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
                 meta.SetUpstream(code!, idp, acr, amr);
 
@@ -588,7 +588,7 @@ public sealed class AuthorizeHandler(
                 }
 
                 // Front-channel logout: generate sid and store with the code for ID token issuance
-                var sid = http.User.FindFirst("sid")?.Value ?? Guid.NewGuid().ToString("N");
+                var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value ?? Guid.NewGuid().ToString("N");
                 meta.SetSid(code!, sid);
             }
 
@@ -749,16 +749,16 @@ public sealed class AuthorizeHandler(
         var issuer = GetIssuer(http);
         var claims = new List<System.Security.Claims.Claim>
         {
-            new("code", code)
+            new(OAuthConstants.Parameters.Code, code)
         };
         // c_hash per JARM
         var cHash = TokenHashing.ComputeLeftHalfBase64Url(code);
-        claims.Add(new("c_hash", cHash));
+        claims.Add(new(OidcConstants.Claims.CHash, cHash));
         if (!string.IsNullOrEmpty(state))
         {
-            claims.Add(new("state", state));
+            claims.Add(new(OAuthConstants.Parameters.State, state));
             var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
-            claims.Add(new("s_hash", sHash));
+            claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
         if (enc is not null)
@@ -773,14 +773,14 @@ public sealed class AuthorizeHandler(
         var issuer = GetIssuer(http);
         var claims = new List<System.Security.Claims.Claim>
         {
-            new("error", error),
-            new("error_description", errorDescription)
+            new(OAuthConstants.Parameters.Error, error),
+            new(OAuthConstants.Parameters.ErrorDescription, errorDescription)
         };
         if (!string.IsNullOrEmpty(state))
         {
-            claims.Add(new("state", state));
+            claims.Add(new(OAuthConstants.Parameters.State, state));
             var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
-            claims.Add(new("s_hash", sHash));
+            claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
         if (enc is not null)

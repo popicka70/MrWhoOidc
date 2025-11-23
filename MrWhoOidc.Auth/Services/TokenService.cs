@@ -155,13 +155,13 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
             if (hasCustomScopes && user?.TenantId != Guid.Empty)
             {
-                accessClaims.Add(new("tenant_id", user!.TenantId.ToString()));
+                accessClaims.Add(new(OidcConstants.Claims.TenantId, user!.TenantId.ToString()));
             }
             
             if (!string.IsNullOrEmpty(dpopJkt))
             {
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
-                accessClaims.Add(new("cnf", cnf));
+                accessClaims.Add(new(OidcConstants.Claims.Cnf, cnf));
             }
             if (scopes.Contains(OidcConstants.Scopes.Roles) && roleNames.Length > 0)
             {
@@ -280,7 +280,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             access_token = accessToken,
             id_token = idToken,
             refresh_token = refreshToken,
-            token_type = "Bearer",
+            token_type = OAuthConstants.TokenTypes.Bearer,
             expires_in = (int)accessTokenLifetime.TotalSeconds,
             scope = string.Join(' ', scopes)
         };

@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -236,7 +237,7 @@ public class LoginModel(
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.Username),
-                new("amr", "pwd"),
+                new(OidcConstants.Claims.Amr, "pwd"),
                 new("mfa_enrollment_required", "true")
             };
             var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
@@ -255,7 +256,7 @@ public class LoginModel(
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.Username),
-                new("amr", "pwd")
+                new(OidcConstants.Claims.Amr, "pwd")
             };
             var identity = new ClaimsIdentity(claims, "preauth");
             await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
@@ -268,9 +269,9 @@ public class LoginModel(
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new("amr", "pwd"),
-            new("idp", "local")
+            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new(OidcConstants.Claims.Amr, "pwd"),
+            new(OidcConstants.Claims.Idp, "local")
         };
 
         var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);

@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -261,7 +262,7 @@ public class TenantSwitchingService(
         {
             new(ClaimTypes.NameIdentifier, tenantUser.Id.ToString()),
             new(ClaimTypes.Name, tenantUser.Username),
-            new("auth_time", httpContext.User.FindFirst("auth_time")?.Value ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+            new(OidcConstants.Claims.AuthTime, httpContext.User.FindFirst(OidcConstants.Claims.AuthTime)?.Value ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
 
         if (accountId.HasValue)
@@ -274,23 +275,23 @@ public class TenantSwitchingService(
             claims.Add(new(ClaimTypes.Email, tenantUser.Email));
         }
 
-        var idpClaim = httpContext.User.FindFirst("idp")?.Value;
+        var idpClaim = httpContext.User.FindFirst(OidcConstants.Claims.Idp)?.Value;
         if (!string.IsNullOrEmpty(idpClaim))
         {
-            claims.Add(new("idp", idpClaim));
+            claims.Add(new(OidcConstants.Claims.Idp, idpClaim));
         }
 
-        var amrClaims = httpContext.User.FindAll("amr").ToList();
+        var amrClaims = httpContext.User.FindAll(OidcConstants.Claims.Amr).ToList();
         if (amrClaims.Count > 0)
         {
             foreach (var amr in amrClaims)
             {
-                claims.Add(new("amr", amr.Value));
+                claims.Add(new(OidcConstants.Claims.Amr, amr.Value));
             }
         }
         else
         {
-            claims.Add(new("amr", "tenant_switch"));
+            claims.Add(new(OidcConstants.Claims.Amr, "tenant_switch"));
         }
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

@@ -16,6 +16,7 @@ using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -712,7 +713,7 @@ public class EditModel(
                 HeaderAlg = parsed.Header.Alg,
                 HeaderKid = parsed.Header.TryGetValue("kid", out var kidObj) ? kidObj?.ToString() : null,
                 Iss = principal.FindFirst("iss")?.Value ?? parsed.Issuer,
-                Sub = principal.FindFirst("sub")?.Value,
+                Sub = principal.FindFirst(OidcConstants.Claims.Subject)?.Value,
                 Aud = string.Join(" ", principal.FindAll("aud").Select(c => c.Value)),
                 Iat = principal.FindFirst("iat")?.Value,
                 Nbf = principal.FindFirst("nbf")?.Value,
@@ -786,11 +787,11 @@ public class EditModel(
             var payload = new JwtPayload
             {
                 { "iss", Input.ClientId },
-                { "sub", Input.ClientId },
+                { OidcConstants.Claims.Subject, Input.ClientId },
                 { "iat", now.ToUnixTimeSeconds() },
                 { "exp", now.AddMinutes(5).ToUnixTimeSeconds() },
                 { "jti", Guid.NewGuid().ToString("N") },
-                { "name", Input.ClientName ?? Input.ClientId }
+                { OidcConstants.Claims.Name, Input.ClientName ?? Input.ClientId }
             };
 
             var token = new JwtSecurityToken(header, payload);

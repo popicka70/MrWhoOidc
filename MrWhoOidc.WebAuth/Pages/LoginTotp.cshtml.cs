@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages;
@@ -55,9 +56,9 @@ public class LoginTotpModel(AuthDbContext db, ITotpService totp, ILogger<LoginTo
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new("amr", "mfa"),
-            new("idp", "local")
+            new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new(OidcConstants.Claims.Amr, "mfa"),
+            new(OidcConstants.Claims.Idp, "local")
         };
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
