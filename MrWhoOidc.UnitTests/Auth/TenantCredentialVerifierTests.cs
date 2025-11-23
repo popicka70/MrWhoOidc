@@ -35,6 +35,8 @@ public class TenantCredentialVerifierTests
         var result = await verifier.VerifyAsync("alice@example.com", password);
 
         Assert.IsTrue(result.Success);
+        Assert.HasCount(1, result.VerifiedUsers);
+        Assert.AreEqual(dbContext.Users.Single().Id, result.VerifiedUsers[0].UserId);
     }
 
     [TestMethod]
@@ -61,6 +63,50 @@ public class TenantCredentialVerifierTests
         var result = await verifier.VerifyAsync("bob@example.com", "not-the-right-password");
 
         Assert.IsFalse(result.Success);
+        Assert.HasCount(0, result.VerifiedUsers);
+    }
+
+    [TestMethod]
+    public async Task VerifyAsync_ReturnsAllMatchingTenants()
+    {
+        await using var dbContext = CreateDbContext();
+        var passwordHasher = new Argon2PasswordHasher();
+        var password = "SamePassword!";
+        var normalizedEmail = EmailNormalizer.NormalizeForLookup("carol@example.com")!;
+
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+
+        dbContext.Users.AddRange(
+            new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantA,
+                Username = "carol-a",
+                Email = "carol@example.com",
+                NormalizedEmail = normalizedEmail,
+                PasswordHash = passwordHasher.Hash(password),
+                HashAlgorithm = SecurityConstants.HashAlgorithms.Argon2id
+            },
+            new User
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantB,
+                Username = "carol-b",
+                Email = "carol@example.com",
+                NormalizedEmail = normalizedEmail,
+                PasswordHash = passwordHasher.Hash(password),
+                HashAlgorithm = SecurityConstants.HashAlgorithms.Argon2id
+            });
+        await dbContext.SaveChangesAsync();
+
+        var verifier = new TenantCredentialVerifier(dbContext, passwordHasher, NullLogger<TenantCredentialVerifier>.Instance);
+
+        var result = await verifier.VerifyAsync("carol@example.com", password);
+
+        Assert.IsTrue(result.Success);
+        Assert.HasCount(2, result.VerifiedUsers);
+        CollectionAssert.AreEquivalent(new[] { tenantA, tenantB }, result.VerifiedUsers.Select(v => v.TenantId).ToArray());
     }
 
     private static AuthDbContext CreateDbContext()

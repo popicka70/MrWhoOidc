@@ -141,6 +141,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrW
 // Tenant switching service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, MrWhoOidc.WebAuth.Services.TenantSwitchingService>();
 
+// Tenant credential ticket store
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantCredentialTicketStore, MrWhoOidc.WebAuth.Services.TenantCredentialTicketStore>();
+
 // Impersonation service (platform admin viewing as tenant admin)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrWhoOidc.WebAuth.Services.ImpersonationService>();
 

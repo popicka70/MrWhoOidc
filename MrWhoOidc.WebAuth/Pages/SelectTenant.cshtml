@@ -57,7 +57,7 @@
                         <div class="card h-100 tenant-card-inner" 
                              role="button"
                              tabindex="0"
-                             onclick="selectTenant('@tenant.Slug', '@tenant.LoginUrl')">
+                             onclick="selectTenant('@tenant.Slug')">
                             <div class="card-body d-flex align-items-center">
                                 <div class="tenant-logo me-3">
                                     @if (!string.IsNullOrEmpty(tenant.LogoUrl))
@@ -100,6 +100,7 @@
                 <input type="hidden" name="SelectedTenantSlug" id="selectedTenantSlug" />
                 <input type="hidden" asp-for="Email" />
                 <input type="hidden" asp-for="ReturnUrl" />
+                <input type="hidden" asp-for="TicketId" />
             </form>
 
             <div class="mt-4 text-center">
@@ -130,31 +131,20 @@
 
 @section Scripts {
     <script>
-        function selectTenant(tenantSlug, loginUrl) {
-            // Store preference if checkbox is checked
-            const rememberChoice = document.getElementById('rememberChoice').checked;
-            if (rememberChoice) {
-                const emailHash = hashString('@Model.Email');
+        function selectTenant(tenantSlug) {
+            const rememberToggle = document.getElementById('rememberChoice');
+            if (rememberToggle && rememberToggle.checked) {
+                const emailHash = hashString('@(Model.Email ?? string.Empty)');
                 localStorage.setItem('preferred_tenant_' + emailHash, tenantSlug);
-                console.log('Saved tenant preference:', tenantSlug);
             }
 
-            // Build redirect URL with email pre-filled
-            let redirectUrl = loginUrl;
-            if (!redirectUrl.includes('?')) {
-                redirectUrl += '?';
-            } else {
-                redirectUrl += '&';
-            }
-            redirectUrl += 'email=' + encodeURIComponent('@Model.Email');
-
-            const returnUrl = '@Model.ReturnUrl';
-            if (returnUrl) {
-                redirectUrl += '&returnUrl=' + encodeURIComponent(returnUrl);
+            const form = document.getElementById('tenantSelectionForm');
+            if (!form) {
+                return;
             }
 
-            // Redirect to tenant-specific login
-            window.location.href = redirectUrl;
+            document.getElementById('selectedTenantSlug').value = tenantSlug;
+            form.submit();
         }
 
         // Simple hash function for email (for storage key)

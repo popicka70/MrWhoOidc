@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Security.Claims;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -15,7 +17,8 @@ public class LoginModel(
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
     ITenantSettingsService settingsService,
-    ITenantBrandingService brandingService) : PageModel
+    ITenantBrandingService brandingService,
+    ITenantCredentialTicketStore ticketStore) : PageModel
 {
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
@@ -34,11 +37,14 @@ public class LoginModel(
     [BindProperty(SupportsGet = true)]
     public string? Email { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? TicketId { get; set; }
+
     public bool ShowNotYouLink => !string.IsNullOrEmpty(Email);
 
     public TenantBranding? TenantBranding { get; set; }
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
         logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}",
             ReturnUrl ?? "(null)",
@@ -60,6 +66,17 @@ public class LoginModel(
             logger.LogWarning(ex, "Failed to load tenant branding, using default");
             TenantBranding = null;
         }
+
+        if (!string.IsNullOrEmpty(TicketId))
+        {
+            var result = await TryCompleteLoginWithTicketAsync();
+            if (result is not null)
+            {
+                return result;
+            }
+        }
+
+        return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -102,87 +119,7 @@ public class LoginModel(
             return Page();
         }
 
-        // Check tenant MFA requirement
-        var settings = await settingsService.GetCurrentTenantSettingsAsync();
-        var mfaRequired = settings.Auth?.RequireMfa ?? false;
-
-        // If MFA is required but user doesn't have it enabled, redirect to enrollment
-        if (mfaRequired && !user.TotpEnabled)
-        {
-            // Issue short-lived preauth to allow MFA enrollment
-            var preauthClaims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Name, user.Username),
-                new("amr", "pwd"),
-                new("mfa_enrollment_required", "true")
-            };
-            var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
-            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
-            ClearAttempts(HttpContext, Username);
-
-            logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", Username);
-            var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = ReturnUrl }, protocol: Request.Scheme);
-            return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
-        }
-
-        // If TOTP enabled, issue short-lived preauth and redirect to TOTP page
-        if (user.TotpEnabled)
-        {
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Name, user.Username),
-                new("amr", "pwd")
-            };
-            var identity = new ClaimsIdentity(claims, "preauth");
-            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
-            ClearAttempts(HttpContext, Username);
-            var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
-            return Redirect(url ?? "/LoginTotp");
-        }
-
-        var finalClaims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.Username),
-            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new("amr", "pwd"),
-            new("idp", "local")
-        };
-
-        var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var principal = new ClaimsPrincipal(finalIdentity);
-        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-
-        ClearAttempts(HttpContext, Username);
-        logger.LogInformation("✅ [Login] User {User} signed in successfully", Username);
-
-        if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
-        {
-            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", ReturnUrl);
-            return LocalRedirect(ReturnUrl);
-        }
-
-        // Build tenant-aware default redirect URL based on mode
-        var currentTenant = tenantAccessor.CurrentTenant;
-        string defaultUrl;
-
-        if (multiTenancyOptions.Enabled && currentTenant != null)
-        {
-            // Multi-tenant mode: redirect to /t/{slug}/
-            defaultUrl = $"/t/{currentTenant.Slug}/";
-            logger.LogInformation("➡️ [Login] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})",
-                defaultUrl, currentTenant.Slug);
-        }
-        else
-        {
-            // Single-tenant mode: redirect to root /
-            defaultUrl = "/";
-            logger.LogInformation("➡️ [Login] Single-tenant mode: redirecting to {DefaultUrl}", defaultUrl);
-        }
-
-        return LocalRedirect(defaultUrl);
+        return await CompleteSignInAsync(user);
     }
 
     static string Key(HttpContext ctx, string username) => $"{ctx.Connection.RemoteIpAddress}-{username}";
@@ -222,5 +159,161 @@ public class LoginModel(
     {
         var key = Key(ctx, username);
         _attempts.Remove(key);
+    }
+
+    private async Task<IActionResult?> TryCompleteLoginWithTicketAsync()
+    {
+        if (string.IsNullOrEmpty(TicketId))
+        {
+            return null;
+        }
+
+        var ticket = ticketStore.GetTicket(TicketId);
+        if (ticket is null)
+        {
+            logger.LogInformation("Tenant credential ticket {TicketId} missing or expired", TicketId);
+            ModelState.AddModelError(string.Empty, "Your verification expired. Please enter your password again.");
+            TicketId = null;
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(Email) || !string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
+        {
+            logger.LogWarning("Ticket {TicketId} email hash mismatch", TicketId);
+            ModelState.AddModelError(string.Empty, "We could not confirm your email for this session. Please sign in again.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        var tenant = tenantAccessor.CurrentTenant;
+        if (tenant is null)
+        {
+            logger.LogWarning("Ticket {TicketId} used without active tenant context", TicketId);
+            ModelState.AddModelError(string.Empty, "We could not determine your organization. Please start over.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        var verifiedUser = ticket.VerifiedUsers.FirstOrDefault(v => v.TenantId == tenant.TenantId);
+        if (verifiedUser == null)
+        {
+            logger.LogWarning("Ticket {TicketId} does not include tenant {TenantId}", TicketId, tenant.TenantId);
+            ModelState.AddModelError(string.Empty, "Please confirm your password again to access this organization.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        var user = await users.FindByIdAcrossTenantsAsync(verifiedUser.UserId);
+        if (user is null)
+        {
+            logger.LogWarning("Ticket {TicketId} referenced missing user {UserId}", TicketId, verifiedUser.UserId);
+            ModelState.AddModelError(string.Empty, "Your account could not be found. Please sign in again.");
+            TicketId = null;
+            ticketStore.RemoveTicket(ticket.TicketId);
+            return null;
+        }
+
+        Username = user.Username;
+        var result = await CompleteSignInAsync(user);
+        ticketStore.RemoveTicket(ticket.TicketId);
+        TempData.Remove("TenantTicketId");
+        return result;
+    }
+
+    private async Task<IActionResult> CompleteSignInAsync(User user)
+    {
+        // Check tenant MFA requirement
+        var settings = await settingsService.GetCurrentTenantSettingsAsync();
+        var mfaRequired = settings.Auth?.RequireMfa ?? false;
+
+        // If MFA is required but user doesn't have it enabled, redirect to enrollment
+        if (mfaRequired && !user.TotpEnabled)
+        {
+            var preauthClaims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Username),
+                new("amr", "pwd"),
+                new("mfa_enrollment_required", "true")
+            };
+            var preauthIdentity = new ClaimsIdentity(preauthClaims, "preauth");
+            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
+            ClearAttempts(HttpContext, user.Username);
+
+            logger.LogInformation("⚠️ [Login] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
+            var enrollUrl = Url.Page("/Mfa/Index", null, new { required = true, returnUrl = ReturnUrl }, protocol: Request.Scheme);
+            return Redirect(enrollUrl ?? "/Mfa/Index?required=true");
+        }
+
+        // If TOTP enabled, issue short-lived preauth and redirect to TOTP page
+        if (user.TotpEnabled)
+        {
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new(ClaimTypes.Name, user.Username),
+                new("amr", "pwd")
+            };
+            var identity = new ClaimsIdentity(claims, "preauth");
+            await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
+            ClearAttempts(HttpContext, user.Username);
+            var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
+            return Redirect(url ?? "/LoginTotp");
+        }
+
+        var finalClaims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new("amr", "pwd"),
+            new("idp", "local")
+        };
+
+        var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(finalIdentity);
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+        ClearAttempts(HttpContext, user.Username);
+        logger.LogInformation("✅ [Login] User {User} signed in successfully", user.Username);
+
+        if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
+        {
+            logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", ReturnUrl);
+            return LocalRedirect(ReturnUrl);
+        }
+
+        // Build tenant-aware default redirect URL based on mode
+        var currentTenant = tenantAccessor.CurrentTenant;
+        string defaultUrl;
+
+        if (multiTenancyOptions.Enabled && currentTenant != null)
+        {
+            defaultUrl = $"/t/{currentTenant.Slug}/";
+            logger.LogInformation("➡️ [Login] Multi-tenant mode: redirecting to {DefaultUrl} (Tenant: {TenantSlug})",
+                defaultUrl, currentTenant.Slug);
+        }
+        else
+        {
+            defaultUrl = "/";
+            logger.LogInformation("➡️ [Login] Single-tenant mode: redirecting to {DefaultUrl}", defaultUrl);
+        }
+
+        return LocalRedirect(defaultUrl);
+    }
+
+    private static string HashEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+        {
+            return "empty";
+        }
+
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(email.ToLowerInvariant()));
+        return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();
     }
 }

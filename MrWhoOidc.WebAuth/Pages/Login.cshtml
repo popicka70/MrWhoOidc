@@ -1,5 +1,6 @@
 @page "/login"
 @model MrWhoOidc.WebAuth.Pages.LoginModel
+@using System.Linq
 @{
     ViewData["Title"] = "Login";
     Layout = "_AuthLayout";
@@ -39,6 +40,18 @@
         <form method="post" asp-antiforgery="true">
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Email" />
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <ul class="mb-0">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                        {
+                            <li>@error.ErrorMessage</li>
+                        }
+                    </ul>
+                </div>
+            }
             <div class="form-group">
                 <label asp-for="Username" class="form-label">
                     <i class="bi bi-person icon-sm"></i> Username or Email

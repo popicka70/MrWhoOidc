@@ -10,11 +10,15 @@ public interface ITenantCredentialVerifier
     Task<TenantCredentialVerificationResult> VerifyAsync(string email, string password, CancellationToken ct = default);
 }
 
-public sealed record TenantCredentialVerificationResult(bool Success)
+public sealed record TenantCredentialVerificationResult(bool Success, IReadOnlyList<VerifiedTenantUser> VerifiedUsers)
 {
-    public static TenantCredentialVerificationResult Failed { get; } = new(false);
-    public static TenantCredentialVerificationResult Passed { get; } = new(true);
+    public static readonly TenantCredentialVerificationResult Failed = new(false, Array.Empty<VerifiedTenantUser>());
+
+    public static TenantCredentialVerificationResult Passed(IReadOnlyList<VerifiedTenantUser> users)
+        => new(true, users);
 }
+
+public sealed record VerifiedTenantUser(Guid TenantId, Guid UserId);
 
 internal sealed class TenantCredentialVerifier(
     AuthDbContext dbContext,
@@ -48,6 +52,8 @@ internal sealed class TenantCredentialVerifier(
                 return TenantCredentialVerificationResult.Failed;
             }
 
+            var matchedUsers = new List<VerifiedTenantUser>();
+
             foreach (var row in credentialRows)
             {
                 if (string.IsNullOrWhiteSpace(row.PasswordHash))
@@ -57,9 +63,17 @@ internal sealed class TenantCredentialVerifier(
 
                 if (VerifyPassword(password, row))
                 {
-                    logger.LogInformation("Tenant credential verification succeeded for email hash {EmailHash}", HashEmail(email));
-                    return TenantCredentialVerificationResult.Passed;
+                    matchedUsers.Add(new VerifiedTenantUser(row.TenantId, row.UserId));
                 }
+            }
+
+            if (matchedUsers.Count > 0)
+            {
+                logger.LogInformation(
+                    "Tenant credential verification succeeded for email hash {EmailHash} across {Count} tenant(s)",
+                    HashEmail(email),
+                    matchedUsers.Count);
+                return TenantCredentialVerificationResult.Passed(matchedUsers);
             }
 
             logger.LogWarning("Tenant credential verification failed (invalid password) for email hash {EmailHash}", HashEmail(email));
@@ -76,7 +90,7 @@ internal sealed class TenantCredentialVerifier(
     {
         var primaryCredentials = await dbContext.Users.AsNoTracking()
             .Where(u => u.NormalizedEmail == normalizedEmail)
-            .Select(u => new CredentialRow(u.PasswordHash, u.HashAlgorithm))
+            .Select(u => new CredentialRow(u.Id, u.TenantId, u.PasswordHash, u.HashAlgorithm))
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
@@ -88,7 +102,7 @@ internal sealed class TenantCredentialVerifier(
         return await (from alt in dbContext.UserAlternativeEmails.AsNoTracking()
                       where alt.NormalizedEmail == normalizedEmail && alt.IsVerified
                       join user in dbContext.Users.AsNoTracking() on alt.UserId equals user.Id
-                      select new CredentialRow(user.PasswordHash, user.HashAlgorithm))
+                      select new CredentialRow(user.Id, user.TenantId, user.PasswordHash, user.HashAlgorithm))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }
@@ -114,5 +128,5 @@ internal sealed class TenantCredentialVerifier(
         return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();
     }
 
-    private sealed record CredentialRow(string PasswordHash, string HashAlgorithm);
+    private sealed record CredentialRow(Guid UserId, Guid TenantId, string PasswordHash, string HashAlgorithm);
 }

@@ -14,21 +14,22 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class SelectTenantModel : PageModel
 {
     private const string DiscoveredTenantsSessionKey = "DiscoveredTenants";
-    private const string VerificationTicketSessionKey = "TenantDiscoveryVerified";
-    private static readonly TimeSpan VerificationLifetime = TimeSpan.FromMinutes(5);
 
     private readonly ILogger<SelectTenantModel> _logger;
     private readonly ITenantSwitchingService _tenantSwitchingService;
     private readonly ITenantCredentialVerifier _credentialVerifier;
+    private readonly ITenantCredentialTicketStore _ticketStore;
 
     public SelectTenantModel(
         ILogger<SelectTenantModel> logger,
         ITenantSwitchingService tenantSwitchingService,
-        ITenantCredentialVerifier credentialVerifier)
+        ITenantCredentialVerifier credentialVerifier,
+        ITenantCredentialTicketStore ticketStore)
     {
         _logger = logger;
         _tenantSwitchingService = tenantSwitchingService;
         _credentialVerifier = credentialVerifier;
+        _ticketStore = ticketStore;
     }
 
     [BindProperty]
@@ -39,6 +40,9 @@ public class SelectTenantModel : PageModel
 
     [BindProperty]
     public string Password { get; set; } = string.Empty;
+
+    [BindProperty]
+    public string? TicketId { get; set; }
 
     public List<TenantInfo>? Tenants { get; set; }
     public string? ErrorMessage { get; set; }
@@ -70,14 +74,17 @@ public class SelectTenantModel : PageModel
             return RedirectToPage("/DiscoverTenant");
         }
 
-        RequiresVerification = !HasValidVerificationTicket(Email!);
-
-        if (!RequiresVerification)
+        if (TryHydrateTicketFromTempData() && HasValidTicketForEmail())
         {
+            RequiresVerification = false;
             if (!LoadAnonymousContext(includeTenants: true))
             {
                 return RedirectToPage("/DiscoverTenant");
             }
+        }
+        else
+        {
+            RequiresVerification = true;
         }
 
         return Page();
@@ -109,6 +116,7 @@ public class SelectTenantModel : PageModel
 
         Email = Request.Form["Email"];
         ReturnUrl = Request.Form["ReturnUrl"];
+        TicketId = Request.Form[nameof(TicketId)];
 
         if (string.IsNullOrEmpty(Email))
         {
@@ -116,11 +124,13 @@ public class SelectTenantModel : PageModel
             return RedirectToPage("/DiscoverTenant");
         }
 
-        if (!HasValidVerificationTicket(Email))
+        var ticket = _ticketStore.GetTicket(TicketId ?? string.Empty);
+        if (ticket is null || !string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
         {
             _logger.LogWarning("Tenant selection attempted without verification for email hash {EmailHash}", HashEmail(Email));
             ErrorMessage = "Please confirm your password before selecting an organization.";
             RequiresVerification = true;
+            TempData.Remove("TenantTicketId");
             LoadAnonymousContext(includeTenants: false);
             return Page();
         }
@@ -142,7 +152,7 @@ public class SelectTenantModel : PageModel
 
         try
         {
-            var tenants = System.Text.Json.JsonSerializer.Deserialize<List<TenantInfo>>(tenantsJson);
+            var tenants = JsonSerializer.Deserialize<List<TenantInfo>>(tenantsJson);
             var selectedTenant = tenants?.FirstOrDefault(t => t.Slug == selectedTenantSlug);
 
             if (selectedTenant == null)
@@ -152,13 +162,22 @@ public class SelectTenantModel : PageModel
                 return await OnGetAsync();
             }
 
+            if (!ticket.VerifiedUsers.Any(v => v.TenantId == selectedTenant.TenantId))
+            {
+                _logger.LogWarning("Tenant selection attempted for tenant {TenantSlug} without matching verification", selectedTenantSlug);
+                ErrorMessage = "Please confirm your password again to access this organization.";
+                RequiresVerification = true;
+                TempData.Remove("TenantTicketId");
+                return Page();
+            }
+
             _logger.LogInformation(
                 "User selected tenant: {TenantSlug} for email (hashed): {EmailHash}",
                 selectedTenant.Slug,
                 HashEmail(Email));
 
-            // Build redirect URL with email pre-filled
-            var loginUrl = $"{selectedTenant.LoginUrl}?email={Uri.EscapeDataString(Email)}";
+            // Build redirect URL with credential ticket to skip second password prompt
+            var loginUrl = $"{selectedTenant.LoginUrl}?ticketId={TicketId}&email={Uri.EscapeDataString(Email)}";
             if (!string.IsNullOrEmpty(ReturnUrl))
             {
                 loginUrl += $"&returnUrl={Uri.EscapeDataString(ReturnUrl)}";
@@ -166,7 +185,7 @@ public class SelectTenantModel : PageModel
 
             // Clear session data
             HttpContext.Session.Remove(DiscoveredTenantsSessionKey);
-            HttpContext.Session.Remove(VerificationTicketSessionKey);
+            TempData.Remove("TenantTicketId");
 
             return Redirect(loginUrl);
         }
@@ -205,7 +224,10 @@ public class SelectTenantModel : PageModel
             return Page();
         }
 
-        StoreVerificationTicket(Email!);
+        var ticket = _ticketStore.CreateTicket(Email!, verificationResult.VerifiedUsers);
+        TicketId = ticket.TicketId;
+        TempData["TenantTicketId"] = TicketId;
+        TempData.Keep("TenantTicketId");
         Password = string.Empty;
         return RedirectToPage(new { ReturnUrl });
     }
@@ -251,7 +273,7 @@ public class SelectTenantModel : PageModel
                     return false;
                 }
 
-                    _logger.LogDebug("Displaying {Count} tenants for selection", Tenants.Count);
+                _logger.LogDebug("Displaying {Count} tenants for selection", Tenants.Count);
             }
             catch (Exception ex)
             {
@@ -261,51 +283,54 @@ public class SelectTenantModel : PageModel
             }
         }
 
+        TicketId ??= TempData["TenantTicketId"] as string;
+        if (!string.IsNullOrEmpty(TicketId))
+        {
+            TempData["TenantTicketId"] = TicketId;
+            TempData.Keep("TenantTicketId");
+        }
+
         TempData.Keep("Email");
         TempData.Keep("ReturnUrl");
         return true;
     }
 
-    private bool HasValidVerificationTicket(string email)
+    private bool TryHydrateTicketFromTempData()
     {
-        var json = HttpContext.Session.GetString(VerificationTicketSessionKey);
-        if (string.IsNullOrEmpty(json))
+        if (!string.IsNullOrEmpty(TicketId))
         {
-            return false;
-        }
-
-        try
-        {
-            var ticket = JsonSerializer.Deserialize<TenantVerificationTicket>(json);
-            if (ticket == null)
-            {
-                return false;
-            }
-
-            if (!string.Equals(ticket.EmailHash, HashEmail(email), StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(ticket.IssuedAtUnixSeconds);
-            if (DateTimeOffset.UtcNow - issuedAt > VerificationLifetime)
-            {
-                return false;
-            }
-
             return true;
         }
-        catch (JsonException)
+
+        var tempTicketId = TempData["TenantTicketId"] as string;
+        if (string.IsNullOrEmpty(tempTicketId))
         {
             return false;
         }
+
+        TicketId = tempTicketId;
+        TempData.Keep("TenantTicketId");
+        return true;
     }
 
-    private void StoreVerificationTicket(string email)
+    private bool HasValidTicketForEmail()
     {
-        var ticket = new TenantVerificationTicket(HashEmail(email), DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        HttpContext.Session.SetString(VerificationTicketSessionKey, JsonSerializer.Serialize(ticket));
-    }
+        if (string.IsNullOrEmpty(TicketId) || string.IsNullOrEmpty(Email))
+        {
+            return false;
+        }
 
-    private sealed record TenantVerificationTicket(string EmailHash, long IssuedAtUnixSeconds);
+        var ticket = _ticketStore.GetTicket(TicketId);
+        if (ticket is null)
+        {
+            return false;
+        }
+
+        if (!string.Equals(ticket.EmailHash, HashEmail(Email), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
+    }
 }
