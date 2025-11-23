@@ -25,9 +25,29 @@ public class LicenseTokenMetadata
     public required string Tier { get; set; }
 
     /// <summary>
+    /// License scope (platform or tenant).
+    /// </summary>
+    public required string Scope { get; set; }
+
+    /// <summary>
     /// Organization name from license.
     /// </summary>
     public string? Organization { get; set; }
+
+    /// <summary>
+    /// Display name for issued-to claim.
+    /// </summary>
+    public string? IssuedTo { get; set; }
+
+    /// <summary>
+    /// Tenant identifier when scope is tenant.
+    /// </summary>
+    public Guid? TenantId { get; set; }
+
+    /// <summary>
+    /// Optional tenant slug.
+    /// </summary>
+    public string? TenantSlug { get; set; }
 
     /// <summary>
     /// License validity start (nbf claim).
@@ -43,6 +63,11 @@ public class LicenseTokenMetadata
     /// JSON array of features (e.g., ["analytics","dpop","multi-tenant"]).
     /// </summary>
     public string? Features { get; set; }
+
+    /// <summary>
+    /// JSON array of features default tenant inherits from platform license.
+    /// </summary>
+    public string? DefaultTenantFeatures { get; set; }
 
     /// <summary>
     /// JSON object of limits (e.g., {"tenants":50,"users":1000}).

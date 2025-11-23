@@ -59,6 +59,7 @@ else
                         <tr>
                             <th>Token ID</th>
                             <th>Tier</th>
+                            <th>Scope</th>
                             <th>Organization</th>
                             <th>Features</th>
                             <th>Valid From</th>
@@ -94,6 +95,21 @@ else
                                         };
                                     }
                                     <span class="badge @tierBadgeClass">@license.Tier</span>
+                                </td>
+                                <td>
+                                    @{
+                                        var isTenantScope = license.Scope?.Equals("tenant", System.StringComparison.OrdinalIgnoreCase) == true;
+                                        var scopeBadge = isTenantScope ? "bg-info" : "bg-secondary";
+                                    }
+                                    <span class="badge @scopeBadge">@(license.Scope?.Equals("tenant", System.StringComparison.OrdinalIgnoreCase) == true ? "Tenant" : "Platform")</span>
+                                    @if (!string.IsNullOrWhiteSpace(license.TenantSlug))
+                                    {
+                                        <div class="small text-muted">@license.TenantSlug</div>
+                                    }
+                                    else if (license.TenantId.HasValue)
+                                    {
+                                        <div class="small text-muted">@license.TenantId</div>
+                                    }
                                 </td>
                                 <td>@license.Organization</td>
                                 <td>

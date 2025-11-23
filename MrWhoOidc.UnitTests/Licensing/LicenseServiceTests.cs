@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Validators;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.UnitTests.Licensing;
 
@@ -215,10 +216,86 @@ public sealed class LicenseServiceTests
         Assert.AreEqual(0, validator.ParseCalls, "Parse should not run when signature validation returns license info.");
     }
 
+    [TestMethod]
+    public async Task InstallLicenseAsync_ReturnsScopeMismatch_WhenPlatformLicenseTargetsTenant()
+    {
+        var repository = new FakeLicenseRepository();
+        var validator = new FakeLicenseValidator();
+        var platformInfo = CreateLicenseInfo(scope: LicenseScope.Platform);
+        validator.SignatureResult = LicenseValidationResult.Success(platformInfo);
+        validator.ParsedLicense = platformInfo;
+        validator.BusinessResult = LicenseValidationResult.Success(platformInfo);
+
+        var (service, _) = CreateService(repository, validator);
+        var tenantId = Guid.NewGuid();
+
+        var result = await service.InstallLicenseAsync("key", tenantId: tenantId);
+
+        Assert.IsFalse(result.IsValid);
+        Assert.AreEqual("scope_mismatch", result.ErrorCode);
+    }
+
+    [TestMethod]
+    public async Task InstallLicenseAsync_ReturnsTenantMismatch_WhenTargetsDifferentTenant()
+    {
+        var repository = new FakeLicenseRepository();
+        var validator = new FakeLicenseValidator();
+        var expectedTenant = Guid.NewGuid();
+        var tenantLicense = CreateLicenseInfo(scope: LicenseScope.Tenant, licensedTenantId: expectedTenant, issuedTo: "expected", licensedTenantSlug: "expected");
+        validator.SignatureResult = LicenseValidationResult.Success(tenantLicense);
+        validator.ParsedLicense = tenantLicense;
+        validator.BusinessResult = LicenseValidationResult.Success(tenantLicense);
+
+        var (service, _) = CreateService(repository, validator);
+        var otherTenant = Guid.NewGuid();
+
+        var result = await service.InstallLicenseAsync("key", tenantId: otherTenant);
+
+        Assert.IsFalse(result.IsValid);
+        Assert.AreEqual("tenant_mismatch", result.ErrorCode);
+    }
+
+    [TestMethod]
+    public async Task GetCurrentLicenseAsync_UsesPlatformOverrides_ForDefaultTenant()
+    {
+        var repository = new FakeLicenseRepository();
+        var validator = new FakeLicenseValidator();
+        var defaultTenantId = Guid.NewGuid();
+        var defaultFeatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "default_feature" };
+        var platformInfo = CreateLicenseInfo(
+            tier: "enterprise",
+            defaultTenantFeatures: defaultFeatures);
+        validator.ParsedLicense = platformInfo;
+        validator.BusinessResult = LicenseValidationResult.Success(platformInfo);
+
+        repository.SetActiveLicense(new License
+        {
+            Id = Guid.NewGuid(),
+            LicenseKey = "platform",
+            Tier = platformInfo.Tier,
+            ValidFrom = platformInfo.ValidFrom,
+            ValidUntil = platformInfo.ValidUntil,
+            IsActive = true
+        });
+
+        var defaultTenantContext = new StubDefaultTenantContext(defaultTenantId, "default");
+        var (service, _) = CreateService(repository, validator, defaultTenantContext: defaultTenantContext);
+
+        var license = await service.GetCurrentLicenseAsync(defaultTenantId);
+
+        Assert.IsNotNull(license);
+        Assert.AreEqual(LicenseScope.Tenant, license!.Scope);
+        Assert.AreEqual(defaultTenantId, license.LicensedTenantId);
+        CollectionAssert.AreEquivalent(defaultFeatures.ToArray(), license.EnabledFeatures.ToArray());
+    }
+
     private static (LicenseService Service, MemoryCache Cache) CreateService(
         FakeLicenseRepository repository,
         FakeLicenseValidator validator,
-        LicensingOptions? options = null)
+        LicensingOptions? options = null,
+        IMultiTenancyStateProvider? multiTenancyStateProvider = null,
+        IDefaultTenantContext? defaultTenantContext = null,
+        TimeProvider? timeProvider = null)
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var licensingOptions = options ?? new LicensingOptions
@@ -231,7 +308,10 @@ public sealed class LicenseServiceTests
             validator,
             cache,
             Options.Create(licensingOptions),
-            NullLogger<LicenseService>.Instance);
+            NullLogger<LicenseService>.Instance,
+            timeProvider,
+            multiTenancyStateProvider,
+            defaultTenantContext);
         return (service, cache);
     }
 
@@ -239,24 +319,58 @@ public sealed class LicenseServiceTests
         string tier = "community",
         string? organization = "Org",
         DateTimeOffset? validFrom = null,
-        DateTimeOffset? validUntil = null)
+        DateTimeOffset? validUntil = null,
+        IReadOnlySet<string>? enabledFeatures = null,
+        IReadOnlyDictionary<string, long>? limits = null,
+        LicenseScope scope = LicenseScope.Platform,
+        Guid? licensedTenantId = null,
+        string? issuedTo = "platform",
+        string? licensedTenantSlug = null,
+        IReadOnlySet<string>? defaultTenantFeatures = null,
+        bool hasExplicitScopeClaim = true)
     {
         var from = validFrom ?? DateTimeOffset.UtcNow.AddDays(-1);
         var until = validUntil ?? DateTimeOffset.UtcNow.AddDays(30);
+        var features = enabledFeatures ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "feature" };
+        var limitTable = limits ?? new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["users"] = -1 };
+        var defaultFeatures = defaultTenantFeatures ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         return new LicenseInfo(
             tier,
             organization,
             from,
             until,
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "feature" },
-            new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["users"] = -1 },
+            features,
+            limitTable,
             false,
-            true);
+            true,
+            scope,
+            issuedTo,
+            licensedTenantId,
+            licensedTenantSlug,
+            defaultFeatures,
+            hasExplicitScopeClaim);
+    }
+
+    private sealed class StubDefaultTenantContext : IDefaultTenantContext
+    {
+        private readonly Guid? _tenantId;
+
+        public StubDefaultTenantContext(Guid? tenantId, string slug)
+        {
+            _tenantId = tenantId;
+            DefaultTenantSlug = slug;
+        }
+
+        public string DefaultTenantSlug { get; }
+
+        public Task<Guid?> GetDefaultTenantIdAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_tenantId);
     }
 
     private sealed class FakeLicenseRepository : ILicenseRepository
     {
         private License? _platformLicense;
+        private readonly Dictionary<Guid, License?> _tenantLicenses = new();
 
         public int GetActiveCalls { get; private set; }
 
@@ -274,7 +388,7 @@ public sealed class LicenseServiceTests
             }
             else
             {
-                throw new NotSupportedException("Tenant-specific licensing not implemented for this test stub.");
+                _tenantLicenses[tenantId.Value] = license;
             }
         }
 
@@ -286,13 +400,20 @@ public sealed class LicenseServiceTests
                 return Task.FromResult(_platformLicense);
             }
 
-            throw new NotSupportedException("Tenant-specific licensing not implemented for this test stub.");
+            return Task.FromResult(_tenantLicenses.TryGetValue(tenantId.Value, out var license) ? license : null);
         }
 
         public Task<License> CreateLicenseAsync(License license, CancellationToken cancellationToken = default)
         {
             CreatedLicenses.Add(license);
-            _platformLicense = license;
+            if (license.TenantId is null)
+            {
+                _platformLicense = license;
+            }
+            else
+            {
+                _tenantLicenses[license.TenantId.Value] = license;
+            }
             return Task.FromResult(license);
         }
 
@@ -302,6 +423,10 @@ public sealed class LicenseServiceTests
             if (_platformLicense?.Id == license.Id)
             {
                 _platformLicense = license;
+            }
+            else if (license.TenantId.HasValue && _tenantLicenses.TryGetValue(license.TenantId.Value, out var existing) && existing?.Id == license.Id)
+            {
+                _tenantLicenses[license.TenantId.Value] = license;
             }
             return Task.FromResult(license);
         }

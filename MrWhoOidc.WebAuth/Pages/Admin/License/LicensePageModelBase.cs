@@ -223,6 +223,9 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
                 kv.Value == 0))
             .ToList();
 
+        var scopeDisplay = FormatScopeDisplay(info);
+        var issuedToDisplay = FormatIssuedToDisplay(info);
+
         return new LicenseSummaryModel(
             info,
             GetTierDisplayName(info.Tier),
@@ -231,7 +234,9 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
             expiryText,
             isExpiringSoon,
             features,
-            limits);
+            limits,
+            scopeDisplay,
+            issuedToDisplay);
     }
 
     protected FeatureUsageReportModel BuildFeatureUsageReport(FeatureUsageReport report, DateTimeOffset reference)
@@ -391,6 +396,35 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
         };
     }
 
+    private static string FormatScopeDisplay(LicenseInfoDto info)
+    {
+        return string.Equals(info.Scope, LicenseTenantScope.Platform, StringComparison.OrdinalIgnoreCase)
+            ? "Platform license"
+            : "Tenant license";
+    }
+
+    private static string FormatIssuedToDisplay(LicenseInfoDto info)
+    {
+        if (!string.IsNullOrWhiteSpace(info.IssuedTo))
+        {
+            return info.IssuedTo!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(info.LicensedTenantSlug))
+        {
+            return $"Tenant slug: {info.LicensedTenantSlug}";
+        }
+
+        if (info.LicensedTenantId.HasValue)
+        {
+            return $"Tenant ID: {info.LicensedTenantId.Value}";
+        }
+
+        return string.Equals(info.Scope, LicenseTenantScope.Platform, StringComparison.OrdinalIgnoreCase)
+            ? "Platform (all tenants)"
+            : "Tenant-specific";
+    }
+
     private static string GetFeatureDisplayName(string feature)
     {
         if (FeatureDisplayNames.TryGetValue(feature, out var name))
@@ -457,7 +491,9 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
         string ExpiryText,
         bool IsExpiringSoon,
         IReadOnlyList<FeatureDisplay> Features,
-        IReadOnlyList<LimitDisplay> Limits);
+        IReadOnlyList<LimitDisplay> Limits,
+        string ScopeDisplay,
+        string IssuedToDisplay);
 
     public sealed record FeatureUsageRow(
         string Key,

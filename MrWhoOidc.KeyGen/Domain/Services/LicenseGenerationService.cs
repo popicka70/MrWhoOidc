@@ -1,3 +1,4 @@
+using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -35,12 +36,17 @@ public class LicenseGenerationService : ILicenseGenerationService
         string organization,
         DateTimeOffset notBefore,
         DateTimeOffset expiresAt,
+        string scope,
+        string? issuedTo = null,
+        Guid? tenantId = null,
+        string? tenantSlug = null,
         string? features = null,
         string? limits = null,
-        string? createdBy = null)
+        string? createdBy = null,
+        string? defaultTenantFeatures = null)
     {
         // Validate inputs
-        ValidateInputs(tier, organization, notBefore, expiresAt);
+        ValidateInputs(tier, organization, notBefore, expiresAt, scope, tenantId, defaultTenantFeatures);
 
         // Generate unique token ID using UUIDv7
         var tokenId = GuidHelper.NewId().ToString();
@@ -58,8 +64,24 @@ public class LicenseGenerationService : ILicenseGenerationService
             new Claim(JwtRegisteredClaimNames.Exp, expiresAt.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(JwtRegisteredClaimNames.Jti, tokenId),
             new Claim("tier", tier),
-            new Claim("organization", organization)
+            new Claim("organization", organization),
+            new Claim("license_scope", scope)
         };
+
+        if (!string.IsNullOrWhiteSpace(issuedTo))
+        {
+            claims.Add(new Claim("issued_to", issuedTo));
+        }
+
+        if (tenantId.HasValue)
+        {
+            claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(tenantSlug))
+        {
+            claims.Add(new Claim("tenant_slug", tenantSlug));
+        }
 
         if (!string.IsNullOrWhiteSpace(features))
         {
@@ -69,6 +91,11 @@ public class LicenseGenerationService : ILicenseGenerationService
         if (!string.IsNullOrWhiteSpace(limits))
         {
             claims.Add(new Claim("limits", limits));
+        }
+
+        if (!string.IsNullOrWhiteSpace(defaultTenantFeatures))
+        {
+            claims.Add(new Claim("default_tenant_features", defaultTenantFeatures));
         }
 
         // Create signing credentials with ECDSA P-256
@@ -97,8 +124,13 @@ public class LicenseGenerationService : ILicenseGenerationService
             TokenId = tokenId,
             Tier = tier,
             Organization = organization,
+            Scope = scope,
+            IssuedTo = issuedTo,
+            TenantId = tenantId,
+            TenantSlug = tenantSlug,
             Features = features,
             Limits = limits,
+            DefaultTenantFeatures = defaultTenantFeatures,
             ValidFrom = notBefore,
             ValidUntil = expiresAt,
             GeneratedAt = now,
@@ -115,11 +147,14 @@ public class LicenseGenerationService : ILicenseGenerationService
         return (tokenId, jwtToken);
     }
 
-    private void ValidateInputs(
+    private static void ValidateInputs(
         string tier,
         string organization,
         DateTimeOffset notBefore,
-        DateTimeOffset expiresAt)
+        DateTimeOffset expiresAt,
+        string scope,
+        Guid? tenantId,
+        string? defaultTenantFeatures)
     {
         // Validate tier
         var validTiers = new[] { "community", "professional", "enterprise", "enterprise+" };
@@ -145,6 +180,27 @@ public class LicenseGenerationService : ILicenseGenerationService
         if (expiresAt <= DateTimeOffset.UtcNow)
         {
             throw new ArgumentException("Expiration date must be in the future");
+        }
+
+        if (!LicenseScopeOptions.IsValid(scope))
+        {
+            throw new ArgumentException("License scope must be either 'platform' or 'tenant'", nameof(scope));
+        }
+
+        var isTenantScope = scope.Equals(LicenseScopeOptions.Tenant, StringComparison.OrdinalIgnoreCase);
+        if (isTenantScope && !tenantId.HasValue)
+        {
+            throw new ArgumentException("Tenant ID is required for tenant-scoped licenses", nameof(tenantId));
+        }
+
+        if (!isTenantScope && tenantId.HasValue)
+        {
+            throw new ArgumentException("Platform licenses cannot include a tenant ID", nameof(tenantId));
+        }
+
+        if (isTenantScope && !string.IsNullOrWhiteSpace(defaultTenantFeatures))
+        {
+            throw new ArgumentException("Default tenant feature overrides apply only to platform licenses", nameof(defaultTenantFeatures));
         }
     }
 

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MrWhoOidc.KeyGen.Persistence;
 
@@ -10,9 +11,11 @@ using MrWhoOidc.KeyGen.Persistence;
 namespace MrWhoOidc.KeyGen.Persistence.Migrations
 {
     [DbContext(typeof(KeyGenDbContext))]
-    partial class KeyGenDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251122224335_AddLicenseScopeMetadata")]
+    partial class AddLicenseScopeMetadata
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.10");

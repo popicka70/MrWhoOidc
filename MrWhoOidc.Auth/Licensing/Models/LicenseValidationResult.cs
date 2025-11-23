@@ -26,4 +26,20 @@ public sealed record LicenseValidationResult(
     public static LicenseValidationResult NotYetValid() => Failure("not_yet_valid", "License is not yet valid");
 
     public static LicenseValidationResult InvalidFormat() => Failure("invalid_format", "License format is invalid");
+
+    public static LicenseValidationResult ScopeMismatch(string? message = null) => Failure(
+        "scope_mismatch",
+        string.IsNullOrWhiteSpace(message)
+            ? "License scope does not match the selected install target"
+            : message!);
+
+    public static LicenseValidationResult TenantMismatch(string? message = null) => Failure(
+        "tenant_mismatch",
+        string.IsNullOrWhiteSpace(message)
+            ? "License does not apply to the selected tenant"
+            : message!);
+
+    public static LicenseValidationResult PlatformOnlyFeatureNotAllowed(string featureName) => Failure(
+        "platform_feature_not_allowed",
+        $"Feature '{featureName}' can only be enabled on the platform license.");
 }

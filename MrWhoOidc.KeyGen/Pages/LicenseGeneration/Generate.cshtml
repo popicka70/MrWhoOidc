@@ -70,10 +70,48 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label" asp-for="Scope">License Scope <span class="text-danger">*</span></label>
+                        <div class="d-flex flex-wrap gap-3" id="scope-options">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="Scope" value="platform" id="scope-platform">
+                                <label class="form-check-label" for="scope-platform">Platform license (all tenants)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="Scope" value="tenant" id="scope-tenant">
+                                <label class="form-check-label" for="scope-tenant">Tenant license</label>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Platform licenses apply globally; tenant licenses target a specific tenant.</small>
+                        <span asp-validation-for="Scope" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
                         <label for="Organization" class="form-label">Organization Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="Organization" name="Organization" asp-for="Organization" 
                                placeholder="e.g., Acme Corp" required>
                         <span asp-validation-for="Organization" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="IssuedTo">Issued to</label>
+                        <input type="text" class="form-control" asp-for="IssuedTo" placeholder="Contact, tenant, or agreement identifier">
+                        <span asp-validation-for="IssuedTo" class="text-danger"></span>
+                        <small class="form-text text-muted">Shown in admin UI; defaults to tenant slug when omitted for tenant licenses.</small>
+                    </div>
+
+                    <div class="row g-3 @(Model.IsTenantScope ? string.Empty : "d-none")" data-scope-section="tenant">
+                        <div class="col-md-6">
+                            <label class="form-label" asp-for="TenantId">Tenant ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" asp-for="TenantId" placeholder="00000000-0000-0000-0000-000000000000">
+                            <span asp-validation-for="TenantId" class="text-danger"></span>
+                            <small class="form-text text-muted">Required to ensure the license is pinned to the correct tenant.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" asp-for="TenantSlug">Tenant slug</label>
+                            <input type="text" class="form-control" asp-for="TenantSlug" placeholder="default-tenant">
+                            <span asp-validation-for="TenantSlug" class="text-danger"></span>
+                            <small class="form-text text-muted">Optional friendly identifier displayed in admin UI.</small>
+                        </div>
                     </div>
 
                     <div class="row">
@@ -95,30 +133,65 @@
                         </div>
                     </div>
 
+                    @{
+                        var normalizedTier = (Model.Tier ?? string.Empty).Trim().ToLowerInvariant();
+                        var tierLockedFeatures = Model.TierFeatureMap.TryGetValue(normalizedTier, out var lockedFeatures)
+                            ? lockedFeatures
+                            : new List<string>();
+                    }
+
                     <div class="mb-3">
-                        <label for="Features" class="form-label">Enabled Features (Optional)</label>
-                        <div class="input-group mb-2">
-                            <input type="text" class="form-control" id="Features" name="Features" asp-for="Features" 
-                                   placeholder="e.g., sso,mfa,audit-logs">
-                            <button class="btn btn-outline-secondary" type="button" onclick="addFeature('multi_tenancy')">+ Multi-Tenancy</button>
+                        <label class="form-label">Enabled features</label>
+                        <small class="form-text text-muted d-block mb-2">Platform-only features are disabled when generating a tenant license.</small>
+                        <div class="row g-2">
+                            @foreach (var feature in Model.FeatureOptions)
+                            {
+                                var checkboxId = $"feature-{feature.Key}";
+                                var isTierLocked = tierLockedFeatures.Any(f => f.Equals(feature.Key, System.StringComparison.OrdinalIgnoreCase)) && !(Model.IsTenantScope && feature.IsPlatformOnly);
+                                var isDisabled = (Model.IsTenantScope && feature.IsPlatformOnly) || isTierLocked;
+                                var isChecked = Model.SelectedFeatures.Any(f => f.Equals(feature.Key, System.StringComparison.OrdinalIgnoreCase));
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input" type="checkbox" name="SelectedFeatures" value="@feature.Key" id="@checkboxId"
+                                               data-feature-key="@feature.Key"
+                                               data-platform-only="@(feature.IsPlatformOnly.ToString().ToLowerInvariant())"
+                                               data-tier-lock="@(isTierLocked.ToString().ToLowerInvariant())"
+                                               @(isChecked ? "checked" : null)
+                                               @(isDisabled ? "disabled" : null) />
+                                        <label class="form-check-label fw-semibold" for="@checkboxId">
+                                            @feature.DisplayName
+                                            @if (feature.IsPlatformOnly)
+                                            {
+                                                <span class="badge bg-warning text-dark ms-1">Platform only</span>
+                                            }
+                                        </label>
+                                        <div class="small text-muted">@feature.Description</div>
+                                    </div>
+                                </div>
+                            }
                         </div>
-                        <span asp-validation-for="Features" class="text-danger"></span>
-                        <small class="form-text text-muted">Comma-separated list of feature identifiers</small>
+                        <span asp-validation-for="SelectedFeatures" class="text-danger"></span>
                     </div>
 
-                    <script>
-                        function addFeature(feature) {
-                            var input = document.getElementById('Features');
-                            var current = input.value.trim();
-                            if (current) {
-                                if (!current.includes(feature)) {
-                                    input.value = current + ',' + feature;
-                                }
-                            } else {
-                                input.value = feature;
+                    <div class="mb-3 @(Model.IsPlatformScope ? string.Empty : "d-none")" data-scope-section="platform">
+                        <label class="form-label">Default tenant feature overrides</label>
+                        <small class="form-text text-muted d-block mb-2">Optional: pick the subset of features the default tenant should inherit automatically.</small>
+                        <div class="row g-2">
+                            @foreach (var feature in Model.FeatureOptions)
+                            {
+                                var checkboxId = $"default-feature-{feature.Key}";
+                                var isChecked = Model.SelectedDefaultTenantFeatures.Any(f => f.Equals(feature.Key, System.StringComparison.OrdinalIgnoreCase));
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input" type="checkbox" name="SelectedDefaultTenantFeatures" value="@feature.Key" id="@checkboxId" @(isChecked ? "checked" : null) />
+                                        <label class="form-check-label fw-semibold" for="@checkboxId">@feature.DisplayName</label>
+                                        <div class="small text-muted">Must also be enabled in the platform license.</div>
+                                    </div>
+                                </div>
                             }
-                        }
-                    </script>
+                        </div>
+                        <span asp-validation-for="SelectedDefaultTenantFeatures" class="text-danger"></span>
+                    </div>
 
                     <div class="mb-3">
                         <label for="Limits" class="form-label">Resource Limits (Optional, JSON)</label>
@@ -162,7 +235,11 @@
                     <li><strong>exp:</strong> Expiration timestamp</li>
                     <li><strong>tier:</strong> License tier level</li>
                     <li><strong>organization:</strong> Organization name</li>
+                    <li><strong>license_scope:</strong> <code>platform</code> or <code>tenant</code></li>
+                    <li><strong>issued_to:</strong> Recipient identifier</li>
+                    <li><strong>tenant_id / tenant_slug:</strong> Required when scope is tenant</li>
                     <li><strong>features:</strong> Enabled features (optional)</li>
+                    <li><strong>default_tenant_features:</strong> Default tenant overrides (platform only)</li>
                     <li><strong>limits:</strong> Resource quotas (optional)</li>
                 </ul>
                 <hr>
@@ -177,4 +254,90 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script id="tierFeatureMap" type="application/json">@Html.Raw(Model.TierFeatureMapJson)</script>
+    <script>
+        (function () {
+            const scopeRadios = document.querySelectorAll('input[name="Scope"]');
+            const scopeSections = document.querySelectorAll('[data-scope-section]');
+            const featureCheckboxes = document.querySelectorAll('input[name="SelectedFeatures"]');
+            const tierSelect = document.getElementById('Tier');
+            const tierFeatureMapElement = document.getElementById('tierFeatureMap');
+            const tierFeatureMap = tierFeatureMapElement ? JSON.parse(tierFeatureMapElement.textContent) : {};
+
+            function currentScope() {
+                return Array.from(scopeRadios).find(r => r.checked)?.value || 'platform';
+            }
+
+            function applyTierLocks(scope) {
+                if (!tierSelect) {
+                    return;
+                }
+
+                const normalizedTier = (tierSelect.value || '').toLowerCase();
+                const normalizedScope = (scope || 'platform').toLowerCase();
+                const isTenantScope = normalizedScope === 'tenant';
+                const tierFeatures = tierFeatureMap[normalizedTier] || [];
+                const tierFeatureSet = new Set(tierFeatures.map(f => f.toLowerCase()));
+
+                featureCheckboxes.forEach(input => {
+                    const featureKey = (input.dataset.featureKey || '').toLowerCase();
+                    const isPlatformOnly = input.dataset.platformOnly === 'true';
+                    const shouldLock = tierFeatureSet.has(featureKey) && !(isTenantScope && isPlatformOnly);
+                    input.dataset.tierLock = shouldLock ? 'true' : 'false';
+                    if (shouldLock) {
+                        input.checked = true;
+                    }
+                });
+            }
+
+            function applyScope(scope) {
+                scopeSections.forEach(section => {
+                    const targetScope = section.getAttribute('data-scope-section');
+                    section.classList.toggle('d-none', targetScope !== scope);
+                });
+
+                const isTenant = scope === 'tenant';
+                featureCheckboxes.forEach(input => {
+                    const isPlatformOnly = input.dataset.platformOnly === 'true';
+                    const isTierLocked = input.dataset.tierLock === 'true';
+
+                    if (isTierLocked) {
+                        input.checked = true;
+                        input.setAttribute('disabled', 'disabled');
+                        return;
+                    }
+
+                    if (isTenant && isPlatformOnly) {
+                        input.checked = false;
+                        input.setAttribute('disabled', 'disabled');
+                        return;
+                    }
+
+                    input.removeAttribute('disabled');
+                });
+            }
+
+            scopeRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (radio.checked) {
+                        const scope = radio.value;
+                        applyTierLocks(scope);
+                        applyScope(scope);
+                    }
+                });
+            });
+
+            if (tierSelect) {
+                tierSelect.addEventListener('change', () => {
+                    const scope = currentScope();
+                    applyTierLocks(scope);
+                    applyScope(scope);
+                });
+            }
+
+            const initialScope = currentScope();
+            applyTierLocks(initialScope);
+            applyScope(initialScope);
+        })();
+    </script>
 }

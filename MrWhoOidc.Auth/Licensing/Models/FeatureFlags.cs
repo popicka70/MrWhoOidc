@@ -51,6 +51,17 @@ public static class FeatureFlags
         ProfessionalServices
     };
 
+    public static IReadOnlySet<string> PlatformOnlyFeatures { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        MultiTenancy
+    };
+
+    public static bool IsPlatformOnlyFeature(string featureName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureName);
+        return PlatformOnlyFeatures.Contains(featureName);
+    }
+
     public static IReadOnlySet<string> GetFeaturesForTier(LicenseTier tier)
     {
         return tier switch

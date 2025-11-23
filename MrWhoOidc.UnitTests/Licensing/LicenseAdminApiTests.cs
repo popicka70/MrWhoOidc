@@ -59,6 +59,12 @@ public sealed class LicenseAdminApiTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "feature-one" },
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["seats"] = 1000 },
             false,
+            true,
+            LicenseScope.Tenant,
+            "default",
+            DefaultTenantId,
+            "default",
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);
@@ -155,6 +161,12 @@ public sealed class LicenseAdminApiTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "feature-x" },
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["users"] = 500 },
             false,
+            true,
+            LicenseScope.Tenant,
+            "tenant",
+            requestedTenant,
+            "tenant-slug",
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);
@@ -199,6 +211,12 @@ public sealed class LicenseAdminApiTests
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "feature-a", "feature-b" },
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["seats"] = 200 },
             false,
+            true,
+            LicenseScope.Platform,
+            "platform",
+            null,
+            null,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             true);
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);

@@ -11,7 +11,13 @@ public sealed record LicenseInfo(
     IReadOnlySet<string> EnabledFeatures,
     IReadOnlyDictionary<string, long> Limits,
     bool IsExpired,
-    bool IsValid)
+    bool IsValid,
+    LicenseScope Scope,
+    string? IssuedTo,
+    Guid? LicensedTenantId,
+    string? LicensedTenantSlug,
+    IReadOnlySet<string> DefaultTenantFeatures,
+    bool HasExplicitScopeClaim)
 {
     public LicenseTier TierEnum => LicenseTierExtensions.FromTierString(Tier);
 

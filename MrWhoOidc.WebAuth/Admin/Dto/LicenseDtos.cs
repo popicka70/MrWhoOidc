@@ -19,7 +19,11 @@ public sealed record LicenseInfoDto(
     bool IsValid,
     int? DaysUntilExpiry,
     IReadOnlyCollection<string> EnabledFeatures,
-    IReadOnlyDictionary<string, long> Limits);
+    IReadOnlyDictionary<string, long> Limits,
+    string Scope,
+    string? IssuedTo,
+    Guid? LicensedTenantId,
+    string? LicensedTenantSlug);
 
 public sealed record LicenseValidationResponseDto(
     bool IsValid,
@@ -119,7 +123,11 @@ internal static class LicenseDtoMapper
             license.IsValid,
             daysUntilExpiry,
             enabledFeatures,
-            limits);
+            limits,
+            license.Scope.ToString().ToLowerInvariant(),
+            license.IssuedTo,
+            license.LicensedTenantId,
+            license.LicensedTenantSlug);
     }
 
     public static LicenseValidationResponseDto ToDto(LicenseValidationResult result, DateTimeOffset now)

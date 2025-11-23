@@ -131,8 +131,20 @@ public class KeyGenDbContext : DbContext
 
             entity.HasIndex(e => e.Tier);
 
+            entity.Property(e => e.Scope)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.HasIndex(e => e.Scope);
+
             entity.Property(e => e.Organization)
                 .HasMaxLength(200);
+
+            entity.Property(e => e.IssuedTo)
+                .HasMaxLength(200);
+
+            entity.Property(e => e.TenantSlug)
+                .HasMaxLength(100);
 
             entity.Property(e => e.ValidFrom)
                 .IsRequired();
