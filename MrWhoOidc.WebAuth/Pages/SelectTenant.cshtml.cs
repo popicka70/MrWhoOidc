@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -12,19 +13,36 @@ namespace MrWhoOidc.WebAuth.Pages;
 /// </summary>
 public class SelectTenantModel : PageModel
 {
+    private const string DiscoveredTenantsSessionKey = "DiscoveredTenants";
+    private const string VerificationTicketSessionKey = "TenantDiscoveryVerified";
+    private static readonly TimeSpan VerificationLifetime = TimeSpan.FromMinutes(5);
+
     private readonly ILogger<SelectTenantModel> _logger;
     private readonly ITenantSwitchingService _tenantSwitchingService;
+    private readonly ITenantCredentialVerifier _credentialVerifier;
 
-    public SelectTenantModel(ILogger<SelectTenantModel> logger, ITenantSwitchingService tenantSwitchingService)
+    public SelectTenantModel(
+        ILogger<SelectTenantModel> logger,
+        ITenantSwitchingService tenantSwitchingService,
+        ITenantCredentialVerifier credentialVerifier)
     {
         _logger = logger;
         _tenantSwitchingService = tenantSwitchingService;
+        _credentialVerifier = credentialVerifier;
     }
 
+    [BindProperty]
     public string? Email { get; set; }
+
+    [BindProperty]
     public string? ReturnUrl { get; set; }
+
+    [BindProperty]
+    public string Password { get; set; } = string.Empty;
+
     public List<TenantInfo>? Tenants { get; set; }
     public string? ErrorMessage { get; set; }
+    public bool RequiresVerification { get; set; } = true;
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -33,59 +51,33 @@ public class SelectTenantModel : PageModel
         {
             Email = User.FindFirst(ClaimTypes.Email)?.Value ?? User.Identity.Name;
             var userTenants = await _tenantSwitchingService.GetUserTenantsAsync(User);
-            
+
             Tenants = userTenants.Select(t => new TenantInfo
             {
                 Name = t.TenantName,
                 Slug = t.TenantSlug,
-                LoginUrl = $"/t/{t.TenantSlug}/account", // Direct to dashboard
-                LogoUrl = null, // TODO: Add logo support in TenantAccessInfo
+                LoginUrl = $"/t/{t.TenantSlug}/account",
+                LogoUrl = null,
                 LastLoginAt = null
             }).ToList();
 
+            RequiresVerification = false;
             return Page();
         }
 
-        // Retrieve data from TempData (set by DiscoverTenant page)
-        Email = TempData["Email"] as string;
-        ReturnUrl = TempData["ReturnUrl"] as string;
-
-        if (string.IsNullOrEmpty(Email))
+        if (!LoadAnonymousContext(includeTenants: false))
         {
-            _logger.LogWarning("SelectTenant page accessed without email in TempData");
             return RedirectToPage("/DiscoverTenant");
         }
 
-        // Retrieve tenant list from session
-        var tenantsJson = HttpContext.Session.GetString("DiscoveredTenants");
-        if (string.IsNullOrEmpty(tenantsJson))
-        {
-            _logger.LogWarning("SelectTenant page accessed without tenant list in session");
-            ErrorMessage = "Session expired. Please enter your email again.";
-            return RedirectToPage("/DiscoverTenant");
-        }
+        RequiresVerification = !HasValidVerificationTicket(Email!);
 
-        try
+        if (!RequiresVerification)
         {
-            Tenants = System.Text.Json.JsonSerializer.Deserialize<List<TenantInfo>>(tenantsJson);
-
-            if (Tenants == null || !Tenants.Any())
+            if (!LoadAnonymousContext(includeTenants: true))
             {
-                _logger.LogWarning("Deserialized tenant list is empty");
                 return RedirectToPage("/DiscoverTenant");
             }
-
-            _logger.LogDebug("Displaying {Count} tenants for selection", Tenants.Count);
-
-            // Preserve TempData for potential reloads
-            TempData.Keep("Email");
-            TempData.Keep("ReturnUrl");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deserializing tenant list from session");
-            ErrorMessage = "An error occurred loading your organizations. Please try again.";
-            return RedirectToPage("/DiscoverTenant");
         }
 
         return Page();
@@ -118,6 +110,21 @@ public class SelectTenantModel : PageModel
         Email = Request.Form["Email"];
         ReturnUrl = Request.Form["ReturnUrl"];
 
+        if (string.IsNullOrEmpty(Email))
+        {
+            _logger.LogWarning("Tenant selection submitted without email");
+            return RedirectToPage("/DiscoverTenant");
+        }
+
+        if (!HasValidVerificationTicket(Email))
+        {
+            _logger.LogWarning("Tenant selection attempted without verification for email hash {EmailHash}", HashEmail(Email));
+            ErrorMessage = "Please confirm your password before selecting an organization.";
+            RequiresVerification = true;
+            LoadAnonymousContext(includeTenants: false);
+            return Page();
+        }
+
         if (string.IsNullOrEmpty(selectedTenantSlug))
         {
             _logger.LogWarning("Tenant selection submitted without selectedTenantSlug");
@@ -125,14 +132,8 @@ public class SelectTenantModel : PageModel
             return await OnGetAsync();
         }
 
-        if (string.IsNullOrEmpty(Email))
-        {
-            _logger.LogWarning("Tenant selection submitted without email");
-            return RedirectToPage("/DiscoverTenant");
-        }
-
         // Retrieve tenant list to validate selection
-        var tenantsJson = HttpContext.Session.GetString("DiscoveredTenants");
+        var tenantsJson = HttpContext.Session.GetString(DiscoveredTenantsSessionKey);
         if (string.IsNullOrEmpty(tenantsJson))
         {
             _logger.LogWarning("Session expired during tenant selection");
@@ -164,7 +165,8 @@ public class SelectTenantModel : PageModel
             }
 
             // Clear session data
-            HttpContext.Session.Remove("DiscoveredTenants");
+            HttpContext.Session.Remove(DiscoveredTenantsSessionKey);
+            HttpContext.Session.Remove(VerificationTicketSessionKey);
 
             return Redirect(loginUrl);
         }
@@ -176,6 +178,38 @@ public class SelectTenantModel : PageModel
         }
     }
 
+    public async Task<IActionResult> OnPostVerifyAsync()
+    {
+        Email = Request.Form["Email"];
+        ReturnUrl = Request.Form["ReturnUrl"];
+
+        if (!LoadAnonymousContext(includeTenants: false))
+        {
+            return RedirectToPage("/DiscoverTenant");
+        }
+
+        if (string.IsNullOrWhiteSpace(Password))
+        {
+            ErrorMessage = "Password is required.";
+            RequiresVerification = true;
+            return Page();
+        }
+
+        var verificationResult = await _credentialVerifier.VerifyAsync(Email!, Password, HttpContext.RequestAborted);
+
+        if (!verificationResult.Success)
+        {
+            ErrorMessage = "Invalid email or password.";
+            RequiresVerification = true;
+            Password = string.Empty;
+            return Page();
+        }
+
+        StoreVerificationTicket(Email!);
+        Password = string.Empty;
+        return RedirectToPage(new { ReturnUrl });
+    }
+
     private static string HashEmail(string email)
     {
         if (string.IsNullOrEmpty(email))
@@ -185,4 +219,93 @@ public class SelectTenantModel : PageModel
         var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(email.ToLowerInvariant()));
         return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();
     }
+
+    private bool LoadAnonymousContext(bool includeTenants)
+    {
+        Email ??= TempData["Email"] as string;
+        ReturnUrl ??= TempData["ReturnUrl"] as string;
+
+        if (string.IsNullOrEmpty(Email))
+        {
+            _logger.LogWarning("SelectTenant page accessed without email in TempData");
+            return false;
+        }
+
+        var tenantsJson = HttpContext.Session.GetString(DiscoveredTenantsSessionKey);
+        if (string.IsNullOrEmpty(tenantsJson))
+        {
+            _logger.LogWarning("SelectTenant page accessed without tenant list in session");
+            ErrorMessage = "Session expired. Please enter your email again.";
+            return false;
+        }
+
+        if (includeTenants)
+        {
+            try
+            {
+                Tenants = JsonSerializer.Deserialize<List<TenantInfo>>(tenantsJson);
+
+                if (Tenants == null || !Tenants.Any())
+                {
+                    _logger.LogWarning("Deserialized tenant list is empty");
+                    return false;
+                }
+
+                    _logger.LogDebug("Displaying {Count} tenants for selection", Tenants.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deserializing tenant list from session");
+                ErrorMessage = "An error occurred loading your organizations. Please try again.";
+                return false;
+            }
+        }
+
+        TempData.Keep("Email");
+        TempData.Keep("ReturnUrl");
+        return true;
+    }
+
+    private bool HasValidVerificationTicket(string email)
+    {
+        var json = HttpContext.Session.GetString(VerificationTicketSessionKey);
+        if (string.IsNullOrEmpty(json))
+        {
+            return false;
+        }
+
+        try
+        {
+            var ticket = JsonSerializer.Deserialize<TenantVerificationTicket>(json);
+            if (ticket == null)
+            {
+                return false;
+            }
+
+            if (!string.Equals(ticket.EmailHash, HashEmail(email), StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(ticket.IssuedAtUnixSeconds);
+            if (DateTimeOffset.UtcNow - issuedAt > VerificationLifetime)
+            {
+                return false;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private void StoreVerificationTicket(string email)
+    {
+        var ticket = new TenantVerificationTicket(HashEmail(email), DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        HttpContext.Session.SetString(VerificationTicketSessionKey, JsonSerializer.Serialize(ticket));
+    }
+
+    private sealed record TenantVerificationTicket(string EmailHash, long IssuedAtUnixSeconds);
 }

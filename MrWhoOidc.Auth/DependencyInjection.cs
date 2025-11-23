@@ -129,6 +129,7 @@ public static class AuthServiceCollectionExtensions
 
         // Tenant discovery service for email-first login flow
         services.AddScoped<ITenantDiscoveryService, TenantDiscoveryService>();
+        services.AddScoped<ITenantCredentialVerifier, TenantCredentialVerifier>();
 
         // PAR store (EF Core-backed). Swap implementation here to move to Redis later.
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
