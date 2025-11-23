@@ -1,8 +1,12 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -32,7 +36,10 @@ public interface ITenantSwitchingService
     string? GetPreferredTenantSlug(HttpContext httpContext);
 }
 
-public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolver userAccountResolver) : ITenantSwitchingService
+public class TenantSwitchingService(
+    AuthDbContext db,
+    ICurrentUserAccountResolver userAccountResolver,
+    ILogger<TenantSwitchingService> logger) : ITenantSwitchingService
 {
 
     public async Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user)
@@ -126,6 +133,7 @@ public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolve
                     TenantName = g.Key.TenantName,
                     TenantSlug = g.Key.TenantSlug,
                     IssuerUri = g.Key.IssuerUri,
+                    TenantUserId = g.Select(entry => entry.UserId).FirstOrDefault(),
                     HasAdminAccess = hasAdminRole || adminTenantIds.Contains(g.Key.TenantId),
                     RoleCount = roleNames.Count
                 };
@@ -158,6 +166,8 @@ public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolve
         {
             httpContext.Session.Remove(TenantSessionKeys.PreferredTenantSlug);
         }
+
+        await ReissueAuthenticationAsync(httpContext, tenantId);
     }
 
     public Guid? GetPreferredTenantId(HttpContext httpContext)
@@ -190,7 +200,8 @@ public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolve
                 TenantName = x.t.Name,
                 TenantSlug = x.t.Slug,
                 IssuerUri = x.t.IssuerUri,
-                RoleName = x.r.Name
+                RoleName = x.r.Name,
+                x.a.UserId
             })
             .ToListAsync();
 
@@ -202,11 +213,91 @@ public class TenantSwitchingService(AuthDbContext db, ICurrentUserAccountResolve
                 TenantName = g.Key.TenantName,
                 TenantSlug = g.Key.TenantSlug,
                 IssuerUri = g.Key.IssuerUri,
+                TenantUserId = g.Select(x => x.UserId).FirstOrDefault(),
                 HasAdminAccess = g.Any(x => x.RoleName == "platform-admin" || x.RoleName == "tenant-admin"),
                 RoleCount = g.Select(x => x.RoleName).Distinct().Count()
             })
             .OrderBy(t => t.TenantName)
             .ToList();
+    }
+
+    private async Task ReissueAuthenticationAsync(HttpContext httpContext, Guid tenantId)
+    {
+        if (!(httpContext.User?.Identity?.IsAuthenticated ?? false))
+        {
+            return;
+        }
+
+        var tenantInfos = await GetUserTenantsAsync(httpContext.User);
+        var targetTenant = tenantInfos.FirstOrDefault(t => t.TenantId == tenantId);
+        if (targetTenant is null)
+        {
+            logger.LogWarning("Tenant switch requested for tenant {TenantId} but user does not have access", tenantId);
+            return;
+        }
+
+        if (targetTenant.TenantUserId == Guid.Empty)
+        {
+            logger.LogWarning("No tenant-specific user id resolved for tenant {TenantId}", tenantId);
+            return;
+        }
+
+        var tenantUser = await db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == targetTenant.TenantUserId, httpContext.RequestAborted);
+
+        if (tenantUser is null)
+        {
+            logger.LogWarning("Tenant-specific user {UserId} not found for tenant {TenantId}", targetTenant.TenantUserId, tenantId);
+            return;
+        }
+
+        var resolution = await userAccountResolver.ResolveAsync(httpContext.User, httpContext.RequestAborted);
+        var accountId = resolution?.UserAccountId ?? resolution?.UserId;
+
+        var existingAuth = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var props = existingAuth?.Properties ?? new AuthenticationProperties();
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, tenantUser.Id.ToString()),
+            new(ClaimTypes.Name, tenantUser.Username),
+            new("auth_time", httpContext.User.FindFirst("auth_time")?.Value ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+        };
+
+        if (accountId.HasValue)
+        {
+            claims.Add(new(UserClaimTypes.UserAccountId, accountId.Value.ToString()));
+        }
+
+        if (!string.IsNullOrEmpty(tenantUser.Email))
+        {
+            claims.Add(new(ClaimTypes.Email, tenantUser.Email));
+        }
+
+        var idpClaim = httpContext.User.FindFirst("idp")?.Value;
+        if (!string.IsNullOrEmpty(idpClaim))
+        {
+            claims.Add(new("idp", idpClaim));
+        }
+
+        var amrClaims = httpContext.User.FindAll("amr").ToList();
+        if (amrClaims.Count > 0)
+        {
+            foreach (var amr in amrClaims)
+            {
+                claims.Add(new("amr", amr.Value));
+            }
+        }
+        else
+        {
+            claims.Add(new("amr", "tenant_switch"));
+        }
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, props);
+        logger.LogInformation("User switched to tenant {TenantId} with subject {UserId}", tenantId, tenantUser.Id);
     }
 
     private sealed record UserTenantRow(Guid UserId, Guid TenantId, string TenantName, string TenantSlug, string IssuerUri);
@@ -218,6 +309,7 @@ public class TenantAccessInfo
     public string TenantName { get; set; } = string.Empty;
     public string TenantSlug { get; set; } = string.Empty;
     public string IssuerUri { get; set; } = string.Empty;
+    public Guid TenantUserId { get; set; }
     public bool HasAdminAccess { get; set; }
     public int RoleCount { get; set; }
 }
