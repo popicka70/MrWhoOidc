@@ -37,7 +37,10 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
     {
-        var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
+        using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
         if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
             return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
 
@@ -143,8 +146,8 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             var jti = Guid.NewGuid().ToString("N");
             var accessClaims = new List<System.Security.Claims.Claim>
             {
-                new("sub", entity.UserId.ToString()),
-                new("scope", string.Join(' ', scopes)),
+                new(OidcConstants.Claims.Subject, entity.UserId.ToString()),
+                new(OAuthConstants.Parameters.Scope, string.Join(' ', scopes)),
                 new("jti", jti)
             };
             
@@ -160,20 +163,20 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 var cnf = JsonSerializer.Serialize(new { jkt = dpopJkt });
                 accessClaims.Add(new("cnf", cnf));
             }
-            if (scopes.Contains("roles") && roleNames.Length > 0)
+            if (scopes.Contains(OidcConstants.Scopes.Roles) && roleNames.Length > 0)
             {
-                foreach (var r in roleNames) accessClaims.Add(new("roles", r));
+                foreach (var r in roleNames) accessClaims.Add(new(OidcConstants.Claims.Roles, r));
             }
             if (!string.IsNullOrEmpty(realmName))
             {
-                accessClaims.Add(new("realm", realmName));
+                accessClaims.Add(new(OidcConstants.Claims.Realm, realmName));
             }
             // Propagate upstream context into access token when available
-            if (!string.IsNullOrWhiteSpace(upstreamIdp)) accessClaims.Add(new("idp", upstreamIdp!));
-            if (!string.IsNullOrWhiteSpace(upstreamAcr)) accessClaims.Add(new("acr", upstreamAcr!));
+            if (!string.IsNullOrWhiteSpace(upstreamIdp)) accessClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
+            if (!string.IsNullOrWhiteSpace(upstreamAcr)) accessClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
             if (authOptions.Value.EmitAmrInAccessToken)
             {
-                foreach (var amr in combinedAmr) accessClaims.Add(new("amr", amr));
+                foreach (var amr in combinedAmr) accessClaims.Add(new(OidcConstants.Claims.Amr, amr));
             }
 
             // Propagate mapped claims into access token when allow-listed (skip amr to avoid conflicts)
@@ -182,7 +185,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 foreach (var name in allowAccess)
                 {
-                    if (string.Equals(name, "amr", StringComparison.Ordinal)) continue; // handled above
+                    if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue; // handled above
                     if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                     {
                         accessClaims.Add(new(name, val));
@@ -199,25 +202,25 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Prepare ID token claims, include profile/email if requested
         var idClaims = new List<System.Security.Claims.Claim>
         {
-            new("sub", entity.UserId.ToString())
+            new(OidcConstants.Claims.Subject, entity.UserId.ToString())
         };
 
         if (user is not null)
         {
-            if (scopes.Contains("profile") && !string.IsNullOrEmpty(user.Name))
-                idClaims.Add(new("name", user.Name));
-            if (scopes.Contains("email") && !string.IsNullOrEmpty(user.Email))
+            if (scopes.Contains(OidcConstants.Scopes.Profile) && !string.IsNullOrEmpty(user.Name))
+                idClaims.Add(new(OidcConstants.Claims.Name, user.Name));
+            if (scopes.Contains(OidcConstants.Scopes.Email) && !string.IsNullOrEmpty(user.Email))
             {
-                idClaims.Add(new("email", user.Email));
-                idClaims.Add(new("email_verified", user.EmailVerified ? "true" : "false"));
+                idClaims.Add(new(OidcConstants.Claims.Email, user.Email));
+                idClaims.Add(new(OidcConstants.Claims.EmailVerified, user.EmailVerified ? "true" : "false"));
             }
-            if (scopes.Contains("roles") && roleNames.Length > 0)
+            if (scopes.Contains(OidcConstants.Scopes.Roles) && roleNames.Length > 0)
             {
-                foreach (var r in roleNames) idClaims.Add(new("roles", r));
+                foreach (var r in roleNames) idClaims.Add(new(OidcConstants.Claims.Roles, r));
             }
             if (!string.IsNullOrEmpty(realmName))
             {
-                idClaims.Add(new("realm", realmName));
+                idClaims.Add(new(OidcConstants.Claims.Realm, realmName));
             }
         }
 
@@ -226,11 +229,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         if (meta.TryGetAuthTime(code, out var at)) authTime = at;
 
         // Propagate upstream context into ID token as well
-        if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new("idp", upstreamIdp!));
-        if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new("acr", upstreamAcr!));
+        if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
+        if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
         if (authOptions.Value.EmitAmrInIdToken)
         {
-            foreach (var amr in combinedAmr) idClaims.Add(new("amr", amr));
+            foreach (var amr in combinedAmr) idClaims.Add(new(OidcConstants.Claims.Amr, amr));
         }
 
         // Propagate mapped claims into ID token when allow-listed (skip amr to avoid conflicts)
@@ -239,7 +242,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         {
             foreach (var name in allowId)
             {
-                if (string.Equals(name, "amr", StringComparison.Ordinal)) continue; // handled above
+                if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue; // handled above
                 if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                 {
                     idClaims.Add(new(name, val));
@@ -250,7 +253,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Include sid for front-channel logout if available
         if (meta.TryGetSid(code, out var sid) && !string.IsNullOrWhiteSpace(sid))
         {
-            idClaims.Add(new("sid", sid!));
+            idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
         }
 
         var idToken = jwt.CreateJwt(
@@ -267,6 +270,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         entity.Consumed = true;
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
 
         // Cleanup
         meta.Remove(code);
@@ -281,6 +285,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             scope = string.Join(' ', scopes)
         };
         return (true, payload, null, 200);
+        }
+        catch
+        {
+            throw;
+        }
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(

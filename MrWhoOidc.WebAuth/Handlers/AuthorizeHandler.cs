@@ -133,16 +133,16 @@ public sealed class AuthorizeHandler(
             {
                 var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    "request_uri", // required for PAR
-                    "state",       // allowed by RFC 9101
-                    "idp",         // our custom provider selector
+                    OAuthConstants.Parameters.RequestUri, // required for PAR
+                    OAuthConstants.Parameters.State,       // allowed by RFC 9101
+                    OidcConstants.Claims.Idp,         // our custom provider selector
                     "idp_hint",    // our custom hint
                     "qr",          // QR login flow hint
-                    "login_hint",  // standard hints we want to preserve visually
-                    "acr_values",
-                    "prompt",
-                    "ui_locales",
-                    "max_age"
+                    OidcConstants.Parameters.LoginHint,  // standard hints we want to preserve visually
+                    OidcConstants.Parameters.AcrValues,
+                    OidcConstants.Parameters.Prompt,
+                    OidcConstants.Parameters.UiLocales,
+                    OidcConstants.Parameters.MaxAge
                 };
 
                 var keys = http.Request.Query.Keys.Select(k => k.ToString());
@@ -152,7 +152,7 @@ public sealed class AuthorizeHandler(
                     var builder = new System.Text.StringBuilder("?request_uri=");
                     builder.Append(Uri.EscapeDataString(requestUriRaw));
 
-                    foreach (var name in allowed.Where(n => !string.Equals(n, "request_uri", StringComparison.OrdinalIgnoreCase)))
+                    foreach (var name in allowed.Where(n => !string.Equals(n, OAuthConstants.Parameters.RequestUri, StringComparison.OrdinalIgnoreCase)))
                     {
                         var val = http.Request.Query[name].ToString();
                         if (!string.IsNullOrEmpty(val))
@@ -341,7 +341,7 @@ public sealed class AuthorizeHandler(
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
                     // If JARM requested, return a signed/encrypted error JWT instead of parameters
-                    if (string.Equals(effectiveReq.response_mode, "query.jwt", StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, "form_post.jwt", StringComparison.Ordinal))
+                    if (string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
                     {
                         EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(effectiveReq.client_id);
                         var jarm = CreateJarmErrorJwt(http, jwt, effectiveReq.client_id!, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state, enc);
@@ -533,14 +533,22 @@ public sealed class AuthorizeHandler(
                 return Results.Redirect(consentUrl);
             }
 
-            var (ok, _, redirect, code) = await codes.IssueAsync(validationResult, userId);
-            if (!ok || redirect is null) return ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
-
-            // Now that authorization succeeded, consume PAR if used
-            if (isPar)
+            string? code;
+            string? redirect;
+            using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
             {
-                parStore.MarkConsumedById(parId!);
-                metrics.ParConsumed.Add(1);
+                var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
+                if (!ok || r is null) return ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
+                code = c;
+                redirect = r;
+
+                // Now that authorization succeeded, consume PAR if used
+                if (isPar)
+                {
+                    parStore.MarkConsumedById(parId!);
+                    metrics.ParConsumed.Add(1);
+                }
+                await transaction.CommitAsync(http.RequestAborted);
             }
 
             // Capture auth_time from login cookie claims
@@ -585,7 +593,7 @@ public sealed class AuthorizeHandler(
             }
 
             // JARM response if requested
-            if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == "query.jwt" || validationResult.ResponseMode == "form_post.jwt"))
+            if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == OidcConstants.ResponseModes.QueryJwt || validationResult.ResponseMode == OidcConstants.ResponseModes.FormPostJwt))
             {
                 EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(validationResult.ClientId);
                 var jarm = CreateJarmSuccessJwt(http, jwt, validationResult.ClientId!, code!, validationResult.ResponseMode!, effectiveReq.state, enc);
@@ -713,7 +721,7 @@ public sealed class AuthorizeHandler(
 
     private static IResult JarmRedirect(string redirectUri, string responseMode, string jarmJwt)
     {
-        if (string.Equals(responseMode, "query.jwt", StringComparison.Ordinal))
+        if (string.Equals(responseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal))
         {
             var uri = new UriBuilder(redirectUri);
             var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
@@ -723,7 +731,7 @@ public sealed class AuthorizeHandler(
             uri.Query = query.ToString();
             return Results.Redirect(uri.ToString());
         }
-        if (string.Equals(responseMode, "form_post.jwt", StringComparison.Ordinal))
+        if (string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
             var html = $"<html><body onload=\"document.forms[0].submit()\"><form method=\"post\" action=\"{System.Web.HttpUtility.HtmlAttributeEncode(redirectUri)}\"><input type=\"hidden\" name=\"response\" value=\"{System.Web.HttpUtility.HtmlAttributeEncode(jarmJwt)}\" /></form></body></html>";
             return Results.Content(html, "text/html; charset=utf-8");

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.AspNetCore.TestHost;
@@ -52,7 +53,7 @@ public sealed class TokenExchangeIntegrationTests
                 webBuilder.ConfigureServices(services =>
                 {
                     services.AddRouting();
-                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
+                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName).ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
                     // Core auth services (TokenService, JwtService, etc.)
                     services.AddMrWhoOidcAuthCore();
                     services.AddSingleton<IFeatureService, StubFeatureService>();

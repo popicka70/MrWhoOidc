@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.UnitTests.TestDoubles;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.AspNetCore.Http;
@@ -68,7 +69,7 @@ public sealed class ExternalOidcIntegrationTests
         var services = builder.Services;
         services.AddLogging();
         services.AddMemoryCache();
-        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName).ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
         services.AddMrWhoOidcAuthCore();
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
         // Inject a deferred IHttpClientFactory that returns the TestServer client once the app is built.

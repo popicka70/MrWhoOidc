@@ -79,4 +79,19 @@ public static class OidcConstants
         public const string Realm = "realm";
         public const string Idp = "idp";
     }
+
+    /// <summary>
+    /// Standard OpenID Connect parameter names.
+    /// </summary>
+    public static class Parameters
+    {
+        public const string Nonce = "nonce";
+        public const string Display = "display";
+        public const string Prompt = "prompt";
+        public const string MaxAge = "max_age";
+        public const string UiLocales = "ui_locales";
+        public const string IdTokenHint = "id_token_hint";
+        public const string LoginHint = "login_hint";
+        public const string AcrValues = "acr_values";
+    }
 }

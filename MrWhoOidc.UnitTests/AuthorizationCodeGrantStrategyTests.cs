@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
@@ -48,7 +49,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                 webBuilder.ConfigureServices(services =>
                 {
                     services.AddRouting();
-                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
+                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName).ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
                     services.AddMrWhoOidcAuthCore();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant

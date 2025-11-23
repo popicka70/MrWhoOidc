@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
@@ -15,6 +16,7 @@ public static class TestDataSeeder
     public static AuthDbContext CreateInMemoryDb()
         => new(new DbContextOptionsBuilder<AuthDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options);
 
     /// <summary>
