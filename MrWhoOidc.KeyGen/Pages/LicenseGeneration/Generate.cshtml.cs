@@ -17,6 +17,7 @@ public class GenerateModel : PageModel
     private readonly ILogger<GenerateModel> _logger;
     private readonly IReadOnlyList<FeatureDefinition> _featureCatalog = FeatureCatalog.GetAll();
     private readonly IReadOnlyList<FeatureDefinition> _platformOnlyFeatures = FeatureCatalog.GetPlatformOnly();
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _tierFeatureMap = LicenseTierCatalog.GetTierFeatureMap();
 
     public GenerateModel(
         ILicenseGenerationService licenseService,
@@ -82,6 +83,8 @@ public class GenerateModel : PageModel
     public string? ErrorMessage { get; set; }
 
     public IReadOnlyList<FeatureDefinition> FeatureOptions => _featureCatalog;
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> TierFeatureMap => _tierFeatureMap;
+    public string TierFeatureMapJson => JsonSerializer.Serialize(_tierFeatureMap);
 
     public bool IsTenantScope => string.Equals(Scope, LicenseScopeOptions.Tenant, StringComparison.OrdinalIgnoreCase);
 
@@ -117,6 +120,7 @@ public class GenerateModel : PageModel
             }
 
             NormalizeFeatureSelections();
+            ApplyTierFeatureDefaults();
 
             if (IsPlatformScope && SelectedDefaultTenantFeatures.Count > 0)
             {
@@ -240,6 +244,41 @@ public class GenerateModel : PageModel
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+    }
+
+    private void ApplyTierFeatureDefaults()
+    {
+        var normalizedTier = LicenseTierCatalog.NormalizeTier(Tier);
+        if (normalizedTier is null)
+        {
+            return;
+        }
+
+        var tierFeatures = LicenseTierCatalog.GetFeaturesForTier(normalizedTier);
+        if (tierFeatures.Count == 0)
+        {
+            return;
+        }
+
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        var featureSet = new HashSet<string>(SelectedFeatures ?? Enumerable.Empty<string>(), comparer);
+        var platformOnlyKeys = new HashSet<string>(_platformOnlyFeatures.Select(f => f.Key), comparer);
+
+        var filteredFeatures = IsTenantScope
+            ? tierFeatures.Where(feature => !platformOnlyKeys.Contains(feature))
+            : tierFeatures;
+
+        foreach (var feature in filteredFeatures)
+        {
+            if (IsKnownFeature(feature))
+            {
+                featureSet.Add(feature);
+            }
+        }
+
+        SelectedFeatures = featureSet
+            .OrderBy(f => f, comparer)
+            .ToList();
     }
 
     private bool IsKnownFeature(string feature) => _featureCatalog.Any(def => def.Key.Equals(feature, StringComparison.OrdinalIgnoreCase));
