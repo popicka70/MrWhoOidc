@@ -26,6 +26,7 @@ public interface ITokenHandler
 public sealed class TokenHandler(
     OidcOptions options,
     ITokenService tokens,
+    ITokenExchangeService tokenExchange,
     IClientStore clients,
     IClientAssertionValidator assertions,
     IDPoPValidator dpop,
@@ -192,7 +193,7 @@ public sealed class TokenHandler(
             }
 
             // Strategy-based grant handling
-            var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(http, grantType, clientId!, form, options, tokens, dpopJkt, clientEntity, usedPrivateKeyJwt);
+            var ctxForGrants = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.TokenRequestContext(http, grantType, clientId!, form, options, tokens, tokenExchange, dpopJkt, clientEntity, usedPrivateKeyJwt);
             foreach (var handler in grantHandlers)
             {
                 var gr = await handler.TryHandleAsync(ctxForGrants);

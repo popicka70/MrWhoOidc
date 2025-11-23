@@ -104,7 +104,7 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
 
         var issuer = http.GetIssuer(context.Options);
         var sw = Stopwatch.StartNew();
-        var result = await context.Tokens.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId, issuer, dpopJkt);
+        var result = await context.TokenExchange.ExchangeTokenAsync(subjectToken, subjectTokenType, requestedTokenType, target, requestedScopes, clientId, issuer, dpopJkt);
         if (!result.ok && string.Equals(result.error, "invalid_request", StringComparison.Ordinal) && result.payload is not null)
         {
             try

@@ -99,6 +99,8 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
         services.AddScoped<IJwtService, JwtService>();
+        services.AddScoped<IJarmService, JarmService>();
+        services.AddScoped<ITokenExchangeService, TokenExchangeService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();
         services.AddScoped<ITokenValidator, TokenValidator>();

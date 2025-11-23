@@ -47,12 +47,13 @@ public sealed class AuthorizeHandlerTests
         IConsentService? consents = null,
         IAuthorizationCodeMetadataStore? meta = null,
         IPushedAuthorizationRequestStore? parStore = null,
-    IRequestObjectValidator? requestObjects = null,
-    IOptions<AuthOptions>? authOptions = null,
-    IJwtService? jwt = null,
-    IClientStore? clients = null,
-    IQrLoginHandler? qrLoginHandler = null,
-    IFeatureService? featureService = null)
+        IRequestObjectValidator? requestObjects = null,
+        IOptions<AuthOptions>? authOptions = null,
+        IJwtService? jwt = null,
+        IClientStore? clients = null,
+        IQrLoginHandler? qrLoginHandler = null,
+        IFeatureService? featureService = null,
+        IJarmService? jarm = null)
     {
         var metrics = new OidcMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
@@ -67,7 +68,8 @@ public sealed class AuthorizeHandlerTests
         jwt ??= new StubJwtService();
         clients ??= new StubClientStore();
         qrLoginHandler ??= new StubQrLoginHandler();
-    featureService ??= new StubFeatureService();
+        featureService ??= new StubFeatureService();
+        jarm ??= new StubJarmService();
 
         // Create a mock tenant accessor with default tenant
         var tenantAccessor = new MockTenantAccessor();
@@ -80,7 +82,7 @@ public sealed class AuthorizeHandlerTests
             IsMultiTenantMode = false
         });
 
-    return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, jwt, clients, db, qrLoginHandler, tenantAccessor, featureService);
+        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, parStore, requestObjects, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -1107,6 +1109,19 @@ public sealed class AuthorizeHandlerTests
         public Task<IResult> ConfirmPageAsync(HttpContext http)
         {
             return Task.FromResult(Results.Ok() as IResult);
+        }
+    }
+
+    internal class StubJarmService : IJarmService
+    {
+        public Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state)
+        {
+            return Task.FromResult("mock_jarm_jwt");
+        }
+
+        public Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state)
+        {
+            return Task.FromResult("mock_jarm_error_jwt");
         }
     }
 }

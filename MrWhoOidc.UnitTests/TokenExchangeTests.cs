@@ -34,12 +34,10 @@ public sealed class TokenExchangeTests
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api", "api2");
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -86,12 +84,10 @@ public sealed class TokenExchangeTests
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -129,12 +125,10 @@ public sealed class TokenExchangeTests
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var jwt = new JwtService(keyStore);
-        var refresh = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
         var opts = Options("api");
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
         var validator = new TokenValidator(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, jwt, refresh, opts, meta, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;

@@ -42,7 +42,8 @@ public sealed class TokenHandlerTests
         IEnumerable<ITokenMetricsRecorder>? tokenMetrics = null,
         IOptions<OidcOptions>? options = null,
         IFeatureService? featureService = null,
-        ITenantAccessor? tenantAccessor = null)
+        ITenantAccessor? tenantAccessor = null,
+        ITokenExchangeService? tokenExchange = null)
     {
         var logger = NullLogger<TokenHandler>.Instance;
 
@@ -55,8 +56,9 @@ public sealed class TokenHandlerTests
         options ??= Options.Create(new OidcOptions { Issuer = "https://test.example.com" });
         featureService ??= new StubFeatureService();
         tenantAccessor ??= MockTenantAccessor.CreateSingleTenantMode();
+        tokenExchange ??= new StubTokenExchangeService();
 
-        return new TokenHandler(options.Value, tokens, clients, assertions, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        return new TokenHandler(options.Value, tokens, tokenExchange, clients, assertions, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -785,5 +787,13 @@ public sealed class TokenHandlerTests
         public void RecordTokenExchangeFailure(string clientBucket, string? targetAudBucket, string dpopMode, string sourceTokenType, string reason) { }
         public void RecordTokenExchangeRateLimitAllowed(string clientBucket) { }
         public void RecordTokenExchangeRateLimitBlocked(string clientBucket, int? retryAfterSeconds) { }
+    }
+
+    internal class StubTokenExchangeService : ITokenExchangeService
+    {
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt, CancellationToken ct = default)
+        {
+            return Task.FromResult((true, (object?)new { access_token = "mock_te_token" }, (string?)null, 200));
+        }
     }
 }

@@ -30,7 +30,7 @@ public sealed record GrantExecutionResult(bool Handled, bool Success, IResult? R
 /// </summary>
 public sealed class TokenRequestContext
 {
-    public TokenRequestContext(HttpContext http, string grantType, string clientId, IFormCollection form, OidcOptions options, ITokenService tokens, string? dpopJkt, MrWhoOidc.Auth.Persistence.Client? clientEntity, bool usedPrivateKeyJwt)
+    public TokenRequestContext(HttpContext http, string grantType, string clientId, IFormCollection form, OidcOptions options, ITokenService tokens, ITokenExchangeService tokenExchange, string? dpopJkt, MrWhoOidc.Auth.Persistence.Client? clientEntity, bool usedPrivateKeyJwt)
     {
         Http = http;
         GrantType = grantType;
@@ -38,6 +38,7 @@ public sealed class TokenRequestContext
         Form = form;
         Options = options;
         Tokens = tokens;
+        TokenExchange = tokenExchange;
         DPoPJkt = dpopJkt;
         ClientEntity = clientEntity;
         UsedPrivateKeyJwt = usedPrivateKeyJwt;
@@ -48,6 +49,7 @@ public sealed class TokenRequestContext
     public IFormCollection Form { get; }
     public OidcOptions Options { get; }
     public ITokenService Tokens { get; }
+    public ITokenExchangeService TokenExchange { get; }
     public string? DPoPJkt { get; }
     public MrWhoOidc.Auth.Persistence.Client? ClientEntity { get; }
     public bool UsedPrivateKeyJwt { get; }

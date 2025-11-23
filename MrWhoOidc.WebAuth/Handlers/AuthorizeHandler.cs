@@ -34,12 +34,12 @@ public sealed class AuthorizeHandler(
     IRequestObjectValidator requestObjects,
     IOptions<AuthOptions> authOptions,
     ILogger<AuthorizeHandler> logger,
-    IJwtService jwt,
     IClientStore clients,
     AuthDbContext db,
     IQrLoginHandler qrLoginHandler,
     ITenantAccessor tenantAccessor,
-    IFeatureService featureService
+    IFeatureService featureService,
+    IJarmService jarm
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
@@ -343,9 +343,9 @@ public sealed class AuthorizeHandler(
                     // If JARM requested, return a signed/encrypted error JWT instead of parameters
                     if (string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || string.Equals(effectiveReq.response_mode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
                     {
-                        EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(effectiveReq.client_id);
-                        var jarm = CreateJarmErrorJwt(http, jwt, effectiveReq.client_id!, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state, enc);
-                        return JarmRedirect(effectiveReq.redirect_uri!, effectiveReq.response_mode!, jarm);
+                        var issuer = GetIssuer(http);
+                        var jarmJwt = await jarm.CreateErrorResponseAsync(effectiveReq.client_id!, issuer, validationResult.Error!, $"{validationResult.ErrorDescription} (corr={corr})", effectiveReq.state);
+                        return JarmRedirect(effectiveReq.redirect_uri!, effectiveReq.response_mode!, jarmJwt);
                     }
 
                     var uri = new UriBuilder(effectiveReq.redirect_uri);
@@ -595,9 +595,9 @@ public sealed class AuthorizeHandler(
             // JARM response if requested
             if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == OidcConstants.ResponseModes.QueryJwt || validationResult.ResponseMode == OidcConstants.ResponseModes.FormPostJwt))
             {
-                EncryptingCredentials? enc = await TryGetJarmEncryptingCredentialsAsync(validationResult.ClientId);
-                var jarm = CreateJarmSuccessJwt(http, jwt, validationResult.ClientId!, code!, validationResult.ResponseMode!, effectiveReq.state, enc);
-                return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarm);
+                var issuer = GetIssuer(http);
+                var jarmJwt = await jarm.CreateSuccessResponseAsync(validationResult.ClientId!, issuer, code!, validationResult.ResponseMode!, effectiveReq.state);
+                return JarmRedirect(validationResult.RedirectUri!, validationResult.ResponseMode!, jarmJwt);
             }
 
             // RFC 9207: Add issuer identification parameter to prevent mix-up attacks
@@ -617,29 +617,6 @@ public sealed class AuthorizeHandler(
             sw.Stop();
             var tags = new TagList { new("client", clientBucket), new("mode", mode), new("outcome", outcome) };
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
-        }
-    }
-
-    private async Task<EncryptingCredentials?> TryGetJarmEncryptingCredentialsAsync(string? clientId)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(clientId)) return null;
-            var client = await clients.FindByClientIdAsync(clientId);
-            if (client is null) return null;
-            var jwks = client.PublicJwksJson;
-            if (string.IsNullOrWhiteSpace(jwks)) return null;
-            var set = new JsonWebKeySet(jwks);
-            // Prefer keys with use=enc and RSA
-            var key = set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase) && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
-                   ?? set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase));
-            if (key is null) return null;
-            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256Gcm);
-            return encCreds;
-        }
-        catch
-        {
-            return null;
         }
     }
 
@@ -744,49 +721,4 @@ public sealed class AuthorizeHandler(
         return Results.Redirect(uri2.ToString());
     }
 
-    private static string CreateJarmSuccessJwt(HttpContext http, IJwtService jwt, string clientId, string code, string responseMode, string? state, EncryptingCredentials? enc)
-    {
-        var issuer = GetIssuer(http);
-        var claims = new List<System.Security.Claims.Claim>
-        {
-            new(OAuthConstants.Parameters.Code, code)
-        };
-        // c_hash per JARM
-        var cHash = TokenHashing.ComputeLeftHalfBase64Url(code);
-        claims.Add(new(OidcConstants.Claims.CHash, cHash));
-        if (!string.IsNullOrEmpty(state))
-        {
-            claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
-            claims.Add(new(OidcConstants.Claims.SHash, sHash));
-        }
-        var exp = DateTimeOffset.UtcNow.AddMinutes(5);
-        if (enc is not null)
-        {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
-        }
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
-    }
-
-    private static string CreateJarmErrorJwt(HttpContext http, IJwtService jwt, string clientId, string error, string errorDescription, string? state, EncryptingCredentials? enc)
-    {
-        var issuer = GetIssuer(http);
-        var claims = new List<System.Security.Claims.Claim>
-        {
-            new(OAuthConstants.Parameters.Error, error),
-            new(OAuthConstants.Parameters.ErrorDescription, errorDescription)
-        };
-        if (!string.IsNullOrEmpty(state))
-        {
-            claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
-            claims.Add(new(OidcConstants.Claims.SHash, sHash));
-        }
-        var exp = DateTimeOffset.UtcNow.AddMinutes(5);
-        if (enc is not null)
-        {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
-        }
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
-    }
 }
