@@ -78,6 +78,10 @@ public class GenerateModel : PageModel
     [StringLength(100, ErrorMessage = "Created By cannot exceed 100 characters")]
     public string? CreatedBy { get; set; }
 
+    [BindProperty]
+    [Display(Name = "Allowed Issuers")]
+    public string? AllowedIssuers { get; set; }
+
     public string? GeneratedTokenId { get; set; }
     public string? JwtToken { get; set; }
     public string? ErrorMessage { get; set; }
@@ -162,6 +166,16 @@ public class GenerateModel : PageModel
                 return Page();
             }
 
+            // Validate Allowed Issuers
+            if (!string.Equals(Tier, "community", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(AllowedIssuers))
+                {
+                    ModelState.AddModelError(nameof(AllowedIssuers), "Allowed Issuers are mandatory for non-community licenses.");
+                    return Page();
+                }
+            }
+
             // Additional validation
             if (!ValidateDates(out var dateError))
             {
@@ -187,6 +201,16 @@ public class GenerateModel : PageModel
             var tenantSlug = string.IsNullOrWhiteSpace(TenantSlug) ? null : TenantSlug.Trim();
             var createdBy = string.IsNullOrWhiteSpace(CreatedBy) ? null : CreatedBy.Trim();
 
+            string? allowedIssuersPayload = null;
+            if (!string.IsNullOrWhiteSpace(AllowedIssuers))
+            {
+                var issuers = AllowedIssuers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (issuers.Length > 0)
+                {
+                    allowedIssuersPayload = JsonSerializer.Serialize(issuers);
+                }
+            }
+
             // Generate license token
             var (tokenId, jwtToken) = await _licenseService.GenerateLicenseTokenAsync(
                 Tier,
@@ -200,7 +224,8 @@ public class GenerateModel : PageModel
                 featuresPayload,
                 trimmedLimits,
                 createdBy,
-                defaultTenantFeaturesPayload);
+                defaultTenantFeaturesPayload,
+                allowedIssuersPayload);
 
             GeneratedTokenId = tokenId;
             JwtToken = jwtToken;

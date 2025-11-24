@@ -23,7 +23,8 @@ public sealed record LicenseInfoDto(
     string Scope,
     string? IssuedTo,
     Guid? LicensedTenantId,
-    string? LicensedTenantSlug);
+    string? LicensedTenantSlug,
+    IReadOnlyCollection<string> AllowedIssuers);
 
 public sealed record LicenseValidationResponseDto(
     bool IsValid,
@@ -114,6 +115,10 @@ internal static class LicenseDtoMapper
 
         var limits = new Dictionary<string, long>(license.Limits, StringComparer.OrdinalIgnoreCase);
 
+        var allowedIssuers = license.AllowedIssuers
+            .OrderBy(i => i, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         return new LicenseInfoDto(
             license.Tier,
             license.OrganizationName,
@@ -127,7 +132,8 @@ internal static class LicenseDtoMapper
             license.Scope.ToString().ToLowerInvariant(),
             license.IssuedTo,
             license.LicensedTenantId,
-            license.LicensedTenantSlug);
+            license.LicensedTenantSlug,
+            allowedIssuers);
     }
 
     public static LicenseValidationResponseDto ToDto(LicenseValidationResult result, DateTimeOffset now)

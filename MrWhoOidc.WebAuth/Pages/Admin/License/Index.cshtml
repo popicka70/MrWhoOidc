@@ -99,12 +99,23 @@
                 </div>
                 <div class="col-lg-6">
                     <div class="mb-2 fw-semibold">Enabled features</div>
-                    <div class="d-flex flex-wrap gap-2">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
                         @foreach (var feature in Model.Summary.Features)
                         {
                             <span class="badge text-bg-light border">@feature.DisplayName</span>
                         }
                     </div>
+
+                    @if (Model.Summary.Info.AllowedIssuers.Count > 0)
+                    {
+                        <div class="mb-2 fw-semibold">Allowed Issuers</div>
+                        <ul class="list-unstyled small text-muted mb-0">
+                            @foreach (var issuer in Model.Summary.Info.AllowedIssuers)
+                            {
+                                <li><i class="bi bi-check2 me-1 text-success"></i>@issuer</li>
+                            }
+                        </ul>
+                    }
                 </div>
             </div>
         </div>

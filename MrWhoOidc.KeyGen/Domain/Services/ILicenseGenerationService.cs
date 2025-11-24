@@ -20,6 +20,7 @@ public interface ILicenseGenerationService
     /// <param name="limits">Optional JSON object with resource limits (e.g., {"clients":10,"users":100})</param>
     /// <param name="createdBy">Username or identifier of the person generating the license</param>
     /// <param name="defaultTenantFeatures">Optional JSON array of features default tenant should inherit (platform scope only)</param>
+    /// <param name="allowedIssuers">Optional JSON array of allowed issuers</param>
     /// <returns>Tuple containing the tokenId (jti) and the signed JWT string</returns>
     Task<(string TokenId, string JwtToken)> GenerateLicenseTokenAsync(
         string tier,
@@ -33,5 +34,6 @@ public interface ILicenseGenerationService
         string? features = null,
         string? limits = null,
         string? createdBy = null,
-        string? defaultTenantFeatures = null);
+        string? defaultTenantFeatures = null,
+        string? allowedIssuers = null);
 }

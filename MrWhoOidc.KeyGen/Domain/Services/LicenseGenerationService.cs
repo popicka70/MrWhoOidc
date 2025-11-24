@@ -43,7 +43,8 @@ public class LicenseGenerationService : ILicenseGenerationService
         string? features = null,
         string? limits = null,
         string? createdBy = null,
-        string? defaultTenantFeatures = null)
+        string? defaultTenantFeatures = null,
+        string? allowedIssuers = null)
     {
         // Validate inputs
         ValidateInputs(tier, organization, notBefore, expiresAt, scope, tenantId, defaultTenantFeatures);
@@ -96,6 +97,11 @@ public class LicenseGenerationService : ILicenseGenerationService
         if (!string.IsNullOrWhiteSpace(defaultTenantFeatures))
         {
             claims.Add(new Claim("default_tenant_features", defaultTenantFeatures));
+        }
+
+        if (!string.IsNullOrWhiteSpace(allowedIssuers))
+        {
+            claims.Add(new Claim("allowed_issuers", allowedIssuers));
         }
 
         // Create signing credentials with ECDSA P-256

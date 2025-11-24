@@ -37,10 +37,8 @@ public sealed class TokenRoleEmissionTests
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
-            new TokenValidator(keyStore),
             settingsService,
-            new MockScopeResolver(),
-            null);
+            new MockScopeResolver());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -80,10 +78,8 @@ public sealed class TokenRoleEmissionTests
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
-            new TokenValidator(keyStore),
             settingsService,
-            new MockScopeResolver(),
-            null);
+            new MockScopeResolver());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -123,10 +119,8 @@ public sealed class TokenRoleEmissionTests
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
-            new TokenValidator(keyStore),
             settingsService,
-            new MockScopeResolver(),
-            null);
+            new MockScopeResolver());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);

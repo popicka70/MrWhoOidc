@@ -18,6 +18,8 @@ public sealed record LicensingOptions
     public bool StrictValidation { get; init; } = true;
 
     public string DefaultTier { get; init; } = "community";
+
+    public string? PlatformIssuer { get; set; }
 }
 
 public static class LicensingOptionsExtensions

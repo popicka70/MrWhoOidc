@@ -17,7 +17,8 @@ public sealed record LicenseInfo(
     Guid? LicensedTenantId,
     string? LicensedTenantSlug,
     IReadOnlySet<string> DefaultTenantFeatures,
-    bool HasExplicitScopeClaim)
+    bool HasExplicitScopeClaim,
+    IReadOnlySet<string> AllowedIssuers)
 {
     public LicenseTier TierEnum => LicenseTierExtensions.FromTierString(Tier);
 

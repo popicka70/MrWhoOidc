@@ -65,7 +65,8 @@ public sealed class LicenseAdminApiTests
             DefaultTenantId,
             "default",
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);
         serviceMock
@@ -167,7 +168,8 @@ public sealed class LicenseAdminApiTests
             requestedTenant,
             "tenant-slug",
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);
         serviceMock
@@ -217,7 +219,8 @@ public sealed class LicenseAdminApiTests
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         var serviceMock = new Mock<ILicenseService>(MockBehavior.Strict);
         serviceMock

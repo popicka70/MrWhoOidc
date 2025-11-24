@@ -25,6 +25,7 @@ internal sealed class LicenseValidator : ILicenseValidator
     private const string TenantSlugClaim = "tenant_slug";
     private const string IssuedToClaim = "issued_to";
     private const string DefaultTenantFeaturesClaim = "default_tenant_features";
+    private const string AllowedIssuersClaim = "allowed_issuers";
     
     private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
 
@@ -193,6 +194,15 @@ internal sealed class LicenseValidator : ILicenseValidator
             }
         }
 
+        if (licenseInfo.TierEnum != LicenseTier.Community && !string.IsNullOrWhiteSpace(_options.PlatformIssuer))
+        {
+            if (licenseInfo.AllowedIssuers.Count > 0 && !licenseInfo.AllowedIssuers.Any(allowed => IsIssuerMatch(allowed, _options.PlatformIssuer)))
+            {
+                _logger.LogWarning("License does not allow issuer {Issuer}.", _options.PlatformIssuer);
+                return Task.FromResult(LicenseValidationResult.Failure("invalid_issuer", $"License does not allow issuer '{_options.PlatformIssuer}'."));
+            }
+        }
+
         var updated = licenseInfo with
         {
             IsExpired = expired,
@@ -247,6 +257,7 @@ internal sealed class LicenseValidator : ILicenseValidator
 
         var features = ParseFeatures(token.Payload.TryGetValue("features", out var featuresValue) ? featuresValue : null, claims, "features");
         var defaultTenantFeatures = ParseFeatures(token.Payload.TryGetValue(DefaultTenantFeaturesClaim, out var defaultFeaturesValue) ? defaultFeaturesValue : null, claims, DefaultTenantFeaturesClaim);
+        var allowedIssuers = ParseFeatures(token.Payload.TryGetValue(AllowedIssuersClaim, out var allowedIssuersValue) ? allowedIssuersValue : null, claims, AllowedIssuersClaim);
         var limits = ParseLimits(token.Payload.TryGetValue("limits", out var limitsValue) ? limitsValue : null, claims);
 
         var scopeInfo = ResolveScope(token, claims);
@@ -271,7 +282,8 @@ internal sealed class LicenseValidator : ILicenseValidator
             tenantId,
             tenantSlug,
             defaultTenantFeatures,
-            scopeInfo.HasExplicitScopeClaim);
+            scopeInfo.HasExplicitScopeClaim,
+            allowedIssuers);
     }
 
     private static DateTimeOffset ResolveValidFrom(JwtSecurityToken token)
@@ -556,5 +568,22 @@ internal sealed class LicenseValidator : ILicenseValidator
             ecdsa.Dispose();
             throw;
         }
+    }
+
+    private static bool IsIssuerMatch(string allowedPattern, string actualIssuer)
+    {
+        if (string.Equals(allowedPattern, actualIssuer, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (Uri.TryCreate(allowedPattern, UriKind.Absolute, out var allowedUri) &&
+            Uri.TryCreate(actualIssuer, UriKind.Absolute, out var actualUri))
+        {
+            return string.Equals(allowedUri.Scheme, actualUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(allowedUri.Host, actualUri.Host, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 }

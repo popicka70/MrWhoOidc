@@ -38,6 +38,14 @@ builder.Services.AddMrWhoOidcObservability(builder.Configuration);
 builder.Services.AddOidcMetricsIfMissing();
 
 builder.Services.AddLicensingOptions(builder.Configuration);
+builder.Services.PostConfigure<LicensingOptions>(options =>
+{
+    var oidc = builder.Configuration.GetSection("Oidc").Get<OidcOptions>();
+    if (oidc != null && !string.IsNullOrWhiteSpace(oidc.Issuer))
+    {
+        options.PlatformIssuer = oidc.Issuer;
+    }
+});
 builder.Services.AddMrWhoOidcLicensing();
 
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));

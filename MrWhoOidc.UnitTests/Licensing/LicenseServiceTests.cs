@@ -348,7 +348,8 @@ public sealed class LicenseServiceTests
             licensedTenantId,
             licensedTenantSlug,
             defaultFeatures,
-            hasExplicitScopeClaim);
+            hasExplicitScopeClaim,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
     private sealed class StubDefaultTenantContext : IDefaultTenantContext

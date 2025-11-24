@@ -99,6 +99,13 @@
                         <small class="form-text text-muted">Shown in admin UI; defaults to tenant slug when omitted for tenant licenses.</small>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="AllowedIssuers">Allowed Issuers</label>
+                        <input type="text" class="form-control" asp-for="AllowedIssuers" placeholder="https://identity.example.com, https://auth.example.org">
+                        <span asp-validation-for="AllowedIssuers" class="text-danger"></span>
+                        <small class="form-text text-muted">Comma-separated list of allowed issuer URLs. Mandatory for non-community licenses.</small>
+                    </div>
+
                     <div class="row g-3 @(Model.IsTenantScope ? string.Empty : "d-none")" data-scope-section="tenant">
                         <div class="col-md-6">
                             <label class="form-label" asp-for="TenantId">Tenant ID <span class="text-danger">*</span></label>

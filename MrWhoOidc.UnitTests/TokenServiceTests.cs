@@ -35,7 +35,7 @@ public sealed class TokenServiceTests
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var settingsService = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks), settingsService, scopeResolver, null);
+        var svc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver);
         var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "verifier", "https://issuer");
         Assert.IsFalse(ok);
         Assert.AreEqual(400, status);
@@ -69,7 +69,7 @@ public sealed class TokenServiceTests
         var jwtSvc = new JwtService(ks2);
         var settingsService = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks2), settingsService, scopeResolver, null);
+        var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver);
         var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("code", "https://cb", "c1", "", "https://issuer");
         Assert.IsTrue(ok);
         var anon = (dynamic)payload!;
@@ -108,7 +108,7 @@ public sealed class TokenServiceTests
         var ks3 = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var settingsService = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks3), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks3), settingsService, scopeResolver, null);
+        var svc = new TokenService(db, new JwtService(ks3), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver);
         var (ok, payload, _, status) = await svc.ExchangeAuthorizationCodeAsync("code2", "https://cb", "c1", "", "https://issuer");
         Assert.IsTrue(ok);
         Assert.AreEqual(200, status);
@@ -132,7 +132,7 @@ public sealed class TokenServiceTests
         var (rt, hash) = await rtSvc.CreateRefreshTokenAsync(user.Id, "c1", new[] { "openid" });
         var ks4 = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks4), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore(), new TokenValidator(ks4), settingsService, scopeResolver, null);
+        var svc = new TokenService(db, new JwtService(ks4), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver);
         var (ok, payload, _, status) = await svc.ExchangeRefreshTokenAsync(rt, "c1", "https://issuer");
         Assert.IsTrue(ok);
         Assert.AreEqual(200, status);

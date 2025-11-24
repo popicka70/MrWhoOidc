@@ -151,7 +151,8 @@ public sealed class LicenseAnalyticsServiceTests
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         var usageRepo = new StubFeatureUsageRepository(Array.Empty<FeatureUsageMetric>());
         var licenseService = new StubLicenseService(license);

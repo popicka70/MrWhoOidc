@@ -508,7 +508,8 @@ internal sealed class LicenseService : ILicenseService
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            false);
+            false,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
     private static Task<LicenseValidationResult?> EnsureLicenseAppliesToTargetAsync(LicenseInfo licenseInfo, Guid? tenantId, CancellationToken cancellationToken)

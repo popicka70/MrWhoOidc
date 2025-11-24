@@ -54,7 +54,8 @@ public sealed class FeatureGatingTests
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
         var licenseService = new StubLicenseService(info);
         var license = new License { Id = Guid.NewGuid(), Tier = info.Tier };
@@ -89,7 +90,8 @@ public sealed class FeatureGatingTests
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var licenseService = new StubLicenseService(info);
         var limitService = new LimitService(licenseService, NullLogger<LimitService>.Instance);
 
@@ -122,7 +124,8 @@ public sealed class FeatureGatingTests
             null,
             null,
             new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            true);
+            true,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
         var licenseService = new StubLicenseService(info);
         var limitService = new LimitService(licenseService, NullLogger<LimitService>.Instance);
 
