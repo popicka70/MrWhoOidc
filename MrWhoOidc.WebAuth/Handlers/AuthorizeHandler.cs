@@ -515,7 +515,7 @@ public sealed class AuthorizeHandler(
 
             // RFC 9207: Add issuer identification parameter to prevent mix-up attacks
             var iss = GetIssuer(http);
-            var uri2 = new UriBuilder(redirect);
+            var uri2 = new UriBuilder(redirect!);
             var query2 = System.Web.HttpUtility.ParseQueryString(uri2.Query);
             query2["iss"] = iss;
             if (!string.IsNullOrEmpty(effectiveReq.state))

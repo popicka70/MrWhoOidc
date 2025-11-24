@@ -28,11 +28,4 @@
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
   </ItemGroup>
 
-  <!-- Exclude legacy/duplicated DPoP implementations (now centralized in MrWhoOidc.Security) -->
-  <ItemGroup>
-    <Compile Remove="Infrastructure/DPoPValidator.cs" />
-    <Compile Remove="Infrastructure/DPoPReplayCache.cs" />
-    <Compile Remove="Infrastructure/DPoPNonceStore.InMemory.cs" />
-  </ItemGroup>
-
 </Project>
