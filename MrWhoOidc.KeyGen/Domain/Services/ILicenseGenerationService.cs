@@ -21,6 +21,8 @@ public interface ILicenseGenerationService
     /// <param name="createdBy">Username or identifier of the person generating the license</param>
     /// <param name="defaultTenantFeatures">Optional JSON array of features default tenant should inherit (platform scope only)</param>
     /// <param name="allowedIssuers">Optional JSON array of allowed issuers</param>
+    /// <param name="deploymentMode">Deployment mode for platform licenses (single_tenant or multi_tenant)</param>
+    /// <param name="parentLicenseId">JTI of the parent platform license for tenant sublicenses</param>
     /// <returns>Tuple containing the tokenId (jti) and the signed JWT string</returns>
     Task<(string TokenId, string JwtToken)> GenerateLicenseTokenAsync(
         string tier,
@@ -35,5 +37,7 @@ public interface ILicenseGenerationService
         string? limits = null,
         string? createdBy = null,
         string? defaultTenantFeatures = null,
-        string? allowedIssuers = null);
+        string? allowedIssuers = null,
+        string? deploymentMode = null,
+        string? parentLicenseId = null);
 }

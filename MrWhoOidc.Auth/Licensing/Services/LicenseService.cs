@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
@@ -12,6 +13,7 @@ using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Validators;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services;
 using MrWhoOidc.ServiceDefaults.Observability;
 
 namespace MrWhoOidc.Auth.Licensing.Services;
@@ -21,6 +23,7 @@ internal sealed class LicenseService : ILicenseService
     private const string LicenseInstalledAction = "installed";
     private const string LicenseRevokedAction = "revoked";
     private const string LicenseUpdatedAction = "updated";
+    private const string EffectiveLicenseCacheKeyPrefix = "effective-license:";
 
     private readonly ILicenseRepository _repository;
     private readonly ILicenseValidator _validator;
@@ -30,6 +33,7 @@ internal sealed class LicenseService : ILicenseService
     private readonly TimeProvider _timeProvider;
     private readonly IMultiTenancyStateProvider? _multiTenancyStateProvider;
     private readonly IDefaultTenantContext? _defaultTenantContext;
+    private readonly ITenantService? _tenantService;
 
     public LicenseService(
         ILicenseRepository repository,
@@ -39,7 +43,8 @@ internal sealed class LicenseService : ILicenseService
         ILogger<LicenseService> logger,
         TimeProvider? timeProvider = null,
         IMultiTenancyStateProvider? multiTenancyStateProvider = null,
-        IDefaultTenantContext? defaultTenantContext = null)
+        IDefaultTenantContext? defaultTenantContext = null,
+        ITenantService? tenantService = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
@@ -49,6 +54,7 @@ internal sealed class LicenseService : ILicenseService
         _timeProvider = timeProvider ?? TimeProvider.System;
         _multiTenancyStateProvider = multiTenancyStateProvider;
         _defaultTenantContext = defaultTenantContext;
+        _tenantService = tenantService;
     }
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -100,6 +106,125 @@ internal sealed class LicenseService : ILicenseService
 
         SetCache(cacheKey, validation.LicenseInfo);
         return validation.LicenseInfo;
+    }
+
+    public async Task<LicenseInfo?> GetEffectiveLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+    {
+        // For platform scope, return platform license directly
+        if (!tenantId.HasValue)
+        {
+            return await GetCurrentLicenseAsync(null, cancellationToken).ConfigureAwait(false);
+        }
+
+        var effectiveCacheKey = $"{EffectiveLicenseCacheKeyPrefix}{tenantId}";
+        if (_cache.TryGetValue(effectiveCacheKey, out LicenseInfo? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        // Check if we're in single-tenant mode
+        var isMultiTenant = _multiTenancyStateProvider?.IsEnabled ?? false;
+        if (!isMultiTenant)
+        {
+            // Single-tenant mode: return platform license
+            var platformLicense = await GetCurrentLicenseAsync(null, cancellationToken).ConfigureAwait(false);
+            if (platformLicense is not null)
+            {
+                SetCache(effectiveCacheKey, platformLicense);
+            }
+            return platformLicense;
+        }
+
+        // Get tenant's license mode
+        var tenantLicenseMode = await GetTenantLicenseModeAsync(tenantId.Value, cancellationToken).ConfigureAwait(false);
+
+        if (tenantLicenseMode == TenantLicenseMode.InheritPlatform)
+        {
+            // Tenant inherits platform license
+            var platformLicense = await GetCurrentLicenseAsync(null, cancellationToken).ConfigureAwait(false);
+            if (platformLicense is null)
+            {
+                _logger.LogWarning("No platform license found for tenant {TenantId} with InheritPlatform mode.", tenantId);
+                return null;
+            }
+
+            // Project platform license to tenant scope
+            var projection = CreateTenantProjection(platformLicense, tenantId.Value);
+            if (projection is not null)
+            {
+                SetCache(effectiveCacheKey, projection);
+                _logger.LogDebug("Tenant {TenantId} using inherited platform license projection.", tenantId);
+            }
+            return projection;
+        }
+
+        // Sublicense mode: tenant must have its own license
+        var tenantLicense = await GetCurrentLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        if (tenantLicense is null)
+        {
+            _logger.LogWarning("No sublicense found for tenant {TenantId} with Sublicense mode.", tenantId);
+            return null;
+        }
+
+        // Validate sublicense against platform license
+        var platformForValidation = await GetCurrentLicenseAsync(null, cancellationToken).ConfigureAwait(false);
+        if (platformForValidation is null)
+        {
+            _logger.LogWarning("No platform license found to validate sublicense for tenant {TenantId}.", tenantId);
+            return null;
+        }
+
+        var validationResult = await _validator.ValidateSublicenseAsync(tenantLicense, platformForValidation, cancellationToken).ConfigureAwait(false);
+        if (!validationResult.IsValid)
+        {
+            _logger.LogWarning(
+                "Sublicense validation failed for tenant {TenantId}: {ErrorCode} - {ErrorMessage}",
+                tenantId,
+                validationResult.ErrorCode,
+                validationResult.ErrorMessage);
+            return null;
+        }
+
+        SetCache(effectiveCacheKey, tenantLicense);
+        _logger.LogDebug("Tenant {TenantId} using validated sublicense.", tenantId);
+        return tenantLicense;
+    }
+
+    private async Task<TenantLicenseMode> GetTenantLicenseModeAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (_tenantService is null)
+        {
+            _logger.LogDebug("TenantService not available, defaulting to InheritPlatform mode for tenant {TenantId}.", tenantId);
+            return TenantLicenseMode.InheritPlatform;
+        }
+
+        var tenant = await _tenantService.FindByIdAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        if (tenant is null)
+        {
+            _logger.LogWarning("Tenant {TenantId} not found, defaulting to InheritPlatform mode.", tenantId);
+            return TenantLicenseMode.InheritPlatform;
+        }
+
+        return tenant.LicenseMode;
+    }
+
+    private LicenseInfo? CreateTenantProjection(LicenseInfo platformLicense, Guid tenantId)
+    {
+        // For inherited licenses, project platform license features to tenant scope
+        // Exclude platform-only features
+        var tenantFeatures = new HashSet<string>(
+            platformLicense.EnabledFeatures.Where(f => !FeatureFlags.IsPlatformOnlyFeature(f)),
+            StringComparer.OrdinalIgnoreCase);
+
+        var projection = platformLicense with
+        {
+            Scope = LicenseScope.Tenant,
+            LicensedTenantId = tenantId,
+            EnabledFeatures = tenantFeatures,
+            HasExplicitScopeClaim = false // Derived projection, not explicit
+        };
+
+        return projection.IsValid ? projection : null;
     }
 
     public async Task<LicenseValidationResult> InstallLicenseAsync(

@@ -26,6 +26,9 @@ internal sealed class LicenseValidator : ILicenseValidator
     private const string IssuedToClaim = "issued_to";
     private const string DefaultTenantFeaturesClaim = "default_tenant_features";
     private const string AllowedIssuersClaim = "allowed_issuers";
+    private const string DeploymentModeClaim = "deployment_mode";
+    private const string ParentLicenseIdClaim = "parent_license_jti";
+    private const string LicenseIdClaim = "jti";
     
     private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
 
@@ -265,6 +268,16 @@ internal sealed class LicenseValidator : ILicenseValidator
         var tenantId = ParseGuidClaim(token.Payload.TryGetValue(TenantIdClaim, out var tenantIdValue) ? tenantIdValue?.ToString() : claims.FirstOrDefault(c => c.Type == TenantIdClaim)?.Value);
         var tenantSlug = ResolveStringClaim(token, TenantSlugClaim, claims);
 
+        // Parse deployment mode (defaults to MultiTenant for backward compatibility)
+        var deploymentModeStr = ResolveStringClaim(token, DeploymentModeClaim, claims);
+        var deploymentMode = DeploymentModeExtensions.FromClaimValue(deploymentModeStr);
+
+        // Parse parent license ID (for sublicenses)
+        var parentLicenseId = ResolveStringClaim(token, ParentLicenseIdClaim, claims);
+
+        // Parse license ID (jti)
+        var licenseId = ResolveStringClaim(token, LicenseIdClaim, claims) ?? token.Id;
+
         var now = _timeProvider.GetUtcNow();
         var isExpired = validUntil <= now;
 
@@ -283,7 +296,10 @@ internal sealed class LicenseValidator : ILicenseValidator
             tenantSlug,
             defaultTenantFeatures,
             scopeInfo.HasExplicitScopeClaim,
-            allowedIssuers);
+            allowedIssuers,
+            deploymentMode,
+            parentLicenseId,
+            licenseId);
     }
 
     private static DateTimeOffset ResolveValidFrom(JwtSecurityToken token)
@@ -585,5 +601,115 @@ internal sealed class LicenseValidator : ILicenseValidator
         }
 
         return false;
+    }
+
+    public Task<LicenseValidationResult> ValidateSublicenseAsync(
+        LicenseInfo sublicense,
+        LicenseInfo platformLicense,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sublicense);
+        ArgumentNullException.ThrowIfNull(platformLicense);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Sublicense must be tenant-scoped
+        if (sublicense.Scope != LicenseScope.Tenant)
+        {
+            _logger.LogWarning("Sublicense validation failed: sublicense must have tenant scope, got {Scope}.", sublicense.Scope);
+            return Task.FromResult(LicenseValidationResult.Failure(
+                "invalid_sublicense_scope",
+                "Sublicense must have tenant scope."));
+        }
+
+        // Platform license must be platform-scoped
+        if (platformLicense.Scope != LicenseScope.Platform)
+        {
+            _logger.LogWarning("Sublicense validation failed: platform license must have platform scope, got {Scope}.", platformLicense.Scope);
+            return Task.FromResult(LicenseValidationResult.Failure(
+                "invalid_platform_scope",
+                "Platform license must have platform scope."));
+        }
+
+        // Sublicense expiry cannot exceed platform license expiry
+        if (sublicense.ValidUntil > platformLicense.ValidUntil)
+        {
+            _logger.LogWarning(
+                "Sublicense validation failed: sublicense expiry {SublicenseExpiry} exceeds platform expiry {PlatformExpiry}.",
+                sublicense.ValidUntil,
+                platformLicense.ValidUntil);
+            return Task.FromResult(LicenseValidationResult.Failure(
+                "sublicense_expiry_exceeds_platform",
+                $"Sublicense expiry ({sublicense.ValidUntil:yyyy-MM-dd}) cannot exceed platform license expiry ({platformLicense.ValidUntil:yyyy-MM-dd})."));
+        }
+
+        // All sublicense features must exist in platform license
+        var invalidFeatures = sublicense.EnabledFeatures
+            .Where(f => !platformLicense.EnabledFeatures.Contains(f))
+            .ToList();
+
+        if (invalidFeatures.Count > 0)
+        {
+            var featureList = string.Join(", ", invalidFeatures);
+            _logger.LogWarning(
+                "Sublicense validation failed: features [{Features}] are not available in platform license.",
+                featureList);
+            return Task.FromResult(LicenseValidationResult.Failure(
+                "sublicense_features_exceed_platform",
+                $"Sublicense contains features not available in platform license: {featureList}"));
+        }
+
+        // Sublicense limits cannot exceed platform limits
+        foreach (var (limitKey, sublicenseValue) in sublicense.Limits)
+        {
+            if (!platformLicense.Limits.TryGetValue(limitKey, out var platformValue))
+            {
+                // If platform doesn't define this limit, sublicense cannot define it either
+                // unless it's restricting (value > 0 means limited, -1 means unlimited)
+                if (sublicenseValue < 0)
+                {
+                    _logger.LogWarning(
+                        "Sublicense validation failed: limit '{LimitKey}' set to unlimited but not defined in platform license.",
+                        limitKey);
+                    return Task.FromResult(LicenseValidationResult.Failure(
+                        "sublicense_limit_exceeds_platform",
+                        $"Sublicense limit '{limitKey}' cannot be unlimited when not defined in platform license."));
+                }
+                continue;
+            }
+
+            // Platform has unlimited (-1), sublicense can have any value
+            if (platformValue == -1)
+            {
+                continue;
+            }
+
+            // Sublicense requests unlimited but platform has a limit
+            if (sublicenseValue == -1)
+            {
+                _logger.LogWarning(
+                    "Sublicense validation failed: limit '{LimitKey}' set to unlimited but platform limit is {PlatformValue}.",
+                    limitKey,
+                    platformValue);
+                return Task.FromResult(LicenseValidationResult.Failure(
+                    "sublicense_limit_exceeds_platform",
+                    $"Sublicense limit '{limitKey}' cannot be unlimited when platform license has limit of {platformValue}."));
+            }
+
+            // Sublicense limit exceeds platform limit
+            if (sublicenseValue > platformValue)
+            {
+                _logger.LogWarning(
+                    "Sublicense validation failed: limit '{LimitKey}' value {SublicenseValue} exceeds platform limit {PlatformValue}.",
+                    limitKey,
+                    sublicenseValue,
+                    platformValue);
+                return Task.FromResult(LicenseValidationResult.Failure(
+                    "sublicense_limit_exceeds_platform",
+                    $"Sublicense limit '{limitKey}' ({sublicenseValue}) cannot exceed platform license limit ({platformValue})."));
+            }
+        }
+
+        _logger.LogDebug("Sublicense validation passed for tenant {TenantId}.", sublicense.LicensedTenantId);
+        return Task.FromResult(LicenseValidationResult.Success(sublicense));
     }
 }

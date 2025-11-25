@@ -44,10 +44,12 @@ public class LicenseGenerationService : ILicenseGenerationService
         string? limits = null,
         string? createdBy = null,
         string? defaultTenantFeatures = null,
-        string? allowedIssuers = null)
+        string? allowedIssuers = null,
+        string? deploymentMode = null,
+        string? parentLicenseId = null)
     {
         // Validate inputs
-        ValidateInputs(tier, organization, notBefore, expiresAt, scope, tenantId, defaultTenantFeatures);
+        ValidateInputs(tier, organization, notBefore, expiresAt, scope, tenantId, defaultTenantFeatures, deploymentMode, parentLicenseId);
 
         // Generate unique token ID using UUIDv7
         var tokenId = GuidHelper.NewId().ToString();
@@ -102,6 +104,18 @@ public class LicenseGenerationService : ILicenseGenerationService
         if (!string.IsNullOrWhiteSpace(allowedIssuers))
         {
             claims.Add(new Claim("allowed_issuers", allowedIssuers));
+        }
+
+        // Add deployment mode for platform licenses
+        if (!string.IsNullOrWhiteSpace(deploymentMode))
+        {
+            claims.Add(new Claim("deployment_mode", deploymentMode));
+        }
+
+        // Add parent license reference for sublicenses
+        if (!string.IsNullOrWhiteSpace(parentLicenseId))
+        {
+            claims.Add(new Claim("parent_license_jti", parentLicenseId));
         }
 
         // Create signing credentials with ECDSA P-256
@@ -160,7 +174,9 @@ public class LicenseGenerationService : ILicenseGenerationService
         DateTimeOffset expiresAt,
         string scope,
         Guid? tenantId,
-        string? defaultTenantFeatures)
+        string? defaultTenantFeatures,
+        string? deploymentMode,
+        string? parentLicenseId)
     {
         // Validate tier
         var validTiers = new[] { "community", "professional", "enterprise", "enterprise+" };
@@ -207,6 +223,37 @@ public class LicenseGenerationService : ILicenseGenerationService
         if (isTenantScope && !string.IsNullOrWhiteSpace(defaultTenantFeatures))
         {
             throw new ArgumentException("Default tenant feature overrides apply only to platform licenses", nameof(defaultTenantFeatures));
+        }
+
+        // Validate deployment mode (only valid for platform licenses)
+        if (!string.IsNullOrWhiteSpace(deploymentMode))
+        {
+            var validModes = new[] { "single_tenant", "multi_tenant" };
+            if (!validModes.Contains(deploymentMode, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    $"Invalid deployment mode '{deploymentMode}'. Must be one of: {string.Join(", ", validModes)}",
+                    nameof(deploymentMode));
+            }
+
+            if (isTenantScope)
+            {
+                throw new ArgumentException("Deployment mode can only be set on platform licenses", nameof(deploymentMode));
+            }
+        }
+
+        // Validate parent license ID (only valid for tenant sublicenses)
+        if (!string.IsNullOrWhiteSpace(parentLicenseId))
+        {
+            if (!isTenantScope)
+            {
+                throw new ArgumentException("Parent license ID can only be set on tenant sublicenses", nameof(parentLicenseId));
+            }
+
+            if (!Guid.TryParse(parentLicenseId, out _))
+            {
+                throw new ArgumentException("Parent license ID must be a valid GUID (JTI of platform license)", nameof(parentLicenseId));
+            }
         }
     }
 

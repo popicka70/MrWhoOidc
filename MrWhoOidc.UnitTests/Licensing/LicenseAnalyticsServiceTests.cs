@@ -271,6 +271,9 @@ public sealed class LicenseAnalyticsServiceTests
         public Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
             => Task.FromResult(_license);
 
+        public Task<LicenseInfo?> GetEffectiveLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(_license);
+
         public Task<PagedResult<LicenseHistoryEntry>> GetLicenseHistoryAsync(Guid? tenantId = null, int page = 1, int pageSize = 20, string? actionFilter = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 

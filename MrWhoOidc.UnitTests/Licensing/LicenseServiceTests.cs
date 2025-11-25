@@ -500,5 +500,10 @@ public sealed class LicenseServiceTests
             LastValidatedLicense = licenseInfo;
             return Task.FromResult(BusinessResult);
         }
+
+        public Task<LicenseValidationResult> ValidateSublicenseAsync(LicenseInfo sublicense, LicenseInfo parentLicense, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(LicenseValidationResult.Success(sublicense));
+        }
     }
 }

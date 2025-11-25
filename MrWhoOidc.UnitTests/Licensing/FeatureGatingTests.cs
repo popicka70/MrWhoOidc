@@ -204,6 +204,9 @@ public sealed class FeatureGatingTests
         public Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
             => Task.FromResult(_license);
 
+        public Task<LicenseInfo?> GetEffectiveLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(_license);
+
         public Task<LicenseValidationResult> InstallLicenseAsync(string licenseKey, Guid? tenantId = null, Guid? installedBy = null, string? notes = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
