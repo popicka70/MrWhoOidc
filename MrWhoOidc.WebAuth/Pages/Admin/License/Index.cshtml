@@ -87,6 +87,28 @@
                     <dl class="row mb-0">
                         <dt class="col-sm-4">Scope</dt>
                         <dd class="col-sm-8">@Model.Summary.ScopeDisplay</dd>
+                        @if (Model.IsViewingPlatform)
+                        {
+                            <dt class="col-sm-4">Deployment mode</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge @(Model.Summary.DeploymentModeDisplay == "Multi-tenant" ? "bg-primary" : "bg-secondary")">
+                                    @Model.Summary.DeploymentModeDisplay
+                                </span>
+                            </dd>
+                        }
+                        @if (Model.Summary.IsSublicense)
+                        {
+                            <dt class="col-sm-4">License type</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-info">Sublicense</span>
+                                @if (!string.IsNullOrWhiteSpace(Model.Summary.ParentLicenseId))
+                                {
+                                    <div class="small text-muted mt-1">
+                                        Parent: <code>@Model.Summary.ParentLicenseId</code>
+                                    </div>
+                                }
+                            </dd>
+                        }
                         <dt class="col-sm-4">Issued to</dt>
                         <dd class="col-sm-8">@Model.Summary.IssuedToDisplay</dd>
                         <dt class="col-sm-4">Organization</dt>
@@ -95,6 +117,11 @@
                         <dd class="col-sm-8">@Model.FormatDate(Model.Summary.Info.ValidFrom)</dd>
                         <dt class="col-sm-4">Valid until</dt>
                         <dd class="col-sm-8">@Model.Summary.ExpiryText</dd>
+                        @if (!string.IsNullOrWhiteSpace(Model.Summary.Info.LicenseId))
+                        {
+                            <dt class="col-sm-4">License ID</dt>
+                            <dd class="col-sm-8"><code>@Model.Summary.Info.LicenseId</code></dd>
+                        }
                     </dl>
                 </div>
                 <div class="col-lg-6">

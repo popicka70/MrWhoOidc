@@ -24,7 +24,11 @@ public sealed record LicenseInfoDto(
     string? IssuedTo,
     Guid? LicensedTenantId,
     string? LicensedTenantSlug,
-    IReadOnlyCollection<string> AllowedIssuers);
+    IReadOnlyCollection<string> AllowedIssuers,
+    string DeploymentMode,
+    string? LicenseId,
+    string? ParentLicenseId,
+    bool IsSublicense);
 
 public sealed record LicenseValidationResponseDto(
     bool IsValid,
@@ -133,7 +137,11 @@ internal static class LicenseDtoMapper
             license.IssuedTo,
             license.LicensedTenantId,
             license.LicensedTenantSlug,
-            allowedIssuers);
+            allowedIssuers,
+            license.DeploymentMode.ToString().ToLowerInvariant(),
+            license.LicenseId,
+            license.ParentLicenseId,
+            license.IsSublicense);
     }
 
     public static LicenseValidationResponseDto ToDto(LicenseValidationResult result, DateTimeOffset now)

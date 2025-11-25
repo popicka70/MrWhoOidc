@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Security.Admin;
@@ -85,6 +86,11 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
         [MaxLength(100)]
         public string? BillingPlan { get; set; }
 
+        /// <summary>
+        /// License mode: InheritPlatform or Sublicense
+        /// </summary>
+        public TenantLicenseMode LicenseMode { get; set; } = TenantLicenseMode.InheritPlatform;
+
         public DateTimeOffset CreatedAt { get; set; }
 
         public DateTimeOffset? SuspendedAt { get; set; }
@@ -142,6 +148,7 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
         }
 
         tenant.BillingPlan = Input.BillingPlan;
+        tenant.LicenseMode = Input.LicenseMode;
 
         // Update status timestamps
         if (Input.Status == TenantStatus.Suspended && tenant.SuspendedAt == null)
@@ -239,6 +246,7 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
             AccentColor = tenant.AccentColor,
             AdminEmail = tenant.AdminEmail,
             BillingPlan = tenant.BillingPlan,
+            LicenseMode = tenant.LicenseMode,
             CreatedAt = tenant.CreatedAt,
             SuspendedAt = tenant.SuspendedAt,
             DeletedAt = tenant.DeletedAt

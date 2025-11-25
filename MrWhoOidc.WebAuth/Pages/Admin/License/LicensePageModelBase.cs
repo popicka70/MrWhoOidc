@@ -225,6 +225,7 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
 
         var scopeDisplay = FormatScopeDisplay(info);
         var issuedToDisplay = FormatIssuedToDisplay(info);
+        var deploymentModeDisplay = FormatDeploymentModeDisplay(info);
 
         return new LicenseSummaryModel(
             info,
@@ -236,7 +237,10 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
             features,
             limits,
             scopeDisplay,
-            issuedToDisplay);
+            issuedToDisplay,
+            deploymentModeDisplay,
+            info.IsSublicense,
+            info.ParentLicenseId);
     }
 
     protected FeatureUsageReportModel BuildFeatureUsageReport(FeatureUsageReport report, DateTimeOffset reference)
@@ -425,6 +429,13 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
             : "Tenant-specific";
     }
 
+    private static string FormatDeploymentModeDisplay(LicenseInfoDto info)
+    {
+        return string.Equals(info.DeploymentMode, "singletenant", StringComparison.OrdinalIgnoreCase)
+            ? "Single-tenant"
+            : "Multi-tenant";
+    }
+
     private static string GetFeatureDisplayName(string feature)
     {
         if (FeatureDisplayNames.TryGetValue(feature, out var name))
@@ -493,7 +504,10 @@ public abstract class LicensePageModelBase : TenantAwarePageModel
         IReadOnlyList<FeatureDisplay> Features,
         IReadOnlyList<LimitDisplay> Limits,
         string ScopeDisplay,
-        string IssuedToDisplay);
+        string IssuedToDisplay,
+        string DeploymentModeDisplay,
+        bool IsSublicense,
+        string? ParentLicenseId);
 
     public sealed record FeatureUsageRow(
         string Key,

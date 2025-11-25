@@ -251,6 +251,46 @@
             </div>
         </div>
     </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-key me-2"></i>Licensing
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label asp-for="Input.LicenseMode" class="form-label">License Mode</label>
+                <select asp-for="Input.LicenseMode" class="form-select">
+                    <option value="0">Inherit Platform License</option>
+                    <option value="1">Use Sublicense</option>
+                </select>
+                <span asp-validation-for="Input.LicenseMode" class="text-danger small"></span>
+                <div class="form-text">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Inherit Platform License:</strong> Tenant uses all features from platform license (excluding platform-only features).<br />
+                    <strong>Use Sublicense:</strong> Tenant requires a dedicated sublicense with its own feature/limit set.
+                </div>
+            </div>
+            
+            @if (Model.Input.LicenseMode == MrWhoOidc.Auth.Licensing.Models.TenantLicenseMode.Sublicense)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    This tenant requires a sublicense. Go to 
+                    <a asp-page="/Admin/License/Install" asp-route-tenantId="@Model.Input.Id" class="alert-link">
+                        License Management
+                    </a>
+                    to install a sublicense for this tenant.
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>
+                    This tenant inherits its license from the platform. No separate sublicense required.
+                </div>
+            }
+        </div>
+    </div>
     
     <div class="card mb-4">
         <div class="card-header">
