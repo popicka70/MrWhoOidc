@@ -24,8 +24,36 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">License Token Generation</h5>
-                <p class="card-text">Generate license tokens with custom parameters for feature enablement.</p>
-                <a asp-page="/LicenseGeneration/Generate" class="btn btn-primary">Generate License</a>
+                <p class="card-text">Generate license tokens for platform deployments and tenant sublicenses.</p>
+                <div class="btn-group" role="group">
+                    <a asp-page="/LicenseGeneration/PlatformLicense" class="btn btn-primary">Platform License</a>
+                    <a asp-page="/LicenseGeneration/TenantLicense" class="btn btn-success">Tenant Sublicense</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="card-title">🏢 Platform License</h6>
+                <p class="card-text small">
+                    Platform licenses define the maximum capabilities for your OIDC installation. 
+                    Choose between single-tenant (one org) or multi-tenant (multiple orgs) deployment modes.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h6 class="card-title">👥 Tenant Sublicense</h6>
+                <p class="card-text small">
+                    Tenant sublicenses are restricted versions of the platform license for specific tenants.
+                    Features and limits must be a subset of the parent platform license.
+                </p>
             </div>
         </div>
     </div>

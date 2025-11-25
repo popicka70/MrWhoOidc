@@ -1,0 +1,321 @@
+@page
+@model MrWhoOidc.KeyGen.Pages.LicenseGeneration.PlatformLicenseModel
+@{
+    ViewData["Title"] = "Generate Platform License";
+}
+
+<h1 class="mb-4">Generate Platform License</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Platform License Parameters</h5>
+                <p class="text-muted">Platform licenses apply to the entire OIDC installation and define the maximum capabilities available.</p>
+                
+                <form method="post">
+                    @Html.AntiForgeryToken()
+
+                    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @Model.ErrorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.GeneratedTokenId))
+                    {
+                        <div class="alert alert-success" role="alert">
+                            <h5 class="alert-heading">✅ Platform License Generated Successfully!</h5>
+                            <p class="mb-2"><strong>Token ID:</strong> <code>@Model.GeneratedTokenId</code></p>
+                            <p class="mb-2"><strong>Deployment Mode:</strong> 
+                                <span class="badge @(Model.IsMultiTenant ? "bg-primary" : "bg-secondary")">
+                                    @(Model.IsMultiTenant ? "Multi-Tenant" : "Single-Tenant")
+                                </span>
+                            </p>
+                            <hr>
+                            <p class="mb-0">
+                                <button type="button" class="btn btn-primary" onclick="downloadLicenseToken()">
+                                    📥 Download Platform License (JWT)
+                                </button>
+                            </p>
+                        </div>
+                        <script id="licenseTokenData" type="application/json">@Html.Raw(Model.JwtToken)</script>
+                        <script>
+                            function downloadLicenseToken() {
+                                var tokenElement = document.getElementById('licenseTokenData');
+                                var token = tokenElement.textContent;
+                                var filename = 'platform-license-@(Model.GeneratedTokenId).txt';
+                                downloadFile(token, filename, 'text/plain');
+                            }
+
+                            function downloadFile(content, filename, contentType) {
+                                var blob = new Blob([content], { type: contentType });
+                                var url = window.URL.createObjectURL(blob);
+                                var a = document.createElement('a');
+                                a.style.display = 'none';
+                                a.href = url;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
+                            }
+                        </script>
+                    }
+
+                    <div class="mb-3">
+                        <label for="Tier" class="form-label">License Tier <span class="text-danger">*</span></label>
+                        <select class="form-select" id="Tier" name="Tier" asp-for="Tier" required>
+                            <option value="">-- Select Tier --</option>
+                            <option value="community">Community</option>
+                            <option value="professional">Professional</option>
+                            <option value="enterprise">Enterprise</option>
+                            <option value="enterprise+">Enterprise+</option>
+                        </select>
+                        <span asp-validation-for="Tier" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Deployment Mode <span class="text-danger">*</span></label>
+                        <div class="d-flex flex-wrap gap-3" id="deployment-mode-options">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="DeploymentMode" value="multi-tenant" id="deploy-multi">
+                                <label class="form-check-label" for="deploy-multi">
+                                    <strong>Multi-Tenant</strong>
+                                    <span class="d-block text-muted small">Multiple tenants with optional sublicenses</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="DeploymentMode" value="single-tenant" id="deploy-single">
+                                <label class="form-check-label" for="deploy-single">
+                                    <strong>Single-Tenant</strong>
+                                    <span class="d-block text-muted small">One tenant, platform license applies directly</span>
+                                </label>
+                            </div>
+                        </div>
+                        <span asp-validation-for="DeploymentMode" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Organization" class="form-label">Organization Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="Organization" name="Organization" asp-for="Organization" 
+                               placeholder="e.g., Acme Corp" required>
+                        <span asp-validation-for="Organization" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="IssuedTo">Issued to</label>
+                        <input type="text" class="form-control" asp-for="IssuedTo" placeholder="Contact or agreement identifier">
+                        <span asp-validation-for="IssuedTo" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" asp-for="AllowedIssuers">Allowed Issuers</label>
+                        <input type="text" class="form-control" asp-for="AllowedIssuers" placeholder="https://identity.example.com, https://auth.example.org">
+                        <span asp-validation-for="AllowedIssuers" class="text-danger"></span>
+                        <small class="form-text text-muted">Comma-separated list of allowed issuer URLs. Mandatory for non-community licenses.</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="NotBefore" class="form-label">Valid From (Not Before) <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="NotBefore" name="NotBefore" asp-for="NotBefore" required>
+                                <span asp-validation-for="NotBefore" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="ExpiresAt" class="form-label">Expires At <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="ExpiresAt" name="ExpiresAt" asp-for="ExpiresAt" required>
+                                <span asp-validation-for="ExpiresAt" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @{
+                        var normalizedTier = (Model.Tier ?? string.Empty).Trim().ToLowerInvariant();
+                        var tierLockedFeatures = Model.TierFeatureMap.TryGetValue(normalizedTier, out var lockedFeatures)
+                            ? lockedFeatures
+                            : new List<string>();
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Enabled Features</label>
+                        <div class="row g-2">
+                            @foreach (var feature in Model.FeatureOptions)
+                            {
+                                var checkboxId = $"feature-{feature.Key}";
+                                var isTierLocked = tierLockedFeatures.Any(f => f.Equals(feature.Key, StringComparison.OrdinalIgnoreCase));
+                                var isChecked = Model.SelectedFeatures.Any(f => f.Equals(feature.Key, StringComparison.OrdinalIgnoreCase));
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input" type="checkbox" name="SelectedFeatures" value="@feature.Key" id="@checkboxId"
+                                               data-feature-key="@feature.Key"
+                                               data-tier-lock="@(isTierLocked.ToString().ToLowerInvariant())"
+                                               @(isChecked ? "checked" : null)
+                                               @(isTierLocked ? "disabled" : null) />
+                                        <label class="form-check-label fw-semibold" for="@checkboxId">
+                                            @feature.DisplayName
+                                            @if (feature.IsPlatformOnly)
+                                            {
+                                                <span class="badge bg-info text-dark ms-1">Platform only</span>
+                                            }
+                                        </label>
+                                        <div class="small text-muted">@feature.Description</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <span asp-validation-for="SelectedFeatures" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3" id="default-tenant-features-section" data-visible-when="multi-tenant">
+                        <label class="form-label">Default Tenant Feature Overrides</label>
+                        <small class="form-text text-muted d-block mb-2">
+                            Select features that new tenants should inherit by default (must be subset of platform features).
+                        </small>
+                        <div class="row g-2">
+                            @foreach (var feature in Model.FeatureOptions.Where(f => !f.IsPlatformOnly))
+                            {
+                                var checkboxId = $"default-feature-{feature.Key}";
+                                var isChecked = Model.SelectedDefaultTenantFeatures.Any(f => f.Equals(feature.Key, StringComparison.OrdinalIgnoreCase));
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input" type="checkbox" name="SelectedDefaultTenantFeatures" value="@feature.Key" id="@checkboxId" @(isChecked ? "checked" : null) />
+                                        <label class="form-check-label fw-semibold" for="@checkboxId">@feature.DisplayName</label>
+                                        <div class="small text-muted">Must also be enabled above.</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <span asp-validation-for="SelectedDefaultTenantFeatures" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="Limits" class="form-label">Resource Limits (Optional, JSON)</label>
+                        <textarea class="form-control" id="Limits" name="Limits" asp-for="Limits" rows="3"
+                                  placeholder='{"clients":100,"users":10000,"tenants":50}'></textarea>
+                        <span asp-validation-for="Limits" class="text-danger"></span>
+                        <small class="form-text text-muted">JSON object defining platform-wide resource quotas</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="CreatedBy" class="form-label">Generated By (Optional)</label>
+                        <input type="text" class="form-control" id="CreatedBy" name="CreatedBy" asp-for="CreatedBy" 
+                               placeholder="e.g., admin@example.com">
+                        <span asp-validation-for="CreatedBy" class="text-danger"></span>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            🔐 Generate Platform License
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h5 class="card-title">ℹ️ Platform License</h5>
+                <p class="card-text">
+                    Platform licenses define the maximum capabilities for your entire OIDC installation.
+                </p>
+                <hr>
+                <h6>Deployment Modes</h6>
+                <ul class="small">
+                    <li><strong>Multi-Tenant:</strong> Multiple organizations share the platform. Each tenant can inherit the platform license or use a restricted sublicense.</li>
+                    <li><strong>Single-Tenant:</strong> One organization uses the platform. The platform license applies directly without sublicensing.</li>
+                </ul>
+                <hr>
+                <h6>Token Claims</h6>
+                <ul class="small">
+                    <li><strong>jti:</strong> Unique license identifier</li>
+                    <li><strong>license_scope:</strong> Always <code>platform</code></li>
+                    <li><strong>deployment_mode:</strong> <code>single-tenant</code> or <code>multi-tenant</code></li>
+                    <li><strong>features:</strong> Enabled features</li>
+                    <li><strong>default_tenant_features:</strong> Features for inheriting tenants</li>
+                    <li><strong>limits:</strong> Resource quotas</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card bg-warning-subtle mt-3">
+            <div class="card-body">
+                <h6 class="card-title">⚠️ Important</h6>
+                <p class="card-text small mb-0">
+                    Store the platform license securely. It's required to enable features across all tenants. 
+                    Tenant sublicenses can only enable features that are available in this platform license.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script id="tierFeatureMap" type="application/json">@Html.Raw(Model.TierFeatureMapJson)</script>
+    <script>
+        (function () {
+            const deploymentRadios = document.querySelectorAll('input[name="DeploymentMode"]');
+            const defaultTenantSection = document.getElementById('default-tenant-features-section');
+            const featureCheckboxes = document.querySelectorAll('input[name="SelectedFeatures"]');
+            const tierSelect = document.getElementById('Tier');
+            const tierFeatureMapElement = document.getElementById('tierFeatureMap');
+            const tierFeatureMap = tierFeatureMapElement ? JSON.parse(tierFeatureMapElement.textContent) : {};
+
+            function currentDeploymentMode() {
+                return Array.from(deploymentRadios).find(r => r.checked)?.value || 'multi-tenant';
+            }
+
+            function applyTierLocks() {
+                if (!tierSelect) return;
+
+                const normalizedTier = (tierSelect.value || '').toLowerCase();
+                const tierFeatures = tierFeatureMap[normalizedTier] || [];
+                const tierFeatureSet = new Set(tierFeatures.map(f => f.toLowerCase()));
+
+                featureCheckboxes.forEach(input => {
+                    const featureKey = (input.dataset.featureKey || '').toLowerCase();
+                    const shouldLock = tierFeatureSet.has(featureKey);
+                    input.dataset.tierLock = shouldLock ? 'true' : 'false';
+                    if (shouldLock) {
+                        input.checked = true;
+                        input.setAttribute('disabled', 'disabled');
+                    } else {
+                        input.removeAttribute('disabled');
+                    }
+                });
+            }
+
+            function applyDeploymentMode(mode) {
+                const isMultiTenant = mode === 'multi-tenant';
+                if (defaultTenantSection) {
+                    defaultTenantSection.classList.toggle('d-none', !isMultiTenant);
+                }
+            }
+
+            deploymentRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (radio.checked) {
+                        applyDeploymentMode(radio.value);
+                    }
+                });
+            });
+
+            if (tierSelect) {
+                tierSelect.addEventListener('change', () => {
+                    applyTierLocks();
+                });
+            }
+
+            // Initialize
+            applyTierLocks();
+            applyDeploymentMode(currentDeploymentMode());
+        })();
+    </script>
+}

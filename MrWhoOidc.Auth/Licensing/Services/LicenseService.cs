@@ -13,7 +13,6 @@ using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.Licensing.Repositories;
 using MrWhoOidc.Auth.Licensing.Validators;
 using MrWhoOidc.Auth.MultiTenancy;
-using MrWhoOidc.Auth.Services;
 using MrWhoOidc.ServiceDefaults.Observability;
 
 namespace MrWhoOidc.Auth.Licensing.Services;
@@ -33,7 +32,7 @@ internal sealed class LicenseService : ILicenseService
     private readonly TimeProvider _timeProvider;
     private readonly IMultiTenancyStateProvider? _multiTenancyStateProvider;
     private readonly IDefaultTenantContext? _defaultTenantContext;
-    private readonly ITenantService? _tenantService;
+    private readonly ITenantLicenseModeProvider? _tenantLicenseModeProvider;
 
     public LicenseService(
         ILicenseRepository repository,
@@ -44,7 +43,7 @@ internal sealed class LicenseService : ILicenseService
         TimeProvider? timeProvider = null,
         IMultiTenancyStateProvider? multiTenancyStateProvider = null,
         IDefaultTenantContext? defaultTenantContext = null,
-        ITenantService? tenantService = null)
+        ITenantLicenseModeProvider? tenantLicenseModeProvider = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
@@ -54,7 +53,7 @@ internal sealed class LicenseService : ILicenseService
         _timeProvider = timeProvider ?? TimeProvider.System;
         _multiTenancyStateProvider = multiTenancyStateProvider;
         _defaultTenantContext = defaultTenantContext;
-        _tenantService = tenantService;
+        _tenantLicenseModeProvider = tenantLicenseModeProvider;
     }
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
@@ -192,20 +191,13 @@ internal sealed class LicenseService : ILicenseService
 
     private async Task<TenantLicenseMode> GetTenantLicenseModeAsync(Guid tenantId, CancellationToken cancellationToken)
     {
-        if (_tenantService is null)
+        if (_tenantLicenseModeProvider is null)
         {
-            _logger.LogDebug("TenantService not available, defaulting to InheritPlatform mode for tenant {TenantId}.", tenantId);
+            _logger.LogDebug("TenantLicenseModeProvider not available, defaulting to InheritPlatform mode for tenant {TenantId}.", tenantId);
             return TenantLicenseMode.InheritPlatform;
         }
 
-        var tenant = await _tenantService.FindByIdAsync(tenantId, cancellationToken).ConfigureAwait(false);
-        if (tenant is null)
-        {
-            _logger.LogWarning("Tenant {TenantId} not found, defaulting to InheritPlatform mode.", tenantId);
-            return TenantLicenseMode.InheritPlatform;
-        }
-
-        return tenant.LicenseMode;
+        return await _tenantLicenseModeProvider.GetLicenseModeAsync(tenantId, cancellationToken).ConfigureAwait(false);
     }
 
     private LicenseInfo? CreateTenantProjection(LicenseInfo platformLicense, Guid tenantId)
