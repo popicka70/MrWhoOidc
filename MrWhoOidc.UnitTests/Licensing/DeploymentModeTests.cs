@@ -92,6 +92,7 @@ public sealed class DeploymentModeTests
     }
 
     [TestMethod]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Assertions", "MSTEST0032:Review or remove assertion", Justification = "Intentional constant value check to catch accidental changes")]
     public void Constants_HaveExpectedValues()
     {
         Assert.AreEqual("single_tenant", DeploymentModeExtensions.SingleTenantClaim);

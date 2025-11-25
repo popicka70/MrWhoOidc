@@ -9,12 +9,14 @@ namespace MrWhoOidc.UnitTests.Licensing;
 public sealed class TenantLicenseModeTests
 {
     [TestMethod]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Assertions", "MSTEST0032:Review or remove assertion", Justification = "Intentional constant value check to catch accidental changes")]
     public void InheritPlatform_HasExpectedValue()
     {
         Assert.AreEqual(0, (int)TenantLicenseMode.InheritPlatform);
     }
 
     [TestMethod]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Assertions", "MSTEST0032:Review or remove assertion", Justification = "Intentional constant value check to catch accidental changes")]
     public void Sublicense_HasExpectedValue()
     {
         Assert.AreEqual(1, (int)TenantLicenseMode.Sublicense);

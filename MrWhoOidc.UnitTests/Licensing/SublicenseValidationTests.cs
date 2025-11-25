@@ -108,7 +108,7 @@ public sealed class SublicenseValidationTests
 
         Assert.IsFalse(result.IsValid);
         Assert.AreEqual("sublicense_features_exceed_platform", result.ErrorCode);
-        Assert.IsTrue(result.ErrorMessage!.Contains("feature_c"));
+        StringAssert.Contains(result.ErrorMessage!, "feature_c");
     }
 
     [TestMethod]

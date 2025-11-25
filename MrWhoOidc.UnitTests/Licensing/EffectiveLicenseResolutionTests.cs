@@ -82,8 +82,8 @@ public sealed class EffectiveLicenseResolutionTests
         Assert.IsNotNull(result);
         Assert.AreEqual(LicenseScope.Tenant, result!.Scope);
         Assert.AreEqual(tenantId, result.LicensedTenantId);
-        Assert.IsTrue(result.EnabledFeatures.Contains("feature_a"));
-        Assert.IsTrue(result.EnabledFeatures.Contains("feature_b"));
+        CollectionAssert.Contains(result.EnabledFeatures.ToList(), "feature_a");
+        CollectionAssert.Contains(result.EnabledFeatures.ToList(), "feature_b");
     }
 
     [TestMethod]
@@ -111,8 +111,8 @@ public sealed class EffectiveLicenseResolutionTests
         var result = await service.GetEffectiveLicenseAsync(tenantId);
 
         Assert.IsNotNull(result);
-        Assert.IsTrue(result!.EnabledFeatures.Contains("feature_a"));
-        Assert.IsFalse(result.EnabledFeatures.Contains("multi_tenancy"));
+        CollectionAssert.Contains(result!.EnabledFeatures.ToList(), "feature_a");
+        CollectionAssert.DoesNotContain(result.EnabledFeatures.ToList(), "multi_tenancy");
     }
 
     [TestMethod]
