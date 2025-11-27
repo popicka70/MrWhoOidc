@@ -257,7 +257,11 @@
                                     <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
                                     <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
                                     <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/license"><i class="bi bi-award me-2"></i>License</a>
-                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/install"><i class="bi bi-cloud-upload me-2"></i>Install or update</a>
+                                    @if (platformAdminCheck.Succeeded)
+                                    {
+                                        <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/platform"><i class="bi bi-globe me-2"></i>Platform license</a>
+                                    }
+                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/tenant"><i class="bi bi-building me-2"></i>Tenant license</a>
                                     <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
                                     
                                     @* Branding - Only show in multi-tenant mode *@
