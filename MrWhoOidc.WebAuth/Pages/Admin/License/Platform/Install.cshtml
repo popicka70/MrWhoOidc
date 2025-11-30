@@ -1,0 +1,169 @@
+@page "/admin/license/platform/install"
+@model MrWhoOidc.WebAuth.Pages.Admin.License.Platform.InstallModel
+@{
+    ViewData["Title"] = "Install Platform License";
+}
+
+<h1 class="mb-3">
+    <i class="bi bi-cloud-upload me-2"></i>Install platform license
+</h1>
+<p class="text-muted mb-4">
+    Install or update the platform license. Platform licenses govern deployment mode, tenant limits, and enterprise features available across all tenants.
+</p>
+
+<form method="post" class="mb-4">
+    <div class="card">
+        <div class="card-body">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                <strong>Platform License:</strong> This license applies to the entire platform and defines the maximum capabilities.
+                Tenant licenses can only enable features that are permitted by the platform license.
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" asp-for="Input.LicenseKey"></label>
+                <textarea class="form-control font-monospace" asp-for="Input.LicenseKey" rows="10" spellcheck="false" aria-describedby="licenseKeyHelp" placeholder="eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+                <div id="licenseKeyHelp" class="form-text">Paste the signed JWS platform license key exactly as provided. Validation runs before installation.</div>
+                <span class="text-danger" asp-validation-for="Input.LicenseKey"></span>
+            </div>
+
+            <div class="mb-0">
+                <label class="form-label" asp-for="Input.Notes"></label>
+                <textarea class="form-control" asp-for="Input.Notes" rows="3" aria-describedby="licenseNotesHelp" placeholder="e.g., Purchase order #12345, renewed for 2025"></textarea>
+                <div id="licenseNotesHelp" class="form-text">Optional notes appear in the license history (e.g., purchase order, contact).</div>
+                <span class="text-danger" asp-validation-for="Input.Notes"></span>
+            </div>
+        </div>
+        <div class="card-footer d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary" type="submit" asp-page-handler="Validate">
+                <i class="bi bi-search me-1"></i>Validate only
+            </button>
+            <button class="btn btn-primary" type="submit" asp-page-handler="Install">
+                <i class="bi bi-cloud-upload me-1"></i>Install license
+            </button>
+            <a class="btn btn-link ms-auto" asp-page="Index">
+                Back to platform license
+            </a>
+        </div>
+    </div>
+</form>
+
+@if (Model.ValidationPreview is not null)
+{
+    var validationStateClass = Model.ValidationPreview.IsValid && Model.ValidationError is null ? "border-success" : "border-danger";
+    <div class="card @validationStateClass mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Validation result:</strong>
+                <span class="@(Model.ValidationPreview.IsValid && Model.ValidationError is null ? "text-success" : "text-danger")">
+                    @(Model.ValidationPreview.IsValid && Model.ValidationError is null ? "License is valid" : "License validation failed")
+                </span>
+            </div>
+            <span class="badge @(Model.ValidationPreview.IsValid && Model.ValidationError is null ? "text-bg-success" : "text-bg-danger")">
+                @(Model.ValidationPreview.IsValid && Model.ValidationError is null ? "Valid" : "Invalid")
+            </span>
+        </div>
+        <div class="card-body">
+            @if (Model.ValidationError is not null)
+            {
+                <div class="alert alert-danger" role="alert">
+                    <div class="fw-semibold">@Model.ValidationError.Error</div>
+                    <div>@Model.ValidationError.ErrorDescription</div>
+                </div>
+            }
+
+            @if (Model.ValidationSummary is not null)
+            {
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <h5 class="mb-3">Proposed platform license</h5>
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Tier</dt>
+                            <dd class="col-sm-8">@Model.ValidationSummary.TierDisplay</dd>
+                            <dt class="col-sm-4">Scope</dt>
+                            <dd class="col-sm-8">
+                                @if (string.Equals(Model.ValidationSummary.Info.Scope, "platform", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <span class="badge bg-primary">Platform</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">Tenant (invalid for this page)</span>
+                                }
+                            </dd>
+                            <dt class="col-sm-4">Deployment mode</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge @(Model.ValidationSummary.DeploymentModeDisplay == "Multi-tenant" ? "bg-primary" : "bg-secondary")">
+                                    @Model.ValidationSummary.DeploymentModeDisplay
+                                </span>
+                            </dd>
+                            <dt class="col-sm-4">Issued to</dt>
+                            <dd class="col-sm-8">@Model.ValidationSummary.IssuedToDisplay</dd>
+                            <dt class="col-sm-4">Organization</dt>
+                            <dd class="col-sm-8">@(!string.IsNullOrWhiteSpace(Model.ValidationSummary.Info.OrganizationName) ? Model.ValidationSummary.Info.OrganizationName : "—")</dd>
+                            <dt class="col-sm-4">Valid from</dt>
+                            <dd class="col-sm-8">@Model.FormatDate(Model.ValidationSummary.Info.ValidFrom)</dd>
+                            <dt class="col-sm-4">Valid until</dt>
+                            <dd class="col-sm-8">@Model.ValidationSummary.ExpiryText</dd>
+                        </dl>
+                    </div>
+                    <div class="col-lg-6">
+                        <h5 class="mb-3">Enabled features</h5>
+                        <p class="small text-muted mb-2">These features will be available platform-wide.</p>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @foreach (var feature in Model.ValidationSummary.Features)
+                            {
+                                <span class="badge text-bg-light border">@feature.DisplayName</span>
+                            }
+                        </div>
+
+                        @if (Model.ValidationSummary.Info.AllowedIssuers.Count > 0)
+                        {
+                            <h5 class="mb-3">Allowed Issuers</h5>
+                            <ul class="list-unstyled small text-muted mb-0">
+                                @foreach (var issuer in Model.ValidationSummary.Info.AllowedIssuers)
+                                {
+                                    <li><i class="bi bi-check2 me-1 text-success"></i>@issuer</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+                <div class="table-responsive mt-4">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Limit</th>
+                                <th scope="col">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var limit in Model.ValidationSummary.Limits)
+                            {
+                                <tr>
+                                    <th scope="row">@limit.DisplayName</th>
+                                    <td>
+                                        @if (limit.IsUnlimited)
+                                        {
+                                            <span class="badge text-bg-success">Unlimited</span>
+                                        }
+                                        else if (limit.IsDisabled)
+                                        {
+                                            <span class="badge text-bg-secondary">Disabled</span>
+                                        }
+                                        else
+                                        {
+                                            @limit.ValueDisplay
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using MrWhoOidc.Auth.Licensing.Models;
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -74,6 +75,14 @@ public class Tenant
     public string? BillingPlan { get; set; } // Free, Starter, Pro, Enterprise
 
     public DateTimeOffset? TrialEndsAt { get; set; }
+
+    // Licensing
+    /// <summary>
+    /// Determines how this tenant's effective license is resolved.
+    /// InheritPlatform: Tenant automatically inherits all platform license features.
+    /// Sublicense: Tenant requires its own license (must be subset of platform features).
+    /// </summary>
+    public TenantLicenseMode LicenseMode { get; set; } = TenantLicenseMode.InheritPlatform;
 
     // Metadata
     [MaxLength(2000)]

@@ -18,6 +18,7 @@ public static class LicensingServiceCollectionExtensions
         services.TryAddScoped<ILicenseRepository, LicenseRepository>();
         services.TryAddScoped<IFeatureUsageRepository, FeatureUsageRepository>();
         services.TryAddScoped<IDefaultTenantContext, DefaultTenantContext>();
+        services.TryAddScoped<ITenantLicenseModeProvider, TenantLicenseModeProvider>();
         services.TryAddScoped<ILicenseService, LicenseService>();
         services.TryAddScoped<IFeatureService, FeatureService>();
         services.TryAddScoped<ILimitService, LimitService>();

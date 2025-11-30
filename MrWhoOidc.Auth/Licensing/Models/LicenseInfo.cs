@@ -18,9 +18,17 @@ public sealed record LicenseInfo(
     string? LicensedTenantSlug,
     IReadOnlySet<string> DefaultTenantFeatures,
     bool HasExplicitScopeClaim,
-    IReadOnlySet<string> AllowedIssuers)
+    IReadOnlySet<string> AllowedIssuers,
+    DeploymentMode DeploymentMode = DeploymentMode.MultiTenant,
+    string? ParentLicenseId = null,
+    string? LicenseId = null)
 {
     public LicenseTier TierEnum => LicenseTierExtensions.FromTierString(Tier);
+
+    /// <summary>
+    /// Indicates if this is a sublicense (tenant license derived from a platform license).
+    /// </summary>
+    public bool IsSublicense => !string.IsNullOrWhiteSpace(ParentLicenseId);
 
     public bool IsFeatureEnabled(string featureName)
     {
