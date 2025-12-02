@@ -44,17 +44,6 @@
                 <span asp-validation-for="Input.LastName" class="text-danger"></span>
             </div>
             <div class="col-md-6">
-                <label asp-for="Input.ClientId" class="form-label">Client (optional)</label>
-                <select asp-for="Input.ClientId" class="form-select">
-                    <option value="">-- none --</option>
-                    @foreach (var c in Model.ClientOptions)
-                    {
-                        <option value="@c.Value">@c.Text</option>
-                    }
-                </select>
-                <span asp-validation-for="Input.ClientId" class="text-danger"></span>
-            </div>
-            <div class="col-md-6">
                 <label asp-for="Input.Password" class="form-label">Password (optional)</label>
                 <input asp-for="Input.Password" class="form-control" type="password" autocomplete="new-password" />
                 <span asp-validation-for="Input.Password" class="text-danger"></span>
