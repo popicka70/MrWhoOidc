@@ -108,8 +108,10 @@ public class IndexModel(
         // Create user
         var user = new User
         {
+            TenantId = currentTenantId.Value,
             Username = normalized,
             Email = emailForUser,
+            NormalizedEmail = normalized,
             EmailVerified = false,
             Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
             HashAlgorithm = "argon2id",
@@ -139,7 +141,7 @@ public class IndexModel(
         await db.SaveChangesAsync();
 
         // Go to user edit
-        return TenantAwareRedirect("/Admin/Users/Edit", new { id = user.Id });
+        return TenantAwareRedirect($"/admin/users/edit/{user.Id}");
     }
 
     public async Task<IActionResult> OnPostRejectAsync(Guid id)
