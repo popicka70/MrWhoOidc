@@ -62,6 +62,7 @@ public class IndexModel(IPasswordHasher hasher, IRegistrationService registratio
 
             // Use the registration service instead of direct DB operations
             // Note: clientId is always null - client assignment is done post-registration by admins
+            // Auto-approve only when creating a new tenant (user becomes tenant admin)
             var userId = await registrationService.CreateAndMaybeApproveRegistrationAsync(
                 email: Input.Email.Trim(),
                 firstName: string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
@@ -69,7 +70,7 @@ public class IndexModel(IPasswordHasher hasher, IRegistrationService registratio
                 clientId: null,
                 passwordHash: passwordHash,
                 isExternalIdp: false, // Local registration
-                autoApprove: true, // Auto-approve tenant admin registrations
+                autoApprove: Input.CreateTenant, // Only auto-approve tenant admin registrations
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
                 tenantDescription: tenantDescription);

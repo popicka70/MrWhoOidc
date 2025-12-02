@@ -163,7 +163,7 @@
                                 <span class="navbar-text small">@userEmail</span>
                                 <span class="badge @roleBadgeClass">@userRole</span>
                             </div>
-                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)">Log out</a>
+                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=%2F">Log out</a>
                         </div>
                         <!-- Mobile Navigation Dropdown -->
                         <div class="dropdown d-md-none">
@@ -178,7 +178,7 @@
                                 <li><a class="dropdown-item" href="@(tenantPrefix)/Password"><i class="bi bi-key me-2"></i>Change password</a></li>
                                 <li><a class="dropdown-item" href="@(tenantPrefix)/Mfa"><i class="bi bi-shield-lock me-2"></i>Two-factor (TOTP)</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString(Context.Request.Path + Context.Request.QueryString)"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
+                                <li><a class="dropdown-item" href="@(tenantPrefix)/logout?returnUrl=%2F"><i class="bi bi-box-arrow-right me-2"></i>Log out</a></li>
                             </ul>
                         </div>
                     }
