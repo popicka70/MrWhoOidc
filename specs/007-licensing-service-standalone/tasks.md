@@ -847,9 +847,9 @@ Implement license tier upgrade/downgrade.
 4. Handle feature inheritance/removal
 
 **Acceptance**:
-- [ ] New license created with correct tier
-- [ ] Original marked appropriately
-- [ ] Features adjusted for tier
+- [X] New license created with correct tier
+- [X] Original marked appropriately
+- [X] Features adjusted for tier
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/LicenseService.cs` (extend)
@@ -864,9 +864,9 @@ Implement license tier upgrade/downgrade.
 Implement POST /licenses/{id}/upgrade and /downgrade endpoints.
 
 **Acceptance**:
-- [ ] Upgrade creates new license with higher tier
-- [ ] Downgrade creates new license with lower tier
-- [ ] Returns new token
+- [X] Upgrade creates new license with higher tier
+- [X] Downgrade creates new license with lower tier
+- [X] Returns new token
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs` (extend)
@@ -882,9 +882,9 @@ Implement POST /licenses/{id}/upgrade and /downgrade endpoints.
 Test tier change functionality.
 
 **Acceptance**:
-- [ ] Upgrade flow correct
-- [ ] Downgrade flow correct
-- [ ] Feature adjustment verified
+- [X] Upgrade flow correct
+- [X] Downgrade flow correct
+- [X] Feature adjustment verified
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/LicenseTierChangeTests.cs`

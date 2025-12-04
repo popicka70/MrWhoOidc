@@ -64,6 +64,16 @@ public static class LicenseEndpoints
             .WithName("RevokeLicense")
             .WithSummary("Revokes a license");
 
+        // Upgrade license tier
+        group.MapPost("/{id:guid}/upgrade", UpgradeLicenseAsync)
+            .WithName("UpgradeLicense")
+            .WithSummary("Upgrades a license to a higher tier");
+
+        // Downgrade license tier
+        group.MapPost("/{id:guid}/downgrade", DowngradeLicenseAsync)
+            .WithName("DowngradeLicense")
+            .WithSummary("Downgrades a license to a lower tier");
+
         // Get license events/history
         group.MapGet("/{id:guid}/events", GetLicenseEventsAsync)
             .WithName("GetLicenseEvents")
@@ -297,6 +307,68 @@ public static class LicenseEndpoints
         }
 
         return TypedResults.Ok(MapToResponse(result.License!));
+    }
+
+    private static async Task<Results<Ok<LicenseWithTokenResponse>, NotFound, BadRequest<string>>> UpgradeLicenseAsync(
+        Guid id,
+        [FromBody] ChangeTierRequest request,
+        Core.Services.ILicenseService licenseService,
+        ICurrentUserAccessor currentUser,
+        CancellationToken cancellationToken)
+    {
+        var upgradeRequest = new Core.Services.ChangeTierRequest
+        {
+            LicenseId = id,
+            NewTier = request.NewTier,
+            OptionUpdates = request.OptionUpdates
+        };
+
+        var result = await licenseService.UpgradeLicenseAsync(
+            upgradeRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            if (result.ErrorCode == "license_not_found")
+            {
+                return TypedResults.NotFound();
+            }
+            return TypedResults.BadRequest(result.Error ?? "Upgrade failed");
+        }
+
+        return TypedResults.Ok(MapToWithTokenResponse(result.License!));
+    }
+
+    private static async Task<Results<Ok<LicenseWithTokenResponse>, NotFound, BadRequest<string>>> DowngradeLicenseAsync(
+        Guid id,
+        [FromBody] ChangeTierRequest request,
+        Core.Services.ILicenseService licenseService,
+        ICurrentUserAccessor currentUser,
+        CancellationToken cancellationToken)
+    {
+        var downgradeRequest = new Core.Services.ChangeTierRequest
+        {
+            LicenseId = id,
+            NewTier = request.NewTier,
+            OptionUpdates = request.OptionUpdates
+        };
+
+        var result = await licenseService.DowngradeLicenseAsync(
+            downgradeRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            if (result.ErrorCode == "license_not_found")
+            {
+                return TypedResults.NotFound();
+            }
+            return TypedResults.BadRequest(result.Error ?? "Downgrade failed");
+        }
+
+        return TypedResults.Ok(MapToWithTokenResponse(result.License!));
     }
 
     private static async Task<Results<Ok<IReadOnlyList<LicenseEventResponse>>, NotFound>> GetLicenseEventsAsync(

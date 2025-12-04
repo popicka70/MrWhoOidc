@@ -65,6 +65,20 @@ public class RevokeLicenseRequest
 }
 
 /// <summary>
+/// Request to change license tier (upgrade or downgrade).
+/// </summary>
+public class ChangeTierRequest
+{
+    /// <summary>New tier for the license.</summary>
+    [JsonPropertyName("newTier")]
+    public required string NewTier { get; init; }
+
+    /// <summary>Optional option updates for the new tier.</summary>
+    [JsonPropertyName("optionUpdates")]
+    public Dictionary<string, object>? OptionUpdates { get; init; }
+}
+
+/// <summary>
 /// License response DTO.
 /// </summary>
 public class LicenseResponse
