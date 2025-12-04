@@ -1478,7 +1478,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "Admin/Users/Edit/{id:guid}",
+    "Pattern": "admin/users/edit/{id:guid}",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",
