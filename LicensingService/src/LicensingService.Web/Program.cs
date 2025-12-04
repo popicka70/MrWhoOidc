@@ -35,6 +35,7 @@ builder.Services.AddScoped<ISigningKeyService, SigningKeyService>();
 builder.Services.AddScoped<ILicenseTokenGenerator, LicenseTokenGenerator>();
 builder.Services.AddScoped<ILicenseStore, LicenseStore>();
 builder.Services.AddScoped<ILicenseValidationService, LicenseValidationService>();
+builder.Services.AddScoped<ILicenseService, LicenseService>();
 
 // Configure OIDC authentication
 builder.Services.AddAuthentication("Bearer")

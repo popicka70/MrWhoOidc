@@ -534,10 +534,10 @@ Implement the core license issuance logic.
 5. Create LicenseEvent for audit trail
 
 **Acceptance**:
-- [ ] License issued with valid token
-- [ ] Options validated against product catalog
-- [ ] Audit event created
-- [ ] Returns token and license metadata
+- [X] License issued with valid token
+- [X] Options validated against product catalog
+- [X] Audit event created
+- [X] Returns token and license metadata
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/ILicenseService.cs`
