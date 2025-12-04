@@ -34,8 +34,8 @@ LicensingService/
 6. Add reference from MrWhoOidc.slnx to new solution (optional for IDE convenience)
 
 **Acceptance**:
-- [ ] `dotnet build LicensingService/LicensingService.slnx` succeeds
-- [ ] Projects follow MrWhoOidc convention (no OpenIddict/Microsoft Identity dependencies)
+- [X] `dotnet build LicensingService/LicensingService.slnx` succeeds
+- [X] Projects follow MrWhoOidc convention (no OpenIddict/Microsoft Identity dependencies)
 
 **Files**:
 - `LicensingService/LicensingService.slnx`
@@ -61,8 +61,8 @@ Set up EF Core with dual-database support:
 4. Add `appsettings.Development.json` with SQLite connection string
 
 **Acceptance**:
-- [ ] Application starts with SQLite in dev mode
-- [ ] Can switch to PostgreSQL via connection string
+- [X] Application starts with SQLite in dev mode
+- [X] Can switch to PostgreSQL via connection string
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Persistence/LicensingDbContext.cs`
@@ -87,9 +87,9 @@ Set up JWT Bearer authentication for all API endpoints.
 5. Create `CurrentUserAccessor` service to extract user claims
 
 **Acceptance**:
-- [ ] Unauthenticated requests receive 401
-- [ ] Authenticated requests have user claims available
-- [ ] OIDC settings configurable via appsettings
+- [X] Unauthenticated requests receive 401
+- [X] Authenticated requests have user claims available
+- [X] OIDC settings configurable via appsettings
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Program.cs`
@@ -112,9 +112,9 @@ Implement the Customer entity per data-model.md.
 3. Implement identifier validation (alphanumeric with hyphens)
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] Unique index on Identifier
-- [ ] Status defaults to "Active"
+- [X] Entity matches data-model.md specification
+- [X] Unique index on Identifier
+- [X] Status defaults to "Active"
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/Customer.cs`
@@ -135,9 +135,9 @@ Implement the LicensedProduct entity.
 3. Add navigation property to OptionDefinitions
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] Unique index on Identifier
-- [ ] Navigation to ProductOptionDefinition collection
+- [X] Entity matches data-model.md specification
+- [X] Unique index on Identifier
+- [X] Navigation to ProductOptionDefinition collection
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/LicensedProduct.cs`
@@ -158,9 +158,9 @@ Implement the ProductOptionDefinition entity for product-specific licensable opt
 3. Add DataType enum: String, Number, Boolean
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] OptionKey validation (lowercase alphanumeric with underscores)
-- [ ] FK relationship to LicensedProduct
+- [X] Entity matches data-model.md specification
+- [X] OptionKey validation (lowercase alphanumeric with underscores)
+- [X] FK relationship to LicensedProduct
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/ProductOptionDefinition.cs`
@@ -183,10 +183,10 @@ Implement the License entity with full lifecycle tracking.
 4. Configure composite indexes for customer-first search
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] Composite index on (CustomerId, ProductId)
-- [ ] Composite index on (CustomerId, Status, ValidUntil)
-- [ ] Self-referencing navigation properties (Parent/Children)
+- [X] Entity matches data-model.md specification
+- [X] Composite index on (CustomerId, ProductId)
+- [X] Composite index on (CustomerId, Status, ValidUntil)
+- [X] Self-referencing navigation properties (Parent/Children)
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/License.cs`
@@ -208,9 +208,9 @@ Implement the audit trail entity.
 3. Configure immutability (append-only pattern)
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] Composite index on (LicenseId, Timestamp)
-- [ ] FK relationship to License
+- [X] Entity matches data-model.md specification
+- [X] Composite index on (LicenseId, Timestamp)
+- [X] FK relationship to License
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/LicenseEvent.cs`
@@ -232,9 +232,9 @@ Implement the signing key entity for JWKS management.
 3. Add unique index on Kid
 
 **Acceptance**:
-- [ ] Entity matches data-model.md specification
-- [ ] Only public key stored in database
-- [ ] Unique index on Kid
+- [X] Entity matches data-model.md specification
+- [X] Only public key stored in database
+- [X] Unique index on Kid
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Entities/SigningKey.cs`
@@ -262,9 +262,9 @@ dotnet ef migrations add InitialCreate --project LicensingService/src/LicensingS
 ```
 
 **Acceptance**:
-- [ ] All entities configured in DbContext
-- [ ] Migration creates all tables with indexes
-- [ ] `dotnet ef database update` succeeds
+- [X] All entities configured in DbContext
+- [X] Migration creates all tables with indexes
+- [X] `dotnet ef database update` succeeds
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Persistence/LicensingDbContext.cs`
@@ -288,9 +288,9 @@ Create data access layer for LicensedProduct.
 4. Include prevention of delete with existing licenses
 
 **Acceptance**:
-- [ ] CRUD operations work correctly
-- [ ] Cannot delete product with licenses
-- [ ] Soft-delete sets Status to Inactive
+- [X] CRUD operations work correctly
+- [X] Cannot delete product with licenses
+- [X] Soft-delete sets Status to Inactive
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Stores/IProductStore.cs`
@@ -312,10 +312,10 @@ Implement REST endpoints for product management per OpenAPI spec.
 4. Add validation using FluentValidation or data annotations
 
 **Acceptance**:
-- [ ] All endpoints per openapi.yaml /products section
-- [ ] 201 on create with Location header
-- [ ] 409 on duplicate identifier
-- [ ] 400 on delete with active licenses
+- [X] All endpoints per openapi.yaml /products section
+- [X] 201 on create with Location header
+- [X] 409 on duplicate identifier
+- [X] 400 on delete with active licenses
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/ProductEndpoints.cs`
@@ -337,9 +337,9 @@ Implement endpoints for managing product option definitions.
 4. DELETE to remove (fails if in use)
 
 **Acceptance**:
-- [ ] Can add/update/remove option definitions
-- [ ] Cannot remove option in use by licenses
-- [ ] Option key uniqueness enforced within product
+- [X] Can add/update/remove option definitions
+- [X] Cannot remove option in use by licenses
+- [X] Option key uniqueness enforced within product
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/ProductEndpoints.cs` (extend)
@@ -386,9 +386,9 @@ Create data access layer for Customer.
 4. Soft-delete with license check
 
 **Acceptance**:
-- [ ] CRUD operations work
-- [ ] Search supports prefix matching
-- [ ] Cannot delete customer with licenses
+- [X] CRUD operations work
+- [X] Search supports prefix matching
+- [X] Cannot delete customer with licenses
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Stores/ICustomerStore.cs`
@@ -410,9 +410,9 @@ Implement REST endpoints for customer management.
 4. Add pagination support
 
 **Acceptance**:
-- [ ] All endpoints per openapi.yaml /customers section
-- [ ] Customer-first license lookup works
-- [ ] Pagination returns correct totals
+- [X] All endpoints per openapi.yaml /customers section
+- [X] Customer-first license lookup works
+- [X] Pagination returns correct totals
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/CustomerEndpoints.cs`
@@ -459,9 +459,9 @@ Reuse ECDSA P-256 signing from MrWhoOidc.KeyGen.
 5. Store public keys in database for JWKS
 
 **Acceptance**:
-- [ ] Can load existing KeyGen keys
-- [ ] Can generate new keys
-- [ ] Public key stored in SigningKey table
+- [X] Can load existing KeyGen keys
+- [X] Can generate new keys
+- [X] Public key stored in SigningKey table
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Crypto/ISigningKeyService.cs`
@@ -485,9 +485,9 @@ Implement JWT license token generation.
 5. Include kid in header
 
 **Acceptance**:
-- [ ] Generates valid JWT with all required claims
-- [ ] Signature verifiable with public key
-- [ ] Options serialized as JSON claim
+- [X] Generates valid JWT with all required claims
+- [X] Signature verifiable with public key
+- [X] Options serialized as JSON claim
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/ILicenseTokenGenerator.cs`
@@ -509,9 +509,9 @@ Create data access layer for License entity.
 4. Include parent/child relationship handling
 
 **Acceptance**:
-- [ ] CRUD operations work
-- [ ] Customer-first search with filters
-- [ ] Parent/child relationships maintained
+- [X] CRUD operations work
+- [X] Customer-first search with filters
+- [X] Parent/child relationships maintained
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Stores/ILicenseStore.cs`
@@ -560,9 +560,9 @@ Implement POST /licenses endpoint.
 5. Return token in response for new licenses
 
 **Acceptance**:
-- [ ] POST creates license and returns token
-- [ ] GET supports all filter parameters
-- [ ] 400 on invalid options
+- [X] POST creates license and returns token
+- [X] GET supports all filter parameters
+- [X] 400 on invalid options
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs`

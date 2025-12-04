@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LicensingService.Core/LicensingService.Core.csproj" />
+    <Project Path="src/LicensingService.Web/LicensingService.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LicensingService.Tests/LicensingService.Tests.csproj" />
+  </Folder>
+</Solution>
