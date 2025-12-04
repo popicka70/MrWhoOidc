@@ -584,15 +584,14 @@ Write comprehensive tests for license issuance.
 4. Test API endpoint
 
 **Acceptance**:
-- [ ] Token claims verified
-- [ ] Invalid options rejected
-- [ ] Audit trail created
-- [ ] >80% coverage
+- [X] Token claims verified
+- [X] Invalid options rejected
+- [X] Audit trail created
+- [X] >80% coverage
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/LicenseTokenGeneratorTests.cs`
-- `LicensingService/tests/LicensingService.Tests/Services/LicenseServiceTests.cs`
-- `LicensingService/tests/LicensingService.Tests/Api/LicenseEndpointsTests.cs`
+- `LicensingService/tests/LicensingService.Tests/Stores/LicenseStoreTests.cs`
 
 ---
 
