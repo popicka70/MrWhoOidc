@@ -953,7 +953,7 @@ Test bulk operations.
 
 ## Phase 11: Admin UI (Razor Pages)
 
-### Task 11.1 – Create Admin Layout and Navigation
+### Task 11.1 – Create Admin Layout and Navigation ✅
 
 **User Story**: All  
 **Estimate**: 30 min
@@ -965,14 +965,20 @@ Create Razor Pages layout for admin interface.
 2. Create `_ViewImports.cshtml` and `_ViewStart.cshtml`
 3. Add navigation links: Customers, Products, Licenses
 
+**Acceptance**:
+- [X] Layout with Bootstrap 5 styling
+- [X] Responsive navigation bar
+- [X] Flash message support
+
 **Files**:
 - `LicensingService/src/LicensingService.Web/Pages/Shared/_Layout.cshtml`
+- `LicensingService/src/LicensingService.Web/Pages/Shared/_ValidationScriptsPartial.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/_ViewImports.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/_ViewStart.cshtml`
 
 ---
 
-### Task 11.2 – Create Customer Admin Pages
+### Task 11.2 – Create Customer Admin Pages ✅
 
 **User Story**: FR-001a  
 **Estimate**: 45 min
@@ -984,6 +990,12 @@ Create CRUD pages for customers.
 2. Include customer search functionality
 3. Show license count per customer
 
+**Acceptance**:
+- [X] Index page with search and pagination
+- [X] Create page with validation
+- [X] Edit page with validation
+- [X] Details page showing licenses
+
 **Files**:
 - `LicensingService/src/LicensingService.Web/Pages/Customers/Index.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/Customers/Create.cshtml`
@@ -992,7 +1004,7 @@ Create CRUD pages for customers.
 
 ---
 
-### Task 11.3 – Create Product Admin Pages
+### Task 11.3 – Create Product Admin Pages ✅
 
 **User Story**: US2  
 **Estimate**: 45 min
@@ -1003,6 +1015,11 @@ Create CRUD pages for products with option management.
 1. Create Index, Create, Edit pages
 2. Include option definition management on Edit page
 
+**Acceptance**:
+- [X] Index page with option count display
+- [X] Create page with validation
+- [X] Edit page with inline option management
+
 **Files**:
 - `LicensingService/src/LicensingService.Web/Pages/Products/Index.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/Products/Create.cshtml`
@@ -1010,7 +1027,7 @@ Create CRUD pages for products with option management.
 
 ---
 
-### Task 11.4 – Create License Admin Pages
+### Task 11.4 – Create License Admin Pages ✅
 
 **User Story**: US1, US3, US4, US5  
 **Estimate**: 60 min
@@ -1023,10 +1040,17 @@ Create license management pages.
 3. Create Details page with renewal/revocation actions
 4. Show audit trail on Details page
 
+**Acceptance**:
+- [X] Index with customer-first search and filters
+- [X] Issue wizard (customer → product → tier → options)
+- [X] Details with event history and actions
+- [X] Renew and revoke actions
+
 **Files**:
 - `LicensingService/src/LicensingService.Web/Pages/Licenses/Index.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/Licenses/Issue.cshtml`
 - `LicensingService/src/LicensingService.Web/Pages/Licenses/Details.cshtml`
+- `LicensingService/src/LicensingService.Web/Pages/Index.cshtml` (Dashboard)
 
 ---
 

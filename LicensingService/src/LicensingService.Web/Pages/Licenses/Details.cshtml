@@ -1,0 +1,231 @@
+@page "{id:guid}"
+@model LicensingService.Web.Pages.Licenses.DetailsModel
+@{
+    ViewData["Title"] = "License Details";
+    var statusClass = Model.License.Status switch
+    {
+        LicensingService.Core.Entities.LicenseStatus.Active => "bg-success",
+        LicensingService.Core.Entities.LicenseStatus.Revoked => "bg-danger",
+        LicensingService.Core.Entities.LicenseStatus.Expired => "bg-warning",
+        LicensingService.Core.Entities.LicenseStatus.Renewed => "bg-info",
+        LicensingService.Core.Entities.LicenseStatus.Upgraded => "bg-info",
+        LicensingService.Core.Entities.LicenseStatus.Downgraded => "bg-info",
+        _ => "bg-secondary"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="bi bi-key me-2"></i>License Details
+        <span class="badge @statusClass fs-6">@Model.License.Status</span>
+    </h1>
+    <a asp-page="Index" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>Back to List
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>License Information
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Token ID</dt>
+                    <dd class="col-sm-8"><code>@Model.License.TokenId</code></dd>
+
+                    <dt class="col-sm-4">Customer</dt>
+                    <dd class="col-sm-8">
+                        <a asp-page="/Customers/Details" asp-route-id="@Model.License.CustomerId">
+                            @Model.License.Customer?.DisplayName
+                        </a>
+                    </dd>
+
+                    <dt class="col-sm-4">Product</dt>
+                    <dd class="col-sm-8">@Model.License.Product?.DisplayName</dd>
+
+                    <dt class="col-sm-4">Tier</dt>
+                    <dd class="col-sm-8"><span class="badge bg-primary">@Model.License.Tier</span></dd>
+
+                    <dt class="col-sm-4">Scope</dt>
+                    <dd class="col-sm-8">@Model.License.Scope</dd>
+
+                    <dt class="col-sm-4">Valid From</dt>
+                    <dd class="col-sm-8">@Model.License.ValidFrom.ToString("MMM dd, yyyy HH:mm")</dd>
+
+                    <dt class="col-sm-4">Valid Until</dt>
+                    <dd class="col-sm-8">
+                        @Model.License.ValidUntil.ToString("MMM dd, yyyy HH:mm")
+                        @if (Model.License.ValidUntil < DateTimeOffset.UtcNow)
+                        {
+                            <span class="badge bg-danger ms-2">Expired</span>
+                        }
+                        else if (Model.License.ValidUntil < DateTimeOffset.UtcNow.AddDays(30))
+                        {
+                            <span class="badge bg-warning ms-2">Expiring Soon</span>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-4">Created</dt>
+                    <dd class="col-sm-8">@Model.License.CreatedAt.ToString("MMM dd, yyyy HH:mm") by @Model.License.CreatedBy</dd>
+
+                    @if (Model.License.ParentLicenseId.HasValue)
+                    {
+                        <dt class="col-sm-4">Parent License</dt>
+                        <dd class="col-sm-8">
+                            <a asp-page="Details" asp-route-id="@Model.License.ParentLicenseId">
+                                View Parent
+                            </a>
+                        </dd>
+                    }
+
+                    @if (Model.License.RevokedAt.HasValue)
+                    {
+                        <dt class="col-sm-4">Revoked At</dt>
+                        <dd class="col-sm-8">@Model.License.RevokedAt?.ToString("MMM dd, yyyy HH:mm")</dd>
+
+                        <dt class="col-sm-4">Revocation Reason</dt>
+                        <dd class="col-sm-8">@Model.License.RevocationReason</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.License.Options))
+        {
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-sliders me-2"></i>Options
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0"><code>@Model.FormattedOptions</code></pre>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-md-6">
+        @if (Model.License.Status == LicensingService.Core.Entities.LicenseStatus.Active)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-lightning me-2"></i>Actions
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#renewModal">
+                            <i class="bi bi-arrow-repeat me-2"></i>Renew License
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#revokeModal">
+                            <i class="bi bi-x-circle me-2"></i>Revoke License
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-download me-2"></i>License Token
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">The signed JWT token for this license:</p>
+                <div class="bg-light p-2 rounded" style="word-break: break-all; max-height: 150px; overflow-y: auto;">
+                    <code class="small">@Model.License.SignedToken</code>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary mt-2" onclick="navigator.clipboard.writeText('@Model.License.SignedToken')">
+                    <i class="bi bi-clipboard me-1"></i>Copy Token
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history me-2"></i>Audit Trail
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.Events.Any())
+                {
+                    <div class="text-center text-muted py-3">
+                        No events recorded.
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var evt in Model.Events)
+                        {
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>@evt.EventType</strong>
+                                    <small class="text-muted">@evt.Timestamp.ToString("MMM dd, yyyy HH:mm")</small>
+                                </div>
+                                <small class="text-muted">by @evt.Actor</small>
+                                @if (!string.IsNullOrEmpty(evt.Details))
+                                {
+                                    <div class="small text-muted mt-1">@evt.Details</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Renew Modal -->
+<div class="modal fade" id="renewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="Renew">
+                <div class="modal-header">
+                    <h5 class="modal-title">Renew License</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>This will create a new license with a 60-day overlap period.</p>
+                    <div class="mb-3">
+                        <label class="form-label">New Expiration Date</label>
+                        <input type="date" name="validUntil" class="form-control" 
+                               value="@Model.License.ValidUntil.AddYears(1).ToString("yyyy-MM-dd")" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Renew License</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Revoke Modal -->
+<div class="modal fade" id="revokeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" asp-page-handler="Revoke">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Revoke License</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        This action cannot be undone. The license will be permanently revoked.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Revocation</label>
+                        <textarea name="reason" class="form-control" rows="3" required 
+                                  placeholder="e.g., Contract terminated, Fraud detected..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Revoke License</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

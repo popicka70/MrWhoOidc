@@ -1,6 +1,7 @@
 using LicensingService.Core.Entities;
 using LicensingService.Core.Stores;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using static LicensingService.Core.Stores.ILicenseStore;
 
 namespace LicensingService.Web.Pages;
 
@@ -27,14 +28,14 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
-        var customers = await _customerStore.GetAllAsync();
-        CustomerCount = customers.Count;
+        var customersResult = await _customerStore.GetAllAsync();
+        CustomerCount = customersResult.TotalCount;
 
         var products = await _productStore.GetAllAsync();
         ProductCount = products.Count;
 
         var activeLicenses = await _licenseStore.SearchAsync(
-            status: LicenseStatus.Active,
+            new LicenseSearchCriteria { Status = LicenseStatus.Active },
             skip: 0,
             take: 1);
         ActiveLicenseCount = activeLicenses.TotalCount;

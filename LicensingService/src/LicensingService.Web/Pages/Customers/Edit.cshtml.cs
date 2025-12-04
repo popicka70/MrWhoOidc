@@ -34,8 +34,6 @@ public class EditModel : PageModel
         public string? ContactEmail { get; set; }
 
         public string Status { get; set; } = "Active";
-
-        public string? Notes { get; set; }
     }
 
     public async Task<IActionResult> OnGetAsync(Guid id)
@@ -52,8 +50,7 @@ public class EditModel : PageModel
             Identifier = customer.Identifier,
             DisplayName = customer.DisplayName,
             ContactEmail = customer.ContactEmail,
-            Status = customer.Status,
-            Notes = customer.Notes
+            Status = customer.Status
         };
 
         return Page();
@@ -75,7 +72,6 @@ public class EditModel : PageModel
         customer.DisplayName = Customer.DisplayName;
         customer.ContactEmail = Customer.ContactEmail;
         customer.Status = Customer.Status;
-        customer.Notes = Customer.Notes;
 
         await _customerStore.UpdateAsync(customer);
 

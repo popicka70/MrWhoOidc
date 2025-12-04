@@ -39,12 +39,6 @@
 
                     <dt class="col-sm-4">Created</dt>
                     <dd class="col-sm-8">@Model.Customer.CreatedAt.ToString("MMM dd, yyyy HH:mm")</dd>
-
-                    @if (!string.IsNullOrEmpty(Model.Customer.Notes))
-                    {
-                        <dt class="col-sm-4">Notes</dt>
-                        <dd class="col-sm-8">@Model.Customer.Notes</dd>
-                    }
                 </dl>
             </div>
         </div>

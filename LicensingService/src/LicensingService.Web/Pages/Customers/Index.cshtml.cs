@@ -27,24 +27,10 @@ public class IndexModel : PageModel
 
     public async Task OnGetAsync()
     {
-        var allCustomers = await _customerStore.GetAllAsync();
+        var result = await _customerStore.GetAllAsync(search: Search, status: StatusFilter, pageSize: 1000);
 
-        // Apply filters
-        var filtered = allCustomers.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(Search))
-        {
-            var searchLower = Search.ToLowerInvariant();
-            filtered = filtered.Where(c =>
-                c.DisplayName.Contains(searchLower, StringComparison.OrdinalIgnoreCase) ||
-                c.Identifier.Contains(searchLower, StringComparison.OrdinalIgnoreCase) ||
-                (c.ContactEmail?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) ?? false));
-        }
-
-        if (!string.IsNullOrWhiteSpace(StatusFilter))
-        {
-            filtered = filtered.Where(c => c.Status == StatusFilter);
-        }
+        // Use filtered result
+        var filtered = result.Items.AsEnumerable();
 
         Customers = filtered.OrderBy(c => c.DisplayName).ToList();
 
