@@ -612,10 +612,10 @@ Implement renewal with 60-day overlap.
 5. Maintain 60-day overlap period
 
 **Acceptance**:
-- [ ] New license created with correct validity period
-- [ ] Original marked as "Renewed"
-- [ ] Both licenses valid during overlap
-- [ ] Audit events for both licenses
+- [X] New license created with correct validity period
+- [X] Original marked as "Renewed"
+- [X] Both licenses valid during overlap
+- [X] Audit events for both licenses
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/LicenseService.cs` (extend)
@@ -635,9 +635,9 @@ Implement POST /licenses/{id}/renew endpoint.
 3. Return new license with token
 
 **Acceptance**:
-- [ ] Renewal creates new license
-- [ ] 400 if license is revoked
-- [ ] Returns new token
+- [X] Renewal creates new license
+- [X] 400 if license is revoked
+- [X] Returns new token
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs` (extend)
@@ -659,9 +659,9 @@ Test renewal functionality.
 4. Test option modification during renewal
 
 **Acceptance**:
-- [ ] Overlap period correct
-- [ ] Status transitions correct
-- [ ] Cannot renew revoked license
+- [X] Overlap period correct
+- [X] Status transitions correct
+- [X] Cannot renew revoked license
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/LicenseRenewalTests.cs`
@@ -684,9 +684,9 @@ Implement revocation with reason tracking.
 4. Create audit event
 
 **Acceptance**:
-- [ ] License status set to Revoked
-- [ ] Revocation metadata recorded
-- [ ] Audit event created
+- [X] License status set to Revoked
+- [X] Revocation metadata recorded
+- [X] Audit event created
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/LicenseService.cs` (extend)
@@ -706,9 +706,9 @@ Implement POST /licenses/{id}/revoke endpoint.
 3. Return updated license
 
 **Acceptance**:
-- [ ] Revocation succeeds with reason
-- [ ] 400 if already revoked
-- [ ] Reason stored
+- [X] Revocation succeeds with reason
+- [X] 400 if already revoked
+- [X] Reason stored
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs` (extend)
@@ -724,9 +724,9 @@ Implement POST /licenses/{id}/revoke endpoint.
 Test revocation functionality.
 
 **Acceptance**:
-- [ ] Status transition correct
-- [ ] Cannot revoke twice
-- [ ] Reason required
+- [X] Status transition correct
+- [X] Cannot revoke twice
+- [X] Reason required
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/LicenseRevocationTests.cs`
@@ -750,10 +750,10 @@ Implement license validation logic.
 5. Return validation result with metadata
 
 **Acceptance**:
-- [ ] Valid license returns success with metadata
-- [ ] Revoked license returns invalid
-- [ ] Expired license returns invalid
-- [ ] Tampered token returns invalid
+- [X] Valid license returns success with metadata
+- [X] Revoked license returns invalid
+- [X] Expired license returns invalid
+- [X] Tampered token returns invalid
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/LicenseService.cs` (extend)
@@ -774,9 +774,9 @@ Implement POST /licenses/validate endpoint.
 3. Return validation result
 
 **Acceptance**:
-- [ ] Validation endpoint responds correctly
-- [ ] Response includes license metadata on success
-- [ ] Response includes failure reason on invalid
+- [X] Validation endpoint responds correctly
+- [X] Response includes license metadata on success
+- [X] Response includes failure reason on invalid
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs` (extend)
@@ -798,8 +798,8 @@ Test validation scenarios.
 4. Test signature verification failure
 
 **Acceptance**:
-- [ ] All validation scenarios covered
-- [ ] <200ms response time verified
+- [X] All validation scenarios covered
+- [X] <200ms response time verified
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/LicenseValidationTests.cs`
