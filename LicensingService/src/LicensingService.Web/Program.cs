@@ -34,6 +34,7 @@ builder.Services.AddScoped<ICustomerStore, CustomerStore>();
 builder.Services.AddScoped<ISigningKeyService, SigningKeyService>();
 builder.Services.AddScoped<ILicenseTokenGenerator, LicenseTokenGenerator>();
 builder.Services.AddScoped<ILicenseStore, LicenseStore>();
+builder.Services.AddScoped<ILicenseValidationService, LicenseValidationService>();
 
 // Configure OIDC authentication
 builder.Services.AddAuthentication("Bearer")
@@ -94,6 +95,7 @@ app.MapProductEndpoints();
 app.MapCustomerEndpoints();
 app.MapLicenseEndpoints();
 app.MapJwksEndpoints();
+app.MapValidationEndpoints();
 
 // Map Razor Pages
 app.MapRazorPages();
