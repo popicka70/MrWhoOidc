@@ -48,17 +48,27 @@ builder.Services.AddAuthentication("Bearer")
 
 builder.Services.AddAuthorization();
 
+// Configure Health Checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<LicensingDbContext>("database", tags: ["ready"]);
+
 // Add OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new() { Title = "Licensing Service API", Version = "v1" });
+    options.SwaggerDoc("v1", new() 
+    { 
+        Title = "Licensing Service API", 
+        Version = "v1",
+        Description = "A standalone licensing service for issuing, validating, and managing software licenses. Supports license lifecycle operations including issuance, renewal, revocation, and tier changes.",
+        Contact = new() { Name = "MrWhoOidc Team" }
+    });
     options.AddSecurityDefinition("Bearer", new()
     {
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
-        Description = "Enter your JWT token"
+        Description = "Enter your JWT token from the OIDC provider"
     });
     options.AddSecurityRequirement(new()
     {
@@ -67,6 +77,9 @@ builder.Services.AddSwaggerGen(options =>
             Array.Empty<string>()
         }
     });
+    
+    // Group endpoints by tag
+    options.TagActionsBy(api => new[] { api.GroupName ?? api.ActionDescriptor.RouteValues["controller"] ?? "Other" });
 });
 
 // Add Razor Pages for Admin UI
@@ -85,11 +98,39 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Health check endpoint (no auth required)
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTimeOffset.UtcNow }))
-    .WithName("HealthCheck")
-    .WithTags("Health")
-    .AllowAnonymous();
+// Health check endpoints (no auth required)
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = new
+        {
+            Status = report.Status.ToString(),
+            Timestamp = DateTimeOffset.UtcNow,
+            Duration = report.TotalDuration.TotalMilliseconds,
+            Checks = report.Entries.Select(e => new
+            {
+                Name = e.Key,
+                Status = e.Value.Status.ToString(),
+                Duration = e.Value.Duration.TotalMilliseconds,
+                Description = e.Value.Description,
+                Exception = e.Value.Exception?.Message
+            })
+        };
+        await context.Response.WriteAsJsonAsync(result);
+    }
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false // Liveness just checks app is running
+}).AllowAnonymous();
 
 // Map API endpoints
 app.MapProductEndpoints();
