@@ -907,9 +907,9 @@ Implement bulk renewal and revocation.
 4. Return summary of results
 
 **Acceptance**:
-- [ ] Bulk renewal processes all selected licenses
-- [ ] Bulk revocation processes all selected licenses
-- [ ] Partial failure handling (report which failed)
+- [X] Bulk renewal processes all selected licenses
+- [X] Bulk revocation processes all selected licenses
+- [X] Partial failure handling (report which failed)
 
 **Files**:
 - `LicensingService/src/LicensingService.Core/Services/LicenseService.cs` (extend)
@@ -925,9 +925,9 @@ Implement bulk renewal and revocation.
 Implement bulk endpoints.
 
 **Acceptance**:
-- [ ] POST /licenses/bulk-renew works
-- [ ] POST /licenses/bulk-revoke works
-- [ ] Returns operation summary
+- [X] POST /licenses/bulk-renew works
+- [X] POST /licenses/bulk-revoke works
+- [X] Returns operation summary
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/LicenseEndpoints.cs` (extend)
@@ -943,8 +943,8 @@ Implement bulk endpoints.
 Test bulk operations.
 
 **Acceptance**:
-- [ ] 100 licenses processed in <10 seconds (SC-005)
-- [ ] Partial failure handling correct
+- [X] 100 licenses processed in <10 seconds (SC-005)
+- [X] Partial failure handling correct
 
 **Files**:
 - `LicensingService/tests/LicensingService.Tests/Services/BulkOperationTests.cs`

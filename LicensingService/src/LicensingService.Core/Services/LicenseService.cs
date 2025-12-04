@@ -522,4 +522,123 @@ public class LicenseService : ILicenseService
 
         return original;
     }
+
+    public async Task<BulkOperationResult> BulkRenewLicensesAsync(
+        BulkRenewRequest request,
+        string renewedBy,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.LicenseIds.Count == 0)
+        {
+            return BulkOperationResult.Success([]);
+        }
+
+        var successes = new List<BulkOperationSuccess>();
+        var failures = new List<BulkOperationFailure>();
+
+        // Process each license individually to isolate failures
+        foreach (var licenseId in request.LicenseIds)
+        {
+            try
+            {
+                var renewRequest = new RenewLicenseRequest
+                {
+                    LicenseId = licenseId,
+                    NewValidUntil = request.NewValidUntil,
+                    OptionUpdates = request.OptionUpdates
+                };
+
+                var result = await RenewLicenseAsync(renewRequest, renewedBy, cancellationToken);
+
+                if (result.Success)
+                {
+                    successes.Add(new BulkOperationSuccess
+                    {
+                        OriginalLicenseId = licenseId,
+                        NewLicenseId = result.License!.Id,
+                        NewToken = result.Token
+                    });
+                }
+                else
+                {
+                    failures.Add(new BulkOperationFailure
+                    {
+                        LicenseId = licenseId,
+                        Error = result.Error ?? "Unknown error",
+                        ErrorCode = result.ErrorCode ?? "unknown"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to renew license {LicenseId} in bulk operation", licenseId);
+                failures.Add(new BulkOperationFailure
+                {
+                    LicenseId = licenseId,
+                    Error = "Unexpected error during renewal",
+                    ErrorCode = "unexpected_error"
+                });
+            }
+        }
+
+        return BulkOperationResult.Mixed(successes, failures);
+    }
+
+    public async Task<BulkOperationResult> BulkRevokeLicensesAsync(
+        BulkRevokeRequest request,
+        string revokedBy,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.LicenseIds.Count == 0)
+        {
+            return BulkOperationResult.Success([]);
+        }
+
+        var successes = new List<BulkOperationSuccess>();
+        var failures = new List<BulkOperationFailure>();
+
+        // Process each license individually to isolate failures
+        foreach (var licenseId in request.LicenseIds)
+        {
+            try
+            {
+                var revokeRequest = new RevokeLicenseRequest
+                {
+                    LicenseId = licenseId,
+                    Reason = request.Reason
+                };
+
+                var result = await RevokeLicenseAsync(revokeRequest, revokedBy, cancellationToken);
+
+                if (result.Success)
+                {
+                    successes.Add(new BulkOperationSuccess
+                    {
+                        OriginalLicenseId = licenseId
+                    });
+                }
+                else
+                {
+                    failures.Add(new BulkOperationFailure
+                    {
+                        LicenseId = licenseId,
+                        Error = result.Error ?? "Unknown error",
+                        ErrorCode = result.ErrorCode ?? "unknown"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to revoke license {LicenseId} in bulk operation", licenseId);
+                failures.Add(new BulkOperationFailure
+                {
+                    LicenseId = licenseId,
+                    Error = "Unexpected error during revocation",
+                    ErrorCode = "unexpected_error"
+                });
+            }
+        }
+
+        return BulkOperationResult.Mixed(successes, failures);
+    }
 }

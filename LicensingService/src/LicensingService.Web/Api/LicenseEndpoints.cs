@@ -83,6 +83,16 @@ public static class LicenseEndpoints
         group.MapGet("/{id:guid}/token", DownloadLicenseTokenAsync)
             .WithName("DownloadLicenseToken")
             .WithSummary("Downloads the signed license token");
+
+        // Bulk renew licenses
+        group.MapPost("/bulk-renew", BulkRenewLicensesAsync)
+            .WithName("BulkRenewLicenses")
+            .WithSummary("Renews multiple licenses in a single operation");
+
+        // Bulk revoke licenses
+        group.MapPost("/bulk-revoke", BulkRevokeLicensesAsync)
+            .WithName("BulkRevokeLicenses")
+            .WithSummary("Revokes multiple licenses in a single operation");
     }
 
     private static async Task<Results<Created<LicenseWithTokenResponse>, BadRequest<string>, NotFound<string>>> IssueLicenseAsync(
@@ -471,6 +481,69 @@ public static class LicenseEndpoints
             RevocationReason = license.RevocationReason,
             RenewedFromId = license.ParentLicenseId,
             SignedToken = license.SignedToken
+        };
+    }
+
+    private static async Task<Ok<BulkOperationResponse>> BulkRenewLicensesAsync(
+        [FromBody] BulkRenewRequest request,
+        Core.Services.ILicenseService licenseService,
+        ICurrentUserAccessor currentUser,
+        CancellationToken cancellationToken)
+    {
+        var bulkRequest = new Core.Services.BulkRenewRequest
+        {
+            LicenseIds = request.LicenseIds,
+            NewValidUntil = request.ValidUntil,
+            OptionUpdates = request.OptionUpdates
+        };
+
+        var result = await licenseService.BulkRenewLicensesAsync(
+            bulkRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        return TypedResults.Ok(MapToBulkResponse(result));
+    }
+
+    private static async Task<Ok<BulkOperationResponse>> BulkRevokeLicensesAsync(
+        [FromBody] BulkRevokeRequest request,
+        Core.Services.ILicenseService licenseService,
+        ICurrentUserAccessor currentUser,
+        CancellationToken cancellationToken)
+    {
+        var bulkRequest = new Core.Services.BulkRevokeRequest
+        {
+            LicenseIds = request.LicenseIds,
+            Reason = request.Reason
+        };
+
+        var result = await licenseService.BulkRevokeLicensesAsync(
+            bulkRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        return TypedResults.Ok(MapToBulkResponse(result));
+    }
+
+    private static BulkOperationResponse MapToBulkResponse(Core.Services.BulkOperationResult result)
+    {
+        return new BulkOperationResponse
+        {
+            TotalRequested = result.TotalRequested,
+            SuccessCount = result.SuccessCount,
+            FailureCount = result.FailureCount,
+            Successes = result.Successes.Select(s => new BulkSuccessItem
+            {
+                OriginalLicenseId = s.OriginalLicenseId,
+                NewLicenseId = s.NewLicenseId,
+                NewToken = s.NewToken
+            }).ToList(),
+            Failures = result.Failures.Select(f => new BulkFailureItem
+            {
+                LicenseId = f.LicenseId,
+                Error = f.Error,
+                ErrorCode = f.ErrorCode
+            }).ToList()
         };
     }
 }

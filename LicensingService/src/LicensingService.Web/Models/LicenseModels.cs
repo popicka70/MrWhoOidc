@@ -219,3 +219,97 @@ public class LicenseSearchResponse
     [JsonPropertyName("take")]
     public required int Take { get; init; }
 }
+
+/// <summary>
+/// Request to bulk renew multiple licenses.
+/// </summary>
+public class BulkRenewRequest
+{
+    /// <summary>List of license IDs to renew.</summary>
+    [JsonPropertyName("licenseIds")]
+    public required IReadOnlyList<Guid> LicenseIds { get; init; }
+
+    /// <summary>New expiration date for all renewed licenses.</summary>
+    [JsonPropertyName("validUntil")]
+    public required DateTimeOffset ValidUntil { get; init; }
+
+    /// <summary>Optional option updates for all renewed licenses.</summary>
+    [JsonPropertyName("optionUpdates")]
+    public Dictionary<string, object>? OptionUpdates { get; init; }
+}
+
+/// <summary>
+/// Request to bulk revoke multiple licenses.
+/// </summary>
+public class BulkRevokeRequest
+{
+    /// <summary>List of license IDs to revoke.</summary>
+    [JsonPropertyName("licenseIds")]
+    public required IReadOnlyList<Guid> LicenseIds { get; init; }
+
+    /// <summary>Reason for revocation (applies to all licenses).</summary>
+    [JsonPropertyName("reason")]
+    public required string Reason { get; init; }
+}
+
+/// <summary>
+/// Response from a bulk license operation.
+/// </summary>
+public class BulkOperationResponse
+{
+    /// <summary>Total number of licenses in the request.</summary>
+    [JsonPropertyName("totalRequested")]
+    public required int TotalRequested { get; init; }
+
+    /// <summary>Number of successfully processed licenses.</summary>
+    [JsonPropertyName("successCount")]
+    public required int SuccessCount { get; init; }
+
+    /// <summary>Number of failed operations.</summary>
+    [JsonPropertyName("failureCount")]
+    public required int FailureCount { get; init; }
+
+    /// <summary>Details of successful operations.</summary>
+    [JsonPropertyName("successes")]
+    public required IReadOnlyList<BulkSuccessItem> Successes { get; init; }
+
+    /// <summary>Details of failed operations.</summary>
+    [JsonPropertyName("failures")]
+    public required IReadOnlyList<BulkFailureItem> Failures { get; init; }
+}
+
+/// <summary>
+/// Details of a successful bulk operation item.
+/// </summary>
+public class BulkSuccessItem
+{
+    /// <summary>Original license ID.</summary>
+    [JsonPropertyName("originalLicenseId")]
+    public required Guid OriginalLicenseId { get; init; }
+
+    /// <summary>New license ID (for renewal).</summary>
+    [JsonPropertyName("newLicenseId")]
+    public Guid? NewLicenseId { get; init; }
+
+    /// <summary>New license token (for renewal).</summary>
+    [JsonPropertyName("newToken")]
+    public string? NewToken { get; init; }
+}
+
+/// <summary>
+/// Details of a failed bulk operation item.
+/// </summary>
+public class BulkFailureItem
+{
+    /// <summary>License ID that failed.</summary>
+    [JsonPropertyName("licenseId")]
+    public required Guid LicenseId { get; init; }
+
+    /// <summary>Error message.</summary>
+    [JsonPropertyName("error")]
+    public required string Error { get; init; }
+
+    /// <summary>Error code.</summary>
+    [JsonPropertyName("errorCode")]
+    public required string ErrorCode { get; init; }
+}

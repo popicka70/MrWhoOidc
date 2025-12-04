@@ -155,4 +155,14 @@ public interface ILicenseService
     /// Gets licenses for a customer.
     /// </summary>
     Task<IReadOnlyList<License>> GetCustomerLicensesAsync(Guid customerId, LicenseStatus? status = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bulk renews multiple licenses.
+    /// </summary>
+    Task<BulkOperationResult> BulkRenewLicensesAsync(BulkRenewRequest request, string renewedBy, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bulk revokes multiple licenses.
+    /// </summary>
+    Task<BulkOperationResult> BulkRevokeLicensesAsync(BulkRevokeRequest request, string revokedBy, CancellationToken cancellationToken = default);
 }
