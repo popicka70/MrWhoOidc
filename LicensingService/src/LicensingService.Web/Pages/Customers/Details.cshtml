@@ -1,0 +1,119 @@
+@page "{id:guid}"
+@model LicensingService.Web.Pages.Customers.DetailsModel
+@{
+    ViewData["Title"] = "Customer Details";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-person me-2"></i>@Model.Customer.DisplayName</h1>
+    <div>
+        <a asp-page="Edit" asp-route-id="@Model.Customer.Id" class="btn btn-primary">
+            <i class="bi bi-pencil me-2"></i>Edit
+        </a>
+        <a asp-page="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle me-2"></i>Customer Information
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Identifier</dt>
+                    <dd class="col-sm-8"><code>@Model.Customer.Identifier</code></dd>
+
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">@(Model.Customer.ContactEmail ?? "—")</dd>
+
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge @(Model.Customer.Status == "Active" ? "bg-success" : "bg-secondary")">
+                            @Model.Customer.Status
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4">Created</dt>
+                    <dd class="col-sm-8">@Model.Customer.CreatedAt.ToString("MMM dd, yyyy HH:mm")</dd>
+
+                    @if (!string.IsNullOrEmpty(Model.Customer.Notes))
+                    {
+                        <dt class="col-sm-4">Notes</dt>
+                        <dd class="col-sm-8">@Model.Customer.Notes</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-key me-2"></i>Licenses (@Model.Licenses.Count)</span>
+                <a asp-page="/Licenses/Issue" asp-route-customerId="@Model.Customer.Id" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Issue License
+                </a>
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.Licenses.Any())
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        No licenses found for this customer.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Tier</th>
+                                    <th>Status</th>
+                                    <th>Valid Until</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var license in Model.Licenses)
+                                {
+                                    <tr>
+                                        <td>@license.Product?.DisplayName</td>
+                                        <td>
+                                            <span class="badge bg-primary">@license.Tier</span>
+                                        </td>
+                                        <td>
+                                            @{
+                                                var statusClass = license.Status switch
+                                                {
+                                                    LicensingService.Core.Entities.LicenseStatus.Active => "bg-success",
+                                                    LicensingService.Core.Entities.LicenseStatus.Revoked => "bg-danger",
+                                                    LicensingService.Core.Entities.LicenseStatus.Expired => "bg-warning",
+                                                    LicensingService.Core.Entities.LicenseStatus.Renewed => "bg-info",
+                                                    _ => "bg-secondary"
+                                                };
+                                            }
+                                            <span class="badge @statusClass">@license.Status</span>
+                                        </td>
+                                        <td>@license.ValidUntil.ToString("MMM dd, yyyy")</td>
+                                        <td class="text-end">
+                                            <a asp-page="/Licenses/Details" asp-route-id="@license.Id" 
+                                               class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
