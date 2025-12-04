@@ -241,67 +241,62 @@ public static class LicenseEndpoints
     private static async Task<Results<Ok<LicenseWithTokenResponse>, NotFound, BadRequest<string>>> RenewLicenseAsync(
         Guid id,
         [FromBody] RenewLicenseRequest request,
-        ILicenseStore licenseStore,
+        Core.Services.ILicenseService licenseService,
         ICurrentUserAccessor currentUser,
         CancellationToken cancellationToken)
     {
-        try
+        var renewRequest = new Core.Services.RenewLicenseRequest
         {
-            var originalLicense = await licenseStore.GetByIdAsync(id, cancellationToken);
-            if (originalLicense == null)
+            LicenseId = id,
+            NewValidUntil = request.ValidUntil,
+            OptionUpdates = request.OptionUpdates
+        };
+
+        var result = await licenseService.RenewLicenseAsync(
+            renewRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            if (result.ErrorCode == "license_not_found")
             {
                 return TypedResults.NotFound();
             }
-
-            // Default: start new license 60 days before original expires (overlap period)
-            var newValidFrom = request.ValidFrom ?? originalLicense.ValidUntil.AddDays(-60);
-            var newValidUntil = request.ValidUntil;
-
-            if (newValidUntil <= newValidFrom)
-            {
-                return TypedResults.BadRequest("ValidUntil must be after ValidFrom");
-            }
-
-            var renewedLicense = await licenseStore.RenewAsync(
-                id,
-                newValidFrom,
-                newValidUntil,
-                currentUser.UserId ?? "system",
-                cancellationToken);
-
-            return TypedResults.Ok(MapToWithTokenResponse(renewedLicense));
+            return TypedResults.BadRequest(result.Error ?? "Renewal failed");
         }
-        catch (InvalidOperationException ex)
-        {
-            return TypedResults.BadRequest(ex.Message);
-        }
+
+        return TypedResults.Ok(MapToWithTokenResponse(result.License!));
     }
 
     private static async Task<Results<Ok<LicenseResponse>, NotFound, BadRequest<string>>> RevokeLicenseAsync(
         Guid id,
         [FromBody] RevokeLicenseRequest request,
-        ILicenseStore licenseStore,
+        Core.Services.ILicenseService licenseService,
         ICurrentUserAccessor currentUser,
         CancellationToken cancellationToken)
     {
-        try
+        var revokeRequest = new Core.Services.RevokeLicenseRequest
         {
-            var license = await licenseStore.RevokeAsync(
-                id,
-                currentUser.UserId ?? "system",
-                request.Reason,
-                cancellationToken);
+            LicenseId = id,
+            Reason = request.Reason
+        };
 
-            return TypedResults.Ok(MapToResponse(license));
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
+        var result = await licenseService.RevokeLicenseAsync(
+            revokeRequest,
+            currentUser.UserId ?? "system",
+            cancellationToken);
+
+        if (!result.Success)
         {
-            return TypedResults.NotFound();
+            if (result.ErrorCode == "license_not_found")
+            {
+                return TypedResults.NotFound();
+            }
+            return TypedResults.BadRequest(result.Error ?? "Revocation failed");
         }
-        catch (InvalidOperationException ex)
-        {
-            return TypedResults.BadRequest(ex.Message);
-        }
+
+        return TypedResults.Ok(MapToResponse(result.License!));
     }
 
     private static async Task<Results<Ok<IReadOnlyList<LicenseEventResponse>>, NotFound>> GetLicenseEventsAsync(

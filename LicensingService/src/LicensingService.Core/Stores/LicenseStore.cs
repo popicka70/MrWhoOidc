@@ -27,28 +27,32 @@ public class LicenseStore : ILicenseStore
         license.CreatedBy = createdBy;
         license.Status = LicenseStatus.Active;
 
-        // Parse options from entity
-        Dictionary<string, object>? options = null;
-        if (!string.IsNullOrEmpty(license.Options))
+        // Only generate token if not already set (LicenseService may have already generated it)
+        if (string.IsNullOrEmpty(license.SignedToken))
         {
-            options = JsonSerializer.Deserialize<Dictionary<string, object>>(license.Options);
+            // Parse options from entity
+            Dictionary<string, object>? options = null;
+            if (!string.IsNullOrEmpty(license.Options))
+            {
+                options = JsonSerializer.Deserialize<Dictionary<string, object>>(license.Options);
+            }
+
+            // Generate the signed JWT token
+            var tokenResult = await _tokenGenerator.GenerateAsync(new GenerateLicenseTokenRequest
+            {
+                CustomerIdentifier = license.Customer?.Identifier ?? throw new InvalidOperationException("Customer must be loaded"),
+                ProductIdentifier = license.Product?.Identifier ?? throw new InvalidOperationException("Product must be loaded"),
+                Tier = license.Tier,
+                Scope = license.Scope,
+                ValidFrom = license.ValidFrom,
+                ValidUntil = license.ValidUntil,
+                Options = options
+            }, cancellationToken);
+
+            license.TokenId = tokenResult.TokenId;
+            license.SignedToken = tokenResult.Token;
+            license.SigningKeyId = tokenResult.Kid;
         }
-
-        // Generate the signed JWT token
-        var tokenResult = await _tokenGenerator.GenerateAsync(new GenerateLicenseTokenRequest
-        {
-            CustomerIdentifier = license.Customer?.Identifier ?? throw new InvalidOperationException("Customer must be loaded"),
-            ProductIdentifier = license.Product?.Identifier ?? throw new InvalidOperationException("Product must be loaded"),
-            Tier = license.Tier,
-            Scope = license.Scope,
-            ValidFrom = license.ValidFrom,
-            ValidUntil = license.ValidUntil,
-            Options = options
-        }, cancellationToken);
-
-        license.TokenId = tokenResult.TokenId;
-        license.SignedToken = tokenResult.Token;
-        license.SigningKeyId = tokenResult.Kid;
 
         _context.Licenses.Add(license);
 

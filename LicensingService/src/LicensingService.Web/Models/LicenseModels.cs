@@ -48,6 +48,10 @@ public class RenewLicenseRequest
     /// <summary>New license expiration date.</summary>
     [JsonPropertyName("validUntil")]
     public required DateTimeOffset ValidUntil { get; init; }
+
+    /// <summary>Optional option updates for the renewed license.</summary>
+    [JsonPropertyName("optionUpdates")]
+    public Dictionary<string, object>? OptionUpdates { get; init; }
 }
 
 /// <summary>
