@@ -822,9 +822,9 @@ Expose public keys for offline license verification.
 4. No authentication required
 
 **Acceptance**:
-- [ ] JWKS endpoint returns valid JWK set
-- [ ] All active keys included
-- [ ] Rotated keys included for verification of existing licenses
+- [X] JWKS endpoint returns valid JWK set
+- [X] All active keys included
+- [X] Rotated keys included for verification of existing licenses
 
 **Files**:
 - `LicensingService/src/LicensingService.Web/Api/JwksEndpoints.cs`
