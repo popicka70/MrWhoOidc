@@ -3,13 +3,19 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Password;
 
 [Authorize]
-public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IPasswordPolicyService passwordPolicy) : PageModel
+public class IndexModel(
+    AuthDbContext db, 
+    IPasswordHasher hasher, 
+    IPasswordPolicyService passwordPolicy,
+    IUserAccountService userAccountService,
+    ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty]
     public ChangePasswordInput Input { get; set; } = new();
@@ -19,16 +25,20 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IPasswordPolic
 
     public async Task OnGetAsync()
     {
-        var user = await GetCurrentUserAsync();
-        RequireCurrent = !string.IsNullOrEmpty(user?.PasswordHash);
+        var account = await GetCurrentUserAccountAsync();
+        RequireCurrent = !string.IsNullOrEmpty(account?.PasswordHash);
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login", new { returnUrl = Url.Page("/Password/Index") });
+        var account = await GetCurrentUserAccountAsync();
+        if (account is null) 
+        {
+            logger.LogWarning("⚠️ [Password Change] No UserAccount found for authenticated user");
+            return RedirectToPage("/Login", new { returnUrl = Url.Page("/Password/Index") });
+        }
 
-        RequireCurrent = !string.IsNullOrEmpty(user.PasswordHash);
+        RequireCurrent = !string.IsNullOrEmpty(account.PasswordHash);
 
         if (RequireCurrent && string.IsNullOrEmpty(Input.CurrentPassword))
         {
@@ -61,26 +71,47 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, IPasswordPolic
             return Page();
         }
 
-        if (RequireCurrent && !hasher.Verify(Input.CurrentPassword!, user.PasswordHash!))
+        // Verify current password against global UserAccount
+        if (RequireCurrent && !hasher.Verify(Input.CurrentPassword!, account.PasswordHash!))
         {
+            logger.LogWarning("⚠️ [Password Change] Invalid current password for account {AccountId}", account.Id);
             ModelState.AddModelError("Input.CurrentPassword", "Current password is incorrect.");
             return Page();
         }
 
-        user.PasswordHash = hasher.Hash(Input.NewPassword!);
-        user.HashAlgorithm = "argon2id";
-        await db.SaveChangesAsync();
+        // Update password on UserAccount (global credential)
+        var newHash = hasher.Hash(Input.NewPassword!);
+        await userAccountService.UpdatePasswordAsync(account.Id, newHash, null, "argon2id");
+        
+        logger.LogInformation("✅ [Password Change] Password updated for account {AccountId}", account.Id);
 
-        SuccessMessage = "Password updated successfully.";
+        SuccessMessage = "Password updated successfully. This change applies to all your tenants.";
         ModelState.Clear();
         Input = new();
         return Page();
     }
 
-    async Task<User?> GetCurrentUserAsync()
+    /// <summary>
+    /// Gets the global UserAccount for the current authenticated user.
+    /// Looks up via per-tenant User first, then finds the associated UserAccount.
+    /// </summary>
+    async Task<UserAccount?> GetCurrentUserAccountAsync()
     {
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(sub, out var id) ? await db.Users.FirstOrDefaultAsync(u => u.Id == id) : null;
+        if (!Guid.TryParse(sub, out var userId)) return null;
+        
+        // Get the per-tenant User to find email/username
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        if (user is null) return null;
+        
+        // Find the global UserAccount by email or username
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            var account = await userAccountService.FindByEmailAsync(user.Email);
+            if (account is not null) return account;
+        }
+        
+        return await userAccountService.FindByUsernameAsync(user.Username);
     }
 
     public sealed class ChangePasswordInput
