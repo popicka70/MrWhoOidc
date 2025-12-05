@@ -14,6 +14,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 
 public class LoginModel(
     IUserService users,
+    IGlobalAuthenticationService globalAuthService,
     ILogger<LoginModel> logger,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
@@ -21,6 +22,7 @@ public class LoginModel(
     ITenantBrandingService brandingService,
     ITenantCredentialTicketStore ticketStore) : PageModel
 {
+    // Local IP-based rate limiting (defense in depth - complements global account lockout)
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
@@ -99,28 +101,107 @@ public class LoginModel(
             return Page();
         }
 
-        if (IsLockedOut(HttpContext, Username))
+        // Use global authentication service for credential verification
+        var authResult = await globalAuthService.AuthenticateAsync(Username, Password);
+        
+        logger.LogInformation("🔍 [Login POST] Global auth result: Succeeded={Succeeded}, FailureReason={FailureReason}",
+            authResult.Succeeded,
+            authResult.FailureReason?.ToString() ?? "(none)");
+
+        if (!authResult.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, "Too many attempts. Try again later.");
+            // Handle different failure reasons with appropriate messages
+            var errorMessage = authResult.FailureReason switch
+            {
+                AuthenticationFailureReason.AccountLocked => 
+                    $"Your account is temporarily locked. Please try again {FormatLockoutTime(authResult.LockedUntil)}.",
+                AuthenticationFailureReason.NoActiveMemberships => 
+                    "Your account does not have access to any organizations. Please contact your administrator.",
+                AuthenticationFailureReason.MfaRequired => 
+                    null, // MFA required is not an error - we'll handle it below
+                _ => "Invalid username or password"
+            };
+
+            if (authResult.FailureReason == AuthenticationFailureReason.MfaRequired)
+            {
+                // Store preauth and redirect to MFA challenge
+                return await HandleMfaRequiredAsync(authResult.Account!);
+            }
+
+            logger.LogWarning("⚠️ [Login POST] Authentication failed: Reason={Reason}",
+                authResult.FailureReason);
+            
+            ModelState.AddModelError(string.Empty, errorMessage!);
             return Page();
         }
 
-        // Try username first; fallback to email/alternative email match.
-        var user = await users.FindByUsernameAsync(Username) ?? await users.FindByUsernameOrEmailAsync(Username);
-        logger.LogInformation("🔍 [Login POST] User lookup result: {UserFound}, Username={Username}",
-            user != null ? "FOUND" : "NOT FOUND", Username);
-        
-        if (user is null || !await users.VerifyPasswordAsync(user, Password))
+        // Get the user for the current tenant from the memberships
+        var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+        var membership = currentTenantId.HasValue 
+            ? authResult.Memberships.FirstOrDefault(m => m.TenantId == currentTenantId.Value)
+            : authResult.Memberships.FirstOrDefault();
+
+        if (membership == null)
         {
-            logger.LogWarning("⚠️ [Login POST] Authentication failed: user={UserNull}, passwordValid={PasswordCheck}",
-                user == null ? "NULL" : "EXISTS",
-                user == null ? "N/A" : (await users.VerifyPasswordAsync(user, Password) ? "VALID" : "INVALID"));
-            RegisterFailedAttempt(HttpContext, Username);
-            ModelState.AddModelError(string.Empty, "Invalid username or password");
+            logger.LogWarning("⚠️ [Login POST] User {AccountId} has no membership for tenant {TenantId}",
+                authResult.Account!.Id, currentTenantId);
+            ModelState.AddModelError(string.Empty, "You do not have access to this organization.");
+            return Page();
+        }
+
+        // Look up the per-tenant User record for session/claims
+        var user = await users.FindByUsernameAsync(authResult.Account!.Username) 
+                   ?? await users.FindByUsernameOrEmailAsync(authResult.Account.Email ?? authResult.Account.Username);
+        
+        if (user is null)
+        {
+            logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
+                authResult.Account.Id, currentTenantId);
+            ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
             return Page();
         }
 
         return await CompleteSignInAsync(user);
+    }
+
+    private async Task<IActionResult> HandleMfaRequiredAsync(UserAccount account)
+    {
+        // Look up the per-tenant user to get the ID for preauth
+        var user = await users.FindByUsernameAsync(account.Username) 
+                   ?? await users.FindByUsernameOrEmailAsync(account.Email ?? account.Username);
+        
+        if (user is null)
+        {
+            logger.LogWarning("⚠️ [Login MFA] No per-tenant User record for UserAccount {AccountId}", account.Id);
+            ModelState.AddModelError(string.Empty, "Account configuration error. Please contact support.");
+            return Page();
+        }
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new(OidcConstants.Claims.Amr, "pwd")
+        };
+        var identity = new ClaimsIdentity(claims, "preauth");
+        await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
+        
+        logger.LogInformation("🔐 [Login MFA] User {User} requires MFA, redirecting to TOTP page", user.Username);
+        var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
+        return Redirect(url ?? "/LoginTotp");
+    }
+
+    private static string FormatLockoutTime(DateTimeOffset? lockedUntil)
+    {
+        if (!lockedUntil.HasValue)
+            return "later";
+        
+        var remaining = lockedUntil.Value - DateTimeOffset.UtcNow;
+        if (remaining.TotalMinutes > 1)
+            return $"in {(int)remaining.TotalMinutes} minutes";
+        if (remaining.TotalSeconds > 30)
+            return "in about a minute";
+        return "shortly";
     }
 
     static string Key(HttpContext ctx, string username) => $"{ctx.Connection.RemoteIpAddress}-{username}";
@@ -278,7 +359,18 @@ public class LoginModel(
         var principal = new ClaimsPrincipal(finalIdentity);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
+        // Clear both local (IP-based) and global (account-based) lockouts on successful login
         ClearAttempts(HttpContext, user.Username);
+        
+        // Clear global lockout if user has an email (for global authentication)
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            var userAccount = await globalAuthService.FindAccountByEmailAsync(user.Email);
+            if (userAccount != null)
+            {
+                await globalAuthService.ClearFailedAttemptsAsync(userAccount.Id);
+            }
+        }
         logger.LogInformation("✅ [Login] User {User} signed in successfully", user.Username);
 
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))

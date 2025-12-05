@@ -139,6 +139,16 @@ internal sealed class GlobalAuthenticationService(
         return account.LockedOutUntil.HasValue && account.LockedOutUntil.Value > DateTimeOffset.UtcNow;
     }
 
+    public async Task<UserAccount?> FindAccountByEmailAsync(string email, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
+        return await userAccountService.FindByEmailAsync(email, ct).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// Hashes an identifier for safe logging (PII protection).
     /// </summary>

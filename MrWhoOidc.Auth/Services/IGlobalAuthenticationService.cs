@@ -39,4 +39,12 @@ public interface IGlobalAuthenticationService
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if locked out, false otherwise</returns>
     Task<bool> IsLockedOutAsync(Guid accountId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Finds a UserAccount by email address.
+    /// </summary>
+    /// <param name="email">Email address to search for</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The UserAccount if found, null otherwise</returns>
+    Task<Persistence.UserAccount?> FindAccountByEmailAsync(string email, CancellationToken ct = default);
 }
