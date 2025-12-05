@@ -771,6 +771,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/migrate-credentials",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/migrate-credentials/{accountId:guid}",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/migrate-credentials/status",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/seed-tenant",
     "Methods": "POST",
     "RateLimiters": [
@@ -1804,6 +1837,15 @@
     "IsAnonymous": true
   },
   {
+    "Pattern": "select-tenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "StartImpersonation",
     "Methods": "",
     "RateLimiters": [],
@@ -1823,15 +1865,6 @@
   },
   {
     "Pattern": "SwitchTenant",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "select-tenant",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

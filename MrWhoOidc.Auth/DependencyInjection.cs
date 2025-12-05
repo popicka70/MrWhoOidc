@@ -103,6 +103,9 @@ public static class AuthServiceCollectionExtensions
         // Password reset service
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         
+        // Password migration service (for migrating per-tenant to global credentials)
+        services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
+        
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
