@@ -1096,6 +1096,43 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.ToTable("LogoutRedirectReferences");
                 });
 
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PasswordResetToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsUsed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RequestedFromIp")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId");
+
+                    b.ToTable("PasswordResetTokens");
+                });
+
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PushedAuthorizationRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2341,6 +2378,17 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Navigation("PlatformAdmin");
 
                     b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PasswordResetToken", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.UserAccount", "UserAccount")
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UserAccount");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.PushedAuthorizationRequest", b =>
