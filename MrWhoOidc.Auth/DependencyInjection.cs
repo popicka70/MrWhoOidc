@@ -95,6 +95,11 @@ public static class AuthServiceCollectionExtensions
         
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
+        services.AddSingleton<OidcMetrics>();
+        
+        // Global authentication service
+        services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
+        
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();

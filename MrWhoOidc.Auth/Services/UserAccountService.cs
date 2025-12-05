@@ -8,6 +8,45 @@ public interface IUserAccountService
     Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<UserAccount?> FindByUsernameAsync(string username, CancellationToken ct = default);
     Task<UserAccount> CreateAsync(UserAccount account, CancellationToken ct = default);
+
+    // New methods for global credentials
+
+    /// <summary>
+    /// Finds a UserAccount by normalized email.
+    /// </summary>
+    Task<UserAccount?> FindByEmailAsync(string email, CancellationToken ct = default);
+
+    /// <summary>
+    /// Finds a UserAccount by username or email.
+    /// </summary>
+    Task<UserAccount?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates the password for a UserAccount.
+    /// </summary>
+    Task UpdatePasswordAsync(
+        Guid accountId,
+        string newPasswordHash,
+        string? salt,
+        string algorithm,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets all active tenant memberships for an account.
+    /// </summary>
+    Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
+        Guid accountId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates lockout fields for an account.
+    /// </summary>
+    Task UpdateLockoutAsync(
+        Guid accountId,
+        int failedAttempts,
+        DateTimeOffset? lastFailedAt,
+        DateTimeOffset? lockedOutUntil,
+        CancellationToken ct = default);
 }
 
 internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccountService
@@ -29,5 +68,86 @@ internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccount
         dbContext.UserAccounts.Add(account);
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         return account;
+    }
+
+    public async Task<UserAccount?> FindByEmailAsync(string email, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null;
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        return await dbContext.UserAccounts.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.NormalizedEmail == normalizedEmail, ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<UserAccount?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(usernameOrEmail)) return null;
+
+        var trimmed = usernameOrEmail.Trim();
+        var normalized = trimmed.ToLowerInvariant();
+
+        // Try by username first (exact match), then by normalized email
+        return await dbContext.UserAccounts.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Username == trimmed || x.NormalizedEmail == normalized, ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task UpdatePasswordAsync(
+        Guid accountId,
+        string newPasswordHash,
+        string? salt,
+        string algorithm,
+        CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        account.PasswordHash = newPasswordHash;
+        account.PasswordSalt = salt;
+        account.HashAlgorithm = algorithm;
+        account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+        // Clear lockout state on password change
+        account.FailedLoginAttempts = 0;
+        account.LastFailedLoginAt = null;
+        account.LockedOutUntil = null;
+
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
+        Guid accountId,
+        CancellationToken ct = default)
+    {
+        return await dbContext.UserTenantMemberships
+            .AsNoTracking()
+            .Include(x => x.Tenant)
+            .Where(x => x.UserAccountId == accountId
+                && x.Status == TenantMembershipStatus.Active
+                && (x.ExpiresAt == null || x.ExpiresAt > DateTimeOffset.UtcNow))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task UpdateLockoutAsync(
+        Guid accountId,
+        int failedAttempts,
+        DateTimeOffset? lastFailedAt,
+        DateTimeOffset? lockedOutUntil,
+        CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        account.FailedLoginAttempts = failedAttempts;
+        account.LastFailedLoginAt = lastFailedAt;
+        account.LockedOutUntil = lockedOutUntil;
+
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

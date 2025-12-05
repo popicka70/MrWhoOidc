@@ -19,14 +19,14 @@
 
 **Purpose**: Database schema changes and project structure updates
 
-- [ ] T001 Add new fields to UserAccount entity in `MrWhoOidc.Auth/Persistence/Entities/UserAccount.cs`
+- [x] T001 Add new fields to UserAccount entity in `MrWhoOidc.Auth/Persistence/AuthDbContext.cs`
   - `FailedLoginAttempts` (int, default 0)
   - `LastFailedLoginAt` (DateTimeOffset?)
   - `PasswordUpdatedAt` (DateTimeOffset?)
-- [ ] T002 Add EF Core migration for UserAccount schema changes
+- [x] T002 Add EF Core migration for UserAccount schema changes
   - Run: `dotnet ef migrations add AddGlobalAuthFieldsToUserAccount --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations`
-- [ ] T003 [P] Add index on `Email` column for UserAccount (case-insensitive, unique) in migration
-- [ ] T004 [P] Create `GlobalAuthenticationResult.cs` record in `MrWhoOidc.Auth/Services/`
+- [x] T003 [P] Add index on `NormalizedEmail` column for UserAccount (case-insensitive, unique) in migration
+- [x] T004 [P] Create `GlobalAuthenticationResult.cs` record in `MrWhoOidc.Auth/Services/`
   - Include `AuthenticationFailureReason` enum in same file
 
 ---
@@ -37,25 +37,25 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Create `IGlobalAuthenticationService.cs` interface in `MrWhoOidc.Auth/Services/`
+- [x] T005 Create `IGlobalAuthenticationService.cs` interface in `MrWhoOidc.Auth/Services/`
   - Methods: `AuthenticateAsync`, `RecordFailedAttemptAsync`, `ClearFailedAttemptsAsync`, `IsLockedOutAsync`
-- [ ] T006 Extend `IUserAccountService.cs` with new methods in `MrWhoOidc.Auth/Services/`
+- [x] T006 Extend `IUserAccountService.cs` with new methods in `MrWhoOidc.Auth/Services/`
   - `FindByEmailAsync(string email)`
   - `UpdatePasswordAsync(Guid userId, string newPasswordHash)`
   - `GetActiveMembershipsAsync(Guid userId)`
   - `UpdateLockoutAsync(Guid userId, int failedAttempts, DateTimeOffset? lastFailedAt, DateTimeOffset? lockedUntil)`
-- [ ] T007 Implement `GlobalAuthenticationService.cs` in `MrWhoOidc.Auth/Services/`
+- [x] T007 Implement `GlobalAuthenticationService.cs` in `MrWhoOidc.Auth/Services/`
   - Inject `IUserAccountService`, `IPasswordHasher`
   - Implement lockout logic per data-model.md state machine
   - Lockout threshold: 5 attempts, duration: 15 minutes
-- [ ] T008 Implement extended methods in `UserAccountService.cs` for `IUserAccountService`
-- [ ] T009 Register `IGlobalAuthenticationService` in DI container in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T010 [P] Add `OidcMetrics` counters for global authentication events
-  - `oidc_global_auth_success_total`
-  - `oidc_global_auth_failure_total`
-  - `oidc_global_account_lockout_total`
+- [x] T008 Implement extended methods in `UserAccountService.cs` for `IUserAccountService`
+- [x] T009 Register `IGlobalAuthenticationService` in DI container in `MrWhoOidc.Auth/DependencyInjection.cs`
+- [x] T010 [P] Add `OidcMetrics` counters for global authentication events in `MrWhoOidc.Auth/Observability/OidcMetrics.cs`
+  - `oidc.global_auth.success`
+  - `oidc.global_auth.failure`
+  - `oidc.global_auth.lockout`
 
-**Checkpoint**: Foundation ready - user story implementation can now begin
+**Checkpoint**: Foundation ready - user story implementation can now begin ✅
 
 ---
 

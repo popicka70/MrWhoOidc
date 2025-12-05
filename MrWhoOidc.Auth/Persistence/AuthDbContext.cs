@@ -205,7 +205,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.Username).IsUnique();
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.NormalizedEmail).HasMaxLength(256);
-            b.HasIndex(x => x.NormalizedEmail);
+            // Unique index on NormalizedEmail (filtered to exclude nulls)
+            b.HasIndex(x => x.NormalizedEmail)
+                .IsUnique()
+                .HasFilter("\"NormalizedEmail\" IS NOT NULL");
             b.Property(x => x.Name).HasMaxLength(200);
             b.Property(x => x.PasswordHash).IsRequired();
             b.Property(x => x.PasswordSalt).HasMaxLength(128);
@@ -214,6 +217,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.TotpSecret).HasMaxLength(200);
             b.Property(x => x.LockedOutUntil);
+            // New global auth fields
+            b.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
+            b.Property(x => x.LastFailedLoginAt);
+            b.Property(x => x.PasswordUpdatedAt);
             b.HasMany(x => x.TenantMemberships)
                 .WithOne(x => x.UserAccount)
                 .HasForeignKey(x => x.UserAccountId)
@@ -955,6 +962,21 @@ public class UserAccount
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
+
+    /// <summary>
+    /// Counter for failed login attempts (global across all tenants).
+    /// </summary>
+    public int FailedLoginAttempts { get; set; }
+
+    /// <summary>
+    /// Timestamp of the last failed login attempt.
+    /// </summary>
+    public DateTimeOffset? LastFailedLoginAt { get; set; }
+
+    /// <summary>
+    /// Timestamp when the password was last changed.
+    /// </summary>
+    public DateTimeOffset? PasswordUpdatedAt { get; set; }
 
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
 }
