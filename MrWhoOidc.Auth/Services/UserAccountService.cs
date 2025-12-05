@@ -47,6 +47,26 @@ public interface IUserAccountService
         DateTimeOffset? lastFailedAt,
         DateTimeOffset? lockedOutUntil,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Enables TOTP MFA for an account by setting the secret.
+    /// </summary>
+    Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default);
+
+    /// <summary>
+    /// Confirms TOTP MFA enrollment after successful code verification.
+    /// </summary>
+    Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Disables TOTP MFA for an account.
+    /// </summary>
+    Task DisableMfaAsync(Guid accountId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the MFA status and secret for an account.
+    /// </summary>
+    Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default);
 }
 
 internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccountService
@@ -149,5 +169,62 @@ internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccount
         account.LockedOutUntil = lockedOutUntil;
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        account.TotpSecret = totpSecret;
+        // Don't enable yet - wait for confirmation
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(account.TotpSecret))
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} does not have a TOTP secret set.");
+        }
+
+        account.TotpEnabled = true;
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task DisableMfaAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        account.TotpEnabled = false;
+        account.TotpSecret = null;
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default)
+    {
+        var account = await dbContext.UserAccounts.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == accountId, ct)
+            .ConfigureAwait(false);
+        
+        if (account is null)
+        {
+            throw new InvalidOperationException($"UserAccount {accountId} not found.");
+        }
+
+        return (account.TotpEnabled, account.TotpSecret);
     }
 }

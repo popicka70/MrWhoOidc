@@ -345,5 +345,39 @@ public class UserAccountServiceTests
 
             await _dbContext.SaveChangesAsync(ct);
         }
+
+        public async Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default)
+        {
+            var account = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct);
+            if (account is null) throw new InvalidOperationException($"UserAccount {accountId} not found.");
+            account.TotpSecret = totpSecret;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        public async Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default)
+        {
+            var account = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct);
+            if (account is null) throw new InvalidOperationException($"UserAccount {accountId} not found.");
+            if (string.IsNullOrWhiteSpace(account.TotpSecret))
+                throw new InvalidOperationException($"UserAccount {accountId} does not have a TOTP secret set.");
+            account.TotpEnabled = true;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        public async Task DisableMfaAsync(Guid accountId, CancellationToken ct = default)
+        {
+            var account = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct);
+            if (account is null) throw new InvalidOperationException($"UserAccount {accountId} not found.");
+            account.TotpEnabled = false;
+            account.TotpSecret = null;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        public async Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default)
+        {
+            var account = await _dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == accountId, ct);
+            if (account is null) throw new InvalidOperationException($"UserAccount {accountId} not found.");
+            return (account.TotpEnabled, account.TotpSecret);
+        }
     }
 }

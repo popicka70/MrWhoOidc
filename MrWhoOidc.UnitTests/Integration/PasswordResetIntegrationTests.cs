@@ -250,6 +250,18 @@ public class PasswordResetIntegrationTests
 
             await db.SaveChangesAsync(ct);
         }
+
+        public Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task DisableMfaAsync(Guid accountId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default)
+            => throw new NotImplementedException();
     }
 
     private sealed class TestPasswordResetService : IPasswordResetService
