@@ -715,6 +715,34 @@ public static class AdminApiEndpointMappingExtensions
                 : Results.Ok(response);
         }).WithName("ClientSecretHealth");
 
+        // Global authentication health endpoint
+        app.MapGet("/health/global-auth", async (AuthDbContext db, CancellationToken ct) =>
+        {
+            // Check UserAccount table is accessible and has accounts
+            var totalAccounts = await db.UserAccounts.AsNoTracking().LongCountAsync(ct);
+            var accountsWithPassword = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.PasswordHash != null && a.PasswordHash != "", ct);
+            var accountsWithMfa = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.TotpEnabled, ct);
+            var lockedAccounts = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.LockedOutUntil != null && a.LockedOutUntil > DateTimeOffset.UtcNow, ct);
+
+            // Determine status
+            var status = totalAccounts == 0 ? "degraded" : "healthy";
+
+            return Results.Ok(new
+            {
+                status,
+                totalAccounts,
+                accountsWithPassword,
+                accountsWithMfa,
+                currentlyLockedOut = lockedAccounts,
+                migrationProgress = totalAccounts > 0
+                    ? Math.Round(100.0 * accountsWithPassword / totalAccounts, 2)
+                    : 0.0
+            });
+        }).WithName("GlobalAuthHealth");
+
     // Platform Admin: On-demand tenant seeding (platform-admin only)
     var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 

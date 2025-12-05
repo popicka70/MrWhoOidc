@@ -715,6 +715,105 @@ public class MyNewEntity
 - Implementation: `MrWhoOidc.Auth/Persistence/GuidHelper.cs`
 - Backlog: `docs/uuidv7-migration-backlog.md`
 
+## 15) Global User Credentials Architecture
+
+### Overview
+
+MrWhoOidc uses a **global credentials model** where each user has a single password and MFA configuration that applies across all tenants they belong to.
+
+**Key Entities:**
+
+| Entity | Scope | Credentials Stored |
+|--------|-------|-------------------|
+| `UserAccount` | Global | PasswordHash, MfaEnabled, MfaSecret, lockout state |
+| `User` | Per-tenant | (Legacy: PasswordHash - deprecated) |
+| `UserTenantMembership` | Link | Role, status, tenant access |
+
+### Authentication Flow
+
+1. User enters email and password on tenant login page
+2. `IGlobalAuthenticationService.AuthenticateAsync` is called
+3. Service looks up `UserAccount` by normalized email
+4. Verifies password against `UserAccount.PasswordHash`
+5. Checks `UserTenantMembership` for active membership in the target tenant
+6. If MFA enabled on `UserAccount`, redirects to MFA challenge
+7. On success, creates session for the tenant
+
+```text
+Login Request → GlobalAuthenticationService
+                      │
+                      ▼
+              UserAccount lookup (by email)
+                      │
+                      ▼
+              Password verification (Argon2id)
+                      │
+                      ▼
+              Lockout check (global)
+                      │
+                      ▼
+              Tenant membership check
+                      │
+                      ▼
+              MFA challenge (if enabled)
+                      │
+                      ▼
+              Session created
+```
+
+### Lockout Protection
+
+Lockout is applied **globally** across all tenants to prevent distributed brute-force attacks:
+
+- **Threshold**: 5 failed attempts
+- **Duration**: 15 minutes
+- **Scope**: `UserAccount` (not per-tenant)
+
+This means if an attacker tries to brute-force a password on tenant A, the lockout also protects tenant B.
+
+### Password Operations
+
+| Operation | Endpoint/Page | Scope |
+|-----------|---------------|-------|
+| Change password | `/profile/change-password` | Updates `UserAccount.PasswordHash` |
+| Reset password | `/account/reset-password` | Resets `UserAccount.PasswordHash` |
+| Admin reset | `/admin/users/edit` | Resets `UserAccount.PasswordHash` |
+
+All password operations:
+- Clear lockout state (`FailedLoginAttempts = 0`)
+- Update `PasswordUpdatedAt` timestamp
+- Apply immediately to all tenant sessions
+
+### MFA Configuration
+
+MFA settings are stored on `UserAccount` and apply globally:
+
+```csharp
+public class UserAccount
+{
+    public bool MfaEnabled { get; set; }
+    public string? MfaSecret { get; set; }        // Encrypted TOTP secret
+    public string[]? MfaRecoveryCodes { get; set; } // Encrypted
+}
+```
+
+When a user enables MFA on one tenant, they will be challenged for MFA on all tenants.
+
+### Migration from Per-Tenant Passwords
+
+If migrating from the legacy per-tenant password model:
+
+1. **On-demand migration**: `UserAccountProvisioner` automatically migrates passwords during login
+2. **Batch migration**: Use `/platform-admin/api/migrate-credentials` endpoints
+3. **Direct SQL**: See `docs/global-credentials-migration.md`
+
+### Related Files
+
+- `MrWhoOidc.Auth/Services/GlobalAuthenticationService.cs` - Core authentication logic
+- `MrWhoOidc.Auth/Services/UserAccountService.cs` - Account operations
+- `MrWhoOidc.Auth/Services/PasswordMigrationService.cs` - Migration tooling
+- `MrWhoOidc.WebAuth/Pages/Login.cshtml.cs` - Login handler
+
 ## 16) Key & License Management Service (NEW)
 
 ### Overview

@@ -11,7 +11,18 @@ public interface IUserService
     // New: find by username OR primary/alternative email (case-insensitive for email)
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
     Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default);
+    
+    /// <summary>
+    /// Verifies password against the per-tenant User.PasswordHash.
+    /// </summary>
+    /// <remarks>
+    /// <b>DEPRECATION NOTICE</b>: Use <see cref="IGlobalAuthenticationService.AuthenticateAsync"/> instead,
+    /// which verifies against the global <c>UserAccount.PasswordHash</c>.
+    /// This method is retained for migration compatibility.
+    /// </remarks>
+    [Obsolete("Use IGlobalAuthenticationService.AuthenticateAsync for authentication.")]
     Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default);
+    
     /// <summary>
     /// Invalidates cached user data for the specified user.
     /// Call this after user updates (profile, password, email, MFA, etc.).

@@ -443,7 +443,54 @@ See: docs/jar-replay-cache.md
 
 When enabled with Redis, endpoints like /token and /introspect return appropriate rate-limit headers and 429 with Retry-After.
 
-## 10) Troubleshooting
+## 10) User Password Management
+
+### Global Credentials Model
+
+User passwords are stored globally on the `UserAccount` entity, not per-tenant. This means:
+
+- **Single password**: Users have one password for all tenants they belong to
+- **Global lockout**: Failed login attempts lock the account across all tenants
+- **Unified MFA**: MFA enrollment applies to all tenants
+
+### Admin Password Reset
+
+When resetting a user's password from the Admin UI:
+
+1. Navigate to **Admin → Users → Edit**
+2. Click "Reset Password"
+3. **⚠️ Important**: This affects ALL tenants the user belongs to
+
+The confirmation dialog warns:
+> "This will reset the user's password across all tenants. The user will need to use this new password for all tenant logins."
+
+### Lockout Management
+
+Users are locked out after 5 failed login attempts for 15 minutes.
+
+**To unlock a user manually:**
+1. Navigate to **Admin → Users → Edit**
+2. Click "Clear Lockout"
+3. The user can immediately attempt login again
+
+Lockout state includes:
+- `FailedLoginAttempts`: Number of consecutive failures
+- `LockedOutUntil`: When lockout expires (null if not locked)
+- `LastFailedLoginAt`: Timestamp of last failure
+
+### Password Migration (Platform Admin)
+
+For systems migrating from per-tenant passwords, platform admins can use:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/platform-admin/api/migrate-credentials/status` | GET | View migration progress |
+| `/platform-admin/api/migrate-credentials` | POST | Batch migrate users |
+| `/platform-admin/api/migrate-credentials/{accountId}` | POST | Migrate single user |
+
+See: `docs/global-credentials-migration.md` for detailed migration procedures.
+
+## 11) Troubleshooting
 
 - External OIDC UX & correlation
   - Supply an `X-Correlation-Id` header (<= 64 chars, `[A-Za-z0-9-_]`) when reproducing issues; the value is echoed back on every response and surfaces in structured logs/telemetry.

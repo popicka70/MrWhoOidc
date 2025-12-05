@@ -5,6 +5,27 @@ using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Verifies user credentials against per-tenant User.PasswordHash values.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>DEPRECATION NOTICE</b>: This service is deprecated in favor of <see cref="IGlobalAuthenticationService"/>
+/// which authenticates against the global <c>UserAccount.PasswordHash</c>.
+/// </para>
+/// <para>
+/// This service is retained for:
+/// <list type="bullet">
+/// <item>Unauthenticated tenant discovery flow (SelectTenant page)</item>
+/// <item>Migration period compatibility when users have per-tenant passwords</item>
+/// </list>
+/// </para>
+/// <para>
+/// After all users are migrated to global credentials via <see cref="IPasswordMigrationService"/>,
+/// this service can be removed and the SelectTenant flow updated to use global auth.
+/// </para>
+/// </remarks>
+[Obsolete("Use IGlobalAuthenticationService for authentication. This service is retained for migration compatibility.")]
 public interface ITenantCredentialVerifier
 {
     Task<TenantCredentialVerificationResult> VerifyAsync(string email, string password, CancellationToken ct = default);
