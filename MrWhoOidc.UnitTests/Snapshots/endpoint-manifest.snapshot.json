@@ -1073,6 +1073,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "Account/ForgotPassword",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "account/linked-accounts",
     "Methods": "",
     "RateLimiters": [],
@@ -1083,6 +1092,15 @@
   },
   {
     "Pattern": "account/profile",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Account/ResetPassword",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

@@ -100,6 +100,9 @@ public static class AuthServiceCollectionExtensions
         // Global authentication service
         services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
         
+        // Password reset service
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
+        
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();

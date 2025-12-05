@@ -62,6 +62,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
     // New: Impersonation audit logs
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
+    // New: Password reset tokens (global, tied to UserAccount)
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     // Licensing
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
@@ -979,6 +981,53 @@ public class UserAccount
     public DateTimeOffset? PasswordUpdatedAt { get; set; }
 
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+/// <summary>
+/// Password reset token for global UserAccount password reset.
+/// Tokens are single-use and expire after a configurable period.
+/// </summary>
+public class PasswordResetToken
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    /// <summary>
+    /// The UserAccount this reset token belongs to.
+    /// </summary>
+    public Guid UserAccountId { get; set; }
+    public UserAccount UserAccount { get; set; } = null!;
+
+    /// <summary>
+    /// The hashed token value (SHA256 of the raw token sent to user).
+    /// </summary>
+    [MaxLength(128)]
+    public string TokenHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When this token was created.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// When this token expires.
+    /// </summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Whether this token has been used.
+    /// </summary>
+    public bool IsUsed { get; set; }
+
+    /// <summary>
+    /// When this token was used (if applicable).
+    /// </summary>
+    public DateTimeOffset? UsedAt { get; set; }
+
+    /// <summary>
+    /// IP address from which the reset was requested.
+    /// </summary>
+    [MaxLength(50)]
+    public string? RequestedFromIp { get; set; }
 }
 
 public class UserTenantMembership
