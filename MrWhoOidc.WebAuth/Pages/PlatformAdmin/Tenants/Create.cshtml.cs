@@ -249,10 +249,36 @@ public partial class CreateModel(
                     IsActive = true
                 };
 
+                // Create a User record in the new tenant for the creator
+                // This is required because TenantSwitchingService.GetUserTenantsAsync 
+                // queries Users joined with Tenants to find accessible tenants
+                var tenantUser = new User
+                {
+                    // New ID for the tenant-specific user record
+                    TenantId = tenant.Id,
+                    Username = creatorUser.Username,
+                    Email = creatorUser.Email,
+                    NormalizedEmail = creatorUser.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(creatorUser.Email ?? string.Empty),
+                    PasswordHash = creatorUser.PasswordHash,
+                    PasswordSalt = creatorUser.PasswordSalt,
+                    HashAlgorithm = creatorUser.HashAlgorithm,
+                    Name = creatorUser.Name,
+                    EmailVerified = creatorUser.EmailVerified,
+                    EmailVerifiedAt = creatorUser.EmailVerifiedAt,
+                    TotpEnabled = creatorUser.TotpEnabled,
+                    TotpSecret = creatorUser.TotpSecret,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                // Update role assignments to use the new tenant user's ID
+                tenantAdminAssignment.UserId = tenantUser.Id;
+                adminAssignment.UserId = tenantUser.Id;
+
                 db.Tenants.Add(tenant);
                 db.Realms.AddRange(defaultRealm, adminRealm);
                 db.Roles.AddRange(tenantAdminRole, adminRole);
                 db.Clients.Add(adminClient);
+                db.Users.Add(tenantUser);
                 db.UserRoleAssignments.AddRange(tenantAdminAssignment, adminAssignment);
 
                 await userAccountProvisioner.EnsureAsync(creatorUser, tenant.Id, defaultRealm.Id, true, ct, autoSave: false);
