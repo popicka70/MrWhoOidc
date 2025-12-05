@@ -103,7 +103,8 @@
                             @if (Model.IsPlatformAdmin)
                             {
                                 <button type="button" class="btn btn-sm btn-outline-warning" title="Reset Password" 
-                                        onclick="if(confirm('Reset password for @u.Username?')) { document.getElementById('resetForm_@u.Id').submit(); }">
+                                        data-bs-toggle="modal" data-bs-target="#resetPasswordModal" 
+                                        data-user-id="@u.Id" data-username="@u.Username">
                                     <i class="bi bi-key"></i> Reset
                                 </button>
                             }
@@ -125,6 +126,71 @@
     </div>
 </div>
 
+@if (Model.IsPlatformAdmin)
+{
+    <!-- Password Reset Confirmation Modal -->
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="resetPasswordModalLabel">
+                        <i class="bi bi-exclamation-triangle"></i> Reset Password
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong><i class="bi bi-globe"></i> Global Password Reset</strong>
+                        <p class="mb-0 mt-2">
+                            You are about to reset the password for user "<strong id="modalUsername"></strong>".
+                        </p>
+                    </div>
+                    <p>
+                        <i class="bi bi-info-circle text-info"></i> 
+                        This will reset the user's password <strong>across ALL tenants</strong> they belong to.
+                        The user will need to use the new temporary password to log in to any organization.
+                    </p>
+                    <p class="mb-0">
+                        <i class="bi bi-unlock text-success"></i> 
+                        If the account is locked out, this will also unlock it.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="confirmResetBtn">
+                        <i class="bi bi-key"></i> Reset Password
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
+    @if (Model.IsPlatformAdmin)
+    {
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var resetModal = document.getElementById('resetPasswordModal');
+                var currentUserId = null;
+                
+                resetModal.addEventListener('show.bs.modal', function(event) {
+                    var button = event.relatedTarget;
+                    currentUserId = button.getAttribute('data-user-id');
+                    var username = button.getAttribute('data-username');
+                    document.getElementById('modalUsername').textContent = username;
+                });
+                
+                document.getElementById('confirmResetBtn').addEventListener('click', function() {
+                    if (currentUserId) {
+                        var form = document.getElementById('resetForm_' + currentUserId);
+                        if (form) {
+                            form.submit();
+                        }
+                    }
+                });
+            });
+        </script>
+    }
 }

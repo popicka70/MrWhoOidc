@@ -22,6 +22,10 @@ public sealed class OidcMetrics
         "oidc.global_auth.lockout",
         description: "Account lockouts due to failed attempts");
 
+    private readonly Counter<long> _adminPasswordReset = Meter.CreateCounter<long>(
+        "oidc.admin.password_reset",
+        description: "Admin password reset operations on global UserAccount");
+
     /// <summary>
     /// Records a successful global authentication.
     /// </summary>
@@ -45,5 +49,14 @@ public sealed class OidcMetrics
     public void GlobalAccountLockout()
     {
         _globalAccountLockout.Add(1);
+    }
+
+    /// <summary>
+    /// Records an admin password reset operation.
+    /// </summary>
+    /// <param name="affectedTenantCount">Number of tenants the user has membership in</param>
+    public void AdminPasswordReset(int affectedTenantCount)
+    {
+        _adminPasswordReset.Add(1, new KeyValuePair<string, object?>("affected_tenant_count", affectedTenantCount));
     }
 }
