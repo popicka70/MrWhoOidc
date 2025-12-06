@@ -311,7 +311,7 @@ public partial class CreateModel(
             {
                 await transaction.RollbackAsync(ct);
                 logger.LogError(ex, "Unexpected error while provisioning tenant {TenantSlug}", Input.Slug);
-                throw new TenantProvisioningException("An unexpected error occurred while creating the tenant. Please try again.");
+                throw new TenantProvisioningException("An unexpected error occurred while creating the tenant. Please try again.", ex);
             }
         });
 
@@ -427,6 +427,10 @@ public partial class CreateModel(
     private sealed class TenantProvisioningException : Exception
     {
         public TenantProvisioningException(string message) : base(message)
+        {
+        }
+
+        public TenantProvisioningException(string message, Exception innerException) : base(message, innerException)
         {
         }
     }
