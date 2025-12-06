@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.MultiTenancy;
@@ -35,21 +36,26 @@ public class ModeAwareTenantResolver : ITenantResolver
     private readonly AuthDbContext _dbContext;
     private readonly IMultiTenancyOptions _options;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<ModeAwareTenantResolver> _logger;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "tenant:";
 
     public ModeAwareTenantResolver(
         AuthDbContext dbContext,
         IMultiTenancyOptions options,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ILogger<ModeAwareTenantResolver> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<TenantContext?> ResolveTenantAsync(string path, CancellationToken cancellationToken = default)
     {
+        _logger.LogDebug("🏢 [TenantResolver] Resolving tenant for path={Path}, MultiTenantEnabled={Enabled}", path, _options.Enabled);
+        
         if (string.IsNullOrEmpty(path))
         {
             path = "/";
@@ -58,20 +64,25 @@ public class ModeAwareTenantResolver : ITenantResolver
         // Single-tenant mode: always return default tenant
         if (!_options.Enabled)
         {
+            _logger.LogDebug("🏢 [TenantResolver] Single-tenant mode - returning default tenant");
             return await ResolveDefaultTenantAsync(cancellationToken);
         }
 
         // Multi-tenant mode: parse path for /t/{slug}
         var slug = ExtractTenantSlugFromPath(path);
+        _logger.LogDebug("🏢 [TenantResolver] Extracted slug from path: {Slug}", slug ?? "(none)");
+        
         if (string.IsNullOrEmpty(slug))
         {
             // No tenant slug in path - fall back to default tenant for backward compatibility
             // This allows existing routes (e.g., /.well-known/openid-configuration) to work
+            _logger.LogDebug("🏢 [TenantResolver] No slug in path - falling back to default tenant");
             return await ResolveDefaultTenantAsync(cancellationToken);
         }
 
         // Path has /t/{slug} - look up the specific tenant
         var tenant = await ResolveTenantBySlugAsync(slug, cancellationToken);
+        _logger.LogDebug("🏢 [TenantResolver] Resolved by slug: {TenantName} ({TenantId})", tenant?.Name, tenant?.TenantId);
 
         // If tenant not found and slug is NOT the default slug, return null (404)
         // If tenant not found but slug IS the default slug, still return null (config error - 500)

@@ -11,7 +11,7 @@ public interface IUserService
     // New: find by username OR primary/alternative email (case-insensitive for email)
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
     Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default);
-    Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default);
+    
     /// <summary>
     /// Invalidates cached user data for the specified user.
     /// Call this after user updates (profile, password, email, MFA, etc.).
@@ -19,7 +19,7 @@ public interface IUserService
     Task InvalidateUserCacheAsync(Guid userId, string username, Guid tenantId, CancellationToken ct = default);
 }
 
-internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, HybridCache cache) : IUserService
+internal sealed class UserService(AuthDbContext db, ITenantAccessor tenantAccessor, HybridCache cache) : IUserService
 {
     public async Task<User?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
@@ -117,9 +117,6 @@ internal sealed class UserService(AuthDbContext db, IPasswordHasher hasher, ITen
     {
         return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
     }
-
-    public Task<bool> VerifyPasswordAsync(User user, string password, CancellationToken ct = default)
-        => Task.FromResult(hasher.Verify(password, user.PasswordHash));
 
     public async Task InvalidateUserCacheAsync(Guid userId, string username, Guid tenantId, CancellationToken ct = default)
     {

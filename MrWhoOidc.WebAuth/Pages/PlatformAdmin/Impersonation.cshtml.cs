@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
@@ -19,7 +18,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 public class ImpersonationModel(
     AuthDbContext db,
     IImpersonationService impersonationService,
-    IOptions<MultiTenancyOptions> multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     public List<TenantDto> Tenants { get; set; } = new();
     public ImpersonationInfo? CurrentImpersonation { get; set; }
@@ -85,7 +84,7 @@ public class ImpersonationModel(
         // Redirect to tenant admin dashboard
         // In multi-tenant mode: /t/{slug}/Admin/Index
         // In single-tenant mode: /Admin/Index
-        if (multiTenancyOptions.Value.Enabled)
+        if (multiTenancyOptions.Enabled)
         {
             return Redirect($"/t/{tenant.Slug}/Admin/Index");
         }

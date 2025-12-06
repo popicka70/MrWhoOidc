@@ -13,7 +13,11 @@ using MrWhoOidc.Auth.Services;
 namespace MrWhoOidc.WebAuth.Pages;
 
 [AllowAnonymous]
-public class LoginTotpModel(AuthDbContext db, ITotpService totp, ILogger<LoginTotpModel> logger) : PageModel
+public class LoginTotpModel(
+    AuthDbContext db, 
+    ITotpService totp, 
+    IUserAccountService userAccountService,
+    ILogger<LoginTotpModel> logger) : PageModel
 {
     [BindProperty]
     [Required, StringLength(6, MinimumLength = 6)]
@@ -40,11 +44,21 @@ public class LoginTotpModel(AuthDbContext db, ITotpService totp, ILogger<LoginTo
         if (!Guid.TryParse(sub, out var userId))
             return RedirectToPage("/Login", new { ReturnUrl });
 
+        // Get the per-tenant user to look up the linked UserAccount
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        if (user is null || !user.TotpEnabled || string.IsNullOrEmpty(user.TotpSecret))
+        if (user is null || string.IsNullOrEmpty(user.Email))
             return RedirectToPage("/Login", new { ReturnUrl });
 
-        if (!totp.VerifyCode(user.TotpSecret, Code, digits: 6, period: 30, window: 1))
+        // Get MFA settings from UserAccount (global)
+        var account = await userAccountService.FindByEmailAsync(user.Email);
+        if (account is null)
+            return RedirectToPage("/Login", new { ReturnUrl });
+
+        var (mfaEnabled, totpSecret) = await userAccountService.GetMfaStatusAsync(account.Id);
+        if (!mfaEnabled || string.IsNullOrEmpty(totpSecret))
+            return RedirectToPage("/Login", new { ReturnUrl });
+
+        if (!totp.VerifyCode(totpSecret, Code, digits: 6, period: 30, window: 1))
         {
             ModelState.AddModelError(string.Empty, "Invalid code");
             return Page();
@@ -63,7 +77,7 @@ public class LoginTotpModel(AuthDbContext db, ITotpService totp, ILogger<LoginTo
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
-        logger.LogInformation("User {User} finished MFA", user.Username);
+        logger.LogInformation("User {User} finished MFA (validated against global UserAccount)", user.Username);
 
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
         {

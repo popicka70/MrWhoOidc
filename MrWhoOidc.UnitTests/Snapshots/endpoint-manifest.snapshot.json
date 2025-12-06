@@ -627,6 +627,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health/global-auth",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/introspect",
     "Methods": "POST",
     "RateLimiters": [
@@ -771,6 +780,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/migrate-credentials",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/migrate-credentials/{accountId:guid}",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/migrate-credentials/status",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/seed-tenant",
     "Methods": "POST",
     "RateLimiters": [
@@ -810,6 +852,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/.well-known/openid-configuration",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -978,6 +1031,309 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/api/icon/{iconId:guid}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/qr/cancel",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-qr-cancel"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/qr/confirm",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-qr-confirm"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/qr/status/{sessionToken}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-qr-poll"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/credentials",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/auth/external/callback",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/auth/external/confirm",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/auth/external/start",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/auth/qr-mobile",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/authorize",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/clients/{clientId}/jwks",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-jwks"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/connect/endsession",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/introspect",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-introspect"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/jwks",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/logout",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/logout/federated-callback",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/logout/final",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/par",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/par",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-par"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/providers/{providerName}/jwks",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-jwks"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/providers/jwks",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-jwks"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/revoke",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/token",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/token",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-token",
+      "rl-token-exchange"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/userinfo",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-userinfo"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/userinfo",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/token",
     "Methods": "OPTIONS",
     "RateLimiters": [],
@@ -1073,6 +1429,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "Account/ForgotPassword",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "account/linked-accounts",
     "Methods": "",
     "RateLimiters": [],
@@ -1083,6 +1448,15 @@
   },
   {
     "Pattern": "account/profile",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "Account/ResetPassword",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
@@ -1478,7 +1852,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "Admin/Users/Edit/{id:guid}",
+    "Pattern": "admin/users/edit/{id:guid}",
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",
@@ -1786,6 +2160,15 @@
     "IsAnonymous": true
   },
   {
+    "Pattern": "select-tenant",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "StartImpersonation",
     "Methods": "",
     "RateLimiters": [],
@@ -1805,15 +2188,6 @@
   },
   {
     "Pattern": "SwitchTenant",
-    "Methods": "",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": true,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
-    "Pattern": "select-tenant",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

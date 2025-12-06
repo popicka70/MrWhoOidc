@@ -61,11 +61,7 @@ public class SettingsOverrideTests
         // Add multi-tenancy services
         services.AddMemoryCache();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions
-        {
-            Enabled = true,
-            DefaultTenantSlug = "default"
-        });
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider("default", true));
         services.AddSingleton<HybridCache, TestHybridCache>();
 
         // Add TenantSettingsService

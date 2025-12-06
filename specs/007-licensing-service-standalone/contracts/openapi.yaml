@@ -1,0 +1,1044 @@
+openapi: 3.0.3
+info:
+  title: Licensing Service API
+  description: |
+    Standalone licensing service for issuing, managing, and validating license tokens
+    for multiple products. All endpoints require OIDC authentication.
+  version: 1.0.0
+  contact:
+    name: MrWhoOidc Team
+
+servers:
+  - url: https://licensing.example.com/api/v1
+    description: Production
+  - url: https://localhost:5001/api/v1
+    description: Local Development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Customers
+    description: Customer management operations
+  - name: Products
+    description: Licensed product management
+  - name: Licenses
+    description: License lifecycle operations
+  - name: Validation
+    description: License validation for consuming applications
+
+paths:
+  # ============ CUSTOMERS ============
+  /customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      description: Returns paginated list of customers, optionally filtered by status or search term
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by name or identifier (prefix match)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Inactive]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated customer list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Customers]
+      summary: Create customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Customer identifier already exists
+
+  /customers/{customerId}:
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Customers]
+      summary: Get customer details
+      responses:
+        '200':
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Customers]
+      summary: Update customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+      responses:
+        '200':
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Customers]
+      summary: Soft-delete customer
+      description: Sets customer status to Inactive. Fails if customer has active licenses.
+      responses:
+        '204':
+          description: Customer deactivated
+        '400':
+          description: Customer has active licenses
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /customers/{customerId}/licenses:
+    parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Customers, Licenses]
+      summary: List licenses for customer
+      description: Customer-first search - returns all licenses for a specific customer
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by product
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Expired, Revoked, Renewed, Upgraded, Downgraded]
+      responses:
+        '200':
+          description: Customer's licenses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseListResponse'
+
+  # ============ PRODUCTS ============
+  /products:
+    get:
+      tags: [Products]
+      summary: List licensed products
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Inactive]
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+
+    post:
+      tags: [Products]
+      summary: Create licensed product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensedProduct'
+
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Products]
+      summary: Get product details with option definitions
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensedProductWithOptions'
+
+    put:
+      tags: [Products]
+      summary: Update product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicensedProduct'
+
+  /products/{productId}/options:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Products]
+      summary: Add option definition to product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOptionDefinitionRequest'
+      responses:
+        '201':
+          description: Option definition created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductOptionDefinition'
+
+  /products/{productId}/options/{optionId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: optionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    put:
+      tags: [Products]
+      summary: Update option definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOptionDefinitionRequest'
+      responses:
+        '200':
+          description: Option definition updated
+
+    delete:
+      tags: [Products]
+      summary: Remove option definition
+      description: Fails if option is used in existing licenses
+      responses:
+        '204':
+          description: Option definition removed
+        '400':
+          description: Option is in use
+
+  # ============ LICENSES ============
+  /licenses:
+    get:
+      tags: [Licenses]
+      summary: List all licenses
+      parameters:
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [Active, Expired, Revoked, Renewed, Upgraded, Downgraded]
+        - name: expiringBefore
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Find licenses expiring before this date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: License list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseListResponse'
+
+    post:
+      tags: [Licenses]
+      summary: Issue new license
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLicenseRequest'
+      responses:
+        '201':
+          description: License issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseWithToken'
+        '400':
+          description: Invalid options or validation error
+
+  /licenses/{licenseId}:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Licenses]
+      summary: Get license details
+      responses:
+        '200':
+          description: License details with audit trail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseDetails'
+
+  /licenses/{licenseId}/renew:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Licenses]
+      summary: Renew license
+      description: Creates new license with 60-day overlap. Original remains active until natural expiry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewLicenseRequest'
+      responses:
+        '201':
+          description: Renewal license issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseWithToken'
+        '400':
+          description: License cannot be renewed (revoked)
+
+  /licenses/{licenseId}/revoke:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Licenses]
+      summary: Revoke license
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeLicenseRequest'
+      responses:
+        '200':
+          description: License revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/License'
+        '400':
+          description: License already revoked
+
+  /licenses/{licenseId}/upgrade:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Licenses]
+      summary: Upgrade license tier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeTierRequest'
+      responses:
+        '201':
+          description: Upgraded license issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseWithToken'
+
+  /licenses/{licenseId}/downgrade:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Licenses]
+      summary: Downgrade license tier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeTierRequest'
+      responses:
+        '201':
+          description: Downgraded license issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenseWithToken'
+
+  /licenses/{licenseId}/events:
+    parameters:
+      - name: licenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Licenses]
+      summary: Get license audit trail
+      responses:
+        '200':
+          description: License events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LicenseEvent'
+
+  # ============ BULK OPERATIONS ============
+  /licenses/bulk/renew:
+    post:
+      tags: [Licenses]
+      summary: Bulk renew licenses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRenewRequest'
+      responses:
+        '200':
+          description: Bulk renewal results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  /licenses/bulk/revoke:
+    post:
+      tags: [Licenses]
+      summary: Bulk revoke licenses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRevokeRequest'
+      responses:
+        '200':
+          description: Bulk revocation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  # ============ VALIDATION ============
+  /licenses/validate:
+    post:
+      tags: [Validation]
+      summary: Validate license token
+      description: Validates license signature, expiry, and revocation status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateLicenseRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+  # ============ JWKS ============
+  /.well-known/jwks.json:
+    get:
+      tags: [Validation]
+      summary: Get signing keys (JWKS)
+      description: Public keys for offline license validation. No authentication required.
+      security: []
+      responses:
+        '200':
+          description: JWKS document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwksDocument'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+    NotFound:
+      description: Resource not found
+    BadRequest:
+      description: Invalid request
+
+  schemas:
+    # ---- Customer Schemas ----
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+        displayName:
+          type: string
+        contactEmail:
+          type: string
+        contactName:
+          type: string
+        status:
+          type: string
+          enum: [Active, Inactive]
+        createdAt:
+          type: string
+          format: date-time
+        licenseCount:
+          type: integer
+          description: Number of licenses held
+
+    CreateCustomerRequest:
+      type: object
+      required: [identifier, displayName]
+      properties:
+        identifier:
+          type: string
+          pattern: '^[A-Za-z0-9-]+$'
+          maxLength: 100
+        displayName:
+          type: string
+          maxLength: 200
+        contactEmail:
+          type: string
+          format: email
+        contactName:
+          type: string
+
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        contactEmail:
+          type: string
+        contactName:
+          type: string
+        status:
+          type: string
+          enum: [Active, Inactive]
+
+    CustomerListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    # ---- Product Schemas ----
+    LicensedProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        identifier:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [Active, Inactive]
+
+    LicensedProductWithOptions:
+      allOf:
+        - $ref: '#/components/schemas/LicensedProduct'
+        - type: object
+          properties:
+            optionDefinitions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductOptionDefinition'
+
+    ProductOptionDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        optionKey:
+          type: string
+        displayName:
+          type: string
+        dataType:
+          type: string
+          enum: [string, number, boolean]
+        defaultValue:
+          type: string
+        description:
+          type: string
+        sortOrder:
+          type: integer
+
+    CreateProductRequest:
+      type: object
+      required: [identifier, displayName]
+      properties:
+        identifier:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        displayName:
+          type: string
+        description:
+          type: string
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [Active, Inactive]
+
+    CreateOptionDefinitionRequest:
+      type: object
+      required: [optionKey, displayName, dataType]
+      properties:
+        optionKey:
+          type: string
+          pattern: '^[a-z0-9_]+$'
+        displayName:
+          type: string
+        dataType:
+          type: string
+          enum: [string, number, boolean]
+        defaultValue:
+          type: string
+        description:
+          type: string
+        sortOrder:
+          type: integer
+
+    UpdateOptionDefinitionRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        defaultValue:
+          type: string
+        description:
+          type: string
+        sortOrder:
+          type: integer
+
+    ProductListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LicensedProduct'
+
+    # ---- License Schemas ----
+    License:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tokenId:
+          type: string
+          description: JWT jti claim
+        customer:
+          $ref: '#/components/schemas/Customer'
+        product:
+          $ref: '#/components/schemas/LicensedProduct'
+        tier:
+          type: string
+        scope:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        options:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [Active, Expired, Revoked, Renewed, Upgraded, Downgraded]
+        createdAt:
+          type: string
+          format: date-time
+
+    LicenseWithToken:
+      allOf:
+        - $ref: '#/components/schemas/License'
+        - type: object
+          properties:
+            token:
+              type: string
+              description: Signed JWT license token (only returned on creation/renewal)
+
+    LicenseDetails:
+      allOf:
+        - $ref: '#/components/schemas/License'
+        - type: object
+          properties:
+            parentLicense:
+              $ref: '#/components/schemas/License'
+            childLicenses:
+              type: array
+              items:
+                $ref: '#/components/schemas/License'
+            events:
+              type: array
+              items:
+                $ref: '#/components/schemas/LicenseEvent'
+            revokedAt:
+              type: string
+              format: date-time
+            revokedBy:
+              type: string
+            revocationReason:
+              type: string
+
+    LicenseEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum: [Created, Renewed, Revoked, Upgraded, Downgraded, Validated]
+        timestamp:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        details:
+          type: object
+
+    CreateLicenseRequest:
+      type: object
+      required: [customerId, productId, tier, validUntil]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        tier:
+          type: string
+        scope:
+          type: string
+          default: platform
+        validFrom:
+          type: string
+          format: date-time
+          description: Defaults to now
+        validUntil:
+          type: string
+          format: date-time
+        options:
+          type: object
+          additionalProperties: true
+
+    RenewLicenseRequest:
+      type: object
+      required: [extensionDays]
+      properties:
+        extensionDays:
+          type: integer
+          minimum: 1
+          description: Days to extend from original expiry
+        options:
+          type: object
+          additionalProperties: true
+          description: Override options (optional)
+
+    RevokeLicenseRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    ChangeTierRequest:
+      type: object
+      required: [newTier]
+      properties:
+        newTier:
+          type: string
+        options:
+          type: object
+          additionalProperties: true
+          description: Updated options for new tier
+
+    LicenseListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/License'
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    # ---- Bulk Operation Schemas ----
+    BulkRenewRequest:
+      type: object
+      required: [licenseIds, extensionDays]
+      properties:
+        licenseIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 100
+        extensionDays:
+          type: integer
+          minimum: 1
+
+    BulkRevokeRequest:
+      type: object
+      required: [licenseIds, reason]
+      properties:
+        licenseIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 100
+        reason:
+          type: string
+
+    BulkOperationResult:
+      type: object
+      properties:
+        succeeded:
+          type: integer
+        failed:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              licenseId:
+                type: string
+                format: uuid
+              success:
+                type: boolean
+              error:
+                type: string
+              newLicenseId:
+                type: string
+                format: uuid
+
+    # ---- Validation Schemas ----
+    ValidateLicenseRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: JWT license token
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        reason:
+          type: string
+          enum: [valid, expired, revoked, invalid_signature, unknown, product_inactive]
+        license:
+          $ref: '#/components/schemas/License'
+          description: Present only if valid
+
+    JwksDocument:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kty:
+                type: string
+              use:
+                type: string
+              kid:
+                type: string
+              alg:
+                type: string
+              crv:
+                type: string
+              x:
+                type: string
+              y:
+                type: string

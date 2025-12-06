@@ -297,7 +297,7 @@ public sealed class DPoPValidatorTests
         // Setup: Create token with cnf.jkt claim
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);

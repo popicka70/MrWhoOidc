@@ -10,13 +10,13 @@ public static class DeploymentModeOptions
     /// Single-tenant deployment where platform license applies to one tenant only.
     /// In this mode, there's no need for sublicenses.
     /// </summary>
-    public const string SingleTenant = "single-tenant";
+    public const string SingleTenant = "single_tenant";
 
     /// <summary>
     /// Multi-tenant deployment where platform license applies to all tenants.
     /// Tenants can optionally use sublicenses for more restrictive licensing.
     /// </summary>
-    public const string MultiTenant = "multi-tenant";
+    public const string MultiTenant = "multi_tenant";
 
     /// <summary>
     /// Validates whether the given deployment mode is valid.

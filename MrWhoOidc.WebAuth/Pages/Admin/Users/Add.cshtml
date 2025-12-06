@@ -1,11 +1,11 @@
-﻿@page "/admin/users/add"
+@page "/admin/users/add"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Users.AddModel
 @{
     ViewData["Title"] = "Add user";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled
         ? $"/t/{currentTenant.Slug}"
         : string.Empty;
     var usersIndexPath = string.IsNullOrEmpty(tenantPrefix)

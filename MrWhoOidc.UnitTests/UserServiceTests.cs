@@ -22,41 +22,29 @@ public sealed class UserServiceTests
     public async Task FindByUsername_ReturnsUser_WhenExists()
     {
         using var db = CreateDb();
-        db.Users.Add(new User { Username = "alice", PasswordHash = "h", TenantId = DefaultTenantId });
+        db.Users.Add(new User { Username = "alice", TenantId = DefaultTenantId });
         await db.SaveChangesAsync();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, new DummyHasher(), tenantAccessor, new TestHybridCache());
+        var svc = new UserService(db, tenantAccessor, new TestHybridCache());
         var u = await svc.FindByUsernameAsync("alice");
         Assert.IsNotNull(u);
         Assert.AreEqual("alice", u!.Username);
     }
 
-    [TestMethod]
-    public async Task VerifyPassword_UsesHasher()
-    {
-        using var db = CreateDb();
-        var hasher = new DummyHasher("secret");
-        var user = new User { Username = "bob", PasswordHash = hasher.Hash("secret"), TenantId = DefaultTenantId };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, hasher, tenantAccessor, new TestHybridCache());
-        Assert.IsTrue(await svc.VerifyPasswordAsync(user, "secret"));
-        Assert.IsFalse(await svc.VerifyPasswordAsync(user, "nope"));
-    }
+    // Password verification is now handled by GlobalAuthenticationService using UserAccount
 
     [TestMethod]
     public async Task FindByUsernameOrEmail_FindsByPrimaryAndAlternativeEmail()
     {
         using var db = CreateDb();
-        var u1 = new User { Username = "carol", Email = "carol@example.com", PasswordHash = "h", TenantId = DefaultTenantId };
-        var u2 = new User { Username = "dave", PasswordHash = "h", TenantId = DefaultTenantId };
+        var u1 = new User { Username = "carol", Email = "carol@example.com", TenantId = DefaultTenantId };
+        var u2 = new User { Username = "dave", TenantId = DefaultTenantId };
         db.Users.AddRange(u1, u2);
         await db.SaveChangesAsync();
         db.UserAlternativeEmails.Add(new UserAlternativeEmail { UserId = u2.Id, Email = "dave.alt@example.com", IsVerified = true });
         await db.SaveChangesAsync();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new UserService(db, new DummyHasher(), tenantAccessor, new TestHybridCache());
+        var svc = new UserService(db, tenantAccessor, new TestHybridCache());
 
         var byUser = await svc.FindByUsernameOrEmailAsync("carol");
         Assert.IsNotNull(byUser);
@@ -74,11 +62,5 @@ public sealed class UserServiceTests
         Assert.IsNull(missing);
     }
 
-    private sealed class DummyHasher : IPasswordHasher
-    {
-        private readonly string? _expected;
-        public DummyHasher(string? expected = null) => _expected = expected;
-        public string Hash(string password) => password;
-        public bool Verify(string password, string hash) => (_expected ?? hash) == password;
-    }
+    
 }

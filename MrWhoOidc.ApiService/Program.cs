@@ -299,9 +299,7 @@ RequireAdmin(app.MapPost("/admin/users", async (AuthDbContext db, User input) =>
         Username = username,
         Name = input.Name,
         Email = email,
-        EmailVerified = false,
-        HashAlgorithm = "argon2id",
-        PasswordHash = string.Empty
+        EmailVerified = false
     };
     db.Users.Add(user);
     await db.SaveChangesAsync();

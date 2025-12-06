@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -22,7 +21,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 [RequireDefaultTenantContext]
 public partial class CreateModel(
     AuthDbContext db,
-    IOptions<MultiTenancyOptions> multiTenancyOptions,
+    IMultiTenancyOptions multiTenancyOptions,
     IHttpContextAccessor httpContextAccessor,
     IUserService userService,
     IUserAccountProvisioner userAccountProvisioner,
@@ -72,18 +71,31 @@ public partial class CreateModel(
         public string? BillingPlan { get; set; }
     }
 
-    public void OnGet()
+    public IActionResult OnGet()
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         CaptureCurrentUserDisplay();
         // Set defaults
         Input.Status = TenantStatus.Active;
         Input.MaxUsers = 10000;
         Input.MaxClients = 100;
         Input.BillingPlan = "Free";
+        return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         CaptureCurrentUserDisplay();
         if (!ModelState.IsValid)
         {
@@ -166,7 +178,7 @@ public partial class CreateModel(
                     Slug = Input.Slug,
                     Name = Input.Name,
                     Description = Input.Description,
-                    IssuerUri = multiTenancyOptions.Value.Enabled
+                    IssuerUri = multiTenancyOptions.Enabled
                         ? $"{baseUrl}/t/{Input.Slug}"
                         : baseUrl,
                     Status = Input.Status,
@@ -249,10 +261,33 @@ public partial class CreateModel(
                     IsActive = true
                 };
 
+                // Create a User record in the new tenant for the creator
+                // This is required because TenantSwitchingService.GetUserTenantsAsync 
+                // queries Users joined with Tenants to find accessible tenants
+                var tenantUser = new User
+                {
+                    // New ID for the tenant-specific user record
+                    TenantId = tenant.Id,
+                    Username = creatorUser.Username,
+                    Email = creatorUser.Email,
+                    NormalizedEmail = creatorUser.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(creatorUser.Email ?? string.Empty),
+                    Name = creatorUser.Name,
+                    EmailVerified = creatorUser.EmailVerified,
+                    EmailVerifiedAt = creatorUser.EmailVerifiedAt,
+                    TotpEnabled = creatorUser.TotpEnabled,
+                    TotpSecret = creatorUser.TotpSecret,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                // Update role assignments to use the new tenant user's ID
+                tenantAdminAssignment.UserId = tenantUser.Id;
+                adminAssignment.UserId = tenantUser.Id;
+
                 db.Tenants.Add(tenant);
                 db.Realms.AddRange(defaultRealm, adminRealm);
                 db.Roles.AddRange(tenantAdminRole, adminRole);
                 db.Clients.Add(adminClient);
+                db.Users.Add(tenantUser);
                 db.UserRoleAssignments.AddRange(tenantAdminAssignment, adminAssignment);
 
                 await userAccountProvisioner.EnsureAsync(creatorUser, tenant.Id, defaultRealm.Id, true, ct, autoSave: false);
@@ -276,7 +311,7 @@ public partial class CreateModel(
             {
                 await transaction.RollbackAsync(ct);
                 logger.LogError(ex, "Unexpected error while provisioning tenant {TenantSlug}", Input.Slug);
-                throw new TenantProvisioningException("An unexpected error occurred while creating the tenant. Please try again.");
+                throw new TenantProvisioningException("An unexpected error occurred while creating the tenant. Please try again.", ex);
             }
         });
 
@@ -392,6 +427,10 @@ public partial class CreateModel(
     private sealed class TenantProvisioningException : Exception
     {
         public TenantProvisioningException(string message) : base(message)
+        {
+        }
+
+        public TenantProvisioningException(string message, Exception innerException) : base(message, innerException)
         {
         }
     }

@@ -100,7 +100,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                         RealmId = realm.Id,
                         TenantId = DefaultTenantId
                     });
-                    var user = new User { Username = "alice", PasswordHash = "p", TenantId = DefaultTenantId };
+                    var user = new User { Username = "alice", TenantId = DefaultTenantId };
                     db.Users.Add(user);
                     await db.SaveChangesAsync();
 

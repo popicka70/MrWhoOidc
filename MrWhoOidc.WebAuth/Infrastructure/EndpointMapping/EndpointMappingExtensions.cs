@@ -116,23 +116,17 @@ internal static class EndpointMappingExtensions
             _migrationCompletionSource.TrySetResult(true);
         }
 
-        // Multi-tenant routing: register both tenant-prefixed and fallback routes
-        var multiTenancyOptions = app.Services.GetRequiredService<IMultiTenancyOptions>();
+        // Always register both tenant-prefixed and root-level routes.
+        // Multi-tenancy state is determined at runtime from license (via IMultiTenancyOptions),
+        // but routes must be mapped at startup before the license is loaded.
+        // The handlers will enforce mode-appropriate behavior at request time.
+        
+        // Register tenant-prefixed routes for multi-tenant mode
+        var tenantGroup = app.MapGroup("/t/{slug}");
+        MapOidcEndpoints(tenantGroup);
 
-        if (multiTenancyOptions.Enabled)
-        {
-            // Multi-tenant mode: register tenant-prefixed routes
-            var tenantGroup = app.MapGroup("/t/{slug}");
-            MapOidcEndpoints(tenantGroup);
-
-            // Fallback routes for backward compatibility (map to default tenant)
-            MapOidcEndpoints(app);
-        }
-        else
-        {
-            // Single-tenant mode: register root-level routes only
-            MapOidcEndpoints(app);
-        }
+        // Register root-level routes (used in single-tenant mode, or as fallback in multi-tenant mode)
+        MapOidcEndpoints(app);
 
         var admin = app.MapGroup("/admin/api").RequireAuthorization("admin").RequireRateLimiting("rl-admin");
 

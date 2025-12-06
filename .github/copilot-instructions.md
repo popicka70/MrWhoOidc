@@ -1,4 +1,4 @@
-﻿# MrWhoOidc – AI Assistant Instructions
+# MrWhoOidc – AI Assistant Instructions
 
 Purpose
 - Make AI coding agents productive quickly in this codebase by capturing architecture, conventions, and workflows actually used here.

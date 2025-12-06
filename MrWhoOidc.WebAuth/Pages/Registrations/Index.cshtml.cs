@@ -2,34 +2,27 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
 
 [AllowAnonymous]
-public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccessor tenantAccessor, IRegistrationService registrationService) : PageModel
+public class IndexModel(IPasswordHasher hasher, IRegistrationService registrationService) : PageModel
 {
-    public List<SelectListItem> ClientOptions { get; private set; } = new();
-
     [BindProperty]
     public RegistrationInput Input { get; set; } = new();
 
     public string? SuccessMessage { get; private set; }
     public string? InfoMessage { get; private set; }
 
-    public async Task OnGetAsync()
+    public void OnGet()
     {
-        await LoadClientsAsync();
+        // No async work needed - client loading removed for security
     }
 
     public async Task<IActionResult> OnPostCreateAsync()
     {
-        await LoadClientsAsync();
         if (!ModelState.IsValid)
         {
             return Page();
@@ -68,14 +61,16 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccesso
             }
 
             // Use the registration service instead of direct DB operations
+            // Note: clientId is always null - client assignment is done post-registration by admins
+            // Auto-approve only when creating a new tenant (user becomes tenant admin)
             var userId = await registrationService.CreateAndMaybeApproveRegistrationAsync(
                 email: Input.Email.Trim(),
                 firstName: string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
                 lastName: string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
-                clientId: Input.ClientId,
+                clientId: null,
                 passwordHash: passwordHash,
                 isExternalIdp: false, // Local registration
-                autoApprove: true, // Auto-approve tenant admin registrations
+                autoApprove: Input.CreateTenant, // Only auto-approve tenant admin registrations
                 tenantSlug: tenantSlug,
                 tenantName: tenantName,
                 tenantDescription: tenantDescription);
@@ -106,22 +101,6 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccesso
         return Page();
     }
 
-    private async Task LoadClientsAsync()
-    {
-        var currentTenant = tenantAccessor.CurrentTenant;
-        if (currentTenant == null)
-        {
-            ClientOptions = new List<SelectListItem>();
-            return;
-        }
-
-        var clients = await db.Clients.AsNoTracking()
-            .Where(c => c.TenantId == currentTenant.TenantId)
-            .Join(db.Realms, c => c.RealmId, r => r.Id, (c, r) => new { c.Id, c.ClientId, RealmName = r.Name })
-            .OrderBy(x => x.ClientId).ToListAsync();
-        ClientOptions = clients.Select(c => new SelectListItem($"{c.ClientId} ({c.RealmName})", c.Id.ToString())).ToList();
-    }
-
     public sealed class RegistrationInput
     {
         [Required, EmailAddress, StringLength(256)]
@@ -130,7 +109,6 @@ public class IndexModel(AuthDbContext db, IPasswordHasher hasher, ITenantAccesso
         public string? FirstName { get; set; }
         [StringLength(100)]
         public string? LastName { get; set; }
-        public Guid? ClientId { get; set; }
         [StringLength(200)]
         [DataType(DataType.Password)]
         public string? Password { get; set; }

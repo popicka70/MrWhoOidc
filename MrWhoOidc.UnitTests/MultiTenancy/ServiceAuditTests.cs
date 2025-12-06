@@ -80,9 +80,7 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "alice",
-            Email = "alice@acme.com",
-            PasswordHash = "hash1",
-            TenantId = _tenant1Id
+            Email = "alice@acme.com",            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
         await _db.SaveChangesAsync();
@@ -120,16 +118,12 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "bob",
-            Email = "bob@acme.com",
-            PasswordHash = "acme_hash",
-            TenantId = _tenant1Id
+            Email = "bob@acme.com",            TenantId = _tenant1Id
         };
         var user2 = new User
         {
             Username = "bob",
-            Email = "bob@contoso.com",
-            PasswordHash = "contoso_hash",
-            TenantId = _tenant2Id
+            Email = "bob@contoso.com",            TenantId = _tenant2Id
         };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
@@ -147,7 +141,6 @@ public class ServiceAuditTests
         var bobInTenant1 = await userService.FindByUsernameAsync("bob");
         Assert.IsNotNull(bobInTenant1);
         Assert.AreEqual(_tenant1Id, bobInTenant1.TenantId);
-        Assert.AreEqual("acme_hash", bobInTenant1.PasswordHash);
 
         // Act & Assert: Tenant 2 context
         _tenantAccessor.SetTenant(new TenantContext 
@@ -160,7 +153,6 @@ public class ServiceAuditTests
         var bobInTenant2 = await userService.FindByUsernameAsync("bob");
         Assert.IsNotNull(bobInTenant2);
         Assert.AreEqual(_tenant2Id, bobInTenant2.TenantId);
-        Assert.AreEqual("contoso_hash", bobInTenant2.PasswordHash);
 
         // Verify they are different users
         Assert.AreNotEqual(bobInTenant1.Id, bobInTenant2.Id, "Users with same username in different tenants should have different IDs");
@@ -174,17 +166,13 @@ public class ServiceAuditTests
         {
             Username = "admin",
             Email = "admin@example.com",
-            NormalizedEmail = "ADMIN@EXAMPLE.COM",
-            PasswordHash = "hash1",
-            TenantId = _tenant1Id
+            NormalizedEmail = "ADMIN@EXAMPLE.COM",            TenantId = _tenant1Id
         };
         var user2 = new User
         {
             Username = "admin",
             Email = "admin@example.com",
-            NormalizedEmail = "ADMIN@EXAMPLE.COM",
-            PasswordHash = "hash2",
-            TenantId = _tenant2Id
+            NormalizedEmail = "ADMIN@EXAMPLE.COM",            TenantId = _tenant2Id
         };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
@@ -230,9 +218,7 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "charlie",
-            Email = "charlie@acme.com",
-            PasswordHash = "hash1",
-            TenantId = _tenant1Id
+            Email = "charlie@acme.com",            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
         await _db.SaveChangesAsync();
@@ -266,8 +252,8 @@ public class ServiceAuditTests
     public async Task RefreshTokenService_CrossTenantAccess_TokensIsolated()
     {
         // Arrange: Create users in both tenants
-        var user1 = new User { Username = "diana", PasswordHash = "hash1", TenantId = _tenant1Id };
-        var user2 = new User { Username = "evan", PasswordHash = "hash2", TenantId = _tenant2Id };
+        var user1 = new User { Username = "diana", TenantId = _tenant1Id };
+        var user2 = new User { Username = "evan", TenantId = _tenant2Id };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 

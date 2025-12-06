@@ -56,8 +56,6 @@ public sealed class TenantSwitchingServiceTests
             Username = "admin-default",
             Email = email,
             NormalizedEmail = normalizedEmail,
-            PasswordHash = "hash",
-            HashAlgorithm = "argon2id",
             CreatedAt = DateTimeOffset.UtcNow
         };
         var tenantBUser = new User
@@ -67,8 +65,6 @@ public sealed class TenantSwitchingServiceTests
             Username = "admin-secondary",
             Email = email,
             NormalizedEmail = normalizedEmail,
-            PasswordHash = "hash",
-            HashAlgorithm = "argon2id",
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -99,7 +95,7 @@ public sealed class TenantSwitchingServiceTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IAuthenticationService>(authenticationStub);
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true, DefaultTenantSlug = tenantA.Slug });
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider(tenantA.Slug, true));
         var provider = services.BuildServiceProvider();
 
         var httpContext = new DefaultHttpContext

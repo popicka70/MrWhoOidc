@@ -1,12 +1,12 @@
-﻿@page "/account/linked-accounts"
+@page "/account/linked-accounts"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Account.LinkedAccountsModel
 @{
     ViewData["Title"] = "Linked Accounts";
     ViewData["ActiveAccountTab"] = "linked";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }

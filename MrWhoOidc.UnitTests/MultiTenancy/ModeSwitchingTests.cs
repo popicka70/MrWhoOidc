@@ -44,15 +44,12 @@ public class ModeSwitchingTests
             options.UseInMemoryDatabase(_databaseName));
 
         // Configure multi-tenancy options
-        var multiTenancyOptions = new MultiTenancyOptions
-        {
-            Enabled = multiTenancyEnabled,
-            DefaultTenantSlug = "default"
-        };
-        services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
+        var multiTenancyStateProvider = new MultiTenancyStateProvider("default", multiTenancyEnabled);
+        services.AddSingleton<IMultiTenancyOptions>(multiTenancyStateProvider);
 
         // Add required services
         services.AddMemoryCache();
+        services.AddLogging();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantService, TenantService>();

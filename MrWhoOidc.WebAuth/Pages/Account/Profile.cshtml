@@ -1,12 +1,12 @@
-﻿@page "/account/profile"
+@page "/account/profile"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Account.ProfileModel
 @{
     ViewData["Title"] = "Profile";
     ViewData["ActiveAccountTab"] = "profile";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }

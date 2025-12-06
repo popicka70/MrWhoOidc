@@ -1,11 +1,11 @@
-﻿@page "/admin/realms/add"
+@page "/admin/realms/add"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Realms.AddModel
 @{
     ViewData["Title"] = "Add realm";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
         ? $"/t/{currentTenant.Slug}"
         : string.Empty;
     var realmsIndexPath = string.IsNullOrEmpty(tenantPrefix) 

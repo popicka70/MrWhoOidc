@@ -10,7 +10,13 @@ using QRCoder;
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
 [Authorize]
-public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration config, ITenantSettingsService settingsService) : PageModel
+public class IndexModel(
+    AuthDbContext db, 
+    ITotpService totp, 
+    IConfiguration config, 
+    ITenantSettingsService settingsService,
+    IUserAccountService userAccountService,
+    ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty]
     public string? Action { get; set; }
@@ -28,12 +34,16 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
     public bool Enabled { get; set; }
     public string? QrPngBase64 { get; set; }
     public string? Message { get; set; }
+    public string? InfoBanner { get; set; }
 
     public async Task OnGetAsync()
     {
-        var user = await GetCurrentUserAsync();
-        if (user is null) { Enabled = false; return; }
-        Enabled = user.TotpEnabled;
+        var account = await GetCurrentUserAccountAsync();
+        if (account is null) { Enabled = false; return; }
+        Enabled = account.TotpEnabled;
+
+        // Show info banner about global MFA
+        InfoBanner = "🔐 MFA settings apply to all your organizations. Once enabled, you'll need to verify your identity when signing in to any organization.";
 
         // If MFA is required and user doesn't have it, show warning
         if (Required && !Enabled)
@@ -44,21 +54,22 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
 
     public async Task<IActionResult> OnPostAsync()
     {
-        var user = await GetCurrentUserAsync();
-        if (user is null) return RedirectToPage("/Login");
+        var account = await GetCurrentUserAccountAsync();
+        if (account is null) return RedirectToPage("/Login");
 
         switch ((Action ?? string.Empty).ToLowerInvariant())
         {
             case "enable":
                 {
-                    if (!user.TotpEnabled)
+                    if (!account.TotpEnabled)
                     {
                         var secret = totp.GenerateSecretBase32();
-                        user.TotpSecret = secret;
-                        await db.SaveChangesAsync();
+                        await userAccountService.EnableMfaAsync(account.Id, secret);
                         Enabled = true;
-                        QrPngBase64 = GenerateQr(secret, user.Username, config["Oidc:Issuer"] ?? Request.Scheme + "://" + Request.Host);
+                        QrPngBase64 = GenerateQr(secret, account.Email ?? account.Username, config["Oidc:Issuer"] ?? Request.Scheme + "://" + Request.Host);
                         Message = "Scan QR and confirm with a code.";
+                        InfoBanner = "🔐 This will enable MFA for all your organizations.";
+                        logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
                     }
                     else
                     {
@@ -69,13 +80,17 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
                 }
             case "confirm":
                 {
-                    if (!user.TotpEnabled && !string.IsNullOrWhiteSpace(user.TotpSecret))
+                    // Reload account to get the pending secret
+                    account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == account.Id);
+                    if (account is null) return RedirectToPage("/Login");
+
+                    if (!account.TotpEnabled && !string.IsNullOrWhiteSpace(account.TotpSecret))
                     {
-                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(user.TotpSecret, VerificationCode!, 6, 30, 1))
+                        if (!string.IsNullOrWhiteSpace(VerificationCode) && totp.VerifyCode(account.TotpSecret, VerificationCode!, 6, 30, 1))
                         {
-                            user.TotpEnabled = true;
-                            await db.SaveChangesAsync();
-                            Message = "TOTP enabled.";
+                            await userAccountService.ConfirmMfaAsync(account.Id);
+                            Message = "✅ TOTP enabled for all your organizations.";
+                            logger.LogInformation("MFA confirmed for UserAccount {AccountId}", account.Id);
 
                             // If this was required enrollment, redirect to TOTP login page
                             if (Required)
@@ -86,9 +101,13 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
                         else
                         {
                             Message = "Invalid code.";
+                            // Regenerate QR for retry
+                            QrPngBase64 = GenerateQr(account.TotpSecret, account.Email ?? account.Username, 
+                                config["Oidc:Issuer"] ?? Request.Scheme + "://" + Request.Host);
                         }
                     }
-                    Enabled = user.TotpEnabled;
+                    Enabled = account.TotpEnabled;
+                    InfoBanner = "🔐 MFA settings apply to all your organizations.";
                     return Page();
                 }
             case "disable":
@@ -99,16 +118,17 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
 
                     if (mfaRequired)
                     {
-                        Enabled = user.TotpEnabled;
+                        Enabled = account.TotpEnabled;
                         Message = "⚠️ Cannot disable MFA: Your organization requires multi-factor authentication.";
+                        InfoBanner = "🔐 MFA settings apply to all your organizations.";
                         return Page();
                     }
 
-                    user.TotpEnabled = false;
-                    user.TotpSecret = null;
-                    await db.SaveChangesAsync();
+                    await userAccountService.DisableMfaAsync(account.Id);
                     Enabled = false;
-                    Message = "TOTP disabled.";
+                    Message = "TOTP disabled for all your organizations.";
+                    InfoBanner = "🔐 MFA settings apply to all your organizations.";
+                    logger.LogInformation("MFA disabled for UserAccount {AccountId}", account.Id);
                     return Page();
                 }
         }
@@ -116,10 +136,19 @@ public class IndexModel(AuthDbContext db, ITotpService totp, IConfiguration conf
         return RedirectToPage("/Mfa/Index");
     }
 
-    async Task<User?> GetCurrentUserAsync()
+    async Task<UserAccount?> GetCurrentUserAccountAsync()
     {
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(sub, out var id) ? await db.Users.FirstOrDefaultAsync(u => u.Id == id) : null;
+        if (!Guid.TryParse(sub, out var userId))
+            return null;
+
+        // Get the per-tenant User first to find the linked UserAccount
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        if (user is null || string.IsNullOrEmpty(user.Email))
+            return null;
+
+        // Find the UserAccount by email
+        return await userAccountService.FindByEmailAsync(user.Email);
     }
 
     string GenerateQr(string secret, string account, string issuer)

@@ -2,12 +2,12 @@
 @using MrWhoOidc.Auth.IdentityProviders
 @using MrWhoOidc.Auth.Persistence
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.EditModel
 @{
     ViewData["Title"] = "Edit Identity Provider";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }

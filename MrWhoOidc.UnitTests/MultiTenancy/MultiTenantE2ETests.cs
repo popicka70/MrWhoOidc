@@ -36,13 +36,12 @@ public class MultiTenantE2ETests
         // Memory cache
         services.AddMemoryCache();
 
+        // Logging
+        services.AddLogging();
+
         // Multi-tenancy options (multi-tenant mode enabled)
-        var multiTenancyOptions = new MultiTenancyOptions
-        {
-            Enabled = true,
-            DefaultTenantSlug = "default"
-        };
-        services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
+        var multiTenancyStateProvider = new MultiTenancyStateProvider("default", true);
+        services.AddSingleton<IMultiTenancyOptions>(multiTenancyStateProvider);
 
         // Tenant resolver
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
@@ -322,8 +321,7 @@ public class MultiTenantE2ETests
             Username = "alice@acme.com",
             Email = "alice@acme.com",
             Name = "Alice",
-            TenantId = _tenant1Id,
-            PasswordHash = "hash"
+            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
 
@@ -388,8 +386,7 @@ public class MultiTenantE2ETests
             Username = "bob@contoso.com",
             Email = "bob@contoso.com",
             Name = "Bob",
-            TenantId = _tenant2Id,
-            PasswordHash = "hash"
+            TenantId = _tenant2Id
         };
         _db.Users.Add(user2);
 

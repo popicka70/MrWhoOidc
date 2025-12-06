@@ -28,13 +28,12 @@ public class TenantResolutionTests
         // Memory cache
         services.AddMemoryCache();
 
+        // Logging
+        services.AddLogging();
+
         // Multi-tenancy options (multi-tenant mode enabled)
-        var multiTenancyOptions = new MultiTenancyOptions
-        {
-            Enabled = true,
-            DefaultTenantSlug = "default"
-        };
-        services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
+        var multiTenancyStateProvider = new MultiTenancyStateProvider("default", true);
+        services.AddSingleton<IMultiTenancyOptions>(multiTenancyStateProvider);
 
         // Tenant resolver
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
@@ -180,13 +179,10 @@ public class TenantResolutionTests
             options.UseInMemoryDatabase(databaseName: $"SingleTenantTestDb_{Guid.NewGuid()}"),
             ServiceLifetime.Singleton);
         services.AddMemoryCache();
+        services.AddLogging();
 
-        var singleTenantOptions = new MultiTenancyOptions
-        {
-            Enabled = false, // Single-tenant mode
-            DefaultTenantSlug = "default"
-        };
-        services.AddSingleton<IMultiTenancyOptions>(singleTenantOptions);
+        var singleTenantStateProvider = new MultiTenancyStateProvider("default", false); // Single-tenant mode
+        services.AddSingleton<IMultiTenancyOptions>(singleTenantStateProvider);
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();
 
         using var provider = services.BuildServiceProvider();

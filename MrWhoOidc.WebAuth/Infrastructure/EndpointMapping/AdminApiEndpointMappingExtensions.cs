@@ -715,6 +715,34 @@ public static class AdminApiEndpointMappingExtensions
                 : Results.Ok(response);
         }).WithName("ClientSecretHealth");
 
+        // Global authentication health endpoint
+        app.MapGet("/health/global-auth", async (AuthDbContext db, CancellationToken ct) =>
+        {
+            // Check UserAccount table is accessible and has accounts
+            var totalAccounts = await db.UserAccounts.AsNoTracking().LongCountAsync(ct);
+            var accountsWithPassword = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.PasswordHash != null && a.PasswordHash != "", ct);
+            var accountsWithMfa = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.TotpEnabled, ct);
+            var lockedAccounts = await db.UserAccounts.AsNoTracking()
+                .LongCountAsync(a => a.LockedOutUntil != null && a.LockedOutUntil > DateTimeOffset.UtcNow, ct);
+
+            // Determine status
+            var status = totalAccounts == 0 ? "degraded" : "healthy";
+
+            return Results.Ok(new
+            {
+                status,
+                totalAccounts,
+                accountsWithPassword,
+                accountsWithMfa,
+                currentlyLockedOut = lockedAccounts,
+                migrationProgress = totalAccounts > 0
+                    ? Math.Round(100.0 * accountsWithPassword / totalAccounts, 2)
+                    : 0.0
+            });
+        }).WithName("GlobalAuthHealth");
+
     // Platform Admin: On-demand tenant seeding (platform-admin only)
     var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
@@ -755,6 +783,82 @@ public static class AdminApiEndpointMappingExtensions
                 adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/Admin/Users"
             });
         }).WithName("SeedTenant");
+
+        // Credential migration endpoints (platform-admin only)
+        platformAdmin.MapGet("/migrate-credentials/status", async (
+            MrWhoOidc.Auth.Services.IPasswordMigrationService migrationService,
+            CancellationToken ct) =>
+        {
+            var status = await migrationService.GetMigrationStatusAsync(ct);
+            return Results.Ok(new
+            {
+                totalAccounts = status.TotalAccounts,
+                migratedAccounts = status.MigratedAccounts,
+                pendingAccounts = status.PendingAccounts,
+                percentComplete = Math.Round(status.PercentComplete, 2)
+            });
+        }).WithName("GetMigrationStatus");
+
+        platformAdmin.MapPost("/migrate-credentials", async (
+            MrWhoOidc.Auth.Services.IPasswordMigrationService migrationService,
+            MigrateBatchRequest? request,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("PasswordMigration");
+            var batchSize = request?.BatchSize ?? 100;
+            if (batchSize < 1 || batchSize > 1000)
+            {
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "BatchSize must be between 1 and 1000");
+            }
+
+            logger.LogInformation("🔄 [Migration] Starting batch migration with size {BatchSize}", batchSize);
+
+            var result = await migrationService.MigrateBatchAsync(batchSize, ct);
+
+            logger.LogInformation(
+                "✅ [Migration] Batch complete: Processed={Processed}, Success={Success}, Failed={Failed}, Skipped={Skipped}, Duration={Duration}ms",
+                result.ProcessedCount, result.SuccessCount, result.FailureCount, result.SkippedCount, result.Duration.TotalMilliseconds);
+
+            return Results.Ok(new
+            {
+                processedCount = result.ProcessedCount,
+                successCount = result.SuccessCount,
+                failureCount = result.FailureCount,
+                skippedCount = result.SkippedCount,
+                durationMs = (int)result.Duration.TotalMilliseconds
+            });
+        }).WithName("MigrateBatch");
+
+        platformAdmin.MapPost("/migrate-credentials/{accountId:guid}", async (
+            Guid accountId,
+            MrWhoOidc.Auth.Services.IPasswordMigrationService migrationService,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("PasswordMigration");
+            logger.LogInformation("🔄 [Migration] Migrating single account {AccountId}", accountId);
+
+            var result = await migrationService.MigrateUserCredentialsAsync(accountId, ct);
+
+            if (!result.Success)
+            {
+                logger.LogWarning("❌ [Migration] Failed for account {AccountId}: {Message}", accountId, result.Message);
+                return Results.Problem(statusCode: 400, title: "Migration failed", detail: result.Message);
+            }
+
+            logger.LogInformation(
+                "✅ [Migration] Account {AccountId} migrated. Skipped={Skipped}, Tenants={Tenants}",
+                accountId, result.Skipped, result.AffectedTenants);
+
+            return Results.Ok(new
+            {
+                success = true,
+                skipped = result.Skipped,
+                affectedTenants = result.AffectedTenants,
+                message = result.Message
+            });
+        }).WithName("MigrateSingleAccount");
     }
 
     /// <summary>
@@ -1079,6 +1183,14 @@ public static class AdminApiEndpointMappingExtensions
         string TenantName,
         string? AdminEmail = null,
         string? AdminPassword = null
+    );
+
+    /// <summary>
+    /// Request to migrate user credentials in batches.
+    /// </summary>
+    public record MigrateBatchRequest(
+        int BatchSize = 100,
+        int Skip = 0
     );
 
     private static void MapTenantIconEndpoints(RouteGroupBuilder admin)

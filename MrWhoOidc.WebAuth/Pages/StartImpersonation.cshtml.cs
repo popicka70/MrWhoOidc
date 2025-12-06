@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
@@ -18,7 +17,7 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class StartImpersonationModel(
     IImpersonationService impersonationService,
     AuthDbContext db,
-    IOptions<MultiTenancyOptions> multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
     {
@@ -51,7 +50,7 @@ public class StartImpersonationModel(
         // Default: redirect to tenant's admin dashboard
         // In multi-tenant mode: /t/{slug}/admin
         // In single-tenant mode: /admin
-        if (multiTenancyOptions.Value.Enabled)
+        if (multiTenancyOptions.Enabled)
         {
             return Redirect($"/t/{tenantSlug}/admin");
         }

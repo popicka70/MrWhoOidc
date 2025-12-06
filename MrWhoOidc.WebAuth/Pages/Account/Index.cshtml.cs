@@ -2,12 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class IndexModel(AuthDbContext db) : PageModel
+public class IndexModel(AuthDbContext db, IUserAccountService userAccountService) : PageModel
 {
     public string Username { get; private set; } = string.Empty;
     public string? Name { get; private set; }
@@ -30,8 +31,18 @@ public class IndexModel(AuthDbContext db) : PageModel
         Name = user.Name;
         Email = user.Email;
         EmailVerified = user.EmailVerified;
-        MfaEnabled = user.TotpEnabled;
         AccountCreatedAt = user.CreatedAt;
+
+        // Get MFA status from UserAccount (global)
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            var account = await userAccountService.FindByEmailAsync(user.Email);
+            if (account != null)
+            {
+                var (enabled, _) = await userAccountService.GetMfaStatusAsync(account.Id);
+                MfaEnabled = enabled;
+            }
+        }
 
         // Count WebAuthn credentials
         WebAuthnCredentialsCount = await db.WebAuthnCredentials

@@ -35,7 +35,7 @@ public sealed class SecurityBoundaryTests
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client1 = new ClientEntity { ClientId = "client1", ClientName = "Client 1", RealmId = realm.Id };
         var client2 = new ClientEntity { ClientId = "client2", ClientName = "Client 2", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "user1", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "user1" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client1);
@@ -75,7 +75,7 @@ public sealed class SecurityBoundaryTests
 
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "client1", ClientName = "Client 1", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "user1", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "user1" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -120,7 +120,7 @@ public sealed class SecurityBoundaryTests
         var role1 = new Role { Id = Guid.NewGuid(), Name = "Admin", RealmId = realm1.Id };
         var role2 = new Role { Id = Guid.NewGuid(), Name = "SuperAdmin", RealmId = realm2.Id };
 
-        var user = new User { Id = Guid.NewGuid(), Username = "user1", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "user1" };
         var client = new ClientEntity { ClientId = "client1", RealmId = realm1.Id };
 
         db.Realms.Add(realm1);
@@ -263,7 +263,7 @@ public sealed class SecurityBoundaryTests
         using var db = CreateDb();
 
         // Setup: Authorization code with PKCE challenge
-        var user = new User { Id = Guid.NewGuid(), Username = "user1", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "user1" };
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "public_client", ClientName = "Public Client", RealmId = realm.Id };
 
@@ -306,7 +306,7 @@ public sealed class SecurityBoundaryTests
         using var db = CreateDb();
 
         // Setup: Two clients, one token for each
-        var user = new User { Id = Guid.NewGuid(), Username = "user1", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "user1" };
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client1 = new ClientEntity { ClientId = "client1", RealmId = realm.Id };
         var client2 = new ClientEntity { ClientId = "client2", RealmId = realm.Id };

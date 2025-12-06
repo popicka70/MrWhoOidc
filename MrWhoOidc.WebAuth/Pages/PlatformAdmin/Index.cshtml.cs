@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Services;
@@ -17,13 +16,13 @@ public class IndexModel : PageModel
     private readonly AuthDbContext _db;
     private readonly ITenantSeedingService _seedingService;
     private readonly ILogger<IndexModel> _logger;
-    private readonly IOptions<MultiTenancyOptions> _multiTenancyOptions;
+    private readonly IMultiTenancyOptions _multiTenancyOptions;
 
     public IndexModel(
         AuthDbContext db,
         ITenantSeedingService seedingService,
         ILogger<IndexModel> logger,
-        IOptions<MultiTenancyOptions> multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions)
     {
         _db = db;
         _seedingService = seedingService;
@@ -38,7 +37,7 @@ public class IndexModel : PageModel
     public int TotalClients { get; set; }
 
     // Multi-tenancy status
-    public bool IsMultiTenantMode => _multiTenancyOptions.Value.Enabled;
+    public bool IsMultiTenantMode => _multiTenancyOptions.Enabled;
 
     // Recent tenants
     public List<TenantSummary> RecentTenants { get; set; } = new();
@@ -71,7 +70,7 @@ public class IndexModel : PageModel
     public async Task<IActionResult> OnPostSeedTenantAsync(string tenantSlug, string tenantName, string? adminEmail, string? adminPassword)
     {
         // Guard: Seeding is only allowed in multi-tenant mode
-        if (!_multiTenancyOptions.Value.Enabled)
+        if (!_multiTenancyOptions.Enabled)
         {
             _logger.LogWarning("Attempt to seed tenant in single-tenant mode by user {User}", User.Identity?.Name);
             throw new InvalidOperationException("Tenant seeding is only available in multi-tenant mode.");

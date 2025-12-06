@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 [Authorize]
-public class LinkedAccountsModel(AuthDbContext db) : PageModel
+public class LinkedAccountsModel(AuthDbContext db, IUserAccountService userAccountService) : PageModel
 {
     public List<LinkedAccountViewModel> LinkedAccounts { get; private set; } = new();
     public string? Message { get; private set; }
@@ -50,8 +51,8 @@ public class LinkedAccountsModel(AuthDbContext db) : PageModel
             return RedirectToPage();
         }
 
-        // Safety check: ensure user has a password or other external identities
-        var hasPassword = !string.IsNullOrWhiteSpace(user.PasswordHash);
+        // Safety check: ensure user has a password (on global UserAccount) or other external identities
+        var hasPassword = await HasGlobalPasswordAsync(user);
         var otherIdentitiesCount = await db.ExternalIdentities
             .CountAsync(ei => ei.UserId == user.Id && ei.Id != accountId);
 
@@ -76,6 +77,21 @@ public class LinkedAccountsModel(AuthDbContext db) : PageModel
 
         return await db.Users
             .FirstOrDefaultAsync(u => u.Id == userId);
+    }
+
+    private async Task<bool> HasGlobalPasswordAsync(User user)
+    {
+        // Check global UserAccount for password
+        UserAccount? account = null;
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            account = await userAccountService.FindByEmailAsync(user.Email);
+        }
+        if (account is null)
+        {
+            account = await userAccountService.FindByUsernameAsync(user.Username);
+        }
+        return account is not null && !string.IsNullOrWhiteSpace(account.PasswordHash);
     }
 }
 

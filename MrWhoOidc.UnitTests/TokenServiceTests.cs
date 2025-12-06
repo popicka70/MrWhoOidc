@@ -45,7 +45,7 @@ public sealed class TokenServiceTests
     public async Task ExchangeAuthorizationCode_Succeeds_JwtAccess_IncludesAtHash()
     {
         using var db = CreateDb();
-        var user = new User { Username = "u", PasswordHash = "x" };
+        var user = new User { Username = "u" };
         var client = new ClientEntity { ClientId = "c1" };
         db.Users.Add(user);
         db.Clients.Add(client);
@@ -85,7 +85,7 @@ public sealed class TokenServiceTests
     public async Task ExchangeAuthorizationCode_Succeeds_OpaqueAccessToken_Persisted()
     {
         using var db = CreateDb();
-        var user = new User { Username = "u", PasswordHash = "x" };
+        var user = new User { Username = "u" };
         var client = new ClientEntity { ClientId = "c1" };
         db.Users.Add(user);
         db.Clients.Add(client);
@@ -121,7 +121,7 @@ public sealed class TokenServiceTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var user = new User { Username = "u", PasswordHash = "x" };
+        var user = new User { Username = "u" };
         var client = new ClientEntity { ClientId = "c1" };
         db.Users.Add(user);
         db.Clients.Add(client);

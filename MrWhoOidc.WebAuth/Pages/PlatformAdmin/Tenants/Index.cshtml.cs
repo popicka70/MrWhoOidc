@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Security.Admin;
@@ -12,7 +11,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 [RequireDefaultTenantContext]
 public class IndexModel(
     AuthDbContext db,
-    IOptions<MultiTenancyOptions> multiTenancyOptions) : PageModel
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     public sealed record TenantRow(
         Guid Id,
@@ -29,14 +28,14 @@ public class IndexModel(
 
     public IReadOnlyList<TenantRow> TenantRows { get; private set; } = Array.Empty<TenantRow>();
 
-    public string CurrentMode => multiTenancyOptions.Value.Enabled ? "MultiTenant" : "SingleTenant";
+    public string CurrentMode => multiTenancyOptions.Enabled ? "MultiTenant" : "SingleTenant";
 
-    public string? DefaultTenantSlug => multiTenancyOptions.Value.DefaultTenantSlug;
+    public string? DefaultTenantSlug => multiTenancyOptions.DefaultTenantSlug;
 
     public async Task OnGetAsync()
     {
         // Redirect to dashboard if multi-tenancy is disabled
-        if (!multiTenancyOptions.Value.Enabled)
+        if (!multiTenancyOptions.Enabled)
         {
             Response.Redirect("/PlatformAdmin/Index");
             return;

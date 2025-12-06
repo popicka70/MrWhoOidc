@@ -101,8 +101,6 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             var seededAlice = new User
             {
                 Username = "alice",
-                PasswordHash = hasher.Hash("P@ssw0rd!"),
-                HashAlgorithm = "argon2id",
                 Name = "Alice Adams",
                 Email = "alice@example.com",
                 EmailVerified = true,
@@ -111,6 +109,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             };
             db.Users.Add(seededAlice);
             await _accountProvisioner.EnsureAsync(seededAlice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
+            
+            // Set password on the UserAccount (global credentials)
+            var aliceAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == "alice", ct).ConfigureAwait(false);
+            if (aliceAccount != null)
+            {
+                aliceAccount.PasswordHash = hasher.Hash("P@ssw0rd!");
+                aliceAccount.HashAlgorithm = "argon2id";
+            }
         }
 
         // Seed default admin user (idempotent)
@@ -125,8 +131,6 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 Email = AdminEmail,
                 EmailVerified = true,
                 EmailVerifiedAt = DateTimeOffset.UtcNow,
-                PasswordHash = hasher.Hash(AdminEasyPassword),
-                HashAlgorithm = "argon2id",
                 TenantId = tenantId
             };
             db.Users.Add(adminUser);
@@ -135,6 +139,14 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         if (adminUser is not null)
         {
             await _accountProvisioner.EnsureAsync(adminUser, tenantId, adminRealm.Id, isTenantAdmin: true, ct).ConfigureAwait(false);
+            
+            // Set password on the UserAccount (global credentials)
+            var adminAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == AdminUsername, ct).ConfigureAwait(false);
+            if (adminAccount != null && string.IsNullOrEmpty(adminAccount.PasswordHash))
+            {
+                adminAccount.PasswordHash = hasher.Hash(AdminEasyPassword);
+                adminAccount.HashAlgorithm = "argon2id";
+            }
         }
 
         // Ensure blazor-web client exists as a confidential client with an initial constant secret

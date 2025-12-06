@@ -289,9 +289,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                 TenantId = tenantId,
                 Username = usernameCandidate,
                 Email = emailForUser,
-                Name = name ?? (emailForUser ?? baseUsername),
-                PasswordHash = string.Empty,
-                HashAlgorithm = "external"
+                Name = name ?? (emailForUser ?? baseUsername)
             };
             _db.Users.Add(user);
             await _db.SaveChangesAsync(cancellationToken);

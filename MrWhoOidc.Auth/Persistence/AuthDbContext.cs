@@ -62,6 +62,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<QrLoginSession> QrLoginSessions => Set<QrLoginSession>();
     // New: Impersonation audit logs
     public DbSet<ImpersonationAuditLog> ImpersonationAuditLogs => Set<ImpersonationAuditLog>();
+    // New: Password reset tokens (global, tied to UserAccount)
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     // Licensing
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
@@ -205,7 +207,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.HasIndex(x => x.Username).IsUnique();
             b.Property(x => x.Email).HasMaxLength(256);
             b.Property(x => x.NormalizedEmail).HasMaxLength(256);
-            b.HasIndex(x => x.NormalizedEmail);
+            // Unique index on NormalizedEmail (filtered to exclude nulls)
+            b.HasIndex(x => x.NormalizedEmail)
+                .IsUnique()
+                .HasFilter("\"NormalizedEmail\" IS NOT NULL");
             b.Property(x => x.Name).HasMaxLength(200);
             b.Property(x => x.PasswordHash).IsRequired();
             b.Property(x => x.PasswordSalt).HasMaxLength(128);
@@ -214,6 +219,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.SettingsJson).HasMaxLength(4000);
             b.Property(x => x.TotpSecret).HasMaxLength(200);
             b.Property(x => x.LockedOutUntil);
+            // New global auth fields
+            b.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
+            b.Property(x => x.LastFailedLoginAt);
+            b.Property(x => x.PasswordUpdatedAt);
             b.HasMany(x => x.TenantMemberships)
                 .WithOne(x => x.UserAccount)
                 .HasForeignKey(x => x.UserAccountId)
@@ -956,7 +965,69 @@ public class UserAccount
     public bool TotpEnabled { get; set; }
     public DateTimeOffset? LockedOutUntil { get; set; }
 
+    /// <summary>
+    /// Counter for failed login attempts (global across all tenants).
+    /// </summary>
+    public int FailedLoginAttempts { get; set; }
+
+    /// <summary>
+    /// Timestamp of the last failed login attempt.
+    /// </summary>
+    public DateTimeOffset? LastFailedLoginAt { get; set; }
+
+    /// <summary>
+    /// Timestamp when the password was last changed.
+    /// </summary>
+    public DateTimeOffset? PasswordUpdatedAt { get; set; }
+
     public ICollection<UserTenantMembership> TenantMemberships { get; set; } = new List<UserTenantMembership>();
+}
+
+/// <summary>
+/// Password reset token for global UserAccount password reset.
+/// Tokens are single-use and expire after a configurable period.
+/// </summary>
+public class PasswordResetToken
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    /// <summary>
+    /// The UserAccount this reset token belongs to.
+    /// </summary>
+    public Guid UserAccountId { get; set; }
+    public UserAccount UserAccount { get; set; } = null!;
+
+    /// <summary>
+    /// The hashed token value (SHA256 of the raw token sent to user).
+    /// </summary>
+    [MaxLength(128)]
+    public string TokenHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When this token was created.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// When this token expires.
+    /// </summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Whether this token has been used.
+    /// </summary>
+    public bool IsUsed { get; set; }
+
+    /// <summary>
+    /// When this token was used (if applicable).
+    /// </summary>
+    public DateTimeOffset? UsedAt { get; set; }
+
+    /// <summary>
+    /// IP address from which the reset was requested.
+    /// </summary>
+    [MaxLength(50)]
+    public string? RequestedFromIp { get; set; }
 }
 
 public class UserTenantMembership
@@ -1000,9 +1071,10 @@ public class User
 
     [MaxLength(200)]
     public string Username { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty; // Argon2id
-    public string? PasswordSalt { get; set; }
-    public string HashAlgorithm { get; set; } = "argon2id";
+    
+    // Password fields REMOVED - use UserAccount.PasswordHash for authentication
+    // These columns will be dropped in the next migration
+    
     [MaxLength(256)]
     public string? Email { get; set; }
     [MaxLength(256)]

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.MultiTenancy;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Services;
@@ -53,13 +54,15 @@ internal sealed class RegistrationService : IRegistrationService
     private readonly ILogger<RegistrationService> _logger;
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly IUserAccountProvisioner _accountProvisioner;
+    private readonly ITenantAccessor _tenantAccessor;
 
-    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow, IUserAccountProvisioner accountProvisioner)
+    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow, IUserAccountProvisioner accountProvisioner, ITenantAccessor tenantAccessor)
     {
         _db = db;
         _logger = logger;
         _emailWorkflow = emailWorkflow;
         _accountProvisioner = accountProvisioner;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
@@ -160,6 +163,24 @@ internal sealed class RegistrationService : IRegistrationService
             _logger.LogInformation("Created new tenant {TenantSlug} (ID: {TenantId}) for registration", tenantSlug, tenant.Id);
         }
 
+        // Determine the tenant ID for this registration
+        Guid registrationTenantId;
+        if (tenantId.HasValue)
+        {
+            // New tenant was created
+            registrationTenantId = tenantId.Value;
+        }
+        else
+        {
+            // Use current tenant from URL path context
+            var currentTenant = _tenantAccessor.CurrentTenant;
+            if (currentTenant == null)
+            {
+                throw new ValidationException("Cannot determine tenant for registration. Please access the registration page via a tenant-specific URL.");
+            }
+            registrationTenantId = currentTenant.TenantId;
+        }
+
         var registration = new Registration
         {
             Email = email,
@@ -174,7 +195,7 @@ internal sealed class RegistrationService : IRegistrationService
             TenantSlug = tenantSlug,
             TenantName = tenantName,
             TenantDescription = tenantDescription,
-            TenantId = tenantId ?? Guid.Empty // Will be set properly during approval if not tenant admin
+            TenantId = registrationTenantId
         };
 
         _db.Set<Registration>().Add(registration);
@@ -240,11 +261,20 @@ internal sealed class RegistrationService : IRegistrationService
             // User is tenant admin of newly created tenant
             userTenantId = registration.TenantId;
         }
+        else if (registration.TenantId != Guid.Empty)
+        {
+            // Regular registration with tenant ID already set
+            userTenantId = registration.TenantId;
+        }
         else
         {
-            // TODO: For regular registrations, determine tenant context from middleware or default
-            // For now, assume single tenant or handle via middleware
-            throw new NotImplementedException("Regular user registration without tenant context not yet implemented for multi-tenant mode.");
+            // Fallback: use current tenant from context (shouldn't happen with fixed CreateAndMaybeApproveRegistrationAsync)
+            var currentTenant = _tenantAccessor.CurrentTenant;
+            if (currentTenant == null)
+            {
+                throw new InvalidOperationException("Cannot determine tenant for user creation. Registration has no tenant context.");
+            }
+            userTenantId = currentTenant.TenantId;
         }
 
         // Create user
@@ -254,9 +284,7 @@ internal sealed class RegistrationService : IRegistrationService
             Username = normalized,
             Email = emailForUser,
             EmailVerified = false,
-            Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
-            HashAlgorithm = "argon2id",
-            PasswordHash = string.IsNullOrEmpty(registration.PasswordHash) ? string.Empty : registration.PasswordHash
+            Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
         };
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);
