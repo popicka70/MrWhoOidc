@@ -228,10 +228,10 @@ public class SelectTenantModel : PageModel
         }
 
         // Convert memberships to VerifiedTenantUser format for ticket store
-        // Note: We use the membership Id as a substitute for the per-tenant UserId
-        // since the ticket only verifies TenantId access, not the specific UserId
+        // The ticket stores TenantId access verification; UserId is a placeholder (not used)
+        // Login page looks up the actual User by email in the target tenant
         var verifiedUsers = authResult.Memberships
-            .Select(m => new VerifiedTenantUser(m.TenantId, m.Id))
+            .Select(m => new VerifiedTenantUser(m.TenantId, m.UserAccountId))
             .ToList();
 
         var ticket = _ticketStore.CreateTicket(Email!, verifiedUsers);

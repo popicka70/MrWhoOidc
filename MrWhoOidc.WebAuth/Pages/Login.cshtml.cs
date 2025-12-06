@@ -288,10 +288,11 @@ public class LoginModel(
             return null;
         }
 
-        var user = await users.FindByIdAcrossTenantsAsync(verifiedUser.UserId);
+        // Look up user by email in current tenant (ticket verified access to this tenant)
+        var user = await users.FindByUsernameOrEmailAsync(Email!);
         if (user is null)
         {
-            logger.LogWarning("Ticket {TicketId} referenced missing user {UserId}", TicketId, verifiedUser.UserId);
+            logger.LogWarning("Ticket {TicketId} verified but no user found for email in tenant {TenantId}", TicketId, tenant.TenantId);
             ModelState.AddModelError(string.Empty, "Your account could not be found. Please sign in again.");
             TicketId = null;
             ticketStore.RemoveTicket(ticket.TicketId);
