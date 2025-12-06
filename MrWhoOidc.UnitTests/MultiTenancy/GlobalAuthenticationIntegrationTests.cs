@@ -82,7 +82,7 @@ public class GlobalAuthenticationIntegrationTests
         await _db.SaveChangesAsync();
 
         // Create services
-        _userAccountService = new UserAccountService(_db);
+        _userAccountService = new UserAccountService(_db, NullLogger<UserAccountService>.Instance);
         var metrics = new OidcMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
         _globalAuthService = new GlobalAuthenticationService(_userAccountService, hasher, metrics, logger);

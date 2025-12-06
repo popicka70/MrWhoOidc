@@ -284,9 +284,7 @@ internal sealed class RegistrationService : IRegistrationService
             Username = normalized,
             Email = emailForUser,
             EmailVerified = false,
-            Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
-            HashAlgorithm = "argon2id",
-            PasswordHash = string.IsNullOrEmpty(registration.PasswordHash) ? string.Empty : registration.PasswordHash
+            Name = string.Join(' ', new[] { registration.FirstName, registration.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
         };
         _db.Users.Add(user);
         await _db.SaveChangesAsync(cancellationToken);

@@ -52,9 +52,10 @@ internal sealed class UserAccountProvisioner(
             {
                 Id = user.Id,
                 Username = user.Username,
-                PasswordHash = user.PasswordHash,
-                PasswordSalt = user.PasswordSalt,
-                HashAlgorithm = user.HashAlgorithm,
+                // Password is managed globally via UserAccountService.UpdatePasswordAsync
+                // Not copied from per-tenant User (which no longer has password fields)
+                PasswordHash = string.Empty,
+                HashAlgorithm = "argon2id",
                 Email = user.Email,
                 NormalizedEmail = normalizedEmail,
                 EmailVerified = user.EmailVerified,
@@ -65,15 +66,12 @@ internal sealed class UserAccountProvisioner(
                 TotpEnabled = user.TotpEnabled
             };
             dbContext.UserAccounts.Add(account);
-            logger.LogDebug("Created UserAccount for legacy user {UserId}", user.Id);
+            logger.LogDebug("Created UserAccount for user {UserId}", user.Id);
         }
         else
         {
-            // Keep account in sync with latest profile info.
+            // Keep account in sync with latest profile info (but NOT password - that's managed globally)
             account.Username = user.Username;
-            account.PasswordHash = user.PasswordHash;
-            account.PasswordSalt = user.PasswordSalt;
-            account.HashAlgorithm = user.HashAlgorithm;
             account.Email = user.Email;
             account.NormalizedEmail = normalizedEmail;
             account.EmailVerified = user.EmailVerified;

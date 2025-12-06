@@ -73,9 +73,7 @@ public class AddModel(
             Username = username,
             Email = email,
             Name = Input.Name,
-            EmailVerified = false,
-            HashAlgorithm = "argon2id",
-            PasswordHash = string.Empty
+            EmailVerified = false
         };
 
         db.Users.Add(user);

@@ -17,18 +17,18 @@ public class SelectTenantModel : PageModel
 
     private readonly ILogger<SelectTenantModel> _logger;
     private readonly ITenantSwitchingService _tenantSwitchingService;
-    private readonly ITenantCredentialVerifier _credentialVerifier;
+    private readonly IGlobalAuthenticationService _globalAuthService;
     private readonly ITenantCredentialTicketStore _ticketStore;
 
     public SelectTenantModel(
         ILogger<SelectTenantModel> logger,
         ITenantSwitchingService tenantSwitchingService,
-        ITenantCredentialVerifier credentialVerifier,
+        IGlobalAuthenticationService globalAuthService,
         ITenantCredentialTicketStore ticketStore)
     {
         _logger = logger;
         _tenantSwitchingService = tenantSwitchingService;
-        _credentialVerifier = credentialVerifier;
+        _globalAuthService = globalAuthService;
         _ticketStore = ticketStore;
     }
 
@@ -214,17 +214,27 @@ public class SelectTenantModel : PageModel
             return Page();
         }
 
-        var verificationResult = await _credentialVerifier.VerifyAsync(Email!, Password, HttpContext.RequestAborted);
+        // Use global authentication service instead of per-tenant credential verifier
+        var authResult = await _globalAuthService.AuthenticateAsync(Email!, Password, HttpContext.RequestAborted);
 
-        if (!verificationResult.Success)
+        if (!authResult.Succeeded)
         {
+            _logger.LogWarning("Global authentication failed for email hash {EmailHash}: {Reason}", 
+                HashEmail(Email!), authResult.FailureReason);
             ErrorMessage = "Invalid email or password.";
             RequiresVerification = true;
             Password = string.Empty;
             return Page();
         }
 
-        var ticket = _ticketStore.CreateTicket(Email!, verificationResult.VerifiedUsers);
+        // Convert memberships to VerifiedTenantUser format for ticket store
+        // Note: We use the membership Id as a substitute for the per-tenant UserId
+        // since the ticket only verifies TenantId access, not the specific UserId
+        var verifiedUsers = authResult.Memberships
+            .Select(m => new VerifiedTenantUser(m.TenantId, m.Id))
+            .ToList();
+
+        var ticket = _ticketStore.CreateTicket(Email!, verifiedUsers);
         TicketId = ticket.TicketId;
         TempData["TenantTicketId"] = TicketId;
         TempData.Keep("TenantTicketId");

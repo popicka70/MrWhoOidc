@@ -325,8 +325,7 @@ public class MultiTenantE2ETests
             Username = "alice@acme.com",
             Email = "alice@acme.com",
             Name = "Alice",
-            TenantId = _tenant1Id,
-            PasswordHash = "hash"
+            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
 
@@ -391,8 +390,7 @@ public class MultiTenantE2ETests
             Username = "bob@contoso.com",
             Email = "bob@contoso.com",
             Name = "Bob",
-            TenantId = _tenant2Id,
-            PasswordHash = "hash"
+            TenantId = _tenant2Id
         };
         _db.Users.Add(user2);
 

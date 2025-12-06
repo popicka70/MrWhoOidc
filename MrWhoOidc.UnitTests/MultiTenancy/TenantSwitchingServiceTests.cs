@@ -56,8 +56,6 @@ public sealed class TenantSwitchingServiceTests
             Username = "admin-default",
             Email = email,
             NormalizedEmail = normalizedEmail,
-            PasswordHash = "hash",
-            HashAlgorithm = "argon2id",
             CreatedAt = DateTimeOffset.UtcNow
         };
         var tenantBUser = new User
@@ -67,8 +65,6 @@ public sealed class TenantSwitchingServiceTests
             Username = "admin-secondary",
             Email = email,
             NormalizedEmail = normalizedEmail,
-            PasswordHash = "hash",
-            HashAlgorithm = "argon2id",
             CreatedAt = DateTimeOffset.UtcNow
         };
 

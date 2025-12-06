@@ -116,8 +116,7 @@ public sealed class UserInfoHandlerTests
             Id = Guid.NewGuid(),
             Username = "testuser",
             Email = "test@example.com",
-            Name = "Test User",
-            PasswordHash = "hash"
+            Name = "Test User"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -148,8 +147,7 @@ public sealed class UserInfoHandlerTests
         {
             Id = userId,
             Username = "testuser",
-            Email = "test@example.com",
-            PasswordHash = "hash"
+            Email = "test@example.com"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -180,8 +178,7 @@ public sealed class UserInfoHandlerTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            PasswordHash = "hash"
+            Username = "testuser"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -326,8 +323,7 @@ public sealed class UserInfoHandlerTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            PasswordHash = "hash"
+            Username = "testuser"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -367,8 +363,7 @@ public sealed class UserInfoHandlerTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            PasswordHash = "hash"
+            Username = "testuser"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -412,8 +407,7 @@ public sealed class UserInfoHandlerTests
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
-            Name = "Test User",
-            PasswordHash = "hash"
+            Name = "Test User"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -450,8 +444,7 @@ public sealed class UserInfoHandlerTests
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
-            Name = "Test User",
-            PasswordHash = "hash"
+            Name = "Test User"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -489,8 +482,7 @@ public sealed class UserInfoHandlerTests
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
-            Name = "Test User",
-            PasswordHash = "hash"
+            Name = "Test User"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -540,8 +532,7 @@ public sealed class UserInfoHandlerTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            PasswordHash = "hash"
+            Username = "testuser"
         };
         var role = new Role { Id = roleId, Name = "admin", RealmId = realmId };
         var assignment = new UserRoleAssignment
@@ -594,8 +585,7 @@ public sealed class UserInfoHandlerTests
             Id = userId,
             Username = "testuser",
             Email = "test@example.com",
-            Name = "Test User",
-            PasswordHash = "hash"
+            Name = "Test User"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -631,8 +621,7 @@ public sealed class UserInfoHandlerTests
         var user = new User
         {
             Id = userId,
-            Username = "testuser",
-            PasswordHash = "hash"
+            Username = "testuser"
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

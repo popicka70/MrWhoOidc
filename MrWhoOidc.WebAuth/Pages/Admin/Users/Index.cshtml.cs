@@ -17,6 +17,7 @@ public class IndexModel(
     IUserService userService,
     IPasswordHasher passwordHasher,
     IUserAccountService userAccountService,
+    IUserAccountProvisioner accountProvisioner,
     OidcMetrics metrics,
     ILogger<IndexModel> logger,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
@@ -134,18 +135,18 @@ public class IndexModel(
 
         if (userAccount is null)
         {
-            // Fallback: User not linked to UserAccount, reset per-tenant password (legacy)
-            logger.LogWarning("⚠️ [Admin Reset] User {UserId} not linked to UserAccount, falling back to per-tenant reset",
+            // User not linked to UserAccount - provision one now
+            logger.LogWarning("⚠️ [Admin Reset] User {UserId} not linked to UserAccount, provisioning now",
                 user.Id);
             
-            var tempPassword = GenerateTemporaryPassword();
-            user.PasswordHash = passwordHasher.Hash(tempPassword);
-            user.HashAlgorithm = "argon2id";
-            await db.SaveChangesAsync();
-            await userService.InvalidateUserCacheAsync(user.Id, user.Username, user.TenantId);
-
-            TempData["Success"] = $"Password reset for user '<strong>{user.Username}</strong>'.<br/>Temporary password: <code class='user-select-all'>{tempPassword}</code><br/><small class='text-warning'><i class='bi bi-exclamation-triangle'></i> Please save this password and share it securely with the user.</small>";
-            return TenantAwareRedirect("/Admin/Users");
+            await accountProvisioner.EnsureAsync(user, user.TenantId, null, false, HttpContext.RequestAborted);
+            userAccount = await userAccountService.FindByEmailAsync(user.Email!);
+            
+            if (userAccount is null)
+            {
+                TempData["Error"] = $"Failed to provision global account for user '{user.Username}'.";
+                return TenantAwareRedirect("/Admin/Users");
+            }
         }
 
         // Get affected tenant count for audit logging

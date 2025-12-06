@@ -126,8 +126,7 @@ public sealed class LicenseAnalyticsServiceTests
             {
                 TenantId = tenantId,
                 Username = $"user{i}",
-                PasswordHash = "hash"
-            });
+                });
         }
 
         await db.SaveChangesAsync();

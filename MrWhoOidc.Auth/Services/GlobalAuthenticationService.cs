@@ -46,6 +46,9 @@ internal sealed class GlobalAuthenticationService(
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.UserNotFound);
         }
 
+        logger.LogDebug("🔍 [GlobalAuth] Found UserAccount: Id={AccountId}, Username={Username}, Email={Email}, HasPassword={HasPassword}",
+            account.Id, account.Username, account.Email ?? "(null)", !string.IsNullOrEmpty(account.PasswordHash));
+
         // Check if account is locked out
         if (await IsLockedOutAsync(account.Id, ct).ConfigureAwait(false))
         {
@@ -57,7 +60,13 @@ internal sealed class GlobalAuthenticationService(
         }
 
         // Verify password
+        var hashPrefix = account.PasswordHash?.Length > 20 ? account.PasswordHash[..20] : account.PasswordHash ?? "(none)";
+        logger.LogDebug("🔍 [GlobalAuth] Verifying password for account {AccountId}, stored hash prefix: '{HashPrefix}...'",
+            account.Id, hashPrefix);
+        
         var isValid = passwordHasher.Verify(password, account.PasswordHash);
+        logger.LogDebug("🔍 [GlobalAuth] Password verification result: {IsValid}", isValid);
+        
         if (!isValid)
         {
             logger.LogDebug("Authentication failed: invalid password for account {AccountId}", account.Id);

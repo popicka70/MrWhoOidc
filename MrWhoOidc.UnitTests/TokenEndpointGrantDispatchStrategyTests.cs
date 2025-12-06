@@ -100,7 +100,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                         RealmId = realm.Id,
                         TenantId = DefaultTenantId
                     });
-                    db.Users.Add(new User { Username = "alice", PasswordHash = "p", TenantId = DefaultTenantId });
+                    db.Users.Add(new User { Username = "alice", TenantId = DefaultTenantId });
                     await db.SaveChangesAsync();
 
                     app.UseRouting();

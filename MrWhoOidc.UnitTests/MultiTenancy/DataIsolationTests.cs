@@ -106,16 +106,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         
         var consent1 = new Consent
@@ -168,16 +166,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
@@ -231,8 +227,7 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         _db.Users.Add(user1);
         
         // Grant consent ONLY in Tenant 1
@@ -278,16 +273,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         
         var token1 = new Token
@@ -344,16 +337,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
@@ -397,8 +388,7 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         _db.Users.Add(user1);
         
         var token = new Token
@@ -445,16 +435,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         
         var code1 = new AuthorizationCode
@@ -511,16 +499,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
@@ -574,8 +560,7 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         _db.Users.Add(user1);
         
         var code = new AuthorizationCode
@@ -623,24 +608,21 @@ public class DataIsolationTests
             Email = "alice@tenant1.com", 
             NormalizedEmail = "ALICE@TENANT1.COM",
             Username = "alice",
-            PasswordHash = "hash1"
-        };
+            };
         var user1B = new User 
         { 
             TenantId = tenant1.Id, 
             Email = "bob@tenant1.com", 
             NormalizedEmail = "BOB@TENANT1.COM",
             Username = "bob",
-            PasswordHash = "hash2"
-        };
+            };
         var user2A = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "alice@tenant2.com", 
             NormalizedEmail = "ALICE@TENANT2.COM",
             Username = "alice", // Same username, different tenant
-            PasswordHash = "hash3"
-        };
+            };
         _db.Users.AddRange(user1A, user1B, user2A);
         await _db.SaveChangesAsync();
 
@@ -670,16 +652,14 @@ public class DataIsolationTests
             Email = "admin@tenant1.com", 
             NormalizedEmail = "ADMIN@TENANT1.COM",
             Username = "admin",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "admin@tenant2.com", 
             NormalizedEmail = "ADMIN@TENANT2.COM",
             Username = "admin", // Same username
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         
         // Act & Assert: Should not throw (unique constraint is (TenantId, Username))
@@ -711,8 +691,7 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         _db.Users.Add(user1);
         
         // Add consent, token, and auth code for Tenant 1
@@ -778,16 +757,14 @@ public class DataIsolationTests
             Email = "user1@tenant1.com", 
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            PasswordHash = "hash1"
-        };
+            };
         var user2 = new User 
         { 
             TenantId = tenant2.Id, 
             Email = "user2@tenant2.com", 
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            PasswordHash = "hash2"
-        };
+            };
         _db.Users.AddRange(user1, user2);
         
         var consent1 = new Consent { TenantId = tenant1.Id, UserId = user1.Id, ClientId = "client1", ScopesJson = """["openid"]""" };

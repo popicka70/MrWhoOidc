@@ -1071,9 +1071,10 @@ public class User
 
     [MaxLength(200)]
     public string Username { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty; // Argon2id
-    public string? PasswordSalt { get; set; }
-    public string HashAlgorithm { get; set; } = "argon2id";
+    
+    // Password fields REMOVED - use UserAccount.PasswordHash for authentication
+    // These columns will be dropped in the next migration
+    
     [MaxLength(256)]
     public string? Email { get; set; }
     [MaxLength(256)]

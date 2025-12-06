@@ -113,9 +113,7 @@ public class IndexModel(
             Email = emailForUser,
             NormalizedEmail = normalized,
             EmailVerified = false,
-            Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
-            HashAlgorithm = "argon2id",
-            PasswordHash = string.IsNullOrEmpty(reg.PasswordHash) ? string.Empty : reg.PasswordHash
+            Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();

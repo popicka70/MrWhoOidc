@@ -545,7 +545,7 @@ public sealed class AuthorizeHandlerTests
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = "[\"https://app/callback\"]"
         };
-        var user = new User { Id = userId, Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = userId, Username = "testuser" };
         var assignment = new UserClientAssignment
         {
             UserId = userId,
@@ -612,7 +612,7 @@ public sealed class AuthorizeHandlerTests
             RequireConsent = false,
             AllowedLoginRedirectUrisJson = "[\"https://app/callback\"]"
         };
-        var user = new User { Id = userId, Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = userId, Username = "testuser" };
         var assignment = new UserClientAssignment
         {
             UserId = userId,

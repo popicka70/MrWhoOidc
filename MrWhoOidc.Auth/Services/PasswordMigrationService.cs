@@ -6,30 +6,29 @@ namespace MrWhoOidc.Auth.Services;
 /// <summary>
 /// Service for migrating per-tenant User credentials to global UserAccount.
 /// </summary>
+/// <remarks>
+/// <b>OBSOLETE</b>: This service is no longer needed as per-tenant password fields have been removed from User entity.
+/// All password management is now handled via UserAccount.PasswordHash and UserAccountService.
+/// This service is retained for backward compatibility but does not perform any actual migration.
+/// </remarks>
+[Obsolete("Per-tenant password fields have been removed. Password is now managed globally via UserAccount.")]
 public interface IPasswordMigrationService
 {
     /// <summary>
     /// Migrates credentials from per-tenant User(s) to a UserAccount.
-    /// Uses the most recently created User's password.
     /// </summary>
-    /// <param name="userAccountId">The UserAccount to migrate credentials to</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Migration result with success/failure details</returns>
+    /// <remarks>No longer performs any migration as per-tenant passwords have been removed.</remarks>
     Task<MigrationResult> MigrateUserCredentialsAsync(Guid userAccountId, CancellationToken ct = default);
 
     /// <summary>
     /// Gets the overall migration status across all UserAccounts.
     /// </summary>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Status with counts of migrated/pending accounts</returns>
     Task<MigrationStatus> GetMigrationStatusAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Batch migrates all pending UserAccounts.
     /// </summary>
-    /// <param name="batchSize">Number of accounts to process per batch</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Batch result with processed/success/failure counts</returns>
+    /// <remarks>No longer performs any migration as per-tenant passwords have been removed.</remarks>
     Task<BatchMigrationResult> MigrateBatchAsync(int batchSize = 100, CancellationToken ct = default);
 }
 
@@ -79,122 +78,46 @@ public sealed record BatchMigrationResult
 /// <summary>
 /// Implementation of password migration from per-tenant User to global UserAccount.
 /// </summary>
+/// <remarks>
+/// <b>OBSOLETE</b>: Per-tenant password fields have been removed from User entity.
+/// This service now reports all accounts as migrated since passwords are managed globally.
+/// </remarks>
+[Obsolete("Per-tenant password fields have been removed. Password is now managed globally via UserAccount.")]
 public sealed class PasswordMigrationService(
     AuthDbContext dbContext) : IPasswordMigrationService
 {
-    public async Task<MigrationResult> MigrateUserCredentialsAsync(Guid userAccountId, CancellationToken ct = default)
+    public Task<MigrationResult> MigrateUserCredentialsAsync(Guid userAccountId, CancellationToken ct = default)
     {
-        var account = await dbContext.UserAccounts.FindAsync([userAccountId], ct);
-        if (account is null)
-        {
-            return MigrationResult.Failed($"UserAccount {userAccountId} not found");
-        }
-
-        // Skip if account already has a password
-        if (!string.IsNullOrEmpty(account.PasswordHash))
-        {
-            return MigrationResult.SkippedWithMessage("Account already has password");
-        }
-
-        // Find all linked tenants
-        var memberships = await dbContext.UserTenantMemberships
-            .Where(m => m.UserAccountId == userAccountId)
-            .ToListAsync(ct);
-
-        if (memberships.Count == 0)
-        {
-            return MigrationResult.SkippedWithMessage("No linked users found to migrate from");
-        }
-
-        // Find per-tenant Users that match this account by email
-        // Select the most recently created one (as proxy for most recent password)
-        var normalizedEmail = account.NormalizedEmail;
-        var tenantIds = memberships.Select(m => m.TenantId).ToList();
-
-        var mostRecentUser = await dbContext.Users
-            .Where(u => tenantIds.Contains(u.TenantId) &&
-                       (u.NormalizedEmail == normalizedEmail || u.Username == account.Username))
-            .OrderByDescending(u => u.CreatedAt)
-            .FirstOrDefaultAsync(ct);
-
-        if (mostRecentUser is null)
-        {
-            return MigrationResult.SkippedWithMessage("No linked users found to migrate from");
-        }
-
-        // Migrate password
-        account.PasswordHash = mostRecentUser.PasswordHash;
-        account.PasswordSalt = mostRecentUser.PasswordSalt;
-        account.HashAlgorithm = mostRecentUser.HashAlgorithm;
-        account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
-
-        // Migrate MFA if not already set and source has it
-        if (!account.TotpEnabled && mostRecentUser.TotpEnabled)
-        {
-            account.TotpEnabled = mostRecentUser.TotpEnabled;
-            account.TotpSecret = mostRecentUser.TotpSecret;
-        }
-
-        await dbContext.SaveChangesAsync(ct);
-
-        return MigrationResult.Succeeded(memberships.Count);
+        // Migration is complete - per-tenant passwords no longer exist
+        return Task.FromResult(MigrationResult.SkippedWithMessage("Migration complete - per-tenant passwords have been removed"));
     }
 
     public async Task<MigrationStatus> GetMigrationStatusAsync(CancellationToken ct = default)
     {
+        // All accounts are considered "migrated" as there's nothing to migrate from
         var total = await dbContext.UserAccounts.CountAsync(ct);
-        var migrated = await dbContext.UserAccounts
+        var withPassword = await dbContext.UserAccounts
             .Where(a => a.PasswordHash != null && a.PasswordHash != string.Empty)
             .CountAsync(ct);
 
         return new MigrationStatus
         {
             TotalAccounts = total,
-            MigratedAccounts = migrated,
-            PendingAccounts = total - migrated
+            MigratedAccounts = total, // All are "migrated" since per-tenant passwords are gone
+            PendingAccounts = 0
         };
     }
 
-    public async Task<BatchMigrationResult> MigrateBatchAsync(int batchSize = 100, CancellationToken ct = default)
+    public Task<BatchMigrationResult> MigrateBatchAsync(int batchSize = 100, CancellationToken ct = default)
     {
-        var startTime = DateTimeOffset.UtcNow;
-        var processed = 0;
-        var success = 0;
-        var failed = 0;
-        var skipped = 0;
-
-        // Get accounts without passwords
-        var pendingAccountIds = await dbContext.UserAccounts
-            .Where(a => a.PasswordHash == null || a.PasswordHash == string.Empty)
-            .Select(a => a.Id)
-            .Take(batchSize)
-            .ToListAsync(ct);
-
-        foreach (var accountId in pendingAccountIds)
+        // Nothing to migrate - per-tenant passwords have been removed
+        return Task.FromResult(new BatchMigrationResult
         {
-            processed++;
-            var result = await MigrateUserCredentialsAsync(accountId, ct);
-
-            if (result.Success)
-            {
-                if (result.Skipped)
-                    skipped++;
-                else
-                    success++;
-            }
-            else
-            {
-                failed++;
-            }
-        }
-
-        return new BatchMigrationResult
-        {
-            ProcessedCount = processed,
-            SuccessCount = success,
-            FailureCount = failed,
-            SkippedCount = skipped,
-            Duration = DateTimeOffset.UtcNow - startTime
-        };
+            ProcessedCount = 0,
+            SuccessCount = 0,
+            FailureCount = 0,
+            SkippedCount = 0,
+            Duration = TimeSpan.Zero
+        });
     }
 }

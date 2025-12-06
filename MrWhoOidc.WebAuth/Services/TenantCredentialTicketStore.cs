@@ -1,9 +1,13 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Services;
+
+/// <summary>
+/// Represents a verified tenant-user pair for credential ticket tracking.
+/// </summary>
+public sealed record VerifiedTenantUser(Guid TenantId, Guid UserId);
 
 public interface ITenantCredentialTicketStore
 {

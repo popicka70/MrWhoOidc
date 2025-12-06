@@ -81,9 +81,12 @@ public class IndexModel(
 
         // Update password on UserAccount (global credential)
         var newHash = hasher.Hash(Input.NewPassword!);
+        logger.LogInformation("🔄 [Password Change] Updating password for account {AccountId}, Username={Username}, Email={Email}", 
+            account.Id, account.Username, account.Email ?? "(null)");
+        
         await userAccountService.UpdatePasswordAsync(account.Id, newHash, null, "argon2id");
         
-        logger.LogInformation("✅ [Password Change] Password updated for account {AccountId}", account.Id);
+        logger.LogInformation("✅ [Password Change] Password updated successfully for account {AccountId}", account.Id);
 
         SuccessMessage = "Password updated successfully. This change applies to all your tenants.";
         ModelState.Clear();
@@ -98,20 +101,50 @@ public class IndexModel(
     async Task<UserAccount?> GetCurrentUserAccountAsync()
     {
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (!Guid.TryParse(sub, out var userId)) return null;
+        logger.LogDebug("🔍 [Password] Looking up UserAccount. Sub claim: {Sub}", sub ?? "(null)");
+        
+        if (!Guid.TryParse(sub, out var userId)) 
+        {
+            logger.LogWarning("⚠️ [Password] Invalid sub claim format: {Sub}", sub);
+            return null;
+        }
         
         // Get the per-tenant User to find email/username
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        if (user is null) return null;
+        if (user is null) 
+        {
+            logger.LogWarning("⚠️ [Password] Per-tenant User not found for ID: {UserId}", userId);
+            return null;
+        }
+        
+        logger.LogDebug("🔍 [Password] Found per-tenant User: Username={Username}, Email={Email}", 
+            user.Username, user.Email ?? "(null)");
         
         // Find the global UserAccount by email or username
         if (!string.IsNullOrEmpty(user.Email))
         {
             var account = await userAccountService.FindByEmailAsync(user.Email);
-            if (account is not null) return account;
+            if (account is not null) 
+            {
+                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, Username={Username}", 
+                    account.Id, account.Username);
+                return account;
+            }
+            logger.LogDebug("🔍 [Password] No UserAccount found by email: {Email}", user.Email);
         }
         
-        return await userAccountService.FindByUsernameAsync(user.Username);
+        var accountByUsername = await userAccountService.FindByUsernameAsync(user.Username);
+        if (accountByUsername is not null)
+        {
+            logger.LogDebug("🔍 [Password] Found UserAccount by username: AccountId={AccountId}", accountByUsername.Id);
+        }
+        else
+        {
+            logger.LogWarning("⚠️ [Password] No UserAccount found for User: Username={Username}, Email={Email}", 
+                user.Username, user.Email ?? "(null)");
+        }
+        
+        return accountByUsername;
     }
 
     public sealed class ChangePasswordInput

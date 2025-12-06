@@ -113,7 +113,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create opaque access token in database
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -155,7 +155,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create EXPIRED opaque token
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -196,7 +196,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create REVOKED opaque token
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -238,7 +238,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create refresh token
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -294,7 +294,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create DPoP-bound token
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);
@@ -336,7 +336,7 @@ public sealed class IntrospectionServiceTests
         // Setup: Create token with specific scopes
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm" };
         var client = new ClientEntity { ClientId = "test-client", RealmId = realm.Id };
-        var user = new User { Id = Guid.NewGuid(), Username = "testuser", PasswordHash = "hash" };
+        var user = new User { Id = Guid.NewGuid(), Username = "testuser" };
 
         db.Realms.Add(realm);
         db.Clients.Add(client);

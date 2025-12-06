@@ -26,7 +26,6 @@ public sealed class EmailNormalizationTests
         db.Users.Add(new User
         {
             Username = "u1",
-            PasswordHash = "hash",
             Email = " Mixed.Case@Example.COM "
         });
 
@@ -41,7 +40,7 @@ public sealed class EmailNormalizationTests
     public async Task SaveChanges_NormalizesAlternativeEmails()
     {
         using var db = CreateDb();
-        var user = new User { Username = "u2", PasswordHash = "hash" };
+        var user = new User { Username = "u2" };
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
@@ -83,7 +82,6 @@ public sealed class EmailNormalizationTests
         db.Users.Add(new User
         {
             Username = "u3",
-            PasswordHash = "hash",
             Email = "not-an-email"
         });
 
@@ -97,7 +95,6 @@ public sealed class EmailNormalizationTests
         var user = new User
         {
             Username = "u4",
-            PasswordHash = "hash",
             Email = "Lookup@Example.COM",
             TenantId = DefaultTenantId
         };
@@ -113,7 +110,7 @@ public sealed class EmailNormalizationTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var service = new UserService(db, new NoopHasher(), tenantAccessor, new TestHybridCache());
+        var service = new UserService(db, tenantAccessor, new TestHybridCache());
 
         var byPrimary = await service.FindByUsernameOrEmailAsync("lookup@example.com");
         Assert.IsNotNull(byPrimary);
@@ -122,12 +119,6 @@ public sealed class EmailNormalizationTests
         var byAlt = await service.FindByUsernameOrEmailAsync("alias@example.com");
         Assert.IsNotNull(byAlt);
         Assert.AreEqual(user.Id, byAlt!.Id);
-    }
-
-    private sealed class NoopHasher : IPasswordHasher
-    {
-        public string Hash(string password) => password;
-        public bool Verify(string password, string hash) => password == hash;
     }
 }
 

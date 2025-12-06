@@ -130,8 +130,6 @@ public class TenantSeedingService : ITenantSeedingService
                 NormalizedEmail = adminEmail.ToUpperInvariant(),
                 EmailVerified = true,
                 EmailVerifiedAt = DateTimeOffset.UtcNow,
-                PasswordHash = _passwordHasher.Hash(adminPassword),
-                HashAlgorithm = "argon2id",
                 TenantId = tenant.Id,
                 CreatedAt = DateTimeOffset.UtcNow
             };

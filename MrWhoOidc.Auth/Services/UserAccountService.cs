@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -69,7 +70,7 @@ public interface IUserAccountService
     Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default);
 }
 
-internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccountService
+internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAccountService> logger) : IUserAccountService
 {
     public async Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await dbContext.UserAccounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct).ConfigureAwait(false);
@@ -119,11 +120,17 @@ internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccount
         string algorithm,
         CancellationToken ct = default)
     {
+        logger.LogInformation("🔄 [UpdatePasswordAsync] Starting for account {AccountId}", accountId);
+        
         var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
         if (account is null)
         {
+            logger.LogError("❌ [UpdatePasswordAsync] Account {AccountId} not found!", accountId);
             throw new InvalidOperationException($"UserAccount {accountId} not found.");
         }
+
+        var oldHashPrefix = account.PasswordHash?.Length > 20 ? account.PasswordHash[..20] : account.PasswordHash ?? "(none)";
+        logger.LogInformation("🔄 [UpdatePasswordAsync] Found account {AccountId}, old hash prefix: '{OldHash}...'", accountId, oldHashPrefix);
 
         account.PasswordHash = newPasswordHash;
         account.PasswordSalt = salt;
@@ -134,7 +141,11 @@ internal sealed class UserAccountService(AuthDbContext dbContext) : IUserAccount
         account.LastFailedLoginAt = null;
         account.LockedOutUntil = null;
 
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        var newHashPrefix = newPasswordHash.Length > 20 ? newPasswordHash[..20] : newPasswordHash;
+        logger.LogInformation("🔄 [UpdatePasswordAsync] About to SaveChanges - new hash prefix: '{NewHash}...'", newHashPrefix);
+        
+        var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger.LogInformation("✅ [UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes", changes);
     }
 
     public async Task<IReadOnlyList<UserTenantMembership>> GetActiveMembershipsAsync(
