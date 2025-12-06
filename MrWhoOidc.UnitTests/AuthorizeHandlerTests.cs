@@ -96,7 +96,7 @@ public sealed class AuthorizeHandlerTests
         services.AddOptions();
 
         // Register mock multi-tenancy services required by issuer builder
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = false, DefaultTenantSlug = "default" });
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider("default", false));
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
 

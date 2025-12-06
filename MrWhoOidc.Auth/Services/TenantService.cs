@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Services;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -14,13 +15,26 @@ public interface ITenantService
     Task InvalidateTenantCacheAsync(Guid tenantId, string slug, CancellationToken ct = default);
     Task<bool> CanProvisionTenantAsync(int additionalCount = 1, CancellationToken ct = default);
     Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, CancellationToken ct = default);
+    
+    /// <summary>
+    /// Checks if the system is running in multi-tenant mode (based on license).
+    /// </summary>
+    bool IsMultiTenantMode { get; }
 }
 
-internal sealed class TenantService(AuthDbContext db, HybridCache cache, ILimitService limitService) : ITenantService
+internal sealed class TenantService(
+    AuthDbContext db, 
+    HybridCache cache, 
+    ILimitService limitService,
+    IMultiTenancyOptions multiTenancyOptions) : ITenantService
 {
     private readonly AuthDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
     private readonly HybridCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     private readonly ILimitService _limitService = limitService ?? throw new ArgumentNullException(nameof(limitService));
+    private readonly IMultiTenancyOptions _multiTenancyOptions = multiTenancyOptions ?? throw new ArgumentNullException(nameof(multiTenancyOptions));
+
+    /// <inheritdoc />
+    public bool IsMultiTenantMode => _multiTenancyOptions.Enabled;
 
     public async Task<Tenant?> FindBySlugAsync(string slug, CancellationToken ct = default)
     {
@@ -86,6 +100,12 @@ internal sealed class TenantService(AuthDbContext db, HybridCache cache, ILimitS
 
     public async Task<bool> CanProvisionTenantAsync(int additionalCount = 1, CancellationToken ct = default)
     {
+        // Multi-tenancy must be enabled by license to provision additional tenants
+        if (!IsMultiTenantMode)
+        {
+            return false;
+        }
+
         if (additionalCount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(additionalCount), additionalCount, "Additional tenant count must be positive.");
@@ -103,6 +123,12 @@ internal sealed class TenantService(AuthDbContext db, HybridCache cache, ILimitS
 
     public async Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, CancellationToken ct = default)
     {
+        // Multi-tenancy must be enabled by license to create additional tenants
+        if (!IsMultiTenantMode)
+        {
+            throw new InvalidOperationException("Cannot create tenants in single-tenant mode. A multi-tenant license is required.");
+        }
+
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Tenant name is required.", nameof(name));

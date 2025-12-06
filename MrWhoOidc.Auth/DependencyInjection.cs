@@ -17,15 +17,19 @@ public static class AuthServiceCollectionExtensions
 {
     public static IServiceCollection AddMrWhoOidcAuthCore(this IServiceCollection services, IConfiguration? configuration = null)
     {
-        // Multi-tenancy support (if configuration provided)
+        // Multi-tenancy support
+        // Note: Multi-tenancy Enabled state is controlled by license, not configuration.
+        // Configuration only provides DefaultTenantSlug.
         if (configuration != null)
         {
             services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
             
-            // Register state provider as singleton, initialized with config values as fallback/initial state
+            // Register state provider as singleton, always starting with Enabled=false.
+            // The MultiTenancyStateInitializer will update this from the license at startup.
             services.AddSingleton<MultiTenancyStateProvider>(sp => {
                 var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value;
-                return new MultiTenancyStateProvider(options.DefaultTenantSlug, options.Enabled);
+                // Always start with Enabled=false; license will set the real value
+                return new MultiTenancyStateProvider(options.DefaultTenantSlug, initialEnabled: false);
             });
             
             services.AddSingleton<IMultiTenancyStateProvider>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
@@ -37,7 +41,7 @@ public static class AuthServiceCollectionExtensions
         else
         {
             // Default: single-tenant mode for tests
-            var provider = new MultiTenancyStateProvider("default", false);
+            var provider = new MultiTenancyStateProvider("default", initialEnabled: false);
             services.AddSingleton<IMultiTenancyStateProvider>(provider);
             services.AddSingleton<IMultiTenancyOptions>(provider);
         }

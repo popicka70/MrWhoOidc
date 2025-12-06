@@ -95,7 +95,7 @@ public sealed class TenantSwitchingServiceTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IAuthenticationService>(authenticationStub);
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true, DefaultTenantSlug = tenantA.Slug });
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider(tenantA.Slug, true));
         var provider = services.BuildServiceProvider();
 
         var httpContext = new DefaultHttpContext

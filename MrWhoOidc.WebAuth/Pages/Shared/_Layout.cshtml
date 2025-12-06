@@ -1,4 +1,4 @@
-﻿@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+﻿@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.WebAuth.Services.ITenantSwitchingService TenantSwitchingService
 @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
@@ -37,7 +37,7 @@
         var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false;
         // Get tenant context from middleware (set by TenantResolutionMiddleware)
         var currentTenant = TenantAccessor.CurrentTenant;
-        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
             ? $"/t/{currentTenant.Slug}" 
             : "";
 
@@ -47,9 +47,9 @@
             resolvedTenantSlug = TenantSwitchingService.GetPreferredTenantSlug(Context);
         }
 
-        var isDefaultTenantContext = !MultiTenancyOptions.Value.Enabled ||
+        var isDefaultTenantContext = !MultiTenancyOptions.Enabled ||
             (!string.IsNullOrEmpty(resolvedTenantSlug) &&
-             string.Equals(resolvedTenantSlug, MultiTenancyOptions.Value.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase));
+             string.Equals(resolvedTenantSlug, MultiTenancyOptions.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase));
         
         // Load user's accessible tenants for tenant switcher
         var userTenants = new List<MrWhoOidc.WebAuth.Services.TenantAccessInfo>();
@@ -230,7 +230,7 @@
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
                                     <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
-                                    @if (MultiTenancyOptions.Value.Enabled)
+                                    @if (MultiTenancyOptions.Enabled)
                                     {
                                         <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
                                     }
@@ -265,7 +265,7 @@
                                     <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
                                     
                                     @* Branding - Only show in multi-tenant mode *@
-                                    @if (MultiTenancyOptions.Value.Enabled)
+                                    @if (MultiTenancyOptions.Enabled)
                                     {
                                         <a class="list-group-item list-group-item-action" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
                                         <a class="list-group-item list-group-item-action" asp-page="/admin/settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>

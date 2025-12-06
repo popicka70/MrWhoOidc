@@ -1,18 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MrWhoOidc.Auth.MultiTenancy;
-using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Pages.Account;
 
 public class AccessDeniedModel : PageModel
 {
     private readonly ITenantAccessor _tenantAccessor;
-    private readonly IOptions<MultiTenancyOptions> _multiTenancyOptions;
+    private readonly IMultiTenancyOptions _multiTenancyOptions;
 
     public AccessDeniedModel(
         ITenantAccessor tenantAccessor,
-        IOptions<MultiTenancyOptions> multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions)
     {
         _tenantAccessor = tenantAccessor;
         _multiTenancyOptions = multiTenancyOptions;
@@ -32,7 +31,7 @@ public class AccessDeniedModel : PageModel
 
         // Build tenant-aware URLs
         var currentTenant = _tenantAccessor.CurrentTenant;
-        var isMultiTenant = _multiTenancyOptions.Value.Enabled && currentTenant != null;
+        var isMultiTenant = _multiTenancyOptions.Enabled && currentTenant != null;
 
         if (isMultiTenant)
         {

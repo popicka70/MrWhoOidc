@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -22,7 +21,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 [RequireDefaultTenantContext]
 public partial class CreateModel(
     AuthDbContext db,
-    IOptions<MultiTenancyOptions> multiTenancyOptions,
+    IMultiTenancyOptions multiTenancyOptions,
     IHttpContextAccessor httpContextAccessor,
     IUserService userService,
     IUserAccountProvisioner userAccountProvisioner,
@@ -72,18 +71,31 @@ public partial class CreateModel(
         public string? BillingPlan { get; set; }
     }
 
-    public void OnGet()
+    public IActionResult OnGet()
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         CaptureCurrentUserDisplay();
         // Set defaults
         Input.Status = TenantStatus.Active;
         Input.MaxUsers = 10000;
         Input.MaxClients = 100;
         Input.BillingPlan = "Free";
+        return Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         CaptureCurrentUserDisplay();
         if (!ModelState.IsValid)
         {
@@ -166,7 +178,7 @@ public partial class CreateModel(
                     Slug = Input.Slug,
                     Name = Input.Name,
                     Description = Input.Description,
-                    IssuerUri = multiTenancyOptions.Value.Enabled
+                    IssuerUri = multiTenancyOptions.Enabled
                         ? $"{baseUrl}/t/{Input.Slug}"
                         : baseUrl,
                     Status = Input.Status,

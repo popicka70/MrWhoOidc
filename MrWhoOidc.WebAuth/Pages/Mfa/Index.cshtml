@@ -1,12 +1,12 @@
-﻿@page "/mfa"
+@page "/mfa"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Mfa.IndexModel
 @{
     ViewData["Title"] = "Security";
     ViewData["ActiveAccountTab"] = "security";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Value.Enabled 
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }

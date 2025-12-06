@@ -40,12 +40,8 @@ public class MultiTenantE2ETests
         services.AddLogging();
 
         // Multi-tenancy options (multi-tenant mode enabled)
-        var multiTenancyOptions = new MultiTenancyOptions
-        {
-            Enabled = true,
-            DefaultTenantSlug = "default"
-        };
-        services.AddSingleton<IMultiTenancyOptions>(multiTenancyOptions);
+        var multiTenancyStateProvider = new MultiTenancyStateProvider("default", true);
+        services.AddSingleton<IMultiTenancyOptions>(multiTenancyStateProvider);
 
         // Tenant resolver
         services.AddSingleton<ITenantResolver, ModeAwareTenantResolver>();

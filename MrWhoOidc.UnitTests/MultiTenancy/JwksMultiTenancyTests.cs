@@ -32,11 +32,7 @@ public class JwksMultiTenancyTests
         services.AddMemoryCache();
         services.AddLogging();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
-        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions
-        {
-            Enabled = true,
-            DefaultTenantSlug = "default"
-        });
+        services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider("default", true));
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
 
         // KeyStore

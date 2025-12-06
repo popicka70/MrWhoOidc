@@ -1,11 +1,11 @@
 @page "/admin/users/edit/{id:guid}"
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
-@inject Microsoft.Extensions.Options.IOptions<MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions> MultiTenancyOptions
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Users.EditModel
 @{
     ViewData["Title"] = "Edit user";
     var currentTenant = TenantAccessor.CurrentTenant;
-    var tenantPrefix = currentTenant is not null && MultiTenancyOptions.Value.Enabled
+    var tenantPrefix = currentTenant is not null && MultiTenancyOptions.Enabled
         ? $"/t/{currentTenant.Slug}"
         : string.Empty;
     var usersIndexPath = string.IsNullOrEmpty(tenantPrefix)

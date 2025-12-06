@@ -25,7 +25,7 @@ public sealed class AutoSeedMiddleware
         AuthDbContext db,
         ISeeder seeder,
         ITenantAccessor tenantAccessor,
-        Microsoft.Extensions.Options.IOptions<MultiTenancyOptions> multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions)
     {
         // Fast path: if already seeded, skip
         if (_seeded)
@@ -50,9 +50,9 @@ public sealed class AutoSeedMiddleware
                 if (needsSeeding)
                 {
                     // Create default tenant first (synchronously for simplicity in lock)
-                    var defaultSlug = multiTenancyOptions.Value.DefaultTenantSlug ?? "default";
+                    var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
                     var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-                    var issuerUri = multiTenancyOptions.Value.Enabled
+                    var issuerUri = multiTenancyOptions.Enabled
                         ? $"{baseUrl}/t/{defaultSlug}"
                         : baseUrl;
 

@@ -216,8 +216,8 @@ using (var scope = app.Services.CreateScope())
         if (needsSeeding)
         {
             logger.LogInformation("Database is empty, seeding default tenant...");
-            var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>();
-            var defaultSlug = multiTenancyOptions.Value.DefaultTenantSlug ?? "default";
+            var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
+            var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
             
             // Create default tenant
             var defaultTenant = new Tenant
@@ -248,7 +248,7 @@ using (var scope = app.Services.CreateScope())
                 Slug = defaultSlug,
                 Name = defaultTenant.Name,
                 IssuerUri = defaultTenant.IssuerUri,
-                IsMultiTenantMode = multiTenancyOptions.Value.Enabled
+                IsMultiTenantMode = multiTenancyOptions.Enabled
             };
             
             tenantAccessor.SetTenant(tenantContext);

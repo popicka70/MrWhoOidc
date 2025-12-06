@@ -12,7 +12,10 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
 [Authorize(Policy = "platform-admin")]
 [RequireDefaultTenantContext]
-public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageModel
+public class EditModel(
+    AuthDbContext db, 
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
     [BindProperty]
     public TenantInput Input { get; set; } = new();
@@ -100,6 +103,12 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
 
     public async Task<IActionResult> OnGetAsync(Guid id)
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         var tenant = await db.Tenants.FindAsync(id);
         if (tenant == null)
         {
@@ -112,6 +121,12 @@ public class EditModel(AuthDbContext db, ITenantAccessor tenantAccessor) : PageM
 
     public async Task<IActionResult> OnPostAsync()
     {
+        // Multi-tenancy must be enabled by license
+        if (!multiTenancyOptions.Enabled)
+        {
+            return RedirectToPage("/PlatformAdmin/Index");
+        }
+
         if (!ModelState.IsValid)
         {
             await LoadCountsAsync(Input.Id);
