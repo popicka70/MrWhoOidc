@@ -28,6 +28,9 @@ public class TenantResolutionTests
         // Memory cache
         services.AddMemoryCache();
 
+        // Logging
+        services.AddLogging();
+
         // Multi-tenancy options (multi-tenant mode enabled)
         var multiTenancyOptions = new MultiTenancyOptions
         {
@@ -180,6 +183,7 @@ public class TenantResolutionTests
             options.UseInMemoryDatabase(databaseName: $"SingleTenantTestDb_{Guid.NewGuid()}"),
             ServiceLifetime.Singleton);
         services.AddMemoryCache();
+        services.AddLogging();
 
         var singleTenantOptions = new MultiTenancyOptions
         {

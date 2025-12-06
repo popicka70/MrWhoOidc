@@ -45,11 +45,17 @@ public class TenantSwitchingService(
 
     public async Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user)
     {
+        logger.LogDebug("🔍 [GetUserTenants] START - Resolving tenants for user");
+        
         var resolved = await userAccountResolver.ResolveAsync(user);
         if (resolved is null)
         {
+            logger.LogWarning("🔍 [GetUserTenants] User account could not be resolved");
             return new List<TenantAccessInfo>();
         }
+
+        logger.LogDebug("🔍 [GetUserTenants] Resolved: UserId={UserId}, UserAccountId={UserAccountId}, Email={Email}", 
+            resolved.Value.UserId, resolved.Value.UserAccountId, resolved.Value.NormalizedEmail);
 
         var normalizedEmail = resolved.Value.NormalizedEmail;
 
@@ -147,12 +153,15 @@ public class TenantSwitchingService(
 
     public async Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId)
     {
+        logger.LogInformation("🔀 [SwitchTenant] START - Switching to tenant {TenantId}", tenantId);
+        
         if (httpContext is null)
         {
             throw new ArgumentNullException(nameof(httpContext));
         }
 
         httpContext.Session.SetString(TenantSessionKeys.PreferredTenantId, tenantId.ToString());
+        logger.LogDebug("🔀 [SwitchTenant] Set session PreferredTenantId={TenantId}", tenantId);
 
         var tenantSlug = await db.Tenants.AsNoTracking()
             .Where(t => t.Id == tenantId)
@@ -162,13 +171,16 @@ public class TenantSwitchingService(
         if (!string.IsNullOrEmpty(tenantSlug))
         {
             httpContext.Session.SetString(TenantSessionKeys.PreferredTenantSlug, tenantSlug);
+            logger.LogDebug("🔀 [SwitchTenant] Set session PreferredTenantSlug={TenantSlug}", tenantSlug);
         }
         else
         {
             httpContext.Session.Remove(TenantSessionKeys.PreferredTenantSlug);
+            logger.LogWarning("🔀 [SwitchTenant] Tenant {TenantId} not found in database - cleared slug from session", tenantId);
         }
 
         await ReissueAuthenticationAsync(httpContext, tenantId);
+        logger.LogInformation("🔀 [SwitchTenant] COMPLETE - Authentication reissued for tenant {TenantId}", tenantId);
     }
 
     public Guid? GetPreferredTenantId(HttpContext httpContext)
@@ -224,22 +236,30 @@ public class TenantSwitchingService(
 
     private async Task ReissueAuthenticationAsync(HttpContext httpContext, Guid tenantId)
     {
+        logger.LogDebug("🔑 [ReissueAuth] START - Reissuing auth for tenant {TenantId}", tenantId);
+        
         if (!(httpContext.User?.Identity?.IsAuthenticated ?? false))
         {
+            logger.LogWarning("🔑 [ReissueAuth] User not authenticated - skipping");
             return;
         }
 
         var tenantInfos = await GetUserTenantsAsync(httpContext.User);
+        logger.LogDebug("🔑 [ReissueAuth] Found {Count} accessible tenants", tenantInfos.Count);
+        
         var targetTenant = tenantInfos.FirstOrDefault(t => t.TenantId == tenantId);
         if (targetTenant is null)
         {
-            logger.LogWarning("Tenant switch requested for tenant {TenantId} but user does not have access", tenantId);
+            logger.LogWarning("🔑 [ReissueAuth] Tenant switch requested for tenant {TenantId} but user does not have access", tenantId);
             return;
         }
 
+        logger.LogDebug("🔑 [ReissueAuth] Target tenant: {TenantName}, TenantUserId={TenantUserId}", 
+            targetTenant.TenantName, targetTenant.TenantUserId);
+
         if (targetTenant.TenantUserId == Guid.Empty)
         {
-            logger.LogWarning("No tenant-specific user id resolved for tenant {TenantId}", tenantId);
+            logger.LogWarning("🔑 [ReissueAuth] No tenant-specific user id resolved for tenant {TenantId} - TenantUserId is empty!", tenantId);
             return;
         }
 
@@ -248,9 +268,12 @@ public class TenantSwitchingService(
 
         if (tenantUser is null)
         {
-            logger.LogWarning("Tenant-specific user {UserId} not found for tenant {TenantId}", targetTenant.TenantUserId, tenantId);
+            logger.LogWarning("🔑 [ReissueAuth] Tenant-specific user {UserId} not found in Users table for tenant {TenantId}", targetTenant.TenantUserId, tenantId);
             return;
         }
+
+        logger.LogDebug("🔑 [ReissueAuth] Found tenant user: Username={Username}, Email={Email}, TenantId={UserTenantId}", 
+            tenantUser.Username, tenantUser.Email, tenantUser.TenantId);
 
         var resolution = await userAccountResolver.ResolveAsync(httpContext.User, httpContext.RequestAborted);
         var accountId = resolution?.UserAccountId ?? resolution?.UserId;
@@ -298,7 +321,8 @@ public class TenantSwitchingService(
         var principal = new ClaimsPrincipal(identity);
 
         await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, props);
-        logger.LogInformation("User switched to tenant {TenantId} with subject {UserId}", tenantId, tenantUser.Id);
+        logger.LogInformation("🔑 [ReissueAuth] SUCCESS - User signed in with new identity. Subject={Subject}, TenantId={TenantId}, Claims={ClaimCount}", 
+            tenantUser.Id, tenantId, claims.Count);
     }
 
     private sealed record UserTenantRow(Guid UserId, Guid TenantId, string TenantName, string TenantSlug, string IssuerUri);

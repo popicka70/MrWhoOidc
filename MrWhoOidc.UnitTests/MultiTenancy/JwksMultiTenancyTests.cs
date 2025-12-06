@@ -30,6 +30,7 @@ public class JwksMultiTenancyTests
 
         // Multi-tenancy services
         services.AddMemoryCache();
+        services.AddLogging();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions
         {

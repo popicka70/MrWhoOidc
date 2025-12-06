@@ -36,6 +36,9 @@ public class MultiTenantE2ETests
         // Memory cache
         services.AddMemoryCache();
 
+        // Logging
+        services.AddLogging();
+
         // Multi-tenancy options (multi-tenant mode enabled)
         var multiTenancyOptions = new MultiTenancyOptions
         {

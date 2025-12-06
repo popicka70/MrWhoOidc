@@ -37,7 +37,7 @@ public class PlatformLicenseModel : PageModel
 
     [BindProperty]
     [Required(ErrorMessage = "Deployment mode is required")]
-    public string DeploymentMode { get; set; } = "multi-tenant";
+    public string DeploymentMode { get; set; } = "multi_tenant";
 
     [BindProperty]
     [Required(ErrorMessage = "Organization name is required")]
@@ -85,13 +85,13 @@ public class PlatformLicenseModel : PageModel
     public IReadOnlyDictionary<string, IReadOnlyList<string>> TierFeatureMap => _tierFeatureMap;
     public string TierFeatureMapJson => JsonSerializer.Serialize(_tierFeatureMap);
 
-    public bool IsMultiTenant => string.Equals(DeploymentMode, "multi-tenant", StringComparison.OrdinalIgnoreCase);
+    public bool IsMultiTenant => string.Equals(DeploymentMode, "multi_tenant", StringComparison.OrdinalIgnoreCase);
 
     public void OnGet()
     {
         NotBefore = DateTime.UtcNow.Date;
         ExpiresAt = DateTime.UtcNow.Date.AddYears(1);
-        DeploymentMode = "multi-tenant";
+        DeploymentMode = "multi_tenant";
     }
 
     public async Task<IActionResult> OnPostAsync()
@@ -109,7 +109,7 @@ public class PlatformLicenseModel : PageModel
         {
             // Validate deployment mode
             DeploymentMode = (DeploymentMode ?? string.Empty).Trim().ToLowerInvariant();
-            if (DeploymentMode != "single-tenant" && DeploymentMode != "multi-tenant")
+            if (DeploymentMode != "single_tenant" && DeploymentMode != "multi_tenant")
             {
                 ModelState.AddModelError(nameof(DeploymentMode), "Select a valid deployment mode.");
                 return Page();
@@ -119,7 +119,7 @@ public class PlatformLicenseModel : PageModel
             ApplyTierFeatureDefaults();
 
             // Single-tenant mode: no default tenant features needed
-            if (DeploymentMode == "single-tenant")
+            if (DeploymentMode == "single_tenant")
             {
                 SelectedDefaultTenantFeatures.Clear();
             }

@@ -42,21 +42,30 @@ public class TenantResolutionMiddleware
     {
         var path = context.Request.Path.Value ?? "/";
 
+        _logger.LogDebug("🌐 [TenantResolution] START - Path={Path}, MultiTenantEnabled={Enabled}, DefaultSlug={DefaultSlug}", 
+            path, options.Enabled, options.DefaultTenantSlug);
+
         UserAccountResolution? resolvedUser = null;
         if (context.User?.Identity?.IsAuthenticated ?? false)
         {
             resolvedUser = await currentUserAccountResolver.ResolveAsync(context.User, context.RequestAborted);
+            _logger.LogDebug("🌐 [TenantResolution] Authenticated user resolved: UserId={UserId}, UserAccountId={UserAccountId}", 
+                resolvedUser?.UserId, resolvedUser?.UserAccountId);
         }
 
         // Skip tenant resolution for specific paths (health checks, platform admin, static assets)
         if (ShouldSkipTenantResolution(path))
         {
+            _logger.LogDebug("🌐 [TenantResolution] SKIPPED - Path is excluded from tenant resolution");
             await _next(context);
             return;
         }
 
         // Resolve tenant
         var tenantContext = await tenantResolver.ResolveTenantAsync(path, context.RequestAborted);
+        
+        _logger.LogDebug("🌐 [TenantResolution] Resolved tenant: {TenantName} ({TenantSlug}), TenantId={TenantId}, IsMultiTenant={IsMultiTenant}", 
+            tenantContext?.Name, tenantContext?.Slug, tenantContext?.TenantId, tenantContext?.IsMultiTenantMode);
 
         if (tenantContext == null)
         {
@@ -128,7 +137,7 @@ public class TenantResolutionMiddleware
         tenantAccessor.SetTenant(tenantContext);
 
         _logger.LogDebug(
-            "Resolved tenant: {TenantSlug} (ID: {TenantId}, Mode: {Mode})",
+            "🌐 [TenantResolution] Tenant context SET: {TenantSlug} (ID: {TenantId}, Mode: {Mode})",
             tenantContext.Slug,
             tenantContext.TenantId,
             tenantContext.IsMultiTenantMode ? "multi-tenant" : "single-tenant");

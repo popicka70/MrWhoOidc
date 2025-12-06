@@ -53,6 +53,7 @@ public class ModeSwitchingTests
 
         // Add required services
         services.AddMemoryCache();
+        services.AddLogging();
         services.AddScoped<ITenantResolver, ModeAwareTenantResolver>();
         services.AddScoped<ITenantAccessor, TenantAccessor>();
         services.AddScoped<ITenantService, TenantService>();
