@@ -18,4 +18,5 @@
   <Project Path="MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" />
   <Project Path="Examples/MrWhoOidc.RazorClient/MrWhoOidc.RazorClient.csproj" />
   <Project Path="Examples/MrWhoOidc.TestApi/MrWhoOidc.TestApi.csproj" />
+  <Project Path="Examples/MrWhoOidc.OidcDemo/MrWhoOidc.OidcDemo.csproj" />
 </Solution>

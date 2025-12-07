@@ -1,0 +1,78 @@
+@page
+@model MrWhoOidc.OidcDemo.Pages.SecureModel
+@{
+    ViewData["Title"] = "Secure Page";
+}
+
+<section class="hero">
+    <h1>🔐 Secure Page</h1>
+    <p>This page requires authentication. If you can see this, you are successfully authenticated!</p>
+</section>
+
+<section class="user-info">
+    <h2>Authenticated User Details</h2>
+    
+    <div class="info-card">
+        <h3>Identity</h3>
+        <dl>
+            <dt>Name</dt>
+            <dd>@User.Identity?.Name ?? "Unknown"</dd>
+            <dt>Authentication Type</dt>
+            <dd>@User.Identity?.AuthenticationType ?? "Unknown"</dd>
+            <dt>Is Authenticated</dt>
+            <dd>@User.Identity?.IsAuthenticated</dd>
+        </dl>
+    </div>
+
+    <div class="info-card">
+        <h3>All Claims</h3>
+        <table class="claims-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Value</th>
+                    <th>Issuer</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var claim in User.Claims)
+                {
+                    <tr>
+                        <td><code>@claim.Type</code></td>
+                        <td>@claim.Value</td>
+                        <td>@claim.Issuer</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Tokens.Count > 0)
+    {
+        <div class="info-card">
+            <h3>Tokens</h3>
+            <table class="claims-table">
+                <thead>
+                    <tr>
+                        <th>Token Type</th>
+                        <th>Value (truncated)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var token in Model.Tokens)
+                    {
+                        <tr>
+                            <td><code>@token.Key</code></td>
+                            <td class="token-value">@(token.Value.Length > 50 ? token.Value[..50] + "..." : token.Value)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<div class="actions">
+    <a asp-page="/Index" class="btn btn-secondary">Back to Home</a>
+    <a asp-page="/Account/Logout" class="btn btn-primary">Logout</a>
+</div>
