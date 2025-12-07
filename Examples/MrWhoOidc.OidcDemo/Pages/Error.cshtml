@@ -1,0 +1,24 @@
+@page
+@model MrWhoOidc.OidcDemo.Pages.ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<section class="error-page">
+    <h1>⚠️ An Error Occurred</h1>
+    
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="error-message">
+            <p>@Model.ErrorMessage</p>
+        </div>
+    }
+    else
+    {
+        <p>An unexpected error occurred. Please try again.</p>
+    }
+    
+    <div class="actions">
+        <a asp-page="/Index" class="btn btn-primary">Return to Home</a>
+    </div>
+</section>

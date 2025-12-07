@@ -144,7 +144,7 @@ internal static class EndpointMappingExtensions
         var authOptions = (app?.Services ?? routes.ServiceProvider).GetRequiredService<IOptions<AuthOptions>>();
 
         // OIDC Discovery and JWKS endpoints
-        routes.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx))
+        routes.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
 

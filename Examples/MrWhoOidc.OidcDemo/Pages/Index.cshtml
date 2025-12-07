@@ -1,0 +1,64 @@
+@page
+@model MrWhoOidc.OidcDemo.Pages.IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<section class="hero">
+    <h1>MrWhoOidc OIDC Demo</h1>
+    <p>This Razor Pages application demonstrates OpenID Connect authentication using the MrWhoOidc identity provider.</p>
+</section>
+
+<section class="info-card">
+    <h2>Configuration</h2>
+    <dl>
+        <dt>Identity Provider</dt>
+        <dd><a href="@Model.Authority" target="_blank">@Model.Authority</a></dd>
+        <dt>Client ID</dt>
+        <dd><code>@Model.ClientId</code></dd>
+        <dt>Tenant</dt>
+        <dd>default</dd>
+    </dl>
+</section>
+
+@if (User.Identity?.IsAuthenticated == true)
+{
+    <section class="auth-status authenticated">
+        <h2>✅ You are authenticated</h2>
+        <p>Welcome, <strong>@User.Identity.Name</strong>!</p>
+        
+        <h3>Your Claims</h3>
+        <table class="claims-table">
+            <thead>
+                <tr>
+                    <th>Claim Type</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var claim in User.Claims)
+                {
+                    <tr>
+                        <td><code>@claim.Type</code></td>
+                        <td>@claim.Value</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        
+        <div class="actions">
+            <a asp-page="/Secure" class="btn btn-primary">View Secure Page</a>
+            <a asp-page="/Account/Logout" class="btn btn-secondary">Logout</a>
+        </div>
+    </section>
+}
+else
+{
+    <section class="auth-status not-authenticated">
+        <h2>🔒 You are not signed in</h2>
+        <p>Click the button below to authenticate with the MrWhoOidc identity provider.</p>
+        <div class="actions">
+            <a asp-page="/Account/Login" class="btn btn-primary">Sign In with MrWhoOidc</a>
+        </div>
+    </section>
+}
