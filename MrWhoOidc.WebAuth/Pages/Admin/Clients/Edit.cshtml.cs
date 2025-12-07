@@ -66,6 +66,9 @@ public class EditModel(
     public List<string> TenantAssignedScopes { get; private set; } = new();
     public string CurrentTenantSlug => TenantAccessor.CurrentTenant?.Slug ?? "tenant";
 
+    // Users tab model
+    public List<UserAssignmentViewModel> AssignedUsers { get; private set; } = new();
+    public List<UserAssignmentViewModel> AvailableUsers { get; private set; } = new();
 
     public List<ProviderRow> ProviderMappings { get; private set; } = new();
 
@@ -124,6 +127,7 @@ public class EditModel(
     await LoadScopesAsync(client.Id);
     await LoadProviderMappingsAsync(client.Id);
     await LoadClientSecretsAsync(client.Id);
+    await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
 
         // Build tenant-aware IdP chaining URLs
         var issuer = HttpContext.GetIssuer(oidcOptions);
@@ -317,6 +321,93 @@ public class EditModel(
             await db.SaveChangesAsync();
         }
         return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=scopes");
+    }
+
+    public async Task<IActionResult> OnPostAssignUserAsync(Guid userId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return NotFound();
+        }
+
+        // Load client to get RealmId
+        var client = await db.Clients.AsNoTracking()
+            .Where(c => c.Id == Id && c.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        // Verify user belongs to same tenant (for multi-tenant mode)
+        var user = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId && u.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        // Check if assignment already exists
+        var existingAssignment = await db.UserClientAssignments
+            .Where(a => a.UserId == userId && a.ClientId == Id && a.RealmId == client.RealmId)
+            .FirstOrDefaultAsync();
+
+        if (existingAssignment is null)
+        {
+            db.UserClientAssignments.Add(new UserClientAssignment
+            {
+                UserId = userId,
+                ClientId = Id,
+                RealmId = client.RealmId,
+                IsActive = true
+            });
+            await db.SaveChangesAsync();
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=users");
+    }
+
+    public async Task<IActionResult> OnPostUnassignUserAsync(Guid userId)
+    {
+        if (!await ValidateTenantAccessAsync())
+        {
+            return NotFound();
+        }
+
+        var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (!currentTenantId.HasValue)
+        {
+            return NotFound();
+        }
+
+        // Load client to get RealmId
+        var client = await db.Clients.AsNoTracking()
+            .Where(c => c.Id == Id && c.TenantId == currentTenantId.Value)
+            .FirstOrDefaultAsync();
+        if (client is null)
+        {
+            return NotFound();
+        }
+
+        // Remove the assignment
+        var assignment = await db.UserClientAssignments
+            .Where(a => a.UserId == userId && a.ClientId == Id && a.RealmId == client.RealmId)
+            .FirstOrDefaultAsync();
+
+        if (assignment is not null)
+        {
+            db.UserClientAssignments.Remove(assignment);
+            await db.SaveChangesAsync();
+        }
+
+        return TenantAwareRedirect($"/Admin/Clients/Edit/{Id}?tab=users");
     }
 
     public async Task<IActionResult> OnPostExtractPublicJwkAsync()
@@ -1282,6 +1373,56 @@ public class EditModel(
             .ToListAsync();
     }
 
+    private async Task LoadUserAssignmentsAsync(Guid clientId, Guid realmId, Guid tenantId)
+    {
+        // Get users already assigned to this client (filter by clientId only - realm is implicit from client)
+        var assignedUserIds = await db.UserClientAssignments
+            .AsNoTracking()
+            .Where(a => a.ClientId == clientId)
+            .Select(a => new { a.UserId, a.IsActive })
+            .ToListAsync();
+
+        var assignedUserIdSet = assignedUserIds.Select(a => a.UserId).ToHashSet();
+
+        // Get assigned users with their details
+        AssignedUsers = await db.Users
+            .AsNoTracking()
+            .Where(u => u.TenantId == tenantId && assignedUserIdSet.Contains(u.Id))
+            .Select(u => new UserAssignmentViewModel
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Email = u.Email,
+                Name = u.Name,
+                IsActive = true // Will be updated below
+            })
+            .ToListAsync();
+
+        // Update IsActive flag based on assignment status
+        var assignmentLookup = assignedUserIds.ToDictionary(a => a.UserId, a => a.IsActive);
+        foreach (var user in AssignedUsers)
+        {
+            if (assignmentLookup.TryGetValue(user.Id, out var isActive))
+            {
+                user.IsActive = isActive;
+            }
+        }
+
+        // Get available users (not assigned to this client, same tenant)
+        AvailableUsers = await db.Users
+            .AsNoTracking()
+            .Where(u => u.TenantId == tenantId && !assignedUserIdSet.Contains(u.Id))
+            .Select(u => new UserAssignmentViewModel
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Email = u.Email,
+                Name = u.Name,
+                IsActive = true
+            })
+            .ToListAsync();
+    }
+
     private async Task<Client?> LoadClientEntityAsync(Guid clientId)
     {
         var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
@@ -1305,6 +1446,12 @@ public class EditModel(
         var client = await LoadClientEntityAsync(Id);
         if (client is not null)
         {
+            var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
+            if (currentTenantId.HasValue)
+            {
+                await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
+            }
+
             ClientDisplayName = client.ClientName ?? client.ClientId;
             ClientPublicId = client.ClientId;
 #pragma warning disable CS0618
@@ -1838,5 +1985,14 @@ public class EditModel(
         [StringLength(100)]
         public string? RequiredAcr { get; set; }
         public int Order { get; set; } = 0;
+    }
+
+    public sealed class UserAssignmentViewModel
+    {
+        public Guid Id { get; set; }
+        public string Username { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 }

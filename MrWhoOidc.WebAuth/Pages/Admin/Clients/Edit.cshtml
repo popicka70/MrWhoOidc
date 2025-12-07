@@ -66,6 +66,11 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab" aria-controls="tab-users" aria-selected="false">
+                <i class="bi bi-people-fill me-1"></i> Users
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tab-tools" type="button" role="tab" aria-controls="tab-tools" aria-selected="false">
                 <i class="bi bi-tools me-1"></i> Tools
             </button>
@@ -870,6 +875,114 @@
                 </div>
             </div>
 
+        <div class="tab-pane fade" id="tab-users" role="tabpanel" aria-labelledby="users-tab" tabindex="0">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">User Assignments</h5>
+                            <p class="text-muted mb-0">Manage which users are assigned to this client</p>
+                        </div>
+                    </div>
+                    @if (MultiTenancyOptions.Enabled)
+                    {
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-building me-1"></i>
+                            <strong>Multi-tenant mode:</strong> Only users from the current tenant can be assigned to this client.
+                        </div>
+                    }
+                </div>
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header bg-secondary text-white">
+                            <i class="bi bi-people me-1"></i> Available Users
+                            <span class="badge bg-light text-dark ms-2">@Model.AvailableUsers.Count</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush user-list-scroll" id="availableUsersList">
+                                @if (!Model.AvailableUsers.Any())
+                                {
+                                    <div class="list-group-item text-center text-muted py-4">
+                                        <i class="bi bi-person-x fs-4 d-block mb-2"></i>
+                                        No available users
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var user in Model.AvailableUsers.OrderBy(u => u.Username))
+                                    {
+                                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center user-item" data-user-id="@user.Id">
+                                            <div>
+                                                <div class="fw-medium">@user.Username</div>
+                                                <small class="text-muted">@(user.Name ?? user.Email ?? "—")</small>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-success" 
+                                                    asp-page-handler="AssignUser" 
+                                                    name="userId" value="@user.Id" 
+                                                    formnovalidate
+                                                    title="Assign user">
+                                                <i class="bi bi-arrow-right"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex flex-column justify-content-center align-items-center gap-2">
+                    <div class="text-muted small text-center">
+                        <i class="bi bi-arrow-left-right fs-3"></i>
+                        <div class="mt-2">Click buttons to<br/>assign or remove</div>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-person-check me-1"></i> Assigned Users
+                            <span class="badge bg-light text-dark ms-2">@Model.AssignedUsers.Count</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush user-list-scroll" id="assignedUsersList">
+                                @if (!Model.AssignedUsers.Any())
+                                {
+                                    <div class="list-group-item text-center text-muted py-4">
+                                        <i class="bi bi-person-check fs-4 d-block mb-2"></i>
+                                        No users assigned
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var user in Model.AssignedUsers.OrderBy(u => u.Username))
+                                    {
+                                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center user-item @(!user.IsActive ? "list-group-item-secondary" : "")" data-user-id="@user.Id">
+                                            <div>
+                                                <div class="fw-medium">
+                                                    @user.Username
+                                                    @if (!user.IsActive)
+                                                    {
+                                                        <span class="badge bg-secondary ms-1">Inactive</span>
+                                                    }
+                                                </div>
+                                                <small class="text-muted">@(user.Name ?? user.Email ?? "—")</small>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                    asp-page-handler="UnassignUser" 
+                                                    name="userId" value="@user.Id" 
+                                                    formnovalidate
+                                                    title="Remove assignment">
+                                                <i class="bi bi-arrow-left"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="tab-pane fade" id="tab-tools" role="tabpanel" aria-labelledby="tools-tab" tabindex="0">
             <div class="row g-3">
                 <div class="col-12">
@@ -957,6 +1070,16 @@
         </div>
     </div>
 </div>
+
+<style>
+    .user-list-scroll {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .user-item:hover {
+        background-color: rgba(0,0,0,.04);
+    }
+</style>
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
