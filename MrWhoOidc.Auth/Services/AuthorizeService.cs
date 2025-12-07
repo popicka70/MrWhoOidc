@@ -81,14 +81,22 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
             return Error(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
 
-        // response_mode (optional): support default (null), query.jwt, form_post.jwt
+        // response_mode (optional): support standard modes and JARM modes
         string? responseMode = request.response_mode;
         if (!string.IsNullOrEmpty(responseMode))
         {
-            if (!string.Equals(responseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) &&
-                !string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
+            var validModes = new[]
             {
-                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, "Only response_mode=query.jwt or form_post.jwt is supported");
+                OidcConstants.ResponseModes.Query,
+                OidcConstants.ResponseModes.Fragment,
+                OidcConstants.ResponseModes.FormPost,
+                OidcConstants.ResponseModes.QueryJwt,
+                OidcConstants.ResponseModes.FormPostJwt
+            };
+            if (!validModes.Contains(responseMode, StringComparer.Ordinal))
+            {
+                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, 
+                    $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, form_post.jwt");
             }
         }
 

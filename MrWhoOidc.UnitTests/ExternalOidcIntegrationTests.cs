@@ -86,6 +86,9 @@ public sealed class ExternalOidcIntegrationTests
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
         services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux: null);
         services.AddSingleton(new OidcOptions { Issuer = "http://localhost" });
+        // Register tenant accessor and feature service for DiscoveryHandler
+        services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(_ => Helpers.MockTenantAccessor.CreateWithDefaultTenant());
+        services.AddSingleton<MrWhoOidc.Auth.Licensing.Services.IFeatureService, StubFeatureService>();
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
         {
             o.Cookie.Name = ".mrwhooidc.auth";
@@ -155,7 +158,7 @@ public sealed class ExternalOidcIntegrationTests
         }
 
         // Discovery (downstream)
-        app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.Handle(ctx));
+        app.MapGet("/.well-known/openid-configuration", (IDiscoveryHandler h, HttpContext ctx) => h.HandleAsync(ctx));
         app.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
         app.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
 
@@ -566,5 +569,24 @@ public sealed class ExternalOidcIntegrationTests
             callback.StatusCode == HttpStatusCode.Redirect,
             "All steps in redirect chain must return 302 (guards against release build redirect issue)"
         );
+    }
+
+    /// <summary>
+    /// Stub feature service that enables all features by default for testing.
+    /// </summary>
+    private sealed class StubFeatureService : MrWhoOidc.Auth.Licensing.Services.IFeatureService
+    {
+        public Task<bool> IsFeatureEnabledAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlySet<string>>(MrWhoOidc.Auth.Licensing.Models.FeatureFlags.AllFeatures);
+
+        public Task RecordFeatureUsageAsync(string featureName, Guid? tenantId = null, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<MrWhoOidc.Auth.Licensing.Entities.FeatureUsageMetric>> GetFeatureUsageAsync(
+            Guid? tenantId = null, string? featureName = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<MrWhoOidc.Auth.Licensing.Entities.FeatureUsageMetric>>(Array.Empty<MrWhoOidc.Auth.Licensing.Entities.FeatureUsageMetric>());
     }
 }
