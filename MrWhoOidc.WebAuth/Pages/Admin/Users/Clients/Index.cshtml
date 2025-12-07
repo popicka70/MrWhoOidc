@@ -17,83 +17,122 @@
 
 <partial name="~/Pages/Admin/Users/_UserTabs.cshtml" />
 
-<form method="post" class="row g-2 align-items-end mb-3" asp-page-handler="Add">
-    <div class="col-auto">
-        <label class="form-label">Realm <span class="text-danger">*</span></label>
-        <select class="form-select" asp-for="RealmId" onchange="this.form.submit()">
-            <option value="">-- Select realm first --</option>
-            @foreach (var r in Model.Realms)
-            {
-                <option value="@r.Id">@r.Name</option>
-            }
-        </select>
-    </div>
-    <div class="col-auto">
-        <label class="form-label">Client <span class="text-danger">*</span></label>
-        <select class="form-select" asp-for="ClientId" disabled="@(!Model.RealmId.HasValue || !Model.Clients.Any())">
-            @if (!Model.RealmId.HasValue)
-            {
-                <option value="">-- Select realm first --</option>
-            }
-            else if (!Model.Clients.Any())
-            {
-                <option value="">-- No clients in this realm --</option>
-            }
-            else
-            {
-                <option value="">-- Select client --</option>
-                @foreach (var c in Model.Clients)
-                {
-                    <option value="@c.Id">@c.ClientId @(!string.IsNullOrEmpty(c.ClientName) ? $"({c.ClientName})" : "")</option>
-                }
-            }
-        </select>
-    </div>
-    <div class="col-auto form-check mb-3">
-        <input class="form-check-input" asp-for="IsActive" />
-        <label class="form-check-label" asp-for="IsActive">Active</label>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-primary" type="submit" disabled="@(!Model.RealmId.HasValue || !Model.Clients.Any())">Add</button>
+<style>
+    .client-list-scroll {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .client-item:hover {
+        background-color: var(--bs-light);
+    }
+</style>
+
+<form method="post" autocomplete="off">
+    <div class="row g-3">
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-header bg-secondary text-white">
+                    <i class="bi bi-grid me-1"></i> Available Clients
+                    <span class="badge bg-light text-dark ms-2">@Model.AvailableClients.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush client-list-scroll" id="availableClientsList">
+                        @if (!Model.AvailableClients.Any())
+                        {
+                            <div class="list-group-item text-center text-muted py-4">
+                                <i class="bi bi-grid-3x3-gap fs-4 d-block mb-2"></i>
+                                No available clients
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var client in Model.AvailableClients.OrderBy(c => c.RealmName).ThenBy(c => c.ClientId))
+                            {
+                                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center client-item">
+                                    <div>
+                                        <div class="fw-medium">@client.ClientId</div>
+                                        <small class="text-muted">
+                                            @if (!string.IsNullOrEmpty(client.ClientName))
+                                            {
+                                                @client.ClientName
+                                                <span class="mx-1">·</span>
+                                            }
+                                            <span class="badge bg-secondary">@client.RealmName</span>
+                                        </small>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-success" 
+                                            asp-page-handler="Assign" 
+                                            name="clientId" value="@client.Id" 
+                                            formnovalidate
+                                            title="Assign client">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 d-flex flex-column justify-content-center align-items-center gap-2">
+            <div class="text-muted small text-center">
+                <i class="bi bi-arrow-left-right fs-3"></i>
+                <div class="mt-2">Click buttons to<br/>assign or remove</div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-check2-square me-1"></i> Assigned Clients
+                    <span class="badge bg-light text-dark ms-2">@Model.AssignedClients.Count</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush client-list-scroll" id="assignedClientsList">
+                        @if (!Model.AssignedClients.Any())
+                        {
+                            <div class="list-group-item text-center text-muted py-4">
+                                <i class="bi bi-check2-square fs-4 d-block mb-2"></i>
+                                No clients assigned
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var client in Model.AssignedClients.OrderBy(c => c.RealmName).ThenBy(c => c.ClientId))
+                            {
+                                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center client-item @(!client.IsActive ? "list-group-item-secondary" : "")">
+                                    <div>
+                                        <div class="fw-medium">
+                                            @client.ClientId
+                                            @if (!client.IsActive)
+                                            {
+                                                <span class="badge bg-secondary ms-1">Inactive</span>
+                                            }
+                                        </div>
+                                        <small class="text-muted">
+                                            @if (!string.IsNullOrEmpty(client.ClientName))
+                                            {
+                                                @client.ClientName
+                                                <span class="mx-1">·</span>
+                                            }
+                                            <span class="badge bg-secondary">@client.RealmName</span>
+                                        </small>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                            asp-page-handler="Unassign" 
+                                            name="clientId" value="@client.Id" 
+                                            formnovalidate
+                                            title="Remove assignment">
+                                        <i class="bi bi-arrow-left"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </form>
-
-<table class="table table-striped align-middle">
-    <thead>
-        <tr>
-            <th>Client</th>
-            <th>Realm</th>
-            <th>Tenant</th>
-            <th>Active</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    @if (!Model.Assignments.Any())
-    {
-        <tr>
-            <td colspan="5" class="text-center text-muted">No client assignments</td>
-        </tr>
-    }
-    else
-    {
-        @foreach (var a in Model.Assignments)
-        {
-            <tr>
-                <td>@a.ClientId @(!string.IsNullOrEmpty(a.ClientName) ? $"({a.ClientName})" : "")</td>
-                <td>@a.RealmName</td>
-                <td><span class="badge text-bg-info">@a.TenantName</span></td>
-                <td>@(a.IsActive ? "Yes" : "No")</td>
-                <td class="text-end">
-                    <form method="post" class="d-inline" asp-page-handler="Delete" asp-route-clientId="@a.ClientGuid" asp-route-realmId="@a.RealmId" onsubmit="return confirm('Remove this assignment?');">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-                    </form>
-                </td>
-            </tr>
-        }
-    }
-    </tbody>
-</table>
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
