@@ -20,6 +20,7 @@ internal sealed class LicenseValidator : ILicenseValidator
 {
     private const string LegacyIssuer = "MrWhoOidc-License-Authority";
     private const string KeyGenIssuer = "MrWhoOidc-KeyGen";
+    private const string LicensingServiceIssuer = "LicensingService";
     private const string ScopeClaim = "license_scope";
     private const string TenantIdClaim = "tenant_id";
     private const string TenantSlugClaim = "tenant_slug";
@@ -30,7 +31,7 @@ internal sealed class LicenseValidator : ILicenseValidator
     private const string ParentLicenseIdClaim = "parent_license_jti";
     private const string LicenseIdClaim = "jti";
     
-    private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer };
+    private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer, LicensingServiceIssuer };
 
     internal static IReadOnlyCollection<string> SupportedIssuers => AllowedIssuers;
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(5);
@@ -215,6 +216,14 @@ internal sealed class LicenseValidator : ILicenseValidator
         return Task.FromResult(LicenseValidationResult.Success(updated));
     }
 
+    // Known kid values used by license signing services
+    private static readonly string[] KnownKeyIds = new[]
+    {
+        "mrwho-oidc-licensing-key",
+        "licensing-key",
+        "licensing-public-key"
+    };
+
     private TokenValidationParameters CreateValidationParameters()
     {
         if (string.IsNullOrWhiteSpace(_options.PublicKeyPem))
@@ -222,17 +231,20 @@ internal sealed class LicenseValidator : ILicenseValidator
             throw new InvalidOperationException("Licensing public key is not configured.");
         }
 
-        var ecdsa = CreateEcdsaFromPem(_options.PublicKeyPem);
-        var key = new ECDsaSecurityKey(ecdsa)
+        // Create a key instance for each known kid value so that JWT validation
+        // can match the token's kid to one of them. All keys use the same underlying
+        // public key material, just with different KeyId values.
+        var keys = KnownKeyIds.Select(kid =>
         {
-            KeyId = "licensing-public-key"
-        };
+            var ecdsa = CreateEcdsaFromPem(_options.PublicKeyPem);
+            return new ECDsaSecurityKey(ecdsa) { KeyId = kid };
+        }).ToArray();
 
         return new TokenValidationParameters
         {
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = key,
+            IssuerSigningKeys = keys,
             ValidateAudience = false,
             RequireAudience = false,
             ValidateIssuer = _options.StrictValidation,
