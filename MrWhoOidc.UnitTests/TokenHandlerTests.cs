@@ -17,6 +17,8 @@ using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Text;
 using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Services;
+using System.Text.Json;
+using System.Threading;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 
@@ -279,6 +281,60 @@ public sealed class TokenHandlerTests
         // Assert
         Assert.IsNotNull(result);
         // Handler returns error for invalid DPoP proof (missing jti)
+    }
+
+    [TestMethod]
+    public async Task Token_DPoP_Proof_Replay_Returns_Invalid_DPoP_Proof()
+    {
+        using var db = CreateDb();
+
+        var realmId = Guid.NewGuid();
+        db.Realms.Add(new Realm { Id = realmId, Name = "test_realm" });
+
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            ClientSecretHash = "hash",
+            RealmId = realmId
+        };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var dpop = new StubDPoPValidator(ok: true, jkt: "test_jkt");
+        var replayCache = new OneTimeReplayCache();
+        var clientStore = new StubClientStore(client, authenticated: true);
+        var grantHandlers = new[] { new StubTokenGrantHandler(handled: true, success: true) };
+        var handler = CreateHandler(db, dpop: dpop, dpopReplayCache: replayCache, clients: clientStore, grantHandlers: grantHandlers);
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = "test_code",
+            ["redirect_uri"] = "https://app/callback",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "secret"
+        };
+
+        // First request should succeed.
+        var ctx1 = CreateHttpContext(formData);
+        ctx1.Request.Headers["DPoP"] = "dpop_proof";
+        var r1 = await handler.HandleAsync(ctx1);
+        await r1.ExecuteAsync(ctx1);
+        Assert.AreEqual(200, ctx1.Response.StatusCode);
+
+        // Second request with same proof key should be rejected as replay.
+        var ctx2 = CreateHttpContext(formData);
+        ctx2.Request.Headers["DPoP"] = "dpop_proof";
+        var r2 = await handler.HandleAsync(ctx2);
+        await r2.ExecuteAsync(ctx2);
+        Assert.AreEqual(400, ctx2.Response.StatusCode);
+
+        ctx2.Response.Body.Position = 0;
+        using var reader = new StreamReader(ctx2.Response.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual("invalid_dpop_proof", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -748,6 +804,13 @@ public sealed class TokenHandlerTests
             var result = new DPoPValidationResult(_ok, _jkt, "test_jti", DateTimeOffset.UtcNow.ToUnixTimeSeconds(), null, _error);
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class OneTimeReplayCache : IDPoPReplayCache
+    {
+        private int _count;
+        public bool TryAdd(string key, DateTimeOffset expiresAt)
+            => Interlocked.Increment(ref _count) == 1;
     }
 
     private sealed class StubTokenGrantHandler : ITokenGrantHandler

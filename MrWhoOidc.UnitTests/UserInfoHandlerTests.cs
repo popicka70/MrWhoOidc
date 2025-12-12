@@ -13,6 +13,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -64,6 +65,15 @@ public sealed class UserInfoHandlerTests
             context.Request.Headers.Authorization = authorization;
         }
         return context;
+    }
+
+    private static async Task<(int Status, string Body)> ExecuteAsync(IResult result, DefaultHttpContext context)
+    {
+        await result.ExecuteAsync(context);
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        return (context.Response.StatusCode, body);
     }
 
     [TestMethod]
@@ -137,6 +147,53 @@ public sealed class UserInfoHandlerTests
         var result = handler.Handle(context);
 
         Assert.IsNotNull(result);
+        var (status, _) = await ExecuteAsync(result, context);
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Missing_Audience_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("scope", "openid")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer valid_token");
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("\"error\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Disallowed_Audience_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("scope", "openid"),
+            new Claim("aud", "evil")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer valid_token");
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("invalid_token", StringComparison.Ordinal));
     }
 
     [TestMethod]
