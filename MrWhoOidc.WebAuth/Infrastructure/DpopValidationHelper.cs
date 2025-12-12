@@ -17,7 +17,7 @@ internal static class DpopValidationHelper
     /// <param name="athToken">Optional access/subject token used for ATH binding when present (token-exchange).</param>
     /// <param name="logger">Optional logger for warnings.</param>
     /// <returns>(Ok, Jkt)</returns>
-    public static async Task<(bool Ok, string? Jkt)> ValidateForTokenEndpointAsync(IDPoPValidator validator, HttpContext http, string endpointUrl, string? athToken, ILogger? logger = null)
+    public static async Task<(bool Ok, string? Jkt)> ValidateForTokenEndpointAsync(IDPoPValidator validator, IDPoPReplayCache replayCache, HttpContext http, string endpointUrl, string? athToken, ILogger? logger = null)
     {
         var validation = await validator.ValidateForEndpointAsync(http, endpointUrl, athToken);
         if (!validation.Ok)
@@ -29,6 +29,28 @@ internal static class DpopValidationHelper
                 http.Connection.RemoteIpAddress?.ToString());
             return (false, null);
         }
+
+        // Replay protection: require jti/iat and ensure uniqueness within the iat window.
+        if (string.IsNullOrEmpty(validation.Jkt) || string.IsNullOrEmpty(validation.Jti) || validation.Iat is null)
+        {
+            logger?.LogWarning("/token invalid_dpop_proof: missing jkt/jti/iat endpoint={Endpoint} method={Method} ip={IP}",
+                endpointUrl,
+                http.Request.Method,
+                http.Connection.RemoteIpAddress?.ToString());
+            return (false, null);
+        }
+
+        var key = $"{validation.Jkt}:{validation.Jti}";
+        var expires = DateTimeOffset.FromUnixTimeSeconds(validation.Iat.Value).AddMinutes(5);
+        if (!replayCache.TryAdd(key, expires))
+        {
+            logger?.LogWarning("/token invalid_dpop_proof: replay endpoint={Endpoint} method={Method} ip={IP}",
+                endpointUrl,
+                http.Request.Method,
+                http.Connection.RemoteIpAddress?.ToString());
+            return (false, null);
+        }
+
         return (true, validation.Jkt);
     }
 }

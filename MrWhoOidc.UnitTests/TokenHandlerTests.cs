@@ -39,6 +39,7 @@ public sealed class TokenHandlerTests
         IClientStore? clients = null,
         IClientAssertionValidator? assertions = null,
         IDPoPValidator? dpop = null,
+        IDPoPReplayCache? dpopReplayCache = null,
         IEnumerable<ITokenGrantHandler>? grantHandlers = null,
         IEnumerable<ITokenMetricsRecorder>? tokenMetrics = null,
         IOptions<OidcOptions>? options = null,
@@ -52,6 +53,7 @@ public sealed class TokenHandlerTests
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
         dpop ??= new StubDPoPValidator();
+        dpopReplayCache ??= new InMemoryDPoPReplayCache();
         grantHandlers ??= new[] { new StubTokenGrantHandler() };
         tokenMetrics ??= new[] { new StubTokenMetricsRecorder() };
         options ??= Options.Create(new OidcOptions { Issuer = "https://test.example.com" });
@@ -63,7 +65,7 @@ public sealed class TokenHandlerTests
         var authOptions = Options.Create(new AuthOptions());
         var authenticator = new ClientAuthenticator(clients, assertions, authOptions, authLogger);
 
-        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(

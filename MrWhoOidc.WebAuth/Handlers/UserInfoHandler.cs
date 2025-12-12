@@ -9,6 +9,7 @@ using MrWhoOidc.Security;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -17,7 +18,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -44,6 +45,38 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             {
                 outcome = "failure";
                 logger.LogWarning("/userinfo 401: token validation failed from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            // Audience hardening: require at least one audience and enforce a conservative allow policy.
+            // Allow if:
+            // - audience matches configured ApiAudiences, OR
+            // - audience is an absolute URI and its host matches the issuer host.
+            // This reduces cross-audience acceptance while keeping common deployments working.
+            var audiences = principal.Claims.Where(c => c.Type == "aud").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+            if (audiences.Length == 0)
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing aud claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            var allowedApiAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+            Uri? issuerUri = null;
+            _ = Uri.TryCreate(issuer, UriKind.Absolute, out issuerUri);
+
+            var azp = principal.FindFirst("azp")?.Value;
+
+            var audienceAllowed = audiences.Any(a => allowedApiAudiences.Contains(a, StringComparer.Ordinal)) ||
+                                 (!string.IsNullOrEmpty(azp) && audiences.Any(a => string.Equals(a, azp, StringComparison.Ordinal))) ||
+                                 (issuerUri is not null && audiences.Any(a => Uri.TryCreate(a, UriKind.Absolute, out var audUri) && string.Equals(audUri.Host, issuerUri.Host, StringComparison.OrdinalIgnoreCase)));
+
+            if (!audienceAllowed)
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: audience not allowed from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }

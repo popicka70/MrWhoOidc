@@ -66,6 +66,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
+                    services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();

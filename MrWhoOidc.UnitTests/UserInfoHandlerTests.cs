@@ -35,15 +35,16 @@ public sealed class UserInfoHandlerTests
         IDPoPNonceStore? nonceStore = null)
     {
         var options = new OidcOptions { Issuer = "https://test.example.com" };
+        var authOptions = Options.Create(new AuthOptions { ApiAudiences = ["api", "test_client"] });
         var metrics = new OidcMetrics();
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<UserInfoHandler>();
 
-        validator ??= new StubTokenValidator(true, new ClaimsPrincipal());
+        validator ??= new StubTokenValidator(true, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", Guid.NewGuid().ToString()), new Claim("aud", "api"), new Claim("scope", "openid") }, "test")));
         dpopValidator ??= new StubDPoPValidator(true);
         replayCache ??= new StubDPoPReplayCache();
         nonceStore ??= new StubDPoPNonceStore();
 
-        return new UserInfoHandler(options, validator, metrics, dpopValidator, replayCache, nonceStore, logger, db);
+        return new UserInfoHandler(options, authOptions, validator, metrics, dpopValidator, replayCache, nonceStore, logger, db);
     }
 
     private static DefaultHttpContext CreateHttpContext(string? authorization = null)
@@ -124,7 +125,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", user.Id.ToString()),
-            new Claim("scope", "openid profile email")
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -155,7 +157,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -189,7 +192,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -334,7 +338,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -374,7 +379,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -416,7 +422,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -454,7 +461,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid email"),
-            new Claim("email", "test@example.com")
+            new Claim("email", "test@example.com"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -492,7 +500,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid profile"),
-            new Claim("name", "Test User")
+            new Claim("name", "Test User"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -595,6 +604,7 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
+            new Claim("aud", "api"),
             new Claim("address", "123 Test St") // Should not be returned
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
@@ -629,7 +639,8 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
