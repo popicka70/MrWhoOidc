@@ -636,6 +636,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health/issuer",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/introspect",
     "Methods": "POST",
     "RateLimiters": [
