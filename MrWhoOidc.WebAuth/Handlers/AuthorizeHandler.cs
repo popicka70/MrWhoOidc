@@ -70,9 +70,7 @@ public sealed class AuthorizeHandler(
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
-        logger.LogInformation("⚡ AuthorizeHandler.HandleAsync called, Path={Path}, QueryString={QueryString}",
-            http.Request.Path,
-            http.Request.QueryString.Value ?? "(empty)");
+        logger.LogInformation("⚡ /authorize called Path={Path}", http.Request.Path);
 
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
         var sw = Stopwatch.StartNew();
@@ -269,20 +267,17 @@ public sealed class AuthorizeHandler(
 
             // DEBUG: Check QR parameter
             bool hasQrParam = http.Request.Query.ContainsKey("qr");
-            logger.LogInformation("🔍 QR Check: allowQr={AllowQr}, hasQrParam={HasQr}, QueryString={QueryString}",
-                allowQr, hasQrParam, http.Request.QueryString.Value ?? "(empty)");
+            logger.LogInformation("🔍 QR Check: allowQr={AllowQr}, hasQrParam={HasQr}", allowQr, hasQrParam);
 
             // QR login: if allowed and hint present, initiate QR flow BEFORE provider selection
             if (allowQr && http.Request.Query.ContainsKey("qr"))
             {
                 logger.LogInformation("Routing to QR login for client {ClientId}, allowQr={AllowQr}", validationResult.ClientId, allowQr);
-                logger.LogInformation("QR routing details: validationResult.IsValid={IsValid}, ClientId={ClientId}, RedirectUri={RedirectUri}, Scopes={Scopes}, CodeChallenge={HasChallenge}, effectiveReq.state={State}",
+                logger.LogInformation("QR routing details: validationResult.IsValid={IsValid}, HasRedirectUri={HasRedirectUri}, ScopeCount={ScopeCount}, CodeChallenge={HasChallenge}",
                     validationResult.IsValid,
-                    validationResult.ClientId ?? "(null)",
-                    validationResult.RedirectUri ?? "(null)",
-                    string.Join(",", validationResult.Scopes ?? Array.Empty<string>()),
-                    !string.IsNullOrEmpty(validationResult.CodeChallenge),
-                    effectiveReq.state ?? "(null)");
+                    !string.IsNullOrEmpty(validationResult.RedirectUri),
+                    validationResult.Scopes?.Length ?? 0,
+                    !string.IsNullOrEmpty(validationResult.CodeChallenge));
                 outcome = "qr_initiate";
                 logger.LogInformation("Calling qrLoginHandler.InitiateAsync with 3 parameters (http, validationResult, effectiveReq)");
                 return await qrLoginHandler.InitiateAsync(http, validationResult, effectiveReq);

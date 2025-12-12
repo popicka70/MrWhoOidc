@@ -56,10 +56,9 @@ public sealed class QrLoginHandler : IQrLoginHandler
         // Extract parameters from query string for backward compatibility
         _logger.LogWarning("⚠️ PARAMETERLESS InitiateAsync(HttpContext) called - this should NOT be called from AuthorizeHandler!");
         var opts = _options.Value;
-        _logger.LogInformation("QR login initiate called from {IP}, Path: {Path}, QueryString: {QueryString}",
+        _logger.LogInformation("QR login initiate called from {IP}, Path: {Path}",
             http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            http.Request.Path,
-            http.Request.QueryString.Value ?? "(empty)");
+            http.Request.Path);
 
         if (!opts.Enabled)
         {
@@ -76,13 +75,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
         var codeChallengeStr = http.Request.Query["code_challenge"].ToString();
         var codeChallengeMethodStr = http.Request.Query["code_challenge_method"].ToString();
 
-        _logger.LogDebug("QR login parameters: clientId={ClientId}, returnUrl={ReturnUrl}, state={State}, nonce={Nonce}, scope={Scope}, codeChallenge={CodeChallenge}, codeChallengeMethod={CodeChallengeMethod}",
-            clientIdStr ?? "(null)",
-            returnUrlStr ?? "(null)",
-            stateStr ?? "(null)",
-            nonceStr ?? "(null)",
-            scopeStr ?? "(null)",
-            !string.IsNullOrEmpty(codeChallengeStr) ? "***" : "(null)",
+        _logger.LogDebug("QR login parameters present: hasClientId={HasClientId}, hasReturnUrl={HasReturnUrl}, hasState={HasState}, hasNonce={HasNonce}, scopeLen={ScopeLen}, hasCodeChallenge={HasCodeChallenge}, codeChallengeMethod={CodeChallengeMethod}",
+            !string.IsNullOrEmpty(clientIdStr),
+            !string.IsNullOrEmpty(returnUrlStr),
+            !string.IsNullOrEmpty(stateStr),
+            !string.IsNullOrEmpty(nonceStr),
+            scopeStr?.Length ?? 0,
+            !string.IsNullOrEmpty(codeChallengeStr),
             codeChallengeMethodStr ?? "(null)");
 
         if (string.IsNullOrEmpty(clientIdStr) || string.IsNullOrEmpty(returnUrlStr))
@@ -134,11 +133,11 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.BadRequest("QR login is not enabled");
         }
 
-        _logger.LogDebug("QR login from validated request: clientId={ClientId}, redirectUri={RedirectUri}, scope={Scope}, nonce={Nonce}",
+        _logger.LogDebug("QR login from validated request: clientId={ClientId}, hasRedirectUri={HasRedirectUri}, scopeCount={ScopeCount}, hasNonce={HasNonce}",
             validationResult.ClientId,
-            validationResult.RedirectUri,
-            string.Join(" ", validationResult.Scopes ?? Array.Empty<string>()),
-            validationResult.Nonce ?? "(null)");
+            !string.IsNullOrEmpty(validationResult.RedirectUri),
+            validationResult.Scopes?.Length ?? 0,
+            !string.IsNullOrEmpty(validationResult.Nonce));
 
         var scope = string.Join(" ", validationResult.Scopes ?? new[] { OidcConstants.Scopes.OpenId });
         var state = request.state ?? string.Empty;
@@ -383,19 +382,17 @@ public sealed class QrLoginHandler : IQrLoginHandler
     public async Task<IResult> MobileLandingAsync(HttpContext http)
     {
         var sessionToken = http.Request.Query["session"].ToString();
-        var requestUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}{http.Request.QueryString}";
 
-        _logger.LogInformation("🔍 [QR Mobile Landing] Request from {IP}, Full URL: {Url}",
+        _logger.LogInformation("🔍 [QR Mobile Landing] Request from {IP}, Path: {Path}",
             http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            requestUrl);
+            http.Request.Path);
         _logger.LogInformation("🔍 [QR Mobile Landing] Session token present: {HasSession}, Length: {Length}",
             !string.IsNullOrEmpty(sessionToken),
             sessionToken?.Length ?? 0);
 
         if (string.IsNullOrEmpty(sessionToken))
         {
-            _logger.LogWarning("❌ [QR Mobile Landing] REJECTED: missing session parameter. Query string: {QueryString}",
-                http.Request.QueryString.Value);
+            _logger.LogWarning("❌ [QR Mobile Landing] REJECTED: missing session parameter");
             return Results.BadRequest("Missing session parameter");
         }
 
@@ -448,14 +445,13 @@ public sealed class QrLoginHandler : IQrLoginHandler
             // Redirect to login with return URL
             var returnUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
             var loginUrl = $"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}";
-            _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to LOGIN. ReturnUrl: {ReturnUrl}, Full login URL: {LoginUrl}",
-                returnUrl, loginUrl);
+            _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to /login for QR flow");
             return Results.Redirect(loginUrl);
         }
 
         // User is authenticated, redirect to confirmation page
         var confirmUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
-        _logger.LogInformation("➡️ [QR Mobile Landing] User already authenticated, redirecting to CONFIRM: {ConfirmUrl}", confirmUrl);
+        _logger.LogInformation("➡️ [QR Mobile Landing] User already authenticated, redirecting to /auth/qr-confirm");
         return Results.Redirect(confirmUrl);
     }
 
