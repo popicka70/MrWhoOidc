@@ -174,6 +174,28 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_Missing_Scope_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("aud", "api")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer valid_token");
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("invalid_token", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task UserInfo_Disallowed_Audience_Returns_401()
     {
         using var db = CreateDb();

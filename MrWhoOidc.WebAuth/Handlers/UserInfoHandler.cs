@@ -49,6 +49,17 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
+            // Require scope claim to distinguish access tokens from ID tokens.
+            // (This server's access tokens always include OAuth 'scope'; ID tokens do not.)
+            var scopeClaim = principal.FindFirst("scope")?.Value;
+            if (string.IsNullOrWhiteSpace(scopeClaim))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing scope claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
             // Audience hardening: require at least one audience and enforce a conservative allow policy.
             // Allow if:
             // - audience matches configured ApiAudiences, OR
@@ -161,7 +172,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
             }
 
-            var scopes = (principal.FindFirst("scope")?.Value ?? string.Empty)
+            var scopes = (scopeClaim ?? string.Empty)
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 

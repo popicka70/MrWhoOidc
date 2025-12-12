@@ -145,9 +145,10 @@ public sealed class DPoPValidator : IDPoPValidator
 
             return Task.FromResult(new DPoPValidationResult(true, jkt, jti, iatSec, nonce, null));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, ex.Message));
+            // Avoid returning raw exception messages (can leak implementation details).
+            return Task.FromResult(new DPoPValidationResult(false, null, null, null, null, "validation_error"));
         }
     }
 
