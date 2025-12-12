@@ -121,7 +121,7 @@ public class ClientAuthenticator(
             usedPrivateKeyJwt = true;
             
             // Determine endpoint URL for audience validation
-            var endpoint = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+            var endpoint = http.GetEndpointUrl();
             
             authenticated = await assertionValidator.ValidateAsync(clientId, clientAssertion, endpoint);
             if (!authenticated)

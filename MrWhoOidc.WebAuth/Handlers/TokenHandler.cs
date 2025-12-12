@@ -87,7 +87,7 @@ public sealed class TokenHandler(
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
             // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-            var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+            var endpointUrl = http.GetEndpointUrl();
             var tenantId = _tenantAccessor.CurrentTenant?.TenantId;
 
             if (!string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))

@@ -1,5 +1,6 @@
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.AspNetCore.Http.Extensions;
 
 namespace MrWhoOidc.WebAuth.Extensions;
 
@@ -39,5 +40,14 @@ public static class HttpContextExtensions
         // Use mode-aware issuer builder to construct tenant-specific issuer
         var issuerBuilder = httpContext.RequestServices.GetRequiredService<IIssuerBuilder>();
         return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
+    }
+
+    public static string GetEndpointUrl(this HttpContext httpContext)
+    {
+        return UriHelper.BuildAbsolute(
+            httpContext.Request.Scheme,
+            httpContext.Request.Host,
+            httpContext.Request.PathBase,
+            httpContext.Request.Path);
     }
 }

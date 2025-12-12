@@ -108,7 +108,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
 
                 // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-                var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+                var endpointUrl = http.GetEndpointUrl();
                 var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
 
                 // Nonce challenge support
