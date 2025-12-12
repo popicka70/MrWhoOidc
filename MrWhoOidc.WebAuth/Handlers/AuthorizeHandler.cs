@@ -199,7 +199,7 @@ public sealed class AuthorizeHandler(
             }
 
             // Resolve request object (Query, PAR, JAR)
-            var issuer = GetIssuer(http);
+            var issuer = http.GetIssuer();
             var resolution = await requestResolver.ResolveAsync(
                 http.Request.Query.Select(x => new KeyValuePair<string, string>(x.Key, x.Value.ToString())),
                 requestUriRaw,
@@ -509,7 +509,7 @@ public sealed class AuthorizeHandler(
             }
 
             // RFC 9207: Add issuer identification parameter to prevent mix-up attacks
-            var iss = GetIssuer(http);
+            var iss = http.GetIssuer();
             var uri2 = new UriBuilder(redirect!);
             var query2 = System.Web.HttpUtility.ParseQueryString(uri2.Query);
             query2["iss"] = iss;
@@ -527,27 +527,6 @@ public sealed class AuthorizeHandler(
             metrics.AuthorizeDurationMs.Record(sw.Elapsed.TotalMilliseconds, tags);
         }
     }
-
-
-
-    private static string GetIssuer(HttpContext http)
-    {
-        var options = http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions;
-
-        // If issuer is explicitly configured, use it (backward compatibility)
-        if (!string.IsNullOrEmpty(options?.Issuer))
-        {
-            return options.Issuer;
-        }
-
-        // Otherwise, use mode-aware issuer builder
-        var issuerBuilder = http.RequestServices.GetRequiredService<IIssuerBuilder>();
-        var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
-        return issuerBuilder.BuildIssuer(baseUrl);
-    }
-
-
-
     // BucketizeClientId moved to Bucketization utility.
 
     private static string BuildLastProviderCookieName(string clientId)

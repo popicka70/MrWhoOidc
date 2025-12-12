@@ -18,13 +18,13 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
 public class EditModel(
-    AuthDbContext db, 
-    IIdentityProviderValidator validator, 
-    IHttpClientFactory httpClientFactory, 
+    AuthDbContext db,
+    IIdentityProviderValidator validator,
+    IHttpClientFactory httpClientFactory,
     IWebHostEnvironment env,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
-    IOptions<OidcOptions> oidcOptions) : ReadOnlyAdminPageModel
+    IOptions<OidcOptions> oidcOptions) : PageModel
 {
     [BindProperty]
     public InputModel? Input { get; set; }
@@ -411,28 +411,15 @@ public class EditModel(
         RedirectUris.Clear();
         LogoutCallbackUris.Clear();
 
-        // Get the base URL (public-facing URL or current request URL)
-        var baseUrl = !string.IsNullOrEmpty(oidcOptions.Value.PublicBaseUrl)
-            ? oidcOptions.Value.PublicBaseUrl.TrimEnd('/')
-            : $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
+        // Use canonical tenant-aware issuer (may include /t/{slug})
+        var baseUrl = HttpContext.GetIssuer(oidcOptions.Value);
 
         // The callback paths
         var authCallbackPath = "/auth/external/callback";
         var logoutCallbackPath = "/logout/federated-callback";
 
-        // In multi-tenant mode, add tenant-specific URIs
-        if (multiTenancyOptions.Enabled && tenantAccessor.CurrentTenant != null)
-        {
-            var tenantSlug = tenantAccessor.CurrentTenant.Slug;
-            RedirectUris.Add($"{baseUrl}/t/{tenantSlug}{authCallbackPath}");
-            LogoutCallbackUris.Add($"{baseUrl}/t/{tenantSlug}{logoutCallbackPath}");
-        }
-        else
-        {
-            // Single-tenant mode or no tenant context
-            RedirectUris.Add($"{baseUrl}{authCallbackPath}");
-            LogoutCallbackUris.Add($"{baseUrl}{logoutCallbackPath}");
-        }
+        RedirectUris.Add($"{baseUrl}{authCallbackPath}");
+        LogoutCallbackUris.Add($"{baseUrl}{logoutCallbackPath}");
     }
 
     private OidcConfigForm? JsonToForm(string json)

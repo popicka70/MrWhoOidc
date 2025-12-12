@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -229,7 +230,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/auth/external/callback";
+        var redirectUri = http.GetIssuer() + "/auth/external/callback";
         
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
             code.Length > 10 ? code.Substring(0, 10) + "..." : code, 

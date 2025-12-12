@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -25,7 +26,8 @@ public sealed class AutoSeedMiddleware
         AuthDbContext db,
         ISeeder seeder,
         ITenantAccessor tenantAccessor,
-        IMultiTenancyOptions multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions,
+        OidcOptions oidcOptions)
     {
         // Fast path: if already seeded, skip
         if (_seeded)
@@ -51,7 +53,9 @@ public sealed class AutoSeedMiddleware
                 {
                     // Create default tenant first (synchronously for simplicity in lock)
                     var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-                    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+                    var baseUrl = !string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl)
+                        ? oidcOptions.PublicBaseUrl.TrimEnd('/')
+                        : $"{context.Request.Scheme}://{context.Request.Host}";
                     var issuerUri = multiTenancyOptions.Enabled
                         ? $"{baseUrl}/t/{defaultSlug}"
                         : baseUrl;
