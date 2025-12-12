@@ -14,6 +14,7 @@ using MrWhoOidc.WebAuth.Observability;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -65,6 +66,29 @@ public sealed class UserInfoHandlerTests
             context.Request.Headers.Authorization = authorization;
         }
         return context;
+    }
+
+    private static string CreateUnsignedJwt(string? typ = SecurityConstants.JwtTokenTypes.AtJwt)
+    {
+        static string Base64Url(byte[] bytes)
+        {
+            var s = Convert.ToBase64String(bytes);
+            return s.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        var header = new Dictionary<string, object?>
+        {
+            ["alg"] = "none"
+        };
+        if (!string.IsNullOrWhiteSpace(typ)) header["typ"] = typ;
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["sub"] = Guid.NewGuid().ToString(),
+            ["iat"] = 0
+        };
+
+        return $"{Base64Url(JsonSerializer.SerializeToUtf8Bytes(header))}.{Base64Url(JsonSerializer.SerializeToUtf8Bytes(payload))}.";
     }
 
     private static async Task<(int Status, string Body)> ExecuteAsync(IResult result, DefaultHttpContext context)
@@ -142,7 +166,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
@@ -165,7 +189,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
         var handler = CreateHandler(db, validator: validator);
 
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
         var result = handler.Handle(context);
         var (status, body) = await ExecuteAsync(result, context);
 
@@ -187,7 +211,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
         var handler = CreateHandler(db, validator: validator);
 
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
         var result = handler.Handle(context);
         var (status, body) = await ExecuteAsync(result, context);
 
@@ -210,7 +234,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
         var handler = CreateHandler(db, validator: validator);
 
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
         var result = handler.Handle(context);
         var (status, body) = await ExecuteAsync(result, context);
 
@@ -243,7 +267,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
@@ -281,7 +305,7 @@ public sealed class UserInfoHandlerTests
         var dpopValidator = new StubDPoPValidator(false, error: "invalid_dpop");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
@@ -427,7 +451,7 @@ public sealed class UserInfoHandlerTests
         var dpopValidator = new StubDPoPValidator(true, jkt: "different_thumbprint");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -469,7 +493,7 @@ public sealed class UserInfoHandlerTests
         var nonceStore = new StubDPoPNonceStore(ok: false, nonce: "server_issued_nonce");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator, nonceStore: nonceStore);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -508,7 +532,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -547,7 +571,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -586,7 +610,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -651,7 +675,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -690,7 +714,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -725,7 +749,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);

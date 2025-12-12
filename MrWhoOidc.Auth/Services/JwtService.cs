@@ -9,13 +9,13 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IJwtService
 {
-    string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null);
-    string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null);
+    string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null);
+    string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null);
 }
 
 internal sealed class JwtService(IKeyStore keyStore) : IJwtService
 {
-    public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null)
+    public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
@@ -40,11 +40,16 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
             signingCredentials: creds
         );
 
+        if (!string.IsNullOrWhiteSpace(tokenType))
+        {
+            token.Header[JwtHeaderParameterNames.Typ] = tokenType;
+        }
+
         var handler = new JwtSecurityTokenHandler();
         return handler.WriteToken(token);
     }
 
-    public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null)
+    public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
@@ -67,7 +72,8 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
             Expires = expires.UtcDateTime,
             Claims = list.ToDictionary(c => c.Type, c => (object)c.Value),
             SigningCredentials = signingCreds,
-            EncryptingCredentials = encryptingCredentials
+            EncryptingCredentials = encryptingCredentials,
+            TokenType = tokenType
         };
 
         var handler = new JwtSecurityTokenHandler();

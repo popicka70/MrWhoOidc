@@ -292,7 +292,7 @@ public class TokenExchangeService(
                 claims.Add(new("cnf", cnf));
             }
             var nowUtc = DateTimeOffset.UtcNow;
-            accessToken = jwt.CreateJwt(issuer, audience, claims, nowUtc.Add(lifetime));
+            accessToken = jwt.CreateJwt(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
         }
 
         var payload = new

@@ -58,18 +58,15 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### C3. DPoP proof replay protection is missing at `/token`
 
-**Evidence**
-- `MrWhoOidc.Security/DPoP.cs` (`DPoPValidator.ValidateForEndpointAsync`) returns `jti`/`iat` but does **not** enforce replay.
-- `/token` uses `MrWhoOidc.WebAuth/Infrastructure/DpopValidationHelper.cs` which validates proof but does **not** consult `IDPoPReplayCache`.
-- Replay checks exist for `/userinfo` and `/introspect` (`TryAdd(jkt:jti)` logic), but not for `/token`.
+**Current status (code as of 2025-12-12 in this workspace)**
+- `/token` enforces DPoP replay protection via `MrWhoOidc.WebAuth/Infrastructure/DpopValidationHelper.cs` using `IDPoPReplayCache` (key `${jkt}:${jti}`, 5-minute window).
+- `MrWhoOidc.Security/DPoP.cs` remains a pure validator (returns `jti`/`iat`); replay prevention is enforced at endpoint layer.
 
 **Why it matters**
 - If an attacker can replay a token request (e.g., via compromised client, telemetry, reverse proxy logs, or request duplication), the DPoP proof does not prevent reuse. DPoP is intended to make replay materially harder; replay cache is a core part of that.
 
 **Recommended fix**
-- Add replay-cache enforcement for `/token` requests when `DPoP` is present:
-  - require `jti` + `iat`,
-  - `TryAdd($"{jkt}:{jti}", iat+5m)` and reject if already present.
+- Keep the current endpoint-layer replay enforcement.
 - Prefer a distributed cache implementation in multi-instance deployments.
 
 ### High
@@ -97,15 +94,17 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### H2. `/token` responses are missing required no-store caching headers
 
-**Evidence**
-- `/par` explicitly sets `Cache-Control: no-store` (`MrWhoOidc.WebAuth/Handlers/ParHandler.cs`).
-- No `Cache-Control: no-store` / `Pragma: no-cache` header setting was found in `/token` handling paths (e.g., `MrWhoOidc.WebAuth/Handlers/TokenHandler.cs` and token grant handlers under `MrWhoOidc.WebAuth/TokenEndpoint/Grants/*`).
+**Current status (code as of 2025-12-12 in this workspace)**
+- `/token` sets `Cache-Control: no-store` and `Pragma: no-cache` in `MrWhoOidc.WebAuth/Handlers/TokenHandler.cs`.
+- `/revoke` sets `Cache-Control: no-store` and `Pragma: no-cache` in `MrWhoOidc.WebAuth/Handlers/RevocationHandler.cs`.
+- `/introspect` sets `Cache-Control: no-store` and `Pragma: no-cache` in `MrWhoOidc.WebAuth/Handlers/Introspection/IntrospectionHandler.cs`.
+- `/par` sets `Cache-Control: no-store` on success (`MrWhoOidc.WebAuth/Handlers/ParHandler.cs`).
 
 **Why it matters**
 - OAuth 2.0 token responses should not be cached by intermediaries.
 
 **Recommended fix**
-- Ensure **all** token endpoint responses (success and error) include:
+- Ensure **all** token-like endpoints (success and error) include:
   - `Cache-Control: no-store`
   - `Pragma: no-cache`
 
@@ -147,6 +146,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 **Evidence**
 - `MrWhoOidc.Auth/Services/TokenValidator.cs` does not check `typ`.
 
+**Current status (code as of 2025-12-12 in this workspace)**
+- Access tokens are emitted with `typ=at+jwt` (via `MrWhoOidc.Auth/Services/JwtService.cs`).
+- `/userinfo` enforces `typ=at+jwt` and also requires the OAuth `scope` claim to reduce accidental acceptance of non-access tokens.
+
 **Why it matters**
 - Without `typ` enforcement (and/or other token-use constraints), endpoints like `/userinfo` can become more permissive than intended (e.g., potentially accepting an `id_token` if signature/lifetime pass and claims look plausible).
 
@@ -157,8 +160,8 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### M2. DPoP validator returns raw exception messages as error strings
 
-**Evidence**
-- `MrWhoOidc.Security/DPoP.cs` catches exceptions and returns `ex.Message` in `DPoPValidationResult.Error`.
+**Current status (code as of 2025-12-12 in this workspace)**
+- `MrWhoOidc.Security/DPoP.cs` normalizes unexpected exceptions to `validation_error` (does not return raw exception messages).
 
 **Why it matters**
 - If these messages leak to clients (now or in future changes), they can become an information disclosure channel.

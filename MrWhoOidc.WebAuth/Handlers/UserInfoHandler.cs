@@ -1,5 +1,6 @@
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
@@ -39,6 +40,26 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
 
             var token = auth.Substring(bearerPrefix.Length).Trim();
             var issuer = http.GetIssuer(options);
+
+            // Require typ=at+jwt to avoid accepting other JWT types (e.g., id_token).
+            try
+            {
+                var unsigned = new JwtSecurityTokenHandler().ReadJwtToken(token);
+                if (!string.Equals(unsigned.Header.Typ, SecurityConstants.JwtTokenTypes.AtJwt, StringComparison.OrdinalIgnoreCase))
+                {
+                    outcome = "failure";
+                    logger.LogWarning("/userinfo 401: invalid typ={Typ} from {IP}", unsigned.Header.Typ ?? "(null)", http.Connection.RemoteIpAddress?.ToString());
+                    metrics.UserInfoFailures.Add(1);
+                    return WithWwwAuthenticate(ErrorResults.InvalidToken());
+                }
+            }
+            catch
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: token not parseable as JWT from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
 
             var (ok, principal, _) = validator.Validate(token, issuer);
             if (!ok || principal is not { })

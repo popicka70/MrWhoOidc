@@ -21,6 +21,9 @@ public sealed class IntrospectionHandler(
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        http.Response.Headers["Cache-Control"] = "no-store";
+        http.Response.Headers["Pragma"] = "no-cache";
+
         var metrics = new IntrospectionMetrics(oidcMetrics);
 
         // Parse request

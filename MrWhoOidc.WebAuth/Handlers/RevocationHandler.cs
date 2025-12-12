@@ -14,6 +14,9 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        http.Response.Headers["Cache-Control"] = "no-store";
+        http.Response.Headers["Pragma"] = "no-cache";
+
         metrics.RevocationRequests.Add(1);
 
         if (!http.Request.HasFormContentType)
