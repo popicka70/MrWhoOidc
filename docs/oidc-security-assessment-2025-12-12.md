@@ -77,8 +77,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 #### H1. Authorization endpoints log full query strings (risk of leaking sensitive parameters)
 
 **Evidence**
-- `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs` logs `QueryString` at entry.
-- Similar patterns exist in other auth-adjacent flows (QR/external callback handlers/pages).
+- Previously flagged risk: logging raw `/authorize` query strings.
+
+**Current status (code as of 2025-12-12 in this workspace)**
+- No raw `/authorize` query string logging was found in `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs` (the entry log includes only Path).
 
 **Why it matters**
 - `/authorize` query strings frequently include values that must not leak (e.g., `state`, `nonce`, `login_hint`, `code_challenge`, and sometimes `request` / `request_uri`).
@@ -113,6 +115,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 **Evidence**
 - `MrWhoOidc.WebAuth/Middleware/AutoSeedMiddleware.cs` creates a default tenant when none exist, with hard-coded values (e.g., `AdminEmail = "admin@mrwho.local"`).
+
+**Current status (code as of 2025-12-12 in this workspace)**
+- Auto-seeding is now gated to Development by default (with an explicit opt-in override via `AutoSeed:Enabled` or `Testing:EnableAutoSeed`).
 
 **Why it matters**
 - If this middleware is enabled in production, an attacker who hits a fresh deployment first could influence initial state (at minimum, it creates a tenant automatically).

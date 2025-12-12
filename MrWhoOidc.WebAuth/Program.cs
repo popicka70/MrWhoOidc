@@ -174,6 +174,15 @@ builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSect
 
 var app = builder.Build();
 
+var autoSeedEnabled = app.Environment.IsDevelopment()
+    || string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(app.Configuration["AutoSeed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (autoSeedEnabled && !app.Environment.IsDevelopment())
+{
+    app.Logger.LogWarning("Auto-seeding is enabled outside Development. This is unsafe for production.");
+}
+
 // Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())
 {
@@ -210,56 +219,63 @@ using (var scope = app.Services.CreateScope())
             throw;
         }
         
-        // Auto-seed default tenant immediately after migrations if database is empty
-        // This ensures background services have a tenant to work with
-        var needsSeeding = !await db.Tenants.AnyAsync();
-        if (needsSeeding)
+        if (autoSeedEnabled)
         {
-            logger.LogInformation("Database is empty, seeding default tenant...");
-            var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
-            var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-            
-            // Create default tenant
-            var defaultTenant = new Tenant
+            // Auto-seed default tenant immediately after migrations if database is empty.
+            // Development/test convenience only.
+            var needsSeeding = !await db.Tenants.AnyAsync();
+            if (needsSeeding)
             {
-                Slug = defaultSlug,
-                Name = "Default Tenant",
-                Description = "Default tenant created automatically on startup",
-                IssuerUri = $"https://localhost:7157/t/{defaultSlug}", // Will be updated on first request
-                Status = TenantStatus.Active,
-                MaxUsers = 100000,
-                MaxClients = 1000,
-                AdminEmail = "admin@mrwho.local",
-                BillingPlan = "Enterprise",
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            
-            db.Tenants.Add(defaultTenant);
-            await db.SaveChangesAsync();
-            
-            // Seed platform admin and sample data
-            var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
-            var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-            
-            // Manually set the tenant context for seeding
-            var tenantContext = new TenantContext
+                logger.LogInformation("Database is empty, seeding default tenant...");
+                var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
+                var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+
+                // Create default tenant
+                var defaultTenant = new Tenant
+                {
+                    Slug = defaultSlug,
+                    Name = "Default Tenant",
+                    Description = "Default tenant created automatically on startup",
+                    IssuerUri = $"https://localhost:7157/t/{defaultSlug}", // Will be updated on first request
+                    Status = TenantStatus.Active,
+                    MaxUsers = 100000,
+                    MaxClients = 1000,
+                    AdminEmail = "admin@mrwho.local",
+                    BillingPlan = "Enterprise",
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                db.Tenants.Add(defaultTenant);
+                await db.SaveChangesAsync();
+
+                // Seed platform admin and sample data
+                var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
+                var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
+
+                // Manually set the tenant context for seeding
+                var tenantContext = new TenantContext
+                {
+                    TenantId = defaultTenant.Id,
+                    Slug = defaultSlug,
+                    Name = defaultTenant.Name,
+                    IssuerUri = defaultTenant.IssuerUri,
+                    IsMultiTenantMode = multiTenancyOptions.Enabled
+                };
+
+                tenantAccessor.SetTenant(tenantContext);
+
+                await seeder.SeedAsync();
+
+                logger.LogInformation("Auto-seeded default tenant '{TenantSlug}' with platform admin on startup", defaultSlug);
+            }
+            else
             {
-                TenantId = defaultTenant.Id,
-                Slug = defaultSlug,
-                Name = defaultTenant.Name,
-                IssuerUri = defaultTenant.IssuerUri,
-                IsMultiTenantMode = multiTenancyOptions.Enabled
-            };
-            
-            tenantAccessor.SetTenant(tenantContext);
-            
-            await seeder.SeedAsync();
-            
-            logger.LogInformation("Auto-seeded default tenant '{TenantSlug}' with platform admin on startup", defaultSlug);
+                logger.LogInformation("Database already contains tenants, skipping seeding");
+            }
         }
         else
         {
-            logger.LogInformation("Database already contains tenants, skipping seeding");
+            logger.LogInformation("Auto-seed disabled; skipping tenant bootstrap");
         }
     }
     else
@@ -276,7 +292,10 @@ app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
 
 // Auto-seed default tenant and platform admin on first request (if database is empty)
 // MUST be before endpoint mapping (it's middleware)
-app.UseAutoSeed();
+if (autoSeedEnabled)
+{
+    app.UseAutoSeed();
+}
 
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
 app.MapMrWhoOidcEndpoints();

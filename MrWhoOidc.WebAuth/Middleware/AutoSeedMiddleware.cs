@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -27,8 +29,21 @@ public sealed class AutoSeedMiddleware
         ISeeder seeder,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions multiTenancyOptions,
-        OidcOptions oidcOptions)
+        OidcOptions oidcOptions,
+        IHostEnvironment env,
+        IConfiguration config)
     {
+        // Safety: auto-seeding must never run in production unless explicitly enabled.
+        var enabled = env.IsDevelopment()
+            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(config["AutoSeed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!enabled)
+        {
+            await _next(context);
+            return;
+        }
+
         // Fast path: if already seeded, skip
         if (_seeded)
         {
