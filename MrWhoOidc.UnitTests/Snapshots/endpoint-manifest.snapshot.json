@@ -580,6 +580,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/bootstrap",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/clients/{clientId}/jwks",
     "Methods": "GET",
     "RateLimiters": [

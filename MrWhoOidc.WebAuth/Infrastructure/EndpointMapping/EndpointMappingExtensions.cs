@@ -80,11 +80,6 @@ internal static class EndpointMappingExtensions
                             tenantAccessor.SetTenant(tenantContext);
                             logger.LogInformation("Tenant context set to '{TenantSlug}' for startup operations.", defaultTenant.Slug);
 
-                            logger.LogInformation("Seeding database...");
-                            var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
-                            await seeder.SeedAsync();
-                            logger.LogInformation("Database seeding completed.");
-
                             logger.LogInformation("Initializing signing keys...");
                             var keyStore = scope.ServiceProvider.GetRequiredService<IKeyStore>();
                             await keyStore.GetActiveSigningKeyAsync();

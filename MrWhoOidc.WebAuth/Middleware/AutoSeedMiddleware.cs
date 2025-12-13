@@ -35,10 +35,9 @@ public sealed class AutoSeedMiddleware
         IHostEnvironment env,
         IConfiguration config)
     {
-        // Safety: auto-seeding must never run in production unless explicitly enabled.
+        // Safety: auto-seeding must never run in production.
         var enabled = env.IsDevelopment()
-            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(config["AutoSeed:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
         if (!enabled)
         {
