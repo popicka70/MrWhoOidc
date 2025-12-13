@@ -63,6 +63,14 @@ internal sealed class GlobalAuthenticationService(
         var hashPrefix = account.PasswordHash?.Length > 20 ? account.PasswordHash[..20] : account.PasswordHash ?? "(none)";
         logger.LogDebug("🔍 [GlobalAuth] Verifying password for account {AccountId}, stored hash prefix: '{HashPrefix}...'",
             account.Id, hashPrefix);
+
+        if (string.IsNullOrWhiteSpace(account.PasswordHash))
+        {
+            logger.LogDebug("Authentication failed: no password hash for account {AccountId}", account.Id);
+            await RecordFailedAttemptAsync(account.Id, ct).ConfigureAwait(false);
+            metrics.GlobalAuthFailure("missing_password_hash");
+            return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
+        }
         
         var isValid = passwordHasher.Verify(password, account.PasswordHash);
         logger.LogDebug("🔍 [GlobalAuth] Password verification result: {IsValid}", isValid);

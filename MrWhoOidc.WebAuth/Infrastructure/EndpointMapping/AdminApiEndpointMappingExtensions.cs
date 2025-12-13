@@ -846,6 +846,7 @@ public static class AdminApiEndpointMappingExtensions
         }).WithName("SeedTenant");
 
         // Credential migration endpoints (platform-admin only)
+#pragma warning disable CS0618
         platformAdmin.MapGet("/migrate-credentials/status", async (
             MrWhoOidc.Auth.Services.IPasswordMigrationService migrationService,
             CancellationToken ct) =>
@@ -920,6 +921,7 @@ public static class AdminApiEndpointMappingExtensions
                 message = result.Message
             });
         }).WithName("MigrateSingleAccount");
+#pragma warning restore CS0618
     }
 
     /// <summary>

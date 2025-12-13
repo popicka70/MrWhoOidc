@@ -108,7 +108,9 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         
         // Password migration service (for migrating per-tenant to global credentials)
+    #pragma warning disable CS0618
         services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
+    #pragma warning restore CS0618
         
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
