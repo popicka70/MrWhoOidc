@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -14,9 +15,9 @@ public class SwitchTenantModel(
     public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
     {
         logger.LogInformation("🔄 [TenantSwitch] START - Requested switch to tenant {TenantId}, ReturnUrl={ReturnUrl}", tenantId, returnUrl);
-        logger.LogInformation("🔄 [TenantSwitch] Current user: {UserName}, Sub={Sub}", 
+        logger.LogInformation("🔄 [TenantSwitch] Current user: {UserName}, SubHash={SubHash}", 
             User.Identity?.Name, 
-            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
+            LogTokenization.HashId(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value));
 
         // Verify user has access to this tenant
         var userTenants = await tenantSwitchingService.GetUserTenantsAsync(User);

@@ -3,6 +3,7 @@ using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -264,7 +265,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
             }
 
-            logger.LogInformation("/userinfo 200 for {Sub}", payload["sub"]);
+            logger.LogInformation("/userinfo 200 for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
             metrics.UserInfoSuccess.Add(1);
             var resultJson = Results.Json(payload);
             return new CacheHeaderResult(resultJson, "private, max-age=60");

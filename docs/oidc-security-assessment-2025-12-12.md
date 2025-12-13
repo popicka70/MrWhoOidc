@@ -174,7 +174,11 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 #### L1. Potential PII in logs (e.g., user subject)
 
 **Evidence**
-- `/userinfo` logs `Sub` on 200 responses (`MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`).
+- `/userinfo` previously logged raw `sub` on 200 responses (`MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`).
+
+**Current status (code as of 2025-12-12 in this workspace)**
+- `/userinfo` logs a short hash token (`sub_hash`) instead of the raw subject.
+- Tenant switching and password flows also tokenize `sub`/subject identifiers in logs.
 
 **Recommended fix**
 - Hash/tokenize identifiers in logs, or downgrade to debug with sampling.
