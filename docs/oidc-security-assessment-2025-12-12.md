@@ -20,9 +20,55 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 ## Findings (prioritized)
 
+## Implementation status (as of 2025-12-13)
+
+This checklist reflects what is implemented in code vs what remains as operational/config work.
+
+### Findings
+
+- [x] **C1 (forwarded headers spoofing)**: Safe-by-default forwarded headers configuration (no blanket trust of `X-Forwarded-*`) + regression test coverage.
+- [ ] **C1 (deployment)**: Production should explicitly configure `ForwardedHeaders:KnownProxies`/`KnownNetworks` and/or `ForwardedHeaders:AllowedHosts` (and set `Oidc:PublicBaseUrl` or `Oidc:Issuer`) to avoid proxy/host ambiguity.
+
+- [x] **C2 (`aud` validation)**: Audience enforced for access-token validation at `/userinfo` (with tests rejecting unexpected audiences).
+
+- [x] **C3 (DPoP replay at `/token`)**: DPoP proof replay prevention enforced at `/token` (distributed-capable where configured).
+
+- [x] **H1 (authorize query logging)**: No raw `/authorize` query string logging in the request logs.
+
+- [x] **H2 (no-store headers)**: `Cache-Control: no-store` + `Pragma: no-cache` consistently applied on token-like endpoints (including error paths) with regression tests.
+
+- [x] **H3 (auto-seed risk)**: Auto-seed restricted to dev/test only; explicit one-time bootstrap endpoint exists.
+
+- [x] **H4 (PAR rate limiting)**: PAR rate limiting enforced via ASP.NET rate limiting; Redis-backed limiter used when configured.
+
+- [x] **M1 (`typ` enforcement)**: Access tokens emitted with `typ=at+jwt` and enforced at `/userinfo`.
+
+- [x] **M2 (DPoP error normalization)**: DPoP validation avoids leaking raw exception messages.
+
+- [x] **L1 (PII in logs)**: Subject identifiers are tokenized/hashed in logs.
+
+### Roadmap (optional)
+
+- [ ] **FAPI alignment mode**: Require PAR for all clients; tighten redirect URI registration; consider JAR/JARM requirements for high-risk clients.
+
+- [x] **Issuer and host safety (code)**: Canonical issuer derivation prefers configured base + tenant issuer over request host; issuer health endpoint encourages explicit configuration.
+- [ ] **Issuer and host safety (deployment)**: Enforce/operate with a strict allowed-host policy (`ForwardedHeaders:AllowedHosts`) in production.
+
+- [x] **Session/logout completeness (RP sample)**: Logout token validation hardened (typ/events/jti replay + `iat` required and bounded).
+
+- [x] **Security headers for Razor Pages (baseline)**: HTML-only security headers middleware added (incl. CSP).
+- [ ] **Security headers for Razor Pages (expand)**: Consider adding `Permissions-Policy` and verify CSP against all UI pages.
+
+- [ ] **DPoP completeness (consistency)**: Review nonce/replay behavior consistency across `/token`, `/userinfo`, and `/introspect` for your intended threat model.
+
 ### Critical
 
 #### C1. Unrestricted trust of forwarded headers (host/proto) can corrupt issuer/endpoint URLs
+
+**Status**
+- [x] **Code**: Forwarded headers are configured safe-by-default (no blanket trust of `X-Forwarded-*`).
+- [x] **Tests**: Regression coverage exists for forwarded-host spoofing.
+- [ ] **Deployment**: Production must explicitly configure `ForwardedHeaders:KnownProxies`/`KnownNetworks` and/or `ForwardedHeaders:AllowedHosts` (and set `Oidc:PublicBaseUrl` or `Oidc:Issuer`).
 
 **Evidence**
 - `MrWhoOidc.WebAuth/Infrastructure/Pipeline/PipelineExtensions.cs` clears `KnownNetworks` and `KnownProxies` and enables forwarded headers (`X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`).
@@ -42,6 +88,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### C2. JWT access token validation does not validate audience (accepts any `aud`)
 
+**Status**
+- [x] **Implemented**: Audience is enforced for access-token validation at `/userinfo`.
+- [x] **Tests**: Tokens with unexpected audiences are rejected.
+
 **Evidence**
 - `MrWhoOidc.Auth/Services/TokenValidator.cs`: `ValidateAudience = false`.
 - `/userinfo` uses this validator (`MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`).
@@ -58,6 +108,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### C3. DPoP proof replay protection is missing at `/token`
 
+**Status**
+- [x] **Implemented**: `/token` enforces DPoP proof replay prevention.
+- [x] **Note**: Distributed support is available when configured.
+
 **Current status (code as of 2025-12-12 in this workspace)**
 - `/token` enforces DPoP replay protection via `MrWhoOidc.WebAuth/Infrastructure/DpopValidationHelper.cs` using `IDPoPReplayCache` (key `${jkt}:${jti}`, 5-minute window).
 - `MrWhoOidc.Security/DPoP.cs` remains a pure validator (returns `jti`/`iat`); replay prevention is enforced at endpoint layer.
@@ -72,6 +126,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 ### High
 
 #### H1. Authorization endpoints log full query strings (risk of leaking sensitive parameters)
+
+**Status**
+- [x] **Verified**: No raw `/authorize` query string logging in the request logs.
 
 **Evidence**
 - Previously flagged risk: logging raw `/authorize` query strings.
@@ -94,6 +151,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### H2. `/token` responses are missing required no-store caching headers
 
+**Status**
+- [x] **Implemented**: Token-like endpoints include `Cache-Control: no-store` and `Pragma: no-cache` (including error paths).
+- [x] **Tests**: Regression coverage exists.
+
 **Current status (code as of 2025-12-12 in this workspace)**
 - `/token` sets `Cache-Control: no-store` and `Pragma: no-cache` in `MrWhoOidc.WebAuth/Handlers/TokenHandler.cs`.
 - `/revoke` sets `Cache-Control: no-store` and `Pragma: no-cache` in `MrWhoOidc.WebAuth/Handlers/RevocationHandler.cs`.
@@ -111,6 +172,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 ---
 
 #### H3. Auto-seeding default tenant/platform admin is risky in non-dev environments
+
+**Status**
+- [x] **Implemented**: Auto-seed is Development/test only.
+- [x] **Implemented**: Explicit one-time bootstrap endpoint exists (`POST /bootstrap`) guarded by `X-Bootstrap-Token` and only allowed when DB is empty.
 
 **Evidence**
 - `MrWhoOidc.WebAuth/Middleware/AutoSeedMiddleware.cs` creates a default tenant when none exist, with hard-coded values (e.g., `AdminEmail = "admin@mrwho.local"`).
@@ -134,6 +199,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### H4. PAR rate limiting is in-memory (can be bypassed in multi-instance deployments)
 
+**Status**
+- [x] **Implemented**: PAR rate limiting enforced via ASP.NET rate limiting; Redis-backed limiter used when Redis is configured.
+
 **Previous evidence**
 - `MrWhoOidc.WebAuth/Handlers/ParHandler.cs` previously included a per-client in-memory limiter.
 
@@ -150,6 +218,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 ### Medium
 
 #### M1. Access token type (`typ`) is not enforced during validation
+
+**Status**
+- [x] **Implemented**: Access tokens emitted with `typ=at+jwt` and enforced at `/userinfo`.
 
 **Evidence**
 - `MrWhoOidc.Auth/Services/TokenValidator.cs` does not check `typ`.
@@ -168,6 +239,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### M2. DPoP validator returns raw exception messages as error strings
 
+**Status**
+- [x] **Implemented**: DPoP validation normalizes unexpected exceptions (no raw exception messages).
+
 **Current status (code as of 2025-12-12 in this workspace)**
 - `MrWhoOidc.Security/DPoP.cs` normalizes unexpected exceptions to `validation_error` (does not return raw exception messages).
 
@@ -180,6 +254,9 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 ### Low
 
 #### L1. Potential PII in logs (e.g., user subject)
+
+**Status**
+- [x] **Implemented**: Logs tokenize/hash subject identifiers.
 
 **Evidence**
 - `/userinfo` previously logged raw `sub` on 200 responses (`MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`).
