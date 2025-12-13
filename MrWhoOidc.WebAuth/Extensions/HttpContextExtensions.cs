@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.AspNetCore.Http.Extensions;
 
 namespace MrWhoOidc.WebAuth.Extensions;
 
@@ -9,6 +9,12 @@ namespace MrWhoOidc.WebAuth.Extensions;
 /// </summary>
 public static class HttpContextExtensions
 {
+    public static string GetIssuer(this HttpContext httpContext)
+    {
+        var options = httpContext.RequestServices.GetService<OidcOptions>() ?? new OidcOptions();
+        return httpContext.GetIssuer(options);
+    }
+
     /// <summary>
     /// Gets the issuer URL for the current request.
     /// In single-tenant mode: returns root issuer (e.g., https://auth.example.com)
@@ -20,35 +26,55 @@ public static class HttpContextExtensions
     /// <returns>The issuer URL.</returns>
     public static string GetIssuer(this HttpContext httpContext, OidcOptions options)
     {
-        var loggerFactory = httpContext.RequestServices.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger("MrWhoOidc.GetIssuer");
-        
-        logger.LogInformation("🔍 [GetIssuer] Called from {Path}, Scheme={Scheme}, Host={Host}", 
-            httpContext.Request.Path, 
-            httpContext.Request.Scheme, 
-            httpContext.Request.Host);
-        
-        // If issuer is explicitly configured, use it (backward compatibility)
-        if (!string.IsNullOrEmpty(options.Issuer))
+        // Prefer per-tenant issuer when available.
+        // This avoids deriving issuer from request host/headers (which is error-prone and can be unsafe
+        // if a deployment misconfigures proxy/host allow-lists).
+        var tenantAccessor = httpContext.RequestServices.GetService<ITenantAccessor>();
+
+        // Compute a best-effort base URL for cases where a tenant issuer is stored as a path.
+        var baseUrl =
+            (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
+            ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null)
+            ?? $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+
+        var tenantIssuer = tenantAccessor?.CurrentTenant?.IssuerUri;
+        if (!string.IsNullOrWhiteSpace(tenantIssuer))
         {
-            logger.LogInformation("✅ [GetIssuer] Using configured Issuer: {Issuer}", options.Issuer);
-            return options.Issuer;
+            if (Uri.TryCreate(tenantIssuer, UriKind.Absolute, out var absTenantIssuer))
+            {
+                return absTenantIssuer.ToString().TrimEnd('/');
+            }
+
+            // Some legacy code paths store tenant issuer as a relative path (e.g., "/t/default").
+            // Normalize to an absolute issuer using the configured base URL.
+            return (baseUrl.TrimEnd('/') + "/" + tenantIssuer.TrimStart('/')).TrimEnd('/');
         }
 
-        // Use PublicBaseUrl if configured (for Docker/proxy scenarios), otherwise use request URL
-        var baseUrl = !string.IsNullOrEmpty(options.PublicBaseUrl)
-            ? options.PublicBaseUrl
-            : $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
-        
-        logger.LogInformation("🔍 [GetIssuer] PublicBaseUrl={PublicBaseUrl}, BaseUrl={BaseUrl}", 
-            options.PublicBaseUrl ?? "(null)", baseUrl);
+        // If issuer is explicitly configured, use it (backward compatibility)
+        if (!string.IsNullOrWhiteSpace(options.Issuer))
+        {
+            return options.Issuer.TrimEnd('/');
+        }
 
-        // Use mode-aware issuer builder to construct tenant-specific issuer
+        // Otherwise, use mode-aware issuer builder.
+        // In multi-tenant mode this requires tenant context; if not yet resolved, fall back to base URL.
         var issuerBuilder = httpContext.RequestServices.GetRequiredService<IIssuerBuilder>();
-        var issuer = issuerBuilder.BuildIssuer(baseUrl);
-        
-        logger.LogInformation("✅ [GetIssuer] Final issuer: {Issuer}", issuer);
-        
-        return issuer;
+        try
+        {
+            return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
+        }
+        catch (InvalidOperationException)
+        {
+            return baseUrl.TrimEnd('/');
+        }
+    }
+
+    public static string GetEndpointUrl(this HttpContext httpContext)
+    {
+        return UriHelper.BuildAbsolute(
+            httpContext.Request.Scheme,
+            httpContext.Request.Host,
+            httpContext.Request.PathBase,
+            httpContext.Request.Path);
     }
 }

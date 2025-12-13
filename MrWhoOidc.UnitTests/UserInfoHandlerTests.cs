@@ -13,6 +13,8 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -35,15 +37,16 @@ public sealed class UserInfoHandlerTests
         IDPoPNonceStore? nonceStore = null)
     {
         var options = new OidcOptions { Issuer = "https://test.example.com" };
+        var authOptions = Options.Create(new AuthOptions { ApiAudiences = ["api", "test_client"] });
         var metrics = new OidcMetrics();
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<UserInfoHandler>();
 
-        validator ??= new StubTokenValidator(true, new ClaimsPrincipal());
+        validator ??= new StubTokenValidator(true, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", Guid.NewGuid().ToString()), new Claim("aud", "api"), new Claim("scope", "openid") }, "test")));
         dpopValidator ??= new StubDPoPValidator(true);
         replayCache ??= new StubDPoPReplayCache();
         nonceStore ??= new StubDPoPNonceStore();
 
-        return new UserInfoHandler(options, validator, metrics, dpopValidator, replayCache, nonceStore, logger, db);
+        return new UserInfoHandler(options, authOptions, validator, metrics, dpopValidator, replayCache, nonceStore, logger, db);
     }
 
     private static DefaultHttpContext CreateHttpContext(string? authorization = null)
@@ -63,6 +66,38 @@ public sealed class UserInfoHandlerTests
             context.Request.Headers.Authorization = authorization;
         }
         return context;
+    }
+
+    private static string CreateUnsignedJwt(string? typ = SecurityConstants.JwtTokenTypes.AtJwt)
+    {
+        static string Base64Url(byte[] bytes)
+        {
+            var s = Convert.ToBase64String(bytes);
+            return s.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        var header = new Dictionary<string, object?>
+        {
+            ["alg"] = "none"
+        };
+        if (!string.IsNullOrWhiteSpace(typ)) header["typ"] = typ;
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["sub"] = Guid.NewGuid().ToString(),
+            ["iat"] = 0
+        };
+
+        return $"{Base64Url(JsonSerializer.SerializeToUtf8Bytes(header))}.{Base64Url(JsonSerializer.SerializeToUtf8Bytes(payload))}.";
+    }
+
+    private static async Task<(int Status, string Body)> ExecuteAsync(IResult result, DefaultHttpContext context)
+    {
+        await result.ExecuteAsync(context);
+        context.Response.Body.Position = 0;
+        using var reader = new StreamReader(context.Response.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+        var body = await reader.ReadToEndAsync();
+        return (context.Response.StatusCode, body);
     }
 
     [TestMethod]
@@ -124,17 +159,87 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", user.Id.ToString()),
-            new Claim("scope", "openid profile email")
+            new Claim("scope", "openid profile email"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
         Assert.IsNotNull(result);
+        var (status, _) = await ExecuteAsync(result, context);
+        Assert.AreEqual(200, status);
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Missing_Audience_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("scope", "openid")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("\"error\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Missing_Scope_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("aud", "api")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("invalid_token", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_Disallowed_Audience_Returns_401()
+    {
+        using var db = CreateDb();
+
+        var claims = new[]
+        {
+            new Claim("sub", Guid.NewGuid().ToString()),
+            new Claim("scope", "openid"),
+            new Claim("aud", "evil")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+        var handler = CreateHandler(db, validator: validator);
+
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+        var result = handler.Handle(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(401, status);
+        Assert.IsTrue(body.Contains("invalid_token", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -155,13 +260,14 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
@@ -189,7 +295,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -198,7 +305,7 @@ public sealed class UserInfoHandlerTests
         var dpopValidator = new StubDPoPValidator(false, error: "invalid_dpop");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         var result = handler.Handle(context);
 
@@ -334,7 +441,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -343,7 +451,7 @@ public sealed class UserInfoHandlerTests
         var dpopValidator = new StubDPoPValidator(true, jkt: "different_thumbprint");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -374,7 +482,8 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
-            new Claim("cnf", cnfJson)
+            new Claim("cnf", cnfJson),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
@@ -384,7 +493,7 @@ public sealed class UserInfoHandlerTests
         var nonceStore = new StubDPoPNonceStore(ok: false, nonce: "server_issued_nonce");
 
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator, nonceStore: nonceStore);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -416,13 +525,14 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -454,13 +564,14 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid email"),
-            new Claim("email", "test@example.com")
+            new Claim("email", "test@example.com"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -492,13 +603,14 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid profile"),
-            new Claim("name", "Test User")
+            new Claim("name", "Test User"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -563,7 +675,7 @@ public sealed class UserInfoHandlerTests
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -595,13 +707,14 @@ public sealed class UserInfoHandlerTests
         {
             new Claim("sub", userId.ToString()),
             new Claim("scope", "openid"),
+            new Claim("aud", "api"),
             new Claim("address", "123 Test St") // Should not be returned
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);
@@ -629,13 +742,14 @@ public sealed class UserInfoHandlerTests
         var claims = new[]
         {
             new Claim("sub", userId.ToString()),
-            new Claim("scope", "openid")
+            new Claim("scope", "openid"),
+            new Claim("aud", "api")
         };
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
         var validator = new StubTokenValidator(true, principal);
 
         var handler = CreateHandler(db, validator: validator);
-        var context = CreateHttpContext("Bearer valid_token");
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
         var result = handler.Handle(context);

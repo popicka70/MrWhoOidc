@@ -30,11 +30,9 @@ public class QrConfirmModel : PageModel
 
     public async Task<IActionResult> OnGet()
     {
-        var requestUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}{Request.QueryString}";
-
-        _logger.LogInformation("🔍 [QR Confirm Page] Request from {IP}, Full URL: {Url}",
+        _logger.LogInformation("🔍 [QR Confirm Page] Request from {IP}, Path: {Path}",
             HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            requestUrl);
+            Request.Path);
         _logger.LogInformation("🔍 [QR Confirm Page] Session parameter: {HasSession}, Length: {Length}, IsAuthenticated: {IsAuth}",
             !string.IsNullOrEmpty(Session),
             Session?.Length ?? 0,
@@ -42,8 +40,7 @@ public class QrConfirmModel : PageModel
 
         if (string.IsNullOrEmpty(Session))
         {
-            _logger.LogWarning("❌ [QR Confirm Page] REJECTED: missing session parameter. Query string: {QueryString}",
-                Request.QueryString.Value);
+            _logger.LogWarning("❌ [QR Confirm Page] REJECTED: missing session parameter");
             return BadRequest("Missing session parameter");
         }
 

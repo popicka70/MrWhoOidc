@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages.Password;
 
@@ -101,11 +102,11 @@ public class IndexModel(
     async Task<UserAccount?> GetCurrentUserAccountAsync()
     {
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        logger.LogDebug("🔍 [Password] Looking up UserAccount. Sub claim: {Sub}", sub ?? "(null)");
+        logger.LogDebug("🔍 [Password] Looking up UserAccount. Sub hash: {SubHash}", LogTokenization.HashId(sub));
         
         if (!Guid.TryParse(sub, out var userId)) 
         {
-            logger.LogWarning("⚠️ [Password] Invalid sub claim format: {Sub}", sub);
+            logger.LogWarning("⚠️ [Password] Invalid sub claim format. Sub hash: {SubHash}", LogTokenization.HashId(sub));
             return null;
         }
         

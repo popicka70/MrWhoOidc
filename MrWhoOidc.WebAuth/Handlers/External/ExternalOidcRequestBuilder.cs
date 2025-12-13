@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -63,7 +64,7 @@ internal sealed class ExternalOidcRequestBuilder : IExternalOidcRequestBuilder
         string codeChallenge,
         string returnUrl)
     {
-        var callback = $"{http.Request.Scheme}://{http.Request.Host}/auth/external/callback";
+        var callback = http.GetIssuer() + "/auth/external/callback";
         var responseType = string.IsNullOrWhiteSpace(config.ResponseType) ? OAuthConstants.ResponseTypes.Code : config.ResponseType.Trim();
 
         _logger.LogInformation("Building authorization request: callback={Callback}, responseType={ResponseType}, clientId={ClientId}", 

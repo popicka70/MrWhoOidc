@@ -3,6 +3,8 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.WebAuth.Infrastructure;
+using StackExchange.Redis;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -12,7 +14,7 @@ namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 /// </summary>
 public static class RateLimitingExtensions
 {
-    public static IServiceCollection AddRateLimitingPolicies(this IServiceCollection services, bool enableGlobalLimiter)
+    public static IServiceCollection AddRateLimitingPolicies(this IServiceCollection services, bool enableGlobalLimiter, IConnectionMultiplexer? redisMux)
     {
         services.AddRateLimiter(options =>
         {
@@ -85,7 +87,20 @@ public static class RateLimitingExtensions
             });
             options.AddPolicy("rl-par", httpContext =>
             {
-                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var keyBase = ExtractClientIdOrIp(httpContext);
+                var key = BucketizeKey(keyBase);
+
+                // If Redis is available, enforce a distributed fixed-window limiter so multi-instance deployments can't bypass limits.
+                if (redisMux is not null)
+                {
+                    return RateLimitPartition.Get(key, _ => new RedisFixedWindowRateLimiter(redisMux, $"par:{key}", new RedisFixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
+                        Window = TimeSpan.FromMinutes(1),
+                        Prefix = "rl"
+                    }));
+                }
+
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 60,
@@ -210,6 +225,13 @@ public static class RateLimitingExtensions
                 catch { }
             }
             return key;
+        }
+
+        static string BucketizeKey(string key)
+        {
+            // Keep Redis keys small + avoid strange chars; stable token suitable for rate-limit partitioning.
+            var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            return Convert.ToHexString(bytes.AsSpan(0, 8));
         }
     }
 }

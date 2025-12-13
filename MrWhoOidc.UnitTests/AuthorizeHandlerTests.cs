@@ -989,12 +989,12 @@ public sealed class AuthorizeHandlerTests
             return "stub_refresh_token";
         }
 
-        public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? kid = null, string? typ = null, DateTimeOffset? notBefore = null)
+        public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
         {
             return "stub_jwt";
         }
 
-        public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? kid = null, string? typ = null, DateTimeOffset? notBefore = null)
+        public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
         {
             return "stub_jwt_encrypted";
         }

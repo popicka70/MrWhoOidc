@@ -1,4 +1,4 @@
-using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
 
@@ -14,17 +14,7 @@ public static class LogoutExtensions
     /// </summary>
     public static string GetIssuer(this HttpContext http)
     {
-        var options = http.RequestServices.GetService(typeof(OidcOptions)) as OidcOptions;
-
-        // If issuer is explicitly configured, use it (backward compatibility)
-        if (!string.IsNullOrEmpty(options?.Issuer))
-        {
-            return options.Issuer;
-        }
-
-        // Otherwise, use mode-aware issuer builder
-        var issuerBuilder = http.RequestServices.GetRequiredService<IIssuerBuilder>();
-        var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
-        return issuerBuilder.BuildIssuer(baseUrl);
+        var options = http.RequestServices.GetRequiredService<OidcOptions>();
+        return MrWhoOidc.WebAuth.Extensions.HttpContextExtensions.GetIssuer(http, options);
     }
 }

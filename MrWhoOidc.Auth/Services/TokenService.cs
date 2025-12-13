@@ -185,7 +185,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 }
             }
 
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime));
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
         }
 
         // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
@@ -372,7 +372,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 accessClaims.Add(new("realm", realmName));
             }
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime));
+            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
         }
 
         // Rotation: create new refresh token and revoke the old one
@@ -483,7 +483,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         // Issue JWT access token (opaque not supported for M2M yet)
         var expiry = DateTimeOffset.UtcNow.Add(lifetime);
-        var accessToken = jwt.CreateJwt(issuer, audience, claims, expiry);
+        var accessToken = jwt.CreateJwt(issuer, audience, claims, expiry, tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
 
         var payload = new
         {

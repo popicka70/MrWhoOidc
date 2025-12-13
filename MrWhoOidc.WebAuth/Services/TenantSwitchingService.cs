@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Security;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -321,8 +322,8 @@ public class TenantSwitchingService(
         var principal = new ClaimsPrincipal(identity);
 
         await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, props);
-        logger.LogInformation("🔑 [ReissueAuth] SUCCESS - User signed in with new identity. Subject={Subject}, TenantId={TenantId}, Claims={ClaimCount}", 
-            tenantUser.Id, tenantId, claims.Count);
+        logger.LogInformation("🔑 [ReissueAuth] SUCCESS - User signed in with new identity. SubjectHash={SubjectHash}, TenantId={TenantId}, Claims={ClaimCount}", 
+            LogTokenization.HashId(tenantUser.Id.ToString()), tenantId, claims.Count);
     }
 
     private sealed record UserTenantRow(Guid UserId, Guid TenantId, string TenantName, string TenantSlug, string IssuerUri);

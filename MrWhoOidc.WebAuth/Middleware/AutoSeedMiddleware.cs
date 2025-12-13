@@ -1,7 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -25,8 +29,22 @@ public sealed class AutoSeedMiddleware
         AuthDbContext db,
         ISeeder seeder,
         ITenantAccessor tenantAccessor,
-        IMultiTenancyOptions multiTenancyOptions)
+        IMultiTenancyOptions multiTenancyOptions,
+        IIssuerBuilder issuerBuilder,
+        IOptions<OidcOptions> oidcOptions,
+        IHostEnvironment env,
+        IConfiguration config)
     {
+        // Safety: auto-seeding must never run in production.
+        var enabled = env.IsDevelopment()
+            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!enabled)
+        {
+            await _next(context);
+            return;
+        }
+
         // Fast path: if already seeded, skip
         if (_seeded)
         {
@@ -51,10 +69,13 @@ public sealed class AutoSeedMiddleware
                 {
                     // Create default tenant first (synchronously for simplicity in lock)
                     var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-                    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-                    var issuerUri = multiTenancyOptions.Enabled
-                        ? $"{baseUrl}/t/{defaultSlug}"
-                        : baseUrl;
+                    var options = oidcOptions.Value;
+                    var baseUrl =
+                        (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
+                        ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null)
+                        ?? $"{context.Request.Scheme}://{context.Request.Host}";
+
+                    var issuerUri = issuerBuilder.BuildIssuer(baseUrl, defaultSlug).TrimEnd('/');
 
                     var defaultTenant = new Tenant
                     {

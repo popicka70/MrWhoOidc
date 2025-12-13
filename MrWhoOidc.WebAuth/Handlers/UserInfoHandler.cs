@@ -1,7 +1,9 @@
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MrWhoOidc.WebAuth.Extensions;
+using MrWhoOidc.WebAuth.Infrastructure.Logging;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -9,6 +11,7 @@ using MrWhoOidc.Security;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -17,7 +20,7 @@ public interface IUserInfoHandler
     IResult Handle(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
     public IResult Handle(HttpContext http)
     {
@@ -39,11 +42,74 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
             var token = auth.Substring(bearerPrefix.Length).Trim();
             var issuer = http.GetIssuer(options);
 
+            // Require typ=at+jwt to avoid accepting other JWT types (e.g., id_token).
+            try
+            {
+                var unsigned = new JwtSecurityTokenHandler().ReadJwtToken(token);
+                if (!string.Equals(unsigned.Header.Typ, SecurityConstants.JwtTokenTypes.AtJwt, StringComparison.OrdinalIgnoreCase))
+                {
+                    outcome = "failure";
+                    logger.LogWarning("/userinfo 401: invalid typ={Typ} from {IP}", unsigned.Header.Typ ?? "(null)", http.Connection.RemoteIpAddress?.ToString());
+                    metrics.UserInfoFailures.Add(1);
+                    return WithWwwAuthenticate(ErrorResults.InvalidToken());
+                }
+            }
+            catch
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: token not parseable as JWT from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
             var (ok, principal, _) = validator.Validate(token, issuer);
             if (!ok || principal is not { })
             {
                 outcome = "failure";
                 logger.LogWarning("/userinfo 401: token validation failed from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            // Require scope claim to distinguish access tokens from ID tokens.
+            // (This server's access tokens always include OAuth 'scope'; ID tokens do not.)
+            var scopeClaim = principal.FindFirst("scope")?.Value;
+            if (string.IsNullOrWhiteSpace(scopeClaim))
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing scope claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            // Audience hardening: require at least one audience and enforce a conservative allow policy.
+            // Allow if:
+            // - audience matches configured ApiAudiences, OR
+            // - audience is an absolute URI and its host matches the issuer host.
+            // This reduces cross-audience acceptance while keeping common deployments working.
+            var audiences = principal.Claims.Where(c => c.Type == "aud").Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+            if (audiences.Length == 0)
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: missing aud claim from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                metrics.UserInfoFailures.Add(1);
+                return WithWwwAuthenticate(ErrorResults.InvalidToken());
+            }
+
+            var allowedApiAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+            Uri? issuerUri = null;
+            _ = Uri.TryCreate(issuer, UriKind.Absolute, out issuerUri);
+
+            var azp = principal.FindFirst("azp")?.Value;
+
+            var audienceAllowed = audiences.Any(a => allowedApiAudiences.Contains(a, StringComparer.Ordinal)) ||
+                                 (!string.IsNullOrEmpty(azp) && audiences.Any(a => string.Equals(a, azp, StringComparison.Ordinal))) ||
+                                 (issuerUri is not null && audiences.Any(a => Uri.TryCreate(a, UriKind.Absolute, out var audUri) && string.Equals(audUri.Host, issuerUri.Host, StringComparison.OrdinalIgnoreCase)));
+
+            if (!audienceAllowed)
+            {
+                outcome = "failure";
+                logger.LogWarning("/userinfo 401: audience not allowed from {IP}", http.Connection.RemoteIpAddress?.ToString());
                 metrics.UserInfoFailures.Add(1);
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
@@ -75,7 +141,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 }
 
                 // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-                var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+                var endpointUrl = http.GetEndpointUrl();
                 var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
 
                 // Nonce challenge support
@@ -128,7 +194,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 }
             }
 
-            var scopes = (principal.FindFirst("scope")?.Value ?? string.Empty)
+            var scopes = (scopeClaim ?? string.Empty)
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -199,7 +265,7 @@ public sealed class UserInfoHandler(OidcOptions options, ITokenValidator validat
                 }
             }
 
-            logger.LogInformation("/userinfo 200 for {Sub}", payload["sub"]);
+            logger.LogInformation("/userinfo 200 for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
             metrics.UserInfoSuccess.Add(1);
             var resultJson = Results.Json(payload);
             return new CacheHeaderResult(resultJson, "private, max-age=60");

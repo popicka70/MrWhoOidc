@@ -21,6 +21,9 @@ public sealed class IntrospectionHandler(
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        http.Response.Headers["Cache-Control"] = "no-store";
+        http.Response.Headers["Pragma"] = "no-cache";
+
         var metrics = new IntrospectionMetrics(oidcMetrics);
 
         // Parse request
@@ -47,7 +50,7 @@ public sealed class IntrospectionHandler(
         // Build context
         var issuer = http.GetIssuer(options);
         // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-        var endpoint = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+        var endpoint = http.GetEndpointUrl();
         var context = new IntrospectionContext
         {
             Request = request,

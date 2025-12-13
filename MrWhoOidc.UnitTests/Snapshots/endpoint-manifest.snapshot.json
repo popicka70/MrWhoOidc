@@ -580,6 +580,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/bootstrap",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/clients/{clientId}/jwks",
     "Methods": "GET",
     "RateLimiters": [
@@ -628,6 +637,15 @@
   },
   {
     "Pattern": "/health/global-auth",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/health/issuer",
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,

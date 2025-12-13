@@ -14,6 +14,8 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
+using Microsoft.Extensions.Options;
+using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
@@ -23,6 +25,7 @@ public partial class CreateModel(
     AuthDbContext db,
     IMultiTenancyOptions multiTenancyOptions,
     IHttpContextAccessor httpContextAccessor,
+    IOptions<OidcOptions> oidcOptions,
     IUserService userService,
     IUserAccountProvisioner userAccountProvisioner,
     ITenantSwitchingService tenantSwitchingService,
@@ -136,7 +139,9 @@ public partial class CreateModel(
         }
 
         var creatorEmail = resolvedEmail.Value.Email;
-        var baseUrl = $"{httpContextAccessor.HttpContext!.Request.Scheme}://{httpContextAccessor.HttpContext.Request.Host}";
+        var baseUrl = !string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl)
+            ? oidcOptions.Value.PublicBaseUrl.TrimEnd('/')
+            : $"{httpContextAccessor.HttpContext!.Request.Scheme}://{httpContextAccessor.HttpContext.Request.Host}";
 
         Tenant provisionedTenant;
         try

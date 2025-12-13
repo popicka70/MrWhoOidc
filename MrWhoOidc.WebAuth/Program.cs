@@ -167,12 +167,15 @@ builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantSettingsService, MrWho
 builder.Services.AddOidcCorsPolicy(oidcOptions);
 
 // Rate limiting policies extracted
-builder.Services.AddRateLimitingPolicies(redisMux is not null);
+builder.Services.AddRateLimitingPolicies(redisMux is not null, redisMux);
 
 // (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
 
 var app = builder.Build();
+
+var autoSeedEnabled = app.Environment.IsDevelopment()
+    || string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 
 // Run migrations on startup (only for relational databases, not in-memory test DBs)
 using (var scope = app.Services.CreateScope())
@@ -210,57 +213,7 @@ using (var scope = app.Services.CreateScope())
             throw;
         }
         
-        // Auto-seed default tenant immediately after migrations if database is empty
-        // This ensures background services have a tenant to work with
-        var needsSeeding = !await db.Tenants.AnyAsync();
-        if (needsSeeding)
-        {
-            logger.LogInformation("Database is empty, seeding default tenant...");
-            var multiTenancyOptions = scope.ServiceProvider.GetRequiredService<IMultiTenancyOptions>();
-            var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-            
-            // Create default tenant
-            var defaultTenant = new Tenant
-            {
-                Slug = defaultSlug,
-                Name = "Default Tenant",
-                Description = "Default tenant created automatically on startup",
-                IssuerUri = $"https://localhost:7157/t/{defaultSlug}", // Will be updated on first request
-                Status = TenantStatus.Active,
-                MaxUsers = 100000,
-                MaxClients = 1000,
-                AdminEmail = "admin@mrwho.local",
-                BillingPlan = "Enterprise",
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            
-            db.Tenants.Add(defaultTenant);
-            await db.SaveChangesAsync();
-            
-            // Seed platform admin and sample data
-            var seeder = scope.ServiceProvider.GetRequiredService<ISeeder>();
-            var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantAccessor>();
-            
-            // Manually set the tenant context for seeding
-            var tenantContext = new TenantContext
-            {
-                TenantId = defaultTenant.Id,
-                Slug = defaultSlug,
-                Name = defaultTenant.Name,
-                IssuerUri = defaultTenant.IssuerUri,
-                IsMultiTenantMode = multiTenancyOptions.Enabled
-            };
-            
-            tenantAccessor.SetTenant(tenantContext);
-            
-            await seeder.SeedAsync();
-            
-            logger.LogInformation("Auto-seeded default tenant '{TenantSlug}' with platform admin on startup", defaultSlug);
-        }
-        else
-        {
-            logger.LogInformation("Database already contains tenants, skipping seeding");
-        }
+        logger.LogInformation("Automatic tenant bootstrap on startup is disabled; use the explicit bootstrap endpoint when needed.");
     }
     else
     {
@@ -274,9 +227,15 @@ using (var scope = app.Services.CreateScope())
 var migrationCompletionSource = EndpointMappingExtensions.GetMigrationCompletionSource();
 app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
 
-// Auto-seed default tenant and platform admin on first request (if database is empty)
-// MUST be before endpoint mapping (it's middleware)
-app.UseAutoSeed();
+// Optional dev/test-only convenience middleware.
+// NOTE: Never enable this in production.
+if (autoSeedEnabled)
+{
+    app.UseAutoSeed();
+}
+
+// Explicit one-time bootstrap endpoint (guarded by operator token, and only when DB is empty)
+app.MapMrWhoBootstrapEndpoints();
 
 // Initial endpoint set (public OIDC + core pages) now routed via extracted helper for snapshot reuse
 app.MapMrWhoOidcEndpoints();

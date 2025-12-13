@@ -20,6 +20,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
     IFeatureService featureService,
     IDPoPValidator dpop,
+    IDPoPReplayCache dpopReplayCache,
     ITokenMetricsRecorder metrics,
     ITokenExchangeRateLimiter rateLimiter,
     ILogger<TokenExchangeGrantHandler> logger) : ITokenGrantHandler
@@ -90,10 +91,10 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         // DPoP ATH validation for token-exchange
         string? dpopJkt = context.DPoPJkt; // earlier early validation if any (should have been skipped for TE)
         // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-        var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+        var endpointUrl = http.GetEndpointUrl();
         if (http.Request.Headers.ContainsKey("DPoP"))
         {
-            var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, subjectToken, logger);
+            var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, dpopReplayCache, http, endpointUrl, subjectToken, logger);
             if (!ok)
             {
                 http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";

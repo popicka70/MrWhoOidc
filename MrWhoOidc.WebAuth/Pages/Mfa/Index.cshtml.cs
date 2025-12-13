@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.ComponentModel.DataAnnotations;
 using QRCoder;
+using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
@@ -13,7 +14,6 @@ namespace MrWhoOidc.WebAuth.Pages.Mfa;
 public class IndexModel(
     AuthDbContext db, 
     ITotpService totp, 
-    IConfiguration config, 
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
     ILogger<IndexModel> logger) : PageModel
@@ -66,7 +66,9 @@ public class IndexModel(
                         var secret = totp.GenerateSecretBase32();
                         await userAccountService.EnableMfaAsync(account.Id, secret);
                         Enabled = true;
-                        QrPngBase64 = GenerateQr(secret, account.Email ?? account.Username, config["Oidc:Issuer"] ?? Request.Scheme + "://" + Request.Host);
+                        var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
+                        var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
+                        QrPngBase64 = GenerateQr(secret, account.Email ?? account.Username, issuerLabel);
                         Message = "Scan QR and confirm with a code.";
                         InfoBanner = "🔐 This will enable MFA for all your organizations.";
                         logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
@@ -102,8 +104,9 @@ public class IndexModel(
                         {
                             Message = "Invalid code.";
                             // Regenerate QR for retry
-                            QrPngBase64 = GenerateQr(account.TotpSecret, account.Email ?? account.Username, 
-                                config["Oidc:Issuer"] ?? Request.Scheme + "://" + Request.Host);
+                            var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
+                            var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
+                            QrPngBase64 = GenerateQr(account.TotpSecret, account.Email ?? account.Username, issuerLabel);
                         }
                     }
                     Enabled = account.TotpEnabled;

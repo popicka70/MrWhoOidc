@@ -8,6 +8,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using Microsoft.AspNetCore.WebUtilities;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Pages.Logout.Prompt;
 
@@ -93,7 +94,7 @@ public class IndexModel : PageModel
                 encIdToken = authResult?.Properties?.Items?.TryGetValue("UpstreamIdTokenEnc", out var enc) == true ? enc : null;
                 upstreamSid = authResult?.Properties?.Items?.TryGetValue("UpstreamSid", out var sidVal) == true ? sidVal : null;
             }
-            var callbackBase = $"{Request.Scheme}://{Request.Host}";
+            var callbackBase = HttpContext.GetIssuer();
             var redirectModel = await _upstream.BuildFederatedRedirectAsync(User ?? new ClaimsPrincipal(), encIdToken, upstreamSid, callbackBase, returnUrl, clientId, externalPostLogout, HttpContext.RequestAborted);
             if (!redirectModel.Success)
             {

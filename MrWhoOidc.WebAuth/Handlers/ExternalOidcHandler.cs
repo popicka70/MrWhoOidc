@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers.External;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.WebAuth.Extensions;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -82,7 +83,9 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
 
         if (string.IsNullOrEmpty(providerName) || string.IsNullOrEmpty(returnUrl))
         {
-            _logger.LogWarning("External start rejected due to missing parameters. provider({Provider}) returnUrl({ReturnUrl})", providerName, returnUrl);
+            _logger.LogWarning("External start rejected due to missing parameters. providerPresent={HasProvider} returnUrlPresent={HasReturnUrl}",
+                !string.IsNullOrEmpty(providerName),
+                !string.IsNullOrEmpty(returnUrl));
             _metricsRecorder.RecordStartOutcome(false, startTs, providerName, clientId, "missing_params");
             return _errorHandler.CreateFriendlyError(returnUrl, clientId, correlation.Handle, "Missing required parameters", "missing_params");
         }
@@ -134,8 +137,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var authRequest = await _requestBuilder.BuildAuthorizationRequestAsync(
             http, provider, cfg, discovery.Response!, state, nonce, challenge, returnUrl);
 
-        _logger.LogInformation("Redirecting to authorization endpoint ({Mechanism}). AuthRequest URL: {AuthRequestUrl}", 
-            authRequest.Mechanism, authRequest.RedirectUrl);
+        _logger.LogInformation("Redirecting to authorization endpoint ({Mechanism})", authRequest.Mechanism);
         _metricsRecorder.RecordStartOutcome(true, startTs, providerName, clientId, authRequest.Mechanism);
 
         return Results.Redirect(authRequest.RedirectUrl);
@@ -146,8 +148,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         var cbStart = DateTime.UtcNow;
         _metricsRecorder.RecordCallbackRequest();
 
-        _logger.LogInformation("OAuth callback received. Path: {Path}, Query: {Query}", 
-            http.Request.Path, http.Request.QueryString.Value);
+        _logger.LogInformation("OAuth callback received. Path: {Path}", http.Request.Path);
 
         var idTokenFromAuth = http.Request.Query["id_token"].ToString();
         var stateRaw = http.Request.Query["state"].ToString();
@@ -229,7 +230,7 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
                 discovery.ErrorMessage!, discovery.ErrorCode);
         }
 
-        var redirectUri = $"{http.Request.Scheme}://{http.Request.Host}/auth/external/callback";
+        var redirectUri = http.GetIssuer() + "/auth/external/callback";
         
         _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
             code.Length > 10 ? code.Substring(0, 10) + "..." : code, 

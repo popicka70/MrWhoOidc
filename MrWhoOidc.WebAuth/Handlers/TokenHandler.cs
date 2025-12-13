@@ -31,6 +31,7 @@ public sealed class TokenHandler(
     ITokenExchangeService tokenExchange,
     IClientAuthenticator authenticator,
     IDPoPValidator dpop,
+    IDPoPReplayCache dpopReplayCache,
     IEnumerable<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler> grantHandlers,
     IEnumerable<MrWhoOidc.WebAuth.Observability.ITokenMetricsRecorder> tokenMetrics,
     IFeatureService featureService,
@@ -44,6 +45,10 @@ public sealed class TokenHandler(
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        // OAuth 2.0 token responses must not be cached.
+        http.Response.Headers["Cache-Control"] = "no-store";
+        http.Response.Headers["Pragma"] = "no-cache";
+
         var sw = Stopwatch.StartNew();
         string grantType = string.Empty;
         string outcome = "failure";
@@ -82,14 +87,14 @@ public sealed class TokenHandler(
             // Early DPoP validation for non-token-exchange grants
             string? dpopJkt = null;
             // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
-            var endpointUrl = $"{http.Request.Scheme}://{http.Request.Host}{http.Request.Path}";
+            var endpointUrl = http.GetEndpointUrl();
             var tenantId = _tenantAccessor.CurrentTenant?.TenantId;
 
             if (!string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal))
             {
                 if (http.Request.Headers.ContainsKey("DPoP"))
                 {
-                    var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, http, endpointUrl, null, logger);
+                    var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, dpopReplayCache, http, endpointUrl, null, logger);
                     if (!ok)
                     {
                         http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";

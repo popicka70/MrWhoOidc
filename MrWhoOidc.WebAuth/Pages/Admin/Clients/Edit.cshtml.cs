@@ -17,6 +17,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Protocols;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -26,7 +27,7 @@ public class EditModel(
     IPasswordHasher hasher, 
     ILogger<EditModel> logger, 
     MrWhoOidc.WebAuth.Observability.IAuditSink audit, 
-    OidcOptions oidcOptions,
+    IOptions<OidcOptions> oidcOptions,
     ITenantAccessor tenantAccessor,
     IClientStore clientStore,
     IScopeResolver scopeResolver,
@@ -130,7 +131,7 @@ public class EditModel(
     await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
 
         // Build tenant-aware IdP chaining URLs
-        var issuer = HttpContext.GetIssuer(oidcOptions);
+        var issuer = HttpContext.GetIssuer(oidcOptions.Value);
         var baseUrl = issuer.TrimEnd('/');
         
         // If multi-tenancy is enabled, append tenant path to the issuer

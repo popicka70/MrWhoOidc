@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
@@ -27,14 +28,12 @@ public static class PipelineExtensions
             await next(context);
         });
 
-        // Trust proxy forwarded headers (scheme/host)
-        var fwdOptions = new ForwardedHeadersOptions
+        // Forwarded headers: safe-by-default (loopback only) unless explicitly configured.
+        // NOTE: Never trust X-Forwarded-* from arbitrary clients in production.
+        if (ForwardedHeadersConfigurator.TryBuild(app.Configuration, app.Environment, app.Logger, out var fwdOptions))
         {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-        };
-        fwdOptions.KnownNetworks.Clear();
-        fwdOptions.KnownProxies.Clear();
-        app.UseForwardedHeaders(fwdOptions);
+            app.UseForwardedHeaders(fwdOptions);
+        }
 
         // Forward client certificates if upstream proxy supplies them
         app.UseCertificateForwarding();
@@ -46,6 +45,10 @@ public static class PipelineExtensions
             app.UseHttpsRedirection();
         }
         // In development we intentionally skip automatic HTTPS redirect to allow http callbacks during local dev.
+
+        // Security headers for user-facing HTML pages (Razor Pages).
+        // Kept separate from protocol endpoints to avoid breaking OAuth/OIDC responses.
+        app.UseMiddleware<SecurityHeadersMiddleware>();
 
         app.UseMiddleware<CorrelationTrackingMiddleware>();
         app.UseWhen(static ctx => ctx.Request.Path.StartsWithSegments("/admin/api", StringComparison.OrdinalIgnoreCase), branch =>

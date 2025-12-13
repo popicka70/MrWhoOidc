@@ -11,6 +11,7 @@ using MrWhoOidc.WebAuth.Admin.Api;
 using MrWhoOidc.WebAuth.Admin.Dto;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Background;
+using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;
@@ -742,6 +743,66 @@ public static class AdminApiEndpointMappingExtensions
                     : 0.0
             });
         }).WithName("GlobalAuthHealth");
+
+        // OIDC issuer configuration health endpoint
+        app.MapGet("/health/issuer", (Microsoft.Extensions.Options.IOptions<OidcOptions> oidcOptions, IWebHostEnvironment env) =>
+        {
+            static (bool ok, string? problem) ValidateAbsoluteHttps(string? value, bool requireHttps)
+            {
+                if (string.IsNullOrWhiteSpace(value)) return (false, "missing");
+                if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)) return (false, "not_absolute_uri");
+                if (!string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.Query)) return (false, "must_not_include_query_or_fragment");
+                if (requireHttps && !string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase)) return (false, "must_use_https");
+                return (true, null);
+            }
+
+            var requireHttps = !env.IsDevelopment();
+
+            var issuer = string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? null : oidcOptions.Value.Issuer.TrimEnd('/');
+            var publicBaseUrl = string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? null : oidcOptions.Value.PublicBaseUrl.TrimEnd('/');
+
+            var hasExplicit = issuer is not null || publicBaseUrl is not null;
+
+            var issuerCheck = ValidateAbsoluteHttps(issuer, requireHttps);
+            var baseCheck = ValidateAbsoluteHttps(publicBaseUrl, requireHttps);
+
+            // In production-like environments we expect an explicit public base to avoid Host/proxy ambiguity.
+            if (!env.IsDevelopment() && !hasExplicit)
+            {
+                return Results.Problem(
+                    statusCode: 503,
+                    title: "Unhealthy",
+                    detail: "Neither Oidc:Issuer nor Oidc:PublicBaseUrl is configured. Set one explicitly for correct issuer and endpoint URLs behind proxies.",
+                    instance: "/health/issuer");
+            }
+
+            // Validate any configured values.
+            if (issuer is not null && !issuerCheck.ok)
+            {
+                return Results.Problem(
+                    statusCode: 503,
+                    title: "Unhealthy",
+                    detail: $"Oidc:Issuer is invalid ({issuerCheck.problem}).",
+                    instance: "/health/issuer");
+            }
+            if (publicBaseUrl is not null && !baseCheck.ok)
+            {
+                return Results.Problem(
+                    statusCode: 503,
+                    title: "Unhealthy",
+                    detail: $"Oidc:PublicBaseUrl is invalid ({baseCheck.problem}).",
+                    instance: "/health/issuer");
+            }
+
+            return Results.Ok(new
+            {
+                status = hasExplicit ? "healthy" : "degraded",
+                environment = env.EnvironmentName,
+                requireHttps,
+                issuer,
+                publicBaseUrl
+            });
+        }).WithName("IssuerHealth");
 
     // Platform Admin: On-demand tenant seeding (platform-admin only)
     var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
