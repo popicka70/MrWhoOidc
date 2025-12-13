@@ -8,9 +8,8 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Middleware;
-
-/// <summary>
-/// Middleware that automatically seeds the default tenant with platform admin on first request.
+        var enabled = env.IsDevelopment()
+            || string.Equals(config["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);
 /// Only runs once when the database is empty (no tenants exist).
 /// </summary>
 public sealed class AutoSeedMiddleware

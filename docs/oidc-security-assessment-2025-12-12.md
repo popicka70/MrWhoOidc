@@ -116,7 +116,10 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 - `MrWhoOidc.WebAuth/Middleware/AutoSeedMiddleware.cs` creates a default tenant when none exist, with hard-coded values (e.g., `AdminEmail = "admin@mrwho.local"`).
 
 **Current status (code as of 2025-12-12 in this workspace)**
-- Auto-seeding is now gated to Development by default (with an explicit opt-in override via `AutoSeed:Enabled` or `Testing:EnableAutoSeed`).
+- Auto-seeding is now **development/test only** (Development or `Testing:EnableAutoSeed=true`).
+- A token-guarded explicit bootstrap endpoint exists at `POST /bootstrap` (see `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/BootstrapEndpointMappingExtensions.cs`).
+  - It is safe-by-default: returns 404 unless `Bootstrap:Token` is configured.
+  - It only runs when the database has **no tenants**.
 
 **Why it matters**
 - If this middleware is enabled in production, an attacker who hits a fresh deployment first could influence initial state (at minimum, it creates a tenant automatically).
@@ -124,7 +127,8 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 **Recommended fix**
 - Restrict auto-seeding to development/test environments only.
-- Replace with explicit admin bootstrap workflow (one-time setup token, CLI, or guarded admin endpoint).
+- Replace with explicit admin bootstrap workflow (one-time setup token, CLI, or guarded endpoint).
+  - This repo implements the guarded endpoint: `POST /bootstrap` with `X-Bootstrap-Token`.
 
 ---
 
