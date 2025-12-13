@@ -46,6 +46,10 @@ public static class PipelineExtensions
         }
         // In development we intentionally skip automatic HTTPS redirect to allow http callbacks during local dev.
 
+        // Security headers for user-facing HTML pages (Razor Pages).
+        // Kept separate from protocol endpoints to avoid breaking OAuth/OIDC responses.
+        app.UseMiddleware<SecurityHeadersMiddleware>();
+
         app.UseMiddleware<CorrelationTrackingMiddleware>();
         app.UseWhen(static ctx => ctx.Request.Path.StartsWithSegments("/admin/api", StringComparison.OrdinalIgnoreCase), branch =>
         {

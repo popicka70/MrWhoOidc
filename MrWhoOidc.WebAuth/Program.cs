@@ -231,12 +231,19 @@ using (var scope = app.Services.CreateScope())
                 var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
 
                 // Create default tenant
+                var configuredBaseUrl =
+                    (!string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl) ? oidcOptions.PublicBaseUrl.TrimEnd('/') : null)
+                    ?? (!string.IsNullOrWhiteSpace(oidcOptions.Issuer) ? oidcOptions.Issuer.TrimEnd('/') : null)
+                    ?? "https://localhost:7157";
+
                 var defaultTenant = new Tenant
                 {
                     Slug = defaultSlug,
                     Name = "Default Tenant",
                     Description = "Default tenant created automatically on startup",
-                    IssuerUri = $"https://localhost:7157/t/{defaultSlug}", // Will be updated on first request
+                    IssuerUri = multiTenancyOptions.Enabled
+                        ? $"{configuredBaseUrl}/t/{defaultSlug}"
+                        : configuredBaseUrl,
                     Status = TenantStatus.Active,
                     MaxUsers = 100000,
                     MaxClients = 1000,

@@ -6,6 +6,8 @@ using MrWhoOidc.Auth.MultiTenancy;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -55,14 +57,25 @@ internal sealed class RegistrationService : IRegistrationService
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly IUserAccountProvisioner _accountProvisioner;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly OidcOptions _oidcOptions;
+    private readonly IIssuerBuilder? _issuerBuilder;
 
-    public RegistrationService(AuthDbContext db, ILogger<RegistrationService> logger, IEmailConfirmationWorkflow emailWorkflow, IUserAccountProvisioner accountProvisioner, ITenantAccessor tenantAccessor)
+    public RegistrationService(
+        AuthDbContext db,
+        ILogger<RegistrationService> logger,
+        IEmailConfirmationWorkflow emailWorkflow,
+        IUserAccountProvisioner accountProvisioner,
+        ITenantAccessor tenantAccessor,
+        IOptions<OidcOptions> oidcOptions,
+        IIssuerBuilder? issuerBuilder = null)
     {
         _db = db;
         _logger = logger;
         _emailWorkflow = emailWorkflow;
         _accountProvisioner = accountProvisioner;
         _tenantAccessor = tenantAccessor;
+        _oidcOptions = oidcOptions.Value;
+        _issuerBuilder = issuerBuilder;
     }
 
     public async Task<Guid?> CreateAndMaybeApproveRegistrationAsync(
@@ -105,6 +118,11 @@ internal sealed class RegistrationService : IRegistrationService
         Guid? tenantId = null;
         if (!string.IsNullOrWhiteSpace(tenantSlug))
         {
+            if (_issuerBuilder is null)
+            {
+                throw new InvalidOperationException("IIssuerBuilder is required to create tenants.");
+            }
+
             if (string.IsNullOrWhiteSpace(tenantName))
             {
                 throw new ValidationException("Tenant name is required when creating a new tenant.");
@@ -124,12 +142,17 @@ internal sealed class RegistrationService : IRegistrationService
             }
 
             // Create the tenant
+            var baseUrl =
+                (!string.IsNullOrWhiteSpace(_oidcOptions.PublicBaseUrl) ? _oidcOptions.PublicBaseUrl.TrimEnd('/') : null)
+                ?? (!string.IsNullOrWhiteSpace(_oidcOptions.Issuer) ? _oidcOptions.Issuer.TrimEnd('/') : null)
+                ?? "https://localhost:8443"; // dev fallback
+
             var tenant = new Tenant
             {
                 Slug = tenantSlug,
                 Name = tenantName,
                 Description = tenantDescription,
-                IssuerUri = $"https://localhost:8443/t/{tenantSlug}", // TODO: Make configurable
+                IssuerUri = _issuerBuilder.BuildIssuer(baseUrl, tenantSlug).TrimEnd('/'),
                 Status = TenantStatus.Active,
                 CreatedAt = DateTimeOffset.UtcNow
             };

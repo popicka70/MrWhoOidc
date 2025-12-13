@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.WebAuth.Handlers;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -19,14 +22,25 @@ public class TenantSeedingService : ITenantSeedingService
     private readonly ITenantService _tenantService;
     private readonly ILogger<TenantSeedingService> _logger;
     private readonly IUserAccountProvisioner _accountProvisioner;
+    private readonly OidcOptions _oidcOptions;
+    private readonly IIssuerBuilder _issuerBuilder;
 
-    public TenantSeedingService(AuthDbContext db, IPasswordHasher passwordHasher, ITenantService tenantService, ILogger<TenantSeedingService> logger, IUserAccountProvisioner accountProvisioner)
+    public TenantSeedingService(
+        AuthDbContext db,
+        IPasswordHasher passwordHasher,
+        ITenantService tenantService,
+        ILogger<TenantSeedingService> logger,
+        IUserAccountProvisioner accountProvisioner,
+        IOptions<OidcOptions> oidcOptions,
+        IIssuerBuilder issuerBuilder)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _tenantService = tenantService;
         _logger = logger;
         _accountProvisioner = accountProvisioner;
+        _oidcOptions = oidcOptions.Value;
+        _issuerBuilder = issuerBuilder;
     }
 
     public async Task<TenantSeedResult> SeedSampleTenantAsync(
@@ -60,11 +74,16 @@ public class TenantSeedingService : ITenantSeedingService
             }
 
             // Create tenant
+            var baseUrl =
+                (!string.IsNullOrWhiteSpace(_oidcOptions.PublicBaseUrl) ? _oidcOptions.PublicBaseUrl.TrimEnd('/') : null)
+                ?? (!string.IsNullOrWhiteSpace(_oidcOptions.Issuer) ? _oidcOptions.Issuer.TrimEnd('/') : null)
+                ?? "https://localhost:8443"; // dev fallback
+
             var tenant = new Tenant
             {
                 Slug = tenantSlug,
                 Name = tenantName,
-                IssuerUri = $"https://localhost:8443/t/{tenantSlug}",
+                IssuerUri = _issuerBuilder.BuildIssuer(baseUrl, tenantSlug).TrimEnd('/'),
                 Status = TenantStatus.Active,
                 MaxUsers = 100000,
                 MaxClients = 1000,

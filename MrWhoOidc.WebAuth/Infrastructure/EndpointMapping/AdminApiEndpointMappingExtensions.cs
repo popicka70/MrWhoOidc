@@ -745,7 +745,7 @@ public static class AdminApiEndpointMappingExtensions
         }).WithName("GlobalAuthHealth");
 
         // OIDC issuer configuration health endpoint
-        app.MapGet("/health/issuer", (OidcOptions oidcOptions, IWebHostEnvironment env) =>
+        app.MapGet("/health/issuer", (Microsoft.Extensions.Options.IOptions<OidcOptions> oidcOptions, IWebHostEnvironment env) =>
         {
             static (bool ok, string? problem) ValidateAbsoluteHttps(string? value, bool requireHttps)
             {
@@ -758,8 +758,8 @@ public static class AdminApiEndpointMappingExtensions
 
             var requireHttps = !env.IsDevelopment();
 
-            var issuer = string.IsNullOrWhiteSpace(oidcOptions.Issuer) ? null : oidcOptions.Issuer.TrimEnd('/');
-            var publicBaseUrl = string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl) ? null : oidcOptions.PublicBaseUrl.TrimEnd('/');
+            var issuer = string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? null : oidcOptions.Value.Issuer.TrimEnd('/');
+            var publicBaseUrl = string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? null : oidcOptions.Value.PublicBaseUrl.TrimEnd('/');
 
             var hasExplicit = issuer is not null || publicBaseUrl is not null;
 

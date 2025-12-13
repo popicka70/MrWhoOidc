@@ -17,7 +17,7 @@ public interface IDiscoveryHandler
 }
 
 public sealed class DiscoveryHandler(
-    OidcOptions oidcOptions,
+    IOptions<OidcOptions> oidcOptions,
     IOptions<AuthOptions> authOptions,
     AuthDbContext db,
     IFeatureService featureService,
@@ -27,7 +27,7 @@ public sealed class DiscoveryHandler(
     {
         // Build issuer dynamically using PublicBaseUrl configuration or request URL
         // This ensures the issuer reflects the actual public-facing URL (e.g., when running behind proxy/Docker)
-        var issuer = ctx.GetIssuer(oidcOptions);
+        var issuer = ctx.GetIssuer(oidcOptions.Value);
         var baseUrl = issuer.TrimEnd('/');
 
         // Pull scopes from DB (exposed only)

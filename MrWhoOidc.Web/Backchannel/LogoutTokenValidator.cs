@@ -122,6 +122,15 @@ public sealed class LogoutTokenValidator
             if (!await _replayCache.TryStoreAsync(jti, _options.JtiTtl, ct))
                 return new Result(false, null, null, "replay detected");
 
+            // iat required (OIDC Back-Channel Logout). Validate it is not unreasonably far in the future.
+            var iatRaw = principal.FindFirst(JwtRegisteredClaimNames.Iat)?.Value
+                         ?? principal.FindFirst("iat")?.Value;
+            if (string.IsNullOrEmpty(iatRaw)) return new Result(false, null, null, "missing iat");
+            if (!long.TryParse(iatRaw, out var iatSeconds)) return new Result(false, null, null, "invalid iat");
+            var iat = DateTimeOffset.FromUnixTimeSeconds(iatSeconds);
+            if (iat > DateTimeOffset.UtcNow.Add(_options.AllowedClockSkew))
+                return new Result(false, null, null, "iat in future");
+
             var sid = principal.FindFirst("sid")?.Value;
             var sub = principal.FindFirst("sub")?.Value;
             if (string.IsNullOrEmpty(sid) && string.IsNullOrEmpty(sub))

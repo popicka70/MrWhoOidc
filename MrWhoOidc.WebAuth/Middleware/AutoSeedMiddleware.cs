@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -29,7 +30,8 @@ public sealed class AutoSeedMiddleware
         ISeeder seeder,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions multiTenancyOptions,
-        OidcOptions oidcOptions,
+        IIssuerBuilder issuerBuilder,
+        IOptions<OidcOptions> oidcOptions,
         IHostEnvironment env,
         IConfiguration config)
     {
@@ -68,12 +70,13 @@ public sealed class AutoSeedMiddleware
                 {
                     // Create default tenant first (synchronously for simplicity in lock)
                     var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-                    var baseUrl = !string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl)
-                        ? oidcOptions.PublicBaseUrl.TrimEnd('/')
-                        : $"{context.Request.Scheme}://{context.Request.Host}";
-                    var issuerUri = multiTenancyOptions.Enabled
-                        ? $"{baseUrl}/t/{defaultSlug}"
-                        : baseUrl;
+                    var options = oidcOptions.Value;
+                    var baseUrl =
+                        (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
+                        ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null)
+                        ?? $"{context.Request.Scheme}://{context.Request.Host}";
+
+                    var issuerUri = issuerBuilder.BuildIssuer(baseUrl, defaultSlug).TrimEnd('/');
 
                     var defaultTenant = new Tenant
                     {
