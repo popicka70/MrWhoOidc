@@ -77,20 +77,26 @@ internal static class ForwardedHeadersConfigurator
             }
         }
 
-        // Legacy/dev-only escape hatch (unsafe): trust all proxies.
+        // Escape hatch (unsafe): trust forwarded headers from any proxy.
+        // This is sometimes required on managed hosting where proxy IP ranges are not stable/knowable.
+        // SECURITY NOTE: Only enable when the app is not directly reachable by clients (i.e., always behind a trusted reverse proxy).
         var unsafeTrustAll = configuration.GetValue<bool>("ForwardedHeaders:UnsafeTrustAll")
                              || configuration.GetValue<bool>("Testing:UnsafeTrustAllForwardedHeaders");
         if (unsafeTrustAll)
         {
-            if (environment.IsDevelopment())
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+
+            logger.LogWarning(
+                "Forwarded headers configured to trust all proxies (ForwardedHeaders:UnsafeTrustAll=true). " +
+                "This can be unsafe if clients can reach the app directly. Environment={EnvironmentName}.",
+                environment.EnvironmentName);
+
+            if (options.AllowedHosts.Count == 0)
             {
-                options.KnownNetworks.Clear();
-                options.KnownProxies.Clear();
-                logger.LogWarning("Forwarded headers configured to trust all proxies (Development only). This is unsafe for production.");
-            }
-            else
-            {
-                logger.LogError("Ignoring ForwardedHeaders:UnsafeTrustAll because environment is not Development.");
+                logger.LogWarning(
+                    "ForwardedHeaders:UnsafeTrustAll is enabled but no ForwardedHeaders:AllowedHosts (or Oidc:Issuer host) is configured. " +
+                    "Consider setting ForwardedHeaders:AllowedHosts to reduce host header spoofing risk.");
             }
         }
 
