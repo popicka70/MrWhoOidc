@@ -22,7 +22,11 @@ internal static class ForwardedHeadersConfigurator
         options = new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
-            RequireHeaderSymmetry = true,
+            // Some hosting providers (including certain proxy chains) can emit a different number of values
+            // for X-Forwarded-For vs X-Forwarded-Proto (e.g., multiple hops for client IP but a single proto).
+            // When symmetry is required, ASP.NET Core ignores the forwarded headers entirely, which can
+            // break HTTPS-dependent features like secure antiforgery cookies.
+            RequireHeaderSymmetry = configuration.GetValue<bool?>("ForwardedHeaders:RequireHeaderSymmetry") ?? false,
             ForwardLimit = configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1
         };
 
