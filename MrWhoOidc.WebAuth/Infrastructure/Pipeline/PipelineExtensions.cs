@@ -30,80 +30,8 @@ public static class PipelineExtensions
 
         // Forwarded headers: safe-by-default (loopback only) unless explicitly configured.
         // NOTE: Never trust X-Forwarded-* from arbitrary clients in production.
-        var forwardedEnabled = app.Configuration.GetValue<bool?>("ForwardedHeaders:Enabled") ?? true;
-        if (forwardedEnabled)
+        if (ForwardedHeadersConfigurator.TryBuild(app.Configuration, app.Environment, app.Logger, out var fwdOptions))
         {
-            var fwdOptions = new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
-                RequireHeaderSymmetry = true,
-                ForwardLimit = app.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1
-            };
-
-            // Optional host allow-list (recommended when honoring X-Forwarded-Host)
-            var allowedHosts = app.Configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? Array.Empty<string>();
-            foreach (var h in allowedHosts)
-            {
-                if (!string.IsNullOrWhiteSpace(h)) fwdOptions.AllowedHosts.Add(h);
-            }
-
-            // If not configured, default to issuer host allow-list when issuer is present.
-            if (fwdOptions.AllowedHosts.Count == 0)
-            {
-                var issuer = app.Configuration["Oidc:Issuer"];
-                if (Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri) && !string.IsNullOrWhiteSpace(issuerUri.Host))
-                {
-                    fwdOptions.AllowedHosts.Add(issuerUri.Host);
-                }
-            }
-
-            // Allow explicit proxy/network configuration.
-            var knownProxies = app.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>();
-            foreach (var p in knownProxies)
-            {
-                if (IPAddress.TryParse(p, out var ip)) fwdOptions.KnownProxies.Add(ip);
-                else if (!string.IsNullOrWhiteSpace(p)) app.Logger.LogWarning("Invalid ForwardedHeaders:KnownProxies entry '{Proxy}'", p);
-            }
-
-            var knownNetworks = app.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>();
-            foreach (var n in knownNetworks)
-            {
-                if (string.IsNullOrWhiteSpace(n)) continue;
-                var parts = n.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (parts.Length == 2 && IPAddress.TryParse(parts[0], out var ip) && int.TryParse(parts[1], out var prefix))
-                {
-                    try
-                    {
-                        fwdOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(ip, prefix));
-                    }
-                    catch (Exception ex)
-                    {
-                        app.Logger.LogWarning(ex, "Invalid ForwardedHeaders:KnownNetworks entry '{Network}'", n);
-                    }
-                }
-                else
-                {
-                    app.Logger.LogWarning("Invalid ForwardedHeaders:KnownNetworks entry '{Network}'", n);
-                }
-            }
-
-            // Legacy/dev-only escape hatch (unsafe): trust all proxies.
-            var unsafeTrustAll = app.Configuration.GetValue<bool>("ForwardedHeaders:UnsafeTrustAll")
-                                 || app.Configuration.GetValue<bool>("Testing:UnsafeTrustAllForwardedHeaders");
-            if (unsafeTrustAll)
-            {
-                if (app.Environment.IsDevelopment())
-                {
-                    fwdOptions.KnownNetworks.Clear();
-                    fwdOptions.KnownProxies.Clear();
-                    app.Logger.LogWarning("Forwarded headers configured to trust all proxies (Development only). This is unsafe for production.");
-                }
-                else
-                {
-                    app.Logger.LogError("Ignoring ForwardedHeaders:UnsafeTrustAll because environment is not Development.");
-                }
-            }
-
             app.UseForwardedHeaders(fwdOptions);
         }
 

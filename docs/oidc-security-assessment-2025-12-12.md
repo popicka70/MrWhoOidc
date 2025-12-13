@@ -130,8 +130,12 @@ This document reviews the **MrWhoOidc** authorization server (IdP/OP) implementa
 
 #### H4. PAR rate limiting is in-memory (can be bypassed in multi-instance deployments)
 
-**Evidence**
-- `MrWhoOidc.WebAuth/Handlers/ParHandler.cs` uses per-client in-memory limiter with a comment noting distributed replacement.
+**Previous evidence**
+- `MrWhoOidc.WebAuth/Handlers/ParHandler.cs` previously included a per-client in-memory limiter.
+
+**Current status (code as of 2025-12-13 in this workspace)**
+- PAR rate limiting is enforced via ASP.NET rate limiting policy `rl-par` and partitions by client id (or IP fallback).
+- When Redis is configured (`ConnectionStrings:redis`), `rl-par` uses a Redis-backed fixed-window limiter (`MrWhoOidc.WebAuth/Infrastructure/RedisFixedWindowRateLimiter.cs`) to make limits effective across multiple instances.
 
 **Why it matters**
 - In multi-instance deployments, clients can spread traffic across instances and bypass local limits.
@@ -212,7 +216,10 @@ These are optional but recommended enhancements depending on your target threat 
 
 - Token audience validation tests for `/userinfo` tokens.
 - DPoP replay tests for `/token` when `DPoP` is present.
-- Forwarded headers tests (ensure spoofed `X-Forwarded-Host` cannot change issuer/endpoint behavior when not from a known proxy).
+
+**Current status (code as of 2025-12-13 in this workspace)**
+- Forwarded headers spoof regression test added (ensures unallowed `X-Forwarded-Host` is ignored).
+- Cache header regression tests added for `/revoke` and `/introspect` (ensures `Cache-Control: no-store` and `Pragma: no-cache` even on error paths).
 
 ## Appendix: key code locations
 

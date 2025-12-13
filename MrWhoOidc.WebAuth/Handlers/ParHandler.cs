@@ -8,7 +8,6 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
-using System.Collections.Concurrent;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -19,10 +18,6 @@ public interface IParHandler
 
 public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcMetrics metrics, ILogger<ParHandler> logger) : IParHandler
 {
-    // In-memory per-client sliding window limiter (small step). For distributed deployments, replace with Redis limiter.
-    private static readonly ConcurrentDictionary<string, (int Count, DateTimeOffset WindowStart)> _clientWindows = new();
-    private const int ClientRateLimitPerMinute = 60; // TODO: make configurable if needed
-
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var corr = Activity.Current?.Id ?? Guid.NewGuid().ToString("N");
@@ -34,36 +29,6 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
         }
 
         var form = await http.Request.ReadFormAsync();
-
-        // Client id for partitioning (from header or form)
-        var (clientIdHeader, _) = ReadClientCredentials(http);
-        var clientIdForRate = !string.IsNullOrEmpty(clientIdHeader) ? clientIdHeader : form[OAuthConstants.Parameters.ClientId].ToString();
-        var clientBucket = !string.IsNullOrEmpty(clientIdForRate) ? BucketizeClientId(clientIdForRate) : "unknown";
-
-        // Per-client sliding window limiter
-        if (!string.IsNullOrEmpty(clientIdForRate))
-        {
-            var nowRL = DateTimeOffset.UtcNow;
-            _clientWindows.AddOrUpdate(clientBucket, _ => (1, nowRL), (_, cur) =>
-            {
-                if (nowRL - cur.WindowStart >= TimeSpan.FromMinutes(1))
-                {
-                    return (1, nowRL);
-                }
-                if (cur.Count + 1 > ClientRateLimitPerMinute)
-                {
-                    return (cur.Count + 1, cur.WindowStart);
-                }
-                return (cur.Count + 1, cur.WindowStart);
-            });
-            var snapshot = _clientWindows[clientBucket];
-            if (snapshot.Count > ClientRateLimitPerMinute && nowRL - snapshot.WindowStart < TimeSpan.FromMinutes(1))
-            {
-                metrics.ParFailures.Add(1);
-                logger.LogWarning("/par 429: per-client window exceeded corr={Corr} client={Client}", corr, clientBucket);
-                return ErrorResults.RateLimitExceeded("Too many requests", correlationId: corr);
-            }
-        }
 
         // Size metric for request object if present
         var roJwtRaw = form["request"].ToString();
