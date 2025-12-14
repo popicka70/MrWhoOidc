@@ -636,6 +636,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health/forwarded-headers",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/health/global-auth",
     "Methods": "GET",
     "RateLimiters": [],

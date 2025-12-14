@@ -804,6 +804,96 @@ public static class AdminApiEndpointMappingExtensions
             });
         }).WithName("IssuerHealth");
 
+        // Forwarded headers configuration health endpoint
+        app.MapGet("/health/forwarded-headers", (
+            HttpContext http,
+            IConfiguration configuration,
+            Microsoft.Extensions.Options.IOptions<OidcOptions> oidcOptions,
+            IWebHostEnvironment env) =>
+        {
+            static string? GetHost(string? url)
+            {
+                if (string.IsNullOrWhiteSpace(url)) return null;
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+                return string.IsNullOrWhiteSpace(uri.Host) ? null : uri.Host;
+            }
+
+            static int CountForwardedForEntries(string? headerValue)
+            {
+                if (string.IsNullOrWhiteSpace(headerValue)) return 0;
+                return headerValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+            }
+
+            var forwardedEnabled = configuration.GetValue<bool?>("ForwardedHeaders:Enabled") ?? true;
+            var requireHeaderSymmetry = configuration.GetValue<bool?>("ForwardedHeaders:RequireHeaderSymmetry") ?? false;
+            var forwardLimit = configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1;
+            var unsafeTrustAll = configuration.GetValue<bool>("ForwardedHeaders:UnsafeTrustAll")
+                                 || configuration.GetValue<bool>("Testing:UnsafeTrustAllForwardedHeaders");
+            var enforceHostAllowList = configuration.GetValue<bool>("ForwardedHeaders:EnforceHostAllowList");
+
+            var configuredAllowedHosts = configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? Array.Empty<string>();
+            var allowedHosts = configuredAllowedHosts
+                .Select(static x => x?.Trim())
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .Select(static x => x!)
+                .ToArray();
+
+            var canonicalHost = GetHost(oidcOptions.Value.PublicBaseUrl) ?? GetHost(oidcOptions.Value.Issuer);
+            if (allowedHosts.Length == 0 && !string.IsNullOrWhiteSpace(canonicalHost))
+            {
+                allowedHosts = [canonicalHost];
+            }
+
+            var knownProxyCount = (configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+                .Count(static x => !string.IsNullOrWhiteSpace(x));
+            var knownNetworkCount = (configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>())
+                .Count(static x => !string.IsNullOrWhiteSpace(x));
+
+            var xff = http.Request.Headers["X-Forwarded-For"].ToString();
+            var xfp = http.Request.Headers["X-Forwarded-Proto"].ToString();
+            var xfh = http.Request.Headers["X-Forwarded-Host"].ToString();
+
+            var requireProxyTrustConfig = !env.IsDevelopment() && forwardedEnabled;
+            var hasProxyTrustConfig = unsafeTrustAll || knownProxyCount > 0 || knownNetworkCount > 0;
+            var hasHostAllowList = allowedHosts.Length > 0;
+
+            var status = "healthy";
+            if (requireProxyTrustConfig && !hasProxyTrustConfig)
+            {
+                status = "degraded";
+            }
+            if (!env.IsDevelopment() && enforceHostAllowList && !hasHostAllowList)
+            {
+                status = "degraded";
+            }
+
+            return Results.Ok(new
+            {
+                status,
+                environment = env.EnvironmentName,
+                forwardedEnabled,
+                requireHeaderSymmetry,
+                forwardLimit,
+                unsafeTrustAll,
+                enforceHostAllowList,
+                allowedHosts,
+                knownProxies = knownProxyCount,
+                knownNetworks = knownNetworkCount,
+                canonicalHost,
+                request = new
+                {
+                    scheme = http.Request.Scheme,
+                    host = http.Request.Host.Value,
+                    hasXForwardedFor = !string.IsNullOrWhiteSpace(xff),
+                    xForwardedForCount = CountForwardedForEntries(xff),
+                    hasXForwardedProto = !string.IsNullOrWhiteSpace(xfp),
+                    xForwardedProto = string.IsNullOrWhiteSpace(xfp) ? null : xfp,
+                    hasXForwardedHost = !string.IsNullOrWhiteSpace(xfh),
+                    xForwardedHost = string.IsNullOrWhiteSpace(xfh) ? null : xfh
+                }
+            });
+        }).WithName("ForwardedHeadersHealth");
+
     // Platform Admin: On-demand tenant seeding (platform-admin only)
     var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
