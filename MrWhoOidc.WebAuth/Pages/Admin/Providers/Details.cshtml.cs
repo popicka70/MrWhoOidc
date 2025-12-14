@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -34,8 +35,24 @@ public class DetailsModel(
         {
             try
             {
-                using var doc = JsonDocument.Parse(Provider.ConfigJson);
-                ConfigPretty = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+                var node = JsonNode.Parse(Provider.ConfigJson);
+                if (node is JsonObject obj)
+                {
+                    // Avoid leaking secrets in the UI.
+                    var secretKey = obj.Select(kvp => kvp.Key)
+                        .FirstOrDefault(k => string.Equals(k, "ClientSecret", StringComparison.OrdinalIgnoreCase));
+                    if (secretKey is not null)
+                    {
+                        obj[secretKey] = "<redacted>";
+                    }
+
+                    ConfigPretty = obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+                }
+                else
+                {
+                    using var doc = JsonDocument.Parse(Provider.ConfigJson);
+                    ConfigPretty = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+                }
             }
             catch
             {

@@ -99,6 +99,11 @@ public class EditModel(
             if (!string.IsNullOrWhiteSpace(entity.ConfigJson))
             {
                 OidcConfig = JsonToForm(entity.ConfigJson);
+
+                if (OidcConfig is not null && OidcProviderConfigJsonMerger.TryExtractExtendedJson(entity.ConfigJson, out var extendedJson, out _))
+                {
+                    OidcConfig.ExtendedJson = extendedJson;
+                }
             }
             else
             {
@@ -145,30 +150,6 @@ public class EditModel(
             return Page();
         }
 
-        // If OIDC and form is populated, convert form to JSON
-        // Note: Both form and JSON are submitted, but form takes precedence if populated
-        if (Input.Type == IdentityProviderType.Oidc && OidcConfig != null && !string.IsNullOrWhiteSpace(OidcConfig.Authority))
-        {
-            var json = FormToJson(OidcConfig);
-            if (json is null)
-            {
-                ModelState.AddModelError(string.Empty, "Failed to serialize configuration from form.");
-                return Page();
-            }
-            Input.ConfigJson = json;
-        }
-
-        // Basic JSON validation
-        if (!string.IsNullOrWhiteSpace(Input.ConfigJson))
-        {
-            try { using var _ = JsonDocument.Parse(Input.ConfigJson); }
-            catch (Exception ex)
-            {
-                ModelState.AddModelError("Input.ConfigJson", $"Invalid JSON: {ex.Message}");
-                return Page();
-            }
-        }
-
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null)
             return NotFound();
@@ -180,7 +161,85 @@ public class EditModel(
         entity.IsDefault = Input.IsDefault;
         entity.SortOrder = Input.SortOrder;
         entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
-        entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim();
+
+        if (Input.Type == IdentityProviderType.Oidc && OidcConfig != null && !string.IsNullOrWhiteSpace(OidcConfig.Authority))
+        {
+            var scopes = string.IsNullOrWhiteSpace(OidcConfig.ScopesString)
+                ? new[] { "openid", "profile", "email" }
+                : OidcConfig.ScopesString.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            Dictionary<string, string>? extraParams = null;
+            if (!string.IsNullOrWhiteSpace(OidcConfig.ExtraAuthParamsJson))
+            {
+                try
+                {
+                    extraParams = JsonSerializer.Deserialize<Dictionary<string, string>>(OidcConfig.ExtraAuthParamsJson);
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError("OidcConfig.ExtraAuthParamsJson", $"Invalid JSON: {ex.Message}");
+                    return Page();
+                }
+            }
+
+            var standardCfg = new OidcProviderConfig
+            {
+                Authority = OidcConfig.Authority,
+                DiscoveryUrl = string.IsNullOrWhiteSpace(OidcConfig.DiscoveryUrl) ? null : OidcConfig.DiscoveryUrl,
+                ClientId = OidcConfig.ClientId,
+                ClientSecret = string.IsNullOrWhiteSpace(OidcConfig.ClientSecret) ? null : OidcConfig.ClientSecret,
+                ResponseType = OidcConfig.ResponseType,
+                Scopes = scopes,
+                UsePKCE = OidcConfig.UsePKCE,
+                UseJAR = OidcConfig.UseJAR,
+                UsePAR = OidcConfig.UsePAR,
+                RequestedAcrValues = string.IsNullOrWhiteSpace(OidcConfig.RequestedAcrValues) ? null : OidcConfig.RequestedAcrValues,
+                Prompt = string.IsNullOrWhiteSpace(OidcConfig.Prompt) ? null : OidcConfig.Prompt,
+                ResponseMode = string.IsNullOrWhiteSpace(OidcConfig.ResponseMode) ? null : OidcConfig.ResponseMode,
+                ClockSkewSeconds = OidcConfig.ClockSkewSeconds,
+                TokenValidation = new TokenValidationOptions
+                {
+                    ValidateIssuer = OidcConfig.ValidateIssuer,
+                    ValidateAudience = OidcConfig.ValidateAudience,
+                    ValidateLifetime = OidcConfig.ValidateLifetime
+                },
+                BackChannelLogout = OidcConfig.BackChannelLogout,
+                ExtraAuthParams = extraParams
+            };
+
+            var overwriteClientSecret = !string.IsNullOrWhiteSpace(OidcConfig.ClientSecret);
+            var extendedJson = string.IsNullOrWhiteSpace(OidcConfig.ExtendedJson) ? null : OidcConfig.ExtendedJson;
+
+            if (!OidcProviderConfigJsonMerger.TryMerge(
+                    existingJson: entity.ConfigJson,
+                    standardConfig: standardCfg,
+                    extendedJson: extendedJson,
+                    overwriteClientSecret: overwriteClientSecret,
+                    mergedJson: out var mergedJson,
+                    error: out var mergeError))
+            {
+                ModelState.AddModelError("OidcConfig.ExtendedJson", mergeError ?? "Invalid extended configuration.");
+                return Page();
+            }
+
+            entity.ConfigJson = mergedJson;
+        }
+        else
+        {
+            // Basic JSON validation (non-OIDC types, or OIDC fallback when the form is not usable)
+            if (!string.IsNullOrWhiteSpace(Input.ConfigJson))
+            {
+                try { using var _ = JsonDocument.Parse(Input.ConfigJson); }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError("Input.ConfigJson", $"Invalid JSON: {ex.Message}");
+                    return Page();
+                }
+            }
+
+            entity.ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim();
+        }
+
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         var (ok, error) = await validator.ValidateAsync(entity);
@@ -437,7 +496,7 @@ public class EditModel(
                 Authority = cfg.Authority,
                 DiscoveryUrl = cfg.DiscoveryUrl,
                 ClientId = cfg.ClientId,
-                ClientSecret = cfg.ClientSecret,
+                ClientSecret = null,
                 ResponseType = cfg.ResponseType,
                 ScopesString = string.Join(" ", cfg.Scopes ?? Array.Empty<string>()),
                 UsePKCE = cfg.UsePKCE,
@@ -521,66 +580,5 @@ public class EditModel(
         [Url]
         public string? LogoUrl { get; set; }
         public string? ConfigJson { get; set; }
-    }
-
-    public sealed class OidcConfigForm
-    {
-        [Required, Url]
-        [Display(Name = "Authority")]
-        public string Authority { get; set; } = string.Empty;
-
-        [Url]
-        [Display(Name = "Discovery URL (optional)")]
-        public string? DiscoveryUrl { get; set; }
-
-        [Required]
-        [Display(Name = "Client ID")]
-        public string ClientId { get; set; } = string.Empty;
-
-        [Display(Name = "Client Secret")]
-        public string? ClientSecret { get; set; }
-
-        [Display(Name = "Response Type")]
-        public string ResponseType { get; set; } = "code";
-
-        [Display(Name = "Scopes (space-separated)")]
-        public string ScopesString { get; set; } = "openid profile email";
-
-        [Display(Name = "Use PKCE")]
-        public bool UsePKCE { get; set; } = true;
-
-        [Display(Name = "Use JAR (JWT-secured Authorization Request)")]
-        public bool UseJAR { get; set; } = false;
-
-        [Display(Name = "Use PAR (Pushed Authorization Request)")]
-        public bool UsePAR { get; set; } = false;
-
-        [Display(Name = "ACR Values (optional)")]
-        public string? RequestedAcrValues { get; set; }
-
-        [Display(Name = "Prompt (optional)")]
-        public string? Prompt { get; set; }
-
-        [Display(Name = "Response Mode (optional)")]
-        public string? ResponseMode { get; set; }
-
-        [Display(Name = "Clock Skew (seconds)")]
-        [Range(0, 600)]
-        public int ClockSkewSeconds { get; set; } = 120;
-
-        [Display(Name = "Validate Issuer")]
-        public bool ValidateIssuer { get; set; } = true;
-
-        [Display(Name = "Validate Audience")]
-        public bool ValidateAudience { get; set; } = false;
-
-        [Display(Name = "Validate Lifetime")]
-        public bool ValidateLifetime { get; set; } = true;
-
-        [Display(Name = "Back-Channel Logout")]
-        public bool BackChannelLogout { get; set; } = true;
-
-        [Display(Name = "Extra Auth Params (JSON object, optional)")]
-        public string? ExtraAuthParamsJson { get; set; }
     }
 }

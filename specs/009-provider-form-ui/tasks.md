@@ -20,9 +20,8 @@ description: "Task list for Identity Provider Configuration Form"
 
 **Purpose**: Confirm scope and mapping against existing code before changes
 
-- [ ] T001 Review current provider add/edit UI in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml
-- [ ] T001 [P] Review current provider add/edit UI in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml
-- [ ] T002 [P] Confirm standard OIDC field list matches current schema in MrWhoOidc.Auth/IdentityProviders/OidcProviderConfig.cs
+- [x] T001 [P] Review current provider add/edit UI in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml
+- [x] T002 [P] Confirm standard OIDC field list matches current schema in MrWhoOidc.Auth/IdentityProviders/OidcProviderConfig.cs
 
 ---
 
@@ -32,8 +31,8 @@ description: "Task list for Identity Provider Configuration Form"
 
 **⚠️ CRITICAL**: No user story work should start until this phase is complete
 
-- [ ] T003 [P] Create JSON merge utility to preserve unknown keys in MrWhoOidc.Auth/IdentityProviders/OidcProviderConfigJsonMerger.cs
-- [ ] T004 [P] Extract shared OIDC form model into MrWhoOidc.WebAuth/Pages/Admin/Providers/OidcConfigForm.cs (used by both Add and Edit)
+- [x] T003 [P] Create JSON merge utility to preserve unknown keys in MrWhoOidc.Auth/IdentityProviders/OidcProviderConfigJsonMerger.cs
+- [x] T004 [P] Extract shared OIDC form model into MrWhoOidc.WebAuth/Pages/Admin/Providers/OidcConfigForm.cs (used by both Add and Edit)
 - [ ] T005 [P] Create Razor partial for standard OIDC inputs in MrWhoOidc.WebAuth/Pages/Admin/Providers/_OidcStandardConfig.cshtml
 - [ ] T006 [P] Create Razor partial for advanced config JSON input in MrWhoOidc.WebAuth/Pages/Admin/Providers/_OidcAdvancedConfig.cshtml
 
@@ -49,10 +48,10 @@ description: "Task list for Identity Provider Configuration Form"
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Add OIDC form binding to MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs (bind OidcConfigForm + optional advanced JSON)
-- [ ] T008 [US1] Replace raw config textarea-first UX with standard form partials in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml
-- [ ] T009 [US1] Build stored config JSON from standard inputs (and optional advanced) in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs
-- [ ] T010 [US1] Implement field-level validation feedback on Add save in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs
+- [x] T007 [US1] Add OIDC form binding to MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs (bind OidcConfigForm + optional advanced JSON)
+- [x] T008 [US1] Replace raw config textarea-first UX with standard form partials in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml
+- [x] T009 [US1] Build stored config JSON from standard inputs (and optional advanced) in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs
+- [x] T010 [US1] Implement field-level validation feedback on Add save in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs
 
 **Checkpoint**: US1 complete — new OIDC provider can be created without JSON
 
@@ -66,12 +65,12 @@ description: "Task list for Identity Provider Configuration Form"
 
 ### Implementation for User Story 2
 
-- [ ] T011 [P] [US2] Refactor OIDC edit model to use shared OidcConfigForm in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
 - [ ] T012 [P] [US2] Render standard + advanced partials in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml
-- [ ] T013 [US2] Implement merge-on-save to preserve unknown keys using MrWhoOidc.Auth/IdentityProviders/OidcProviderConfigJsonMerger.cs in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
-- [ ] T014 [US2] Implement safe secret update semantics (blank = unchanged; do not display existing secret) in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
-- [ ] T015 [US2] Handle invalid stored config by avoiding auto-rewrite and allowing explicit overwrite via advanced JSON in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
-- [ ] T016 [US2] Prevent secret disclosure in provider details view by redacting sensitive fields from display in MrWhoOidc.WebAuth/Pages/Admin/Providers/Details.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Details.cshtml
+- [x] T011 [P] [US2] Refactor OIDC edit model to use shared OidcConfigForm in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T013 [US2] Implement merge-on-save to preserve unknown keys using MrWhoOidc.Auth/IdentityProviders/OidcProviderConfigJsonMerger.cs in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T014 [US2] Implement safe secret update semantics (blank = unchanged; do not display existing secret) in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T015 [US2] Handle invalid stored config by avoiding auto-rewrite and allowing explicit overwrite via advanced JSON in MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T016 [US2] Prevent secret disclosure in provider details view by redacting sensitive fields from display in MrWhoOidc.WebAuth/Pages/Admin/Providers/Details.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Details.cshtml
 
 **Checkpoint**: US2 complete — edits preserve unknown keys and keep secrets safe
 
@@ -86,8 +85,8 @@ description: "Task list for Identity Provider Configuration Form"
 ### Implementation for User Story 3
 
 - [ ] T017 [P] [US3] Define advanced JSON semantics as an “extended properties” JSON object and document help text in MrWhoOidc.WebAuth/Pages/Admin/Providers/_OidcAdvancedConfig.cshtml
-- [ ] T018 [P] [US3] Validate advanced JSON syntax and require JSON object shape in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
-- [ ] T019 [US3] Detect conflicts where advanced JSON sets a standard field and block save with clear message in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T018 [P] [US3] Validate advanced JSON syntax and require JSON object shape in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
+- [x] T019 [US3] Detect conflicts where advanced JSON sets a standard field and block save with clear message in MrWhoOidc.WebAuth/Pages/Admin/Providers/Add.cshtml.cs and MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs
 
 **Checkpoint**: US3 complete — advanced config is optional, validated, and conflict-safe
 
@@ -99,7 +98,7 @@ description: "Task list for Identity Provider Configuration Form"
 
 - [ ] T020 [P] Update admin documentation for the new provider form and advanced JSON guidance in docs/admin-guide.md
 - [ ] T021 Update quickstart verification steps if needed in specs/009-provider-form-ui/quickstart.md
-- [ ] T022 Run end-to-end validation by executing dotnet test for MrWhoOidc.slnx and fix any warnings/regressions in modified files
+- [x] T022 Run end-to-end validation by executing dotnet test for MrWhoOidc.slnx and fix any warnings/regressions in modified files
 
 ---
 

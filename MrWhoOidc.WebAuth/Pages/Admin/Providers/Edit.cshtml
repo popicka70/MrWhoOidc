@@ -227,7 +227,7 @@ else
                                 <label asp-for="OidcConfig.ClientSecret" class="form-label"></label>
                                 <input asp-for="OidcConfig.ClientSecret" type="password" class="form-control" />
                                 <span asp-validation-for="OidcConfig.ClientSecret" class="text-danger"></span>
-                                <div class="form-text">Leave empty for public clients or when using client assertions.</div>
+                                <div class="form-text">Leave empty to keep the existing secret (it is never displayed).</div>
                             </div>
                         </div>
 
@@ -345,15 +345,23 @@ else
             {
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle me-1"></i>
-                    <strong>JSON Configuration:</strong> This tab shows the raw JSON configuration. 
-                    For OIDC providers, you can use the <strong>Form Editor</strong> tab for a structured editing experience, 
-                    or edit the JSON directly here for advanced scenarios.
+                    <strong>Extended JSON:</strong> Use this only for non-standard provider keys. Standard OIDC fields come from the <strong>Form Editor</strong> tab.
                 </div>
             }
             <div class="mb-3">
-                <label class="form-label">Config JSON (OIDC)</label>
-                <textarea asp-for="Input.ConfigJson" class="form-control font-monospace" id="configJsonTextarea" style="height: calc(100vh - 350px); min-height: 400px;"></textarea>
-                <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+                @if (Model.Input?.Type == IdentityProviderType.Oidc && Model.OidcConfig != null)
+                {
+                    <label class="form-label">Extended parameters (JSON)</label>
+                    <textarea asp-for="OidcConfig.ExtendedJson" class="form-control font-monospace" id="configJsonTextarea" style="height: calc(100vh - 350px); min-height: 400px;"></textarea>
+                    <span asp-validation-for="OidcConfig.ExtendedJson" class="text-danger"></span>
+                    <div class="form-text">Must be a JSON object and must not include standard keys like Authority/ClientId.</div>
+                }
+                else
+                {
+                    <label class="form-label">Config JSON</label>
+                    <textarea asp-for="Input.ConfigJson" class="form-control font-monospace" id="configJsonTextarea" style="height: calc(100vh - 350px); min-height: 400px;"></textarea>
+                    <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+                }
             </div>
             <div class="d-flex gap-2 align-items-center">
                 <button type="button" class="btn btn-outline-secondary" id="formatJsonBtn">
@@ -438,7 +446,7 @@ else
         
         if (configTab) {
             configTab.addEventListener('shown.bs.tab', function () {
-                console.log('JSON editor active - manual edits will override form values on save');
+                console.log('Extended JSON editor active - standard fields come from the form');
             });
         }
     });

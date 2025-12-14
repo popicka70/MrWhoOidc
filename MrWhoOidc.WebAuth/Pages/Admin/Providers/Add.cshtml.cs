@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Extensions;
 
@@ -21,34 +22,128 @@ public class AddModel(
     [BindProperty]
     public InputModel Input { get; set; } = new();
 
+    [BindProperty]
+    public OidcConfigForm? OidcConfig { get; set; }
+
     public List<SelectListItem> TypeOptions { get; private set; } = new();
 
     public void OnGet()
     {
-        TypeOptions = new()
+        LoadTypes();
+
+        OidcConfig = new OidcConfigForm
         {
-            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
-            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
+            Authority = string.Empty,
+            ClientId = string.Empty,
+            ResponseType = "code",
+            ScopesString = "openid profile email",
+            UsePKCE = true,
+            UseJAR = false,
+            UsePAR = false,
+            ClockSkewSeconds = 120,
+            ValidateIssuer = true,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            BackChannelLogout = true
         };
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
-        OnGet();
+        LoadTypes();
+
+        // Only validate OIDC form when the provider type is OIDC.
+        if (Input.Type != IdentityProviderType.Oidc)
+        {
+            var keys = ModelState.Keys.Where(k => k.StartsWith("OidcConfig.", StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var k in keys)
+            {
+                ModelState.Remove(k);
+            }
+        }
+
         if (!ModelState.IsValid)
             return Page();
 
-        // Basic JSON validation
-        if (!string.IsNullOrWhiteSpace(Input.ConfigJson))
+        if (Input.Type == IdentityProviderType.Oidc)
         {
-            try
+            if (OidcConfig is null)
             {
-                using var _ = JsonDocument.Parse(Input.ConfigJson);
-            }
-            catch (Exception ex)
-            {
-                ModelState.AddModelError("Input.ConfigJson", $"Invalid JSON: {ex.Message}");
+                ModelState.AddModelError(string.Empty, "OIDC configuration is required.");
                 return Page();
+            }
+
+            var scopes = string.IsNullOrWhiteSpace(OidcConfig.ScopesString)
+                ? new[] { "openid", "profile", "email" }
+                : OidcConfig.ScopesString.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            Dictionary<string, string>? extraParams = null;
+            if (!string.IsNullOrWhiteSpace(OidcConfig.ExtraAuthParamsJson))
+            {
+                try
+                {
+                    extraParams = JsonSerializer.Deserialize<Dictionary<string, string>>(OidcConfig.ExtraAuthParamsJson);
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError("OidcConfig.ExtraAuthParamsJson", $"Invalid JSON: {ex.Message}");
+                    return Page();
+                }
+            }
+
+            var standardCfg = new OidcProviderConfig
+            {
+                Authority = OidcConfig.Authority,
+                DiscoveryUrl = string.IsNullOrWhiteSpace(OidcConfig.DiscoveryUrl) ? null : OidcConfig.DiscoveryUrl,
+                ClientId = OidcConfig.ClientId,
+                ClientSecret = string.IsNullOrWhiteSpace(OidcConfig.ClientSecret) ? null : OidcConfig.ClientSecret,
+                ResponseType = OidcConfig.ResponseType,
+                Scopes = scopes,
+                UsePKCE = OidcConfig.UsePKCE,
+                UseJAR = OidcConfig.UseJAR,
+                UsePAR = OidcConfig.UsePAR,
+                RequestedAcrValues = string.IsNullOrWhiteSpace(OidcConfig.RequestedAcrValues) ? null : OidcConfig.RequestedAcrValues,
+                Prompt = string.IsNullOrWhiteSpace(OidcConfig.Prompt) ? null : OidcConfig.Prompt,
+                ResponseMode = string.IsNullOrWhiteSpace(OidcConfig.ResponseMode) ? null : OidcConfig.ResponseMode,
+                ClockSkewSeconds = OidcConfig.ClockSkewSeconds,
+                TokenValidation = new TokenValidationOptions
+                {
+                    ValidateIssuer = OidcConfig.ValidateIssuer,
+                    ValidateAudience = OidcConfig.ValidateAudience,
+                    ValidateLifetime = OidcConfig.ValidateLifetime
+                },
+                BackChannelLogout = OidcConfig.BackChannelLogout,
+                ExtraAuthParams = extraParams
+            };
+
+            if (!OidcProviderConfigJsonMerger.TryMerge(
+                    existingJson: null,
+                    standardConfig: standardCfg,
+                    extendedJson: OidcConfig.ExtendedJson,
+                    overwriteClientSecret: true,
+                    mergedJson: out var mergedJson,
+                    error: out var mergeError))
+            {
+                ModelState.AddModelError("OidcConfig.ExtendedJson", mergeError ?? "Invalid extended configuration.");
+                return Page();
+            }
+
+            Input.ConfigJson = mergedJson;
+        }
+        else
+        {
+            // Basic JSON validation (non-OIDC types)
+            if (!string.IsNullOrWhiteSpace(Input.ConfigJson))
+            {
+                try
+                {
+                    using var _ = JsonDocument.Parse(Input.ConfigJson);
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError("Input.ConfigJson", $"Invalid JSON: {ex.Message}");
+                    return Page();
+                }
             }
         }
 
@@ -91,6 +186,15 @@ public class AddModel(
             tenantAccessor,
             multiTenancyOptions);
         return Redirect(redirectUrl);
+    }
+
+    private void LoadTypes()
+    {
+        TypeOptions = new()
+        {
+            new SelectListItem("OIDC", ((int)IdentityProviderType.Oidc).ToString()),
+            new SelectListItem("SAML", ((int)IdentityProviderType.Saml).ToString())
+        };
     }
 
     public sealed class InputModel
