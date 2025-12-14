@@ -120,7 +120,7 @@
 
                 <hr class="my-3" />
 
-                                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" role="button" aria-label="Register a new account">
+                                <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" asp-route-returnUrl="@Model.ReturnUrl" role="button" aria-label="Register a new account">
                     <i class="bi bi-person-plus me-2"></i>
                     Register a new account
                 </a>

@@ -2,16 +2,23 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
 
 [AllowAnonymous]
-public class IndexModel(IPasswordHasher hasher, IRegistrationService registrationService) : PageModel
+public class IndexModel(
+    IPasswordHasher hasher,
+    IRegistrationService registrationService,
+    IReturnUrlClientContextResolver clientContextResolver) : PageModel
 {
     [BindProperty]
     public RegistrationInput Input { get; set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public string? ReturnUrl { get; set; }
 
     public string? SuccessMessage { get; private set; }
     public string? InfoMessage { get; private set; }
@@ -61,13 +68,23 @@ public class IndexModel(IPasswordHasher hasher, IRegistrationService registratio
             }
 
             // Use the registration service instead of direct DB operations
-            // Note: clientId is always null - client assignment is done post-registration by admins
+            // Only associate a client when we can derive it from a validated authorize context and the client opts in.
             // Auto-approve only when creating a new tenant (user becomes tenant admin)
+            Guid? clientId = null;
+            if (!Input.CreateTenant)
+            {
+                Client? client = await clientContextResolver.TryResolveClientAsync(HttpContext, ReturnUrl, HttpContext.RequestAborted);
+                if (client is not null && client.AutoAssignNewUsersToClient)
+                {
+                    clientId = client.Id;
+                }
+            }
+
             var userId = await registrationService.CreateAndMaybeApproveRegistrationAsync(
                 email: Input.Email.Trim(),
                 firstName: string.IsNullOrWhiteSpace(Input.FirstName) ? null : Input.FirstName.Trim(),
                 lastName: string.IsNullOrWhiteSpace(Input.LastName) ? null : Input.LastName.Trim(),
-                clientId: null,
+                clientId: clientId,
                 passwordHash: passwordHash,
                 isExternalIdp: false, // Local registration
                 autoApprove: Input.CreateTenant, // Only auto-approve tenant admin registrations

@@ -32,6 +32,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -81,7 +82,8 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+
+    	services.AddExternalOidcTestDefaults();
     services.AddExternalOidcHandler(); // Use DI registration
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();

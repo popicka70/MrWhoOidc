@@ -35,7 +35,9 @@ public class ExternalOidcHandlerTests
     public async Task Start_Missing_Provider_Parameter_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
         ctx.Request.QueryString = new QueryString("?returnUrl=%2Fauthorize&clientId=web");
 
         // Act
@@ -46,13 +48,16 @@ public class ExternalOidcHandlerTests
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
         Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
+        }
     }
 
     [TestMethod]
     public async Task Start_Missing_ReturnUrl_Parameter_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
         ctx.Request.QueryString = new QueryString("?provider=google&clientId=web");
 
         // Act
@@ -63,13 +68,16 @@ public class ExternalOidcHandlerTests
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
         Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
+        }
     }
 
     [TestMethod]
     public async Task Start_Unknown_Provider_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
         ctx.Request.QueryString = new QueryString("?provider=nonexistent&returnUrl=%2Fauthorize&clientId=web");
 
         // Act
@@ -80,13 +88,16 @@ public class ExternalOidcHandlerTests
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
         Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for unknown provider");
+        }
     }
 
     [TestMethod]
     public async Task Start_Disabled_Provider_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
         var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
 
         // Add a disabled provider
@@ -112,13 +123,16 @@ public class ExternalOidcHandlerTests
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
         Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for disabled provider");
+        }
     }
 
     [TestMethod]
     public async Task Start_Invalid_Provider_Config_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
         var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
 
         // Add a provider with invalid JSON config
@@ -140,6 +154,7 @@ public class ExternalOidcHandlerTests
         var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
         var url = urlProp?.GetValue(result)?.ToString();
         Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for invalid config");
+        }
     }
 
     #endregion
@@ -150,114 +165,94 @@ public class ExternalOidcHandlerTests
     public async Task Callback_Missing_State_Parameter_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
-        ctx.Request.QueryString = new QueryString("?code=abc123");
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
+            ctx.Request.QueryString = new QueryString("?code=abc123");
 
-        // Act
-        var result = await handler.CallbackAsync(ctx);
+            // Act
+            var result = await handler.CallbackAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // CallbackAsync returns Results.BadRequest("Missing state") for missing state
-        var resultType = result.GetType().Name;
-        Assert.IsTrue(
-            resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
-            $"Expected BadRequest result, got: {resultType}");
+            // Assert
+            Assert.IsNotNull(result);
+            // CallbackAsync returns Results.BadRequest("Missing state") for missing state
+            var resultType = result.GetType().Name;
+            Assert.IsTrue(
+                resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
+                $"Expected BadRequest result, got: {resultType}");
+        }
     }
 
     [TestMethod]
     public async Task Callback_Invalid_State_Returns_Error()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
-        ctx.Request.QueryString = new QueryString("?state=invalid-state-value&code=abc123");
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
+            ctx.Request.QueryString = new QueryString("?state=invalid-state-value&code=abc123");
 
-        // Act
-        var result = await handler.CallbackAsync(ctx);
+            // Act
+            var result = await handler.CallbackAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // CallbackAsync returns Results.BadRequest("Invalid state") for invalid state
-        var resultType = result.GetType().Name;
-        Assert.IsTrue(
-            resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
-            $"Expected BadRequest result, got: {resultType}");
+            // Assert
+            Assert.IsNotNull(result);
+            // CallbackAsync returns Results.BadRequest("Invalid state") for invalid state
+            var resultType = result.GetType().Name;
+            Assert.IsTrue(
+                resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
+                $"Expected BadRequest result, got: {resultType}");
+        }
     }
 
     [TestMethod]
     public async Task Callback_Error_Parameter_Propagated()
     {
         // Arrange
-        var (handler, ctx) = CreateHandler();
-        // Without valid state, will still get BadRequest for missing state
-        ctx.Request.QueryString = new QueryString("?error=access_denied&error_description=User%20cancelled");
+        var (handler, ctx, scope) = CreateHandler();
+        using (scope)
+        {
+            // Without valid state, will still get BadRequest for missing state
+            ctx.Request.QueryString = new QueryString("?error=access_denied&error_description=User%20cancelled");
 
-        // Act
-        var result = await handler.CallbackAsync(ctx);
+            // Act
+            var result = await handler.CallbackAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        // Without state parameter, will return BadRequest("Missing state")
-        // This test verifies error parameter is present in query, but state validation happens first
-        var resultType = result.GetType().Name;
-        Assert.IsTrue(
-            resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
-            $"Expected BadRequest for missing state, got: {resultType}");
+            // Assert
+            Assert.IsNotNull(result);
+            // Without state parameter, will return BadRequest("Missing state")
+            // This test verifies error parameter is present in query, but state validation happens first
+            var resultType = result.GetType().Name;
+            Assert.IsTrue(
+                resultType.Contains("BadRequest") || resultType.Contains("BadHttpRequest"),
+                $"Expected BadRequest for missing state, got: {resultType}");
+        }
     }
 
     #endregion
 
     #region Test Helpers
 
-    private static (IExternalOidcHandler handler, DefaultHttpContext ctx) CreateHandler()
+    private static (IExternalOidcHandler handler, DefaultHttpContext ctx, IServiceScope scope) CreateHandler()
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddDataProtection();
-        services.AddMemoryCache();
+        var (scope, handler, ctx) = ExternalOidcTestHost.Create(
+            configureServices: services =>
+            {
+                services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
 
-        var dbName = "ext-handler-" + Guid.NewGuid().ToString("N");
-        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
+                // Add HttpClient with test handler
+                services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
+            },
+            configureContext: ctx =>
+            {
+                ctx.Request.Scheme = "https";
+                ctx.Request.Host = new HostString("test.example.com");
+            },
+            inMemoryDbName: "ext-handler-" + Guid.NewGuid().ToString("N"),
+            useEphemeralDataProtectionProvider: false,
+            useRecordingMetrics: false);
 
-        services.AddScoped<IClaimMappingService, ClaimMappingService>();
-        services.AddSingleton<OidcMetrics>();
-        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
-        services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
-
-        // Add HttpClient with test handler
-        services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
-
-        services.AddSingleton<IJwksCache, JwksCache>();
-        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
-        
-        // Register ITenantAccessor for multi-tenant support
-        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
-        services.AddScoped<RecordingUserAccountProvisioner>();
-        services.AddScoped<IUserAccountProvisioner>(sp => sp.GetRequiredService<RecordingUserAccountProvisioner>());
-        
-    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
-    services.AddExternalOidcHandler(); // Use DI registration
-
-        var sp = services.BuildServiceProvider();
-        var scope = sp.CreateScope();
-        var scoped = scope.ServiceProvider;
-
-        var handler = scoped.GetRequiredService<IExternalOidcHandler>();
-
-        var ctx = new DefaultHttpContext
-        {
-            RequestServices = scoped
-        };
-
-        // Set HttpContext in IHttpContextAccessor
-        var httpContextAccessor = scoped.GetRequiredService<IHttpContextAccessor>();
-        httpContextAccessor.HttpContext = ctx;
-
-        ctx.Items["__scope"] = scope; // Keep scope alive
-        ctx.Request.Scheme = "https";
-        ctx.Request.Host = new HostString("test.example.com");
-
-        return (handler, ctx);
+        return (handler, ctx, scope);
     }
 
     private sealed class TestHttpClientFactory : IHttpClientFactory

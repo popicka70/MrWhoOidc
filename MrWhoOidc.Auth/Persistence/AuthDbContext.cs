@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Security.Cryptography; // added for future cryptographic helpers if needed
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -394,6 +393,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.OboMaxLifetimeMinutes);
             b.Property(x => x.OboDpopMode);
             b.Property(x => x.OboAllowedCallersJson).HasMaxLength(2000);
+
+            b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
             b.HasOne<Realm>()
                 .WithMany()
@@ -1273,6 +1274,8 @@ public class Client
     /// No = manual approval required (default), OnlyExternalIdp = auto-approve external IdP logins only, All = auto-approve all registrations.
     /// </summary>
     public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
+
+    public bool AutoAssignNewUsersToClient { get; set; } = false;
 
     // Navigation properties
     public List<ClientSecret> ClientSecrets { get; set; } = new();

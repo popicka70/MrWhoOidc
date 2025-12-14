@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers.External;
 
@@ -51,6 +52,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IUserAccountProvisioner _accountProvisioner;
+    private readonly IClientStore _clientStore;
+    private readonly IAuditSink _audit;
 
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
@@ -58,7 +61,9 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         IRegistrationService registrationService,
         IEmailConfirmationWorkflow emailWorkflow,
         ITenantAccessor tenantAccessor,
-        IUserAccountProvisioner accountProvisioner)
+        IUserAccountProvisioner accountProvisioner,
+        IClientStore clientStore,
+        IAuditSink audit)
     {
         _db = db;
         _logger = logger;
@@ -66,6 +71,8 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         _emailWorkflow = emailWorkflow;
         _tenantAccessor = tenantAccessor;
         _accountProvisioner = accountProvisioner;
+        _clientStore = clientStore;
+        _audit = audit;
     }
 
     public async Task<UserProvisioningResult> ProvisionOrLinkUserAsync(
@@ -101,10 +108,21 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         var userEmail = mappedClaims.TryGetValue("email", out var me) ? me : email;
         var userName = mappedClaims.TryGetValue("name", out var mn) ? mn : name;
 
-        var clientPublicId = ExternalOidcUrlHelpers.TryGetClientIdFromReturnUrl(returnUrl);
-        var clientEntity = await (string.IsNullOrWhiteSpace(clientPublicId)
-            ? Task.FromResult<Client?>(null)
-            : _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientPublicId, cancellationToken));
+        // Prefer the validated clientId from the external state (captured at flow start).
+        // Fall back to returnUrl parsing only when needed, and always validate via the client store.
+        var clientPublicId = !string.IsNullOrWhiteSpace(clientId)
+            ? clientId
+            : ExternalOidcUrlHelpers.TryGetClientIdFromReturnUrl(returnUrl);
+
+        var clientEntity = string.IsNullOrWhiteSpace(clientPublicId)
+            ? null
+            : await _clientStore.FindByClientIdAsync(clientPublicId, cancellationToken);
+
+        // Enforce tenant boundaries when a tenant context exists.
+        if (clientEntity is not null && _tenantAccessor.CurrentTenant is { TenantId: var currentTenantId } && clientEntity.TenantId != currentTenantId)
+        {
+            clientEntity = null;
+        }
 
         var allowAutoProvision = clientEntity?.AllowExternalAutoProvision ?? true;
         var allowEmailLinking = clientEntity?.AllowExternalEmailLinking ?? true;
@@ -173,11 +191,14 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                 // Create registration and auto-approve it
                 try
                 {
+                    // Only associate a client when it opts in to auto-assign.
+                    var registrationClientId = clientEntity?.AutoAssignNewUsersToClient == true ? clientEntity.Id : (Guid?)null;
+
                     var userId = await _registrationService.CreateAndMaybeApproveRegistrationAsync(
                         userEmail ?? $"{provider}:{subject}",
                         null, // firstName - can be parsed from name if needed
                         null, // lastName
-                        clientEntity?.Id,
+                        registrationClientId,
                         null, // no password for external IdP users
                         isExternalIdp: true,
                         autoApprove: true,
@@ -321,6 +342,38 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         };
         _db.ExternalIdentities.Add(ext);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Auto-assign only for newly created users, and only when the resolved client opts in.
+        if (userWasCreated && clientEntity is not null && clientEntity.AutoAssignNewUsersToClient && user.TenantId == clientEntity.TenantId)
+        {
+            var exists = await _db.UserClientAssignments.AnyAsync(
+                a => a.UserId == user.Id && a.ClientId == clientEntity.Id && a.RealmId == clientEntity.RealmId,
+                cancellationToken);
+            if (!exists)
+            {
+                _db.UserClientAssignments.Add(new UserClientAssignment
+                {
+                    UserId = user.Id,
+                    ClientId = clientEntity.Id,
+                    RealmId = clientEntity.RealmId,
+                    IsActive = true
+                });
+                await _db.SaveChangesAsync(cancellationToken);
+
+                _audit.Emit("external.client.auto_assign", new
+                {
+                    at = DateTimeOffset.UtcNow,
+                    provider,
+                    tenant_id = user.TenantId,
+                    user_id = user.Id,
+                    user_email_hash = _audit.HashValue(user.Email),
+                    client_id = clientEntity.ClientId,
+                    client_record_id = clientEntity.Id,
+                    realm_id = clientEntity.RealmId,
+                    source = "external.auto_provision"
+                });
+            }
+        }
 
         if (!userWasCreated)
         {

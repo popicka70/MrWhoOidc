@@ -242,6 +242,7 @@ public class EditModel(
             AllowQrLogin = client.AllowQrLogin,
             LoginStyleKey = client.LoginStyleKey,
             AutoApprovalMode = client.AutoApprovalMode,
+            AutoAssignNewUsersToClient = client.AutoAssignNewUsersToClient,
             // M2M
             M2MAllowedAudiences = m2mAudiences,
             M2MAccessTokenLifetimeSeconds = client.M2MAccessTokenLifetimeSeconds,
@@ -1018,6 +1019,7 @@ public class EditModel(
         client.AllowQrLogin = Input.AllowQrLogin;
         client.LoginStyleKey = string.IsNullOrWhiteSpace(Input.LoginStyleKey) ? null : Input.LoginStyleKey.Trim();
         client.AutoApprovalMode = Input.AutoApprovalMode;
+        client.AutoAssignNewUsersToClient = Input.AutoAssignNewUsersToClient;
         if (!string.IsNullOrEmpty(Input.ClientSecret))
         {
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
@@ -1927,6 +1929,9 @@ public class EditModel(
         // New: Auto-approval for new registrations
         [Display(Name = "Auto-approve new registrations")]
         public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
+
+        [Display(Name = "Auto-assign new users to this client")]
+        public bool AutoAssignNewUsersToClient { get; set; } = false;
 
         // New: M2M policy fields
         [Display(Name = "M2M allowed audiences (comma-separated)")]

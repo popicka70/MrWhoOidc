@@ -8,6 +8,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -59,6 +60,7 @@ internal sealed class RegistrationService : IRegistrationService
     private readonly ITenantAccessor _tenantAccessor;
     private readonly OidcOptions _oidcOptions;
     private readonly IIssuerBuilder? _issuerBuilder;
+    private readonly IAuditSink _audit;
 
     public RegistrationService(
         AuthDbContext db,
@@ -67,6 +69,7 @@ internal sealed class RegistrationService : IRegistrationService
         IUserAccountProvisioner accountProvisioner,
         ITenantAccessor tenantAccessor,
         IOptions<OidcOptions> oidcOptions,
+        IAuditSink audit,
         IIssuerBuilder? issuerBuilder = null)
     {
         _db = db;
@@ -75,6 +78,7 @@ internal sealed class RegistrationService : IRegistrationService
         _accountProvisioner = accountProvisioner;
         _tenantAccessor = tenantAccessor;
         _oidcOptions = oidcOptions.Value;
+        _audit = audit;
         _issuerBuilder = issuerBuilder;
     }
 
@@ -369,6 +373,18 @@ internal sealed class RegistrationService : IRegistrationService
                         IsActive = true
                     });
                     await _db.SaveChangesAsync(cancellationToken);
+
+                    _audit.Emit("registration.client.auto_assign", new
+                    {
+                        at = DateTimeOffset.UtcNow,
+                        tenant_id = user.TenantId,
+                        user_id = user.Id,
+                        user_email_hash = _audit.HashValue(user.Email),
+                        client_id = client.ClientId,
+                        client_record_id = client.Id,
+                        realm_id = client.RealmId,
+                        source = "registration.approve"
+                    });
                 }
             }
         }

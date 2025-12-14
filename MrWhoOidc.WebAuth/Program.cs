@@ -168,6 +168,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IImpersonationService, MrW
 // Tenant branding service
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantBrandingService, MrWhoOidc.Auth.Services.TenantBrandingService>();
 
+// ReturnUrl client context resolver (safe client derivation for registration/login UX)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextResolver, MrWhoOidc.WebAuth.Services.ReturnUrlClientContextResolver>();
+
 // Tenant settings service (cascading: platform → tenant → client)
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantSettingsService, MrWhoOidc.Auth.Services.TenantSettingsService>();
 
