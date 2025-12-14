@@ -212,37 +212,25 @@ public class ExternalOidcHandlerTests
     private static (IExternalOidcHandler handler, DefaultHttpContext ctx) CreateHandler()
     {
         var services = new ServiceCollection();
-        services.AddExternalOidcTestCore(
+        var (scope, handler, ctx) = ExternalOidcTestHost.Create(
+            configureServices: services =>
+            {
+                services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
+
+                // Add HttpClient with test handler
+                services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
+            },
+            configureContext: ctx =>
+            {
+                ctx.Request.Scheme = "https";
+                ctx.Request.Host = new HostString("test.example.com");
+            },
             inMemoryDbName: "ext-handler-" + Guid.NewGuid().ToString("N"),
             useEphemeralDataProtectionProvider: false,
             useRecordingMetrics: false);
-        services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
 
-        // Add HttpClient with test handler
-        services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
-
-        services.AddExternalOidcTestDefaults();
-    services.AddExternalOidcHandler(); // Use DI registration
-
-        var sp = services.BuildServiceProvider();
-        var scope = sp.CreateScope();
-        var scoped = scope.ServiceProvider;
-
-        var handler = scoped.GetRequiredService<IExternalOidcHandler>();
-
-        var ctx = new DefaultHttpContext
-        {
-            RequestServices = scoped
-        };
-
-        // Set HttpContext in IHttpContextAccessor
-        var httpContextAccessor = scoped.GetRequiredService<IHttpContextAccessor>();
-        httpContextAccessor.HttpContext = ctx;
-
-        ctx.Items["__scope"] = scope; // Keep scope alive
-        ctx.Request.Scheme = "https";
-        ctx.Request.Host = new HostString("test.example.com");
-
+        // Keep scope alive
+        ctx.Items["__scope"] = scope;
         return (handler, ctx);
     }
 
