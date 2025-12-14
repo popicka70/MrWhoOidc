@@ -71,15 +71,12 @@ public sealed class CorrelationPipelineTests
     [TestMethod]
     public async Task Callback_StaleHandle_EmitsCacheMissAndWriteMetrics()
     {
-        using var scope = CreateServiceScope(out var handler, out var metrics);
+        using var host = CreateServiceScope(out var handler, out var metrics, out var ctx);
         metrics.Reset();
 
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
+        var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var staleHandle = "ABCDEFGH"; // looks like a handle but never stored
         var state = BuildState(protector, staleHandle, correlationId: null);
-
-        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
-        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = ctx;
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);
@@ -97,15 +94,12 @@ public sealed class CorrelationPipelineTests
     [TestMethod]
     public async Task Callback_InvalidHandleFormat_IgnoresHandleButStoresNewCorrelation()
     {
-        using var scope = CreateServiceScope(out var handler, out var metrics);
+        using var host = CreateServiceScope(out var handler, out var metrics, out var ctx);
         metrics.Reset();
 
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
+        var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var invalidHandle = "bad"; // fails LooksLikeHandle validation
         var state = BuildState(protector, invalidHandle, correlationId: null);
-
-        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
-        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = ctx;
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);
@@ -117,46 +111,21 @@ public sealed class CorrelationPipelineTests
         Assert.IsEmpty(metrics.GetCounterEvents("oidc.correlation.cache.misses"), "Invalid handles should not record miss measurements");
         Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "A single handle write was expected");
         Assert.HasCount(1, metrics.GetCounterEvents("oidc.correlation.cache.writes"), "Expected one write measurement");
-        Assert.IsFalse(string.IsNullOrWhiteSpace(scope.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>().CorrelationId));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(host.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>().CorrelationId));
     }
 
-    private static IServiceScope CreateServiceScope(out IExternalOidcHandler handler, out RecordingOidcMetrics metrics)
+    private static IServiceScope CreateServiceScope(out IExternalOidcHandler handler, out RecordingOidcMetrics metrics, out DefaultHttpContext ctx)
     {
-        var services = new ServiceCollection();
-        services.AddExternalOidcTestCore(
-            inMemoryDbName: "corr-tests" + Guid.NewGuid().ToString("N"),
+        var (scope, resolvedHandler, hostCtx) = ExternalOidcTestHost.Create(
+            inMemoryDbName: "corr-tests-" + Guid.NewGuid().ToString("N"),
             useEphemeralDataProtectionProvider: true,
             useRecordingMetrics: true);
-        services.AddExternalOidcTestDefaults();
-    services.AddExternalOidcHandler(); // Use DI registration
 
-        var provider = services.BuildServiceProvider();
-        var scope = provider.CreateScope();
-
-        handler = scope.ServiceProvider.GetRequiredService<IExternalOidcHandler>();
+        handler = resolvedHandler;
         metrics = scope.ServiceProvider.GetRequiredService<RecordingOidcMetrics>();
+        ctx = hostCtx;
 
-        return new RootedScope(provider, scope);
-    }
-
-    private sealed class RootedScope : IServiceScope
-    {
-        private readonly ServiceProvider _provider;
-        private readonly IServiceScope _inner;
-
-        public RootedScope(ServiceProvider provider, IServiceScope inner)
-        {
-            _provider = provider;
-            _inner = inner;
-        }
-
-        public IServiceProvider ServiceProvider => _inner.ServiceProvider;
-
-        public void Dispose()
-        {
-            _inner.Dispose();
-            _provider.Dispose();
-        }
+        return scope;
     }
 
     private static string BuildState(IDataProtector protector, string correlationHandle, string? correlationId)
@@ -350,15 +319,12 @@ public sealed class CorrelationPipelineTests
     [TestMethod]
     public async Task Callback_EmptyHandle_GeneratesNewCorrelationWithoutCacheLookup()
     {
-        using var scope = CreateServiceScope(out var handler, out var metrics);
+        using var host = CreateServiceScope(out var handler, out var metrics, out var ctx);
         metrics.Reset();
 
-        var protector = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
+        var protector = host.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("ext-oidc-state");
         var emptyHandle = ""; // explicitly empty
         var state = BuildState(protector, emptyHandle, correlationId: null);
-
-        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
-        scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = ctx;
         ctx.Request.QueryString = new QueryString("?state=" + Uri.EscapeDataString(state));
 
         var result = await handler.CallbackAsync(ctx);
@@ -370,7 +336,7 @@ public sealed class CorrelationPipelineTests
         Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Empty handles should skip cache lookup");
         Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "New handle should be stored");
         
-        var accessor = scope.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>();
+        var accessor = host.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>();
         Assert.IsFalse(string.IsNullOrWhiteSpace(accessor.CorrelationId), "New CID should be generated");
     }
 }
