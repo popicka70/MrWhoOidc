@@ -1,4 +1,5 @@
 @page "/admin/providers/add"
+@using MrWhoOidc.Auth.Persistence
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.AddModel
@@ -13,6 +14,10 @@
 <h2>Add Identity Provider</h2>
 
 <form method="post">
+    <div class="mb-3">
+        <div asp-validation-summary="All" class="text-danger"></div>
+    </div>
+
     <div class="mb-3">
         <label asp-for="Input.Name" class="form-label"></label>
         <input asp-for="Input.Name" class="form-control" />
@@ -42,11 +47,32 @@
         <label asp-for="Input.LogoUrl" class="form-label"></label>
         <input asp-for="Input.LogoUrl" class="form-control" />
     </div>
-    <div class="mb-3">
-        <label class="form-label">Config JSON (OIDC)</label>
-        <textarea asp-for="Input.ConfigJson" class="form-control" rows="10"></textarea>
-        <span class="form-text">Paste OIDC config (Authority, ClientId, etc.). Validation runs on save.</span>
-    </div>
+
+    @if (Model.Input.Type == IdentityProviderType.Oidc)
+    {
+        <hr class="my-4" />
+        <div class="alert alert-info">
+            <strong>OIDC configuration</strong> is edited via the form below. Use extended JSON only for non-standard keys.
+        </div>
+
+        @if (Model.OidcConfig is not null)
+        {
+            @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
+            @await Html.PartialAsync(
+                "_OidcAdvancedConfig",
+                Model.OidcConfig,
+                new ViewDataDictionary(ViewData) { ["Compact"] = true })
+        }
+    }
+    else
+    {
+        <div class="mb-3">
+            <label class="form-label">Config JSON</label>
+            <textarea asp-for="Input.ConfigJson" class="form-control font-monospace" rows="10"></textarea>
+            <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+        </div>
+    }
+
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="@(tenantPrefix)/Admin/Providers" class="btn btn-secondary">Cancel</a>
 </form>

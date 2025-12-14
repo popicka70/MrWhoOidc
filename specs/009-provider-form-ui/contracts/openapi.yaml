@@ -1,0 +1,106 @@
+openapi: 3.0.3
+info:
+  title: MrWhoOidc Admin API (Provider Management)
+  version: "1.0"
+  description: |
+    Contracts relevant to the Identity Provider Configuration Form feature.
+    This describes the existing provider CRUD surface consumed by admin tooling.
+servers:
+  - url: /admin/api
+paths:
+  /providers:
+    get:
+      summary: List identity providers
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Create identity provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityProvider"
+      responses:
+        "201":
+          description: Created
+  /providers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get identity provider
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+    put:
+      summary: Update identity provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityProvider"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+    delete:
+      summary: Delete identity provider
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+components:
+  schemas:
+    IdentityProvider:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 200
+        type:
+          type: integer
+          description: Provider type enum value
+        enabled:
+          type: boolean
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        logoUrl:
+          type: string
+          nullable: true
+        configJson:
+          type: string
+          nullable: true
+          description: Structured provider configuration text container
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
