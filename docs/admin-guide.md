@@ -19,6 +19,8 @@ Add one or more OpenID Connect identity providers (IdPs). Each provider record e
 
 Navigation: **Admin → Providers → New**
 
+> Note (2025-12): OIDC providers are now configured primarily via a structured form in the Admin UI. An "Extended JSON" input exists for advanced/non-standard keys only; it cannot set standard fields like `Authority` or `ClientId`.
+
 ### 1.1 Core Fields
 
 | Field | Required | Example | Notes |
@@ -41,6 +43,15 @@ Navigation: **Admin → Providers → New**
 | ExtraAuthParams | Optional | `{"domain_hint":"contoso"}` | Arbitrary K/V pairs appended to auth request (careful with collisions). |
 | BackChannelLogout | Optional | `true` | Enables future back-channel logout integration. |
 | TokenValidation.* | Optional | `{ "ValidateIssuer": true }` | Per-provider validation overrides (future extensibility). |
+
+#### 1.1.1 Extended Parameters (JSON)
+
+For advanced provider-specific settings that are not part of the standard schema, use the **Extended JSON** field.
+
+- The value must be a JSON **object**.
+- It must **not** include standard keys like `Authority`, `ClientId`, `Scopes`, etc. (those come from the form fields).
+- The standard form fields always win.
+- Providing an empty object (`{}`) removes previously stored extended keys.
 
 ### 1.2 Validation
 
@@ -92,6 +103,8 @@ Upstream `error=access_denied` or `interaction_required` triggers friendly error
   "ExtraAuthParams": {}
 }
 ```
+
+> Security note: Admin UI screens avoid displaying stored secrets; if a secret is present in config JSON, it is redacted in the details view.
 
 ## 2) Keys (PEM/JWK Import & Rotation)
 

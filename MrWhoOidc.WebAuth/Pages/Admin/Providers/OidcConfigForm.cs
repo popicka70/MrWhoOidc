@@ -16,7 +16,7 @@ public sealed class OidcConfigForm
     [Display(Name = "Client ID")]
     public string ClientId { get; set; } = string.Empty;
 
-    [Display(Name = "New client secret")]
+    [Display(Name = "Client Secret")]
     public string? ClientSecret { get; set; }
 
     [Display(Name = "Response Type")]

@@ -45,12 +45,24 @@ Expected:
 ### Secret Handling
 
 1. Edit an existing provider.
-2. Leave “New client secret” empty.
+2. Leave “Client Secret” empty.
 3. Save.
 
 Expected:
 
 - The stored secret remains unchanged.
+
+### Extended JSON
+
+1. Edit an existing OIDC provider.
+2. In the JSON tab, add a non-standard key via Extended JSON (e.g., `{ "SomeNonStandardKey": "value" }`).
+3. Save.
+
+Expected:
+
+- The extended key persists after saving.
+- If you try to include a standard key (e.g., `Authority`) in Extended JSON, save is blocked with a clear message.
+- Setting Extended JSON to `{}` removes previously stored extended keys.
 
 ## Automated Verification
 

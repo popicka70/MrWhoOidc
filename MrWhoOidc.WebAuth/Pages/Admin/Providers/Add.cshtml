@@ -55,117 +55,14 @@
             <strong>OIDC configuration</strong> is edited via the form below. Use extended JSON only for non-standard keys.
         </div>
 
-        <div class="mb-3">
-            <label asp-for="OidcConfig.Authority" class="form-label"></label>
-            <input asp-for="OidcConfig.Authority" class="form-control" placeholder="https://login.example.com" />
-            <span asp-validation-for="OidcConfig.Authority" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.DiscoveryUrl" class="form-label"></label>
-            <input asp-for="OidcConfig.DiscoveryUrl" class="form-control" placeholder="Leave empty to use Authority/.well-known/openid-configuration" />
-            <span asp-validation-for="OidcConfig.DiscoveryUrl" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ClientId" class="form-label"></label>
-            <input asp-for="OidcConfig.ClientId" class="form-control" />
-            <span asp-validation-for="OidcConfig.ClientId" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ClientSecret" class="form-label"></label>
-            <input asp-for="OidcConfig.ClientSecret" type="password" class="form-control" />
-            <span asp-validation-for="OidcConfig.ClientSecret" class="text-danger"></span>
-            <div class="form-text">Leave empty for public clients or when using client assertions.</div>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ResponseType" class="form-label"></label>
-            <select asp-for="OidcConfig.ResponseType" class="form-select">
-                <option value="code">code</option>
-                <option value="id_token">id_token</option>
-                <option value="code id_token">code id_token</option>
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ScopesString" class="form-label"></label>
-            <input asp-for="OidcConfig.ScopesString" class="form-control" placeholder="openid profile email" />
-            <div class="form-text">Space-separated list of scopes.</div>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ResponseMode" class="form-label"></label>
-            <input asp-for="OidcConfig.ResponseMode" class="form-control" placeholder="query, fragment, or form_post" />
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.Prompt" class="form-label"></label>
-            <input asp-for="OidcConfig.Prompt" class="form-control" placeholder="login, consent, none" />
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.RequestedAcrValues" class="form-label"></label>
-            <input asp-for="OidcConfig.RequestedAcrValues" class="form-control" />
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="form-check mb-2">
-                    <input asp-for="OidcConfig.UsePKCE" class="form-check-input" />
-                    <label asp-for="OidcConfig.UsePKCE" class="form-check-label"></label>
-                </div>
-                <div class="form-check mb-2">
-                    <input asp-for="OidcConfig.UseJAR" class="form-check-input" />
-                    <label asp-for="OidcConfig.UseJAR" class="form-check-label"></label>
-                </div>
-                <div class="form-check mb-2">
-                    <input asp-for="OidcConfig.UsePAR" class="form-check-input" />
-                    <label asp-for="OidcConfig.UsePAR" class="form-check-label"></label>
-                </div>
-                <div class="form-check">
-                    <input asp-for="OidcConfig.BackChannelLogout" class="form-check-input" />
-                    <label asp-for="OidcConfig.BackChannelLogout" class="form-check-label"></label>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="form-check mb-2">
-                    <input asp-for="OidcConfig.ValidateIssuer" class="form-check-input" />
-                    <label asp-for="OidcConfig.ValidateIssuer" class="form-check-label"></label>
-                </div>
-                <div class="form-check mb-2">
-                    <input asp-for="OidcConfig.ValidateAudience" class="form-check-input" />
-                    <label asp-for="OidcConfig.ValidateAudience" class="form-check-label"></label>
-                </div>
-                <div class="form-check mb-3">
-                    <input asp-for="OidcConfig.ValidateLifetime" class="form-check-input" />
-                    <label asp-for="OidcConfig.ValidateLifetime" class="form-check-label"></label>
-                </div>
-
-                <div class="mb-0">
-                    <label asp-for="OidcConfig.ClockSkewSeconds" class="form-label"></label>
-                    <input asp-for="OidcConfig.ClockSkewSeconds" type="number" class="form-control" />
-                </div>
-            </div>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ExtraAuthParamsJson" class="form-label"></label>
-            <textarea asp-for="OidcConfig.ExtraAuthParamsJson" class="form-control font-monospace" rows="3" placeholder='{"param1": "value1"}'></textarea>
-            <span asp-validation-for="OidcConfig.ExtraAuthParamsJson" class="text-danger"></span>
-            <div class="form-text">Additional parameters to send during authorization (JSON object).</div>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="OidcConfig.ExtendedJson" class="form-label"></label>
-            <textarea asp-for="OidcConfig.ExtendedJson" class="form-control font-monospace" rows="6" placeholder='{"SomeNonStandardKey": "value"}'></textarea>
-            <span asp-validation-for="OidcConfig.ExtendedJson" class="text-danger"></span>
-            <div class="form-text">Must be a JSON object and must not include standard keys like Authority/ClientId.</div>
-        </div>
+        @if (Model.OidcConfig is not null)
+        {
+            @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
+            @await Html.PartialAsync(
+                "_OidcAdvancedConfig",
+                Model.OidcConfig,
+                new ViewDataDictionary(ViewData) { ["Compact"] = true })
+        }
     }
     else
     {

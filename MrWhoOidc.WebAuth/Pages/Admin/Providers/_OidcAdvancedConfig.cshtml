@@ -1,0 +1,15 @@
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm
+
+<div class="mb-3">
+    <label asp-for="ExtendedJson" class="form-label"></label>
+    @if (ViewData["Compact"] is true)
+    {
+        <textarea asp-for="ExtendedJson" class="form-control font-monospace" rows="6" placeholder='{"SomeNonStandardKey": "value"}'></textarea>
+    }
+    else
+    {
+        <textarea asp-for="ExtendedJson" class="form-control font-monospace" id="configJsonTextarea" style="height: calc(100vh - 350px); min-height: 400px;" placeholder='{"SomeNonStandardKey": "value"}'></textarea>
+    }
+    <span asp-validation-for="ExtendedJson" class="text-danger"></span>
+    <div class="form-text">Extended JSON is for non-standard keys only: it must be a JSON object, must not include standard keys (Authority/ClientId/etc.), and providing <code>{}</code> clears any previously stored extended keys.</div>
+</div>

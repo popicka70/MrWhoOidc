@@ -1,0 +1,131 @@
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm
+
+<div class="row">
+    <div class="col-md-6">
+        <h5 class="mb-3"><i class="bi bi-link-45deg me-1"></i>Connection Settings</h5>
+
+        <div class="mb-3">
+            <label asp-for="Authority" class="form-label"></label>
+            <input asp-for="Authority" class="form-control" placeholder="https://login.example.com" />
+            <span asp-validation-for="Authority" class="text-danger"></span>
+            <div class="form-text">The base URL of the OIDC provider.</div>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="DiscoveryUrl" class="form-label"></label>
+            <input asp-for="DiscoveryUrl" class="form-control" placeholder="Leave empty to use Authority/.well-known/openid-configuration" />
+            <span asp-validation-for="DiscoveryUrl" class="text-danger"></span>
+            <div class="form-text">Override the discovery endpoint if needed.</div>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ClientId" class="form-label"></label>
+            <input asp-for="ClientId" class="form-control" />
+            <span asp-validation-for="ClientId" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ClientSecret" class="form-label"></label>
+            <input asp-for="ClientSecret" type="password" class="form-control" />
+            <span asp-validation-for="ClientSecret" class="text-danger"></span>
+            <div class="form-text">Leave empty for public clients; on edit, leaving empty keeps the existing secret (it is never displayed).</div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
+
+        <div class="mb-3">
+            <label asp-for="ResponseType" class="form-label"></label>
+            <select asp-for="ResponseType" class="form-select">
+                <option value="code">code</option>
+                <option value="id_token">id_token</option>
+                <option value="code id_token">code id_token</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ScopesString" class="form-label"></label>
+            <input asp-for="ScopesString" class="form-control" placeholder="openid profile email" />
+            <div class="form-text">Space-separated list of scopes.</div>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ResponseMode" class="form-label"></label>
+            <input asp-for="ResponseMode" class="form-control" placeholder="query, fragment, or form_post" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Prompt" class="form-label"></label>
+            <input asp-for="Prompt" class="form-control" placeholder="login, consent, none" />
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="RequestedAcrValues" class="form-label"></label>
+            <input asp-for="RequestedAcrValues" class="form-control" />
+        </div>
+    </div>
+</div>
+
+<hr class="my-4" />
+
+<div class="row">
+    <div class="col-md-6">
+        <h5 class="mb-3"><i class="bi bi-shield-check me-1"></i>Security Features</h5>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input asp-for="UsePKCE" class="form-check-input" />
+                    <label asp-for="UsePKCE" class="form-check-label"></label>
+                </div>
+                <div class="form-check mb-2">
+                    <input asp-for="UseJAR" class="form-check-input" />
+                    <label asp-for="UseJAR" class="form-check-label"></label>
+                </div>
+                <div class="form-check mb-2">
+                    <input asp-for="UsePAR" class="form-check-input" />
+                    <label asp-for="UsePAR" class="form-check-label"></label>
+                </div>
+                <div class="form-check">
+                    <input asp-for="BackChannelLogout" class="form-check-input" />
+                    <label asp-for="BackChannelLogout" class="form-check-label"></label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <h5 class="mb-3"><i class="bi bi-check-circle me-1"></i>Token Validation</h5>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input asp-for="ValidateIssuer" class="form-check-input" />
+                    <label asp-for="ValidateIssuer" class="form-check-label"></label>
+                </div>
+                <div class="form-check mb-2">
+                    <input asp-for="ValidateAudience" class="form-check-input" />
+                    <label asp-for="ValidateAudience" class="form-check-label"></label>
+                </div>
+                <div class="form-check mb-3">
+                    <input asp-for="ValidateLifetime" class="form-check-input" />
+                    <label asp-for="ValidateLifetime" class="form-check-label"></label>
+                </div>
+
+                <div class="mb-0">
+                    <label asp-for="ClockSkewSeconds" class="form-label"></label>
+                    <input asp-for="ClockSkewSeconds" type="number" class="form-control" />
+                    <div class="form-text">Tolerance for token expiration checks.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-3">
+    <label asp-for="ExtraAuthParamsJson" class="form-label"></label>
+    <textarea asp-for="ExtraAuthParamsJson" class="form-control font-monospace" rows="3" placeholder='{"param1": "value1", "param2": "value2"}'></textarea>
+    <span asp-validation-for="ExtraAuthParamsJson" class="text-danger"></span>
+    <div class="form-text">Additional parameters to send during authorization (JSON format).</div>
+</div>
