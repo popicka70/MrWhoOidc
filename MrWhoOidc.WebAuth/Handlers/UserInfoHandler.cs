@@ -144,17 +144,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 var endpointUrl = http.GetEndpointUrl();
                 var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
 
-                // Nonce challenge support
                 var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                (bool nonceOk, string serverNonce) = nonceStore.ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce).GetAwaiter().GetResult();
-                if (!nonceOk)
-                {
-                    http.Response.Headers["DPoP-Nonce"] = serverNonce;
-                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=use_dpop_nonce";
-                    logger.LogInformation("/userinfo nonce challenge issued to {IP}", clientIp);
-                    return Results.Unauthorized();
-                }
-
                 if (!validation.Ok)
                 {
                     outcome = "failure";
@@ -171,6 +161,19 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                     metrics.UserInfoFailures.Add(1);
                     http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                     return ErrorResults.InvalidToken();
+                }
+
+                // Nonce challenge support (only after proof is valid and matches token binding)
+                (bool nonceOk, string serverNonce) = nonceStore
+                    .ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce)
+                    .GetAwaiter()
+                    .GetResult();
+                if (!nonceOk)
+                {
+                    http.Response.Headers["DPoP-Nonce"] = serverNonce;
+                    http.Response.Headers["WWW-Authenticate"] = "DPoP error=use_dpop_nonce";
+                    logger.LogInformation("/userinfo nonce challenge issued to {IP}", clientIp);
+                    return Results.Unauthorized();
                 }
 
                 // Replay protection: DPoP jti must not repeat within window

@@ -18,7 +18,16 @@ public sealed class DPoPValidator(
     {
         var validation = await dpopValidator.ValidateForEndpointAsync(http, endpoint, token).ConfigureAwait(false);
 
-        // Validate nonce
+        // Validate proof + JKT match first (avoid issuing nonces for invalid proofs)
+        // Validate JKT match
+        if (!validation.Ok ||
+            string.IsNullOrEmpty(validation.Jkt) ||
+            !string.Equals(validation.Jkt, expectedJkt, StringComparison.Ordinal))
+        {
+            return (false, null);
+        }
+
+        // Validate nonce (only after proof is valid and binding matches)
         var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var (nonceOk, serverNonce) = await nonceStore.ValidateOrIssueAsync(
             endpoint,
@@ -30,15 +39,8 @@ public sealed class DPoPValidator(
         if (!nonceOk)
         {
             http.Response.Headers["DPoP-Nonce"] = serverNonce;
+            http.Response.Headers["WWW-Authenticate"] = "DPoP error=use_dpop_nonce";
             return (false, Results.Unauthorized());
-        }
-
-        // Validate JKT match
-        if (!validation.Ok ||
-            string.IsNullOrEmpty(validation.Jkt) ||
-            !string.Equals(validation.Jkt, expectedJkt, StringComparison.Ordinal))
-        {
-            return (false, null);
         }
 
         // Validate JTI presence
