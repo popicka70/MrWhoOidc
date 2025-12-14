@@ -44,6 +44,7 @@ namespace MrWhoOidc.UnitTests;
 public sealed class ExternalOidcIntegrationTests
 {
     private const string ClientPublicId = "webapp";
+    private const string EntraTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
     private sealed record RsaBundle(RsaSecurityKey Key, string Kid);
 
@@ -54,6 +55,7 @@ public sealed class ExternalOidcIntegrationTests
         var dbName = "ext-intg-" + Guid.NewGuid().ToString("N");
         var up1 = CreateRsa("up1");
         var up2 = CreateRsa("up2");
+        var ms = CreateRsa("ms");
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.Host.UseDefaultServiceProvider(options =>
@@ -145,14 +147,31 @@ public sealed class ExternalOidcIntegrationTests
                         Scopes = new[] { "openid", "profile" },
                         UsePKCE = true
                     })
+                },
+                new IdentityProvider
+                {
+                    Name = "ms",
+                    DisplayName = "Microsoft (issuer template)",
+                    Enabled = true,
+                    ConfigJson = JsonSerializer.Serialize(new
+                    {
+                        Authority = "http://localhost/ms",
+                        ClientId = "c3",
+                        ClientSecret = "s3",
+                        ResponseType = "code",
+                        Scopes = new[] { "openid", "profile", "email" },
+                        UsePKCE = true
+                    })
                 }
             );
             db.SaveChanges();
             var up1Id = db.IdentityProviders.First(p => p.Name == "up1").Id;
             var up2Id = db.IdentityProviders.First(p => p.Name == "up2").Id;
+            var msId = db.IdentityProviders.First(p => p.Name == "ms").Id;
             db.ClientIdentityProviders.AddRange(
                 new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = up1Id, Enabled = true, Order = 1 },
-                new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = up2Id, Enabled = true, Order = 2 }
+                new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = up2Id, Enabled = true, Order = 2 },
+                new ClientIdentityProvider { ClientId = client.Id, IdentityProviderId = msId, Enabled = true, Order = 3 }
             );
             db.SaveChanges();
         }
@@ -190,6 +209,20 @@ public sealed class ExternalOidcIntegrationTests
         app.MapGet("/up2/authorize", (HttpContext ctx) => UpstreamAuthorizeAsync(ctx, codeNonceStore));
         app.MapGet("/up2/jwks", (HttpContext ctx) => WriteJwks(ctx, up2));
         app.MapPost("/up2/token", (HttpContext ctx) => IssueIdTokenAsync(ctx, up2, codeNonceStore, sub: "user-up2"));
+
+        // Fake upstream #3 - simulates Microsoft Entra discovery issuer template + concrete ID token issuer
+        app.MapGet("/ms/.well-known/openid-configuration", (HttpContext ctx) => Results.Json(new
+        {
+            issuer = "https://login.microsoftonline.com/{tenantid}/v2.0",
+            authorization_endpoint = "http://localhost/ms/authorize",
+            token_endpoint = "http://localhost/ms/token",
+            jwks_uri = "http://localhost/ms/jwks",
+            userinfo_endpoint = "http://localhost/ms/userinfo"
+        }));
+        app.MapGet("/ms/authorize", (HttpContext ctx) => UpstreamAuthorizeAsync(ctx, codeNonceStore));
+        app.MapGet("/ms/jwks", (HttpContext ctx) => WriteJwks(ctx, ms));
+        app.MapPost("/ms/token", (HttpContext ctx) => IssueMicrosoftIdTokenAsync(ctx, ms, codeNonceStore, EntraTenantId));
+        app.MapGet("/ms/userinfo", (HttpContext ctx) => ctx.Response.WriteAsJsonAsync(new { sub = "user-ms", email = "user-ms@example.com", name = "User Ms" }));
 
         // Ensure routing middleware is in pipeline (minimal hosting normally wires this during Run())
         app.UseRouting();
@@ -257,6 +290,38 @@ public sealed class ExternalOidcIntegrationTests
             expires: now.AddMinutes(5).UtcDateTime,
             signingCredentials: creds
         );
+        var idToken = handler.WriteToken(token);
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { access_token = "at-" + code, id_token = idToken, token_type = "Bearer", expires_in = 300 }));
+    }
+
+    private static async Task IssueMicrosoftIdTokenAsync(HttpContext ctx, RsaBundle key, ConcurrentDictionary<string, string> codeNonceStore, string tenantId)
+    {
+        var form = await ctx.Request.ReadFormAsync();
+        var code = form["code"].ToString();
+        var clientId = form["client_id"].ToString();
+        var nonce = codeNonceStore.TryGetValue(code, out var n) ? n : Guid.NewGuid().ToString("N");
+
+        var now = DateTimeOffset.UtcNow;
+        var handler = new JwtSecurityTokenHandler();
+        var creds = new SigningCredentials(key.Key, SecurityAlgorithms.RsaSha256);
+        var issuer = $"https://login.microsoftonline.com/{tenantId}/v2.0";
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: clientId,
+            claims: new[]
+            {
+                new Claim("sub", "user-ms"),
+                new Claim("nonce", nonce),
+                new Claim("tid", tenantId),
+                new Claim("email", "user-ms@example.com"),
+                new Claim("name", "user-ms display"),
+            },
+            notBefore: now.UtcDateTime.AddMinutes(-1),
+            expires: now.AddMinutes(5).UtcDateTime,
+            signingCredentials: creds
+        );
+
         var idToken = handler.WriteToken(token);
         ctx.Response.ContentType = "application/json";
         await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { access_token = "at-" + code, id_token = idToken, token_type = "Bearer", expires_in = 300 }));
@@ -376,6 +441,35 @@ public sealed class ExternalOidcIntegrationTests
         {
             Assert.Contains(expectedCookieName, setCookie, $"Expected last provider cookie {expectedCookieName}");
         }
+    }
+
+    [TestMethod]
+    public async Task External_IssuerTemplate_FromDiscovery_IsResolved_ByTid_And_Validates()
+    {
+        var env = await CreateAsync();
+        using var _ = env.Host;
+        var client = env.Client;
+        var returnUrl = "/authorize?client_id=" + ClientPublicId;
+
+        var start = await client.GetAsync($"/auth/external/start?provider=ms&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
+        Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode);
+
+        var upstreamLocation = start.Headers.Location;
+        Assert.IsNotNull(upstreamLocation, "Start redirect is missing location header");
+        Assert.Contains("/ms/authorize", upstreamLocation!.ToString(), "Redirect should target upstream /ms/authorize");
+
+        var uri = upstreamLocation.IsAbsoluteUri ? upstreamLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), upstreamLocation);
+        var upstreamAuth = await client.GetAsync(uri);
+        Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize should redirect to callback with code");
+
+        var callbackLocation = upstreamAuth.Headers.Location;
+        Assert.IsNotNull(callbackLocation, "Callback redirect missing location header");
+        var baseUri = client.BaseAddress ?? new Uri("http://localhost");
+        var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
+        Assert.AreEqual("/auth/external/callback", callbackUri.AbsolutePath);
+
+        var cb = await client.GetAsync(callbackUri);
+        Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode);
     }
 
     [TestMethod]

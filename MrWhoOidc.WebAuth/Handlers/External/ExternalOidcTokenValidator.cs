@@ -77,10 +77,17 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
             var tokenHandler = new JwtSecurityTokenHandler();
             tokenHandler.InboundClaimTypeMap.Clear();
 
+            static string NormalizeIssuer(string issuer) => issuer.Trim().TrimEnd('/');
+            static bool IsTenantTemplateIssuer(string issuer) => issuer.Contains("{tenantid}", StringComparison.OrdinalIgnoreCase);
+
+            var normalizedExpectedIssuer = string.IsNullOrWhiteSpace(expectedIssuer)
+                ? null
+                : NormalizeIssuer(expectedIssuer);
+
             var parms = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = expectedIssuer,
+                ValidIssuer = normalizedExpectedIssuer,
                 ValidateAudience = true,
                 ValidAudience = expectedAudience,
                 ValidateLifetime = true,
@@ -91,6 +98,33 @@ internal sealed class ExternalOidcTokenValidator : IExternalOidcTokenValidator
                 NameClaimType = "name",
                 RoleClaimType = "roles"
             };
+
+            // Microsoft Entra ID (and sometimes other IdPs) may return an issuer template from discovery like:
+            //   https://login.microsoftonline.com/{tenantid}/v2.0
+            // while the actual ID token 'iss' contains a concrete tenant id.
+            // If we see the template, resolve it using the token's 'tid' claim.
+            if (!string.IsNullOrEmpty(normalizedExpectedIssuer) && IsTenantTemplateIssuer(normalizedExpectedIssuer))
+            {
+                parms.IssuerValidator = (issuer, securityToken, parameters) =>
+                {
+                    if (string.IsNullOrWhiteSpace(issuer))
+                        throw new SecurityTokenInvalidIssuerException("Issuer is missing");
+
+                    var jwt = securityToken as JwtSecurityToken;
+                    var tenantId = jwt?.Claims.FirstOrDefault(c => c.Type == "tid")?.Value;
+                    if (string.IsNullOrWhiteSpace(tenantId))
+                        throw new SecurityTokenInvalidIssuerException("Issuer template requires a 'tid' claim");
+
+                    var expectedResolved = NormalizeIssuer(normalizedExpectedIssuer.Replace("{tenantid}", tenantId, StringComparison.OrdinalIgnoreCase));
+                    var actualNormalized = NormalizeIssuer(issuer);
+
+                    if (string.Equals(actualNormalized, expectedResolved, StringComparison.Ordinal))
+                        return issuer;
+
+                    throw new SecurityTokenInvalidIssuerException(
+                        $"Issuer validation failed. Issuer: '{actualNormalized}'. Did not match issuer template '{normalizedExpectedIssuer}' (resolved to '{expectedResolved}').");
+                };
+            }
 
             var principal = tokenHandler.ValidateToken(idToken, parms, out var _);
 
