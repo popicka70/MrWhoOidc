@@ -86,12 +86,12 @@ description: "Task list for feature implementation"
 
 ### Implementation
 
-- [ ] T025 [US3] Ensure the local ReturnUrl-to-client resolution path rejects invalid/non-local ReturnUrl and returns “no client context” rather than trusting unvalidated input: `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`
-- [ ] T026 [US3] Enforce tenant boundaries when resolving/loading the client for auto-assignment (client tenant must match current tenant): `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`, `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`, `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T027 [US3] Ensure external “already linked identity” path never performs auto-assignment (`ext is not null`) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T028 [US3] Ensure external “email links to existing user” paths never perform auto-assignment in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T029 [US3] Ensure external auto-provision auto-assignment only runs when `userWasCreated == true` in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T030 [US3] Make assignment idempotent under concurrency (avoid duplicates): keep/introduce “exists then insert” checks for registration approval and external auto-provision in `MrWhoOidc.WebAuth/Services/RegistrationService.cs` and `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T025 [US3] Ensure the local ReturnUrl-to-client resolution path rejects invalid/non-local ReturnUrl and returns “no client context” rather than trusting unvalidated input: `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`
+- [X] T026 [US3] Enforce tenant boundaries when resolving/loading the client for auto-assignment (client tenant must match current tenant): `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`, `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`, `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T027 [US3] Ensure external “already linked identity” path never performs auto-assignment (`ext is not null`) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T028 [US3] Ensure external “email links to existing user” paths never perform auto-assignment in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T029 [US3] Ensure external auto-provision auto-assignment only runs when `userWasCreated == true` in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T030 [US3] Make assignment idempotent under concurrency (avoid duplicates): keep/introduce “exists then insert” checks for registration approval and external auto-provision in `MrWhoOidc.WebAuth/Services/RegistrationService.cs` and `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
 
 **Checkpoint**: US3 safety conditions hold under manual tampering attempts.
 
@@ -99,7 +99,7 @@ description: "Task list for feature implementation"
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T031 Run the feature quickstart end-to-end and adjust any docs only if behavior differs: `specs/010-auto-assign-client/quickstart.md`
+- [X] T031 Run the feature quickstart end-to-end and adjust any docs only if behavior differs: `specs/010-auto-assign-client/quickstart.md`
 - [X] T032 Run full build/tests after changes: `dotnet build` + `dotnet test` from repo root (MrWhoOidc.slnx)
 
 ---
