@@ -700,6 +700,31 @@ MrWhoOidc supports forwarded header hardening via the following variables (mappe
 | `FORWARDED_HEADERS_KNOWN_PROXY_0` | - | Known proxy IP (recommended when stable) |
 | `FORWARDED_HEADERS_KNOWN_NETWORK_0` | - | Known proxy network in CIDR (e.g., `10.0.0.0/24`) |
 
+#### Cloud providers (Render) – direct ASP.NET Core config keys
+
+If your platform sets environment variables directly (instead of using the `.env` → `docker-compose.yml` mapping), configure the canonical public URL and forwarded headers using ASP.NET Core’s `__` (double-underscore) nesting.
+
+Minimal recommended values for Render (replace the host with your real public domain):
+
+```bash
+# Canonical issuer/base URL used for discovery and token validation
+Oidc__PublicBaseUrl=https://mrwho.onrender.com
+
+# Forwarded headers: required behind TLS-terminating proxies
+ForwardedHeaders__Enabled=true
+
+# Render/managed proxies often have non-stable IP ranges; this is a last-resort setting.
+# Mitigate host spoofing by also setting AllowedHosts (+ optionally enabling runtime enforcement).
+ForwardedHeaders__UnsafeTrustAll=true
+ForwardedHeaders__AllowedHosts__0=mrwho.onrender.com
+ForwardedHeaders__EnforceHostAllowList=true
+```
+
+Notes:
+
+- Prefer `Oidc__PublicBaseUrl` (or `Oidc__Issuer`) to avoid issuer drift across environments.
+- If you can reliably configure proxy IPs, prefer `ForwardedHeaders__KnownProxies__*` / `ForwardedHeaders__KnownNetworks__*` instead of `ForwardedHeaders__UnsafeTrustAll=true`.
+
 Operational checks:
 
 - Ensure `OIDC_PUBLIC_BASE_URL` matches the external URL clients use.
