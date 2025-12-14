@@ -35,6 +35,10 @@ public static class PipelineExtensions
             app.UseForwardedHeaders(fwdOptions);
         }
 
+        // Optional host allow-list enforcement (recommended in production when honoring X-Forwarded-Host).
+        // Controlled via ForwardedHeaders:EnforceHostAllowList.
+        app.UseMiddleware<HostAllowListMiddleware>();
+
         // Forward client certificates if upstream proxy supplies them
         app.UseCertificateForwarding();
 

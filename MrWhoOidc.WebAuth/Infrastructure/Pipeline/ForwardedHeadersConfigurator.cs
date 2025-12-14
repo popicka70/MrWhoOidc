@@ -40,6 +40,12 @@ internal static class ForwardedHeadersConfigurator
         // If not configured, default to issuer host allow-list when issuer is present.
         if (options.AllowedHosts.Count == 0)
         {
+            var publicBaseUrl = configuration["Oidc:PublicBaseUrl"];
+            if (Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var publicBaseUri) && !string.IsNullOrWhiteSpace(publicBaseUri.Host))
+            {
+                options.AllowedHosts.Add(publicBaseUri.Host);
+            }
+
             var issuer = configuration["Oidc:Issuer"];
             if (Uri.TryCreate(issuer, UriKind.Absolute, out var issuerUri) && !string.IsNullOrWhiteSpace(issuerUri.Host))
             {
@@ -98,6 +104,26 @@ internal static class ForwardedHeadersConfigurator
                     "ForwardedHeaders:UnsafeTrustAll is enabled but no ForwardedHeaders:AllowedHosts (or Oidc:Issuer host) is configured. " +
                     "Consider setting ForwardedHeaders:AllowedHosts to reduce host header spoofing risk.");
             }
+        }
+
+        // Production guidance: if you are behind a reverse proxy and want HTTPS redirects/correct issuer URLs,
+        // you must configure KnownProxies/KnownNetworks (or enable UnsafeTrustAll as a last resort).
+        if (!environment.IsDevelopment() && !unsafeTrustAll && options.KnownProxies.Count == 0 && options.KnownNetworks.Count == 0)
+        {
+            logger.LogWarning(
+                "Forwarded headers are enabled but no known proxies/networks are configured. " +
+                "ASP.NET Core will honor X-Forwarded-* only from loopback by default. " +
+                "If running behind a reverse proxy, set ForwardedHeaders:KnownProxies/KnownNetworks (recommended) " +
+                "or ForwardedHeaders:UnsafeTrustAll=true (last resort). Environment={EnvironmentName}.",
+                environment.EnvironmentName);
+        }
+
+        if (!environment.IsDevelopment() && options.AllowedHosts.Count == 0)
+        {
+            logger.LogWarning(
+                "Forwarded headers are enabled but no ForwardedHeaders:AllowedHosts (and no Oidc:PublicBaseUrl/Oidc:Issuer host) is configured. " +
+                "Consider setting ForwardedHeaders:AllowedHosts to reduce host header spoofing risk. Environment={EnvironmentName}.",
+                environment.EnvironmentName);
         }
 
         return true;

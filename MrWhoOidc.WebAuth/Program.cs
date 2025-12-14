@@ -51,7 +51,17 @@ builder.Services.AddMrWhoOidcLicensing();
 builder.Services.Configure<OidcOptions>(builder.Configuration.GetSection("Oidc"));
 var oidcOptions = builder.Configuration.GetSection("Oidc").Get<OidcOptions>() ?? new OidcOptions();
 
+// Normalize configured URLs to avoid subtle trailing-slash mismatches.
+oidcOptions.Issuer = string.IsNullOrWhiteSpace(oidcOptions.Issuer) ? null : oidcOptions.Issuer.Trim();
+oidcOptions.PublicBaseUrl = string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl) ? null : oidcOptions.PublicBaseUrl.Trim();
+
 builder.Services.AddSingleton(oidcOptions);
+
+builder.Services.PostConfigure<OidcOptions>(o =>
+{
+    o.Issuer = string.IsNullOrWhiteSpace(o.Issuer) ? null : o.Issuer.Trim();
+    o.PublicBaseUrl = string.IsNullOrWhiteSpace(o.PublicBaseUrl) ? null : o.PublicBaseUrl.Trim();
+});
 
 // Bind AuthOptions
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
@@ -173,6 +183,19 @@ builder.Services.AddRateLimitingPolicies(redisMux is not null, redisMux);
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    var issuer = string.IsNullOrWhiteSpace(oidcOptions.Issuer) ? null : oidcOptions.Issuer.TrimEnd('/');
+    var publicBaseUrl = string.IsNullOrWhiteSpace(oidcOptions.PublicBaseUrl) ? null : oidcOptions.PublicBaseUrl.TrimEnd('/');
+    if (issuer is null && publicBaseUrl is null)
+    {
+        app.Logger.LogWarning(
+            "Neither Oidc:Issuer nor Oidc:PublicBaseUrl is configured. " +
+            "This can cause incorrect issuer/endpoint URLs behind proxies. " +
+            "See /health/issuer for validation.");
+    }
+}
 
 var autoSeedEnabled = app.Environment.IsDevelopment()
     || string.Equals(app.Configuration["Testing:EnableAutoSeed"], "true", StringComparison.OrdinalIgnoreCase);

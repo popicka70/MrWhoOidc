@@ -28,6 +28,7 @@ This checklist reflects what is implemented in code vs what remains as operation
 
 - [x] **C1 (forwarded headers spoofing)**: Safe-by-default forwarded headers configuration (no blanket trust of `X-Forwarded-*`) + regression test coverage.
 - [ ] **C1 (deployment)**: Production should explicitly configure `ForwardedHeaders:KnownProxies`/`KnownNetworks` and/or `ForwardedHeaders:AllowedHosts` (and set `Oidc:PublicBaseUrl` or `Oidc:Issuer`) to avoid proxy/host ambiguity.
+ - [ ] **C1 (deployment)**: Production should explicitly configure `ForwardedHeaders:KnownProxies`/`KnownNetworks` and `ForwardedHeaders:AllowedHosts` (and set `Oidc:PublicBaseUrl` or `Oidc:Issuer`) to avoid proxy/host ambiguity. Consider enabling `ForwardedHeaders:EnforceHostAllowList=true`.
 
 - [x] **C2 (`aud` validation)**: Audience enforced for access-token validation at `/userinfo` (with tests rejecting unexpected audiences).
 
@@ -83,6 +84,13 @@ This checklist reflects what is implemented in code vs what remains as operation
 **Recommended fix**
 - Lock down forwarded headers by configuring *known proxies/networks* (or at minimum enforce an allow-list of hosts).
 - Consider setting a canonical public base URL per tenant and using that for issuer + endpoint URL construction, rather than `Request.Host`.
+
+**Concrete configuration knobs (implemented)**
+
+- `Oidc:PublicBaseUrl` (or `Oidc:Issuer`) for canonical issuer/base.
+- `ForwardedHeaders:KnownProxies` / `ForwardedHeaders:KnownNetworks` (recommended).
+- `ForwardedHeaders:UnsafeTrustAll` (last resort).
+- `ForwardedHeaders:AllowedHosts` plus `ForwardedHeaders:EnforceHostAllowList=true` (recommended).
 
 ---
 

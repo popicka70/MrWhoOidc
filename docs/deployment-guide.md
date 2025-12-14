@@ -681,6 +681,30 @@ Complete reference of all environment variables.
 | `MAIL_FROM_NAME` | `MrWhoOidc` | Sender display name |
 | `LOGGING_LEVEL` | `Information` | Minimum log level (Trace, Debug, Information, Warning, Error, Critical) |
 
+#### Reverse Proxy / Forwarded Headers (Optional)
+
+If you deploy behind a reverse proxy (nginx/Traefik/HAProxy) that terminates TLS and forwards requests to MrWhoOidc over HTTP, you must ensure the app can safely honor `X-Forwarded-*` headers.
+
+MrWhoOidc supports forwarded header hardening via the following variables (mapped to the `ForwardedHeaders:*` config section):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FORWARDED_HEADERS_ENABLED` | `true` | Enable `X-Forwarded-*` processing (safe-by-default: loopback-only unless you configure known proxies) |
+| `FORWARDED_HEADERS_FORWARD_LIMIT` | `1` | Max proxy hops to trust |
+| `FORWARDED_HEADERS_REQUIRE_HEADER_SYMMETRY` | `false` | Require the same number of values across forwarded headers |
+| `FORWARDED_HEADERS_UNSAFE_TRUST_ALL` | `false` | Last-resort: trust forwarded headers from any proxy (only safe if app is not directly reachable) |
+| `FORWARDED_HEADERS_ENFORCE_HOST_ALLOW_LIST` | `false` | Enforce a runtime host allow-list (recommended in production) |
+| `FORWARDED_HEADERS_ALLOWED_HOST_0` | - | Allowed host (e.g., `auth.example.com`) |
+| `FORWARDED_HEADERS_ALLOWED_HOST_1` | - | Allowed host (optional) |
+| `FORWARDED_HEADERS_ALLOWED_HOST_2` | - | Allowed host (optional) |
+| `FORWARDED_HEADERS_KNOWN_PROXY_0` | - | Known proxy IP (recommended when stable) |
+| `FORWARDED_HEADERS_KNOWN_NETWORK_0` | - | Known proxy network in CIDR (e.g., `10.0.0.0/24`) |
+
+Operational checks:
+
+- Ensure `OIDC_PUBLIC_BASE_URL` matches the external URL clients use.
+- Use the issuer health check: `GET /health/issuer` should be `healthy` in non-development environments.
+
 ### Variable Substitution in docker-compose.yml
 
 Docker Compose automatically loads variables from `.env` file:
@@ -986,6 +1010,8 @@ Use this checklist before deploying to production:
 - [ ] **TLS Version**: TLS 1.2+ enforced (disable TLS 1.0/1.1)
 - [ ] **Container Security**: Running as non-root user (verified in Dockerfile)
 - [ ] **Read-Only Volumes**: Certificate volumes mounted as `:ro` (read-only)
+- [ ] **Forwarded Headers**: If behind a reverse proxy, configure `FORWARDED_HEADERS_KNOWN_PROXY_*`/`FORWARDED_HEADERS_KNOWN_NETWORK_*` (or last-resort `FORWARDED_HEADERS_UNSAFE_TRUST_ALL=true`) and set `FORWARDED_HEADERS_ALLOWED_HOST_*`
+- [ ] **Host Allow-List**: `FORWARDED_HEADERS_ENFORCE_HOST_ALLOW_LIST=true` enabled in production (recommended)
 
 #### Resource Management
 

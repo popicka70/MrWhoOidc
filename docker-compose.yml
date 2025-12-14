@@ -23,6 +23,21 @@ services:
       
       # OIDC Configuration
       Oidc__PublicBaseUrl: ${OIDC_PUBLIC_BASE_URL}
+
+      # Forwarded Headers / Reverse Proxy Configuration (Optional)
+      ForwardedHeaders__Enabled: ${FORWARDED_HEADERS_ENABLED:-true}
+      ForwardedHeaders__RequireHeaderSymmetry: ${FORWARDED_HEADERS_REQUIRE_HEADER_SYMMETRY:-false}
+      ForwardedHeaders__ForwardLimit: ${FORWARDED_HEADERS_FORWARD_LIMIT:-1}
+      ForwardedHeaders__UnsafeTrustAll: ${FORWARDED_HEADERS_UNSAFE_TRUST_ALL:-false}
+      ForwardedHeaders__EnforceHostAllowList: ${FORWARDED_HEADERS_ENFORCE_HOST_ALLOW_LIST:-false}
+      ForwardedHeaders__AllowedHosts__0: ${FORWARDED_HEADERS_ALLOWED_HOST_0:-}
+      ForwardedHeaders__AllowedHosts__1: ${FORWARDED_HEADERS_ALLOWED_HOST_1:-}
+      ForwardedHeaders__AllowedHosts__2: ${FORWARDED_HEADERS_ALLOWED_HOST_2:-}
+      ForwardedHeaders__KnownProxies__0: ${FORWARDED_HEADERS_KNOWN_PROXY_0:-}
+      ForwardedHeaders__KnownProxies__1: ${FORWARDED_HEADERS_KNOWN_PROXY_1:-}
+      ForwardedHeaders__KnownProxies__2: ${FORWARDED_HEADERS_KNOWN_PROXY_2:-}
+      ForwardedHeaders__KnownNetworks__0: ${FORWARDED_HEADERS_KNOWN_NETWORK_0:-}
+      ForwardedHeaders__KnownNetworks__1: ${FORWARDED_HEADERS_KNOWN_NETWORK_1:-}
       
       # Multi-Tenancy Configuration
       MultiTenant__Enabled: ${MULTITENANT_ENABLED:-false}
