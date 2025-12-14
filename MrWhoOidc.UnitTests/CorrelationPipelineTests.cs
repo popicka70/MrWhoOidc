@@ -123,26 +123,11 @@ public sealed class CorrelationPipelineTests
     private static IServiceScope CreateServiceScope(out IExternalOidcHandler handler, out RecordingOidcMetrics metrics)
     {
         var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddDataProtection().UseEphemeralDataProtectionProvider();
-        services.AddMemoryCache();
-        services.AddHttpClient();
-        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase("corr-tests" + Guid.NewGuid().ToString("N")));
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        services.AddScoped<IClaimMappingService, ClaimMappingService>();
-        services.AddSingleton<IJwksCache, JwksCache>();
-        services.AddSingleton<RecordingOidcMetrics>();
-        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<RecordingOidcMetrics>());
-        services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
-        services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
-        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
-        
-        // Register ITenantAccessor for multi-tenant support
-        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
-        services.AddScoped<RecordingUserAccountProvisioner>();
-        services.AddScoped<IUserAccountProvisioner>(sp => sp.GetRequiredService<RecordingUserAccountProvisioner>());
-        
-    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+        services.AddExternalOidcTestCore(
+            inMemoryDbName: "corr-tests" + Guid.NewGuid().ToString("N"),
+            useEphemeralDataProtectionProvider: true,
+            useRecordingMetrics: true);
+        services.AddExternalOidcTestDefaults();
     services.AddExternalOidcHandler(); // Use DI registration
 
         var provider = services.BuildServiceProvider();

@@ -21,8 +21,8 @@ description: "Task list for feature implementation"
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Confirm Constitution gates for this change (no new identity packages; domain logic in Auth, UI/HTTP in WebAuth) per specs/010-auto-assign-client/plan.md
-- [ ] T002 Run baseline build/tests before changes: `dotnet build` + `dotnet test` from repo root (MrWhoOidc.slnx)
+- [X] T001 Confirm Constitution gates for this change (no new identity packages; domain logic in Auth, UI/HTTP in WebAuth) per specs/010-auto-assign-client/plan.md
+- [X] T002 Run baseline build/tests before changes: `dotnet build` + `dotnet test` from repo root (MrWhoOidc.slnx)
 
 ---
 
@@ -30,10 +30,10 @@ description: "Task list for feature implementation"
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T003 Add per-client flag `AutoAssignNewUsersToClient` (default false) to `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` (class `Client`)
-- [ ] T004 Create EF Core migration adding the new column to Clients in `MrWhoOidc.Auth/Persistence/Migrations/` and update `MrWhoOidc.Auth/Persistence/Migrations/AuthDbContextModelSnapshot.cs`
-- [ ] T005 [P] Identify any seed/client creation code paths that must set/assume the new property (e.g., `MrWhoOidc.WebAuth/Services/TenantSeedingService.cs`, `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Create.cshtml.cs`) and ensure they remain correct with default=false
-- [ ] T006 Implement a server-side “client context resolver” for local registration that can derive a validated client context from ReturnUrl (JAR/PAR aware) without trusting raw query strings (new file suggested: `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`)
+- [X] T003 Add per-client flag `AutoAssignNewUsersToClient` (default false) to `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` (class `Client`)
+- [X] T004 Create EF Core migration adding the new column to Clients in `MrWhoOidc.Auth/Persistence/Migrations/` and update `MrWhoOidc.Auth/Persistence/Migrations/AuthDbContextModelSnapshot.cs`
+- [X] T005 [P] Identify any seed/client creation code paths that must set/assume the new property (e.g., `MrWhoOidc.WebAuth/Services/TenantSeedingService.cs`, `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Create.cshtml.cs`) and ensure they remain correct with default=false
+- [X] T006 Implement a server-side “client context resolver” for local registration that can derive a validated client context from ReturnUrl (JAR/PAR aware) without trusting raw query strings (new file suggested: `MrWhoOidc.WebAuth/Services/ReturnUrlClientContextResolver.cs`)
 
 **Checkpoint**: Foundation ready — user story implementation can begin.
 
@@ -47,15 +47,15 @@ description: "Task list for feature implementation"
 
 ### Implementation
 
-- [ ] T010 [P] [US1] Preserve ReturnUrl when navigating to registration from login page by updating the register link in `MrWhoOidc.WebAuth/Pages/Login.cshtml` to pass `asp-route-returnUrl="@Model.ReturnUrl"`
-- [ ] T011 [P] [US1] Preserve ReturnUrl when navigating to registration from provider-selection page by updating the register link in `MrWhoOidc.WebAuth/Pages/Auth/Providers/Select.cshtml` to pass `asp-route-returnUrl="@Model.ReturnUrl"`
-- [ ] T012 [US1] Add `ReturnUrl` handling to local registration page model and view: `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs` (+ hidden field in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml` if needed)
-- [ ] T013 [US1] Use the resolver from T006 inside `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs` to resolve the validated target client (if any), load the `Client` entity for the current tenant, and only pass `clientId` into `CreateAndMaybeApproveRegistrationAsync(...)` when `Client.AutoAssignNewUsersToClient == true`
-- [ ] T014 [US1] Update external provisioning to load client policy using the validated `clientId` from state (fallback to ReturnUrl parsing only if needed): `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T015 [US1] Gate external auto-approval path assignment: only pass `clientEntity.Id` into `CreateAndMaybeApproveRegistrationAsync(...)` when `clientEntity.AutoAssignNewUsersToClient == true` (otherwise pass null): `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T016 [US1] Implement external auto-provision assignment for newly created users: when `userWasCreated == true` and `clientEntity.AutoAssignNewUsersToClient == true`, create `UserClientAssignment` (idempotent) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
-- [ ] T017 [US1] Emit audit-relevant record on successful registration approval auto-assignment (user identity + client + time) in `MrWhoOidc.WebAuth/Services/RegistrationService.cs`
-- [ ] T018 [US1] Emit audit-relevant record on successful external auto-provision auto-assignment (user identity + client + time) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T010 [P] [US1] Preserve ReturnUrl when navigating to registration from login page by updating the register link in `MrWhoOidc.WebAuth/Pages/Login.cshtml` to pass `asp-route-returnUrl="@Model.ReturnUrl"`
+- [X] T011 [P] [US1] Preserve ReturnUrl when navigating to registration from provider-selection page by updating the register link in `MrWhoOidc.WebAuth/Pages/Auth/Providers/Select.cshtml` to pass `asp-route-returnUrl="@Model.ReturnUrl"`
+- [X] T012 [US1] Add `ReturnUrl` handling to local registration page model and view: `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs` (+ hidden field in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml` if needed)
+- [X] T013 [US1] Use the resolver from T006 inside `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs` to resolve the validated target client (if any), load the `Client` entity for the current tenant, and only pass `clientId` into `CreateAndMaybeApproveRegistrationAsync(...)` when `Client.AutoAssignNewUsersToClient == true`
+- [X] T014 [US1] Update external provisioning to load client policy using the validated `clientId` from state (fallback to ReturnUrl parsing only if needed): `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T015 [US1] Gate external auto-approval path assignment: only pass `clientEntity.Id` into `CreateAndMaybeApproveRegistrationAsync(...)` when `clientEntity.AutoAssignNewUsersToClient == true` (otherwise pass null): `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T016 [US1] Implement external auto-provision assignment for newly created users: when `userWasCreated == true` and `clientEntity.AutoAssignNewUsersToClient == true`, create `UserClientAssignment` (idempotent) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [X] T017 [US1] Emit audit-relevant record on successful registration approval auto-assignment (user identity + client + time) in `MrWhoOidc.WebAuth/Services/RegistrationService.cs`
+- [X] T018 [US1] Emit audit-relevant record on successful external auto-provision auto-assignment (user identity + client + time) in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
 
 **Checkpoint**: US1 is functional and manually verifiable via quickstart.
 
@@ -69,10 +69,10 @@ description: "Task list for feature implementation"
 
 ### Implementation
 
-- [ ] T020 [US2] Add `AutoAssignNewUsersToClient` to `MrWhoOidc.WebAuth/Pages/Admin/Clients/Add.cshtml.cs` (`ClientInput` + map to `Client` entity)
-- [ ] T021 [US2] Render `AutoAssignNewUsersToClient` checkbox in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Add.cshtml`
-- [ ] T022 [US2] Add `AutoAssignNewUsersToClient` to `MrWhoOidc.WebAuth/Pages/Admin/Clients/Edit.cshtml.cs` (`ClientInput` + populate in `OnGetAsync` + persist in save/update handler)
-- [ ] T023 [US2] Render `AutoAssignNewUsersToClient` checkbox in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Edit.cshtml`
+- [X] T020 [US2] Add `AutoAssignNewUsersToClient` to `MrWhoOidc.WebAuth/Pages/Admin/Clients/Add.cshtml.cs` (`ClientInput` + map to `Client` entity)
+- [X] T021 [US2] Render `AutoAssignNewUsersToClient` checkbox in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Add.cshtml`
+- [X] T022 [US2] Add `AutoAssignNewUsersToClient` to `MrWhoOidc.WebAuth/Pages/Admin/Clients/Edit.cshtml.cs` (`ClientInput` + populate in `OnGetAsync` + persist in save/update handler)
+- [X] T023 [US2] Render `AutoAssignNewUsersToClient` checkbox in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Edit.cshtml`
 
 **Checkpoint**: US2 is functional; toggling changes persisted client state.
 
@@ -100,7 +100,7 @@ description: "Task list for feature implementation"
 ## Phase 6: Polish & Cross-Cutting
 
 - [ ] T031 Run the feature quickstart end-to-end and adjust any docs only if behavior differs: `specs/010-auto-assign-client/quickstart.md`
-- [ ] T032 Run full build/tests after changes: `dotnet build` + `dotnet test` from repo root (MrWhoOidc.slnx)
+- [X] T032 Run full build/tests after changes: `dotnet build` + `dotnet test` from repo root (MrWhoOidc.slnx)
 
 ---
 

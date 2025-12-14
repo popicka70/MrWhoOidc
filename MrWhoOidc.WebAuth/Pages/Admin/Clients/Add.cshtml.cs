@@ -67,6 +67,7 @@ public class AddModel(
             RealmId = Input.RealmId,
             RequirePkce = Input.RequirePkce,
             RequireConsent = Input.RequireConsent,
+            AutoAssignNewUsersToClient = Input.AutoAssignNewUsersToClient,
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
 #pragma warning restore CS0618
@@ -115,6 +116,10 @@ public class AddModel(
         public Guid RealmId { get; set; }
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;
+
+        [Display(Name = "Auto-assign new users to this client")]
+        public bool AutoAssignNewUsersToClient { get; set; } = false;
+
         [DataType(DataType.Password)]
         public string? ClientSecret { get; set; }
     }

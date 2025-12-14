@@ -28,6 +28,7 @@
         }
 
         <form method="post" asp-page-handler="Create" class="row g-3">
+            <input type="hidden" asp-for="ReturnUrl" />
             <div class="col-md-6">
                 <label asp-for="Input.Email" class="form-label"></label>
                 <input asp-for="Input.Email" class="form-control" />

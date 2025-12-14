@@ -212,30 +212,16 @@ public class ExternalOidcHandlerTests
     private static (IExternalOidcHandler handler, DefaultHttpContext ctx) CreateHandler()
     {
         var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddDataProtection();
-        services.AddMemoryCache();
-
-        var dbName = "ext-handler-" + Guid.NewGuid().ToString("N");
-        services.AddDbContext<AuthDbContext>(o => o.UseInMemoryDatabase(dbName));
-
-        services.AddScoped<IClaimMappingService, ClaimMappingService>();
-        services.AddSingleton<OidcMetrics>();
-        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+        services.AddExternalOidcTestCore(
+            inMemoryDbName: "ext-handler-" + Guid.NewGuid().ToString("N"),
+            useEphemeralDataProtectionProvider: false,
+            useRecordingMetrics: false);
         services.AddSingleton<IOptions<AuthOptions>>(Options.Create(new AuthOptions()));
 
         // Add HttpClient with test handler
         services.AddSingleton<IHttpClientFactory>(new TestHttpClientFactory());
 
-        services.AddSingleton<IJwksCache, JwksCache>();
-        services.AddMrWhoOidcCorrelation(new ConfigurationBuilder().Build(), redisMux: null);
-        
-        // Register ITenantAccessor for multi-tenant support
-        services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateWithDefaultTenant());
-        services.AddScoped<RecordingUserAccountProvisioner>();
-        services.AddScoped<IUserAccountProvisioner>(sp => sp.GetRequiredService<RecordingUserAccountProvisioner>());
-        
-    services.AddSingleton<IEmailConfirmationWorkflow, FakeEmailConfirmationWorkflow>();
+        services.AddExternalOidcTestDefaults();
     services.AddExternalOidcHandler(); // Use DI registration
 
         var sp = services.BuildServiceProvider();
