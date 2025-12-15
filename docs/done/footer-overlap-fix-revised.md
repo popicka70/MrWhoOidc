@@ -1,8 +1,19 @@
-# Footer Overlap Fix - REVISED Simple Solution
+# Footer Overlap Fix - REVISED Simple Solution (Superseded)
 
 **Date**: October 9, 2025  
 **Issue**: Footer obstructing Save and Back buttons on Edit Client page  
-**Status**: ✅ Fixed with Simple Approach
+**Status**: ⚠️ Superseded by grid-based page shell (Dec 2025)
+
+## Update (Dec 2025)
+
+This document describes an older mitigation based on adding bottom padding / per-page margins.
+It has been replaced by a centralized, layout-level fix that uses a 3-row grid “page shell” (header / scrollable content / footer) so the footer is always visible and never overlaps content.
+
+Current implementation lives in:
+
+- `MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml`
+- `MrWhoOidc.WebAuth/wwwroot/css/site.css` (classes: `.page-shell`, `.scroll-container`)
+- `MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css` (removed absolute footer positioning)
 
 ## Problem
 
@@ -10,11 +21,12 @@ The original flexbox approach was making things worse, creating a huge footer ar
 
 ## Final Simple Solution
 
-### Changes Made:
+### Changes Made
 
 #### 1. CSS (`MrWhoOidc.WebAuth/wwwroot/css/site.css`)
 
 **Body padding** - Added bottom padding to ensure space for footer:
+
 ```css
 html {
   position: relative;
@@ -28,6 +40,7 @@ body {
 ```
 
 **Footer** - Simplified, no fancy positioning:
+
 ```css
 .footer {
   background-color: white;
@@ -45,6 +58,7 @@ body {
 #### 2. Edit.cshtml
 
 Added extra bottom margin to button container:
+
 ```html
 <div class="mt-3 mb-5 d-flex gap-2">
     <button type="submit" class="btn btn-primary" asp-page-handler="Save">Save</button>
@@ -55,6 +69,7 @@ Added extra bottom margin to button container:
 #### 3. Layout (`_Layout.cshtml`)
 
 Reverted to standard Bootstrap container structure (no complex flexbox):
+
 ```html
 <div class="container-fluid">
     <div class="row">
@@ -81,6 +96,7 @@ Reverted to standard Bootstrap container structure (no complex flexbox):
 3. **Restart the application**
 
 The footer should now:
+
 - ✅ Be compact and small
 - ✅ Never overlap content
 - ✅ Stay at bottom of page naturally

@@ -32,7 +32,7 @@
     @* Inject tenant branding CSS variables *@
     @await Component.InvokeAsync("TenantBranding")
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="page-shell">
     @{
         var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false;
         // Get tenant context from middleware (set by TenantResolutionMiddleware)
@@ -41,15 +41,48 @@
             ? $"/t/{currentTenant.Slug}" 
             : "";
 
+        // Sidebar highlighting helpers
+        static string NormalizePath(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "/";
+            var cleaned = value;
+            var qIndex = cleaned.IndexOf('?');
+            if (qIndex >= 0) cleaned = cleaned[..qIndex];
+            var hashIndex = cleaned.IndexOf('#');
+            if (hashIndex >= 0) cleaned = cleaned[..hashIndex];
+            cleaned = cleaned.Trim();
+            if (cleaned.Length > 1) cleaned = cleaned.TrimEnd('/');
+            return cleaned.Length == 0 ? "/" : cleaned;
+        }
+
+        var currentPath = NormalizePath(Context?.Request?.Path.Value);
+        bool IsActiveHref(string? href, bool matchPrefix = false)
+        {
+            var expected = NormalizePath(href);
+            if (matchPrefix)
+            {
+                return currentPath.Equals(expected, StringComparison.OrdinalIgnoreCase)
+                    || currentPath.StartsWith(expected + "/", StringComparison.OrdinalIgnoreCase);
+            }
+            return currentPath.Equals(expected, StringComparison.OrdinalIgnoreCase);
+        }
+
+        string LinkClass(string baseClass, string? href, bool matchPrefix = false)
+            => IsActiveHref(href, matchPrefix) ? $"{baseClass} active" : baseClass;
+
         string? resolvedTenantSlug = currentTenant?.Slug;
         if ((User?.Identity?.IsAuthenticated ?? false) && string.IsNullOrEmpty(resolvedTenantSlug))
         {
-            resolvedTenantSlug = TenantSwitchingService.GetPreferredTenantSlug(Context);
+            resolvedTenantSlug = TenantSwitchingService.GetPreferredTenantSlug(Context!);
         }
 
         var isDefaultTenantContext = !MultiTenancyOptions.Enabled ||
             (!string.IsNullOrEmpty(resolvedTenantSlug) &&
              string.Equals(resolvedTenantSlug, MultiTenancyOptions.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase));
+
+        var isMyAccountArea = currentPath.StartsWith(NormalizePath($"{tenantPrefix}/account"), StringComparison.OrdinalIgnoreCase)
+            || currentPath.StartsWith(NormalizePath($"{tenantPrefix}/password"), StringComparison.OrdinalIgnoreCase)
+            || currentPath.StartsWith(NormalizePath($"{tenantPrefix}/mfa"), StringComparison.OrdinalIgnoreCase);
         
         // Load user's accessible tenants for tenant switcher
         var userTenants = new List<MrWhoOidc.WebAuth.Services.TenantAccessInfo>();
@@ -136,7 +169,7 @@
                                     <li>
                                         <form method="post" asp-page="/SwitchTenant" class="m-0">
                                             <input type="hidden" name="tenantId" value="@tenant.TenantId" />
-                                            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                                            <input type="hidden" name="returnUrl" value="@(Context!.Request.Path + Context!.Request.QueryString)" />
                                             <button type="submit" class="dropdown-item @(isCurrent ? "active" : "")" @(isCurrent ? "disabled" : "")>
                                                 <i class="bi @(tenant.HasAdminAccess ? "bi-shield-check" : "bi-building") me-2"></i>
                                                 @tenant.TenantName
@@ -194,7 +227,7 @@
         </header>
     }
 
-    <div class="flex-grow-1 d-flex flex-column">
+    <div class="scroll-container d-flex flex-column">
         @if (User?.Identity?.IsAuthenticated ?? false && !hideNavbar)
         {
             <div class="container-fluid flex-grow-1">
@@ -207,19 +240,15 @@
                     </div>
                         <div class="offcanvas-body p-0 d-flex flex-column flex-grow-1">
                             <div class="list-group list-group-flush rounded-0 d-flex flex-column flex-grow-1 overflow-auto">
-                            <a class="list-group-item list-group-item-action" asp-page="/Index"><i class="bi bi-house-door me-2"></i>Home</a>
+                            <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/")" href="@(tenantPrefix)/"><i class="bi bi-house-door me-2"></i>Home</a>
                             <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/.well-known/openid-configuration" target="_blank" rel="noopener"><i class="bi bi-file-earmark-code me-2"></i>OIDC Discovery</a>
                             <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/jwks" target="_blank" rel="noopener"><i class="bi bi-key me-2"></i>JWKS</a>
                             
                             @* My Account Section - All authenticated users *@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
-                                <div class="list-group-item fw-semibold text-uppercase small bg-info text-white">My Account</div>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account"><i class="bi bi-person-circle me-2"></i>Dashboard</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account/profile"><i class="bi bi-person me-2"></i>Profile</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/password"><i class="bi bi-key me-2"></i>Password</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/mfa"><i class="bi bi-shield-lock me-2"></i>Security</a>
-                                <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/account/sessions"><i class="bi bi-phone me-2"></i>Sessions</a>
+                                <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">My Account</div>
+                                <a class="list-group-item list-group-item-action @(isMyAccountArea ? "active" : "")" href="@(tenantPrefix)/account"><i class="bi bi-person-circle me-2"></i>Dashboard</a>
                             }
                             
                             @* Platform Admin Section - Only visible to platform admins *@
@@ -228,14 +257,14 @@
                                 var platformAdminResult = await AuthorizationService.AuthorizeAsync(User, null, "platform-admin");
                                 if (platformAdminResult.Succeeded && isDefaultTenantContext)
                                 {
-                                    <div class="list-group-item fw-semibold text-uppercase small bg-primary text-white">Platform Admin</div>
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+                                    <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">Platform Admin</div>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Index"))" asp-page="/PlatformAdmin/Index"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
                                     @if (MultiTenancyOptions.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Tenants/Index"), matchPrefix: true)" asp-page="/PlatformAdmin/Tenants/Index"><i class="bi bi-building me-2"></i>Tenants</a>
                                     }
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
-                                    <a class="list-group-item list-group-item-action" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Impersonation"))" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/ImpersonationHistory/Index"))" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
                                 }
                             }
                             
@@ -246,47 +275,47 @@
                                 var platformAdminCheck = await AuthorizationService.AuthorizeAsync(User, null, "platform-admin");
                                 if (tenantAdminResult.Succeeded || platformAdminCheck.Succeeded)
                                 {
-                                    <div class="list-group-item fw-semibold text-uppercase small bg-success text-white">Admin</div>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/clients"><i class="bi bi-people me-2"></i>Clients</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/providers"><i class="bi bi-shield-lock me-2"></i>Providers</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/provider-mappings"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/scopes"><i class="bi bi-tags me-2"></i>Scopes</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/roles"><i class="bi bi-person-badge me-2"></i>Roles</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/users"><i class="bi bi-people-fill me-2"></i>Users</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
-                                    <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/admin/license"><i class="bi bi-award me-2"></i>License</a>
+                                    <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">Admin</div>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/realms", matchPrefix: true)" href="@(tenantPrefix)/admin/realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/clients", matchPrefix: true)" href="@(tenantPrefix)/admin/clients"><i class="bi bi-people me-2"></i>Clients</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/providers", matchPrefix: true)" href="@(tenantPrefix)/admin/providers"><i class="bi bi-shield-lock me-2"></i>Providers</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/provider-mappings", matchPrefix: true)" href="@(tenantPrefix)/admin/provider-mappings"><i class="bi bi-diagram-2 me-2"></i>Provider mappings</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/scopes", matchPrefix: true)" href="@(tenantPrefix)/admin/scopes"><i class="bi bi-tags me-2"></i>Scopes</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/roles", matchPrefix: true)" href="@(tenantPrefix)/admin/roles"><i class="bi bi-person-badge me-2"></i>Roles</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="bi bi-people-fill me-2"></i>Users</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license")" href="@(tenantPrefix)/admin/license"><i class="bi bi-award me-2"></i>License</a>
                                     @if (platformAdminCheck.Succeeded)
                                     {
-                                        <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/platform"><i class="bi bi-globe me-2"></i>Platform license</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/platform", matchPrefix: true)" href="@(tenantPrefix)/admin/license/platform"><i class="bi bi-globe me-2"></i>Platform license</a>
                                     }
-                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/tenant"><i class="bi bi-building me-2"></i>Tenant license</a>
-                                    <a class="list-group-item list-group-item-action ps-4 small" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/tenant", matchPrefix: true)" href="@(tenantPrefix)/admin/license/tenant"><i class="bi bi-building me-2"></i>Tenant license</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/history", matchPrefix: true)" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
                                     
                                     @* Branding - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Enabled)
                                     {
-                                        <a class="list-group-item list-group-item-action" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
-                                        <a class="list-group-item list-group-item-action" asp-page="/admin/settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/branding", matchPrefix: true)" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/settings", matchPrefix: true)" asp-page="/admin/settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
                                     }
                                 }
                             }
                             
                             <div class="mt-auto border-top flex-shrink-0">
-                                <div class="list-group-item fw-semibold text-uppercase small bg-secondary text-white">Account</div>
+                                <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">Account</div>
                                 <a class="list-group-item list-group-item-action" href="@(tenantPrefix)/logout?returnUrl=@Uri.EscapeDataString("/")"><i class="bi bi-box-arrow-right me-2"></i>Log out</a>
                             </div>
                         </div>
                     </div>
                     </aside>
-                    <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4 pb-5 d-flex flex-column">
+                    <main role="main" class="col-md-9 col-lg-10 ms-sm-auto px-md-4 d-flex flex-column">
                     <div class="py-3 flex-grow-1">
                         @* Impersonation Banner - Shows when platform admin is impersonating *@
                         <partial name="_ImpersonationBanner" />
                         
                         @* Tenant Context Banner for Admin Pages *@
-                        @if (Context.Request.Path.StartsWithSegments("/Admin") || Context.Request.Path.StartsWithSegments("/PlatformAdmin"))
+                        @if (Context!.Request.Path.StartsWithSegments("/Admin") || Context!.Request.Path.StartsWithSegments("/PlatformAdmin"))
                         {
                             <partial name="_TenantContextBanner" />
                         }
@@ -316,7 +345,7 @@
         }
     </div>
 
-    <footer class="border-top footer text-muted mt-auto">
+    <footer class="border-top footer text-muted">
         <div class="container py-2">
             &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
         </div>
