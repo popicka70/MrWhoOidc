@@ -478,6 +478,22 @@ body {
   width: 100%;
 }
 
+/* PAGE SHELL (header / scrollable content / footer) */
+.page-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Dedicated scroll container so the footer never overlaps content */
+.scroll-container {
+  min-height: 0;
+  overflow-y: auto;
+  scroll-padding-bottom: 1rem;
+}
+
 .footer .container {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;

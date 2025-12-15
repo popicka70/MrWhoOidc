@@ -10,9 +10,7 @@ description: "Task list for Sticky Footer Layout implementation"
 **Tests**: No automated tests requested in spec; validation is manual per quickstart.md.
 
 ## Format: `[ID] [P?] [Story] Description`
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- Include exact file paths in descriptions
+
 
 ---
 
@@ -20,10 +18,10 @@ description: "Task list for Sticky Footer Layout implementation"
 
 **Purpose**: Prepare the workspace for safe, repeatable UI verification.
 
-- [ ] T001 Create verification notes file at specs/011-sticky-footer-layout/artifacts/verification-notes.md
+- [X] T001 Create verification notes file at specs/011-sticky-footer-layout/artifacts/verification-notes.md
 - [ ] T002 Capture baseline screenshots for footer behavior on 3 representative pages and link them from specs/011-sticky-footer-layout/artifacts/verification-notes.md
-- [ ] T003 Identify the shared layouts in use via MrWhoOidc.WebAuth/Pages/_ViewStart.cshtml and confirm which pages use MrWhoOidc.WebAuth/Pages/Shared/_AuthLayout.cshtml
-- [ ] T004 [P] Review footer CSS sources and note conflicts in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css and MrWhoOidc.WebAuth/wwwroot/css/site.css (record findings in specs/011-sticky-footer-layout/artifacts/verification-notes.md)
+- [X] T003 Identify the shared layouts in use via MrWhoOidc.WebAuth/Pages/_ViewStart.cshtml and confirm which pages use MrWhoOidc.WebAuth/Pages/Shared/_AuthLayout.cshtml
+- [X] T004 [P] Review footer CSS sources and note conflicts in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css and MrWhoOidc.WebAuth/wwwroot/css/site.css (record findings in specs/011-sticky-footer-layout/artifacts/verification-notes.md)
 
 ---
 
@@ -33,10 +31,10 @@ description: "Task list for Sticky Footer Layout implementation"
 
 **⚠️ CRITICAL**: No user story work should begin until this phase is complete.
 
-- [ ] T005 Remove absolute footer positioning in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css (eliminate `.footer { position: absolute; bottom: 0; ... }`)
-- [ ] T006 Add a shared “page shell” CSS class for a 3-row grid layout in MrWhoOidc.WebAuth/wwwroot/css/site.css (header / scrollable content / footer)
-- [ ] T007 [P] Add a shared “scroll container” CSS class with appropriate `overflow-y`, `min-height`, and `scroll-padding-bottom` in MrWhoOidc.WebAuth/wwwroot/css/site.css
-- [ ] T008 Confirm footer styles are defined only once and do not conflict between CSS isolation and global CSS (MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css, MrWhoOidc.WebAuth/wwwroot/css/site.css)
+- [X] T005 Remove absolute footer positioning in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css (eliminate `.footer { position: absolute; bottom: 0; ... }`)
+- [X] T006 Add a shared “page shell” CSS class for a 3-row grid layout in MrWhoOidc.WebAuth/wwwroot/css/site.css (header / scrollable content / footer)
+- [X] T007 [P] Add a shared “scroll container” CSS class with appropriate `overflow-y`, `min-height`, and `scroll-padding-bottom` in MrWhoOidc.WebAuth/wwwroot/css/site.css
+- [X] T008 Confirm footer styles are defined only once and do not conflict between CSS isolation and global CSS (MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml.css, MrWhoOidc.WebAuth/wwwroot/css/site.css)
 
 **Checkpoint**: Foundation ready — user story work can now begin.
 
@@ -50,10 +48,10 @@ description: "Task list for Sticky Footer Layout implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Wrap MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml body structure in the new “page shell” wrapper (header/content/footer as grid rows)
-- [ ] T010 [US1] Move the main content area in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml into the dedicated scroll container so the footer remains visible
-- [ ] T011 [US1] Ensure the unauthenticated layout branch in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml also uses the same page shell and scroll container
-- [ ] T012 [US1] Ensure the footer element in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml is placed as the final grid row and remains visible without fixed positioning
+- [X] T009 [US1] Wrap MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml body structure in the new “page shell” wrapper (header/content/footer as grid rows)
+- [X] T010 [US1] Move the main content area in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml into the dedicated scroll container so the footer remains visible
+- [X] T011 [US1] Ensure the unauthenticated layout branch in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml also uses the same page shell and scroll container
+- [X] T012 [US1] Ensure the footer element in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml is placed as the final grid row and remains visible without fixed positioning
 - [ ] T013 [US1] Record US1 verification results (1024x700+) in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 
 **Checkpoint**: User Story 1 functional and independently verifiable.
