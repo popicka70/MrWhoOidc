@@ -491,7 +491,7 @@ body {
 .scroll-container {
   min-height: 0;
   overflow-y: auto;
-  scroll-padding-bottom: 1rem;
+  scroll-padding-bottom: 4rem;
 }
 
 .footer .container {

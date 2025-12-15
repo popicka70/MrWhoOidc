@@ -11,6 +11,10 @@ description: "Task list for Sticky Footer Layout implementation"
 
 ## Format: `[ID] [P?] [Story] Description`
 
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
+- Include exact file paths in descriptions
+
 
 ---
 
@@ -52,7 +56,7 @@ description: "Task list for Sticky Footer Layout implementation"
 - [X] T010 [US1] Move the main content area in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml into the dedicated scroll container so the footer remains visible
 - [X] T011 [US1] Ensure the unauthenticated layout branch in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml also uses the same page shell and scroll container
 - [X] T012 [US1] Ensure the footer element in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml is placed as the final grid row and remains visible without fixed positioning
-- [ ] T013 [US1] Record US1 verification results (1024x700+) in specs/011-sticky-footer-layout/artifacts/verification-notes.md
+- [X] T013 [US1] Record US1 verification results (1024x700+) in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 
 **Checkpoint**: User Story 1 functional and independently verifiable.
 
@@ -66,8 +70,8 @@ description: "Task list for Sticky Footer Layout implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Audit and remove layout-level “compensating” padding/margins that were previously used to avoid overlap (e.g., bottom padding on main) in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml
-- [ ] T015 [US2] Ensure the scroll container in MrWhoOidc.WebAuth/wwwroot/css/site.css provides sufficient bottom scroll-padding so focused elements are not hidden behind the footer
+- [X] T014 [US2] Audit and remove layout-level “compensating” padding/margins that were previously used to avoid overlap (e.g., bottom padding on main) in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml
+- [X] T015 [US2] Ensure the scroll container in MrWhoOidc.WebAuth/wwwroot/css/site.css provides sufficient bottom scroll-padding so focused elements are not hidden behind the footer
 - [ ] T016 [US2] Validate long-table pages render fully to the bottom inside the scroll container (no overlap) and note the page used in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 - [ ] T017 [US2] Validate edit pages with bottom action buttons remain fully visible and usable without per-page hacks and note the page used in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 - [ ] T018 [US2] Verify keyboard navigation: tab to bottom controls and footer links without focus being hidden (MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml + MrWhoOidc.WebAuth/wwwroot/css/site.css) and record results in specs/011-sticky-footer-layout/artifacts/verification-notes.md
@@ -84,7 +88,7 @@ description: "Task list for Sticky Footer Layout implementation"
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Ensure the page shell height uses mobile-friendly viewport sizing in MrWhoOidc.WebAuth/wwwroot/css/site.css (prefer dynamic viewport behavior where supported)
+- [X] T019 [US3] Ensure the page shell height uses mobile-friendly viewport sizing in MrWhoOidc.WebAuth/wwwroot/css/site.css (prefer dynamic viewport behavior where supported)
 - [ ] T020 [US3] Validate offcanvas sidebar + scroll container interaction on mobile (navigation still usable; content still scrollable) in MrWhoOidc.WebAuth/Pages/Shared/_Layout.cshtml and record results in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 - [ ] T021 [US3] Validate no horizontal scrolling at 360px width on representative admin pages and record pages/results in specs/011-sticky-footer-layout/artifacts/verification-notes.md
 
@@ -96,10 +100,10 @@ description: "Task list for Sticky Footer Layout implementation"
 
 **Purpose**: Ensure the solution is consistent, maintainable, and meets build quality gates.
 
-- [ ] T022 [P] Update any documentation note about the old footer workaround (if present) in docs/done/footer-overlap-fix-revised.md to reflect the new centralized approach
+- [X] T022 [P] Update any documentation note about the old footer workaround (if present) in docs/done/footer-overlap-fix-revised.md to reflect the new centralized approach
 - [ ] T023 Run the full manual verification checklist in specs/011-sticky-footer-layout/quickstart.md and record completion in specs/011-sticky-footer-layout/artifacts/verification-notes.md
-- [ ] T024 Ensure build quality gates are met by running `dotnet build` for MrWhoOidc.slnx
-- [ ] T025 Ensure test suite passes by running `dotnet test` for MrWhoOidc.slnx
+- [X] T024 Ensure build quality gates are met by running `dotnet build` for MrWhoOidc.slnx
+- [X] T025 Ensure test suite passes by running `dotnet test` for MrWhoOidc.slnx
 
 ---
 
