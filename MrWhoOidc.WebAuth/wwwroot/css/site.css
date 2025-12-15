@@ -494,6 +494,22 @@ body {
   scroll-padding-bottom: 4rem;
 }
 
+/* Checkbox/switch alignment inside bordered tab panels
+   Bootstrap's default .form-check uses a negative margin on the input, which can visually
+   overlap the left border when the surrounding container has borders (e.g., tab content panes). */
+.tab-content.border-start.border-end.border-bottom .form-check:not(.form-check-reverse):not(.form-switch) {
+  padding-left: 2.25em;
+}
+.tab-content.border-start.border-end.border-bottom .form-check:not(.form-check-reverse):not(.form-switch) > .form-check-input {
+  margin-left: -2.25em;
+}
+.tab-content.border-start.border-end.border-bottom .form-check.form-switch:not(.form-check-reverse) {
+  padding-left: 3.25em;
+}
+.tab-content.border-start.border-end.border-bottom .form-check.form-switch:not(.form-check-reverse) > .form-check-input {
+  margin-left: -3.25em;
+}
+
 .footer .container {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
