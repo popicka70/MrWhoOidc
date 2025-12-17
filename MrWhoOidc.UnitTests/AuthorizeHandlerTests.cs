@@ -659,6 +659,74 @@ public sealed class AuthorizeHandlerTests
     }
 
     [TestMethod]
+    public async Task Authorize_When_NotAssigned_And_AutoApproval_External_Backfills_Assignment_And_Continues()
+    {
+        // Arrange
+        using var db = CreateDb();
+
+        var tenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var userId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+        var clientGuid = Guid.NewGuid();
+
+        var realm = new Realm { Id = realmId, TenantId = tenantId, Name = "test_realm" };
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = clientGuid,
+            TenantId = tenantId,
+            ClientId = "test_client",
+            ClientSecretHash = "hash",
+            RealmId = realmId,
+            RequirePkce = true,
+            RequireConsent = false,
+            AutoApprovalMode = AutoApprovalMode.OnlyExternalIdp,
+            AllowedLoginRedirectUrisJson = "[\"https://app/callback\"]"
+        };
+        var user = new User { Id = userId, TenantId = tenantId, Username = "testuser" };
+
+        db.Realms.Add(realm);
+        db.Clients.Add(client);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        // No assignment exists initially
+        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", scopes: new[] { "openid" });
+        var codes = new StubAuthorizationCodeService(code: "auth_code_123", redirect: "https://app/callback?code=auth_code_123");
+        var consents = new StubConsentService(hasConsent: true);
+        var clientStore = new StubClientStore(client);
+        var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('k', 43),
+            ["code_challenge_method"] = "S256"
+        };
+
+        // Authenticated external session (idp claim set by ExternalOidcSessionManager)
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim("idp", "up1")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var context = CreateHttpContext(queryParams, principal);
+
+        // Act
+        var result = await handler.HandleAsync(context);
+
+        // Assert
+        Assert.IsNotNull(result);
+        var assigned = await db.UserClientAssignments.AsNoTracking().AnyAsync(a =>
+            a.UserId == userId && a.ClientId == clientGuid && a.RealmId == realmId && a.IsActive);
+        Assert.IsTrue(assigned, "Expected /authorize to backfill the user->client assignment when auto-approval is enabled for external sessions");
+    }
+
+    [TestMethod]
     public async Task Authorize_Response_Mode_Form_Post_Supported()
     {
         // Arrange

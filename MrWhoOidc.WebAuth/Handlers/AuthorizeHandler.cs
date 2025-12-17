@@ -406,6 +406,61 @@ public sealed class AuthorizeHandler(
                 .AnyAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive);
             if (!assigned)
             {
+                // If the client opts into auto-approval, treat a successful login as sufficient to ensure
+                // the user is assigned to the client. This backfills legacy users that pre-date assignment.
+                // OnlyExternalIdp requires evidence the current session is external (idp claim set by external session manager).
+                var idp = http.User.FindFirst("idp")?.Value;
+                var isExternalSession = !string.IsNullOrWhiteSpace(idp);
+
+                var canAutoAssign = client.AutoApprovalMode == AutoApprovalMode.All ||
+                    (client.AutoApprovalMode == AutoApprovalMode.OnlyExternalIdp && isExternalSession);
+
+                if (canAutoAssign)
+                {
+                    var userTenantId = await db.Users.AsNoTracking()
+                        .Where(u => u.Id == userId)
+                        .Select(u => u.TenantId)
+                        .FirstOrDefaultAsync(http.RequestAborted);
+
+                    if (userTenantId != Guid.Empty && userTenantId == client.TenantId)
+                    {
+                        var exists = await db.UserClientAssignments.AnyAsync(
+                            a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive,
+                            http.RequestAborted);
+
+                        if (!exists)
+                        {
+                            db.UserClientAssignments.Add(new UserClientAssignment
+                            {
+                                UserId = userId,
+                                ClientId = client.Id,
+                                RealmId = client.RealmId,
+                                IsActive = true
+                            });
+                            await db.SaveChangesAsync(http.RequestAborted);
+
+                            logger.LogInformation(
+                                "Authorize backfilled missing client assignment. ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}, UserId={UserId}, TenantId={TenantId}, AutoApprovalMode={AutoApprovalMode}, Idp={Idp}, Corr={Corr}",
+                                client.ClientId, client.Id, client.RealmId, userId, userTenantId, client.AutoApprovalMode, idp ?? "(none)", corr);
+                        }
+
+                        assigned = true;
+                    }
+                    else
+                    {
+                        logger.LogInformation(
+                            "Authorize auto-assign skipped due to tenant mismatch or unknown user tenant. ClientId={ClientId}, ClientRecordId={ClientRecordId}, UserId={UserId}, UserTenantId={UserTenantId}, ClientTenantId={ClientTenantId}, AutoApprovalMode={AutoApprovalMode}, Idp={Idp}, Corr={Corr}",
+                            client.ClientId, client.Id, userId, userTenantId, client.TenantId, client.AutoApprovalMode, idp ?? "(none)", corr);
+                    }
+                }
+
+                if (!assigned)
+                {
+                    logger.LogInformation(
+                        "Authorize denied: user not assigned to client. ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}, UserId={UserId}, AutoApprovalMode={AutoApprovalMode}, HasExternalIdpClaim={HasIdp}, Corr={Corr}",
+                        client.ClientId, client.Id, client.RealmId, userId, client.AutoApprovalMode, !string.IsNullOrWhiteSpace(idp), corr);
+                }
+
                 outcome = "not_assigned";
                 if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
                 {
