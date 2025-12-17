@@ -358,7 +358,7 @@ internal sealed class RegistrationService : IRegistrationService
         if (registration.ClientId is Guid clientId)
         {
             var client = await _db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, cancellationToken);
-            if (client is not null)
+            if (client is not null && client.TenantId == user.TenantId)
             {
                 var exists = await _db.UserClientAssignments.AnyAsync(
                     a => a.UserId == user.Id && a.ClientId == client.Id && a.RealmId == client.RealmId,
@@ -386,6 +386,12 @@ internal sealed class RegistrationService : IRegistrationService
                         source = "registration.approve"
                     });
                 }
+            }
+            else if (client is not null)
+            {
+                _logger.LogWarning(
+                    "Skipped client assignment during registration approval due to tenant mismatch. UserTenantId={UserTenantId}, ClientTenantId={ClientTenantId}, ClientRecordId={ClientRecordId}",
+                    user.TenantId, client.TenantId, client.Id);
             }
         }
 

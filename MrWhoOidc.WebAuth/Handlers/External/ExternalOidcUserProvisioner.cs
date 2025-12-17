@@ -91,20 +91,6 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         var ext = await _db.ExternalIdentities
             .FirstOrDefaultAsync(x => x.Issuer == issuer && x.Subject == subject, cancellationToken);
 
-        if (ext is not null)
-        {
-            ext.LastSeenAt = DateTimeOffset.UtcNow;
-            ext.ClaimsJson = BuildClaimsJson(email, name);
-            await _db.SaveChangesAsync(cancellationToken);
-
-            return new UserProvisioningResult
-            {
-                Success = true,
-                UserId = ext.UserId,
-                Outcome = "linked"
-            };
-        }
-
         var userEmail = mappedClaims.TryGetValue("email", out var me) ? me : email;
         var userName = mappedClaims.TryGetValue("name", out var mn) ? mn : name;
 
@@ -127,6 +113,31 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         var allowAutoProvision = clientEntity?.AllowExternalAutoProvision ?? true;
         var allowEmailLinking = clientEntity?.AllowExternalEmailLinking ?? true;
         var requireEmailConfirm = clientEntity?.RequireEmailLinkConfirmation ?? true;
+
+        // When a client opts into auto-approval for external IdP logins, we treat successful external sign-in
+        // as sufficient to ensure a client assignment exists (backfills previously-created users).
+        var autoApprovalMode = clientEntity?.AutoApprovalMode ?? AutoApprovalMode.No;
+        var shouldEnsureClientAssignment = clientEntity is not null &&
+            (autoApprovalMode == AutoApprovalMode.All || autoApprovalMode == AutoApprovalMode.OnlyExternalIdp);
+
+        if (ext is not null)
+        {
+            ext.LastSeenAt = DateTimeOffset.UtcNow;
+            ext.ClaimsJson = BuildClaimsJson(email, name);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            if (shouldEnsureClientAssignment)
+            {
+                await EnsureClientAssignmentAsync(ext.UserId, clientEntity!, provider, outcome: "linked", cancellationToken);
+            }
+
+            return new UserProvisioningResult
+            {
+                Success = true,
+                UserId = ext.UserId,
+                Outcome = "linked"
+            };
+        }
 
         if (allowEmailLinking && !string.IsNullOrWhiteSpace(userEmail))
         {
@@ -170,6 +181,11 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
                     await _db.SaveChangesAsync(cancellationToken);
                     await _accountProvisioner.EnsureAsync(existingUser, existingUser.TenantId, clientEntity?.RealmId, isTenantAdmin: false, cancellationToken);
 
+                    if (shouldEnsureClientAssignment && clientEntity is not null)
+                    {
+                        await EnsureClientAssignmentAsync(existingUser.Id, clientEntity, provider, outcome: "linked_immediate", cancellationToken);
+                    }
+
                     return new UserProvisioningResult
                     {
                         Success = true,
@@ -182,17 +198,16 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
         if (allowAutoProvision)
         {
-            // Check client's auto-approval setting
-            var autoApprovalMode = clientEntity?.AutoApprovalMode ?? AutoApprovalMode.No;
-            var shouldAutoApprove = autoApprovalMode == AutoApprovalMode.All || autoApprovalMode == AutoApprovalMode.OnlyExternalIdp;
+            var shouldAutoApprove = shouldEnsureClientAssignment;
 
             if (shouldAutoApprove)
             {
                 // Create registration and auto-approve it
                 try
                 {
-                    // Only associate a client when it opts in to auto-assign.
-                    var registrationClientId = clientEntity?.AutoAssignNewUsersToClient == true ? clientEntity.Id : (Guid?)null;
+                    // Auto-approval is a per-client opt-in. When enabled, treat this external sign-in as a
+                    // client-scoped registration and associate the client so approval will grant assignment.
+                    var registrationClientId = clientEntity?.Id;
 
                     var userId = await _registrationService.CreateAndMaybeApproveRegistrationAsync(
                         userEmail ?? $"{provider}:{subject}",
@@ -249,6 +264,12 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 
             // Standard auto-provisioning (no registration record, direct user creation)
             var autoProvisionedUserId = await AutoProvisionUserAsync(provider, issuer, subject, userEmail, userName, clientEntity, cancellationToken);
+
+            if (shouldEnsureClientAssignment && clientEntity is not null)
+            {
+                await EnsureClientAssignmentAsync(autoProvisionedUserId, clientEntity, provider, outcome: "auto_provisioned", cancellationToken);
+            }
+
             return new UserProvisioningResult
             {
                 Success = true,
@@ -408,5 +429,57 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
         if (email is null && name is null)
             return null;
         return JsonSerializer.Serialize(new { email, name });
+    }
+
+    private async Task EnsureClientAssignmentAsync(Guid userId, Client clientEntity, string provider, string outcome, CancellationToken ct)
+    {
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return;
+
+        if (user.TenantId != clientEntity.TenantId)
+        {
+            _logger.LogDebug(
+                "External login client assignment backfill skipped due to tenant mismatch. Provider={Provider}, Outcome={Outcome}, UserId={UserId}, UserTenantId={UserTenantId}, ClientId={ClientId}, ClientRecordId={ClientRecordId}, ClientTenantId={ClientTenantId}",
+                provider, outcome, userId, user.TenantId, clientEntity.ClientId, clientEntity.Id, clientEntity.TenantId);
+            return;
+        }
+
+        var exists = await _db.UserClientAssignments.AnyAsync(
+            a => a.UserId == userId && a.ClientId == clientEntity.Id && a.RealmId == clientEntity.RealmId && a.IsActive,
+            ct);
+        if (exists)
+        {
+            _logger.LogDebug(
+                "External login client assignment already present. Provider={Provider}, Outcome={Outcome}, UserId={UserId}, TenantId={TenantId}, ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}",
+                provider, outcome, userId, user.TenantId, clientEntity.ClientId, clientEntity.Id, clientEntity.RealmId);
+            return;
+        }
+
+        _db.UserClientAssignments.Add(new UserClientAssignment
+        {
+            UserId = userId,
+            ClientId = clientEntity.Id,
+            RealmId = clientEntity.RealmId,
+            IsActive = true
+        });
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "External login backfilled missing client assignment. Provider={Provider}, Outcome={Outcome}, UserId={UserId}, TenantId={TenantId}, ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}",
+            provider, outcome, userId, user.TenantId, clientEntity.ClientId, clientEntity.Id, clientEntity.RealmId);
+
+        _audit.Emit("external.client.auto_assign", new
+        {
+            at = DateTimeOffset.UtcNow,
+            provider,
+            tenant_id = user.TenantId,
+            user_id = userId,
+            user_email_hash = _audit.HashValue(user.Email),
+            client_id = clientEntity.ClientId,
+            client_record_id = clientEntity.Id,
+            realm_id = clientEntity.RealmId,
+            source = "external.ensure_assignment"
+        });
     }
 }
