@@ -17,6 +17,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
     // Initial constant secret for the blazor-web client (development only)
     private const string InitialBlazorWebClientSecret = "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG";
 
+    // Dedicated E2E dev clients for first-party apps
+    private const string LicensingWebClientId = "licensing-web";
+    private const string LicensingWebClientSecret = "LicensingWebDevSecret_2eZcZx2mD7nKJ4YwBf8uPqT3wQvR9aLs";
+    private const string MrWhoPdfWebClientId = "mrwhopdf-web";
+    private const string MrWhoPdfWebClientSecret = "MrWhoPdfWebDevSecret_Gp5rVx6sQ1tZ8nM3wK9cF2yH7aB4dL0p";
+
     // PoC M2M client id/secret (intentionally hard-coded)
     private const string M2MClientId = "m2m-test-client";
     private const string M2MClientSecret = "m2m-test-secret";
@@ -260,6 +266,164 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://localhost:5003/signin-oidc", "http://localhost:5003/signin-oidc" })
             };
             db.Clients.Add(adminClient);
+        }
+
+        // Seed dedicated LicensingService interactive UI client (for local E2E)
+        var licensingWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == LicensingWebClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+        if (licensingWebClient is null)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+            licensingWebClient = new Client
+            {
+                ClientId = LicensingWebClientId,
+                ClientName = "LicensingService Web",
+                RequirePkce = true,
+                RequireConsent = false,
+                AutoApprovalMode = AutoApprovalMode.All,
+                ClientSecretHash = hasher.Hash(LicensingWebClientSecret),
+                RealmId = adminRealm.Id,
+                TenantId = tenantId,
+                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    // HTTPS (preferred)
+                    "https://localhost:8444/signin-oidc",
+                    // HTTP (if a reverse proxy / redirect is used)
+                    "http://localhost:8082/signin-oidc",
+
+                    // Loopback redirect to manually capture the authorization code during E2E validation.
+                    // (No listener required; the browser address bar will contain the code.)
+                    "http://localhost:8400/callback",
+                    "http://127.0.0.1:8400/callback",
+                }),
+                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8444/signout-callback-oidc",
+                    "https://localhost:8444/",
+                    "http://localhost:8082/signout-callback-oidc",
+                    "http://localhost:8082/",
+                })
+            };
+            db.Clients.Add(licensingWebClient);
+#pragma warning restore CS0618
+        }
+        else
+        {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+            if (string.IsNullOrEmpty(licensingWebClient.ClientSecretHash))
+            {
+                licensingWebClient.ClientSecretHash = hasher.Hash(LicensingWebClientSecret);
+                licensingWebClient.RequirePkce = true;
+            }
+
+            // Dedicated E2E client: allow local login to auto-assign users without manual admin approval.
+            if (licensingWebClient.AutoApprovalMode == AutoApprovalMode.No)
+            {
+                licensingWebClient.AutoApprovalMode = AutoApprovalMode.All;
+            }
+            if (string.IsNullOrEmpty(licensingWebClient.AllowedLoginRedirectUrisJson))
+            {
+                licensingWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8444/signin-oidc",
+                    "http://localhost:8082/signin-oidc",
+
+                    "http://localhost:8400/callback",
+                    "http://127.0.0.1:8400/callback",
+                });
+            }
+            if (string.IsNullOrEmpty(licensingWebClient.AllowedLogoutRedirectUrisJson))
+            {
+                licensingWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8444/signout-callback-oidc",
+                    "https://localhost:8444/",
+                    "http://localhost:8082/signout-callback-oidc",
+                    "http://localhost:8082/",
+                });
+            }
+#pragma warning restore CS0618
+        }
+
+        // Seed dedicated MrWhoPdf interactive UI client (for local E2E)
+        var mrWhoPdfWebClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == MrWhoPdfWebClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+        if (mrWhoPdfWebClient is null)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+            mrWhoPdfWebClient = new Client
+            {
+                ClientId = MrWhoPdfWebClientId,
+                ClientName = "MrWhoPdf Web",
+                RequirePkce = true,
+                RequireConsent = false,
+                AutoApprovalMode = AutoApprovalMode.All,
+                ClientSecretHash = hasher.Hash(MrWhoPdfWebClientSecret),
+                RealmId = adminRealm.Id,
+                TenantId = tenantId,
+                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    // HTTPS (preferred)
+                    "https://localhost:8445/signin-oidc",
+                    // HTTP (ports may vary; include the two most common dev ports)
+                    "http://localhost:8099/signin-oidc",
+                    "http://localhost:8100/signin-oidc",
+
+                    // Loopback redirect to manually capture the authorization code during E2E validation.
+                    // (No listener required; the browser address bar will contain the code.)
+                    "http://localhost:8400/callback",
+                    "http://127.0.0.1:8400/callback",
+                }),
+                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8445/signout-callback-oidc",
+                    "https://localhost:8445/",
+                    "http://localhost:8099/signout-callback-oidc",
+                    "http://localhost:8099/",
+                    "http://localhost:8100/signout-callback-oidc",
+                    "http://localhost:8100/",
+                })
+            };
+            db.Clients.Add(mrWhoPdfWebClient);
+#pragma warning restore CS0618
+        }
+        else
+        {
+#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
+            if (string.IsNullOrEmpty(mrWhoPdfWebClient.ClientSecretHash))
+            {
+                mrWhoPdfWebClient.ClientSecretHash = hasher.Hash(MrWhoPdfWebClientSecret);
+                mrWhoPdfWebClient.RequirePkce = true;
+            }
+
+            // Dedicated E2E client: allow local login to auto-assign users without manual admin approval.
+            if (mrWhoPdfWebClient.AutoApprovalMode == AutoApprovalMode.No)
+            {
+                mrWhoPdfWebClient.AutoApprovalMode = AutoApprovalMode.All;
+            }
+            if (string.IsNullOrEmpty(mrWhoPdfWebClient.AllowedLoginRedirectUrisJson))
+            {
+                mrWhoPdfWebClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8445/signin-oidc",
+                    "http://localhost:8099/signin-oidc",
+                    "http://localhost:8100/signin-oidc",
+
+                    "http://localhost:8400/callback",
+                    "http://127.0.0.1:8400/callback",
+                });
+            }
+            if (string.IsNullOrEmpty(mrWhoPdfWebClient.AllowedLogoutRedirectUrisJson))
+            {
+                mrWhoPdfWebClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "https://localhost:8445/signout-callback-oidc",
+                    "https://localhost:8445/",
+                    "http://localhost:8099/signout-callback-oidc",
+                    "http://localhost:8099/",
+                    "http://localhost:8100/signout-callback-oidc",
+                    "http://localhost:8100/",
+                });
+            }
+#pragma warning restore CS0618
         }
 
         // Seed a simple M2M confidential client (client_credentials)

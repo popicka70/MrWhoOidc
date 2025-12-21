@@ -16,7 +16,7 @@ namespace MrWhoOidc.WebAuth.Middleware;
 public sealed class AutoSeedMiddleware
 {
     private readonly RequestDelegate _next;
-    private static bool _seeded = false;
+    private static bool _initialized = false;
     private static readonly object _lock = new();
 
     public AutoSeedMiddleware(RequestDelegate next)
@@ -46,26 +46,22 @@ public sealed class AutoSeedMiddleware
         }
 
         // Fast path: if already seeded, skip
-        if (_seeded)
-        {
-            await _next(context);
-            return;
-        }
+        // NOTE: We still check whether the default tenant has users on every request.
+        // This avoids a failure mode where the first request is not tenant-scoped and
+        // only the Tenant row is created but no users/clients are seeded.
 
         // Double-check lock to ensure seeding only happens once
         lock (_lock)
         {
-            if (_seeded)
+            if (_initialized)
             {
-                // Another thread beat us to it
-                // Continue to next middleware
+                // Another thread already initialized tenant bootstrap.
             }
             else
             {
-                // Check if database needs seeding (no tenants exist)
-                var needsSeeding = !db.Tenants.Any();
-
-                if (needsSeeding)
+                // Ensure at least one tenant exists (dev/test bootstrap)
+                var needsBootstrap = !db.Tenants.Any();
+                if (needsBootstrap)
                 {
                     // Create default tenant first (synchronously for simplicity in lock)
                     var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
@@ -93,35 +89,39 @@ public sealed class AutoSeedMiddleware
 
                     db.Tenants.Add(defaultTenant);
                     db.SaveChanges(); // Synchronous save in lock
+                }
 
-                    // Set tenant context for seeding
-                    // Note: We need to run seeding in async context outside the lock
-                    _seeded = true; // Mark as seeded before async work
-                }
-                else
-                {
-                    // Database already has tenants, no seeding needed
-                    _seeded = true;
-                }
+                _initialized = true;
             }
         }
 
-        // If we just created a tenant, run the seeder now (outside lock, async)
-        if (!_seeded)
+        // Resolve a tenant context for seeding.
+        // If the request is not tenant-scoped, fall back to the default tenant.
+        var currentTenant = tenantAccessor.CurrentTenant;
+        if (currentTenant is null)
         {
-            // This should never happen due to logic above, but kept for safety
-            await _next(context);
-            return;
+            var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+            var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == defaultSlug);
+            if (tenant is not null)
+            {
+                tenantAccessor.SetTenant(new TenantContext
+                {
+                    TenantId = tenant.Id,
+                    Slug = tenant.Slug,
+                    Name = tenant.Name,
+                    IssuerUri = tenant.IssuerUri,
+                    IsMultiTenantMode = multiTenancyOptions.Enabled
+                });
+                currentTenant = tenantAccessor.CurrentTenant;
+            }
         }
 
-        // Check if we need to run the seeder (tenant exists but no users)
-        var currentTenant = tenantAccessor.CurrentTenant;
-        if (currentTenant != null)
+        // Seed if tenant exists but has no users yet.
+        if (currentTenant is not null)
         {
             var tenantHasUsers = await db.Users.AnyAsync(u => u.TenantId == currentTenant.TenantId);
             if (!tenantHasUsers)
             {
-                // Run seeder for this tenant
                 await seeder.SeedAsync();
             }
         }

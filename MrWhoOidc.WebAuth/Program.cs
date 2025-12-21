@@ -279,14 +279,15 @@ using (var scope = app.Services.CreateScope())
 // MUST come before endpoint mapping because it includes UseRouting()
 // Pass migration completion source so the pipeline can wait for migrations before processing requests
 var migrationCompletionSource = EndpointMappingExtensions.GetMigrationCompletionSource();
-app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
-
 // Optional dev/test-only convenience middleware.
 // NOTE: Never enable this in production.
+// IMPORTANT: Must run before tenant resolution in the main pipeline so a fresh DB can bootstrap a default tenant.
 if (autoSeedEnabled)
 {
     app.UseAutoSeed();
 }
+
+app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
 
 // Explicit one-time bootstrap endpoint (guarded by operator token, and only when DB is empty)
 app.MapMrWhoBootstrapEndpoints();

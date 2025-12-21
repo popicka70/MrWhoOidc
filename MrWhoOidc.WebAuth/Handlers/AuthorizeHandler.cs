@@ -454,25 +454,26 @@ public sealed class AuthorizeHandler(
                     }
                 }
 
+                // Only deny if the user is STILL unassigned after the auto-assign attempt.
                 if (!assigned)
                 {
                     logger.LogInformation(
                         "Authorize denied: user not assigned to client. ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}, UserId={UserId}, AutoApprovalMode={AutoApprovalMode}, HasExternalIdpClaim={HasIdp}, Corr={Corr}",
                         client.ClientId, client.Id, client.RealmId, userId, client.AutoApprovalMode, !string.IsNullOrWhiteSpace(idp), corr);
-                }
 
-                outcome = "not_assigned";
-                if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
-                {
-                    var uri = new UriBuilder(effectiveReq.redirect_uri);
-                    var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                    query[OAuthConstants.Parameters.Error] = OAuthConstants.ErrorCodes.AccessDenied;
-                    query[OAuthConstants.Parameters.ErrorDescription] = $"User is not assigned to this client (corr={corr})";
-                    if (!string.IsNullOrEmpty(effectiveReq.state)) query[OAuthConstants.Parameters.State] = effectiveReq.state;
-                    uri.Query = query.ToString();
-                    return Results.Redirect(uri.ToString());
+                    outcome = "not_assigned";
+                    if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
+                    {
+                        var uri = new UriBuilder(effectiveReq.redirect_uri);
+                        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                        query[OAuthConstants.Parameters.Error] = OAuthConstants.ErrorCodes.AccessDenied;
+                        query[OAuthConstants.Parameters.ErrorDescription] = $"User is not assigned to this client (corr={corr})";
+                        if (!string.IsNullOrEmpty(effectiveReq.state)) query[OAuthConstants.Parameters.State] = effectiveReq.state;
+                        uri.Query = query.ToString();
+                        return Results.Redirect(uri.ToString());
+                    }
+                    return ErrorResults.AccessDenied($"User is not assigned to this client (corr={corr})");
                 }
-                return ErrorResults.AccessDenied($"User is not assigned to this client (corr={corr})");
             }
 
             if (validationResult.RequireConsent && !await consents.HasConsentAsync(userId, validationResult.ClientId!, validationResult.Scopes))
