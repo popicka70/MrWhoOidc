@@ -38,6 +38,7 @@
         </div>
 
         <form method="post" asp-antiforgery="true">
+            <input type="hidden" asp-for="Ctx" />
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Email" />
             @if (!ViewData.ModelState.IsValid)

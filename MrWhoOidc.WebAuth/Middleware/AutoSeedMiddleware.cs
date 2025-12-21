@@ -19,6 +19,7 @@ public sealed class AutoSeedMiddleware
 {
     private readonly RequestDelegate _next;
     private static bool _initialized = false;
+    private static bool _appliedManifestUpdates = false;
     private static readonly object _lock = new();
     private static readonly SemaphoreSlim _bootstrapSemaphore = new(1, 1);
 
@@ -33,10 +34,12 @@ public sealed class AutoSeedMiddleware
         ISeeder seeder,
         ISeedManifestProvider seedManifestProvider,
         ISeedManifestApplier seedManifestApplier,
+        IOptions<SeedManifestOptions> seedOptions,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions multiTenancyOptions,
         IIssuerBuilder issuerBuilder,
         IOptions<OidcOptions> oidcOptions,
+        ILogger<AutoSeedMiddleware> logger,
         IHostEnvironment env,
         IConfiguration config)
     {
@@ -150,6 +153,39 @@ public sealed class AutoSeedMiddleware
                 if (seedManifest is not null)
                 {
                     await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
+                }
+            }
+            else if (seedOptions.Value.Enabled && seedOptions.Value.AllowUpdates)
+            {
+                // Dev/test quality-of-life: allow the seed manifest to update existing data (e.g., redirect URIs,
+                // client secrets when OverwriteClientSecrets=true) without requiring deleting volumes.
+                // Apply once per process start to avoid doing DB work on every request.
+                var shouldApply = false;
+                lock (_lock)
+                {
+                    if (!_appliedManifestUpdates)
+                    {
+                        _appliedManifestUpdates = true;
+                        shouldApply = true;
+                    }
+                }
+
+                if (shouldApply)
+                {
+                    try
+                    {
+                        seedManifest ??= await seedManifestProvider.TryLoadAsync(context.RequestAborted);
+                        if (seedManifest is not null)
+                        {
+                            logger.LogInformation("Applying seed manifest updates (AllowUpdates=true) for tenant '{TenantSlug}'", currentTenant.Slug);
+                            await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Never fail requests due to non-critical dev/test seeding.
+                        logger.LogWarning(ex, "Failed to apply seed manifest updates (AllowUpdates=true)");
+                    }
                 }
             }
         }

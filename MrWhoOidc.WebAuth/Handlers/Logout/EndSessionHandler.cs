@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
+using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
@@ -10,6 +12,7 @@ public sealed class EndSessionHandler(
     FrontChannelLogoutNotifier frontChannelNotifier,
     BackChannelLogoutEnqueuer backChannelEnqueuer,
     PostLogoutRedirectValidator redirectValidator,
+    ITokenValidator tokenValidator,
     IAuditSink audit,
     OidcMetrics metrics,
     ILogger<EndSessionHandler> logger)
@@ -41,24 +44,31 @@ public sealed class EndSessionHandler(
         // Validate post_logout_redirect_uri and create opaque reference if provided
         string? refId = null;
 
-        if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri) && string.IsNullOrEmpty(request.ClientId))
+        if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri))
         {
-            var host = TryGetHost(request.PostLogoutRedirectUri);
-            audit.Emit("logout.redirect.rejected_missing_client", new
+            var effectiveClientId = !string.IsNullOrEmpty(request.ClientId)
+                ? request.ClientId
+                : TryInferClientIdFromIdTokenHint(request.IdTokenHint, issuer, tokenValidator, logger);
+
+            if (string.IsNullOrEmpty(effectiveClientId))
             {
-                post_logout_host = host,
-                post_logout_hash = audit.HashValue(request.PostLogoutRedirectUri)
-            });
-            metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_missing_client"));
-            logger.LogWarning("Rejecting post_logout_redirect_uri without client_id. host={Host}", host ?? "unknown");
-        }
-        else if (!string.IsNullOrEmpty(request.PostLogoutRedirectUri) && !string.IsNullOrEmpty(request.ClientId))
-        {
-            refId = await redirectValidator.ValidateAndCreateReferenceAsync(
-                request.PostLogoutRedirectUri,
-                request.ClientId!,
-                request.State,
-                http.RequestAborted).ConfigureAwait(false);
+                var host = TryGetHost(request.PostLogoutRedirectUri);
+                audit.Emit("logout.redirect.rejected_missing_client", new
+                {
+                    post_logout_host = host,
+                    post_logout_hash = audit.HashValue(request.PostLogoutRedirectUri)
+                });
+                metrics.LogoutFailures.Add(1, new KeyValuePair<string, object?>("reason", "post_logout_missing_client"));
+                logger.LogWarning("Rejecting post_logout_redirect_uri without a resolvable client_id. host={Host}", host ?? "unknown");
+            }
+            else
+            {
+                refId = await redirectValidator.ValidateAndCreateReferenceAsync(
+                    request.PostLogoutRedirectUri,
+                    effectiveClientId,
+                    request.State,
+                    http.RequestAborted).ConfigureAwait(false);
+            }
         }
 
         // Render HTML page with front-channel iframes and optional redirect
@@ -74,5 +84,28 @@ public sealed class EndSessionHandler(
         }
 
         return Uri.TryCreate(uri, UriKind.Absolute, out var parsed) ? parsed.Host : null;
+    }
+
+    private static string? TryInferClientIdFromIdTokenHint(
+        string? idTokenHint,
+        string issuer,
+        ITokenValidator tokenValidator,
+        ILogger logger)
+    {
+        if (string.IsNullOrWhiteSpace(idTokenHint) || !JwtLightParser.IsProbablyJwt(idTokenHint))
+        {
+            return null;
+        }
+
+        var validation = tokenValidator.Validate(idTokenHint, issuer);
+        if (!validation.ok)
+        {
+            logger.LogInformation("id_token_hint validation failed while inferring client_id for logout redirect.");
+            return null;
+        }
+
+        // Prefer azp when present (multiple audiences); else aud.
+        return JwtLightParser.TryGetClaim(idTokenHint, "azp")
+            ?? JwtLightParser.TryGetAudience(idTokenHint);
     }
 }

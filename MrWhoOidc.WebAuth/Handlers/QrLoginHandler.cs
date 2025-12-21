@@ -31,6 +31,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
     private readonly ILogger<QrLoginHandler> _logger;
     private readonly IAuditSink _audit;
     private readonly IOptions<QrLoginOptions> _options;
+    private readonly ILoginContinuationStore _continuationStore;
 
     public QrLoginHandler(
         IQrLoginService qrService,
@@ -39,7 +40,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         AuthDbContext db,
         ILogger<QrLoginHandler> logger,
         IAuditSink audit,
-        IOptions<QrLoginOptions> options)
+        IOptions<QrLoginOptions> options,
+        ILoginContinuationStore continuationStore)
     {
         _qrService = qrService;
         _qrCodeGenerator = qrCodeGenerator;
@@ -48,6 +50,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         _logger = logger;
         _audit = audit;
         _options = options;
+        _continuationStore = continuationStore;
     }
 
     public async Task<IResult> InitiateAsync(HttpContext http)
@@ -444,7 +447,8 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             // Redirect to login with return URL
             var returnUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
-            var loginUrl = $"/login?ReturnUrl={Uri.EscapeDataString(returnUrl)}";
+            var ctx = await _continuationStore.StoreAsync(returnUrl, http.RequestAborted);
+            var loginUrl = $"/login?ctx={Uri.EscapeDataString(ctx)}";
             _logger.LogInformation("➡️ [QR Mobile Landing] Redirecting to /login for QR flow");
             return Results.Redirect(loginUrl);
         }

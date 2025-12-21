@@ -7,10 +7,12 @@ using System.Security.Cryptography;
 using System.Text;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
+using MrWhoOidc.WebAuth.Services;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
-public class SelectModel(AuthDbContext db) : PageModel
+public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationStore) : PageModel
 {
     public sealed record Item(string Name, string Display, string? LogoUrl, bool IsRecommended = false);
 
@@ -48,6 +50,8 @@ public class SelectModel(AuthDbContext db) : PageModel
 
     public bool AllowLocalLogin { get; private set; }
     public bool AllowQrLogin { get; private set; }
+
+    public string? LocalLoginUrl { get; private set; }
 
     public string? LastProvider { get; private set; }
     public string? RecommendationSource { get; private set; }
@@ -143,6 +147,12 @@ public class SelectModel(AuthDbContext db) : PageModel
         }
 
         Providers = providerLinks;
+
+        if (AllowLocalLogin)
+        {
+            var ctx = await continuationStore.StoreAsync(ReturnUrl, HttpContext.RequestAborted);
+            LocalLoginUrl = QueryHelpers.AddQueryString("/login", "ctx", ctx);
+        }
 
         // If auto=1 and single provider, immediately choose it but only when local login is not allowed
         if (Request.Query.TryGetValue("auto", out var autoVal) && autoVal == "1" && Providers.Count == 1 && !AllowLocalLogin)

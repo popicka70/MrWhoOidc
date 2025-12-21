@@ -101,6 +101,9 @@ builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
 builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
 builder.Services.AddMrWhoOidcMail(builder.Configuration);
 
+// Login continuation store (keeps large ReturnUrl values out of /login query string)
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
+
 // LicensingService entitlements integration (Phase 2 PDF licensing)
 builder.Services.AddMemoryCache();
 builder.Services.Configure<LicensingIntegrationOptions>(builder.Configuration.GetSection("LicensingIntegration"));

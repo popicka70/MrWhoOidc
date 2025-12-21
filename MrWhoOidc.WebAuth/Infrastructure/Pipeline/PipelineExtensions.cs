@@ -68,6 +68,12 @@ public static class PipelineExtensions
             branch.UseMiddleware<AdminCorrelationMiddleware>();
         });
 
+        // Diagnostics for 400s (safe metadata only). Note: Kestrel parse-time rejects won't reach this.
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseMiddleware<BadRequestDiagnosticsMiddleware>();
+        }
+
         app.UseRouting();
 
         // Multi-tenancy: resolve tenant from path early in pipeline

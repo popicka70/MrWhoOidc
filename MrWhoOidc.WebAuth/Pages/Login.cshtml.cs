@@ -20,7 +20,8 @@ public class LoginModel(
     IMultiTenancyOptions multiTenancyOptions,
     ITenantSettingsService settingsService,
     ITenantBrandingService brandingService,
-    ITenantCredentialTicketStore ticketStore) : PageModel
+    ITenantCredentialTicketStore ticketStore,
+    MrWhoOidc.WebAuth.Services.ILoginContinuationStore continuationStore) : PageModel
 {
     // Local IP-based rate limiting (defense in depth - complements global account lockout)
     private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
@@ -38,6 +39,9 @@ public class LoginModel(
     public string? ReturnUrl { get; set; }
 
     [BindProperty(SupportsGet = true)]
+    public string? Ctx { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public string? Email { get; set; }
 
     [BindProperty(SupportsGet = true)]
@@ -49,8 +53,18 @@ public class LoginModel(
 
     public async Task<IActionResult> OnGetAsync()
     {
-        logger.LogInformation("🔍 [Login Page GET] ReturnUrl: {ReturnUrl}, Email: {Email}",
-            ReturnUrl ?? "(null)",
+        if (string.IsNullOrEmpty(ReturnUrl) && !string.IsNullOrEmpty(Ctx))
+        {
+            ReturnUrl = await continuationStore.TryGetAsync(Ctx, HttpContext.RequestAborted);
+            if (string.IsNullOrEmpty(ReturnUrl))
+            {
+                ModelState.AddModelError(string.Empty, "Your sign-in session expired. Please start again.");
+            }
+        }
+
+        logger.LogInformation("🔍 [Login Page GET] ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, Email={Email}",
+            ReturnUrl?.Length ?? 0,
+            !string.IsNullOrEmpty(Ctx),
             Email ?? "(null)");
 
         // Pre-fill username with email if provided
@@ -84,9 +98,19 @@ public class LoginModel(
 
     public async Task<IActionResult> OnPostAsync()
     {
-        logger.LogInformation("🔐 [Login POST] Username={Username}, ReturnUrl={ReturnUrl}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
-            Username ?? "(null)", 
-            ReturnUrl ?? "(null)", 
+        if (string.IsNullOrEmpty(ReturnUrl) && !string.IsNullOrEmpty(Ctx))
+        {
+            ReturnUrl = await continuationStore.TryGetAsync(Ctx, HttpContext.RequestAborted);
+            if (string.IsNullOrEmpty(ReturnUrl))
+            {
+                ModelState.AddModelError(string.Empty, "Your sign-in session expired. Please start again.");
+            }
+        }
+
+        logger.LogInformation("🔐 [Login POST] Username={Username}, ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
+            Username ?? "(null)",
+            ReturnUrl?.Length ?? 0,
+            !string.IsNullOrEmpty(Ctx),
             ModelState.IsValid,
             tenantAccessor.CurrentTenant?.Slug ?? "(null)",
             tenantAccessor.CurrentTenant?.TenantId.ToString() ?? "(null)");
@@ -161,7 +185,12 @@ public class LoginModel(
             return Page();
         }
 
-        return await CompleteSignInAsync(user);
+        var result = await CompleteSignInAsync(user);
+        if (!string.IsNullOrEmpty(Ctx))
+        {
+            await continuationStore.RemoveAsync(Ctx, HttpContext.RequestAborted);
+        }
+        return result;
     }
 
     private async Task<IActionResult> HandleMfaRequiredAsync(UserAccount account)

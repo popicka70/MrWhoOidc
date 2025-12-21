@@ -18,6 +18,8 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.WebAuth.Services;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -41,7 +43,8 @@ public sealed class AuthorizeHandler(
     IQrLoginHandler qrLoginHandler,
     ITenantAccessor tenantAccessor,
     IFeatureService featureService,
-    IJarmService jarm
+    IJarmService jarm,
+    ILoginContinuationStore continuationStore
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
@@ -66,6 +69,13 @@ public sealed class AuthorizeHandler(
         }
 
         return path;
+    }
+
+    private async Task<string> BuildTenantAwareLoginUrlAsync(string returnUrl, CancellationToken cancellationToken)
+    {
+        var ctx = await continuationStore.StoreAsync(returnUrl, cancellationToken).ConfigureAwait(false);
+        var loginPath = BuildTenantAwareUrl("/login");
+        return QueryHelpers.AddQueryString(loginPath, "ctx", ctx);
     }
 
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -293,7 +303,7 @@ public sealed class AuthorizeHandler(
                     {
                         outcome = "login";
                         var returnUrlDenied = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                        var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
+                        var loginUrl = await BuildTenantAwareLoginUrlAsync(returnUrlDenied, http.RequestAborted).ConfigureAwait(false);
                         return Results.Redirect(loginUrl);
                     }
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
@@ -372,7 +382,7 @@ public sealed class AuthorizeHandler(
                 var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
                 if (allowLocal)
                 {
-                    var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                    var loginUrl = await BuildTenantAwareLoginUrlAsync(returnUrl2, http.RequestAborted).ConfigureAwait(false);
                     return Results.Redirect(loginUrl);
                 }
 
