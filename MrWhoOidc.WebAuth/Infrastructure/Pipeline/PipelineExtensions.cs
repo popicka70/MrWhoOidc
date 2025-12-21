@@ -42,13 +42,21 @@ public static class PipelineExtensions
         // Forward client certificates if upstream proxy supplies them
         app.UseCertificateForwarding();
 
+        var requireHttps = app.Configuration.GetValue<bool?>("Security:RequireHttps")
+            ?? !app.Environment.IsDevelopment();
+
         if (!app.Environment.IsDevelopment())
         {
             app.UseExceptionHandler("/Error");
             app.UseHsts();
+        }
+
+        // Default behavior: skip HTTPS redirects in Development (local callback flexibility).
+        // Override with Security:RequireHttps=true to enforce HTTPS even in Development (recommended for E2E).
+        if (requireHttps)
+        {
             app.UseHttpsRedirection();
         }
-        // In development we intentionally skip automatic HTTPS redirect to allow http callbacks during local dev.
 
         // Security headers for user-facing HTML pages (Razor Pages).
         // Kept separate from protocol endpoints to avoid breaking OAuth/OIDC responses.
