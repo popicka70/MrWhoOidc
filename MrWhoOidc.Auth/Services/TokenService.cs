@@ -14,9 +14,9 @@ namespace MrWhoOidc.Auth.Services;
 public interface ITokenService
 {
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
     // New: client credentials (M2M)
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
@@ -28,9 +28,8 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     private readonly IEntitlementsProvider _entitlementsProvider = entitlementsProvider;
 
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
-    private const string MrWhoPdfScope = "mrwhopdf";
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync<(bool ok, object? payload, string? error, int status)>(async () =>
@@ -78,10 +77,20 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
 
-        // Fail-closed product-scope granting and claim injection (Phase 2: mrwhopdf only)
+        // Fail-closed product-scope granting and claim injection (licensed products)
+        Guid? tenantIdForEntitlements = null;
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty)
+        {
+            tenantIdForEntitlements = tenantId;
+        }
+        else if (user is not null && user.TenantId != Guid.Empty)
+        {
+            tenantIdForEntitlements = user.TenantId;
+        }
+
         var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
             subjectId: entity.UserId.ToString(),
-            tenantId: user?.TenantId,
+            tenantId: tenantIdForEntitlements,
             requestedScopes: scopes,
             issuer: issuer,
             ct: ct).ConfigureAwait(false);
@@ -307,7 +316,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
     {
         // Load tenant settings
         var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
@@ -321,20 +330,26 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
         var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
 
-        // Fail-closed product-scope granting and claim injection (Phase 2: mrwhopdf only)
-        string? entitlementsClaimJson = null;
-        if (scopes.Any(s => string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase)))
+        // Fail-closed product-scope granting and claim injection (licensed products)
+        var userForTenant = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
+
+        Guid? tenantIdForEntitlements = null;
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty)
         {
-            var userForTenant = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
-            var (scopesFiltered, claimJson) = await ApplyProductEntitlementsAsync(
-                subjectId: tokenEntity.UserId.ToString(),
-                tenantId: userForTenant?.TenantId,
-                requestedScopes: scopes,
-                issuer: issuer,
-                ct: ct).ConfigureAwait(false);
-            scopes = scopesFiltered;
-            entitlementsClaimJson = claimJson;
+            tenantIdForEntitlements = tenantId;
         }
+        else if (userForTenant is not null && userForTenant.TenantId != Guid.Empty)
+        {
+            tenantIdForEntitlements = userForTenant.TenantId;
+        }
+
+        var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
+            subjectId: tokenEntity.UserId.ToString(),
+            tenantId: tenantIdForEntitlements,
+            requestedScopes: scopes,
+            issuer: issuer,
+            ct: ct).ConfigureAwait(false);
+        scopes = scopesFiltered;
 
         // Opaque issuance check matches authorization_code path
         var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
@@ -435,8 +450,8 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
-        // Phase 2: fail-closed for product scopes on client_credentials.
-        if (requestedScopes.Any(s => string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase)))
+        // Fail-closed for product scopes on client_credentials.
+        if (requestedScopes.Any(ProductScopeClassifier.IsProductScope))
         {
             return (false, new { error = OAuthConstants.ErrorCodes.InvalidScope, error_description = "product scopes are not supported for client_credentials" }, OAuthConstants.ErrorCodes.InvalidScope, 400);
         }
@@ -550,7 +565,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         CancellationToken ct)
     {
         var productScopes = requestedScopes
-            .Where(s => string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase))
+            .Where(ProductScopeClassifier.IsProductScope)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
@@ -573,7 +588,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         var grantedProducts = productScopes.Where(p => entitlements.ContainsKey(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var filteredScopes = requestedScopes
-            .Where(s => !string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase) || grantedProducts.Contains(s))
+            .Where(s => !ProductScopeClassifier.IsProductScope(s) || grantedProducts.Contains(s))
             .ToArray();
 
         if (grantedProducts.Count == 0)

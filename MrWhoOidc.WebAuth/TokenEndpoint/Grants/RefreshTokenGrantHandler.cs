@@ -33,7 +33,7 @@ public sealed class RefreshTokenGrantHandler(ILogger<RefreshTokenGrantHandler> l
         var ipAddress = context.Http.Connection.RemoteIpAddress?.ToString();
         var userAgent = context.Http.Request.Headers.UserAgent.ToString();
 
-        (bool ok, object? payload, string? _, int status) = await context.Tokens.ExchangeRefreshTokenAsync(refresh, context.ClientId, issuer, context.DPoPJkt, ipAddress, userAgent);
+        (bool ok, object? payload, string? _, int status) = await context.Tokens.ExchangeRefreshTokenAsync(refresh, context.ClientId, issuer, context.DPoPJkt, ipAddress, userAgent, context.TenantId);
         if (!ok)
         {
             logger.LogWarning("/token refresh_token exchange failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));

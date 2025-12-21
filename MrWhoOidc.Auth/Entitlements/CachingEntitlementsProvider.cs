@@ -87,5 +87,10 @@ public sealed class CachingEntitlementsProvider(
     }
 
     private static string BuildCacheKey(string subjectId, string? tenantId, string productKey)
-        => $"entitlements:{subjectId}:{tenantId ?? "-"}:{productKey}";
+    {
+        var subjectPart = string.IsNullOrWhiteSpace(subjectId) ? "-" : subjectId.Trim().ToLowerInvariant();
+        var tenantPart = string.IsNullOrWhiteSpace(tenantId) ? "-" : tenantId.Trim().ToLowerInvariant();
+        var productPart = string.IsNullOrWhiteSpace(productKey) ? "-" : productKey.Trim().ToLowerInvariant();
+        return $"entitlements:{subjectPart}:{tenantPart}:{productPart}";
+    }
 }

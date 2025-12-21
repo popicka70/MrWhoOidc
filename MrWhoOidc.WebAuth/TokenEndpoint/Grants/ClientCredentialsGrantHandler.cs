@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Utils;
 using System.Threading.Tasks;
 
@@ -15,8 +16,6 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrantHandler> logger) : ITokenGrantHandler
 {
     public string GrantType => OAuthConstants.GrantTypes.ClientCredentials;
-
-    private const string MrWhoPdfScope = "mrwhopdf";
 
     public async Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
     {
@@ -36,8 +35,8 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
 
-        // Phase 2: fail-closed for product scopes on client_credentials.
-        if (requestedScopes.Any(s => string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase)))
+        // Fail-closed for product scopes on client_credentials.
+        if (requestedScopes.Any(ProductScopeClassifier.IsProductScope))
         {
             return new GrantExecutionResult(true, false, ErrorResults.InvalidScope("product scopes are not supported for client_credentials"));
         }
