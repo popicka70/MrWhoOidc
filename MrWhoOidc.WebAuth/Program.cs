@@ -111,6 +111,18 @@ builder.Services.AddHttpClient<ILicensingEntitlementsClient, LicensingEntitlemen
     {
         client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/'));
     }
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // Dev-only convenience: allow calling a HTTPS LicensingService with a self-signed cert.
+    if (builder.Environment.IsDevelopment())
+    {
+        return new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+    }
+
+    return new HttpClientHandler();
 });
 builder.Services.AddScoped<IEntitlementsProvider, CachingEntitlementsProvider>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
