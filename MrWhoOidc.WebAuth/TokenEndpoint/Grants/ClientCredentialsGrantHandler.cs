@@ -16,6 +16,8 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
 {
     public string GrantType => OAuthConstants.GrantTypes.ClientCredentials;
 
+    private const string MrWhoPdfScope = "mrwhopdf";
+
     public async Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
     {
         if (!string.Equals(context.GrantType, GrantType, StringComparison.Ordinal))
@@ -33,6 +35,12 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
 
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
+
+        // Phase 2: fail-closed for product scopes on client_credentials.
+        if (requestedScopes.Any(s => string.Equals(s, MrWhoPdfScope, StringComparison.OrdinalIgnoreCase)))
+        {
+            return new GrantExecutionResult(true, false, ErrorResults.InvalidScope("product scopes are not supported for client_credentials"));
+        }
 
         var issuer = context.Http.GetIssuer(context.Options);
         var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt);

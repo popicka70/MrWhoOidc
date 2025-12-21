@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 
@@ -38,7 +39,8 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
-            new MockScopeResolver());
+            new MockScopeResolver(),
+            new NoopEntitlementsProvider());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -79,7 +81,8 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
-            new MockScopeResolver());
+            new MockScopeResolver(),
+            new NoopEntitlementsProvider());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -120,7 +123,8 @@ public sealed class TokenRoleEmissionTests
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
-            new MockScopeResolver());
+            new MockScopeResolver(),
+            new NoopEntitlementsProvider());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);

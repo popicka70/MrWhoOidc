@@ -5,6 +5,8 @@ using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Entitlements.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
@@ -12,6 +14,7 @@ using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,6 +100,19 @@ builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
 builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
 builder.Services.AddMrWhoOidcMail(builder.Configuration);
+
+// LicensingService entitlements integration (Phase 2 PDF licensing)
+builder.Services.AddMemoryCache();
+builder.Services.Configure<LicensingIntegrationOptions>(builder.Configuration.GetSection("LicensingIntegration"));
+builder.Services.AddHttpClient<ILicensingEntitlementsClient, LicensingEntitlementsClient>((sp, client) =>
+{
+    var opt = sp.GetRequiredService<IOptions<LicensingIntegrationOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(opt.BaseUrl))
+    {
+        client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/'));
+    }
+});
+builder.Services.AddScoped<IEntitlementsProvider, CachingEntitlementsProvider>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))

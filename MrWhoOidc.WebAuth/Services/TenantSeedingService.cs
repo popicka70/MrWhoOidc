@@ -247,7 +247,7 @@ public class TenantSeedingService : ITenantSeedingService
             _logger.LogInformation("Assigned tenant-admin and admin roles to user {AdminEmail} for tenant {TenantSlug}", adminEmail, tenantSlug);
 
             // Create standard scopes (client-scope associations)
-            var scopes = new[] { "openid", "profile", "email", "roles", "offline_access" };
+            var scopes = new[] { "openid", "profile", "email", "roles", "offline_access", "mrwhopdf" };
             foreach (var scopeName in scopes)
             {
                 // Check if scope already exists globally
@@ -258,7 +258,8 @@ public class TenantSeedingService : ITenantSeedingService
                     {
                         Name = scopeName,
                         Description = $"{scopeName} scope",
-                        IsExposed = true
+                        IsExposed = true,
+                        IsGlobal = string.Equals(scopeName, "mrwhopdf", StringComparison.OrdinalIgnoreCase)
                     };
                     _db.Scopes.Add(scope);
                 }
