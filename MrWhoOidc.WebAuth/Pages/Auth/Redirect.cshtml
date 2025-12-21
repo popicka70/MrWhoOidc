@@ -1,0 +1,22 @@
+@page
+@model MrWhoOidc.WebAuth.Pages.Auth.RedirectModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0;url=@Html.Raw(Html.Encode(Model.RedirectUrl))">
+    <title>Redirecting...</title>
+</head>
+<body>
+    <p>Redirecting to application...</p>
+    <script>
+        window.location.replace("@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(Model.RedirectUrl))");
+    </script>
+    <noscript>
+        <p>If you are not redirected automatically, <a href="@Model.RedirectUrl">click here</a>.</p>
+    </noscript>
+</body>
+</html>
