@@ -184,6 +184,11 @@ builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 // On-demand tenant seeding service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrWhoOidc.WebAuth.Services.TenantSeedingService>();
 
+// Optional seed manifest (portable JSON for future import/export)
+builder.Services.Configure<MrWhoOidc.WebAuth.Seeding.SeedManifestOptions>(builder.Configuration.GetSection("Seeding"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Seeding.ISeedManifestProvider, MrWhoOidc.WebAuth.Seeding.SeedManifestProvider>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Seeding.ISeedManifestApplier, MrWhoOidc.WebAuth.Seeding.SeedManifestApplier>();
+
 // Tenant switching service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, MrWhoOidc.WebAuth.Services.TenantSwitchingService>();
 

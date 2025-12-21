@@ -11,6 +11,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Seeding;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 
@@ -27,6 +28,8 @@ public static class BootstrapEndpointMappingExtensions
             IMultiTenancyOptions multiTenancyOptions,
             IIssuerBuilder issuerBuilder,
             ISeeder seeder,
+            ISeedManifestProvider seedManifestProvider,
+            ISeedManifestApplier seedManifestApplier,
             IKeyStore keyStore,
             IKeyRotationService keyRotationService,
             IPasswordHasher passwordHasher,
@@ -111,6 +114,13 @@ public static class BootstrapEndpointMappingExtensions
             });
 
             await seeder.SeedAsync(ct).ConfigureAwait(false);
+
+            // Optional: apply manifest-provided realms/clients for this tenant.
+            var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
+            if (seedManifest is not null)
+            {
+                await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
+            }
 
             // Ensure the seeded admin account uses the operator-supplied password and email.
             var normalizedEmail = request.AdminEmail.Trim().ToLowerInvariant();

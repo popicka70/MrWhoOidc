@@ -4,8 +4,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Seeding;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -18,6 +20,7 @@ public sealed class AutoSeedMiddleware
     private readonly RequestDelegate _next;
     private static bool _initialized = false;
     private static readonly object _lock = new();
+    private static readonly SemaphoreSlim _bootstrapSemaphore = new(1, 1);
 
     public AutoSeedMiddleware(RequestDelegate next)
     {
@@ -28,6 +31,8 @@ public sealed class AutoSeedMiddleware
         HttpContext context,
         AuthDbContext db,
         ISeeder seeder,
+        ISeedManifestProvider seedManifestProvider,
+        ISeedManifestApplier seedManifestApplier,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions multiTenancyOptions,
         IIssuerBuilder issuerBuilder,
@@ -50,48 +55,65 @@ public sealed class AutoSeedMiddleware
         // This avoids a failure mode where the first request is not tenant-scoped and
         // only the Tenant row is created but no users/clients are seeded.
 
-        // Double-check lock to ensure seeding only happens once
-        lock (_lock)
+        // Optional: seed manifest (portable JSON) can bootstrap tenants/clients for local stacks.
+        // Only enabled in dev/test via the middleware gate above.
+        SeedManifest? seedManifest = null;
+        if (!_initialized)
         {
-            if (_initialized)
+            await _bootstrapSemaphore.WaitAsync(context.RequestAborted);
+            try
             {
-                // Another thread already initialized tenant bootstrap.
-            }
-            else
-            {
-                // Ensure at least one tenant exists (dev/test bootstrap)
-                var needsBootstrap = !db.Tenants.Any();
-                if (needsBootstrap)
+                if (!_initialized)
                 {
-                    // Create default tenant first (synchronously for simplicity in lock)
-                    var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
-                    var options = oidcOptions.Value;
-                    var baseUrl =
-                        (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
-                        ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null)
-                        ?? $"{context.Request.Scheme}://{context.Request.Host}";
-
-                    var issuerUri = issuerBuilder.BuildIssuer(baseUrl, defaultSlug).TrimEnd('/');
-
-                    var defaultTenant = new Tenant
+                    // Ensure at least one tenant exists (dev/test bootstrap)
+                    var needsBootstrap = !db.Tenants.Any();
+                    if (needsBootstrap)
                     {
-                        Slug = defaultSlug,
-                        Name = "Default Tenant",
-                        Description = "Default tenant created automatically",
-                        IssuerUri = issuerUri,
-                        Status = TenantStatus.Active,
-                        MaxUsers = 100000,
-                        MaxClients = 1000,
-                        AdminEmail = "admin@mrwho.local",
-                        BillingPlan = "Enterprise",
-                        CreatedAt = DateTimeOffset.UtcNow
-                    };
+                        seedManifest = await seedManifestProvider.TryLoadAsync(context.RequestAborted);
 
-                    db.Tenants.Add(defaultTenant);
-                    db.SaveChanges(); // Synchronous save in lock
+                        var authorityBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+                        if (seedManifest is not null && seedManifest.Tenants.Count > 0)
+                        {
+                            await seedManifestApplier.ApplyTenantsAsync(seedManifest, authorityBaseUrl, context.RequestAborted);
+                        }
+
+                        // Backwards-compatible fallback: create a default tenant if the manifest is not present.
+                        if (!db.Tenants.Any())
+                        {
+                            var defaultSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+                            var options = oidcOptions.Value;
+                            var baseUrl =
+                                (!string.IsNullOrWhiteSpace(options.PublicBaseUrl) ? options.PublicBaseUrl.TrimEnd('/') : null)
+                                ?? (!string.IsNullOrWhiteSpace(options.Issuer) ? options.Issuer.TrimEnd('/') : null)
+                                ?? authorityBaseUrl;
+
+                            var issuerUri = issuerBuilder.BuildIssuer(baseUrl, defaultSlug).TrimEnd('/');
+
+                            var defaultTenant = new Tenant
+                            {
+                                Slug = defaultSlug,
+                                Name = "Default Tenant",
+                                Description = "Default tenant created automatically",
+                                IssuerUri = issuerUri,
+                                Status = TenantStatus.Active,
+                                MaxUsers = 100000,
+                                MaxClients = 1000,
+                                AdminEmail = "admin@mrwho.local",
+                                BillingPlan = "Enterprise",
+                                CreatedAt = DateTimeOffset.UtcNow
+                            };
+
+                            db.Tenants.Add(defaultTenant);
+                            await db.SaveChangesAsync(context.RequestAborted);
+                        }
+                    }
+
+                    _initialized = true;
                 }
-
-                _initialized = true;
+            }
+            finally
+            {
+                _bootstrapSemaphore.Release();
             }
         }
 
@@ -123,6 +145,12 @@ public sealed class AutoSeedMiddleware
             if (!tenantHasUsers)
             {
                 await seeder.SeedAsync();
+
+                seedManifest ??= await seedManifestProvider.TryLoadAsync(context.RequestAborted);
+                if (seedManifest is not null)
+                {
+                    await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
+                }
             }
         }
 
