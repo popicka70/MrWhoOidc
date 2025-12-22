@@ -218,6 +218,8 @@ internal sealed class SeedManifestApplier(
 
                 ApplyRedirectUris(client, clientDef);
 
+                ApplyOboPolicy(client, clientDef, allowUpdates: true);
+
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -241,6 +243,8 @@ internal sealed class SeedManifestApplier(
                 if (client.RealmId != realm.Id) client.RealmId = realm.Id;
 
                 ApplyRedirectUris(client, clientDef);
+
+                ApplyOboPolicy(client, clientDef, allowUpdates: true);
             }
             else
             {
@@ -254,6 +258,8 @@ internal sealed class SeedManifestApplier(
                 {
                     ApplyRedirectUris(client, clientDef);
                 }
+
+                ApplyOboPolicy(client, clientDef, allowUpdates: false);
             }
 
 #pragma warning disable CS0618 // legacy secret hash kept for backward compatibility
@@ -283,6 +289,41 @@ internal sealed class SeedManifestApplier(
         if (def.AllowedLogoutRedirectUris.Count > 0)
         {
             client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(def.AllowedLogoutRedirectUris);
+        }
+    }
+
+    private static void ApplyOboPolicy(Client client, ClientSeedDefinition def, bool allowUpdates)
+    {
+        if (def.OboEnabled is not null)
+        {
+            if (allowUpdates || client.OboEnabled is null)
+            {
+                client.OboEnabled = def.OboEnabled;
+            }
+        }
+
+        if (def.OboAllowedSourceAudiences.Count > 0)
+        {
+            if (allowUpdates || string.IsNullOrWhiteSpace(client.OboAllowedSourceAudiencesJson))
+            {
+                client.OboAllowedSourceAudiencesJson = JsonSerializer.Serialize(def.OboAllowedSourceAudiences);
+            }
+        }
+
+        if (def.OboAllowedTargetAudiences.Count > 0)
+        {
+            if (allowUpdates || string.IsNullOrWhiteSpace(client.OboAllowedTargetAudiencesJson))
+            {
+                client.OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(def.OboAllowedTargetAudiences);
+            }
+        }
+
+        if (def.OboAllowedScopes.Count > 0)
+        {
+            if (allowUpdates || string.IsNullOrWhiteSpace(client.OboAllowedScopesJson))
+            {
+                client.OboAllowedScopesJson = JsonSerializer.Serialize(def.OboAllowedScopes);
+            }
         }
     }
 

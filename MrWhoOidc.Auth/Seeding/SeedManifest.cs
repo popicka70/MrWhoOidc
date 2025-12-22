@@ -103,4 +103,18 @@ public sealed record ClientSeedDefinition
 
     [JsonPropertyName("allowedLogoutRedirectUris")]
     public List<string> AllowedLogoutRedirectUris { get; init; } = [];
+
+    // OBO / Token Exchange policy (optional)
+    // These map to Client.Obo* fields and are only applied when present.
+    [JsonPropertyName("oboEnabled")]
+    public bool? OboEnabled { get; init; }
+
+    [JsonPropertyName("oboAllowedSourceAudiences")]
+    public List<string> OboAllowedSourceAudiences { get; init; } = [];
+
+    [JsonPropertyName("oboAllowedTargetAudiences")]
+    public List<string> OboAllowedTargetAudiences { get; init; } = [];
+
+    [JsonPropertyName("oboAllowedScopes")]
+    public List<string> OboAllowedScopes { get; init; } = [];
 }
