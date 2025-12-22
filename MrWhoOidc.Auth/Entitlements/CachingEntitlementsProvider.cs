@@ -33,6 +33,8 @@ public sealed class CachingEntitlementsProvider(
         }
 
         var ttl = TimeSpan.FromMinutes(opt.CacheTtlMinutes <= 0 ? 5 : opt.CacheTtlMinutes);
+        var negativeTtlSeconds = opt.NegativeCacheTtlSeconds <= 0 ? 10 : opt.NegativeCacheTtlSeconds;
+        var negativeTtl = TimeSpan.FromSeconds(Math.Min(negativeTtlSeconds, (int)Math.Max(1, ttl.TotalSeconds)));
 
         var result = new Dictionary<string, Entitlement>(StringComparer.OrdinalIgnoreCase);
 
@@ -72,14 +74,14 @@ public sealed class CachingEntitlementsProvider(
                 }
                 else
                 {
-                    cache.Set(cacheKey, NegativeCacheSentinel, ttl);
+                    cache.Set(cacheKey, NegativeCacheSentinel, negativeTtl);
                 }
             }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed resolving entitlements for product {Product}", productKey);
                 // Fail-closed: do not grant entitlement on error.
-                cache.Set(cacheKey, NegativeCacheSentinel, ttl);
+                cache.Set(cacheKey, NegativeCacheSentinel, negativeTtl);
             }
         }
 
