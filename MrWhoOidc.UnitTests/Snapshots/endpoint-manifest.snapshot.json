@@ -1987,6 +1987,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "Auth/Redirect",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "Auth/WebAuthn",
     "Methods": "",
     "RateLimiters": [],
