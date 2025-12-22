@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Handlers;
+using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Seeding;
 
@@ -223,6 +224,8 @@ internal sealed class SeedManifestApplier(
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
+                await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
+
                 await clientStore.InvalidateClientCacheAsync(client.ClientId, tenant.TenantId, ct).ConfigureAwait(false);
 
                 logger.LogInformation("Seed manifest created client {ClientId} (Tenant={TenantSlug})", client.ClientId, tenant.Slug);
@@ -276,6 +279,88 @@ internal sealed class SeedManifestApplier(
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await clientStore.InvalidateClientCacheAsync(client.ClientId, tenant.TenantId, ct).ConfigureAwait(false);
+
+            await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task EnsureSeededAdminHasAdminRoleForClientAsync(Client client, CancellationToken ct)
+    {
+        // E2E/dev quality-of-life: the built-in seeded admin user has admin role assignments for the built-in
+        // admin clients, but seed-manifest-created clients (e.g., licensing-web) also need an admin role
+        // assignment for roles to show up in /userinfo (roles are client-contextual).
+        //
+        // We keep this narrowly scoped:
+        // - only for the seeded "admin" user
+        // - only for clients in the "admin" realm
+        // - only if the "admin" role exists for that realm
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        if (tenantId is null)
+        {
+            return;
+        }
+
+        var adminRealm = await db.Realms.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.Name == "admin", ct)
+            .ConfigureAwait(false);
+
+        if (adminRealm is null || client.RealmId != adminRealm.Id)
+        {
+            return;
+        }
+
+        var adminUser = await db.Users.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == "admin", ct)
+            .ConfigureAwait(false);
+
+        if (adminUser is null)
+        {
+            return;
+        }
+
+        var adminRole = await db.Roles.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.RealmId == adminRealm.Id && r.Name == "admin", ct)
+            .ConfigureAwait(false);
+
+        if (adminRole is null)
+        {
+            return;
+        }
+
+        var hasClientAssignment = await db.UserClientAssignments.AnyAsync(
+            a => a.UserId == adminUser.Id && a.ClientId == client.Id && a.RealmId == adminRealm.Id && a.IsActive,
+            ct).ConfigureAwait(false);
+
+        if (!hasClientAssignment)
+        {
+            db.UserClientAssignments.Add(new UserClientAssignment
+            {
+                UserId = adminUser.Id,
+                ClientId = client.Id,
+                RealmId = adminRealm.Id,
+                IsActive = true
+            });
+        }
+
+        var hasRoleAssignment = await db.UserRoleAssignments.AnyAsync(
+            a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.ClientId == client.Id && a.RealmId == adminRealm.Id && a.IsActive,
+            ct).ConfigureAwait(false);
+
+        if (!hasRoleAssignment)
+        {
+            db.UserRoleAssignments.Add(new UserRoleAssignment
+            {
+                UserId = adminUser.Id,
+                RoleId = adminRole.Id,
+                ClientId = client.Id,
+                RealmId = adminRealm.Id,
+                IsActive = true
+            });
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
     }
 
