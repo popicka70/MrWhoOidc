@@ -40,7 +40,8 @@ public sealed class TokenRoleEmissionTests
             meta,
             settingsService,
             new MockScopeResolver(),
-            new NoopEntitlementsProvider());
+            new NoopEntitlementsProvider(),
+            new NoopTenantsClaimService());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -82,7 +83,8 @@ public sealed class TokenRoleEmissionTests
             meta,
             settingsService,
             new MockScopeResolver(),
-            new NoopEntitlementsProvider());
+            new NoopEntitlementsProvider(),
+            new NoopTenantsClaimService());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);
@@ -124,7 +126,8 @@ public sealed class TokenRoleEmissionTests
             meta,
             settingsService,
             new MockScopeResolver(),
-            new NoopEntitlementsProvider());
+            new NoopEntitlementsProvider(),
+            new NoopTenantsClaimService());
 
         var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
         Assert.IsTrue(ok);

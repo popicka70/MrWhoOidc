@@ -22,7 +22,7 @@ public interface ITokenService
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider, ITenantsClaimService tenantsClaimService) : ITokenService
 {
     private readonly ITenantSettingsService _settingsService = settingsService;
     private readonly IEntitlementsProvider _entitlementsProvider = entitlementsProvider;
@@ -95,6 +95,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             issuer: issuer,
             ct: ct).ConfigureAwait(false);
         scopes = scopesFiltered;
+
+        string? tenantsClaimJson = null;
+        if (scopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+        {
+            tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(entity.UserId, ct).ConfigureAwait(false);
+        }
 
         string? realmName = null;
         string[] roleNames = Array.Empty<string>();
@@ -172,6 +178,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 accessClaims.Add(new("entitlements", entitlementsClaimJson));
             }
+
+            if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+            {
+                accessClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
+            }
             
             // Add tenant_id claim if any custom (non-standard) scopes are granted
             var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
@@ -244,6 +255,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 idClaims.Add(new(OidcConstants.Claims.Realm, realmName));
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+        {
+            idClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
         }
 
         // Pull auth_time from metadata store if available
@@ -351,6 +367,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             ct: ct).ConfigureAwait(false);
         scopes = scopesFiltered;
 
+        string? tenantsClaimJson = null;
+        if (scopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+        {
+            tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(tokenEntity.UserId, ct).ConfigureAwait(false);
+        }
+
         // Opaque issuance check matches authorization_code path
         var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
             (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
@@ -402,6 +424,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             if (!string.IsNullOrWhiteSpace(entitlementsClaimJson))
             {
                 accessClaims.Add(new("entitlements", entitlementsClaimJson));
+            }
+
+            if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+            {
+                accessClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
             }
             
             // Add tenant_id claim if any custom (non-standard) scopes are granted

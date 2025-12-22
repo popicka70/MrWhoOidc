@@ -3,6 +3,7 @@ using MrWhoOidc.Auth.Persistence;
 using System.Linq;
 using System.Text.Json;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.Auth.Services;
@@ -59,12 +60,20 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         }
 
         // Seed default scopes (scopes are global, not tenant-specific)
-        string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read"];
+        // Note: presence in this table does NOT automatically grant the scope to clients.
+        string[] defaultScopes = ["openid", "profile", "email", "offline_access", "roles", "api.read", OidcConstants.Scopes.Tenants];
         foreach (var s in defaultScopes)
         {
             if (!await db.Scopes.AnyAsync(x => x.Name == s, ct).ConfigureAwait(false))
             {
-                db.Scopes.Add(new Scope { Name = s, Description = $"Standard scope {s}", IsExposed = true });
+                db.Scopes.Add(new Scope
+                {
+                    Name = s,
+                    Description = $"Standard scope {s}",
+                    IsExposed = true,
+                    IsGlobal = true,
+                    TenantId = null
+                });
             }
         }
 

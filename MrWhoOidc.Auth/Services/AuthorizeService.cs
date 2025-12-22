@@ -68,6 +68,16 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
             .Select(cs => cs.ScopeName)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+
+        // Protected scopes must be explicitly assigned to the client, even if the client
+        // has no other scope assignments.
+        if (scopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+        {
+            if (!allowedScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+            {
+                return Error(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
+            }
+        }
         if (allowedScopes.Count > 0)
         {
             var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();

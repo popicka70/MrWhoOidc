@@ -97,6 +97,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
+        services.AddScoped<ITenantsClaimService, TenantsClaimService>();
         
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();

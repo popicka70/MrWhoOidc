@@ -68,6 +68,7 @@ public class TokenExchangeService(
         string? sourceAudience = null;
         string? subjectCnfJkt = null;
         string? subjectTenantId = null;
+        string? subjectTenantsJson = null;
         DateTimeOffset subjectExpiry;
         int subjectDelegationDepth = 0; // for opaque subjects
 
@@ -88,6 +89,9 @@ public class TokenExchangeService(
 
             // Capture tenant_id claim if present
             subjectTenantId = principal.FindFirst("tenant_id")?.Value;
+
+            // Capture tenants claim if present
+            subjectTenantsJson = principal.FindFirst(OidcConstants.Scopes.Tenants)?.Value;
 
             // scope claim is space-delimited
             var scopeStr = principal.FindFirst("scope")?.Value;
@@ -284,6 +288,12 @@ public class TokenExchangeService(
             if (hasCustomScopes && !string.IsNullOrEmpty(subjectTenantId))
             {
                 claims.Add(new System.Security.Claims.Claim("tenant_id", subjectTenantId));
+            }
+
+            // Propagate tenants list only when scope is granted
+            if (resultScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal) && !string.IsNullOrWhiteSpace(subjectTenantsJson))
+            {
+                claims.Add(new System.Security.Claims.Claim(OidcConstants.Scopes.Tenants, subjectTenantsJson));
             }
             
             if (!string.IsNullOrEmpty(outCnfJkt))

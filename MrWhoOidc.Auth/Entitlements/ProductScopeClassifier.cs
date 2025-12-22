@@ -9,6 +9,7 @@ public static class ProductScopeClassifier
         "email",
         "roles",
         "offline_access",
+        "tenants",
     };
 
     public static bool IsProductScope(string? scope)

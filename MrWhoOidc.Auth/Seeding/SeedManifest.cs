@@ -11,8 +11,41 @@ public sealed record SeedManifest
     [JsonPropertyName("version")]
     public int Version { get; init; } = 1;
 
+    /// <summary>
+    /// Optional explicit scope registry definitions.
+    /// These are written to the Scopes table so they can be referenced by ClientScopes.
+    /// </summary>
+    [JsonPropertyName("scopes")]
+    public List<ScopeSeedDefinition> Scopes { get; init; } = [];
+
     [JsonPropertyName("tenants")]
     public List<TenantSeedDefinition> Tenants { get; init; } = [];
+}
+
+public sealed record ScopeSeedDefinition
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// If true, scope is global (TenantId is null). If false, scope is tenant-scoped.
+    /// Defaults to true when tenantSlug is not provided.
+    /// </summary>
+    [JsonPropertyName("isGlobal")]
+    public bool? IsGlobal { get; init; }
+
+    [JsonPropertyName("isExposed")]
+    public bool? IsExposed { get; init; }
+
+    /// <summary>
+    /// Optional tenant slug for tenant-scoped scopes.
+    /// When set, the scope will be associated with that tenant.
+    /// </summary>
+    [JsonPropertyName("tenantSlug")]
+    public string? TenantSlug { get; init; }
 }
 
 public sealed record TenantSeedDefinition
@@ -103,6 +136,13 @@ public sealed record ClientSeedDefinition
 
     [JsonPropertyName("allowedLogoutRedirectUris")]
     public List<string> AllowedLogoutRedirectUris { get; init; } = [];
+
+    /// <summary>
+    /// Optional explicit allow-list of OIDC scopes for this client.
+    /// When provided, this maps to ClientScopes rows and enables fail-closed scope validation.
+    /// </summary>
+    [JsonPropertyName("allowedScopes")]
+    public List<string> AllowedScopes { get; init; } = [];
 
     // OBO / Token Exchange policy (optional)
     // These map to Client.Obo* fields and are only applied when present.

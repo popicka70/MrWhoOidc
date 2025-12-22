@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -174,6 +175,8 @@ internal sealed class SeedManifestApplier(
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
+        await EnsureScopesAsync(manifest, tenantDef, tenant, ct).ConfigureAwait(false);
+
         // Clients (reference realms by name)
         foreach (var clientDef in tenantDef.Clients)
         {
@@ -223,6 +226,8 @@ internal sealed class SeedManifestApplier(
 
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
 
                 await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
 
@@ -277,10 +282,141 @@ internal sealed class SeedManifestApplier(
             }
 #pragma warning restore CS0618
 
+            await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
+
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             await clientStore.InvalidateClientCacheAsync(client.ClientId, tenant.TenantId, ct).ConfigureAwait(false);
 
             await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task EnsureScopesAsync(SeedManifest manifest, TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)
+    {
+        // Scopes must exist before we can create ClientScopes due to FK constraints.
+        // We seed:
+        // 1) Any explicit scope definitions in the manifest that apply to this tenant (global or tenant-scoped)
+        // 2) Any scopes referenced by tenant clients' allowedScopes (implicit global scopes)
+
+        var allowUpdates = seedOptions.Value.AllowUpdates;
+
+        var explicitDefs = manifest.Scopes
+            .Where(s => !string.IsNullOrWhiteSpace(s.Name))
+            .Select(s => new
+            {
+                Name = s.Name.Trim(),
+                Def = s
+            })
+            .Where(x =>
+                string.IsNullOrWhiteSpace(x.Name) == false &&
+                (
+                    string.IsNullOrWhiteSpace(x.Def.TenantSlug) ||
+                    string.Equals(x.Def.TenantSlug.Trim(), tenant.Slug, StringComparison.OrdinalIgnoreCase)
+                ))
+            .GroupBy(x => x.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Def, StringComparer.Ordinal);
+
+        var referencedScopeNames = tenantDef.Clients
+            .SelectMany(c => c.AllowedScopes)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var namesToEnsure = explicitDefs.Keys
+            .Concat(referencedScopeNames)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (namesToEnsure.Length == 0)
+        {
+            return;
+        }
+
+        var existing = await db.Scopes
+            .AsNoTracking()
+            .Where(s => namesToEnsure.Contains(s.Name))
+            .ToDictionaryAsync(s => s.Name, StringComparer.Ordinal, ct)
+            .ConfigureAwait(false);
+
+        foreach (var name in namesToEnsure)
+        {
+            explicitDefs.TryGetValue(name, out var def);
+
+            var desiredIsGlobal = def?.IsGlobal
+                ?? (string.IsNullOrWhiteSpace(def?.TenantSlug));
+
+            var desiredTenantId = desiredIsGlobal
+                ? (Guid?)null
+                : tenant.TenantId;
+
+            var desiredIsExposed = def?.IsExposed ?? true;
+            var desiredDescription = def?.Description;
+
+            if (!existing.TryGetValue(name, out var current))
+            {
+                db.Scopes.Add(new Scope
+                {
+                    Name = name,
+                    IsGlobal = desiredIsGlobal,
+                    TenantId = desiredTenantId,
+                    IsExposed = desiredIsExposed,
+                    Description = desiredDescription
+                });
+
+                continue;
+            }
+
+            if (!allowUpdates)
+            {
+                continue;
+            }
+
+            // Avoid silently re-homing scopes between global/tenant namespaces.
+            // (Name is the PK, so this would be a destructive semantic change.)
+            var namespaceCompatible =
+                current.IsGlobal == desiredIsGlobal &&
+                current.TenantId == desiredTenantId;
+
+            if (!namespaceCompatible)
+            {
+                logger.LogWarning(
+                    "Seed manifest scope '{ScopeName}' conflicts with existing namespace (IsGlobal={IsGlobal}, TenantId={TenantId}). Skipping namespace update.",
+                    name,
+                    current.IsGlobal,
+                    current.TenantId);
+                continue;
+            }
+
+            var tracked = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name, ct).ConfigureAwait(false);
+            if (tracked is null)
+            {
+                continue;
+            }
+
+            var changed = false;
+            if (tracked.IsExposed != desiredIsExposed)
+            {
+                tracked.IsExposed = desiredIsExposed;
+                changed = true;
+            }
+
+            if (desiredDescription is not null && tracked.Description != desiredDescription)
+            {
+                tracked.Description = desiredDescription;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
     }
 
@@ -409,6 +545,42 @@ internal sealed class SeedManifestApplier(
             {
                 client.OboAllowedScopesJson = JsonSerializer.Serialize(def.OboAllowedScopes);
             }
+        }
+    }
+
+    private async Task EnsureClientScopesAsync(Client client, ClientSeedDefinition def, CancellationToken ct)
+    {
+        if (def.AllowedScopes.Count == 0)
+        {
+            return;
+        }
+
+        var requested = def.AllowedScopes
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (requested.Length == 0)
+        {
+            return;
+        }
+
+        var existing = await db.ClientScopes
+            .AsNoTracking()
+            .Where(cs => cs.ClientId == client.Id)
+            .Select(cs => cs.ScopeName)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var scope in requested.Except(existing, StringComparer.Ordinal))
+        {
+            db.ClientScopes.Add(new ClientScope { ClientId = client.Id, ScopeName = scope });
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
     }
 
