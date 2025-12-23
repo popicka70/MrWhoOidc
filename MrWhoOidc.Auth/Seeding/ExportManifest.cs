@@ -55,8 +55,8 @@ public sealed record ExportManifest
     public static bool IsObfuscated(string? value) => value == ObfuscatedMarker;
 
     /// <summary>
-    /// Returns the obfuscated marker if the value is not empty, otherwise null.
+    /// Returns the obfuscated marker if the value is not empty or whitespace, otherwise null.
     /// </summary>
     public static string? ObfuscateSecret(string? value) =>
-        string.IsNullOrEmpty(value) ? null : ObfuscatedMarker;
+        string.IsNullOrWhiteSpace(value) ? null : ObfuscatedMarker;
 }

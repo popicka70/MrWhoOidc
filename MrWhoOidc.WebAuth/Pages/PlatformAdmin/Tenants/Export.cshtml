@@ -1,0 +1,162 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants.ExportModel
+@{
+    ViewData["Title"] = $"Export Tenant: {Model.Tenant.Name}";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="bi bi-download text-primary me-2"></i>
+            Export Tenant Configuration
+        </h1>
+        <p class="text-muted mb-0">
+            <code>@Model.Tenant.Slug</code> - @Model.Tenant.Name
+        </p>
+    </div>
+    <div>
+        <a class="btn btn-outline-secondary" asp-page="Index">
+            <i class="bi bi-arrow-left"></i> Back to Tenants
+        </a>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Export Error:</strong> @Model.ErrorMessage
+    </div>
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-gear me-2"></i>Export Options
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Export Mode</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="ExportMode" id="modeObfuscated" 
+                                   value="obfuscated" @(Model.ExportMode == "obfuscated" ? "checked" : "") />
+                            <label class="form-check-label" for="modeObfuscated">
+                                <strong>Obfuscated</strong> <span class="badge bg-success">Recommended</span>
+                            </label>
+                            <p class="text-muted small mb-0 ms-4">
+                                Secrets are replaced with placeholder markers (e.g., <code>***OBFUSCATED***</code>). 
+                                Safe for sharing, backup, and version control. Secrets must be re-entered on import.
+                            </p>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="ExportMode" id="modeFull" 
+                                   value="full" @(Model.ExportMode == "full" ? "checked" : "") />
+                            <label class="form-check-label" for="modeFull">
+                                <strong>Full Export</strong> <span class="badge bg-warning text-dark">Sensitive</span>
+                            </label>
+                            <p class="text-muted small mb-0 ms-4">
+                                Includes hashed secrets for restoration without re-entering credentials.
+                                <span class="text-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Contains sensitive data - store securely!
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> This export includes tenants, realms, clients, scopes, identity providers, 
+                        claim mappings, and roles. User data is <em>not</em> exported.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-download me-2"></i>Download Export
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-check me-2"></i>Export Preview
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">The following entities will be included:</p>
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><i class="bi bi-building me-2 text-primary"></i>Realms</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.RealmCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-app me-2 text-success"></i>Clients</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ClientCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-key me-2 text-warning"></i>Client Secrets</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.SecretCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-box me-2 text-info"></i>Scopes</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ScopeCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-person-badge me-2 text-danger"></i>Identity Providers</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ProviderCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-shield-check me-2 text-purple"></i>Roles</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.RoleCount</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                @if (Model.Preview.SecretCount > 0)
+                {
+                    <div class="alert alert-warning small mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>@Model.Preview.SecretCount secret(s)</strong> will be 
+                        @(Model.ExportMode == "full" ? "exported as hashes" : "obfuscated").
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.Tenant.Description))
+        {
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i class="bi bi-info-circle me-2"></i>Tenant Description
+                </div>
+                <div class="card-body">
+                    <p class="mb-0 text-muted">@Model.Tenant.Description</p>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Update secret warning text when mode changes
+        document.querySelectorAll('input[name="ExportMode"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var secretCount = @Model.Preview.SecretCount;
+                if (secretCount > 0) {
+                    var warningText = this.value === 'full' 
+                        ? 'exported as hashes' 
+                        : 'obfuscated';
+                    var alertEl = document.querySelector('.alert-warning strong');
+                    if (alertEl) {
+                        alertEl.parentElement.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>' + secretCount + ' secret(s)</strong> will be ' + warningText + '.';
+                    }
+                }
+            });
+        });
+    </script>
+}

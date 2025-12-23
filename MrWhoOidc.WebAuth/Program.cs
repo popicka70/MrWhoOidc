@@ -310,6 +310,9 @@ app.MapMrWhoOidcEndpoints();
 // Admin + health endpoints (extracted)
 app.MapMrWhoAdminApiEndpoints();
 
+// Export/Import API endpoints (platform admin only)
+app.MapExportImportEndpoints();
+
 // (Static assets mapping handled inside UseMrWhoOidcPipeline)
 
 app.Run();
