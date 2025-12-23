@@ -49,9 +49,7 @@ else
                     <a href="@(tenantPrefix)/Admin/Providers/Edit/@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                     <a href="@(tenantPrefix)/Admin/Providers/ClaimMappings/@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
                     <a href="@(tenantPrefix)/Admin/ProviderKeys/Index?providerId=@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
-                    <a href="@(tenantPrefix)/admin/providers/export/@p.Id" class="btn btn-outline-info" title="Export Configuration">
-                        <i class="bi bi-download"></i>
-                    </a>
+                    <a href="@(tenantPrefix)/admin/providers/export/@p.Id" class="btn btn-outline-secondary" title="Export Configuration">Export</a>
                     <a href="@(tenantPrefix)/Admin/Providers/Delete/@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                 </div>
                 <span class="drag-handle ms-3 text-muted" aria-hidden="true" title="Drag to reorder">☰</span>

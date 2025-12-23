@@ -74,9 +74,7 @@
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/Admin/Realms/Edit/@r.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
-                            <a href="@(tenantPrefix)/admin/realms/export/@r.Id" class="btn btn-outline-info" title="Export Configuration">
-                                <i class="bi bi-download"></i>
-                            </a>
+                            <a href="@(tenantPrefix)/admin/realms/export/@r.Id" class="btn btn-outline-secondary" title="Export Configuration">Export</a>
                             <a asp-page="Delete" asp-route-id="@r.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                         </div>
                     </td>

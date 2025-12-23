@@ -119,9 +119,7 @@ else
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-outline-secondary" title="View as Tenant Admin" onclick="document.getElementById('impersonate-form-@t.Id').submit()">Impersonate</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
-                                <a class="btn btn-outline-info" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">
-                                    <i class="bi bi-download"></i>
-                                </a>
+                                <a class="btn btn-outline-secondary" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">Export</a>
                             </div>
                         </td>
                     </tr>
