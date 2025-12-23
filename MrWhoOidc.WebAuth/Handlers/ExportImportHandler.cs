@@ -16,7 +16,8 @@ public static class ExportImportHandler
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
     };
 
     /// <summary>
@@ -136,24 +137,224 @@ public static class ExportImportHandler
     }
 
     /// <summary>
+    /// Previews an import operation without applying changes.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/platform/tenants/import/preview
+    /// </remarks>
+    [Authorize(Policy = "PlatformAdmin")]
+    public static async Task<IResult> PreviewImport(
+        [FromBody] ImportPreviewRequest request,
+        [FromServices] IConfigurationImportService importService,
+        CancellationToken cancellationToken)
+    {
+        if (request.Manifest == null)
+        {
+            return Results.BadRequest(new { error = "Manifest is required" });
+        }
+
+        try
+        {
+            // Parse the manifest from JSON
+            var manifest = JsonSerializer.Deserialize<ExportManifest>(request.Manifest, JsonOptions);
+            if (manifest == null)
+            {
+                return Results.BadRequest(new { error = "Invalid manifest format" });
+            }
+
+            var options = new ImportOptions
+            {
+                ValidateOnly = true,
+                DefaultConflictResolution = request.DefaultConflictResolution ?? ConflictResolution.Skip
+            };
+
+            var preview = await importService.PreviewImportAsync(manifest, options, cancellationToken);
+
+            return Results.Ok(preview);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Invalid JSON format",
+                details = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: ex.Message,
+                title: "Preview failed",
+                statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Imports tenant configuration from a manifest.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/platform/tenants/import
+    /// </remarks>
+    [Authorize(Policy = "PlatformAdmin")]
+    public static async Task<IResult> ImportTenant(
+        [FromBody] ImportTenantRequest request,
+        [FromServices] IConfigurationImportService importService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (request.Manifest == null)
+        {
+            return Results.BadRequest(new { error = "Manifest is required" });
+        }
+
+        try
+        {
+            // Parse the manifest from JSON
+            var manifest = JsonSerializer.Deserialize<ExportManifest>(request.Manifest, JsonOptions);
+            if (manifest == null)
+            {
+                return Results.BadRequest(new { error = "Invalid manifest format" });
+            }
+
+            // Build conflict resolutions dictionary
+            var conflictOverrides = new Dictionary<string, ConflictResolution>();
+            if (request.ConflictResolutions != null)
+            {
+                foreach (var (key, value) in request.ConflictResolutions)
+                {
+                    if (Enum.TryParse<ConflictResolution>(value, true, out var resolution))
+                    {
+                        conflictOverrides[key] = resolution;
+                    }
+                }
+            }
+
+            var options = new ImportOptions
+            {
+                ValidateOnly = request.DryRun,
+                DefaultConflictResolution = request.DefaultConflictResolution ?? ConflictResolution.Skip,
+                ConflictOverrides = conflictOverrides,
+                Secrets = request.Secrets ?? [],
+                ImportedBy = httpContext.User.Identity?.Name ?? "anonymous",
+                IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+            };
+
+            var result = await importService.ImportTenantAsync(manifest, options, cancellationToken);
+
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            return Results.BadRequest(result);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Invalid JSON format",
+                details = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                detail: ex.Message,
+                title: "Import failed",
+                statusCode: 500);
+        }
+    }
+
+    /// <summary>
     /// Maps export/import routes to the endpoint router.
     /// </summary>
     public static void MapExportImportEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/admin/api/platform/tenants/{slug}")
+        // Export endpoints (tenant-specific)
+        var exportGroup = endpoints.MapGroup("/admin/api/platform/tenants/{slug}")
             .WithTags("Export/Import");
 
-        group.MapGet("/export", ExportTenant)
+        exportGroup.MapGet("/export", ExportTenant)
             .WithName("ExportTenant")
             .WithDescription("Export tenant configuration as JSON")
             .Produces(200, contentType: "application/json")
             .Produces(404)
             .Produces(500);
 
-        group.MapGet("/export/preview", GetExportPreview)
+        exportGroup.MapGet("/export/preview", GetExportPreview)
             .WithName("GetExportPreview")
             .WithDescription("Get export preview with entity counts")
             .Produces<object>(200)
             .Produces(404);
+
+        // Import endpoints (platform-level)
+        var importGroup = endpoints.MapGroup("/admin/api/platform/tenants/import")
+            .WithTags("Export/Import");
+
+        importGroup.MapPost("/preview", PreviewImport)
+            .WithName("PreviewImport")
+            .WithDescription("Preview import operation without applying changes")
+            .Produces<ImportPreview>(200)
+            .Produces(400)
+            .Produces(500);
+
+        importGroup.MapPost("/", ImportTenant)
+            .WithName("ImportTenant")
+            .WithDescription("Import tenant configuration from manifest")
+            .Produces<ImportResult>(200)
+            .Produces(400)
+            .Produces(500);
     }
+}
+
+/// <summary>
+/// Request model for import preview.
+/// </summary>
+public sealed record ImportPreviewRequest
+{
+    /// <summary>
+    /// The JSON manifest string to preview.
+    /// </summary>
+    public string? Manifest { get; init; }
+
+    /// <summary>
+    /// Default conflict resolution strategy.
+    /// </summary>
+    public ConflictResolution? DefaultConflictResolution { get; init; }
+}
+
+/// <summary>
+/// Request model for tenant import.
+/// </summary>
+public sealed record ImportTenantRequest
+{
+    /// <summary>
+    /// The JSON manifest string to import.
+    /// </summary>
+    public string? Manifest { get; init; }
+
+    /// <summary>
+    /// Whether this is a dry run (validate without applying changes).
+    /// </summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>
+    /// Default conflict resolution strategy.
+    /// </summary>
+    public ConflictResolution? DefaultConflictResolution { get; init; }
+
+    /// <summary>
+    /// Per-entity conflict resolutions.
+    /// Key format: "{EntityType}:{Identifier}" (e.g., "tenant:my-tenant").
+    /// Value: "Skip", "Rename", "Merge", or "Overwrite".
+    /// </summary>
+    public Dictionary<string, string>? ConflictResolutions { get; init; }
+
+    /// <summary>
+    /// Secrets for obfuscated entities.
+    /// Key format: "{EntityId}" (e.g., client ID or provider name).
+    /// Value: The actual secret value to use.
+    /// </summary>
+    public Dictionary<string, string>? Secrets { get; init; }
 }

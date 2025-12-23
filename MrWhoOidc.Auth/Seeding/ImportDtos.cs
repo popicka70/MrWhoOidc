@@ -31,6 +31,46 @@ public sealed record ImportPreview
     public List<EntitySummary> EntitiesToUpdate { get; init; } = [];
 
     /// <summary>
+    /// Number of tenants in the manifest.
+    /// </summary>
+    public int TenantCount { get; init; }
+
+    /// <summary>
+    /// Number of realms in the manifest.
+    /// </summary>
+    public int RealmCount { get; init; }
+
+    /// <summary>
+    /// Number of clients in the manifest.
+    /// </summary>
+    public int ClientCount { get; init; }
+
+    /// <summary>
+    /// Number of identity providers in the manifest.
+    /// </summary>
+    public int ProviderCount { get; init; }
+
+    /// <summary>
+    /// Number of scopes in the manifest.
+    /// </summary>
+    public int ScopeCount { get; init; }
+
+    /// <summary>
+    /// Number of roles in the manifest.
+    /// </summary>
+    public int RoleCount { get; init; }
+
+    /// <summary>
+    /// Whether the manifest contains obfuscated secrets that need to be provided.
+    /// </summary>
+    public bool HasObfuscatedSecrets { get; init; }
+
+    /// <summary>
+    /// Number of obfuscated secrets that need to be provided.
+    /// </summary>
+    public int ObfuscatedSecretCount { get; init; }
+
+    /// <summary>
     /// Non-blocking warnings about the import.
     /// </summary>
     public List<string> Warnings { get; init; } = [];
@@ -60,6 +100,63 @@ public sealed record ImportResult
     /// Number of entities skipped (due to conflict resolution).
     /// </summary>
     public int EntitiesSkipped { get; init; }
+
+    // --- Per-entity type counts ---
+
+    /// <summary>Number of tenants created.</summary>
+    public int TenantsCreated { get; init; }
+
+    /// <summary>Number of tenants updated.</summary>
+    public int TenantsUpdated { get; init; }
+
+    /// <summary>Number of tenants skipped.</summary>
+    public int TenantsSkipped { get; init; }
+
+    /// <summary>Number of realms created.</summary>
+    public int RealmsCreated { get; init; }
+
+    /// <summary>Number of clients created.</summary>
+    public int ClientsCreated { get; init; }
+
+    /// <summary>Number of clients updated.</summary>
+    public int ClientsUpdated { get; init; }
+
+    /// <summary>Number of clients skipped.</summary>
+    public int ClientsSkipped { get; init; }
+
+    /// <summary>Number of providers created.</summary>
+    public int ProvidersCreated { get; init; }
+
+    /// <summary>Number of scopes created.</summary>
+    public int ScopesCreated { get; init; }
+
+    /// <summary>Number of roles created.</summary>
+    public int RolesCreated { get; init; }
+
+    /// <summary>
+    /// Whether the transaction was rolled back due to an error.
+    /// </summary>
+    public bool WasRolledBack { get; init; }
+
+    /// <summary>
+    /// Error message if the import failed.
+    /// </summary>
+    public string? ErrorMessage { get; init; }
+
+    /// <summary>
+    /// Additional error details.
+    /// </summary>
+    public string? ErrorDetails { get; init; }
+
+    /// <summary>
+    /// When the import started.
+    /// </summary>
+    public DateTime? StartedAt { get; init; }
+
+    /// <summary>
+    /// When the import completed.
+    /// </summary>
+    public DateTime? CompletedAt { get; init; }
 
     /// <summary>
     /// Errors that occurred during import.
@@ -119,6 +216,26 @@ public sealed record ImportConflict
     public string Identifier { get; init; } = string.Empty;
 
     /// <summary>
+    /// Conflict key for resolution lookup (e.g., "tenant:existing-slug").
+    /// </summary>
+    public string EntityKey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Type of conflict as string (e.g., "SlugCollision", "ClientIdCollision").
+    /// </summary>
+    public string ConflictType { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Value in existing entity.
+    /// </summary>
+    public string? ExistingValue { get; init; }
+
+    /// <summary>
+    /// Value in incoming manifest.
+    /// </summary>
+    public string? IncomingValue { get; init; }
+
+    /// <summary>
     /// ID of the existing entity (if known).
     /// </summary>
     public Guid? ExistingEntityId { get; init; }
@@ -132,6 +249,11 @@ public sealed record ImportConflict
     /// User's resolution choice (set during import execution).
     /// </summary>
     public ConflictResolution? Resolution { get; init; }
+
+    /// <summary>
+    /// Suggested resolution strategy.
+    /// </summary>
+    public ConflictResolution SuggestedResolution { get; init; } = ConflictResolution.Skip;
 }
 
 /// <summary>

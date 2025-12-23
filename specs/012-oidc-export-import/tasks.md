@@ -99,28 +99,28 @@
 
 ### Tests for User Story 2
 
-- [ ] T030 [P] [US2] Unit test for manifest validation in `MrWhoOidc.UnitTests/Import/ManifestValidationTests.cs`
-- [ ] T031 [P] [US2] Unit test for conflict detection in `MrWhoOidc.UnitTests/Import/ConflictDetectionTests.cs`
-- [ ] T032 [P] [US2] Unit test for transactional rollback in `MrWhoOidc.UnitTests/Import/TransactionalRollbackTests.cs`
+- [x] T030 [P] [US2] Unit test for manifest validation in `MrWhoOidc.UnitTests/Import/ManifestValidationTests.cs`
+- [x] T031 [P] [US2] Unit test for conflict detection in `MrWhoOidc.UnitTests/Import/ConflictDetectionTests.cs`
+- [x] T032 [P] [US2] Unit test for transactional rollback in `MrWhoOidc.UnitTests/Import/TransactionalRollbackTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Implement `ConfigurationImportService.PreviewImportAsync()` for validation and conflict detection in `MrWhoOidc.Auth/Services/ConfigurationImportService.cs`
-- [ ] T034 [US2] Implement conflict detection for tenant slug, realm name, client ID, provider name collisions (depends on T033)
-- [ ] T035 [US2] Implement conflict resolution strategies (skip, rename, merge, overwrite) (depends on T034)
-- [ ] T036 [US2] Implement `ConfigurationImportService.ExecuteImportAsync()` with transaction wrapper using EF Core execution strategy (depends on T035)
-- [ ] T037 [US2] Handle obfuscated secret prompting during import (depends on T036)
-- [ ] T038 [US2] Add audit logging for import operations (depends on T015)
-- [ ] T039 [US2] Create import preview API endpoint `POST /admin/api/platform/tenants/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T040 [US2] Create import execute API endpoint `POST /admin/api/platform/tenants/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T041 [US2] Create tenant import Razor Page in `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Import.cshtml(.cs)` with file upload, preview, and conflict resolution UI
+- [x] T033 [US2] Implement `ConfigurationImportService.PreviewImportAsync()` for validation and conflict detection in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
+- [x] T034 [US2] Implement conflict detection for tenant slug, realm name, client ID, provider name collisions (depends on T033)
+- [x] T035 [US2] Implement conflict resolution strategies (skip, rename, merge, overwrite) (depends on T034)
+- [x] T036 [US2] Implement `ConfigurationImportService.ExecuteImportAsync()` with transaction wrapper using EF Core execution strategy (depends on T035)
+- [x] T037 [US2] Handle obfuscated secret prompting during import (depends on T036)
+- [x] T038 [US2] Add audit logging for import operations (depends on T015)
+- [x] T039 [US2] Create import preview API endpoint `POST /admin/api/platform/tenants/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T040 [US2] Create import execute API endpoint `POST /admin/api/platform/tenants/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T041 [US2] Create tenant import Razor Page in `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Import.cshtml(.cs)` with file upload, preview, and conflict resolution UI
 
 ### Integration Tests
 
-- [ ] T042 [P] [US2] Integration test for import preview endpoint in `MrWhoOidc.UnitTests/Import/ImportPreviewIntegrationTests.cs`
-- [ ] T043 [P] [US2] Integration test for import execute with rollback in `MrWhoOidc.UnitTests/Import/ImportExecuteIntegrationTests.cs`
+- [x] T042 [P] [US2] Integration test for import preview endpoint in `MrWhoOidc.UnitTests/Import/TenantImportIntegrationTests.cs`
+- [x] T043 [P] [US2] Integration test for import execute with rollback in `MrWhoOidc.UnitTests/Import/TenantImportIntegrationTests.cs`
 
-**Checkpoint**: User Stories 1 AND 2 complete - full tenant backup/restore cycle functional
+**Checkpoint**: User Stories 1 AND 2 complete - full tenant backup/restore cycle functional ✅
 
 ---
 

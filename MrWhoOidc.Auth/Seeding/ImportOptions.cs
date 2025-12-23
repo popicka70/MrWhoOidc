@@ -18,10 +18,30 @@ public sealed record ImportOptions
     public Dictionary<string, ConflictResolution> ConflictOverrides { get; init; } = [];
 
     /// <summary>
+    /// Per-entity conflict resolution overrides (alias for ConflictOverrides).
+    /// Key format: "{entityType}:{identifier}" (e.g., "tenant:existing-slug").
+    /// </summary>
+    public Dictionary<string, ConflictResolution> ConflictResolutions
+    {
+        get => ConflictOverrides;
+        init => ConflictOverrides = value;
+    }
+
+    /// <summary>
     /// Whether to only validate without actually applying changes.
     /// When true, performs all validation and conflict detection but does not modify data.
     /// </summary>
     public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Whether this is a dry run (alias for ValidateOnly).
+    /// When true, performs all validation and conflict detection but does not modify data.
+    /// </summary>
+    public bool DryRun
+    {
+        get => ValidateOnly;
+        init => ValidateOnly = value;
+    }
 
     /// <summary>
     /// Secrets to use for entities with obfuscated values.
