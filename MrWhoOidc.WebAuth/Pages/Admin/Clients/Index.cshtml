@@ -19,9 +19,14 @@
         <p class="page-header__subtitle">Manage OAuth2/OIDC client applications</p>
     </div>
     <div class="page-header__actions">
-        <a class="btn btn-success" href="@(tenantPrefix)/admin/clients/add">
-            <i class="bi bi-plus-lg"></i> Add Client
-        </a>
+        <div class="btn-group">
+            <a class="btn btn-outline-primary" href="@(tenantPrefix)/admin/clients/import">
+                <i class="bi bi-upload"></i> Import Client
+            </a>
+            <a class="btn btn-success" href="@(tenantPrefix)/admin/clients/add">
+                <i class="bi bi-plus-lg"></i> Add Client
+            </a>
+        </div>
     </div>
 </div>
 
@@ -107,6 +112,9 @@
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group">
                             <a href="@(tenantPrefix)/admin/clients/edit/@c.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
+                            <a href="@(tenantPrefix)/admin/clients/export/@c.Id" class="btn btn-outline-info" title="Export Configuration">
+                                <i class="bi bi-download"></i>
+                            </a>
                             <a asp-page="Delete" asp-route-id="@c.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                         </div>
                     </td>

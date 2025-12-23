@@ -20,6 +20,24 @@ public sealed record SeedManifest
 
     [JsonPropertyName("tenants")]
     public List<TenantSeedDefinition> Tenants { get; init; } = [];
+
+    /// <summary>
+    /// Standalone realm definitions for realm-level export/import.
+    /// </summary>
+    [JsonPropertyName("realms")]
+    public List<RealmSeedDefinition> Realms { get; init; } = [];
+
+    /// <summary>
+    /// Standalone client definitions for client-level export/import.
+    /// </summary>
+    [JsonPropertyName("clients")]
+    public List<ClientSeedDefinition> Clients { get; init; } = [];
+
+    /// <summary>
+    /// Standalone identity provider definitions for provider-level export/import.
+    /// </summary>
+    [JsonPropertyName("identityProviders")]
+    public List<IdentityProviderSeedDefinition> IdentityProviders { get; init; } = [];
 }
 
 public sealed record ScopeSeedDefinition
@@ -144,6 +162,18 @@ public sealed record RealmSeedDefinition
 
     [JsonPropertyName("allowUnconfirmedLogin")]
     public bool? AllowUnconfirmedLogin { get; init; }
+
+    /// <summary>
+    /// Clients within this realm (for realm-level export).
+    /// </summary>
+    [JsonPropertyName("clients")]
+    public List<ClientSeedDefinition> Clients { get; init; } = [];
+
+    /// <summary>
+    /// Roles within this realm (for realm-level export).
+    /// </summary>
+    [JsonPropertyName("roles")]
+    public List<RoleSeedDefinition> Roles { get; init; } = [];
 }
 
 public sealed record ClientSeedDefinition

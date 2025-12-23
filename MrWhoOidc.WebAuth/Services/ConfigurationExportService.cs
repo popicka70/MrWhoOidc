@@ -129,33 +129,254 @@ public sealed class ConfigurationExportService(
     }
 
     /// <inheritdoc />
-    public Task<ExportManifest> ExportRealmAsync(
+    public async Task<ExportManifest> ExportRealmAsync(
         Guid realmId,
         ExportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in T044
-        throw new NotImplementedException("Realm export will be implemented in Phase 5");
+        _logger.LogInformation("Exporting realm {RealmId} with mode {Mode}", realmId, options.Mode);
+
+        var realm = await _dbContext.Realms
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == realmId, cancellationToken)
+            ?? throw new InvalidOperationException($"Realm {realmId} not found");
+
+        // Load tenant separately (no navigation property)
+        var tenant = await _dbContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == realm.TenantId, cancellationToken)
+            ?? throw new InvalidOperationException($"Tenant {realm.TenantId} not found");
+
+        // Load all clients for this realm
+        var clients = await _dbContext.Clients
+            .AsNoTracking()
+            .Where(c => c.RealmId == realmId)
+            .ToListAsync(cancellationToken);
+
+        var clientIds = clients.Select(c => c.Id).ToList();
+        var clientSecrets = await _dbContext.ClientSecrets
+            .AsNoTracking()
+            .Where(cs => clientIds.Contains(cs.ClientId))
+            .ToListAsync(cancellationToken);
+
+        var clientScopes = await _dbContext.ClientScopes
+            .AsNoTracking()
+            .Where(cs => clientIds.Contains(cs.ClientId))
+            .ToListAsync(cancellationToken);
+
+        // Load identity providers for the tenant (available to this realm)
+        var providers = await _dbContext.IdentityProviders
+            .AsNoTracking()
+            .Where(p => p.TenantId == realm.TenantId)
+            .ToListAsync(cancellationToken);
+
+        var providerLookup = providers.ToDictionary(p => p.Id, p => p.Name);
+
+        var clientIdpAssignments = await _dbContext.ClientIdentityProviders
+            .AsNoTracking()
+            .Where(cip => clientIds.Contains(cip.ClientId))
+            .ToListAsync(cancellationToken);
+
+        // Load roles for this realm
+        var roles = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(r => r.RealmId == realmId)
+            .ToListAsync(cancellationToken);
+
+        var secretsByClient = clientSecrets.GroupBy(s => s.ClientId).ToDictionary(g => g.Key, g => g.First());
+        var scopesByClient = clientScopes.GroupBy(s => s.ClientId).ToDictionary(g => g.Key, g => g.ToList());
+        var idpAssignmentsByClient = clientIdpAssignments.GroupBy(a => a.ClientId).ToDictionary(g => g.Key, g => g.ToList());
+        var realmLookup = new Dictionary<Guid, string> { [realm.Id] = realm.Name };
+
+        var realmDefinition = new RealmSeedDefinition
+        {
+            Name = realm.Name,
+            DisplayName = realm.DisplayName,
+            AllowUnconfirmedLogin = realm.AllowUnconfirmedLogin,
+            Clients = clients.Select(c => BuildClientSeedDefinition(
+                c, secretsByClient, scopesByClient, idpAssignmentsByClient,
+                realmLookup, providerLookup, options.Mode)).ToList(),
+            Roles = roles.Select(r => new RoleSeedDefinition
+            {
+                Name = r.Name,
+                RealmName = realm.Name,
+                IsActive = r.IsActive
+            }).ToList()
+        };
+
+        var exportManifest = new ExportManifest
+        {
+            ExportType = "realm",
+            ExportMode = options.Mode == ExportMode.Obfuscated ? "obfuscated" : "full",
+            Metadata = BuildMetadata(options, $"{tenant.Slug}/{realm.Name}"),
+            Data = new SeedManifest
+            {
+                Version = 1,
+                Realms = [realmDefinition]
+            }
+        };
+
+        if (options.IncludeChecksum)
+        {
+            exportManifest = exportManifest with
+            {
+                Metadata = exportManifest.Metadata with { Checksum = GenerateChecksum(exportManifest.Data) }
+            };
+        }
+
+        await LogExportAuditAsync(realm.TenantId, "Realm", realm.Name, options, true, cancellationToken);
+
+        _logger.LogInformation("Exported realm {RealmName} with {ClientCount} clients, {RoleCount} roles",
+            realm.Name, clients.Count, roles.Count);
+
+        return exportManifest;
     }
 
     /// <inheritdoc />
-    public Task<ExportManifest> ExportClientAsync(
+    public async Task<ExportManifest> ExportClientAsync(
         Guid clientId,
         ExportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in T048
-        throw new NotImplementedException("Client export will be implemented in Phase 6");
+        _logger.LogInformation("Exporting client {ClientId} with mode {Mode}", clientId, options.Mode);
+
+        var client = await _dbContext.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == clientId, cancellationToken)
+            ?? throw new InvalidOperationException($"Client {clientId} not found");
+
+        // Load realm separately (no navigation property)
+        var realm = await _dbContext.Realms
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == client.RealmId, cancellationToken)
+            ?? throw new InvalidOperationException($"Realm {client.RealmId} not found");
+
+        // Load tenant separately (no navigation property)
+        var tenant = await _dbContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == client.TenantId, cancellationToken)
+            ?? throw new InvalidOperationException($"Tenant {client.TenantId} not found");
+
+        var secrets = await _dbContext.ClientSecrets
+            .AsNoTracking()
+            .Where(cs => cs.ClientId == clientId)
+            .ToListAsync(cancellationToken);
+
+        var scopes = await _dbContext.ClientScopes
+            .AsNoTracking()
+            .Where(cs => cs.ClientId == clientId)
+            .ToListAsync(cancellationToken);
+
+        var idpAssignments = await _dbContext.ClientIdentityProviders
+            .AsNoTracking()
+            .Where(cip => cip.ClientId == clientId)
+            .ToListAsync(cancellationToken);
+
+        // Load provider names for assignments
+        var providerIds = idpAssignments.Select(a => a.IdentityProviderId).Distinct().ToList();
+        var providers = await _dbContext.IdentityProviders
+            .AsNoTracking()
+            .Where(p => providerIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Name, cancellationToken);
+
+        var secretsByClient = secrets.Count > 0
+            ? new Dictionary<Guid, ClientSecret> { [clientId] = secrets.First() }
+            : new Dictionary<Guid, ClientSecret>();
+        var scopesByClient = new Dictionary<Guid, List<ClientScope>> { [clientId] = scopes };
+        var idpAssignmentsByClient = new Dictionary<Guid, List<ClientIdentityProvider>> { [clientId] = idpAssignments };
+        var realmLookup = new Dictionary<Guid, string> { [realm.Id] = realm.Name };
+
+        var clientDefinition = BuildClientSeedDefinition(
+            client, secretsByClient, scopesByClient, idpAssignmentsByClient,
+            realmLookup, providers, options.Mode);
+
+        var exportManifest = new ExportManifest
+        {
+            ExportType = "client",
+            ExportMode = options.Mode == ExportMode.Obfuscated ? "obfuscated" : "full",
+            Metadata = BuildMetadata(options, $"{tenant.Slug}/{realm.Name}/{client.ClientId}"),
+            Data = new SeedManifest
+            {
+                Version = 1,
+                Clients = [clientDefinition]
+            }
+        };
+
+        if (options.IncludeChecksum)
+        {
+            exportManifest = exportManifest with
+            {
+                Metadata = exportManifest.Metadata with { Checksum = GenerateChecksum(exportManifest.Data) }
+            };
+        }
+
+        await LogExportAuditAsync(client.TenantId, "Client", client.ClientId, options, true, cancellationToken);
+
+        _logger.LogInformation("Exported client {ClientId} from realm {RealmName}", client.ClientId, realm.Name);
+
+        return exportManifest;
     }
 
     /// <inheritdoc />
-    public Task<ExportManifest> ExportIdentityProviderAsync(
+    public async Task<ExportManifest> ExportIdentityProviderAsync(
         Guid providerId,
         ExportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in T052
-        throw new NotImplementedException("Identity provider export will be implemented in Phase 7");
+        _logger.LogInformation("Exporting identity provider {ProviderId} with mode {Mode}", providerId, options.Mode);
+
+        var provider = await _dbContext.IdentityProviders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == providerId, cancellationToken)
+            ?? throw new InvalidOperationException($"Identity provider {providerId} not found");
+
+        // Load tenant separately (no navigation property)
+        var tenant = await _dbContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == provider.TenantId, cancellationToken)
+            ?? throw new InvalidOperationException($"Tenant {provider.TenantId} not found");
+
+        var claimMappings = await _dbContext.IdentityProviderClaimMappings
+            .AsNoTracking()
+            .Where(m => m.IdentityProviderId == providerId)
+            .ToListAsync(cancellationToken);
+
+        var providerKeys = await _dbContext.IdentityProviderKeys
+            .AsNoTracking()
+            .Where(k => k.IdentityProviderId == providerId)
+            .ToListAsync(cancellationToken);
+
+        var mappingsByProvider = new Dictionary<Guid, List<IdentityProviderClaimMapping>> { [providerId] = claimMappings };
+        var keysByProvider = new Dictionary<Guid, List<IdentityProviderKey>> { [providerId] = providerKeys };
+
+        var providerDefinition = BuildProviderSeedDefinition(provider, mappingsByProvider, keysByProvider, options.Mode);
+
+        var exportManifest = new ExportManifest
+        {
+            ExportType = "provider",
+            ExportMode = options.Mode == ExportMode.Obfuscated ? "obfuscated" : "full",
+            Metadata = BuildMetadata(options, $"{tenant.Slug}/{provider.Name}"),
+            Data = new SeedManifest
+            {
+                Version = 1,
+                IdentityProviders = [providerDefinition]
+            }
+        };
+
+        if (options.IncludeChecksum)
+        {
+            exportManifest = exportManifest with
+            {
+                Metadata = exportManifest.Metadata with { Checksum = GenerateChecksum(exportManifest.Data) }
+            };
+        }
+
+        await LogExportAuditAsync(provider.TenantId, "IdentityProvider", provider.Name, options, true, cancellationToken);
+
+        _logger.LogInformation("Exported identity provider {ProviderName} with {MappingCount} claim mappings",
+            provider.Name, claimMappings.Count);
+
+        return exportManifest;
     }
 
     private SeedManifest BuildSeedManifest(
