@@ -1,7 +1,9 @@
 using System.Text.Json;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -60,6 +62,20 @@ internal sealed class OboPolicyService(AuthDbContext db, IOptions<AuthOptions> a
 
         // Scopes: requested ∩ subject ∩ allowed (if configured)
         var allowedScopes = Parse(client.OboAllowedScopesJson);
+
+        // Protected scopes must be explicitly listed in OboAllowedScopesJson.
+        // This prevents accidental enablement when allowedScopes is empty (meaning "allow any").
+        var protectsTenantsScope = true;
+        if (protectsTenantsScope)
+        {
+            var isRequestingTenants = (requestedScopes is { Length: > 0 } && requestedScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+                || (requestedScopes is not { Length: > 0 } && subjectScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal));
+
+            if (isRequestingTenants && (allowedScopes.Length == 0 || !allowedScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal)))
+            {
+                return (false, "insufficient_scope", 400, Array.Empty<string>(), TimeSpan.Zero);
+            }
+        }
         HashSet<string> granted = new(StringComparer.Ordinal);
         var subjectSet = new HashSet<string>(subjectScopes, StringComparer.Ordinal);
         if (requestedScopes is { Length: > 0 })

@@ -98,7 +98,7 @@
                     }
                     @if (Model.AllowLocalLogin)
                     {
-                        var loginUrl = "/login?ReturnUrl=" + Uri.EscapeDataString(Model.ReturnUrl);
+                        var loginUrl = Model.LocalLoginUrl ?? "/login";
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@loginUrl" role="listitem" aria-label="Sign in with username and password" data-provider-name="_local">
                             <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
                         </a>

@@ -74,11 +74,12 @@ public class LogoutPromptFlowTests
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var tokenValidator = new TokenValidator(keyStore);
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var config = new ConfigurationBuilder().Build();
         var backChannel = new BackChannelLogoutEnqueuer(db, tokenBuilder, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
         var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, new NullLogger<PostLogoutRedirectValidator>());
-        var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, audit, metrics, new NullLogger<EndSessionHandler>());
+        var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, tokenValidator, audit, metrics, new NullLogger<EndSessionHandler>());
         var redirectResolver = new LogoutRedirectResolver(db, audit);
         var handler = new LogoutHandler(localLogout, federatedEntry, federatedCallback, endSession, redirectResolver);
 

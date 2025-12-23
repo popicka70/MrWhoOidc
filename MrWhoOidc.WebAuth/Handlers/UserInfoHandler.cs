@@ -236,6 +236,25 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
             }
 
+            // Tenants list exposure when tenants scope is granted
+            if (scopes.Contains(OidcConstants.Scopes.Tenants))
+            {
+                var tenantsJson = principal.FindFirstValue(OidcConstants.Scopes.Tenants);
+                if (!string.IsNullOrWhiteSpace(tenantsJson))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(tenantsJson);
+                        payload[OidcConstants.Scopes.Tenants] = doc.RootElement.Clone();
+                    }
+                    catch
+                    {
+                        // If it's not valid JSON, fall back to string.
+                        payload[OidcConstants.Scopes.Tenants] = tenantsJson;
+                    }
+                }
+            }
+
             // Roles exposure when roles scope is granted
             if (scopes.Contains("roles"))
             {

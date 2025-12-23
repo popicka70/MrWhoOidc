@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Entitlements.Contracts;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
@@ -12,19 +14,22 @@ namespace MrWhoOidc.Auth.Services;
 public interface ITokenService
 {
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default);
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
     // New: client credentials (M2M)
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider, ITenantsClaimService tenantsClaimService) : ITokenService
 {
     private readonly ITenantSettingsService _settingsService = settingsService;
+    private readonly IEntitlementsProvider _entitlementsProvider = entitlementsProvider;
+
+    private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
+        string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync<(bool ok, object? payload, string? error, int status)>(async () =>
@@ -71,6 +76,32 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         // Lookup user and client to compute role claims and realm
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
+
+        // Fail-closed product-scope granting and claim injection (licensed products)
+        Guid? tenantIdForEntitlements = null;
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty)
+        {
+            tenantIdForEntitlements = tenantId;
+        }
+        else if (user is not null && user.TenantId != Guid.Empty)
+        {
+            tenantIdForEntitlements = user.TenantId;
+        }
+
+        var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
+            subjectId: entity.UserId.ToString(),
+            tenantId: tenantIdForEntitlements,
+            requestedScopes: scopes,
+            issuer: issuer,
+            ct: ct).ConfigureAwait(false);
+        scopes = scopesFiltered;
+
+        string? tenantsClaimJson = null;
+        if (scopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+        {
+            tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(entity.UserId, ct).ConfigureAwait(false);
+        }
+
         string? realmName = null;
         string[] roleNames = Array.Empty<string>();
         if (client is not null)
@@ -142,6 +173,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new(OAuthConstants.Parameters.Scope, string.Join(' ', scopes)),
                 new("jti", jti)
             };
+
+            if (!string.IsNullOrWhiteSpace(entitlementsClaimJson))
+            {
+                accessClaims.Add(new("entitlements", entitlementsClaimJson));
+            }
+
+            if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+            {
+                accessClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
+            }
             
             // Add tenant_id claim if any custom (non-standard) scopes are granted
             var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
@@ -216,6 +257,11 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+        {
+            idClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
+        }
+
         // Pull auth_time from metadata store if available
         DateTimeOffset? authTime = null;
         if (meta.TryGetAuthTime(code, out var at)) authTime = at;
@@ -286,7 +332,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, CancellationToken ct = default)
+        string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
     {
         // Load tenant settings
         var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
@@ -299,6 +345,33 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
         var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+
+        // Fail-closed product-scope granting and claim injection (licensed products)
+        var userForTenant = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == tokenEntity.UserId, ct).ConfigureAwait(false);
+
+        Guid? tenantIdForEntitlements = null;
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty)
+        {
+            tenantIdForEntitlements = tenantId;
+        }
+        else if (userForTenant is not null && userForTenant.TenantId != Guid.Empty)
+        {
+            tenantIdForEntitlements = userForTenant.TenantId;
+        }
+
+        var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
+            subjectId: tokenEntity.UserId.ToString(),
+            tenantId: tenantIdForEntitlements,
+            requestedScopes: scopes,
+            issuer: issuer,
+            ct: ct).ConfigureAwait(false);
+        scopes = scopesFiltered;
+
+        string? tenantsClaimJson = null;
+        if (scopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
+        {
+            tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(tokenEntity.UserId, ct).ConfigureAwait(false);
+        }
 
         // Opaque issuance check matches authorization_code path
         var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
@@ -347,6 +420,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 new("scope", string.Join(' ', scopes)),
                 new("jti", jti)
             };
+
+            if (!string.IsNullOrWhiteSpace(entitlementsClaimJson))
+            {
+                accessClaims.Add(new("entitlements", entitlementsClaimJson));
+            }
+
+            if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
+            {
+                accessClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
+            }
             
             // Add tenant_id claim if any custom (non-standard) scopes are granted
             var hasCustomScopes = scopes.Any(s => !scopeResolver.IsStandardScope(s));
@@ -394,6 +477,12 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
     public async Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
     {
+        // Fail-closed for product scopes on client_credentials.
+        if (requestedScopes.Any(ProductScopeClassifier.IsProductScope))
+        {
+            return (false, new { error = OAuthConstants.ErrorCodes.InvalidScope, error_description = "product scopes are not supported for client_credentials" }, OAuthConstants.ErrorCodes.InvalidScope, 400);
+        }
+
         // Load tenant settings for default token lifetime
         var settings = await _settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
         var defaultAccessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
@@ -493,6 +582,56 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             scope = granted.Count > 0 ? string.Join(' ', granted) : null
         };
         return (true, payload, null, 200);
+    }
+
+    private async Task<(string[] scopes, string? entitlementsClaimJson)> ApplyProductEntitlementsAsync(
+        string subjectId,
+        Guid? tenantId,
+        string[] requestedScopes,
+        string issuer,
+        CancellationToken ct)
+    {
+        var productScopes = requestedScopes
+            .Where(ProductScopeClassifier.IsProductScope)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (productScopes.Length == 0)
+        {
+            return (requestedScopes, null);
+        }
+
+        string? tenantIdStr = tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString() : null;
+
+        IReadOnlyDictionary<string, Entitlement> entitlements;
+        try
+        {
+            entitlements = await _entitlementsProvider.GetEffectiveEntitlementsAsync(subjectId, tenantIdStr, productScopes, issuer, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            entitlements = new Dictionary<string, Entitlement>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var grantedProducts = productScopes.Where(p => entitlements.ContainsKey(p)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var filteredScopes = requestedScopes
+            .Where(s => !ProductScopeClassifier.IsProductScope(s) || grantedProducts.Contains(s))
+            .ToArray();
+
+        if (grantedProducts.Count == 0)
+        {
+            return (filteredScopes, null);
+        }
+
+        var claimObj = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in grantedProducts)
+        {
+            var e = entitlements[p];
+            claimObj[p] = new { tier = e.Tier, source = e.Source, licenseId = e.LicenseId, status = e.Status };
+        }
+
+        var json = JsonSerializer.Serialize(claimObj, EntitlementsJsonOptions);
+        return (filteredScopes, json);
     }
 
     async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)

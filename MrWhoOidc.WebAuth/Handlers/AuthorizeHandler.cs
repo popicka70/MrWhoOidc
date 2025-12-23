@@ -18,6 +18,8 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.WebAuth.Services;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -41,7 +43,8 @@ public sealed class AuthorizeHandler(
     IQrLoginHandler qrLoginHandler,
     ITenantAccessor tenantAccessor,
     IFeatureService featureService,
-    IJarmService jarm
+    IJarmService jarm,
+    ILoginContinuationStore continuationStore
 ) : IAuthorizeHandler
 {
     private const string LastIdpCookiePrefix = ".mrwhooidc.lastidp.";
@@ -66,6 +69,13 @@ public sealed class AuthorizeHandler(
         }
 
         return path;
+    }
+
+    private async Task<string> BuildTenantAwareLoginUrlAsync(string returnUrl, CancellationToken cancellationToken)
+    {
+        var ctx = await continuationStore.StoreAsync(returnUrl, cancellationToken).ConfigureAwait(false);
+        var loginPath = BuildTenantAwareUrl("/login");
+        return QueryHelpers.AddQueryString(loginPath, "ctx", ctx);
     }
 
     public async Task<IResult> HandleAsync(HttpContext http)
@@ -269,6 +279,12 @@ public sealed class AuthorizeHandler(
             bool hasQrParam = http.Request.Query.ContainsKey("qr");
             logger.LogInformation("🔍 QR Check: allowQr={AllowQr}, hasQrParam={HasQr}", allowQr, hasQrParam);
 
+            // DEBUG: Log authentication state
+            var isAuthenticated = http.User.Identity?.IsAuthenticated ?? false;
+            logger.LogInformation("🔐 Auth State: IsAuthenticated={IsAuth}, IdentityName={Name}", 
+                isAuthenticated, 
+                http.User.Identity?.Name ?? "(anonymous)");
+
             // QR login: if allowed and hint present, initiate QR flow BEFORE provider selection
             if (allowQr && http.Request.Query.ContainsKey("qr"))
             {
@@ -293,7 +309,7 @@ public sealed class AuthorizeHandler(
                     {
                         outcome = "login";
                         var returnUrlDenied = http.Request.Path + http.Request.QueryString.ToUriComponent();
-                        var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrlDenied)}");
+                        var loginUrl = await BuildTenantAwareLoginUrlAsync(returnUrlDenied, http.RequestAborted).ConfigureAwait(false);
                         return Results.Redirect(loginUrl);
                     }
                     var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
@@ -372,7 +388,7 @@ public sealed class AuthorizeHandler(
                 var returnUrl2 = http.Request.Path + http.Request.QueryString.ToUriComponent();
                 if (allowLocal)
                 {
-                    var loginUrl = BuildTenantAwareUrl($"/login?ReturnUrl={Uri.EscapeDataString(returnUrl2)}");
+                    var loginUrl = await BuildTenantAwareLoginUrlAsync(returnUrl2, http.RequestAborted).ConfigureAwait(false);
                     return Results.Redirect(loginUrl);
                 }
 
@@ -391,19 +407,49 @@ public sealed class AuthorizeHandler(
             }
 
             // From here: authenticated user -> issue code
+            logger.LogInformation("✅ User is authenticated, proceeding to issue authorization code");
             var sub = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            logger.LogInformation("📋 User sub claim: {Sub}", sub ?? "(null)");
             if (string.IsNullOrEmpty(sub) || !Guid.TryParse(sub, out var userId))
+            {
+                logger.LogWarning("❌ No valid sub claim found, returning Unauthorized");
                 return Results.Unauthorized();
+            }
 
             // Enforce user must be assigned to this client (and realm)
+            logger.LogInformation("🔍 Looking up client: {ClientId}", validationResult.ClientId);
             var client = await clients.FindByClientIdAsync(validationResult.ClientId!);
             if (client is null)
             {
                 outcome = "error";
+                logger.LogWarning("❌ Client not found: {ClientId}", validationResult.ClientId);
                 return ErrorResults.InvalidRequest($"Unknown client (corr={corr})");
             }
-            var assigned = await db.UserClientAssignments.AsNoTracking()
-                .AnyAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive);
+            logger.LogInformation("✅ Client found: {ClientId} (Id={ClientGuid}), checking user assignment for user {UserId}", 
+                validationResult.ClientId, client.Id, userId);
+            
+            // Use a timeout to prevent hanging indefinitely
+            using var assignmentCts = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted);
+            assignmentCts.CancelAfter(TimeSpan.FromSeconds(10));
+            
+            bool assigned;
+            try
+            {
+                logger.LogDebug("🔍 Querying UserClientAssignments: UserId={UserId}, ClientId={ClientId}, RealmId={RealmId}", 
+                    userId, client.Id, client.RealmId);
+                assigned = await db.UserClientAssignments.AsNoTracking()
+                    .AnyAsync(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive, assignmentCts.Token);
+                logger.LogInformation("✅ User assignment check completed: assigned={Assigned}", assigned);
+            }
+            catch (OperationCanceledException) when (assignmentCts.IsCancellationRequested && !http.RequestAborted.IsCancellationRequested)
+            {
+                logger.LogError("❌ UserClientAssignments query timed out after 10 seconds!");
+                outcome = "error";
+                return ErrorResults.ServerError($"Database query timed out (corr={corr})");
+            }
+            
+            logger.LogInformation("🔍 Checking if consent is required: RequireConsent={RequireConsent}", validationResult.RequireConsent);
+
             if (!assigned)
             {
                 // If the client opts into auto-approval, treat a successful login as sufficient to ensure
@@ -454,25 +500,26 @@ public sealed class AuthorizeHandler(
                     }
                 }
 
+                // Only deny if the user is STILL unassigned after the auto-assign attempt.
                 if (!assigned)
                 {
                     logger.LogInformation(
                         "Authorize denied: user not assigned to client. ClientId={ClientId}, ClientRecordId={ClientRecordId}, RealmId={RealmId}, UserId={UserId}, AutoApprovalMode={AutoApprovalMode}, HasExternalIdpClaim={HasIdp}, Corr={Corr}",
                         client.ClientId, client.Id, client.RealmId, userId, client.AutoApprovalMode, !string.IsNullOrWhiteSpace(idp), corr);
-                }
 
-                outcome = "not_assigned";
-                if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
-                {
-                    var uri = new UriBuilder(effectiveReq.redirect_uri);
-                    var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                    query[OAuthConstants.Parameters.Error] = OAuthConstants.ErrorCodes.AccessDenied;
-                    query[OAuthConstants.Parameters.ErrorDescription] = $"User is not assigned to this client (corr={corr})";
-                    if (!string.IsNullOrEmpty(effectiveReq.state)) query[OAuthConstants.Parameters.State] = effectiveReq.state;
-                    uri.Query = query.ToString();
-                    return Results.Redirect(uri.ToString());
+                    outcome = "not_assigned";
+                    if (!string.IsNullOrEmpty(effectiveReq.redirect_uri))
+                    {
+                        var uri = new UriBuilder(effectiveReq.redirect_uri);
+                        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                        query[OAuthConstants.Parameters.Error] = OAuthConstants.ErrorCodes.AccessDenied;
+                        query[OAuthConstants.Parameters.ErrorDescription] = $"User is not assigned to this client (corr={corr})";
+                        if (!string.IsNullOrEmpty(effectiveReq.state)) query[OAuthConstants.Parameters.State] = effectiveReq.state;
+                        uri.Query = query.ToString();
+                        return Results.Redirect(uri.ToString());
+                    }
+                    return ErrorResults.AccessDenied($"User is not assigned to this client (corr={corr})");
                 }
-                return ErrorResults.AccessDenied($"User is not assigned to this client (corr={corr})");
             }
 
             if (validationResult.RequireConsent && !await consents.HasConsentAsync(userId, validationResult.ClientId!, validationResult.Scopes))
@@ -482,19 +529,27 @@ public sealed class AuthorizeHandler(
                 var scopesQuery = string.Join("&", validationResult.Scopes.Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
                 var consentUrlPath = BuildTenantAwareUrl("/consent");
                 var consentUrl = $"{consentUrlPath}?ClientId={Uri.EscapeDataString(validationResult.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&{scopesQuery}";
+                logger.LogInformation("⏩ Redirecting to consent page: {ConsentUrl}", consentUrl);
                 return Results.Redirect(consentUrl);
             }
+
+            logger.LogInformation("🔐 Proceeding to issue authorization code for client {ClientId}", validationResult.ClientId);
 
             string? code = null;
             string? redirect = null;
             IResult? errorResult = null;
 
+            logger.LogInformation("📦 Starting database transaction for code issuance");
+
             var strategy = db.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
+                logger.LogInformation("🔄 Inside execution strategy, beginning transaction");
                 using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
                 {
+                    logger.LogInformation("✅ Transaction started, calling IssueAsync");
                     var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
+                    logger.LogInformation("📝 IssueAsync returned: ok={Ok}, redirect={Redirect}, hasCode={HasCode}", ok, r, !string.IsNullOrEmpty(c));
                     if (!ok || r is null)
                     {
                         errorResult = ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
@@ -509,9 +564,14 @@ public sealed class AuthorizeHandler(
                         parStore.MarkConsumedById(resolution.ParId!);
                         metrics.ParConsumed.Add(1);
                     }
+                    logger.LogInformation("💾 Committing transaction...");
                     await transaction.CommitAsync(http.RequestAborted);
+                    logger.LogInformation("✅ Transaction committed successfully");
                 }
             });
+
+            logger.LogInformation("📤 Execution strategy completed, errorResult={HasError}, code={HasCode}, redirect={Redirect}", 
+                errorResult != null, !string.IsNullOrEmpty(code), redirect);
 
             if (errorResult != null) return errorResult;
 
@@ -556,6 +616,8 @@ public sealed class AuthorizeHandler(
                 meta.SetSid(code!, sid);
             }
 
+            logger.LogInformation("📋 Metadata set complete, preparing redirect response");
+
             // JARM response if requested
             if (!string.IsNullOrEmpty(validationResult.ResponseMode) && (validationResult.ResponseMode == OidcConstants.ResponseModes.QueryJwt || validationResult.ResponseMode == OidcConstants.ResponseModes.FormPostJwt))
             {
@@ -573,7 +635,14 @@ public sealed class AuthorizeHandler(
                 query2["state"] = effectiveReq.state;
             }
             uri2.Query = query2.ToString();
-            return Results.Redirect(uri2.ToString());
+            var finalRedirectUrl = uri2.ToString();
+            logger.LogInformation("🎯 FINAL REDIRECT to RP: {RedirectUrl}", finalRedirectUrl);
+            
+            // Use Razor page redirect as a workaround for Chromium browsers that don't follow
+            // HTTP 302 redirects in certain cross-origin/post-redirect contexts.
+            // The Redirect.cshtml page uses meta refresh + JavaScript for reliable navigation.
+            var redirectPageUrl = $"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(finalRedirectUrl)}";
+            return Results.Redirect(redirectPageUrl);
         }
         finally
         {

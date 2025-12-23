@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.Text.Json;
@@ -35,7 +36,7 @@ public sealed class SeedUsageExamples
         // Exchange it
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var scopeResolver = new MockScopeResolver();
-        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, settingsService, scopeResolver);
+        var tokenSvc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);

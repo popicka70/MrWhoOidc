@@ -5,6 +5,8 @@ using MrWhoOidc.Auth.Licensing.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Entitlements.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
@@ -12,6 +14,7 @@ using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;
 using MrWhoOidc.WebAuth.Infrastructure.Pipeline;
 using MrWhoOidc.WebAuth.Middleware;
 using MrWhoOidc.WebAuth.Observability; // for AddOidcMetricsIfMissing
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,6 +100,34 @@ builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 builder.Services.AddMrWhoOidcPersistenceAndCore(builder.Configuration);
 builder.Services.AddMrWhoOidcCorrelation(builder.Configuration, redisMux);
 builder.Services.AddMrWhoOidcMail(builder.Configuration);
+
+// Login continuation store (keeps large ReturnUrl values out of /login query string)
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Services.ILoginContinuationStore, MrWhoOidc.WebAuth.Services.DistributedLoginContinuationStore>();
+
+// LicensingService entitlements integration (Phase 2 PDF licensing)
+builder.Services.AddMemoryCache();
+builder.Services.Configure<LicensingIntegrationOptions>(builder.Configuration.GetSection("LicensingIntegration"));
+builder.Services.AddHttpClient<ILicensingEntitlementsClient, LicensingEntitlementsClient>((sp, client) =>
+{
+    var opt = sp.GetRequiredService<IOptions<LicensingIntegrationOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(opt.BaseUrl))
+    {
+        client.BaseAddress = new Uri(opt.BaseUrl.TrimEnd('/'));
+    }
+}).ConfigurePrimaryHttpMessageHandler(() =>
+{
+    // Dev-only convenience: allow calling a HTTPS LicensingService with a self-signed cert.
+    if (builder.Environment.IsDevelopment())
+    {
+        return new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
+    }
+
+    return new HttpClientHandler();
+});
+builder.Services.AddScoped<IEntitlementsProvider, CachingEntitlementsProvider>();
 // Test-only safety net to mitigate intermittent first-run missing DI registrations.
 // Enabled via Testing:InlineAuthCoreSafety=true. Idempotent; re-invokes core registration if any critical service absent.
 if (string.Equals(builder.Configuration["Testing:InlineAuthCoreSafety"], "true", StringComparison.OrdinalIgnoreCase))
@@ -155,6 +186,11 @@ builder.Services.AddMrWhoOidcBackgroundAndBackchannel(builder.Configuration);
 
 // On-demand tenant seeding service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSeedingService, MrWhoOidc.WebAuth.Services.TenantSeedingService>();
+
+// Optional seed manifest (portable JSON for future import/export)
+builder.Services.Configure<MrWhoOidc.WebAuth.Seeding.SeedManifestOptions>(builder.Configuration.GetSection("Seeding"));
+builder.Services.AddSingleton<MrWhoOidc.WebAuth.Seeding.ISeedManifestProvider, MrWhoOidc.WebAuth.Seeding.SeedManifestProvider>();
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Seeding.ISeedManifestApplier, MrWhoOidc.WebAuth.Seeding.SeedManifestApplier>();
 
 // Tenant switching service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, MrWhoOidc.WebAuth.Services.TenantSwitchingService>();
@@ -251,14 +287,15 @@ using (var scope = app.Services.CreateScope())
 // MUST come before endpoint mapping because it includes UseRouting()
 // Pass migration completion source so the pipeline can wait for migrations before processing requests
 var migrationCompletionSource = EndpointMappingExtensions.GetMigrationCompletionSource();
-app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
-
 // Optional dev/test-only convenience middleware.
 // NOTE: Never enable this in production.
+// IMPORTANT: Must run before tenant resolution in the main pipeline so a fresh DB can bootstrap a default tenant.
 if (autoSeedEnabled)
 {
     app.UseAutoSeed();
 }
+
+app.UseMrWhoOidcPipeline(redisMux, migrationCompletionSource);
 
 // Explicit one-time bootstrap endpoint (guarded by operator token, and only when DB is empty)
 app.MapMrWhoBootstrapEndpoints();

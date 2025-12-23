@@ -13,6 +13,9 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.Logout;
 using MrWhoOidc.WebAuth.Infrastructure;
 using MrWhoOidc.WebAuth.Observability;
+using System;
+using System.Security.Claims;
+using System.Text.Json;
 
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -148,6 +151,52 @@ public class LogoutHandlerTests
     }
 
     [TestMethod]
+    public async Task EndSessionAsync_Allows_Post_Logout_Redirect_Uri_Without_Client_Id_When_Id_Token_Hint_Present()
+    {
+        // Arrange
+        var db = TestDataSeeder.CreateInMemoryDb();
+        await TestDataSeeder.SeedBasicAsync(db);
+
+        var clientId = "spa";
+        var postLogout = "https://app.example.com/signed-out";
+
+        var client = await db.Clients.FirstAsync(c => c.ClientId == clientId);
+        client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] { postLogout });
+        await db.SaveChangesAsync();
+
+        var issuer = "https://issuer.example.com";
+        var audit = new NoopAuditSink();
+        var metrics = new OidcMetrics();
+        var config = new ConfigurationBuilder().Build();
+        var endSession = CreateEndSessionHandler(db, audit, metrics, config);
+
+        // Create a valid, signed JWT whose aud == client_id (simulating a real id_token_hint)
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var jwt = new JwtService(keyStore);
+        var idTokenHint = jwt.CreateJwt(
+            issuer,
+            clientId,
+            new[] { new Claim("sub", "user1") },
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            tokenType: "JWT");
+
+        var http = CreateHttpContextWithIssuer(issuer,
+            ("post_logout_redirect_uri", postLogout),
+            ("id_token_hint", idTokenHint),
+            ("state", "state-value"));
+
+        // Act
+        var result = await endSession.ExecuteAsync(http, LogoutRequest.FromQuery(http.Request.Query), issuer);
+
+        // Assert
+        Assert.IsNotNull(result);
+        Assert.IsInstanceOfType(result, typeof(Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult));
+        var content = (Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult)result;
+        Assert.IsNotNull(content.ResponseContent);
+        StringAssert.Contains(content.ResponseContent, "/logout/final?ref=");
+    }
+
+    [TestMethod]
     public async Task EndSessionAsync_Accepts_Sid()
     {
         // Arrange
@@ -280,6 +329,7 @@ public class LogoutHandlerTests
     {
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var tokenValidator = new TokenValidator(keyStore);
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var backChannel = new BackChannelLogoutEnqueuer(
             db,
@@ -292,7 +342,7 @@ public class LogoutHandlerTests
         );
         var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, NullLogger<PostLogoutRedirectValidator>.Instance);
 
-        return new EndSessionHandler(frontChannel, backChannel, redirectValidator, audit, metrics, NullLogger<EndSessionHandler>.Instance);
+        return new EndSessionHandler(frontChannel, backChannel, redirectValidator, tokenValidator, audit, metrics, NullLogger<EndSessionHandler>.Instance);
     }
 
     private static LogoutRedirectResolver CreateLogoutRedirectResolver(AuthDbContext db, IAuditSink audit)

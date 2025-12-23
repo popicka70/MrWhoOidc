@@ -84,7 +84,9 @@ public sealed class AuthorizeHandlerTests
 
         var resolver = new AuthorizeRequestResolver(requestObjects, parStore, db, authOptions, NullLogger<AuthorizeRequestResolver>.Instance);
 
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, resolver, parStore, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm);
+        var continuationStore = new StubLoginContinuationStore();
+
+        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, resolver, parStore, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm, continuationStore);
     }
 
     private static DefaultHttpContext CreateHttpContext(

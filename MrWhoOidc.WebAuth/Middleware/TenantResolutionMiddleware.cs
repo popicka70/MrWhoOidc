@@ -221,7 +221,10 @@ public class TenantResolutionMiddleware
         var lowerPath = path.ToLowerInvariant();
 
         return lowerPath.StartsWith("/health") ||
+               lowerPath.StartsWith("/bootstrap") ||
                lowerPath.StartsWith("/platform-admin") ||
+               lowerPath.StartsWith("/notfound") ||
+               lowerPath.EndsWith("/notfound") ||
                lowerPath.StartsWith("/_") ||
                lowerPath.StartsWith("/swagger") ||
                lowerPath.StartsWith("/api/platform") ||

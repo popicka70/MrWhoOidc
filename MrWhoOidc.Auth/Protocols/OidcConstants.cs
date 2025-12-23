@@ -18,6 +18,9 @@ public static class OidcConstants
         public const string OfflineAccess = "offline_access";
         public const string Roles = "roles";
 
+        // Custom scopes
+        public const string Tenants = "tenants";
+
         /// <summary>Default scopes for most OIDC flows.</summary>
         public static readonly string[] DefaultScopes = { OpenId, Profile, Email };
 

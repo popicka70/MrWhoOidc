@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Entitlements;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -96,6 +97,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IClientStore, ClientStore>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
+        services.AddScoped<ITenantsClaimService, TenantsClaimService>();
         
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
@@ -118,6 +120,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();
+        services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();
         services.AddScoped<ITokenValidator, TokenValidator>();

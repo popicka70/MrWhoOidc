@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Utils;
 using System.Threading.Tasks;
 
@@ -33,6 +34,12 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
 
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
+
+        // Fail-closed for product scopes on client_credentials.
+        if (requestedScopes.Any(ProductScopeClassifier.IsProductScope))
+        {
+            return new GrantExecutionResult(true, false, ErrorResults.InvalidScope("product scopes are not supported for client_credentials"));
+        }
 
         var issuer = context.Http.GetIssuer(context.Options);
         var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt);
