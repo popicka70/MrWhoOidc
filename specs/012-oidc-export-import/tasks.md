@@ -18,11 +18,11 @@
 
 **Purpose**: Project structure and schema extensions
 
-- [ ] T001 [P] Create `ExportMode` and `ConflictResolution` enums in `MrWhoOidc.Auth/Seeding/ExportEnums.cs`
-- [ ] T002 [P] Create `ExportOptions` DTO in `MrWhoOidc.Auth/Seeding/ExportOptions.cs`
-- [ ] T003 [P] Create `ImportOptions` DTO in `MrWhoOidc.Auth/Seeding/ImportOptions.cs`
-- [ ] T004 [P] Create `ExportMetadata` record in `MrWhoOidc.Auth/Seeding/ExportMetadata.cs`
-- [ ] T005 [P] Create `ExportManifest` root container in `MrWhoOidc.Auth/Seeding/ExportManifest.cs`
+- [x] T001 [P] Create `ExportMode` and `ConflictResolution` enums in `MrWhoOidc.Auth/Seeding/ExportEnums.cs`
+- [x] T002 [P] Create `ExportOptions` DTO in `MrWhoOidc.Auth/Seeding/ExportOptions.cs`
+- [x] T003 [P] Create `ImportOptions` DTO in `MrWhoOidc.Auth/Seeding/ImportOptions.cs`
+- [x] T004 [P] Create `ExportMetadata` record in `MrWhoOidc.Auth/Seeding/ExportMetadata.cs`
+- [x] T005 [P] Create `ExportManifest` root container in `MrWhoOidc.Auth/Seeding/ExportManifest.cs`
 
 ---
 
@@ -34,29 +34,29 @@
 
 ### Schema Extensions
 
-- [ ] T006 Create `IdentityProviderSeedDefinition` in `MrWhoOidc.Auth/Seeding/IdentityProviderSeedDefinition.cs`
-- [ ] T007 [P] Create `ClaimMappingSeedDefinition` in `MrWhoOidc.Auth/Seeding/ClaimMappingSeedDefinition.cs`
-- [ ] T008 [P] Create `ProviderKeySeedDefinition` in `MrWhoOidc.Auth/Seeding/ProviderKeySeedDefinition.cs`
-- [ ] T009 [P] Create `ClientIdpAssignmentSeedDefinition` in `MrWhoOidc.Auth/Seeding/ClientIdpAssignmentSeedDefinition.cs`
-- [ ] T010 [P] Create `RoleSeedDefinition` in `MrWhoOidc.Auth/Seeding/RoleSeedDefinition.cs`
-- [ ] T011 Extend `TenantSeedDefinition` with `identityProviders`, `roles`, new branding fields in `MrWhoOidc.Auth/Seeding/SeedManifest.cs`
-- [ ] T012 Extend `ClientSeedDefinition` with `clientSecretHash`, `publicJwksJson`, `identityProviderAssignments`, logout URIs, M2M settings in `MrWhoOidc.Auth/Seeding/SeedManifest.cs` (depends on T009)
+- [x] T006 Create `IdentityProviderSeedDefinition` in `MrWhoOidc.Auth/Seeding/IdentityProviderSeedDefinition.cs`
+- [x] T007 [P] Create `ClaimMappingSeedDefinition` in `MrWhoOidc.Auth/Seeding/ClaimMappingSeedDefinition.cs`
+- [x] T008 [P] Create `ProviderKeySeedDefinition` in `MrWhoOidc.Auth/Seeding/ProviderKeySeedDefinition.cs`
+- [x] T009 [P] Create `ClientIdpAssignmentSeedDefinition` in `MrWhoOidc.Auth/Seeding/ClientIdpAssignmentSeedDefinition.cs`
+- [x] T010 [P] Create `RoleSeedDefinition` in `MrWhoOidc.Auth/Seeding/RoleSeedDefinition.cs`
+- [x] T011 Extend `TenantSeedDefinition` with `identityProviders`, `roles`, new branding fields in `MrWhoOidc.Auth/Seeding/SeedManifest.cs`
+- [x] T012 Extend `ClientSeedDefinition` with `clientSecretHash`, `publicJwksJson`, `identityProviderAssignments`, logout URIs, M2M settings in `MrWhoOidc.Auth/Seeding/SeedManifest.cs` (depends on T009)
 
 ### Audit Entity & Migration
 
-- [ ] T013 Create `ConfigurationAuditLog` entity in `MrWhoOidc.Auth/Entities/ConfigurationAuditLog.cs`
-- [ ] T014 Add `ConfigurationAuditLogs` DbSet and configuration to `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` (depends on T013)
-- [ ] T015 Generate EF Core migration for `ConfigurationAuditLog` using `dotnet ef migrations add AddConfigurationAuditLog` (depends on T014)
+- [x] T013 Create `ConfigurationAuditLog` entity in `MrWhoOidc.Auth/Entities/ConfigurationAuditLog.cs`
+- [x] T014 Add `ConfigurationAuditLogs` DbSet and configuration to `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` (depends on T013)
+- [x] T015 Generate EF Core migration for `ConfigurationAuditLog` using `dotnet ef migrations add AddConfigurationAuditLog` (depends on T014)
 
 ### Service Interfaces
 
-- [ ] T016 [P] Create `IConfigurationExportService` interface in `MrWhoOidc.Auth/Services/IConfigurationExportService.cs`
-- [ ] T017 [P] Create `IConfigurationImportService` interface with preview/execute methods in `MrWhoOidc.Auth/Services/IConfigurationImportService.cs`
-- [ ] T018 [P] Create import DTOs (`ImportPreview`, `ImportConflict`, `ImportResult`, `ValidationError`) in `MrWhoOidc.Auth/Seeding/ImportDtos.cs`
+- [x] T016 [P] Create `IConfigurationExportService` interface in `MrWhoOidc.Auth/Services/IConfigurationExportService.cs`
+- [x] T017 [P] Create `IConfigurationImportService` interface with preview/execute methods in `MrWhoOidc.Auth/Services/IConfigurationImportService.cs`
+- [x] T018 [P] Create import DTOs (`ImportPreview`, `ImportConflict`, `ImportResult`, `ValidationError`) in `MrWhoOidc.Auth/Seeding/ImportDtos.cs`
 
 ### Service Registration
 
-- [ ] T019 Register export/import services in `MrWhoOidc.WebAuth/Program.cs` DI container (depends on T016, T017)
+- [x] T019 Register export/import services in `MrWhoOidc.WebAuth/Program.cs` DI container (depends on T016, T017)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 

@@ -68,6 +68,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<LicenseHistoryEntry> LicenseHistory => Set<LicenseHistoryEntry>();
     public DbSet<FeatureUsageMetric> FeatureUsageMetrics => Set<FeatureUsageMetric>();
     public DbSet<LicenseLimit> LicenseLimits => Set<LicenseLimit>();
+    // New: Configuration export/import audit logs
+    public DbSet<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog> ConfigurationAuditLogs => Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -867,6 +869,34 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.TenantId);
             b.HasIndex(x => new { x.Status, x.ExpiresAt });
+        });
+
+        // New: Configuration export/import audit logs
+        modelBuilder.Entity<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Operation).IsRequired().HasMaxLength(20);
+            b.Property(x => x.EntityType).IsRequired().HasMaxLength(50);
+            b.Property(x => x.EntityIdentifier).HasMaxLength(200);
+            b.Property(x => x.ExportMode).IsRequired().HasMaxLength(20);
+            b.Property(x => x.Result).IsRequired().HasMaxLength(20);
+            b.Property(x => x.ErrorDetails).HasMaxLength(4000);
+            b.Property(x => x.ManifestChecksum).HasMaxLength(100);
+            b.Property(x => x.PerformedBy).IsRequired().HasMaxLength(256);
+            b.Property(x => x.IpAddress).HasMaxLength(100);
+            b.Property(x => x.UserAgent).HasMaxLength(500);
+            b.Property(x => x.Timestamp).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Timestamp })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_ConfigurationAuditLog_Tenant_Timestamp");
+            b.HasIndex(x => new { x.Operation, x.Timestamp })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_ConfigurationAuditLog_Operation");
+            // Optional tenant FK
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
             ConfigureLicenseEntities(modelBuilder);
