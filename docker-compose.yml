@@ -60,6 +60,9 @@ services:
       # Logging Configuration
       Logging__LogLevel__Default: ${LOGGING_LEVEL:-Information}
       Logging__LogLevel__Microsoft.AspNetCore: ${LOGGING_LEVEL:-Warning}
+      
+      # Bootstrap Configuration (one-time initial setup)
+      Bootstrap__Token: ${BOOTSTRAP_TOKEN:-}
     ports:
       - "8443:8443"
       - "8081:8080"  # HTTP port for automatic redirect to HTTPS (mapped to 8081 on host to avoid conflicts)
