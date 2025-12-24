@@ -9,11 +9,17 @@
         ? $"/t/{currentTenant.Slug}" 
         : "";
 }
-<h2>Identity Providers</h2>
-
-<p>
-    <a href="@(tenantPrefix)/Admin/Providers/Add" class="btn btn-primary">Add Provider</a>
-</p>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="m-0">Identity Providers</h2>
+    <div class="btn-group">
+        <a href="@(tenantPrefix)/admin/providers/import" class="btn btn-outline-primary">
+            <i class="bi bi-upload"></i> Import Provider
+        </a>
+        <a href="@(tenantPrefix)/Admin/Providers/Add" class="btn btn-success">
+            <i class="bi bi-plus-lg"></i> Add Provider
+        </a>
+    </div>
+</div>
 
 @if (Model.Providers.Count == 0)
 {
@@ -43,6 +49,7 @@ else
                     <a href="@(tenantPrefix)/Admin/Providers/Edit/@p.Id" class="btn btn-outline-secondary" title="Edit">Edit</a>
                     <a href="@(tenantPrefix)/Admin/Providers/ClaimMappings/@p.Id" class="btn btn-outline-secondary" title="Claim mappings">Claims</a>
                     <a href="@(tenantPrefix)/Admin/ProviderKeys/Index?providerId=@p.Id" class="btn btn-outline-secondary" title="Keys">Keys</a>
+                    <a href="@(tenantPrefix)/admin/providers/export/@p.Id" class="btn btn-outline-secondary" title="Export Configuration">Export</a>
                     <a href="@(tenantPrefix)/Admin/Providers/Delete/@p.Id" class="btn btn-outline-danger" title="Delete">Del</a>
                 </div>
                 <span class="drag-handle ms-3 text-muted" aria-hidden="true" title="Drag to reorder">☰</span>

@@ -20,6 +20,24 @@ public sealed record SeedManifest
 
     [JsonPropertyName("tenants")]
     public List<TenantSeedDefinition> Tenants { get; init; } = [];
+
+    /// <summary>
+    /// Standalone realm definitions for realm-level export/import.
+    /// </summary>
+    [JsonPropertyName("realms")]
+    public List<RealmSeedDefinition> Realms { get; init; } = [];
+
+    /// <summary>
+    /// Standalone client definitions for client-level export/import.
+    /// </summary>
+    [JsonPropertyName("clients")]
+    public List<ClientSeedDefinition> Clients { get; init; } = [];
+
+    /// <summary>
+    /// Standalone identity provider definitions for provider-level export/import.
+    /// </summary>
+    [JsonPropertyName("identityProviders")]
+    public List<IdentityProviderSeedDefinition> IdentityProviders { get; init; } = [];
 }
 
 public sealed record ScopeSeedDefinition
@@ -71,11 +89,67 @@ public sealed record TenantSeedDefinition
     [JsonPropertyName("billingPlan")]
     public string? BillingPlan { get; init; }
 
+    // --- Export/Import extensions ---
+
+    /// <summary>
+    /// Tenant status: "Active", "Suspended", or "Disabled".
+    /// </summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    /// <summary>
+    /// URL to tenant logo image.
+    /// </summary>
+    [JsonPropertyName("logoUrl")]
+    public string? LogoUrl { get; init; }
+
+    /// <summary>
+    /// Primary branding color (hex format).
+    /// </summary>
+    [JsonPropertyName("primaryColor")]
+    public string? PrimaryColor { get; init; }
+
+    /// <summary>
+    /// Accent branding color (hex format).
+    /// </summary>
+    [JsonPropertyName("accentColor")]
+    public string? AccentColor { get; init; }
+
+    /// <summary>
+    /// Custom tenant settings as JSON blob.
+    /// </summary>
+    [JsonPropertyName("settingsJson")]
+    public string? SettingsJson { get; init; }
+
+    /// <summary>
+    /// License limit: maximum number of users.
+    /// </summary>
+    [JsonPropertyName("maxUsers")]
+    public int? MaxUsers { get; init; }
+
+    /// <summary>
+    /// License limit: maximum number of clients.
+    /// </summary>
+    [JsonPropertyName("maxClients")]
+    public int? MaxClients { get; init; }
+
     [JsonPropertyName("realms")]
     public List<RealmSeedDefinition> Realms { get; init; } = [];
 
     [JsonPropertyName("clients")]
     public List<ClientSeedDefinition> Clients { get; init; } = [];
+
+    /// <summary>
+    /// Identity providers configured for this tenant.
+    /// </summary>
+    [JsonPropertyName("identityProviders")]
+    public List<IdentityProviderSeedDefinition> IdentityProviders { get; init; } = [];
+
+    /// <summary>
+    /// Roles defined within this tenant's realms.
+    /// </summary>
+    [JsonPropertyName("roles")]
+    public List<RoleSeedDefinition> Roles { get; init; } = [];
 }
 
 public sealed record RealmSeedDefinition
@@ -88,6 +162,18 @@ public sealed record RealmSeedDefinition
 
     [JsonPropertyName("allowUnconfirmedLogin")]
     public bool? AllowUnconfirmedLogin { get; init; }
+
+    /// <summary>
+    /// Clients within this realm (for realm-level export).
+    /// </summary>
+    [JsonPropertyName("clients")]
+    public List<ClientSeedDefinition> Clients { get; init; } = [];
+
+    /// <summary>
+    /// Roles within this realm (for realm-level export).
+    /// </summary>
+    [JsonPropertyName("roles")]
+    public List<RoleSeedDefinition> Roles { get; init; } = [];
 }
 
 public sealed record ClientSeedDefinition
@@ -111,6 +197,12 @@ public sealed record ClientSeedDefinition
     public bool? RequireConsent { get; init; }
 
     /// <summary>
+    /// Whether Pushed Authorization Request (PAR) is required.
+    /// </summary>
+    [JsonPropertyName("requirePar")]
+    public bool? RequirePar { get; init; }
+
+    /// <summary>
     /// One of: No, All, OnlyExternalIdp.
     /// Stored in Clients.AutoApprovalMode.
     /// </summary>
@@ -131,11 +223,78 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("clientSecretEnv")]
     public string? ClientSecretEnv { get; init; }
 
+    /// <summary>
+    /// Hashed client secret value (for full exports only).
+    /// Never contains plaintext secrets.
+    /// </summary>
+    [JsonPropertyName("clientSecretHash")]
+    public string? ClientSecretHash { get; init; }
+
+    // --- Public Keys ---
+
+    /// <summary>
+    /// Inline JWKS for client authentication (e.g., private_key_jwt).
+    /// </summary>
+    [JsonPropertyName("publicJwksJson")]
+    public string? PublicJwksJson { get; init; }
+
+    /// <summary>
+    /// Remote JWKS URI for dynamic key retrieval.
+    /// </summary>
+    [JsonPropertyName("publicJwksUri")]
+    public string? PublicJwksUri { get; init; }
+
     [JsonPropertyName("allowedLoginRedirectUris")]
     public List<string> AllowedLoginRedirectUris { get; init; } = [];
 
     [JsonPropertyName("allowedLogoutRedirectUris")]
     public List<string> AllowedLogoutRedirectUris { get; init; } = [];
+
+    // --- Login Methods ---
+
+    /// <summary>
+    /// Whether local (username/password) login is allowed.
+    /// </summary>
+    [JsonPropertyName("allowLocalLogin")]
+    public bool? AllowLocalLogin { get; init; }
+
+    /// <summary>
+    /// Whether external IdP login is allowed.
+    /// </summary>
+    [JsonPropertyName("allowExternalIdp")]
+    public bool? AllowExternalIdp { get; init; }
+
+    /// <summary>
+    /// Whether QR code login is allowed.
+    /// </summary>
+    [JsonPropertyName("allowQrLogin")]
+    public bool? AllowQrLogin { get; init; }
+
+    // --- Logout URIs ---
+
+    /// <summary>
+    /// Back-channel logout URI for receiving logout tokens.
+    /// </summary>
+    [JsonPropertyName("backChannelLogoutUri")]
+    public string? BackChannelLogoutUri { get; init; }
+
+    /// <summary>
+    /// Whether session ID (sid) is required in back-channel logout tokens.
+    /// </summary>
+    [JsonPropertyName("backChannelLogoutSessionRequired")]
+    public bool? BackChannelLogoutSessionRequired { get; init; }
+
+    /// <summary>
+    /// Front-channel logout URI.
+    /// </summary>
+    [JsonPropertyName("frontChannelLogoutUri")]
+    public string? FrontChannelLogoutUri { get; init; }
+
+    /// <summary>
+    /// Whether session ID (sid) is required in front-channel logout.
+    /// </summary>
+    [JsonPropertyName("frontChannelLogoutSessionRequired")]
+    public bool? FrontChannelLogoutSessionRequired { get; init; }
 
     /// <summary>
     /// Optional explicit allow-list of OIDC scopes for this client.
@@ -157,4 +316,58 @@ public sealed record ClientSeedDefinition
 
     [JsonPropertyName("oboAllowedScopes")]
     public List<string> OboAllowedScopes { get; init; } = [];
+
+    /// <summary>
+    /// Maximum delegation depth for OBO chains.
+    /// </summary>
+    [JsonPropertyName("oboMaxDelegationDepth")]
+    public int? OboMaxDelegationDepth { get; init; }
+
+    /// <summary>
+    /// Maximum token lifetime in minutes for OBO tokens.
+    /// </summary>
+    [JsonPropertyName("oboMaxLifetimeMinutes")]
+    public int? OboMaxLifetimeMinutes { get; init; }
+
+    /// <summary>
+    /// DPoP mode for OBO: "None", "Optional", or "Required".
+    /// </summary>
+    [JsonPropertyName("oboDpopMode")]
+    public string? OboDpopMode { get; init; }
+
+    /// <summary>
+    /// List of client IDs that are allowed to call this client via OBO.
+    /// </summary>
+    [JsonPropertyName("oboAllowedCallers")]
+    public List<string> OboAllowedCallers { get; init; } = [];
+
+    // --- M2M Settings ---
+
+    /// <summary>
+    /// Allowed audiences for machine-to-machine tokens.
+    /// </summary>
+    [JsonPropertyName("m2mAllowedAudiences")]
+    public List<string> M2mAllowedAudiences { get; init; } = [];
+
+    /// <summary>
+    /// Access token lifetime in seconds for M2M tokens.
+    /// </summary>
+    [JsonPropertyName("m2mAccessTokenLifetimeSeconds")]
+    public int? M2mAccessTokenLifetimeSeconds { get; init; }
+
+    // --- Auto-assignment ---
+
+    /// <summary>
+    /// Whether to auto-assign new users to this client.
+    /// </summary>
+    [JsonPropertyName("autoAssignNewUsersToClient")]
+    public bool? AutoAssignNewUsersToClient { get; init; }
+
+    // --- IdP Assignments ---
+
+    /// <summary>
+    /// Identity provider assignments for this client.
+    /// </summary>
+    [JsonPropertyName("identityProviderAssignments")]
+    public List<ClientIdpAssignmentSeedDefinition> IdentityProviderAssignments { get; init; } = [];
 }

@@ -210,6 +210,10 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextRes
 // Tenant settings service (cascading: platform → tenant → client)
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantSettingsService, MrWhoOidc.Auth.Services.TenantSettingsService>();
 
+// Configuration export/import services
+builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationExportService, MrWhoOidc.WebAuth.Services.ConfigurationExportService>();
+builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationImportService, MrWhoOidc.WebAuth.Services.ConfigurationImportService>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted
@@ -305,6 +309,9 @@ app.MapMrWhoOidcEndpoints();
 
 // Admin + health endpoints (extracted)
 app.MapMrWhoAdminApiEndpoints();
+
+// Export/Import API endpoints (platform admin only)
+app.MapExportImportEndpoints();
 
 // (Static assets mapping handled inside UseMrWhoOidcPipeline)
 

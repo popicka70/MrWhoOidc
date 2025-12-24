@@ -1,0 +1,151 @@
+@page "{id:guid}"
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.ExportModel
+@{
+    ViewData["Title"] = $"Export Provider: {Model.Provider.Name}";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="bi bi-download text-primary me-2"></i>
+            Export Identity Provider Configuration
+        </h1>
+        <p class="text-muted mb-0">
+            <code>@Model.Provider.TenantSlug/@Model.Provider.Name</code>
+            @if (!string.IsNullOrEmpty(Model.Provider.DisplayName))
+            {
+                <span> - @Model.Provider.DisplayName</span>
+            }
+            <span class="badge bg-info ms-2">@Model.Provider.ProviderType</span>
+        </p>
+    </div>
+    <div>
+        <a class="btn btn-outline-secondary" asp-page="Index">
+            <i class="bi bi-arrow-left"></i> Back to Providers
+        </a>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Export Error:</strong> @Model.ErrorMessage
+    </div>
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-gear me-2"></i>Export Options
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Export Mode</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="ExportMode" id="modeObfuscated" 
+                                   value="obfuscated" @(Model.ExportMode == "obfuscated" ? "checked" : "") />
+                            <label class="form-check-label" for="modeObfuscated">
+                                <strong>Obfuscated</strong> <span class="badge bg-success">Recommended</span>
+                            </label>
+                            <p class="text-muted small mb-0 ms-4">
+                                Secrets are replaced with placeholder markers (e.g., <code>***OBFUSCATED***</code>). 
+                                Safe for sharing, backup, and version control. Secrets must be re-entered on import.
+                            </p>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="ExportMode" id="modeFull" 
+                                   value="full" @(Model.ExportMode == "full" ? "checked" : "") />
+                            <label class="form-check-label" for="modeFull">
+                                <strong>Full Export</strong> <span class="badge bg-warning text-dark">Sensitive</span>
+                            </label>
+                            <p class="text-muted small mb-0 ms-4">
+                                Includes the client secret for restoration without re-entering credentials.
+                                <span class="text-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Contains sensitive data - store securely!
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> This export includes the identity provider configuration, 
+                        claim mappings, and public keys.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-download me-2"></i>Download Export
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-check me-2"></i>Export Preview
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">The following entities will be included:</p>
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><i class="bi bi-diagram-3 me-2 text-primary"></i>Claim Mappings</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ClaimMappingCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-key-fill me-2 text-success"></i>Public Keys</td>
+                            <td class="text-end"><span class="badge bg-secondary">@Model.Preview.KeyCount</span></td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-shield-lock me-2 text-warning"></i>Client Secret</td>
+                            <td class="text-end">
+                                @if (Model.Preview.HasClientSecret)
+                                {
+                                    <span class="badge bg-warning text-dark">Yes</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">None</span>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                @if (Model.Preview.HasClientSecret)
+                {
+                    <div class="alert alert-warning small mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Client secret</strong> will be 
+                        @(Model.ExportMode == "full" ? "exported" : "obfuscated").
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('input[name="ExportMode"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var hasSecret = @(Model.Preview.HasClientSecret ? "true" : "false");
+                if (hasSecret) {
+                    var warningText = this.value === 'full' 
+                        ? 'exported' 
+                        : 'obfuscated';
+                    var alertEl = document.querySelector('.alert-warning strong');
+                    if (alertEl) {
+                        alertEl.parentElement.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>Client secret</strong> will be ' + warningText + '.';
+                    }
+                }
+            });
+        });
+    </script>
+}
