@@ -21,6 +21,46 @@
             </div>
         }
 
+        @* External IdP Login Section *@
+        @if (Model.LoginIdps.Any())
+        {
+            <div class="mb-4">
+                <div class="d-grid gap-2 provider-list" role="list" aria-label="External identity providers for sign in">
+                    @foreach (var idp in Model.LoginIdps)
+                    {
+                        // Construct the external start URL - login flow returns to DiscoverTenant with success
+                        var callbackUrl = "/DiscoverTenant";
+                        if (!string.IsNullOrEmpty(Model.ReturnUrl))
+                        {
+                            callbackUrl += $"?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
+                        }
+                        var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idp.Name)}&returnUrl={Uri.EscapeDataString(callbackUrl)}";
+                        <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"
+                           href="@startUrl"
+                           role="listitem"
+                           aria-label="Sign in with @idp.DisplayName"
+                           data-provider-name="@idp.Name">
+                            @if (!string.IsNullOrEmpty(idp.LogoUrl))
+                            {
+                                <img src="@idp.LogoUrl" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
+                            }
+                            <span class="flex-grow-1">Continue with @idp.DisplayName</span>
+                        </a>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center my-3">
+                <hr class="flex-grow-1" />
+                <span class="mx-3 text-muted small">or use email</span>
+                <hr class="flex-grow-1" />
+            </div>
+        }
+
         <form method="post" asp-antiforgery="true">
             <input type="hidden" asp-for="ReturnUrl" />
             
