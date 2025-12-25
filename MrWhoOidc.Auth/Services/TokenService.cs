@@ -88,7 +88,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             tenantIdForEntitlements = user.TenantId;
         }
 
-        var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
+        var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
             subjectId: entity.UserId.ToString(),
             tenantId: tenantIdForEntitlements,
             requestedScopes: scopes,
@@ -177,6 +177,14 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             if (!string.IsNullOrWhiteSpace(entitlementsClaimJson))
             {
                 accessClaims.Add(new("entitlements", entitlementsClaimJson));
+            }
+
+            // Add signed license tokens for cryptographic verification
+            if (signedLicenseTokens is { Count: > 0 })
+            {
+                // Embed as JSON object mapping product -> signed JWT
+                var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
+                accessClaims.Add(new("license", licenseJson));
             }
 
             if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
@@ -359,7 +367,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             tenantIdForEntitlements = userForTenant.TenantId;
         }
 
-        var (scopesFiltered, entitlementsClaimJson) = await ApplyProductEntitlementsAsync(
+        var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
             subjectId: tokenEntity.UserId.ToString(),
             tenantId: tenantIdForEntitlements,
             requestedScopes: scopes,
@@ -424,6 +432,13 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             if (!string.IsNullOrWhiteSpace(entitlementsClaimJson))
             {
                 accessClaims.Add(new("entitlements", entitlementsClaimJson));
+            }
+
+            // Add signed license tokens for cryptographic verification
+            if (signedLicenseTokens is { Count: > 0 })
+            {
+                var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
+                accessClaims.Add(new("license", licenseJson));
             }
 
             if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
@@ -584,7 +599,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         return (true, payload, null, 200);
     }
 
-    private async Task<(string[] scopes, string? entitlementsClaimJson)> ApplyProductEntitlementsAsync(
+    private async Task<(string[] scopes, string? entitlementsClaimJson, Dictionary<string, string>? signedLicenseTokens)> ApplyProductEntitlementsAsync(
         string subjectId,
         Guid? tenantId,
         string[] requestedScopes,
@@ -598,7 +613,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         if (productScopes.Length == 0)
         {
-            return (requestedScopes, null);
+            return (requestedScopes, null, null);
         }
 
         string? tenantIdStr = tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString() : null;
@@ -620,7 +635,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         if (grantedProducts.Count == 0)
         {
-            return (filteredScopes, null);
+            return (filteredScopes, null, null);
         }
 
         var claimObj = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
@@ -631,7 +646,53 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         }
 
         var json = JsonSerializer.Serialize(claimObj, EntitlementsJsonOptions);
-        return (filteredScopes, json);
+        
+        // Request signed license tokens for each granted product
+        var signedTokens = await RequestSignedLicenseTokensAsync(subjectId, tenantIdStr, grantedProducts, issuer, ct).ConfigureAwait(false);
+        
+        return (filteredScopes, json, signedTokens);
+    }
+
+    private async Task<Dictionary<string, string>?> RequestSignedLicenseTokensAsync(
+        string subjectId,
+        string? tenantId,
+        ISet<string> grantedProducts,
+        string issuer,
+        CancellationToken ct)
+    {
+        // Try to get signed license tokens from LicensingService
+        // Fall back gracefully if unavailable - unsigned entitlements still work
+        if (entitlementsProvider is not ILicensingEntitlementsClient client)
+        {
+            return null;
+        }
+
+        var signedTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        
+        foreach (var productKey in grantedProducts)
+        {
+            try
+            {
+                var request = new Entitlements.Contracts.SignedLicenseTokenRequest
+                {
+                    SubjectId = subjectId,
+                    ProductKey = productKey,
+                    TenantId = tenantId
+                };
+
+                var result = await client.GetSignedLicenseTokenAsync(request, issuer, ct).ConfigureAwait(false);
+                if (result.Success && result.Response?.Token is not null)
+                {
+                    signedTokens[productKey] = result.Response.Token;
+                }
+            }
+            catch
+            {
+                // Log and continue - signed tokens are optional enhancement
+            }
+        }
+
+        return signedTokens.Count > 0 ? signedTokens : null;
     }
 
     async Task PersistOpaqueAccessAsync(Guid userId, string clientId, string audience, string[] scopes, string jti, string rawToken, TimeSpan lifetime, string? cnfJkt, CancellationToken ct, string? actJson = null, int delegationDepth = 0)
