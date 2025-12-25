@@ -88,6 +88,16 @@ public sealed class ConfigurationImportService(
                     }
                 }
             }
+
+            // Check standalone providers for obfuscated secrets
+            foreach (var provider in manifest.Data?.IdentityProviders ?? [])
+            {
+                if (provider.Config?.Any(kv => 
+                    kv.Value is JsonElement je && je.GetString() == ExportManifest.ObfuscatedMarker) == true)
+                {
+                    warnings.Add($"Provider '{provider.Name}' has obfuscated configuration. Provide replacement values in import options.");
+                }
+            }
         }
 
         // Detect conflicts
@@ -96,13 +106,30 @@ public sealed class ConfigurationImportService(
         // Build entity lists
         var (toCreate, toUpdate) = BuildEntityLists(manifest, conflicts, options);
 
+        // Calculate counts
+        var tenantCount = manifest.Data?.Tenants?.Count ?? 0;
+        var realmCount = (manifest.Data?.Realms?.Count ?? 0) + 
+                         (manifest.Data?.Tenants?.Sum(t => t.Realms?.Count ?? 0) ?? 0);
+        var clientCount = (manifest.Data?.Clients?.Count ?? 0) + 
+                          (manifest.Data?.Tenants?.Sum(t => t.Clients?.Count ?? 0) ?? 0);
+        var providerCount = (manifest.Data?.IdentityProviders?.Count ?? 0) + 
+                            (manifest.Data?.Tenants?.Sum(t => t.IdentityProviders?.Count ?? 0) ?? 0);
+        var scopeCount = manifest.Data?.Scopes?.Count ?? 0;
+
         preview = preview with
         {
             IsValid = true,
             Conflicts = conflicts,
             EntitiesToCreate = toCreate,
             EntitiesToUpdate = toUpdate,
-            Warnings = warnings
+            Warnings = warnings,
+            TenantCount = tenantCount,
+            RealmCount = realmCount,
+            ClientCount = clientCount,
+            ProviderCount = providerCount,
+            ScopeCount = scopeCount,
+            HasObfuscatedSecrets = warnings.Any(w => w.Contains("obfuscated", StringComparison.OrdinalIgnoreCase)),
+            ObfuscatedSecretCount = warnings.Count(w => w.Contains("obfuscated", StringComparison.OrdinalIgnoreCase))
         };
 
         return preview;
@@ -278,33 +305,1144 @@ public sealed class ConfigurationImportService(
     }
 
     /// <inheritdoc />
-    public Task<ImportResult> ImportRealmAsync(
+    public async Task<ImportResult> ImportRealmAsync(
         ExportManifest manifest,
         ImportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in Phase 5
-        throw new NotImplementedException("Realm import will be implemented in Phase 5");
+        // Require target tenant ID for realm imports
+        if (!options.TargetTenantId.HasValue)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Realm",
+                Code = "MISSING_TARGET_TENANT",
+                Message = "Target tenant ID must be specified when importing realms"
+            });
+        }
+
+        var tenantId = options.TargetTenantId.Value;
+
+        // Verify tenant exists
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+        if (tenant == null)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Realm",
+                Code = "TENANT_NOT_FOUND",
+                Message = $"Target tenant with ID '{tenantId}' was not found"
+            });
+        }
+
+        // Collect realms from both standalone and tenant-nested sources
+        var realms = new List<RealmSeedDefinition>();
+        realms.AddRange(manifest.Data?.Realms ?? []);
+        foreach (var tenantDef in manifest.Data?.Tenants ?? [])
+        {
+            realms.AddRange(tenantDef.Realms ?? []);
+        }
+
+        if (realms.Count == 0)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Realm",
+                Code = "NO_REALMS",
+                Message = "No realms found in the manifest"
+            });
+        }
+
+        if (options.ValidateOnly)
+        {
+            var (created, updated, skipped) = await CountRealmOperationsAsync(tenantId, realms, options, cancellationToken);
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = created,
+                EntitiesUpdated = updated,
+                EntitiesSkipped = skipped
+            };
+        }
+
+        var createdCount = 0;
+        var updatedCount = 0;
+        var skippedCount = 0;
+        var errors = new List<ImportError>();
+
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        try
+        {
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                foreach (var realmDef in realms)
+                {
+                    var existingRealm = await _dbContext.Realms
+                        .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.Name == realmDef.Name, cancellationToken);
+
+                    if (existingRealm != null)
+                    {
+                        var resolution = options.GetResolution("Realm", realmDef.Name);
+
+                        switch (resolution)
+                        {
+                            case ConflictResolution.Skip:
+                                skippedCount++;
+                                _logger.LogInformation("Skipped existing realm {Name}", realmDef.Name);
+                                continue;
+
+                            case ConflictResolution.Overwrite:
+                                await UpdateRealmAsync(existingRealm, realmDef, options, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Updated existing realm {Name}", realmDef.Name);
+                                break;
+
+                            case ConflictResolution.Merge:
+                                await MergeRealmAsync(existingRealm, realmDef, options, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Merged realm {Name}", realmDef.Name);
+                                break;
+
+                            case ConflictResolution.Rename:
+                                var newName = await GenerateUniqueRealmNameAsync(tenantId, realmDef.Name, cancellationToken);
+                                await CreateRealmAsync(tenantId, realmDef with { Name = newName }, options, cancellationToken);
+                                createdCount++;
+                                _logger.LogInformation("Created renamed realm {NewName} (was {OldName})", newName, realmDef.Name);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        await CreateRealmAsync(tenantId, realmDef, options, cancellationToken);
+                        createdCount++;
+                        _logger.LogInformation("Created realm {Name}", realmDef.Name);
+                    }
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+            });
+
+            await LogImportAuditAsync(
+                tenantId, "Realm", realms.FirstOrDefault()?.Name ?? "unknown",
+                options, true, createdCount, updatedCount, skippedCount, null, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = createdCount,
+                EntitiesUpdated = updatedCount,
+                EntitiesSkipped = skippedCount,
+                Errors = errors
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import realms");
+
+            await LogImportAuditAsync(
+                tenantId, "Realm", realms.FirstOrDefault()?.Name ?? "unknown",
+                options, false, createdCount, updatedCount, skippedCount, ex.Message, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Realm",
+                Code = "IMPORT_FAILED",
+                Message = ex.Message
+            });
+        }
     }
 
     /// <inheritdoc />
-    public Task<ImportResult> ImportClientAsync(
+    public async Task<ImportResult> ImportClientAsync(
         ExportManifest manifest,
         ImportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in Phase 6
-        throw new NotImplementedException("Client import will be implemented in Phase 6");
+        // Require target tenant ID for client imports
+        if (!options.TargetTenantId.HasValue)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Client",
+                Code = "MISSING_TARGET_TENANT",
+                Message = "Target tenant ID must be specified when importing clients"
+            });
+        }
+
+        var tenantId = options.TargetTenantId.Value;
+
+        // Verify tenant exists
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+        if (tenant == null)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Client",
+                Code = "TENANT_NOT_FOUND",
+                Message = $"Target tenant with ID '{tenantId}' was not found"
+            });
+        }
+
+        // Collect clients from both standalone and tenant/realm-nested sources
+        var clients = new List<(ClientSeedDefinition Client, string? RealmName)>();
+        foreach (var clientDef in manifest.Data?.Clients ?? [])
+        {
+            clients.Add((clientDef, clientDef.Realm));
+        }
+        foreach (var tenantDef in manifest.Data?.Tenants ?? [])
+        {
+            foreach (var clientDef in tenantDef.Clients ?? [])
+            {
+                clients.Add((clientDef, clientDef.Realm));
+            }
+            foreach (var realmDef in tenantDef.Realms ?? [])
+            {
+                foreach (var clientDef in realmDef.Clients ?? [])
+                {
+                    clients.Add((clientDef, realmDef.Name));
+                }
+            }
+        }
+        foreach (var realmDef in manifest.Data?.Realms ?? [])
+        {
+            foreach (var clientDef in realmDef.Clients ?? [])
+            {
+                clients.Add((clientDef, realmDef.Name));
+            }
+        }
+
+        if (clients.Count == 0)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Client",
+                Code = "NO_CLIENTS",
+                Message = "No clients found in the manifest"
+            });
+        }
+
+        if (options.ValidateOnly)
+        {
+            var (created, updated, skipped) = await CountClientOperationsAsync(tenantId, clients, options, cancellationToken);
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = created,
+                EntitiesUpdated = updated,
+                EntitiesSkipped = skipped
+            };
+        }
+
+        var createdCount = 0;
+        var updatedCount = 0;
+        var skippedCount = 0;
+        var errors = new List<ImportError>();
+
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        try
+        {
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                // Load realm mappings
+                var realmMap = await _dbContext.Realms
+                    .Where(r => r.TenantId == tenantId)
+                    .ToDictionaryAsync(r => r.Name, r => r.Id, cancellationToken);
+
+                foreach (var (clientDef, realmName) in clients)
+                {
+                    // Determine target realm
+                    var targetRealmName = realmName ?? clientDef.Realm ?? "admin";
+                    if (!realmMap.TryGetValue(targetRealmName, out var realmId))
+                    {
+                        // If target realm specified in options, use that
+                        if (options.TargetRealmId.HasValue)
+                        {
+                            realmId = options.TargetRealmId.Value;
+                        }
+                        else
+                        {
+                            errors.Add(new ImportError
+                            {
+                                EntityType = "Client",
+                                Identifier = clientDef.ClientId,
+                                Code = "REALM_NOT_FOUND",
+                                Message = $"Target realm '{targetRealmName}' not found for client '{clientDef.ClientId}'"
+                            });
+                            skippedCount++;
+                            continue;
+                        }
+                    }
+
+                    var existingClient = await _dbContext.Clients
+                        .FirstOrDefaultAsync(c => c.ClientId == clientDef.ClientId, cancellationToken);
+
+                    if (existingClient != null)
+                    {
+                        var resolution = options.GetResolution("Client", clientDef.ClientId);
+
+                        switch (resolution)
+                        {
+                            case ConflictResolution.Skip:
+                                skippedCount++;
+                                _logger.LogInformation("Skipped existing client {ClientId}", clientDef.ClientId);
+                                continue;
+
+                            case ConflictResolution.Overwrite:
+                                await UpdateClientAsync(existingClient, clientDef, options, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Updated existing client {ClientId}", clientDef.ClientId);
+                                break;
+
+                            case ConflictResolution.Merge:
+                                await MergeClientAsync(existingClient, clientDef, options, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Merged client {ClientId}", clientDef.ClientId);
+                                break;
+
+                            case ConflictResolution.Rename:
+                                var newClientId = await GenerateUniqueClientIdAsync(clientDef.ClientId, cancellationToken);
+                                await CreateClientAsync(realmId, clientDef with { ClientId = newClientId }, options, cancellationToken);
+                                createdCount++;
+                                _logger.LogInformation("Created renamed client {NewClientId} (was {OldClientId})", newClientId, clientDef.ClientId);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        await CreateClientAsync(realmId, clientDef, options, cancellationToken);
+                        createdCount++;
+                        _logger.LogInformation("Created client {ClientId}", clientDef.ClientId);
+                    }
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+            });
+
+            await LogImportAuditAsync(
+                tenantId, "Client", clients.FirstOrDefault().Client?.ClientId ?? "unknown",
+                options, true, createdCount, updatedCount, skippedCount, null, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = createdCount,
+                EntitiesUpdated = updatedCount,
+                EntitiesSkipped = skippedCount,
+                Errors = errors,
+                Warnings = errors.Count > 0 ? errors.Select(e => $"{e.Identifier}: {e.Message}").ToList() : []
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import clients");
+
+            await LogImportAuditAsync(
+                tenantId, "Client", clients.FirstOrDefault().Client?.ClientId ?? "unknown",
+                options, false, createdCount, updatedCount, skippedCount, ex.Message, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "Client",
+                Code = "IMPORT_FAILED",
+                Message = ex.Message
+            });
+        }
     }
 
     /// <inheritdoc />
-    public Task<ImportResult> ImportIdentityProviderAsync(
+    public async Task<ImportResult> ImportIdentityProviderAsync(
         ExportManifest manifest,
         ImportOptions options,
         CancellationToken cancellationToken = default)
     {
-        // Will be implemented in Phase 7
-        throw new NotImplementedException("Identity provider import will be implemented in Phase 7");
+        // Require target tenant ID for standalone provider imports
+        if (!options.TargetTenantId.HasValue)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "IdentityProvider",
+                Code = "MISSING_TARGET_TENANT",
+                Message = "Target tenant ID must be specified when importing identity providers"
+            });
+        }
+
+        var tenantId = options.TargetTenantId.Value;
+
+        // Verify tenant exists
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+        if (tenant == null)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "IdentityProvider",
+                Code = "TENANT_NOT_FOUND",
+                Message = $"Target tenant with ID '{tenantId}' was not found"
+            });
+        }
+
+        // Collect providers from both standalone and tenant-nested sources
+        var providers = new List<IdentityProviderSeedDefinition>();
+        providers.AddRange(manifest.Data?.IdentityProviders ?? []);
+        foreach (var tenantDef in manifest.Data?.Tenants ?? [])
+        {
+            providers.AddRange(tenantDef.IdentityProviders ?? []);
+        }
+
+        if (providers.Count == 0)
+        {
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "IdentityProvider",
+                Code = "NO_PROVIDERS",
+                Message = "No identity providers found in the manifest"
+            });
+        }
+
+        if (options.ValidateOnly)
+        {
+            // Dry run - just count what would be created/updated/skipped
+            var (created, updated, skipped) = await CountProviderOperationsAsync(tenantId, providers, options, cancellationToken);
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = created,
+                EntitiesUpdated = updated,
+                EntitiesSkipped = skipped
+            };
+        }
+
+        var createdCount = 0;
+        var updatedCount = 0;
+        var skippedCount = 0;
+        var errors = new List<ImportError>();
+
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+
+        try
+        {
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                foreach (var providerDef in providers)
+                {
+                    var existingProvider = await _dbContext.IdentityProviders
+                        .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Name == providerDef.Name, cancellationToken);
+
+                    if (existingProvider != null)
+                    {
+                        var resolution = options.GetResolution("IdentityProvider", providerDef.Name);
+
+                        switch (resolution)
+                        {
+                            case ConflictResolution.Skip:
+                                skippedCount++;
+                                _logger.LogInformation("Skipped existing provider {Name}", providerDef.Name);
+                                continue;
+
+                            case ConflictResolution.Overwrite:
+                                await UpdateProviderAsync(existingProvider, providerDef, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Updated existing provider {Name}", providerDef.Name);
+                                break;
+
+                            case ConflictResolution.Merge:
+                                await MergeProviderAsync(existingProvider, providerDef, cancellationToken);
+                                updatedCount++;
+                                _logger.LogInformation("Merged provider {Name}", providerDef.Name);
+                                break;
+
+                            case ConflictResolution.Rename:
+                                var newName = await GenerateUniqueProviderNameAsync(tenantId, providerDef.Name, cancellationToken);
+                                await CreateProviderAsync(tenantId, providerDef with { Name = newName }, cancellationToken);
+                                createdCount++;
+                                _logger.LogInformation("Created renamed provider {NewName} (was {OldName})", newName, providerDef.Name);
+                                break;
+                        }
+                    }
+                    else
+                    {
+                        await CreateProviderAsync(tenantId, providerDef, cancellationToken);
+                        createdCount++;
+                        _logger.LogInformation("Created provider {Name}", providerDef.Name);
+                    }
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+            });
+
+            // Log audit
+            await LogImportAuditAsync(
+                tenantId, "IdentityProvider", providers.FirstOrDefault()?.Name ?? "unknown",
+                options, true, createdCount, updatedCount, skippedCount, null, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return new ImportResult
+            {
+                Success = true,
+                EntitiesCreated = createdCount,
+                EntitiesUpdated = updatedCount,
+                EntitiesSkipped = skippedCount,
+                Errors = errors
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import identity providers");
+
+            await LogImportAuditAsync(
+                tenantId, "IdentityProvider", providers.FirstOrDefault()?.Name ?? "unknown",
+                options, false, createdCount, updatedCount, skippedCount, ex.Message, manifest.Metadata?.Checksum,
+                cancellationToken);
+
+            return ImportResult.Failed(new ImportError
+            {
+                EntityType = "IdentityProvider",
+                Code = "IMPORT_FAILED",
+                Message = ex.Message
+            });
+        }
+    }
+
+    private async Task<(int created, int updated, int skipped)> CountProviderOperationsAsync(
+        Guid tenantId,
+        List<IdentityProviderSeedDefinition> providers,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var providerDef in providers)
+        {
+            var exists = await _dbContext.IdentityProviders
+                .AnyAsync(p => p.TenantId == tenantId && p.Name == providerDef.Name, cancellationToken);
+
+            if (exists)
+            {
+                var resolution = options.GetResolution("IdentityProvider", providerDef.Name);
+                switch (resolution)
+                {
+                    case ConflictResolution.Skip:
+                        skipped++;
+                        break;
+                    case ConflictResolution.Rename:
+                        created++;
+                        break;
+                    default: // Merge, Overwrite
+                        updated++;
+                        break;
+                }
+            }
+            else
+            {
+                created++;
+            }
+        }
+
+        return (created, updated, skipped);
+    }
+
+    private async Task CreateProviderAsync(
+        Guid tenantId,
+        IdentityProviderSeedDefinition providerDef,
+        CancellationToken cancellationToken)
+    {
+        var provider = new IdentityProvider
+        {
+            Id = GuidHelper.NewId(),
+            TenantId = tenantId,
+            Name = providerDef.Name,
+            DisplayName = providerDef.DisplayName,
+            Type = Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type) ? type : IdentityProviderType.Oidc,
+            Enabled = providerDef.Enabled ?? true,
+            IsDefault = providerDef.IsDefault ?? false,
+            LogoUrl = providerDef.LogoUrl,
+            SortOrder = providerDef.SortOrder ?? 0,
+            ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null
+        };
+        _dbContext.IdentityProviders.Add(provider);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Add claim mappings
+        foreach (var mappingDef in providerDef.ClaimMappings ?? [])
+        {
+            var mapping = new IdentityProviderClaimMapping
+            {
+                Id = GuidHelper.NewId(),
+                IdentityProviderId = provider.Id,
+                ExternalClaim = mappingDef.ExternalClaim,
+                LocalClaim = mappingDef.LocalClaim,
+                Transform = mappingDef.Transform,
+                Order = mappingDef.Order ?? 0
+            };
+            _dbContext.IdentityProviderClaimMappings.Add(mapping);
+        }
+
+        // Add keys
+        foreach (var keyDef in providerDef.Keys ?? [])
+        {
+            var key = new IdentityProviderKey
+            {
+                Id = GuidHelper.NewId(),
+                IdentityProviderId = provider.Id,
+                Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
+                Alg = keyDef.Alg,
+                Kid = keyDef.Kid,
+                Jwk = keyDef.Jwk ?? string.Empty,
+                Active = keyDef.Active ?? true
+            };
+            _dbContext.IdentityProviderKeys.Add(key);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task UpdateProviderAsync(
+        IdentityProvider provider,
+        IdentityProviderSeedDefinition providerDef,
+        CancellationToken cancellationToken)
+    {
+        // Update all properties
+        provider.DisplayName = providerDef.DisplayName;
+        provider.Type = Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type) ? type : IdentityProviderType.Oidc;
+        provider.Enabled = providerDef.Enabled ?? true;
+        provider.IsDefault = providerDef.IsDefault ?? false;
+        provider.LogoUrl = providerDef.LogoUrl;
+        provider.SortOrder = providerDef.SortOrder ?? 0;
+        provider.ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null;
+
+        // Remove existing claim mappings and keys
+        var existingMappings = await _dbContext.IdentityProviderClaimMappings
+            .Where(m => m.IdentityProviderId == provider.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.IdentityProviderClaimMappings.RemoveRange(existingMappings);
+
+        var existingKeys = await _dbContext.IdentityProviderKeys
+            .Where(k => k.IdentityProviderId == provider.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.IdentityProviderKeys.RemoveRange(existingKeys);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Add new claim mappings
+        foreach (var mappingDef in providerDef.ClaimMappings ?? [])
+        {
+            var mapping = new IdentityProviderClaimMapping
+            {
+                Id = GuidHelper.NewId(),
+                IdentityProviderId = provider.Id,
+                ExternalClaim = mappingDef.ExternalClaim,
+                LocalClaim = mappingDef.LocalClaim,
+                Transform = mappingDef.Transform,
+                Order = mappingDef.Order ?? 0
+            };
+            _dbContext.IdentityProviderClaimMappings.Add(mapping);
+        }
+
+        // Add new keys
+        foreach (var keyDef in providerDef.Keys ?? [])
+        {
+            var key = new IdentityProviderKey
+            {
+                Id = GuidHelper.NewId(),
+                IdentityProviderId = provider.Id,
+                Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
+                Alg = keyDef.Alg,
+                Kid = keyDef.Kid,
+                Jwk = keyDef.Jwk ?? string.Empty,
+                Active = keyDef.Active ?? true
+            };
+            _dbContext.IdentityProviderKeys.Add(key);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task MergeProviderAsync(
+        IdentityProvider provider,
+        IdentityProviderSeedDefinition providerDef,
+        CancellationToken cancellationToken)
+    {
+        // Merge: only update non-null/non-default values
+        if (providerDef.DisplayName != null)
+            provider.DisplayName = providerDef.DisplayName;
+        if (providerDef.Type != null && Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type))
+            provider.Type = type;
+        if (providerDef.Enabled.HasValue)
+            provider.Enabled = providerDef.Enabled.Value;
+        if (providerDef.IsDefault.HasValue)
+            provider.IsDefault = providerDef.IsDefault.Value;
+        if (providerDef.LogoUrl != null)
+            provider.LogoUrl = providerDef.LogoUrl;
+        if (providerDef.SortOrder.HasValue)
+            provider.SortOrder = providerDef.SortOrder.Value;
+        if (providerDef.Config != null)
+            provider.ConfigJson = JsonSerializer.Serialize(providerDef.Config);
+
+        // Merge claim mappings (add new ones, don't remove existing)
+        var existingMappings = await _dbContext.IdentityProviderClaimMappings
+            .Where(m => m.IdentityProviderId == provider.Id)
+            .ToListAsync(cancellationToken);
+
+        foreach (var mappingDef in providerDef.ClaimMappings ?? [])
+        {
+            var existing = existingMappings.FirstOrDefault(m => m.ExternalClaim == mappingDef.ExternalClaim);
+            if (existing == null)
+            {
+                var mapping = new IdentityProviderClaimMapping
+                {
+                    Id = GuidHelper.NewId(),
+                    IdentityProviderId = provider.Id,
+                    ExternalClaim = mappingDef.ExternalClaim,
+                    LocalClaim = mappingDef.LocalClaim,
+                    Transform = mappingDef.Transform,
+                    Order = mappingDef.Order ?? 0
+                };
+                _dbContext.IdentityProviderClaimMappings.Add(mapping);
+            }
+            else
+            {
+                // Update existing mapping
+                existing.LocalClaim = mappingDef.LocalClaim;
+                existing.Transform = mappingDef.Transform;
+                existing.Order = mappingDef.Order ?? existing.Order;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<string> GenerateUniqueProviderNameAsync(Guid tenantId, string baseName, CancellationToken cancellationToken)
+    {
+        var suffix = 1;
+        var candidate = $"{baseName}_imported";
+
+        while (await _dbContext.IdentityProviders.AnyAsync(p => p.TenantId == tenantId && p.Name == candidate, cancellationToken))
+        {
+            suffix++;
+            candidate = $"{baseName}_imported_{suffix}";
+        }
+
+        return candidate;
+    }
+
+    // ========== Realm Helper Methods ==========
+
+    private async Task<(int created, int updated, int skipped)> CountRealmOperationsAsync(
+        Guid tenantId,
+        List<RealmSeedDefinition> realms,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var realmDef in realms)
+        {
+            var exists = await _dbContext.Realms
+                .AnyAsync(r => r.TenantId == tenantId && r.Name == realmDef.Name, cancellationToken);
+
+            if (exists)
+            {
+                var resolution = options.GetResolution("Realm", realmDef.Name);
+                switch (resolution)
+                {
+                    case ConflictResolution.Skip:
+                        skipped++;
+                        break;
+                    case ConflictResolution.Rename:
+                        created++;
+                        break;
+                    default:
+                        updated++;
+                        break;
+                }
+            }
+            else
+            {
+                created++;
+            }
+        }
+
+        return (created, updated, skipped);
+    }
+
+    private async Task CreateRealmAsync(
+        Guid tenantId,
+        RealmSeedDefinition realmDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        var realm = new Realm
+        {
+            Id = GuidHelper.NewId(),
+            TenantId = tenantId,
+            Name = realmDef.Name,
+            DisplayName = realmDef.DisplayName,
+            AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin ?? false
+        };
+        _dbContext.Realms.Add(realm);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Import clients within this realm
+        foreach (var clientDef in realmDef.Clients ?? [])
+        {
+            await CreateClientAsync(realm.Id, clientDef, options, cancellationToken);
+        }
+
+        // Import roles within this realm
+        foreach (var roleDef in realmDef.Roles ?? [])
+        {
+            var role = new Role
+            {
+                Id = GuidHelper.NewId(),
+                TenantId = tenantId,
+                RealmId = realm.Id,
+                Name = roleDef.Name,
+                IsActive = roleDef.IsActive ?? true
+            };
+            _dbContext.Roles.Add(role);
+        }
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task UpdateRealmAsync(
+        Realm realm,
+        RealmSeedDefinition realmDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        realm.DisplayName = realmDef.DisplayName;
+        realm.AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin ?? realm.AllowUnconfirmedLogin;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task MergeRealmAsync(
+        Realm realm,
+        RealmSeedDefinition realmDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (realmDef.DisplayName != null)
+            realm.DisplayName = realmDef.DisplayName;
+        if (realmDef.AllowUnconfirmedLogin.HasValue)
+            realm.AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin.Value;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<string> GenerateUniqueRealmNameAsync(Guid tenantId, string baseName, CancellationToken cancellationToken)
+    {
+        var suffix = 1;
+        var candidate = $"{baseName}_imported";
+
+        while (await _dbContext.Realms.AnyAsync(r => r.TenantId == tenantId && r.Name == candidate, cancellationToken))
+        {
+            suffix++;
+            candidate = $"{baseName}_imported_{suffix}";
+        }
+
+        return candidate;
+    }
+
+    // ========== Client Helper Methods ==========
+
+    private async Task<(int created, int updated, int skipped)> CountClientOperationsAsync(
+        Guid tenantId,
+        List<(ClientSeedDefinition Client, string? RealmName)> clients,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var (clientDef, _) in clients)
+        {
+            var exists = await _dbContext.Clients
+                .AnyAsync(c => c.ClientId == clientDef.ClientId, cancellationToken);
+
+            if (exists)
+            {
+                var resolution = options.GetResolution("Client", clientDef.ClientId);
+                switch (resolution)
+                {
+                    case ConflictResolution.Skip:
+                        skipped++;
+                        break;
+                    case ConflictResolution.Rename:
+                        created++;
+                        break;
+                    default:
+                        updated++;
+                        break;
+                }
+            }
+            else
+            {
+                created++;
+            }
+        }
+
+        return (created, updated, skipped);
+    }
+
+    private async Task CreateClientAsync(
+        Guid realmId,
+        ClientSeedDefinition clientDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        // Look up tenant from realm
+        var realm = await _dbContext.Realms.FirstOrDefaultAsync(r => r.Id == realmId, cancellationToken);
+        var tenantId = realm?.TenantId ?? Guid.Empty;
+
+        var client = new Client
+        {
+            Id = GuidHelper.NewId(),
+            TenantId = tenantId,
+            RealmId = realmId,
+            ClientId = clientDef.ClientId,
+            ClientName = clientDef.ClientName,
+            RequirePkce = clientDef.RequirePkce ?? true,
+            RequireConsent = clientDef.RequireConsent ?? false,
+            RequirePar = clientDef.RequirePar ?? false,
+            AutoApprovalMode = Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode) ? mode : AutoApprovalMode.No,
+            AllowLocalLogin = clientDef.AllowLocalLogin ?? true,
+            AllowExternalIdp = clientDef.AllowExternalIdp ?? true,
+            AllowQrLogin = clientDef.AllowQrLogin ?? false,
+            BackChannelLogoutUri = clientDef.BackChannelLogoutUri,
+            FrontChannelLogoutUri = clientDef.FrontChannelLogoutUri,
+            PublicJwksJson = clientDef.PublicJwksJson,
+            PublicJwksUri = clientDef.PublicJwksUri,
+            // Redirect URIs stored as JSON
+            AllowedLoginRedirectUrisJson = clientDef.AllowedLoginRedirectUris?.Count > 0
+                ? JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris)
+                : null,
+            AllowedLogoutRedirectUrisJson = clientDef.AllowedLogoutRedirectUris?.Count > 0
+                ? JsonSerializer.Serialize(clientDef.AllowedLogoutRedirectUris)
+                : null
+        };
+
+        // Handle client secret using new ClientSecrets collection
+        if (!string.IsNullOrEmpty(clientDef.ClientSecretHash) && !ExportManifest.IsObfuscated(clientDef.ClientSecretHash))
+        {
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = clientDef.ClientSecretHash,
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+        else if (!string.IsNullOrEmpty(clientDef.ClientSecret))
+        {
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = BCrypt.Net.BCrypt.HashPassword(clientDef.ClientSecret),
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+        else if (options.Secrets.TryGetValue(clientDef.ClientId, out var secret))
+        {
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = BCrypt.Net.BCrypt.HashPassword(secret),
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+
+        _dbContext.Clients.Add(client);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Add scopes
+        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        {
+            _dbContext.ClientScopes.Add(new ClientScope
+            {
+                ClientId = client.Id,
+                ScopeName = scopeName
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task UpdateClientAsync(
+        Client client,
+        ClientSeedDefinition clientDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        client.ClientName = clientDef.ClientName;
+        client.RequirePkce = clientDef.RequirePkce ?? client.RequirePkce;
+        client.RequireConsent = clientDef.RequireConsent ?? client.RequireConsent;
+        client.RequirePar = clientDef.RequirePar ?? client.RequirePar;
+        if (clientDef.AutoApprovalMode != null && Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode))
+            client.AutoApprovalMode = mode;
+        client.AllowLocalLogin = clientDef.AllowLocalLogin ?? client.AllowLocalLogin;
+        client.AllowExternalIdp = clientDef.AllowExternalIdp ?? client.AllowExternalIdp;
+        client.AllowQrLogin = clientDef.AllowQrLogin ?? client.AllowQrLogin;
+        client.BackChannelLogoutUri = clientDef.BackChannelLogoutUri;
+        client.FrontChannelLogoutUri = clientDef.FrontChannelLogoutUri;
+        client.PublicJwksJson = clientDef.PublicJwksJson;
+        client.PublicJwksUri = clientDef.PublicJwksUri;
+
+        // Update redirect URIs (JSON fields)
+        if (clientDef.AllowedLoginRedirectUris?.Count > 0)
+            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris);
+        if (clientDef.AllowedLogoutRedirectUris?.Count > 0)
+            client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(clientDef.AllowedLogoutRedirectUris);
+
+        // Handle secret update using ClientSecrets collection
+        if (!string.IsNullOrEmpty(clientDef.ClientSecretHash) && !ExportManifest.IsObfuscated(clientDef.ClientSecretHash))
+        {
+            // Mark existing secrets as non-primary, add new one
+            foreach (var existingSecret in client.ClientSecrets.Where(s => s.IsPrimary))
+                existingSecret.IsPrimary = false;
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = clientDef.ClientSecretHash,
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+        else if (!string.IsNullOrEmpty(clientDef.ClientSecret))
+        {
+            foreach (var existingSecret in client.ClientSecrets.Where(s => s.IsPrimary))
+                existingSecret.IsPrimary = false;
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = BCrypt.Net.BCrypt.HashPassword(clientDef.ClientSecret),
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+        else if (options.Secrets.TryGetValue(clientDef.ClientId, out var secret))
+        {
+            foreach (var existingSecret in client.ClientSecrets.Where(s => s.IsPrimary))
+                existingSecret.IsPrimary = false;
+            client.ClientSecrets.Add(new ClientSecret
+            {
+                Id = GuidHelper.NewId(),
+                ClientId = client.Id,
+                SecretHash = BCrypt.Net.BCrypt.HashPassword(secret),
+                IsPrimary = true,
+                CreatedAtUtc = DateTime.UtcNow,
+                ActivatedAtUtc = DateTime.UtcNow
+            });
+        }
+
+        // Replace scopes
+        var existingScopes = await _dbContext.ClientScopes
+            .Where(s => s.ClientId == client.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.ClientScopes.RemoveRange(existingScopes);
+
+        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        {
+            _dbContext.ClientScopes.Add(new ClientScope
+            {
+                ClientId = client.Id,
+                ScopeName = scopeName
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task MergeClientAsync(
+        Client client,
+        ClientSeedDefinition clientDef,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (clientDef.ClientName != null)
+            client.ClientName = clientDef.ClientName;
+        if (clientDef.RequirePkce.HasValue)
+            client.RequirePkce = clientDef.RequirePkce.Value;
+        if (clientDef.RequireConsent.HasValue)
+            client.RequireConsent = clientDef.RequireConsent.Value;
+        if (clientDef.RequirePar.HasValue)
+            client.RequirePar = clientDef.RequirePar.Value;
+        if (clientDef.AutoApprovalMode != null && Enum.TryParse<AutoApprovalMode>(clientDef.AutoApprovalMode, true, out var mode))
+            client.AutoApprovalMode = mode;
+        if (clientDef.AllowLocalLogin.HasValue)
+            client.AllowLocalLogin = clientDef.AllowLocalLogin.Value;
+        if (clientDef.AllowExternalIdp.HasValue)
+            client.AllowExternalIdp = clientDef.AllowExternalIdp.Value;
+        if (clientDef.AllowQrLogin.HasValue)
+            client.AllowQrLogin = clientDef.AllowQrLogin.Value;
+        if (clientDef.BackChannelLogoutUri != null)
+            client.BackChannelLogoutUri = clientDef.BackChannelLogoutUri;
+        if (clientDef.FrontChannelLogoutUri != null)
+            client.FrontChannelLogoutUri = clientDef.FrontChannelLogoutUri;
+
+        // Merge redirect URIs (combine existing with new)
+        if (clientDef.AllowedLoginRedirectUris?.Count > 0)
+        {
+            var existing = !string.IsNullOrEmpty(client.AllowedLoginRedirectUrisJson)
+                ? JsonSerializer.Deserialize<List<string>>(client.AllowedLoginRedirectUrisJson) ?? []
+                : new List<string>();
+            var merged = existing.Union(clientDef.AllowedLoginRedirectUris).Distinct().ToList();
+            client.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(merged);
+        }
+        if (clientDef.AllowedLogoutRedirectUris?.Count > 0)
+        {
+            var existing = !string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson)
+                ? JsonSerializer.Deserialize<List<string>>(client.AllowedLogoutRedirectUrisJson) ?? []
+                : new List<string>();
+            var merged = existing.Union(clientDef.AllowedLogoutRedirectUris).Distinct().ToList();
+            client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(merged);
+        }
+
+        // Merge scopes (add new ones)
+        var existingScopes = await _dbContext.ClientScopes
+            .Where(s => s.ClientId == client.Id)
+            .Select(s => s.ScopeName)
+            .ToListAsync(cancellationToken);
+
+        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        {
+            if (!existingScopes.Contains(scopeName))
+            {
+                _dbContext.ClientScopes.Add(new ClientScope
+                {
+                    ClientId = client.Id,
+                    ScopeName = scopeName
+                });
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static List<ValidationError> ValidateManifest(ExportManifest manifest)
@@ -499,6 +1637,15 @@ public sealed class ConfigurationImportService(
                 {
                     toCreate.Add(new EntitySummary { Type = "IdentityProvider", Identifier = providerDef.Name, DisplayName = providerDef.DisplayName });
                 }
+            }
+        }
+
+        // Handle standalone identity providers
+        foreach (var providerDef in manifest.Data?.IdentityProviders ?? [])
+        {
+            if (!conflictLookup.ContainsKey(providerDef.Name))
+            {
+                toCreate.Add(new EntitySummary { Type = "IdentityProvider", Identifier = providerDef.Name, DisplayName = providerDef.DisplayName });
             }
         }
 
@@ -717,7 +1864,7 @@ public sealed class ConfigurationImportService(
                     Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
                     Alg = keyDef.Alg,
                     Kid = keyDef.Kid,
-                    Jwk = keyDef.Jwk,
+                    Jwk = keyDef.Jwk ?? string.Empty,
                     Active = keyDef.Active ?? true
                 };
                 _dbContext.IdentityProviderKeys.Add(key);

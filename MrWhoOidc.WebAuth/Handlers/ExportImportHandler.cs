@@ -267,6 +267,466 @@ public static class ExportImportHandler
     }
 
     /// <summary>
+    /// Previews a realm import operation without applying changes.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/realms/import/preview
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> PreviewRealmImport(
+        [FromBody] ImportRealmRequest request,
+        [FromServices] IConfigurationImportService importService,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.RealmJson))
+        {
+            return Results.BadRequest(new { error = "Realm JSON is required" });
+        }
+
+        try
+        {
+            var realmDefinition = JsonSerializer.Deserialize<RealmSeedDefinition>(request.RealmJson, JsonOptions);
+            if (realmDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid realm JSON format" });
+            }
+
+            // Get target tenant
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            // Check for conflicts
+            var conflicts = new List<object>();
+            var existingRealm = await dbContext.Realms
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.TenantId == tenantId.Value && r.Name == realmDefinition.Name, cancellationToken);
+
+            if (existingRealm != null)
+            {
+                conflicts.Add(new
+                {
+                    entityType = "Realm",
+                    identifier = realmDefinition.Name,
+                    existingId = existingRealm.Id,
+                    message = $"Realm '{realmDefinition.Name}' already exists in tenant"
+                });
+            }
+
+            return Results.Ok(new
+            {
+                isValid = true,
+                conflicts,
+                summary = new
+                {
+                    realmName = realmDefinition.Name,
+                    clientCount = realmDefinition.Clients?.Count ?? 0,
+                    roleCount = realmDefinition.Roles?.Count ?? 0
+                }
+            });
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Imports a realm configuration.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/realms/import
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> ImportRealm(
+        [FromBody] ImportRealmRequest request,
+        [FromServices] IConfigurationImportService importService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.RealmJson))
+        {
+            return Results.BadRequest(new { error = "Realm JSON is required" });
+        }
+
+        try
+        {
+            var realmDefinition = JsonSerializer.Deserialize<RealmSeedDefinition>(request.RealmJson, JsonOptions);
+            if (realmDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid realm JSON format" });
+            }
+
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            var options = new ImportOptions
+            {
+                ValidateOnly = request.DryRun,
+                TargetTenantId = tenantId.Value,
+                DefaultConflictResolution = request.ConflictResolution ?? ConflictResolution.Skip,
+                ImportedBy = httpContext.User.Identity?.Name ?? "anonymous",
+                IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+            };
+
+            // Wrap realm definition in a manifest
+            var manifest = new ExportManifest
+            {
+                Version = 1,
+                ExportType = "realm",
+                Data = new SeedManifest
+                {
+                    Realms = [realmDefinition]
+                }
+            };
+
+            var result = await importService.ImportRealmAsync(manifest, options, cancellationToken);
+
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            return Results.BadRequest(result);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Previews a client import operation without applying changes.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/clients/import/preview
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> PreviewClientImport(
+        [FromBody] ImportClientRequest request,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.ClientJson))
+        {
+            return Results.BadRequest(new { error = "Client JSON is required" });
+        }
+
+        try
+        {
+            var clientDefinition = JsonSerializer.Deserialize<ClientSeedDefinition>(request.ClientJson, JsonOptions);
+            if (clientDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid client JSON format" });
+            }
+
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            // Validate target realm exists
+            if (request.TargetRealmId == null)
+            {
+                return Results.BadRequest(new { error = "Target realm ID is required" });
+            }
+
+            var realm = await dbContext.Realms
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == request.TargetRealmId.Value && r.TenantId == tenantId.Value, cancellationToken);
+
+            if (realm == null)
+            {
+                return Results.BadRequest(new { error = "Target realm not found or not accessible" });
+            }
+
+            // Check for conflicts
+            var conflicts = new List<object>();
+            var existingClient = await dbContext.Clients
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.TenantId == tenantId.Value && c.ClientId == clientDefinition.ClientId, cancellationToken);
+
+            if (existingClient != null)
+            {
+                conflicts.Add(new
+                {
+                    entityType = "Client",
+                    identifier = clientDefinition.ClientId,
+                    existingId = existingClient.Id,
+                    message = $"Client '{clientDefinition.ClientId}' already exists in tenant"
+                });
+            }
+
+            return Results.Ok(new
+            {
+                isValid = true,
+                conflicts,
+                summary = new
+                {
+                    clientId = clientDefinition.ClientId,
+                    clientName = clientDefinition.ClientName,
+                    targetRealm = realm.Name,
+                    scopeCount = clientDefinition.AllowedScopes?.Count ?? 0
+                }
+            });
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Imports a client configuration.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/clients/import
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> ImportClient(
+        [FromBody] ImportClientRequest request,
+        [FromServices] IConfigurationImportService importService,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.ClientJson))
+        {
+            return Results.BadRequest(new { error = "Client JSON is required" });
+        }
+
+        if (request.TargetRealmId == null)
+        {
+            return Results.BadRequest(new { error = "Target realm ID is required" });
+        }
+
+        try
+        {
+            var clientDefinition = JsonSerializer.Deserialize<ClientSeedDefinition>(request.ClientJson, JsonOptions);
+            if (clientDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid client JSON format" });
+            }
+
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            // Get target realm name for the manifest
+            var targetRealm = await dbContext.Realms
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == request.TargetRealmId.Value && r.TenantId == tenantId.Value, cancellationToken);
+
+            if (targetRealm == null)
+            {
+                return Results.BadRequest(new { error = "Target realm not found or not accessible" });
+            }
+
+            // Create a new client definition with the target realm set
+            var clientWithRealm = clientDefinition with { Realm = targetRealm.Name };
+
+            var options = new ImportOptions
+            {
+                ValidateOnly = request.DryRun,
+                TargetTenantId = tenantId.Value,
+                DefaultConflictResolution = request.ConflictResolution ?? ConflictResolution.Skip,
+                Secrets = string.IsNullOrEmpty(request.ClientSecret)
+                    ? []
+                    : new Dictionary<string, string> { [clientDefinition.ClientId ?? ""] = request.ClientSecret },
+                ImportedBy = httpContext.User.Identity?.Name ?? "anonymous",
+                IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+            };
+
+            // Wrap client definition in a manifest
+            var manifest = new ExportManifest
+            {
+                Version = 1,
+                ExportType = "client",
+                Data = new SeedManifest
+                {
+                    Clients = [clientWithRealm]
+                }
+            };
+
+            var result = await importService.ImportClientAsync(manifest, options, cancellationToken);
+
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            return Results.BadRequest(result);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Previews an identity provider import operation without applying changes.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/providers/import/preview
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> PreviewProviderImport(
+        [FromBody] ImportProviderRequest request,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.ProviderJson))
+        {
+            return Results.BadRequest(new { error = "Provider JSON is required" });
+        }
+
+        try
+        {
+            var providerDefinition = JsonSerializer.Deserialize<IdentityProviderSeedDefinition>(request.ProviderJson, JsonOptions);
+            if (providerDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid provider JSON format" });
+            }
+
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            // Check for conflicts
+            var conflicts = new List<object>();
+            var existingProvider = await dbContext.IdentityProviders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.TenantId == tenantId.Value && p.Name == providerDefinition.Name, cancellationToken);
+
+            if (existingProvider != null)
+            {
+                conflicts.Add(new
+                {
+                    entityType = "IdentityProvider",
+                    identifier = providerDefinition.Name,
+                    existingId = existingProvider.Id,
+                    message = $"Identity provider '{providerDefinition.Name}' already exists in tenant"
+                });
+            }
+
+            return Results.Ok(new
+            {
+                isValid = true,
+                conflicts,
+                summary = new
+                {
+                    providerName = providerDefinition.Name,
+                    providerType = providerDefinition.Type?.ToString(),
+                    claimMappingCount = providerDefinition.ClaimMappings?.Count ?? 0
+                }
+            });
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Imports an identity provider configuration.
+    /// </summary>
+    /// <remarks>
+    /// POST /admin/api/providers/import
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> ImportProvider(
+        [FromBody] ImportProviderRequest request,
+        [FromServices] IConfigurationImportService importService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(request.ProviderJson))
+        {
+            return Results.BadRequest(new { error = "Provider JSON is required" });
+        }
+
+        try
+        {
+            var providerDefinition = JsonSerializer.Deserialize<IdentityProviderSeedDefinition>(request.ProviderJson, JsonOptions);
+            if (providerDefinition == null)
+            {
+                return Results.BadRequest(new { error = "Invalid provider JSON format" });
+            }
+
+            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            if (tenantId == null)
+            {
+                return Results.BadRequest(new { error = "Tenant context required" });
+            }
+
+            var options = new ImportOptions
+            {
+                ValidateOnly = request.DryRun,
+                TargetTenantId = tenantId.Value,
+                DefaultConflictResolution = request.ConflictResolution ?? ConflictResolution.Skip,
+                Secrets = string.IsNullOrEmpty(request.ClientSecret)
+                    ? []
+                    : new Dictionary<string, string> { [providerDefinition.Name ?? ""] = request.ClientSecret },
+                ImportedBy = httpContext.User.Identity?.Name ?? "anonymous",
+                IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+            };
+
+            // Wrap provider definition in a manifest
+            var manifest = new ExportManifest
+            {
+                Version = 1,
+                ExportType = "provider",
+                Data = new SeedManifest
+                {
+                    IdentityProviders = [providerDefinition]
+                }
+            };
+
+            var result = await importService.ImportIdentityProviderAsync(manifest, options, cancellationToken);
+
+            if (result.Success)
+            {
+                return Results.Ok(result);
+            }
+
+            return Results.BadRequest(result);
+        }
+        catch (JsonException ex)
+        {
+            return Results.BadRequest(new { error = "Invalid JSON format", details = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Import failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
     /// Maps export/import routes to the endpoint router.
     /// </summary>
     public static void MapExportImportEndpoints(this IEndpointRouteBuilder endpoints)
@@ -305,6 +765,205 @@ public static class ExportImportHandler
             .Produces<ImportResult>(200)
             .Produces(400)
             .Produces(500);
+
+        // Realm import endpoints (tenant-level)
+        var realmImportGroup = endpoints.MapGroup("/admin/api/realms/import")
+            .WithTags("Export/Import");
+
+        realmImportGroup.MapPost("/preview", PreviewRealmImport)
+            .WithName("PreviewRealmImport")
+            .WithDescription("Preview realm import operation without applying changes")
+            .Produces<object>(200)
+            .Produces(400);
+
+        realmImportGroup.MapPost("/", ImportRealm)
+            .WithName("ImportRealm")
+            .WithDescription("Import realm configuration from JSON")
+            .Produces<ImportResult>(200)
+            .Produces(400)
+            .Produces(500);
+
+        // Client import endpoints (tenant-level)
+        var clientImportGroup = endpoints.MapGroup("/admin/api/clients/import")
+            .WithTags("Export/Import");
+
+        clientImportGroup.MapPost("/preview", PreviewClientImport)
+            .WithName("PreviewClientImport")
+            .WithDescription("Preview client import operation without applying changes")
+            .Produces<object>(200)
+            .Produces(400);
+
+        clientImportGroup.MapPost("/", ImportClient)
+            .WithName("ImportClient")
+            .WithDescription("Import client configuration from JSON")
+            .Produces<ImportResult>(200)
+            .Produces(400)
+            .Produces(500);
+
+        // Identity provider import endpoints (tenant-level)
+        var providerImportGroup = endpoints.MapGroup("/admin/api/providers/import")
+            .WithTags("Export/Import");
+
+        providerImportGroup.MapPost("/preview", PreviewProviderImport)
+            .WithName("PreviewProviderImport")
+            .WithDescription("Preview identity provider import operation without applying changes")
+            .Produces<object>(200)
+            .Produces(400);
+
+        providerImportGroup.MapPost("/", ImportProvider)
+            .WithName("ImportProvider")
+            .WithDescription("Import identity provider configuration from JSON")
+            .Produces<ImportResult>(200)
+            .Produces(400)
+            .Produces(500);
+
+        // Configuration audit log endpoints
+        var auditGroup = endpoints.MapGroup("/admin/api/configuration-audit")
+            .WithTags("Export/Import");
+
+        auditGroup.MapGet("/", GetAuditLogs)
+            .WithName("GetConfigurationAuditLogs")
+            .WithDescription("Get list of configuration export/import audit logs")
+            .Produces<IEnumerable<object>>(200);
+
+        auditGroup.MapGet("/{id:guid}", GetAuditLogDetail)
+            .WithName("GetConfigurationAuditLogDetail")
+            .WithDescription("Get details of a specific audit log entry")
+            .Produces<object>(200)
+            .Produces(404);
+    }
+
+    /// <summary>
+    /// Gets a list of configuration export/import audit log entries.
+    /// </summary>
+    /// <remarks>
+    /// GET /admin/api/configuration-audit?tenantId={guid}&amp;operation={export|import}&amp;page=1&amp;pageSize=20
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> GetAuditLogs(
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? tenantId = null,
+        [FromQuery] string? operation = null,
+        [FromQuery] string? entityType = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        // Restrict to current tenant if not platform admin
+        var contextTenantId = httpContext.Items["TenantId"] as Guid?;
+        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+
+        var query = dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>().AsNoTracking();
+
+        // Filter by tenant - platform admins can see all, tenant admins only their tenant
+        if (isPlatformAdmin && tenantId.HasValue)
+        {
+            query = query.Where(a => a.TenantId == tenantId.Value);
+        }
+        else if (!isPlatformAdmin && contextTenantId.HasValue)
+        {
+            query = query.Where(a => a.TenantId == contextTenantId.Value);
+        }
+
+        // Additional filters
+        if (!string.IsNullOrEmpty(operation))
+        {
+            query = query.Where(a => a.Operation == operation);
+        }
+
+        if (!string.IsNullOrEmpty(entityType))
+        {
+            query = query.Where(a => a.EntityType == entityType);
+        }
+
+        // Ensure valid pagination
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(a => a.Timestamp)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(a => new
+            {
+                a.Id,
+                a.TenantId,
+                a.Operation,
+                a.EntityType,
+                a.EntityIdentifier,
+                a.ExportMode,
+                a.Result,
+                a.PerformedBy,
+                a.Timestamp
+            })
+            .ToListAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            items,
+            pagination = new
+            {
+                page,
+                pageSize,
+                totalCount,
+                totalPages = (int)Math.Ceiling((double)totalCount / pageSize)
+            }
+        });
+    }
+
+    /// <summary>
+    /// Gets details of a specific audit log entry.
+    /// </summary>
+    /// <remarks>
+    /// GET /admin/api/configuration-audit/{id}
+    /// </remarks>
+    [Authorize(Policy = "TenantAdmin")]
+    public static async Task<IResult> GetAuditLogDetail(
+        [FromRoute] Guid id,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var contextTenantId = httpContext.Items["TenantId"] as Guid?;
+        var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
+
+        var auditLog = await dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+        if (auditLog == null)
+        {
+            return Results.NotFound(new { error = "Audit log entry not found", id });
+        }
+
+        // Check tenant access (non-platform admins can only see their tenant's logs)
+        if (!isPlatformAdmin && auditLog.TenantId != contextTenantId)
+        {
+            return Results.NotFound(new { error = "Audit log entry not found", id });
+        }
+
+        return Results.Ok(new
+        {
+            auditLog.Id,
+            auditLog.TenantId,
+            auditLog.Operation,
+            auditLog.EntityType,
+            auditLog.EntityIdentifier,
+            auditLog.ExportMode,
+            auditLog.Result,
+            auditLog.EntitiesCreated,
+            auditLog.EntitiesUpdated,
+            auditLog.EntitiesSkipped,
+            auditLog.ErrorDetails,
+            auditLog.ManifestChecksum,
+            auditLog.PerformedBy,
+            auditLog.PerformedByUserId,
+            auditLog.IpAddress,
+            auditLog.UserAgent,
+            auditLog.Timestamp
+        });
     }
 }
 
@@ -357,4 +1016,82 @@ public sealed record ImportTenantRequest
     /// Value: The actual secret value to use.
     /// </summary>
     public Dictionary<string, string>? Secrets { get; init; }
+}
+
+/// <summary>
+/// Request model for realm import.
+/// </summary>
+public sealed record ImportRealmRequest
+{
+    /// <summary>
+    /// The JSON representation of the realm to import.
+    /// </summary>
+    public string? RealmJson { get; init; }
+
+    /// <summary>
+    /// Whether this is a dry run (validate without applying changes).
+    /// </summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>
+    /// Conflict resolution strategy.
+    /// </summary>
+    public ConflictResolution? ConflictResolution { get; init; }
+}
+
+/// <summary>
+/// Request model for client import.
+/// </summary>
+public sealed record ImportClientRequest
+{
+    /// <summary>
+    /// The JSON representation of the client to import.
+    /// </summary>
+    public string? ClientJson { get; init; }
+
+    /// <summary>
+    /// The target realm ID to import the client into.
+    /// </summary>
+    public Guid? TargetRealmId { get; init; }
+
+    /// <summary>
+    /// Whether this is a dry run (validate without applying changes).
+    /// </summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>
+    /// Conflict resolution strategy.
+    /// </summary>
+    public ConflictResolution? ConflictResolution { get; init; }
+
+    /// <summary>
+    /// The client secret to use (required for confidential clients).
+    /// </summary>
+    public string? ClientSecret { get; init; }
+}
+
+/// <summary>
+/// Request model for identity provider import.
+/// </summary>
+public sealed record ImportProviderRequest
+{
+    /// <summary>
+    /// The JSON representation of the identity provider to import.
+    /// </summary>
+    public string? ProviderJson { get; init; }
+
+    /// <summary>
+    /// Whether this is a dry run (validate without applying changes).
+    /// </summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>
+    /// Conflict resolution strategy.
+    /// </summary>
+    public ConflictResolution? ConflictResolution { get; init; }
+
+    /// <summary>
+    /// The client secret to use for the identity provider.
+    /// </summary>
+    public string? ClientSecret { get; init; }
 }

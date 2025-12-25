@@ -41,7 +41,9 @@ public class AdminTenantIsolationTests
 
     private static MultiTenancyOptions DisabledMultiTenancy() => new()
     {
+#pragma warning disable CS0618 // Obsolete - intentional for test configuration
         Enabled = false,
+#pragma warning restore CS0618
         DefaultTenantSlug = "default"
     };
 

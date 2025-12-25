@@ -5,6 +5,8 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Suppress MSTest style analyzer warnings - these are code style suggestions, not bugs -->
+    <NoWarn>$(NoWarn);MSTEST0037;MSTEST0032</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

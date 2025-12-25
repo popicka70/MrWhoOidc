@@ -329,7 +329,9 @@ public sealed class AdminPasswordResetIntegrationTests
     /// Test implementation of IGlobalAuthenticationService.
     /// </summary>
     private sealed class TestGlobalAuthenticationService(
+#pragma warning disable CS9113 // Parameter 'db' is unread - kept for DI compatibility
         AuthDbContext db,
+#pragma warning restore CS9113
         IPasswordHasher passwordHasher,
         IUserAccountService userAccountService) : IGlobalAuthenticationService
     {
