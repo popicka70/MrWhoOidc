@@ -70,24 +70,24 @@
 
 ### Tests for User Story 1
 
-- [ ] T020 [P] [US1] Unit test for tenant export serialization in `MrWhoOidc.UnitTests/Export/TenantExportSerializationTests.cs`
-- [ ] T021 [P] [US1] Unit test for secret obfuscation in `MrWhoOidc.UnitTests/Export/SecretObfuscationTests.cs`
+- [x] T020 [P] [US1] Unit test for tenant export serialization in `MrWhoOidc.UnitTests/Export/TenantExportSerializationTests.cs`
+- [x] T021 [P] [US1] Unit test for secret obfuscation in `MrWhoOidc.UnitTests/Export/SecretObfuscationTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Implement `ConfigurationExportService.ExportTenantAsync()` with full entity loading in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
-- [ ] T023 [US1] Add secret obfuscation logic (replace with `***OBFUSCATED***`) in `ConfigurationExportService` (depends on T022)
-- [ ] T024 [US1] Add full export mode with hashed secrets in `ConfigurationExportService` (depends on T023)
-- [ ] T025 [US1] Add checksum generation (SHA-256 of data section) in `ConfigurationExportService` (depends on T022)
-- [ ] T026 [US1] Add audit logging for export operations in `ConfigurationExportService` (depends on T015)
-- [ ] T027 [US1] Create tenant export API endpoint `GET /admin/api/platform/tenants/{slug}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T028 [US1] Create tenant export Razor Page in `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Export.cshtml(.cs)` with export mode selector
+- [x] T022 [US1] Implement `ConfigurationExportService.ExportTenantAsync()` with full entity loading in `MrWhoOidc.WebAuth/Services/ConfigurationExportService.cs`
+- [x] T023 [US1] Add secret obfuscation logic (replace with `***OBFUSCATED***`) in `ConfigurationExportService` (depends on T022)
+- [x] T024 [US1] Add full export mode with hashed secrets in `ConfigurationExportService` (depends on T023)
+- [x] T025 [US1] Add checksum generation (SHA-256 of data section) in `ConfigurationExportService` (depends on T022)
+- [x] T026 [US1] Add audit logging for export operations in `ConfigurationExportService` (depends on T015)
+- [x] T027 [US1] Create tenant export API endpoint `GET /admin/api/platform/tenants/{slug}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T028 [US1] Create tenant export Razor Page in `MrWhoOidc.WebAuth/Pages/PlatformAdmin/Tenants/Export.cshtml(.cs)` with export mode selector
 
 ### Integration Test
 
-- [ ] T029 [US1] Integration test for tenant export endpoint with TestServer in `MrWhoOidc.UnitTests/Export/TenantExportIntegrationTests.cs`
+- [x] T029 [US1] Integration test for tenant export endpoint with TestServer in `MrWhoOidc.UnitTests/Export/TenantExportIntegrationTests.cs`
 
-**Checkpoint**: User Story 1 complete - tenant export fully functional
+**Checkpoint**: User Story 1 complete - tenant export fully functional ✅
 
 ---
 
@@ -132,15 +132,15 @@
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] Implement `ConfigurationExportService.ExportRealmAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
-- [ ] T045 [US3] Create realm export API endpoint `GET /admin/api/realms/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T046 [US3] Create realm export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Realms/Export.cshtml(.cs)`
+- [x] T044 [US3] Implement `ConfigurationExportService.ExportRealmAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
+- [x] T045 [US3] Create realm export API endpoint `GET /admin/api/realms/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T046 [US3] Create realm export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Realms/Export.cshtml(.cs)`
 
 ### Tests for User Story 3
 
 - [ ] T047 [US3] Unit test for realm export in `MrWhoOidc.UnitTests/Export/RealmExportTests.cs`
 
-**Checkpoint**: User Story 3 complete - realm export functional
+**Checkpoint**: User Story 3 complete - realm export functional ✅
 
 ---
 
@@ -152,15 +152,15 @@
 
 ### Implementation for User Story 4
 
-- [ ] T048 [P] [US4] Implement `ConfigurationExportService.ExportClientAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
-- [ ] T049 [US4] Create client export API endpoint `GET /admin/api/clients/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T050 [US4] Create client export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Export.cshtml(.cs)`
+- [x] T048 [P] [US4] Implement `ConfigurationExportService.ExportClientAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
+- [x] T049 [US4] Create client export API endpoint `GET /admin/api/clients/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T050 [US4] Create client export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Export.cshtml(.cs)`
 
 ### Tests for User Story 4
 
 - [ ] T051 [US4] Unit test for client export with IdP assignments in `MrWhoOidc.UnitTests/Export/ClientExportTests.cs`
 
-**Checkpoint**: User Story 4 complete - client export functional
+**Checkpoint**: User Story 4 complete - client export functional ✅
 
 ---
 
@@ -172,16 +172,16 @@
 
 ### Implementation for User Story 5
 
-- [ ] T052 [P] [US5] Implement `ConfigurationExportService.ExportIdentityProviderAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
-- [ ] T053 [US5] Ensure private keys excluded from IdP export (public keys only) (depends on T052)
-- [ ] T054 [US5] Create IdP export API endpoint `GET /admin/api/providers/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T055 [US5] Create IdP export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Export.cshtml(.cs)`
+- [x] T052 [P] [US5] Implement `ConfigurationExportService.ExportIdentityProviderAsync()` in `MrWhoOidc.Auth/Services/ConfigurationExportService.cs`
+- [x] T053 [US5] Ensure private keys excluded from IdP export (public keys only) (depends on T052)
+- [x] T054 [US5] Create IdP export API endpoint `GET /admin/api/providers/{id}/export` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T055 [US5] Create IdP export Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Export.cshtml(.cs)`
 
 ### Tests for User Story 5
 
 - [ ] T056 [US5] Unit test for IdP export with claim mappings in `MrWhoOidc.UnitTests/Export/IdentityProviderExportTests.cs`
 
-**Checkpoint**: User Stories 3, 4, 5 complete - all granular export functionality available
+**Checkpoint**: User Stories 3, 4, 5 complete - all granular export functionality available ✅
 
 ---
 
@@ -193,16 +193,16 @@
 
 ### Implementation for User Story 6
 
-- [ ] T057 [US6] Implement `ConfigurationImportService.ImportRealmAsync()` in `MrWhoOidc.Auth/Services/ConfigurationImportService.cs`
+- [x] T057 [US6] Implement `ConfigurationImportService.ImportRealmAsync()` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
 - [ ] T058 [US6] Create realm import preview endpoint `POST /admin/api/realms/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [ ] T059 [US6] Create realm import execute endpoint `POST /admin/api/realms/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T060 [US6] Create realm import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Realms/Import.cshtml(.cs)`
+- [x] T060 [US6] Create realm import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Realms/Import.cshtml(.cs)`
 
 ### Tests for User Story 6
 
 - [ ] T061 [US6] Unit test for realm import with conflict resolution in `MrWhoOidc.UnitTests/Import/RealmImportTests.cs`
 
-**Checkpoint**: User Story 6 complete - realm import functional
+**Checkpoint**: User Story 6 complete - realm import functional ✅
 
 ---
 
@@ -214,16 +214,16 @@
 
 ### Implementation for User Story 7
 
-- [ ] T062 [US7] Implement `ConfigurationImportService.ImportClientAsync()` with target realm parameter in `MrWhoOidc.Auth/Services/ConfigurationImportService.cs`
+- [x] T062 [US7] Implement `ConfigurationImportService.ImportClientAsync()` with target realm parameter in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
 - [ ] T063 [US7] Create client import preview endpoint `POST /admin/api/clients/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [ ] T064 [US7] Create client import execute endpoint `POST /admin/api/clients/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T065 [US7] Create client import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Import.cshtml(.cs)` with realm selector
+- [x] T065 [US7] Create client import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Import.cshtml(.cs)` with realm selector
 
 ### Tests for User Story 7
 
 - [ ] T066 [US7] Unit test for client import with secret handling in `MrWhoOidc.UnitTests/Import/ClientImportTests.cs`
 
-**Checkpoint**: User Story 7 complete - client import functional
+**Checkpoint**: User Story 7 complete - client import functional ✅
 
 ---
 
@@ -235,16 +235,16 @@
 
 ### Implementation for User Story 8
 
-- [ ] T067 [US8] Implement `ConfigurationImportService.ImportIdentityProviderAsync()` in `MrWhoOidc.Auth/Services/ConfigurationImportService.cs`
+- [x] T067 [US8] Implement `ConfigurationImportService.ImportIdentityProviderAsync()` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
 - [ ] T068 [US8] Create IdP import preview endpoint `POST /admin/api/providers/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [ ] T069 [US8] Create IdP import execute endpoint `POST /admin/api/providers/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T070 [US8] Create IdP import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Import.cshtml(.cs)`
+- [x] T070 [US8] Create IdP import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Import.cshtml(.cs)`
 
 ### Tests for User Story 8
 
 - [ ] T071 [US8] Unit test for IdP import with claim mapping preservation in `MrWhoOidc.UnitTests/Import/IdentityProviderImportTests.cs`
 
-**Checkpoint**: All user stories complete - full export/import functionality available
+**Checkpoint**: All user stories complete - full export/import functionality available ✅
 
 ---
 

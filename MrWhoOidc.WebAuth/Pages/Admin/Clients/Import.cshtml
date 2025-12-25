@@ -1,0 +1,335 @@
+@page "/admin/clients/import"
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@model MrWhoOidc.WebAuth.Pages.Admin.Clients.ImportModel
+@{
+    ViewData["Title"] = "Import Client";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="m-0">
+            <i class="bi bi-upload text-primary me-2"></i>
+            Import Client
+        </h1>
+        <p class="text-muted mb-0">
+            Upload a previously exported client configuration.
+        </p>
+    </div>
+    <div>
+        <a class="btn btn-outline-secondary" href="@(tenantPrefix)/admin/clients">
+            <i class="bi bi-arrow-left"></i> Back to Clients
+        </a>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Error:</strong> @Model.ErrorMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle me-2"></i>
+        @Model.SuccessMessage
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Upload Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-file-earmark-arrow-up me-2"></i>Upload Configuration
+            </div>
+            <div class="card-body">
+                <form method="post" asp-page-handler="Preview" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Configuration File</label>
+                        <input type="file" class="form-control" name="ManifestFile" accept=".json" />
+                        <div class="form-text">
+                            Upload a JSON export file from a previous client export.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Or Paste JSON Content</label>
+                        <textarea class="form-control font-monospace" name="ManifestJson" rows="6"
+                                  placeholder='{"schema": "mrwho-oidc-export", "version": 1, "data": {...}}'>@Model.ManifestJson</textarea>
+                        <div class="form-text">
+                            Alternatively, paste the JSON manifest content directly.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Conflict Resolution</label>
+                        <select class="form-select" name="ConflictResolution">
+                            <option value="skip" selected="@(Model.ConflictResolution == "skip")">
+                                Skip - Do not import conflicting clients
+                            </option>
+                            <option value="rename" selected="@(Model.ConflictResolution == "rename")">
+                                Rename - Generate new client IDs for conflicts
+                            </option>
+                            <option value="merge" selected="@(Model.ConflictResolution == "merge")">
+                                Merge - Update existing clients with new data
+                            </option>
+                            <option value="overwrite" selected="@(Model.ConflictResolution == "overwrite")">
+                                Overwrite - Replace existing clients completely
+                            </option>
+                        </select>
+                        <div class="form-text">
+                            Choose how to handle clients that already exist in the database.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="bi bi-search me-2"></i>Preview Import
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        @if (Model.Preview != null)
+        {
+            <!-- Preview Results -->
+            <div class="card mb-4">
+                <div class="card-header @(Model.Preview.IsValid ? "bg-success text-white" : "bg-danger text-white")">
+                    <i class="bi @(Model.Preview.IsValid ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                    Import Preview
+                </div>
+                <div class="card-body">
+                    @if (Model.Preview.ValidationErrors.Count > 0)
+                    {
+                        <h6 class="text-danger mb-3">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Validation Errors (@Model.Preview.ValidationErrors.Count)
+                        </h6>
+                        <ul class="list-group mb-4">
+                            @foreach (var error in Model.Preview.ValidationErrors)
+                            {
+                                <li class="list-group-item list-group-item-danger">
+                                    <code>@error.Path</code>: @error.Message
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Model.Preview.Conflicts.Count > 0)
+                    {
+                        <h6 class="text-warning mb-3">
+                            <i class="bi bi-exclamation-circle me-2"></i>
+                            Conflicts Detected (@Model.Preview.Conflicts.Count)
+                        </h6>
+                        <ul class="list-group mb-4">
+                            @foreach (var conflict in Model.Preview.Conflicts)
+                            {
+                                <li class="list-group-item list-group-item-warning">
+                                    <strong>@conflict.EntityType</strong>: @conflict.Identifier
+                                    <br />
+                                    <small class="text-muted">@conflict.ConflictType - Will be resolved with: @Model.ConflictResolution</small>
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Model.Preview.HasObfuscatedSecrets)
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-key me-2"></i>
+                            <strong>Obfuscated Secrets:</strong> This manifest contains @Model.Preview.ObfuscatedSecretCount obfuscated secret(s).
+                            These values will need to be re-entered after import.
+                        </div>
+                    }
+
+                    @if (Model.Preview.IsValid)
+                    {
+                        <form method="post" asp-page-handler="Import">
+                            <input type="hidden" name="ManifestJson" value="@Model.ManifestJson" />
+                            <input type="hidden" name="ConflictResolution" value="@Model.ConflictResolution" />
+
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    <input type="hidden" name="DryRun" value="false" />
+                                    <input class="form-check-input" type="checkbox" name="DryRun" id="dryRunCheck" 
+                                           value="true" @(Model.DryRun ? "checked" : "") />
+                                    <label class="form-check-label" for="dryRunCheck">
+                                        <strong>Dry Run</strong> - Validate without making changes
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-upload me-2"></i>Execute Import
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.Result != null)
+        {
+            <!-- Import Results -->
+            <div class="card mb-4">
+                <div class="card-header @(Model.Result.Success ? "bg-success text-white" : "bg-danger text-white")">
+                    <i class="bi @(Model.Result.Success ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                    Import @(Model.DryRun ? "Dry Run " : "")Results
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td>Clients Created</td>
+                                <td class="text-end"><span class="badge bg-success">@Model.Result.EntitiesCreated</span></td>
+                            </tr>
+                            <tr>
+                                <td>Clients Updated</td>
+                                <td class="text-end"><span class="badge bg-primary">@Model.Result.EntitiesUpdated</span></td>
+                            </tr>
+                            <tr>
+                                <td>Clients Skipped</td>
+                                <td class="text-end"><span class="badge bg-secondary">@Model.Result.EntitiesSkipped</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    @if (Model.Result.Errors.Count > 0)
+                    {
+                        <h6 class="text-danger mt-4">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Errors (@Model.Result.Errors.Count)
+                        </h6>
+                        <ul class="list-group">
+                            @foreach (var error in Model.Result.Errors)
+                            {
+                                <li class="list-group-item list-group-item-danger">
+                                    <strong>@error.EntityType</strong>: @error.Identifier - @error.Message
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Model.Result.Warnings.Count > 0)
+                    {
+                        <h6 class="text-warning mt-4">
+                            <i class="bi bi-exclamation-circle me-2"></i>
+                            Warnings (@Model.Result.Warnings.Count)
+                        </h6>
+                        <ul class="list-group">
+                            @foreach (var warning in Model.Result.Warnings)
+                            {
+                                <li class="list-group-item list-group-item-warning">@warning</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-md-4">
+        <!-- Preview Counts -->
+        @if (Model.Preview != null)
+        {
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-list-check me-2"></i>Manifest Contents
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <td><i class="bi bi-app me-2 text-primary"></i>Clients</td>
+                                <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ClientCount</span></td>
+                            </tr>
+                            @if (Model.Preview.RealmCount > 0)
+                            {
+                                <tr>
+                                    <td><i class="bi bi-building me-2 text-muted"></i>Realms</td>
+                                    <td class="text-end"><span class="badge bg-secondary">@Model.Preview.RealmCount</span></td>
+                                </tr>
+                            }
+                            @if (Model.Preview.TenantCount > 0)
+                            {
+                                <tr>
+                                    <td><i class="bi bi-diagram-3 me-2 text-muted"></i>Tenants</td>
+                                    <td class="text-end"><span class="badge bg-secondary">@Model.Preview.TenantCount</span></td>
+                                </tr>
+                            }
+                            @if (Model.Preview.ProviderCount > 0)
+                            {
+                                <tr>
+                                    <td><i class="bi bi-person-badge me-2 text-muted"></i>Identity Providers</td>
+                                    <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ProviderCount</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- Help Card -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-question-circle me-2"></i>Import Help
+            </div>
+            <div class="card-body">
+                <h6>Supported Formats</h6>
+                <p class="small text-muted">
+                    You can import a client from:
+                </p>
+                <ul class="small text-muted">
+                    <li>Single client export file</li>
+                    <li>Realm export (clients will be extracted)</li>
+                    <li>Full tenant export (clients will be extracted)</li>
+                </ul>
+
+                <h6 class="mt-4">What's Imported</h6>
+                <p class="small text-muted">
+                    A client import includes:
+                </p>
+                <ul class="small text-muted">
+                    <li>Client ID and name</li>
+                    <li>Redirect URIs (login and logout)</li>
+                    <li>Allowed scopes</li>
+                    <li>PKCE, consent, PAR settings</li>
+                    <li>Login method configuration</li>
+                    <li>Logout URIs (back-channel and front-channel)</li>
+                    <li>OBO/Token Exchange policy</li>
+                </ul>
+
+                <h6 class="mt-4">Conflict Resolution</h6>
+                <dl class="small">
+                    <dt>Skip</dt>
+                    <dd>Existing clients are left unchanged. Only new clients are created.</dd>
+
+                    <dt>Rename</dt>
+                    <dd>Conflicting clients are imported with auto-generated unique client IDs.</dd>
+
+                    <dt>Merge</dt>
+                    <dd>Existing clients are updated with values from the import. New scopes and URIs are added.</dd>
+
+                    <dt>Overwrite</dt>
+                    <dd>Existing clients are completely replaced with imported values.</dd>
+                </dl>
+
+                <h6 class="mt-4">Obfuscated Secrets</h6>
+                <p class="small text-muted">
+                    If the export was created in "Obfuscated" mode, client secrets will need to be manually
+                    re-entered after import. Go to the client's settings to configure new secrets.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
