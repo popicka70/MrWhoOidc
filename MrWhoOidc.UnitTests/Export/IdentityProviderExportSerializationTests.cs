@@ -52,10 +52,10 @@ public class IdentityProviderExportSerializationTests
 
         // Assert
         Assert.IsNotNull(json);
-        Assert.IsTrue(json.Contains("\"$schema\""));
-        Assert.IsTrue(json.Contains("\"exportType\": \"identity-provider\""));
-        Assert.IsTrue(json.Contains("\"exportMode\": \"obfuscated\""));
-        Assert.IsTrue(json.Contains("\"name\": \"azure-ad\""));
+        StringAssert.Contains(json, "\"$schema\"");
+        StringAssert.Contains(json, "\"exportType\": \"identity-provider\"");
+        StringAssert.Contains(json, "\"exportMode\": \"obfuscated\"");
+        StringAssert.Contains(json, "\"name\": \"azure-ad\"");
     }
 
     [TestMethod]

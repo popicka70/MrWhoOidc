@@ -51,10 +51,10 @@ public class RealmExportSerializationTests
 
         // Assert
         Assert.IsNotNull(json);
-        Assert.IsTrue(json.Contains("\"$schema\""));
-        Assert.IsTrue(json.Contains("\"exportType\": \"realm\""));
-        Assert.IsTrue(json.Contains("\"exportMode\": \"obfuscated\""));
-        Assert.IsTrue(json.Contains("\"name\": \"main\""));
+        StringAssert.Contains(json, "\"$schema\"");
+        StringAssert.Contains(json, "\"exportType\": \"realm\"");
+        StringAssert.Contains(json, "\"exportMode\": \"obfuscated\"");
+        StringAssert.Contains(json, "\"name\": \"main\"");
     }
 
     [TestMethod]

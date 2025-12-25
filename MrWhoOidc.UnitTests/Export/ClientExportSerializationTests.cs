@@ -51,10 +51,10 @@ public class ClientExportSerializationTests
 
         // Assert
         Assert.IsNotNull(json);
-        Assert.IsTrue(json.Contains("\"$schema\""));
-        Assert.IsTrue(json.Contains("\"exportType\": \"client\""));
-        Assert.IsTrue(json.Contains("\"exportMode\": \"obfuscated\""));
-        Assert.IsTrue(json.Contains("\"clientId\": \"web-app\""));
+        StringAssert.Contains(json, "\"$schema\"");
+        StringAssert.Contains(json, "\"exportType\": \"client\"");
+        StringAssert.Contains(json, "\"exportMode\": \"obfuscated\"");
+        StringAssert.Contains(json, "\"clientId\": \"web-app\"");
     }
 
     [TestMethod]

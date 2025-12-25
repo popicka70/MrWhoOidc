@@ -50,10 +50,10 @@ public class TenantExportSerializationTests
 
         // Assert
         Assert.IsNotNull(json);
-        Assert.IsTrue(json.Contains("\"$schema\""));
-        Assert.IsTrue(json.Contains("\"version\":"));
-        Assert.IsTrue(json.Contains("\"exportType\": \"tenant\""));
-        Assert.IsTrue(json.Contains("\"exportMode\": \"obfuscated\""));
+        StringAssert.Contains(json, "\"$schema\"");
+        StringAssert.Contains(json, "\"version\":");
+        StringAssert.Contains(json, "\"exportType\": \"tenant\"");
+        StringAssert.Contains(json, "\"exportMode\": \"obfuscated\"");
     }
 
     [TestMethod]
