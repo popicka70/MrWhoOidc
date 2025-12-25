@@ -15,6 +15,32 @@ body {
   margin: 0;
 }
 
+/* Home page hero logo: keep contained and responsive */
+.home-logo {
+  width: clamp(260px, 50vw, 720px);
+  max-width: 100%;
+  height: auto;
+  max-height: min(55vh, 560px);
+  object-fit: contain;
+}
+
+/* Provider mappings: align checkboxes with other inputs in the grid */
+.provider-mappings-form .form-check:not(.form-switch) {
+  padding-left: 0;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.provider-mappings-form .form-check:not(.form-switch) > .form-check-input {
+  margin-left: 0;
+  margin-top: 0;
+  float: none;
+}
+.provider-mappings-form .form-check:not(.form-switch) > .form-check-label {
+  margin-bottom: 0;
+}
+
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
   color: var(--bs-secondary-color);
   text-align: end;

@@ -18,7 +18,7 @@
     </div>
 }
 
-<form method="post">
+<form method="post" class="provider-mappings-form">
     <div class="row g-3 align-items-end">
         <div class="col-md-4">
             <label asp-for="Input.ClientId" class="form-label">Client</label>
@@ -32,21 +32,27 @@
             <label asp-for="Input.Order" class="form-label">Order</label>
             <input asp-for="Input.Order" class="form-control" />
         </div>
-        <div class="col-md-2 form-check">
-            <input asp-for="Input.Enabled" class="form-check-input" />
-            <label asp-for="Input.Enabled" class="form-check-label">Enabled</label>
+        <div class="col-md-2">
+            <div class="form-check">
+                <input asp-for="Input.Enabled" class="form-check-input" />
+                <label asp-for="Input.Enabled" class="form-check-label">Enabled</label>
+            </div>
         </div>
-        <div class="col-md-2 form-check">
-            <input asp-for="Input.IsDefaultForClient" class="form-check-input" />
-            <label asp-for="Input.IsDefaultForClient" class="form-check-label">Default</label>
+        <div class="col-md-2">
+            <div class="form-check">
+                <input asp-for="Input.IsDefaultForClient" class="form-check-input" />
+                <label asp-for="Input.IsDefaultForClient" class="form-check-label">Default</label>
+            </div>
         </div>
         <div class="col-md-3">
             <label asp-for="Input.RequiredAcr" class="form-label">Required ACR</label>
             <input asp-for="Input.RequiredAcr" class="form-control" />
         </div>
-        <div class="col-md-3 form-check">
-            <input asp-for="Input.AutoRedirectIfSingle" class="form-check-input" />
-            <label asp-for="Input.AutoRedirectIfSingle" class="form-check-label">Auto-redirect if single</label>
+        <div class="col-md-3">
+            <div class="form-check">
+                <input asp-for="Input.AutoRedirectIfSingle" class="form-check-input" />
+                <label asp-for="Input.AutoRedirectIfSingle" class="form-check-label">Auto-redirect if single</label>
+            </div>
         </div>
         <div class="col-md-12">
             <button type="submit" class="btn btn-primary">Add / Update</button>
