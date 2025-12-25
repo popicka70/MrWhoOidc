@@ -138,7 +138,7 @@
 
 ### Tests for User Story 3
 
-- [ ] T047 [US3] Unit test for realm export in `MrWhoOidc.UnitTests/Export/RealmExportTests.cs`
+- [x] T047 [US3] Unit test for realm export serialization in `MrWhoOidc.UnitTests/Export/RealmExportSerializationTests.cs`
 
 **Checkpoint**: User Story 3 complete - realm export functional ✅
 
@@ -158,7 +158,7 @@
 
 ### Tests for User Story 4
 
-- [ ] T051 [US4] Unit test for client export with IdP assignments in `MrWhoOidc.UnitTests/Export/ClientExportTests.cs`
+- [x] T051 [US4] Unit test for client export serialization in `MrWhoOidc.UnitTests/Export/ClientExportSerializationTests.cs`
 
 **Checkpoint**: User Story 4 complete - client export functional ✅
 
@@ -179,7 +179,7 @@
 
 ### Tests for User Story 5
 
-- [ ] T056 [US5] Unit test for IdP export with claim mappings in `MrWhoOidc.UnitTests/Export/IdentityProviderExportTests.cs`
+- [x] T056 [US5] Unit test for IdP export serialization in `MrWhoOidc.UnitTests/Export/IdentityProviderExportSerializationTests.cs`
 
 **Checkpoint**: User Stories 3, 4, 5 complete - all granular export functionality available ✅
 
@@ -194,13 +194,13 @@
 ### Implementation for User Story 6
 
 - [x] T057 [US6] Implement `ConfigurationImportService.ImportRealmAsync()` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
-- [ ] T058 [US6] Create realm import preview endpoint `POST /admin/api/realms/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T059 [US6] Create realm import execute endpoint `POST /admin/api/realms/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T058 [US6] Create realm import preview endpoint `POST /admin/api/realms/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T059 [US6] Create realm import execute endpoint `POST /admin/api/realms/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [x] T060 [US6] Create realm import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Realms/Import.cshtml(.cs)`
 
 ### Tests for User Story 6
 
-- [ ] T061 [US6] Unit test for realm import with conflict resolution in `MrWhoOidc.UnitTests/Import/RealmImportTests.cs`
+- [x] T061 [US6] Unit test for realm import validation in `MrWhoOidc.UnitTests/Import/RealmImportValidationTests.cs`
 
 **Checkpoint**: User Story 6 complete - realm import functional ✅
 
@@ -215,13 +215,13 @@
 ### Implementation for User Story 7
 
 - [x] T062 [US7] Implement `ConfigurationImportService.ImportClientAsync()` with target realm parameter in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
-- [ ] T063 [US7] Create client import preview endpoint `POST /admin/api/clients/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T064 [US7] Create client import execute endpoint `POST /admin/api/clients/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T063 [US7] Create client import preview endpoint `POST /admin/api/clients/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T064 [US7] Create client import execute endpoint `POST /admin/api/clients/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [x] T065 [US7] Create client import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Clients/Import.cshtml(.cs)` with realm selector
 
 ### Tests for User Story 7
 
-- [ ] T066 [US7] Unit test for client import with secret handling in `MrWhoOidc.UnitTests/Import/ClientImportTests.cs`
+- [x] T066 [US7] Unit test for client import validation in `MrWhoOidc.UnitTests/Import/ClientImportValidationTests.cs`
 
 **Checkpoint**: User Story 7 complete - client import functional ✅
 
@@ -236,13 +236,13 @@
 ### Implementation for User Story 8
 
 - [x] T067 [US8] Implement `ConfigurationImportService.ImportIdentityProviderAsync()` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
-- [ ] T068 [US8] Create IdP import preview endpoint `POST /admin/api/providers/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T069 [US8] Create IdP import execute endpoint `POST /admin/api/providers/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T068 [US8] Create IdP import preview endpoint `POST /admin/api/providers/import/preview` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T069 [US8] Create IdP import execute endpoint `POST /admin/api/providers/import` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
 - [x] T070 [US8] Create IdP import Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Import.cshtml(.cs)`
 
 ### Tests for User Story 8
 
-- [ ] T071 [US8] Unit test for IdP import with claim mapping preservation in `MrWhoOidc.UnitTests/Import/IdentityProviderImportTests.cs`
+- [x] T071 [US8] Unit test for IdP import validation in `MrWhoOidc.UnitTests/Import/IdentityProviderImportValidationTests.cs`
 
 **Checkpoint**: All user stories complete - full export/import functionality available ✅
 
@@ -254,9 +254,9 @@
 
 ### Audit & Observability
 
-- [ ] T072 [P] Create audit log list API endpoint `GET /admin/api/configuration-audit` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T073 [P] Create audit log detail API endpoint `GET /admin/api/configuration-audit/{id}` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
-- [ ] T074 [P] Create audit log Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/ConfigurationAudit/Index.cshtml(.cs)`
+- [x] T072 [P] Create audit log list API endpoint `GET /admin/api/configuration-audit` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T073 [P] Create audit log detail API endpoint `GET /admin/api/configuration-audit/{id}` in `MrWhoOidc.WebAuth/Handlers/ExportImportHandler.cs`
+- [x] T074 [P] Create audit log Razor Page in `MrWhoOidc.WebAuth/Pages/Admin/ConfigurationAudit/Index.cshtml(.cs)`
 
 ### Documentation & Cleanup
 
