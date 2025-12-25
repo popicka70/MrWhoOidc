@@ -88,6 +88,7 @@ public class EditModel(
             Type = entity.Type,
             Enabled = entity.Enabled,
             IsDefault = entity.IsDefault,
+            AllowRegistration = entity.AllowRegistration,
             SortOrder = entity.SortOrder,
             LogoUrl = entity.LogoUrl,
             ConfigJson = entity.ConfigJson
@@ -159,6 +160,7 @@ public class EditModel(
         entity.Type = Input.Type;
         entity.Enabled = Input.Enabled;
         entity.IsDefault = Input.IsDefault;
+        entity.AllowRegistration = Input.AllowRegistration;
         entity.SortOrder = Input.SortOrder;
         entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
 
@@ -576,6 +578,11 @@ public class EditModel(
         public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
         public bool Enabled { get; set; } = true;
         public bool IsDefault { get; set; } = false;
+        /// <summary>
+        /// When true, this IdP appears on the public registration page allowing users to register via external authentication.
+        /// Only applicable for IdPs in the default tenant.
+        /// </summary>
+        public bool AllowRegistration { get; set; } = false;
         public int SortOrder { get; set; } = 0;
         [Url]
         public string? LogoUrl { get; set; }

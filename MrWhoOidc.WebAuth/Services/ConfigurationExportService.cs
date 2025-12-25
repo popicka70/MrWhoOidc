@@ -572,6 +572,7 @@ public sealed class ConfigurationExportService(
             Type = provider.Type.ToString().ToLowerInvariant(),
             Enabled = provider.Enabled,
             IsDefault = provider.IsDefault,
+            AllowRegistration = provider.AllowRegistration,
             LogoUrl = provider.LogoUrl,
             SortOrder = provider.SortOrder,
             Config = config,

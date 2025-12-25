@@ -1,26 +1,46 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
 /// <summary>
+/// Represents an external identity provider option available for login.
+/// </summary>
+public sealed record LoginIdpOption
+{
+    public required string Name { get; init; }
+    public required string DisplayName { get; init; }
+    public string? LogoUrl { get; init; }
+}
+
+/// <summary>
 /// Email-first tenant discovery page.
 /// Users enter their email to find which tenant(s) they have access to.
+/// Also shows external IdP login options for IdPs configured with AllowRegistration=true in the default tenant.
 /// </summary>
 [EnableRateLimiting("email-discovery")]
 public class DiscoverTenantModel : PageModel
 {
     private readonly ITenantDiscoveryService _tenantDiscovery;
+    private readonly AuthDbContext _dbContext;
+    private readonly IMultiTenancyOptions _multiTenancyOptions;
     private readonly ILogger<DiscoverTenantModel> _logger;
 
     public DiscoverTenantModel(
         ITenantDiscoveryService tenantDiscovery,
+        AuthDbContext dbContext,
+        IMultiTenancyOptions multiTenancyOptions,
         ILogger<DiscoverTenantModel> logger)
     {
         _tenantDiscovery = tenantDiscovery;
+        _dbContext = dbContext;
+        _multiTenancyOptions = multiTenancyOptions;
         _logger = logger;
     }
 
@@ -36,9 +56,77 @@ public class DiscoverTenantModel : PageModel
 
     public bool ShowDirectLoginLink { get; set; } = true;
 
-    public void OnGet()
+    /// <summary>
+    /// External identity providers available for login (from default tenant with AllowRegistration=true).
+    /// </summary>
+    public List<LoginIdpOption> LoginIdps { get; private set; } = [];
+
+    public async Task<IActionResult> OnGetAsync()
     {
         _logger.LogDebug("Tenant discovery page accessed, ReturnUrl: {ReturnUrl}", ReturnUrl ?? "(none)");
+
+        // If user is already authenticated (e.g., returned from external IdP login), redirect them
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            _logger.LogInformation("User already authenticated, redirecting from DiscoverTenant");
+
+            // If there's a return URL, go there (it's likely an OIDC authorize flow)
+            if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
+            {
+                return Redirect(ReturnUrl);
+            }
+
+            // Otherwise, redirect to home page
+            return Redirect("/");
+        }
+
+        await LoadLoginIdpsAsync();
+        return Page();
+    }
+
+    private async Task LoadLoginIdpsAsync()
+    {
+        try
+        {
+            // Get the default tenant slug from configuration
+            var defaultTenantSlug = _multiTenancyOptions.DefaultTenantSlug ?? "default";
+
+            // Get the default tenant ID
+            var defaultTenantId = await _dbContext.Tenants
+                .AsNoTracking()
+                .Where(t => t.Slug == defaultTenantSlug && t.Status == TenantStatus.Active)
+                .Select(t => t.Id)
+                .FirstOrDefaultAsync();
+
+            if (defaultTenantId == Guid.Empty)
+            {
+                _logger.LogWarning("No default tenant found for login IdP loading (slug: {Slug})", defaultTenantSlug);
+                return;
+            }
+
+            // Load IdPs that are enabled and allow registration (same rules as registration page)
+            LoginIdps = await _dbContext.IdentityProviders
+                .AsNoTracking()
+                .Where(p => p.TenantId == defaultTenantId
+                         && p.Enabled
+                         && p.AllowRegistration)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.DisplayName)
+                .Select(p => new LoginIdpOption
+                {
+                    Name = p.Name,
+                    DisplayName = p.DisplayName ?? p.Name,
+                    LogoUrl = p.LogoUrl
+                })
+                .ToListAsync();
+
+            _logger.LogDebug("Loaded {Count} login IdPs for tenant discovery page", LoginIdps.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load login IdPs");
+            // Don't throw - page should still render with email-first flow
+        }
     }
 
     public async Task<IActionResult> OnPostAsync()

@@ -33,7 +33,8 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
         var roleName = _options.Value.PlatformAdminRoleName;
 
         // Check if user has the platform-admin role in the platform realm
-        var hasPlatformAdmin = await _db.UserRoleAssignments.AsNoTracking()
+        // Check both client-scoped (UserRoleAssignments) and realm-scoped (UserRealmRoleAssignments) tables
+        var hasClientScopedRole = await _db.UserRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId
@@ -42,7 +43,16 @@ public sealed class PlatformAdminAuthorizationHandler : AuthorizationHandler<Pla
                            && x.r.Name == roleName
                            && x.rl.Name == realmName);
 
-        if (hasPlatformAdmin)
+        var hasRealmScopedRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+            .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+            .AnyAsync(x => x.a.UserId == userId
+                           && x.a.IsActive
+                           && x.r.IsActive
+                           && x.r.Name == roleName
+                           && x.rl.Name == realmName);
+
+        if (hasClientScopedRole || hasRealmScopedRole)
             context.Succeed(requirement);
     }
 }

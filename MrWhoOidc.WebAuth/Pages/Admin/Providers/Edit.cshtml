@@ -169,6 +169,14 @@ else
                 <input asp-for="Input.IsDefault" class="form-check-input" />
                 <label asp-for="Input.IsDefault" class="form-check-label"></label>
             </div>
+            <div class="form-check mb-3">
+                <input asp-for="Input.AllowRegistration" class="form-check-input" />
+                <label asp-for="Input.AllowRegistration" class="form-check-label">Allow Registration</label>
+                <div class="form-text">
+                    When enabled, this provider will appear on the public registration page,
+                    allowing new users to register by authenticating with this IdP.
+                </div>
+            </div>
             <div class="mb-3">
                 <label asp-for="Input.SortOrder" class="form-label"></label>
                 <input asp-for="Input.SortOrder" class="form-control" />

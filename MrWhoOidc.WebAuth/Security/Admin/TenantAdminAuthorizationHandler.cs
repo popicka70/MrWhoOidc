@@ -47,7 +47,8 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         var platformRealmName = _platformOptions.Value.RealmName;
         var platformRoleName = _platformOptions.Value.PlatformAdminRoleName;
 
-        var isPlatformAdmin = await _db.UserRoleAssignments.AsNoTracking()
+        // Check both client-scoped and realm-scoped role assignments for platform admin
+        var isPlatformAdminClientScoped = await _db.UserRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId
@@ -56,7 +57,16 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
                            && x.r.Name == platformRoleName
                            && x.rl.Name == platformRealmName);
 
-        if (isPlatformAdmin)
+        var isPlatformAdminRealmScoped = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+            .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+            .AnyAsync(x => x.a.UserId == userId
+                           && x.a.IsActive
+                           && x.r.IsActive
+                           && x.r.Name == platformRoleName
+                           && x.rl.Name == platformRealmName);
+
+        if (isPlatformAdminClientScoped || isPlatformAdminRealmScoped)
         {
             // Platform admins always have access, even when not impersonating
             context.Succeed(requirement);
@@ -92,10 +102,11 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         }
 
         // Check if user has tenant-admin role in current tenant's default realm
+        // Check both client-scoped and realm-scoped role assignments
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.TenantAdminRoleName;
 
-        var isTenantAdmin = await _db.UserRoleAssignments.AsNoTracking()
+        var isTenantAdminClientScoped = await _db.UserRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId
@@ -105,7 +116,17 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
                            && x.rl.TenantId == tenantId
                            && x.rl.Name == realmName);
 
-        if (isTenantAdmin)
+        var isTenantAdminRealmScoped = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+            .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+            .AnyAsync(x => x.a.UserId == userId
+                           && x.a.IsActive
+                           && x.r.IsActive
+                           && x.r.Name == roleName
+                           && x.rl.TenantId == tenantId
+                           && x.rl.Name == realmName);
+
+        if (isTenantAdminClientScoped || isTenantAdminRealmScoped)
             context.Succeed(requirement);
     }
 }
