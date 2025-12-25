@@ -24,13 +24,20 @@ public sealed class AdminAuthorizationHandler : AuthorizationHandler<AdminRequir
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.AdminRoleName;
 
-        var hasAdmin = await _db.UserRoleAssignments.AsNoTracking()
+        // Check both client-scoped (UserRoleAssignments) and realm-scoped (UserRealmRoleAssignments) tables
+        var hasClientScopedRole = await _db.UserRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
             .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
             .AnyAsync(x => x.a.UserId == userId && x.a.IsActive && x.r.IsActive
                            && x.r.Name == roleName && x.rl.Name == realmName);
 
-        if (hasAdmin)
+        var hasRealmScopedRole = await _db.UserRealmRoleAssignments.AsNoTracking()
+            .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
+            .Join(_db.Realms, ar => ar.r.RealmId, rl => rl.Id, (ar, rl) => new { ar.a, ar.r, rl })
+            .AnyAsync(x => x.a.UserId == userId && x.a.IsActive && x.r.IsActive
+                           && x.r.Name == roleName && x.rl.Name == realmName);
+
+        if (hasClientScopedRole || hasRealmScopedRole)
             context.Succeed(requirement);
     }
 }
