@@ -22,7 +22,9 @@ public class AdminUiMultiTenantRoutingTests
                     // Override multi-tenancy configuration to enable multi-tenant mode
                     services.Configure<MultiTenancyOptions>(options =>
                     {
+#pragma warning disable CS0618 // Obsolete - intentional for test configuration
                         options.Enabled = true;
+#pragma warning restore CS0618
                         options.DefaultTenantSlug = "default";
                     });
                 });

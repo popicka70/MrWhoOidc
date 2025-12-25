@@ -21,7 +21,9 @@ public interface ISeedManifestApplier
 internal sealed class SeedManifestApplier(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
+#pragma warning disable CS9113 // Parameter is unread - kept for future multi-tenancy validation
     IMultiTenancyOptions multiTenancyOptions,
+#pragma warning restore CS9113
     IIssuerBuilder issuerBuilder,
     IOptions<OidcOptions> oidcOptions,
     IOptions<SeedManifestOptions> seedOptions,

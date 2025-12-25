@@ -25,7 +25,6 @@ public interface ITokenService
 internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider, ITenantsClaimService tenantsClaimService) : ITokenService
 {
     private readonly ITenantSettingsService _settingsService = settingsService;
-    private readonly IEntitlementsProvider _entitlementsProvider = entitlementsProvider;
 
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
@@ -621,7 +620,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         IReadOnlyDictionary<string, Entitlement> entitlements;
         try
         {
-            entitlements = await _entitlementsProvider.GetEffectiveEntitlementsAsync(subjectId, tenantIdStr, productScopes, issuer, ct).ConfigureAwait(false);
+            entitlements = await entitlementsProvider.GetEffectiveEntitlementsAsync(subjectId, tenantIdStr, productScopes, issuer, ct).ConfigureAwait(false);
         }
         catch
         {

@@ -900,7 +900,7 @@ public sealed class ConfigurationImportService(
                 Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
                 Alg = keyDef.Alg,
                 Kid = keyDef.Kid,
-                Jwk = keyDef.Jwk,
+                Jwk = keyDef.Jwk ?? string.Empty,
                 Active = keyDef.Active ?? true
             };
             _dbContext.IdentityProviderKeys.Add(key);
@@ -961,7 +961,7 @@ public sealed class ConfigurationImportService(
                 Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
                 Alg = keyDef.Alg,
                 Kid = keyDef.Kid,
-                Jwk = keyDef.Jwk,
+                Jwk = keyDef.Jwk ?? string.Empty,
                 Active = keyDef.Active ?? true
             };
             _dbContext.IdentityProviderKeys.Add(key);
@@ -1864,7 +1864,7 @@ public sealed class ConfigurationImportService(
                     Purpose = Enum.TryParse<IdentityProviderKeyPurpose>(keyDef.Purpose, true, out var purpose) ? purpose : IdentityProviderKeyPurpose.Signing,
                     Alg = keyDef.Alg,
                     Kid = keyDef.Kid,
-                    Jwk = keyDef.Jwk,
+                    Jwk = keyDef.Jwk ?? string.Empty,
                     Active = keyDef.Active ?? true
                 };
                 _dbContext.IdentityProviderKeys.Add(key);
