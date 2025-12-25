@@ -868,6 +868,7 @@ public sealed class ConfigurationImportService(
             Type = Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type) ? type : IdentityProviderType.Oidc,
             Enabled = providerDef.Enabled ?? true,
             IsDefault = providerDef.IsDefault ?? false,
+            AllowRegistration = providerDef.AllowRegistration ?? false,
             LogoUrl = providerDef.LogoUrl,
             SortOrder = providerDef.SortOrder ?? 0,
             ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null
@@ -919,6 +920,7 @@ public sealed class ConfigurationImportService(
         provider.Type = Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type) ? type : IdentityProviderType.Oidc;
         provider.Enabled = providerDef.Enabled ?? true;
         provider.IsDefault = providerDef.IsDefault ?? false;
+        provider.AllowRegistration = providerDef.AllowRegistration ?? false;
         provider.LogoUrl = providerDef.LogoUrl;
         provider.SortOrder = providerDef.SortOrder ?? 0;
         provider.ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null;
@@ -984,6 +986,8 @@ public sealed class ConfigurationImportService(
             provider.Enabled = providerDef.Enabled.Value;
         if (providerDef.IsDefault.HasValue)
             provider.IsDefault = providerDef.IsDefault.Value;
+        if (providerDef.AllowRegistration.HasValue)
+            provider.AllowRegistration = providerDef.AllowRegistration.Value;
         if (providerDef.LogoUrl != null)
             provider.LogoUrl = providerDef.LogoUrl;
         if (providerDef.SortOrder.HasValue)
@@ -1832,6 +1836,7 @@ public sealed class ConfigurationImportService(
                 Type = Enum.TryParse<IdentityProviderType>(providerDef.Type, true, out var type) ? type : IdentityProviderType.Oidc,
                 Enabled = providerDef.Enabled ?? true,
                 IsDefault = providerDef.IsDefault ?? false,
+                AllowRegistration = providerDef.AllowRegistration ?? false,
                 LogoUrl = providerDef.LogoUrl,
                 SortOrder = providerDef.SortOrder ?? 0,
                 ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null

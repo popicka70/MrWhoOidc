@@ -25,9 +25,9 @@
 
 **Purpose**: Add `AllowRegistration` property to IdentityProvider entity and create database migration
 
-- [ ] T001 Add `AllowRegistration` boolean property to `IdentityProvider` entity in `MrWhoOidc.Auth/Persistence/AuthDbContext.cs`
-- [ ] T002 Run EF Core migration: `dotnet ef migrations add AddAllowRegistrationToIdentityProvider --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations`
-- [ ] T003 Verify migration file created in `MrWhoOidc.Auth/Persistence/Migrations/` and contains correct column definition
+- [x] T001 Add `AllowRegistration` boolean property to `IdentityProvider` entity in `MrWhoOidc.Auth/Persistence/AuthDbContext.cs`
+- [x] T002 Run EF Core migration: `dotnet ef migrations add AddAllowRegistrationToIdentityProvider --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth --output-dir Persistence/Migrations`
+- [x] T003 Verify migration file created in `MrWhoOidc.Auth/Persistence/Migrations/` and contains correct column definition
 
 ---
 
@@ -37,10 +37,10 @@
 
 **⚠️ CRITICAL**: These tasks ensure the new property works correctly in import/export and seeding scenarios
 
-- [ ] T004 [P] Update `IdentityProviderSeedDefinition` to include `AllowRegistration` in `MrWhoOidc.Auth/Seeding/SeedManifest.cs`
-- [ ] T005 [P] Update `ConfigurationExportService.ExportIdentityProviderAsync()` to export `AllowRegistration` in `MrWhoOidc.WebAuth/Services/ConfigurationExportService.cs`
-- [ ] T006 [P] Update `ConfigurationImportService.ImportIdentityProviderAsync()` to import `AllowRegistration` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
-- [ ] T007 Build solution and verify zero warnings: `dotnet build`
+- [x] T004 [P] Update `IdentityProviderSeedDefinition` to include `AllowRegistration` in `MrWhoOidc.Auth/Seeding/IdentityProviderSeedDefinition.cs`
+- [x] T005 [P] Update `ConfigurationExportService.ExportIdentityProviderAsync()` to export `AllowRegistration` in `MrWhoOidc.WebAuth/Services/ConfigurationExportService.cs`
+- [x] T006 [P] Update `ConfigurationImportService.ImportIdentityProviderAsync()` to import `AllowRegistration` in `MrWhoOidc.WebAuth/Services/ConfigurationImportService.cs`
+- [x] T007 Build solution and verify zero warnings: `dotnet build`
 
 **Checkpoint**: Foundation ready - entity extended, migration created, import/export updated
 
@@ -54,15 +54,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Create `RegistrationIdpOption` record in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T009 [P] [US1] Add `RegistrationIdps` property to `IndexModel` in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T010 [US1] Inject `AuthDbContext` into `IndexModel` constructor in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T011 [US1] Implement `OnGetAsync()` method to query registration-enabled IdPs from default tenant in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T012 [US1] Add IdP buttons section to registration page UI in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T013 [US1] Style IdP buttons to match provider picker page design in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T014 [US1] Construct external start URL with registration-specific returnUrl in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T015 [US1] Add `mode` query parameter handling to detect IdP callback in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T016 [US1] Display success message when `mode=idp_callback` indicates successful registration in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T008 [P] [US1] Create `RegistrationIdpOption` record in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T009 [P] [US1] Add `RegistrationIdps` property to `IndexModel` in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T010 [US1] Inject `AuthDbContext` into `IndexModel` constructor in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T011 [US1] Implement `OnGetAsync()` method to query registration-enabled IdPs from default tenant in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T012 [US1] Add IdP buttons section to registration page UI in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T013 [US1] Style IdP buttons to match provider picker page design in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T014 [US1] Construct external start URL with registration-specific returnUrl in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T015 [US1] Add `mode` query parameter handling to detect IdP callback in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T016 [US1] Display success message when `mode=idp_callback` indicates successful registration in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can register via external IdP
 
@@ -76,11 +76,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T017 [P] [US2] Add `AllowRegistration` property to `InputModel` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
-- [ ] T018 [US2] Map `AllowRegistration` from entity to `InputModel` in `OnGetAsync()` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
-- [ ] T019 [US2] Map `AllowRegistration` from `InputModel` to entity in `OnPostAsync()` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
-- [ ] T020 [US2] Add "Allow Registration" checkbox to admin provider edit form in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml`
-- [ ] T021 [US2] Add help text explaining the setting's purpose in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml`
+- [x] T017 [P] [US2] Add `AllowRegistration` property to `InputModel` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
+- [x] T018 [US2] Map `AllowRegistration` from entity to `InputModel` in `OnGetAsync()` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
+- [x] T019 [US2] Map `AllowRegistration` from `InputModel` to entity in `OnPostAsync()` in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml.cs`
+- [x] T020 [US2] Add "Allow Registration" checkbox to admin provider edit form in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml`
+- [x] T021 [US2] Add help text explaining the setting's purpose in `MrWhoOidc.WebAuth/Pages/Admin/Providers/Edit.cshtml`
 
 **Checkpoint**: At this point, User Story 2 should be fully functional - admins can enable/disable IdP registration
 
@@ -94,9 +94,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Add conditional rendering to hide IdP section when `RegistrationIdps` is empty in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T023 [US3] Ensure no visual artifacts (empty dividers, sections) when IdPs list is empty in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T024 [US3] Verify manual registration form remains fully functional regardless of IdP configuration in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T022 [US3] Add conditional rendering to hide IdP section when `RegistrationIdps` is empty in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T023 [US3] Ensure no visual artifacts (empty dividers, sections) when IdPs list is empty in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T024 [US3] Verify manual registration form remains fully functional regardless of IdP configuration in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
 
 **Checkpoint**: At this point, User Story 3 should be fully functional - graceful degradation works
 
@@ -110,10 +110,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T025 [US4] Add `ErrorMessage` property to `IndexModel` if not present in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T026 [US4] Add `error` query parameter handling in `OnGetAsync()` to display duplicate email message in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T027 [US4] Add error alert UI with "sign in instead" link in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
-- [ ] T028 [US4] Verify `ExternalOidcUserProvisioner` returns appropriate error for duplicate accounts that redirects to registration page with error parameter in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
+- [x] T025 [US4] Add `ErrorMessage` property to `IndexModel` if not present in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T026 [US4] Add `error` query parameter handling in `OnGetAsync()` to display duplicate email message in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T027 [US4] Add error alert UI with "sign in instead" link in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml`
+- [x] T028 [US4] Verify `ExternalOidcUserProvisioner` returns appropriate error for duplicate accounts that redirects to registration page with error parameter in `MrWhoOidc.WebAuth/Handlers/External/ExternalOidcUserProvisioner.cs`
 
 **Checkpoint**: At this point, User Story 4 should be fully functional - duplicate prevention works
 
@@ -124,8 +124,8 @@
 **Purpose**: Final improvements, documentation, and validation
 
 - [ ] T029 [P] Update quickstart documentation with actual screenshots/examples in `specs/013-external-idp-registration/quickstart.md`
-- [ ] T030 [P] Add logging for IdP registration flow in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
-- [ ] T031 Build and run all existing tests to verify no regressions: `dotnet test`
+- [x] T030 [P] Add logging for IdP registration flow in `MrWhoOidc.WebAuth/Pages/Registrations/Index.cshtml.cs`
+- [x] T031 Build and run all existing tests to verify no regressions: `dotnet test`
 - [ ] T032 Apply database migration to development environment: `dotnet ef database update --project MrWhoOidc.Auth --startup-project MrWhoOidc.WebAuth`
 - [ ] T033 Manual E2E validation following `specs/013-external-idp-registration/quickstart.md`
 

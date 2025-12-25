@@ -2,17 +2,32 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Registrations;
 
+/// <summary>
+/// Represents an external identity provider option available for registration.
+/// </summary>
+public sealed record RegistrationIdpOption
+{
+    public required string Name { get; init; }
+    public required string DisplayName { get; init; }
+    public string? LogoUrl { get; init; }
+}
+
 [AllowAnonymous]
 public class IndexModel(
     IPasswordHasher hasher,
     IRegistrationService registrationService,
-    IReturnUrlClientContextResolver clientContextResolver) : PageModel
+    IReturnUrlClientContextResolver clientContextResolver,
+    AuthDbContext dbContext,
+    IMultiTenancyOptions multiTenancyOptions,
+    ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty]
     public RegistrationInput Input { get; set; } = new();
@@ -20,12 +35,80 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>
+    /// When returning from IdP callback, indicates flow mode.
+    /// </summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Mode { get; set; }
+
     public string? SuccessMessage { get; private set; }
     public string? InfoMessage { get; private set; }
+    public string? ErrorMessage { get; private set; }
 
-    public void OnGet()
+    /// <summary>
+    /// External identity providers available for registration.
+    /// </summary>
+    public List<RegistrationIdpOption> RegistrationIdps { get; private set; } = [];
+
+    public async Task OnGetAsync()
     {
-        // No async work needed - client loading removed for security
+        // Handle IdP callback mode
+        if (Mode == "idp_callback")
+        {
+            SuccessMessage = "Registration successful! Please check your email for confirmation instructions.";
+        }
+        else if (Mode == "idp_duplicate")
+        {
+            ErrorMessage = "An account with this email already exists. Please sign in instead.";
+        }
+
+        // Load registration-enabled IdPs from default tenant
+        await LoadRegistrationIdpsAsync();
+    }
+
+    private async Task LoadRegistrationIdpsAsync()
+    {
+        try
+        {
+            // Get the default tenant slug from configuration
+            var defaultTenantSlug = multiTenancyOptions.DefaultTenantSlug ?? "default";
+
+            // Get the default tenant ID
+            var defaultTenantId = await dbContext.Tenants
+                .AsNoTracking()
+                .Where(t => t.Slug == defaultTenantSlug && t.Status == TenantStatus.Active)
+                .Select(t => t.Id)
+                .FirstOrDefaultAsync();
+
+            if (defaultTenantId == Guid.Empty)
+            {
+                logger.LogWarning("No default tenant found for registration IdP loading (slug: {Slug})", defaultTenantSlug);
+                return;
+            }
+
+            // Load IdPs that are enabled and allow registration
+            RegistrationIdps = await dbContext.IdentityProviders
+                .AsNoTracking()
+                .Where(p => p.TenantId == defaultTenantId
+                         && p.Enabled
+                         && p.AllowRegistration)
+                .OrderBy(p => p.SortOrder)
+                .ThenBy(p => p.DisplayName)
+                .Select(p => new RegistrationIdpOption
+                {
+                    Name = p.Name,
+                    DisplayName = p.DisplayName ?? p.Name,
+                    LogoUrl = p.LogoUrl
+                })
+                .ToListAsync();
+
+            logger.LogDebug("Loaded {Count} registration-enabled IdPs for registration page", RegistrationIdps.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load registration IdPs");
+            // Don't throw - page should still render with manual registration option
+        }
     }
 
     public async Task<IActionResult> OnPostCreateAsync()

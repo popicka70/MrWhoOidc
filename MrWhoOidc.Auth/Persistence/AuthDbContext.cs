@@ -1593,6 +1593,11 @@ public class IdentityProvider
     public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
     public bool Enabled { get; set; } = true;
     public bool IsDefault { get; set; } = false;
+    /// <summary>
+    /// When true, this IdP appears on the public registration page allowing users to register via external authentication.
+    /// Only applicable for IdPs in the default tenant.
+    /// </summary>
+    public bool AllowRegistration { get; set; } = false;
     [MaxLength(2000)]
     public string? LogoUrl { get; set; }
     public int SortOrder { get; set; } = 0;

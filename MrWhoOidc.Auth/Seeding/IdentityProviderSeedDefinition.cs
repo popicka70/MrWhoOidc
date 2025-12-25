@@ -38,6 +38,13 @@ public sealed record IdentityProviderSeedDefinition
     public bool? IsDefault { get; init; }
 
     /// <summary>
+    /// When true, this IdP appears on the public registration page allowing users to register via external authentication.
+    /// Only applicable for IdPs in the default tenant.
+    /// </summary>
+    [JsonPropertyName("allowRegistration")]
+    public bool? AllowRegistration { get; init; }
+
+    /// <summary>
     /// URL to the provider's logo image.
     /// </summary>
     [JsonPropertyName("logoUrl")]
