@@ -210,6 +210,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IReturnUrlClientContextRes
 // Tenant settings service (cascading: platform → tenant → client)
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.ITenantSettingsService, MrWhoOidc.Auth.Services.TenantSettingsService>();
 
+// Platform settings service (system-wide settings across all tenants)
+builder.Services.AddScoped<MrWhoOidc.Auth.Services.IPlatformSettingsService, MrWhoOidc.Auth.Services.PlatformSettingsService>();
+
 // Configuration export/import services
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationExportService, MrWhoOidc.WebAuth.Services.ConfigurationExportService>();
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationImportService, MrWhoOidc.WebAuth.Services.ConfigurationImportService>();

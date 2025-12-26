@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,7 @@ public interface IQrLoginHandler
     Task<IResult> CancelAsync(HttpContext http);
     Task<IResult> MobileLandingAsync(HttpContext http);
     Task<IResult> ConfirmPageAsync(HttpContext http);
+    Task<IResult> CompleteAsync(HttpContext http, string sessionToken);
 }
 
 public sealed class QrLoginHandler : IQrLoginHandler
@@ -229,12 +231,27 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         _logger.LogDebug("QR session status: {Status} for client {ClientId}", session.Status, session.ClientId);
 
+        // Determine redirect URL based on login type
+        string? redirectUrl = null;
+        if (session.Status == QrSessionStatus.Authenticated)
+        {
+            var isPlatformQrLogin = !session.ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+            if (isPlatformQrLogin)
+            {
+                // Platform QR login - redirect to return URL with user ID for session creation
+                redirectUrl = $"/auth/qr-complete?session={Uri.EscapeDataString(sessionToken)}";
+            }
+            else if (!string.IsNullOrEmpty(session.AuthorizationCode))
+            {
+                // OAuth QR login - redirect to callback with auth code
+                redirectUrl = BuildCallbackUrl(session);
+            }
+        }
+
         var response = new
         {
             status = session.Status.ToString().ToLowerInvariant(),
-            redirectUrl = session.Status == QrSessionStatus.Authenticated && !string.IsNullOrEmpty(session.AuthorizationCode)
-                ? BuildCallbackUrl(session)
-                : null,
+            redirectUrl,
             message = session.Status switch
             {
                 QrSessionStatus.Pending => "Waiting for mobile device to scan",
@@ -285,22 +302,60 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         // Get authenticated user from mobile session
         var user = http.User;
+        _logger.LogInformation("QR confirm: checking authentication, IsAuthenticated={IsAuth}, AuthType={AuthType}, Name={Name}",
+            user.Identity?.IsAuthenticated,
+            user.Identity?.AuthenticationType,
+            user.Identity?.Name);
+
         if (!user.Identity?.IsAuthenticated ?? true)
         {
             _logger.LogWarning("QR confirm rejected: user not authenticated");
-            return Results.Unauthorized();
+            return Results.Json(new { success = false, message = "You must be logged in to confirm this login request" }, statusCode: 401);
         }
 
         var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _logger.LogInformation("QR confirm: NameIdentifier claim={Claim}", userIdClaim ?? "(null)");
+        
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
-            _logger.LogWarning("QR confirm rejected: invalid user ID claim");
-            return Results.Unauthorized();
+            _logger.LogWarning("QR confirm rejected: invalid user ID claim, got {Claim}", userIdClaim);
+            return Results.Json(new { success = false, message = "Invalid user session" }, statusCode: 401);
         }
 
         try
         {
-            _logger.LogDebug("Generating authorization code for QR session, client {ClientId}, user {UserId}", session.ClientId, userId);
+            // Check if this is a platform QR login (relative URL) or OAuth QR login (absolute URL)
+            var isPlatformQrLogin = !session.ReturnUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase);
+            _logger.LogInformation("QR confirm: isPlatformQrLogin={IsPlatform}, ReturnUrl={ReturnUrl}", isPlatformQrLogin, session.ReturnUrl);
+
+            if (isPlatformQrLogin)
+            {
+                // Platform QR login - just mark as authenticated, no auth code needed
+                // The desktop browser will sign in the user directly via cookie
+                _logger.LogInformation("QR confirm: platform QR login for user {UserId}", userId);
+                
+                await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Authenticated, userId, authCode: null);
+
+                _logger.LogInformation("QR platform login confirmed: user {UserId}", userId);
+
+                _audit.Emit("qr.confirm", new
+                {
+                    user_id = userId,
+                    client_id = session.ClientId,
+                    session_token_hash = ComputeHash(sessionToken),
+                    platform_login = true,
+                    success = true
+                });
+
+                return Results.Json(new
+                {
+                    success = true,
+                    message = "Authentication confirmed. You may close this page."
+                });
+            }
+
+            // OAuth QR login - generate authorization code
+            _logger.LogInformation("QR confirm: generating auth code for client {ClientId}, user {UserId}", session.ClientId, userId);
 
             // Build validation result for code generation
             var validationResult = new AuthorizeValidationResult
@@ -314,16 +369,24 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 CodeChallengeMethod = session.CodeChallengeMethod
             };
 
+            _logger.LogInformation("QR confirm: validation result - RedirectUri={RedirectUri}, Scopes={Scopes}, HasChallenge={HasChallenge}",
+                validationResult.RedirectUri,
+                string.Join(",", validationResult.Scopes),
+                !string.IsNullOrEmpty(validationResult.CodeChallenge));
+
             // Generate authorization code
+            _logger.LogInformation("QR confirm: calling IssueAsync...");
             var result = await _authCodeService.IssueAsync(validationResult, userId);
+            _logger.LogInformation("QR confirm: IssueAsync returned ok={Ok}, hasCode={HasCode}, error={Error}",
+                result.ok, !string.IsNullOrEmpty(result.code), result.error ?? "(none)");
 
             if (!result.ok || string.IsNullOrEmpty(result.code))
             {
                 _logger.LogError("Failed to generate authorization code for QR session: ok={Ok}, error={Error}", result.ok, result.error);
-                return Results.Json(new { success = false, error = "Failed to generate code" }, statusCode: 500);
+                return Results.Json(new { success = false, message = result.error ?? "Failed to generate code" }, statusCode: 500);
             }
 
-            _logger.LogDebug("Authorization code generated successfully for QR session");
+            _logger.LogInformation("QR confirm: auth code generated, updating session status...");
 
             // Update session
             await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Authenticated, userId, result.code);
@@ -348,7 +411,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error confirming QR login for client {ClientId}: {Message}", session?.ClientId ?? "unknown", ex.Message);
-            return Results.Problem("Failed to confirm authentication");
+            return Results.Json(new { success = false, message = $"Server error: {ex.Message}" }, statusCode: 500);
         }
     }
 
@@ -457,6 +520,81 @@ public sealed class QrLoginHandler : IQrLoginHandler
         var confirmUrl = $"/auth/qr-confirm?session={Uri.EscapeDataString(sessionToken)}";
         _logger.LogInformation("➡️ [QR Mobile Landing] User already authenticated, redirecting to /auth/qr-confirm");
         return Results.Redirect(confirmUrl);
+    }
+
+    /// <summary>
+    /// Completes a platform QR login by signing in the user on the desktop browser.
+    /// This is called when the mobile user has confirmed their identity.
+    /// </summary>
+    public async Task<IResult> CompleteAsync(HttpContext http, string sessionToken)
+    {
+        _logger.LogInformation("QR complete called for session {SessionHash}", ComputeHash(sessionToken));
+
+        var session = await _qrService.GetSessionAsync(sessionToken);
+        if (session is null)
+        {
+            _logger.LogWarning("QR complete: session not found");
+            return Results.Redirect("/DiscoverTenant?error=session_not_found");
+        }
+
+        if (session.Status != QrSessionStatus.Authenticated)
+        {
+            _logger.LogWarning("QR complete: session not authenticated, status={Status}", session.Status);
+            return Results.Redirect("/DiscoverTenant?error=not_authenticated");
+        }
+
+        if (session.UserId is null)
+        {
+            _logger.LogWarning("QR complete: session has no user ID");
+            return Results.Redirect("/DiscoverTenant?error=no_user");
+        }
+
+        // Get the user
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == session.UserId.Value);
+        if (user is null)
+        {
+            _logger.LogWarning("QR complete: user {UserId} not found", session.UserId);
+            return Results.Redirect("/DiscoverTenant?error=user_not_found");
+        }
+
+        // Mark session as consumed
+        await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Consumed, session.UserId, session.AuthorizationCode);
+
+        // Sign in the user on the desktop browser
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new("tenant_id", user.TenantId.ToString())
+        };
+
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            claims.Add(new(ClaimTypes.Email, user.Email));
+        }
+
+        var identity = new ClaimsIdentity(claims, "QrLogin");
+        var principal = new ClaimsPrincipal(identity);
+
+        await http.SignInAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, principal);
+
+        _logger.LogInformation("QR login complete: user {UserId} signed in on desktop", user.Id);
+
+        _audit.Emit("qr.complete", new
+        {
+            user_id = user.Id,
+            username = user.Username,
+            session_token_hash = ComputeHash(sessionToken)
+        });
+
+        // Redirect to the original return URL
+        var returnUrl = session.ReturnUrl;
+        if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith("/"))
+        {
+            returnUrl = "/";
+        }
+
+        return Results.Redirect(returnUrl);
     }
 
     /// <summary>

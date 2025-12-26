@@ -2,50 +2,65 @@
 @model MrWhoOidc.WebAuth.Pages.Auth.QrModel
 @{
     ViewData["Title"] = "QR Code Login";
-    // Read from query parameters
-    var qrCodeDataUri = HttpContext.Request.Query["qr"].ToString();
-    var sessionToken = HttpContext.Request.Query["token"].ToString();
-    var pollInterval = HttpContext.Request.Query["interval"].ToString();
-    if (string.IsNullOrEmpty(pollInterval)) pollInterval = "2";
+    // Use model properties (either from query params or initialized by page model)
+    var qrCodeDataUri = Model.QrCodeDataUri ?? "";
+    var sessionToken = Model.SessionToken ?? "";
+    var pollInterval = Model.PollIntervalSeconds.ToString();
 }
 
-<div class="auth-container mt-5">
+<div class="container py-5">
     <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
+        <div class="col-12 col-md-10 col-lg-9 col-xl-8">
             <div class="card shadow">
-                <div class="card-body text-center p-4">
-                    <h2 class="mb-4">
+                <div class="card-body p-4 p-lg-5">
+                    <h2 class="text-center mb-4">
                         <i class="bi bi-qr-code me-2"></i>
                         Scan to Login
                     </h2>
-                    
-                    <div class="qr-code-container mb-4" role="img" aria-label="QR code for mobile authentication">
-                        @if (!string.IsNullOrEmpty(qrCodeDataUri))
-                        {
-                            <img src="@qrCodeDataUri" alt="QR Code" class="img-fluid" style="max-width: 300px;" id="qrCodeImage" />
-                        }
-                        else
-                        {
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading QR code...</span>
-                            </div>
-                        }
+
+                    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            @Model.ErrorMessage
+                        </div>
+                        <div class="text-center">
+                            <a href="/DiscoverTenant" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Back to Login
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                    <div class="d-flex justify-content-center mb-4">
+                        <div class="qr-code-container" role="img" aria-label="QR code for mobile authentication">
+                            @if (!string.IsNullOrEmpty(qrCodeDataUri))
+                            {
+                                <img src="@qrCodeDataUri" alt="QR Code" class="img-fluid" style="max-width: 280px;" id="qrCodeImage" />
+                            }
+                            else
+                            {
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading QR code...</span>
+                                </div>
+                            }
+                        </div>
                     </div>
 
-                    <div id="statusMessage" class="alert alert-info" role="status" aria-live="polite">
+                    <div id="statusMessage" class="alert alert-info text-center" role="status" aria-live="polite">
                         <i class="bi bi-hourglass-split me-2"></i>
-                        <span id="statusText">Waiting for mobile device to scan...</span>
+                        <span id="statusText">Waiting for mobile device to scan</span>
                     </div>
 
                     <div class="instructions mb-4">
-                        <p class="text-muted mb-2">
+                        <p class="text-muted text-center mb-3">
                             <i class="bi bi-phone me-2"></i>
                             Scan this QR code with your mobile device camera
                         </p>
-                        <ol class="text-start text-muted small">
-                            <li>Open your phone's camera app</li>
-                            <li>Point it at the QR code above</li>
-                            <li>Tap the notification to open the link</li>
+                        <ol class="text-muted ps-4">
+                            <li class="mb-2">Open your phone's camera app</li>
+                            <li class="mb-2">Point it at the QR code above</li>
+                            <li class="mb-2">Tap the notification to open the link</li>
                             <li>Complete authentication on your phone</li>
                         </ol>
                     </div>
@@ -64,21 +79,20 @@
                     </div>
                     <!-- END TEMP -->
 
-                    <div class="d-grid gap-2">
+                    <div class="d-grid">
                         <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
                             <i class="bi bi-x-circle me-2"></i>
                             Cancel and choose different login
                         </button>
                     </div>
+                    } @* End of else block for error handling *@
                 </div>
             </div>
 
-            <div class="text-center mt-3">
-                <small class="text-muted">
-                    <i class="bi bi-shield-check me-1"></i>
-                    Secure authentication via your mobile device
-                </small>
-            </div>
+            <p class="text-center text-muted mt-3 small">
+                <i class="bi bi-shield-check me-1"></i>
+                Secure authentication via your mobile device
+            </p>
         </div>
     </div>
 </div>
@@ -192,7 +206,7 @@
             
             // Get base URL from window location
             const baseUrl = window.location.origin;
-            const qrUrl = `${baseUrl}/Auth/QrMobile?session=${encodeURIComponent(sessionToken)}`;
+            const qrUrl = `${baseUrl}/auth/qr-mobile?session=${encodeURIComponent(sessionToken)}`;
             qrUrlInput.value = qrUrl;
             
             copyUrlBtn.addEventListener('click', async function() {
@@ -226,13 +240,9 @@
 <style>
     .qr-code-container {
         background: white;
-        padding: 15px;
-        border-radius: 8px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin: 0 auto;
-        max-width: 330px;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     #statusMessage {
@@ -240,8 +250,7 @@
     }
 
     .instructions ol {
-        max-width: 400px;
-        margin: 0 auto;
+        list-style-position: outside;
     }
 
     /* TEMP: Testing section styles */

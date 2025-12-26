@@ -227,6 +227,8 @@ internal static class EndpointMappingExtensions
         // QR login endpoints
         // Note: /auth/qr and /auth/qr-confirm are handled by Razor Pages directly
         routes.MapGet("/auth/qr-mobile", (IQrLoginHandler h, HttpContext ctx) => h.MobileLandingAsync(ctx));
+        routes.MapGet("/auth/qr-complete", (IQrLoginHandler h, HttpContext ctx, string session) => h.CompleteAsync(ctx, session))
+            .RequireRateLimiting("rl-qr-poll");
         routes.MapGet("/api/qr/status/{sessionToken}", (IQrLoginHandler h, HttpContext ctx, string sessionToken) => h.GetStatusAsync(ctx, sessionToken))
             .RequireRateLimiting("rl-qr-poll");
         routes.MapPost("/api/qr/confirm", (IQrLoginHandler h, HttpContext ctx) => h.ConfirmAsync(ctx))

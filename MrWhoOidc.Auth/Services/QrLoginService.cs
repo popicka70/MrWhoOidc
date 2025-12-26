@@ -79,7 +79,7 @@ public sealed class QrLoginService : IQrLoginService
 
         // Build authentication URL
         var baseUrl = opts.BaseUrl?.TrimEnd('/') ?? "https://localhost";
-        var authUrl = $"{baseUrl}/Auth/QrMobile?session={Uri.EscapeDataString(sessionToken)}";
+        var authUrl = $"{baseUrl}/auth/qr-mobile?session={Uri.EscapeDataString(sessionToken)}";
 
         return (sessionToken, authUrl);
     }

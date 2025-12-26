@@ -21,6 +21,31 @@
             </div>
         }
 
+        @* QR Login Option - shown when enabled at platform level *@
+        @if (Model.ShowQrLogin)
+        {
+            <div class="mb-4">
+                @{
+                    var qrReturnUrl = Model.ReturnUrl ?? "/";
+                    var qrLoginUrl = $"/auth/qr?returnUrl={Uri.EscapeDataString(qrReturnUrl)}";
+                }
+                <a href="@qrLoginUrl" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-center"
+                   aria-label="Sign in with QR Code">
+                    <i class="bi bi-qr-code me-2" style="font-size: 1.25rem;"></i>
+                    <span>Sign in with QR Code</span>
+                </a>
+            </div>
+            
+            @if (!Model.LoginIdps.Any())
+            {
+                <div class="d-flex align-items-center my-3">
+                    <hr class="flex-grow-1" />
+                    <span class="mx-3 text-muted small">or use email</span>
+                    <hr class="flex-grow-1" />
+                </div>
+            }
+        }
+
         @* External IdP Login Section *@
         @if (Model.LoginIdps.Any())
         {

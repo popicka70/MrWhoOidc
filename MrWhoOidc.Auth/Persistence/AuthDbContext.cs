@@ -70,6 +70,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<LicenseLimit> LicenseLimits => Set<LicenseLimit>();
     // New: Configuration export/import audit logs
     public DbSet<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog> ConfigurationAuditLogs => Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>();
+    // New: Platform-wide settings (single-row table)
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
