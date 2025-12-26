@@ -1,0 +1,63 @@
+@page "/platform-admin/settings"
+@model MrWhoOidc.WebAuth.Pages.PlatformAdmin.SettingsModel
+@{
+    ViewData["Title"] = "Platform Settings";
+}
+
+<div class="content-container py-4">
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">
+                <i class="bi bi-sliders icon-md icon-primary"></i>
+                Platform Settings
+            </h1>
+            <p class="page-header__subtitle">System-wide settings that apply across all tenants</p>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-key me-2"></i>Authentication Options
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                @Html.AntiForgeryToken()
+                
+                <div class="mb-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" 
+                               asp-for="QrLoginAtDiscoveryEnabled" id="qrLoginToggle"
+                               role="switch">
+                        <label class="form-check-label fw-semibold" for="qrLoginToggle">
+                            Enable QR Login at Discovery Page
+                        </label>
+                    </div>
+                    <div class="form-text mt-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        When enabled, users can sign in by scanning a QR code on the 
+                        <strong>/DiscoverTenant</strong> page before selecting their organization.
+                        This requires QR Login to be enabled in the system configuration.
+                    </div>
+                </div>
+                
+                <hr class="my-4" />
+                
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-2"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

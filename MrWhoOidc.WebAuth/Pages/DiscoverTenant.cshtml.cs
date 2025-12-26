@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -30,17 +31,23 @@ public class DiscoverTenantModel : PageModel
     private readonly ITenantDiscoveryService _tenantDiscovery;
     private readonly AuthDbContext _dbContext;
     private readonly IMultiTenancyOptions _multiTenancyOptions;
+    private readonly IPlatformSettingsService _platformSettings;
+    private readonly IOptions<QrLoginOptions> _qrOptions;
     private readonly ILogger<DiscoverTenantModel> _logger;
 
     public DiscoverTenantModel(
         ITenantDiscoveryService tenantDiscovery,
         AuthDbContext dbContext,
         IMultiTenancyOptions multiTenancyOptions,
+        IPlatformSettingsService platformSettings,
+        IOptions<QrLoginOptions> qrOptions,
         ILogger<DiscoverTenantModel> logger)
     {
         _tenantDiscovery = tenantDiscovery;
         _dbContext = dbContext;
         _multiTenancyOptions = multiTenancyOptions;
+        _platformSettings = platformSettings;
+        _qrOptions = qrOptions;
         _logger = logger;
     }
 
@@ -60,6 +67,11 @@ public class DiscoverTenantModel : PageModel
     /// External identity providers available for login (from default tenant with AllowRegistration=true).
     /// </summary>
     public List<LoginIdpOption> LoginIdps { get; private set; } = [];
+
+    /// <summary>
+    /// Whether to show the QR login option (based on platform settings and QR login being enabled).
+    /// </summary>
+    public bool ShowQrLogin { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
     {
@@ -81,6 +93,15 @@ public class DiscoverTenantModel : PageModel
         }
 
         await LoadLoginIdpsAsync();
+        
+        // Check if QR login should be shown
+        var qrGloballyEnabled = _qrOptions.Value.Enabled;
+        var qrPlatformEnabled = await _platformSettings.IsQrLoginAtDiscoveryEnabledAsync();
+        ShowQrLogin = qrGloballyEnabled && qrPlatformEnabled;
+        
+        _logger.LogDebug("QR login visibility: globalEnabled={GlobalEnabled}, platformEnabled={PlatformEnabled}, show={Show}",
+            qrGloballyEnabled, qrPlatformEnabled, ShowQrLogin);
+
         return Page();
     }
 
