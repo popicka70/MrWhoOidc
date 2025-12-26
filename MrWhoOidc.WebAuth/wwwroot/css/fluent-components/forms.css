@@ -194,6 +194,7 @@ select:focus {
 
 .form-check-input,
 input[type="checkbox"] {
+  margin-left: 0; /* Reset Bootstrap's negative margin since we're using flexbox */
   width: 20px;
   height: 20px;
   margin-top: 0;
