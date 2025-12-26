@@ -290,6 +290,7 @@ input[type="radio"]:checked::after {
 
 .form-switch .form-check-input,
 .form-switch input[type="checkbox"] {
+  margin-left: 0; /* Reset Bootstrap's negative margin since we're using flexbox */
   width: 40px;
   height: 20px;
   border-radius: 10px;
