@@ -37,6 +37,7 @@ curl -k https://localhost:8443/.well-known/openid-configuration
 - ✅ Comprehensive admin UI at `/admin`
 
 **📖 Complete Documentation:**
+- **[Production Setup Guide](docs/production-setup-guide.md)** - Cloud deployment & bootstrap process
 - **[Deployment Guide](docs/deployment-guide.md)** - Full deployment lifecycle (1200+ lines)
 - **[Configuration Examples](docs/docker-compose-examples.md)** - Production scenarios
 - **[Upgrade Guide](docs/upgrade-guide.md)** - Upgrade procedures and rollback
@@ -155,14 +156,18 @@ See [`.env.example`](.env.example) for complete configuration options.
 ### Production Deployment
 
 For production deployments, see:
+- **[Production Setup Guide](docs/production-setup-guide.md)** - Bootstrap process, environment variables, cloud platforms
 - **[Production Configuration Guide](docs/deployment-guide.md#production-configuration-checklist)** - 40-item checklist
 - **[Production Examples](docs/docker-compose-examples.md)** - Multi-tenancy, custom certs, SMTP, Redis
 - **[Security Hardening](docs/docker-security-best-practices.md)** - Network isolation, secrets, TLS
 - **[Upgrade Procedures](docs/upgrade-guide.md)** - Zero-downtime upgrades and rollback
 
+> ⚠️ **Important**: In production, the database starts empty. You must call the `/bootstrap` endpoint to create the initial tenant and admin user. See [Production Setup Guide](docs/production-setup-guide.md) for details.
+
 ## Documentation
 
 ### Quick Links
+- **[Production Setup Guide](docs/production-setup-guide.md)** - Cloud deployment & bootstrap
 - **[Deployment Guide](docs/deployment-guide.md)** - Complete deployment documentation
 - **[Configuration Examples](docs/docker-compose-examples.md)** - Common deployment scenarios
 - **[Upgrade Guide](docs/upgrade-guide.md)** - Upgrade and rollback procedures
