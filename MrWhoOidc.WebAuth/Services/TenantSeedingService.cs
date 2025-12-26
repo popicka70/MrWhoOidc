@@ -221,27 +221,25 @@ public class TenantSeedingService : ITenantSeedingService
 
             _logger.LogInformation("Client IDs confirmed: Admin={AdminId}, Web={WebId}", adminClient.Id, webClient.Id);
 
-            // Assign tenant-admin role to admin user (in default realm)
-            var tenantAdminRoleAssignment = new UserRoleAssignment
+            // Assign tenant-admin role to admin user (realm-scoped in default realm)
+            var tenantAdminRoleAssignment = new UserRealmRoleAssignment
             {
                 UserId = adminUser.Id,
                 RoleId = tenantAdminRole.Id,
-                ClientId = adminClient.Id,
                 RealmId = defaultRealm.Id,
                 IsActive = true
             };
-            _db.UserRoleAssignments.Add(tenantAdminRoleAssignment);
+            _db.UserRealmRoleAssignments.Add(tenantAdminRoleAssignment);
 
-            // Also assign legacy admin role (in admin realm)
-            var adminRoleAssignment = new UserRoleAssignment
+            // Also assign admin role (realm-scoped in admin realm)
+            var adminRoleAssignment = new UserRealmRoleAssignment
             {
                 UserId = adminUser.Id,
                 RoleId = adminRole.Id,
-                ClientId = adminClient.Id,
                 RealmId = adminRealm.Id,
                 IsActive = true
             };
-            _db.UserRoleAssignments.Add(adminRoleAssignment);
+            _db.UserRealmRoleAssignments.Add(adminRoleAssignment);
             await _db.SaveChangesAsync(ct);
 
             _logger.LogInformation("Assigned tenant-admin and admin roles to user {AdminEmail} for tenant {TenantSlug}", adminEmail, tenantSlug);

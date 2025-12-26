@@ -156,7 +156,7 @@ public class TenantResolutionMiddleware
 
             if (userTenantId != Guid.Empty && userTenantId != tenantContext.TenantId)
             {
-                var hasTenantRole = await dbContext.UserRoleAssignments.AsNoTracking()
+                var hasTenantRole = await dbContext.UserRealmRoleAssignments.AsNoTracking()
                     .Join(dbContext.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
                     .AnyAsync(x => x.a.UserId == userGuid
                                    && x.a.IsActive

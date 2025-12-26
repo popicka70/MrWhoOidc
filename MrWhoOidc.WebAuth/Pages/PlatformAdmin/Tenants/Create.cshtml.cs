@@ -248,20 +248,18 @@ public partial class CreateModel(
                     })
                 };
 
-                var tenantAdminAssignment = new UserRoleAssignment
+                var tenantAdminAssignment = new UserRealmRoleAssignment
                 {
                     UserId = creatorUser.Id,
                     RoleId = tenantAdminRole.Id,
-                    ClientId = adminClient.Id,
                     RealmId = defaultRealm.Id,
                     IsActive = true
                 };
 
-                var adminAssignment = new UserRoleAssignment
+                var adminAssignment = new UserRealmRoleAssignment
                 {
                     UserId = creatorUser.Id,
                     RoleId = adminRole.Id,
-                    ClientId = adminClient.Id,
                     RealmId = adminRealm.Id,
                     IsActive = true
                 };
@@ -293,7 +291,7 @@ public partial class CreateModel(
                 db.Roles.AddRange(tenantAdminRole, adminRole);
                 db.Clients.Add(adminClient);
                 db.Users.Add(tenantUser);
-                db.UserRoleAssignments.AddRange(tenantAdminAssignment, adminAssignment);
+                db.UserRealmRoleAssignments.AddRange(tenantAdminAssignment, adminAssignment);
 
                 await userAccountProvisioner.EnsureAsync(creatorUser, tenant.Id, defaultRealm.Id, true, ct, autoSave: false);
 
@@ -352,7 +350,7 @@ public partial class CreateModel(
             return VerificationResult.Fail("Your administrator membership could not be confirmed. Please contact support.");
         }
 
-        var adminRoles = await db.UserRoleAssignments
+        var adminRoles = await db.UserRealmRoleAssignments
             .AsNoTracking()
             .Where(a => a.UserId == userId && a.IsActive)
             .Join(db.Roles.AsNoTracking(), a => a.RoleId, r => r.Id, (a, r) => new { a, r })

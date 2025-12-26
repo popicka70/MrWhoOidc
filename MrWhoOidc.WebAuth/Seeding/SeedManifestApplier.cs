@@ -480,17 +480,16 @@ internal sealed class SeedManifestApplier(
             });
         }
 
-        var hasRoleAssignment = await db.UserRoleAssignments.AnyAsync(
-            a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.ClientId == client.Id && a.RealmId == adminRealm.Id && a.IsActive,
+        var hasRoleAssignment = await db.UserRealmRoleAssignments.AnyAsync(
+            a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.RealmId == adminRealm.Id && a.IsActive,
             ct).ConfigureAwait(false);
 
         if (!hasRoleAssignment)
         {
-            db.UserRoleAssignments.Add(new UserRoleAssignment
+            db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
             {
                 UserId = adminUser.Id,
                 RoleId = adminRole.Id,
-                ClientId = client.Id,
                 RealmId = adminRealm.Id,
                 IsActive = true
             });

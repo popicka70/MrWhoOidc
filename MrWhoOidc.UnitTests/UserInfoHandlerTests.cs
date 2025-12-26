@@ -647,12 +647,11 @@ public sealed class UserInfoHandlerTests
             Username = "testuser"
         };
         var role = new Role { Id = roleId, Name = "admin", RealmId = realmId };
-        var assignment = new UserRoleAssignment
+        var assignment = new UserClientRoleAssignment
         {
             UserId = userId,
             RoleId = roleId,
             ClientId = clientGuid,
-            RealmId = realmId,
             IsActive = true
         };
 
@@ -660,7 +659,7 @@ public sealed class UserInfoHandlerTests
         db.Clients.Add(client);
         db.Users.Add(user);
         db.Roles.Add(role);
-        db.UserRoleAssignments.Add(assignment);
+        db.UserClientRoleAssignments.Add(assignment);
         await db.SaveChangesAsync();
 
         // Token with openid and roles scopes

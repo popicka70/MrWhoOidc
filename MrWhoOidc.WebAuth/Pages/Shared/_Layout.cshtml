@@ -265,15 +265,15 @@
                                     }
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/Impersonation"))" asp-page="/PlatformAdmin/Impersonation"><i class="bi bi-incognito me-2"></i>Impersonation</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", Url.Page("/PlatformAdmin/ImpersonationHistory/Index"))" asp-page="/PlatformAdmin/ImpersonationHistory/Index"><i class="bi bi-clock-history me-2"></i>Impersonation History</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license/platform", matchPrefix: true)" href="@(tenantPrefix)/admin/license/platform"><i class="bi bi-award me-2"></i>Platform License</a>
                                 }
                             }
                             
-                            @* Admin Section - Only visible to tenant admins or platform admins *@
+                            @* Admin Section - Only visible to tenant admins (platform admins must use impersonation) *@
                             @if (User?.Identity?.IsAuthenticated ?? false)
                             {
                                 var tenantAdminResult = await AuthorizationService.AuthorizeAsync(User, null, "tenant-admin");
-                                var platformAdminCheck = await AuthorizationService.AuthorizeAsync(User, null, "platform-admin");
-                                if (tenantAdminResult.Succeeded || platformAdminCheck.Succeeded)
+                                if (tenantAdminResult.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">Admin</div>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/realms", matchPrefix: true)" href="@(tenantPrefix)/admin/realms"><i class="bi bi-diagram-3 me-2"></i>Realms</a>
@@ -285,15 +285,10 @@
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="bi bi-people-fill me-2"></i>Users</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="bi bi-clipboard2-check me-2"></i>Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="bi bi-plug me-2"></i>BCL outbox</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license")" href="@(tenantPrefix)/admin/license"><i class="bi bi-award me-2"></i>License</a>
-                                    @if (platformAdminCheck.Succeeded)
-                                    {
-                                        <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/platform", matchPrefix: true)" href="@(tenantPrefix)/admin/license/platform"><i class="bi bi-globe me-2"></i>Platform license</a>
-                                    }
-                                    <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/tenant", matchPrefix: true)" href="@(tenantPrefix)/admin/license/tenant"><i class="bi bi-building me-2"></i>Tenant license</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license/tenant", matchPrefix: true)" href="@(tenantPrefix)/admin/license/tenant"><i class="bi bi-award me-2"></i>Tenant License</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action ps-4 small", $"{tenantPrefix}/admin/license/history", matchPrefix: true)" href="@(tenantPrefix)/admin/license/history"><i class="bi bi-clock-history me-2"></i>History</a>
                                     
-                                    @* Branding - Only show in multi-tenant mode *@
+                                    @* Branding and Settings - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Enabled)
                                     {
                                         <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/branding", matchPrefix: true)" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>

@@ -104,7 +104,7 @@ public class TenantSwitchingService(
         var userIds = userTenantRows.Select(x => x.UserId).Distinct().ToList();
 
         var roleAssignments = await (
-            from assignment in db.UserRoleAssignments.AsNoTracking()
+            from assignment in db.UserRealmRoleAssignments.AsNoTracking()
             where assignment.IsActive && userIds.Contains(assignment.UserId)
             join role in db.Roles.AsNoTracking() on assignment.RoleId equals role.Id
             where role.IsActive
@@ -201,7 +201,7 @@ public class TenantSwitchingService(
 
     private async Task<List<TenantAccessInfo>> GetLegacyTenantsAsync(Guid userId)
     {
-        var tenantAccess = await db.UserRoleAssignments
+        var tenantAccess = await db.UserRealmRoleAssignments
             .AsNoTracking()
             .Where(a => a.UserId == userId && a.IsActive)
             .Join(db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })

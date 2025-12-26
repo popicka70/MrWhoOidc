@@ -265,12 +265,12 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                     var userSub = principal.FindFirstValue("sub");
                     if (Guid.TryParse(userSub, out var userId))
                     {
-                        // Find client record to resolve RealmId and ClientId (Guid)
+                        // Find client record to resolve ClientId (Guid)
                         var client = db.Clients.AsNoTracking().FirstOrDefault(c => c.ClientId == clientId);
                         if (client is not null)
                         {
-                            var roleIds = db.UserRoleAssignments.AsNoTracking()
-                                .Where(a => a.UserId == userId && a.ClientId == client.Id && a.RealmId == client.RealmId && a.IsActive)
+                            var roleIds = db.UserClientRoleAssignments.AsNoTracking()
+                                .Where(a => a.UserId == userId && a.ClientId == client.Id && a.IsActive)
                                 .Select(a => a.RoleId);
                             var roles = db.Roles.AsNoTracking()
                                 .Where(r => roleIds.Contains(r.Id))

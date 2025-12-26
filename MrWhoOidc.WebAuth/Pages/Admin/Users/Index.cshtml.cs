@@ -87,7 +87,8 @@ public class IndexModel(
         var inUse = await db.Tokens.AnyAsync(t => t.UserId == id)
             || await db.Consents.AnyAsync(c => c.UserId == id)
             || await db.UserClientAssignments.AnyAsync(a => a.UserId == id)
-            || await db.UserRoleAssignments.AnyAsync(a => a.UserId == id);
+            || await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == id)
+            || await db.UserClientRoleAssignments.AnyAsync(a => a.UserId == id);
         if (inUse)
         {
             TempData["Error"] = "Cannot delete user; it is referenced by tokens, consents, or assignments.";

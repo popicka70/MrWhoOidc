@@ -50,6 +50,15 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
+        // Ensure default realm exists (for tenant-admin role and tenant-specific config)
+        var defaultRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "default" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+        if (defaultRealm is null)
+        {
+            defaultRealm = new Realm { Name = "default", DisplayName = "Default Realm", TenantId = tenantId };
+            db.Realms.Add(defaultRealm);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
         // Ensure platform realm exists (for platform administrators)
         var platformRealm = await db.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Name == "platform" && r.TenantId == tenantId, ct).ConfigureAwait(false);
         if (platformRealm is null)
@@ -96,6 +105,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         if (!await db.Roles.AnyAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
         {
             db.Roles.Add(new Role { Name = "admin", RealmId = adminRealm.Id, IsActive = true, TenantId = tenantId });
+        }
+
+        // Seed tenant-admin role in default realm (for Tenant Admin UI access)
+        if (!await db.Roles.AnyAsync(r => r.RealmId == defaultRealm.Id && r.Name == "tenant-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false))
+        {
+            db.Roles.Add(new Role { Name = "tenant-admin", RealmId = defaultRealm.Id, IsActive = true, TenantId = tenantId });
         }
 
         // Seed platform-admin role in platform realm (for Platform Admin UI access)
@@ -357,17 +372,17 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = alice.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
-            // Assign admin role to alice for blazor-web in admin realm (demo)
+            // Assign admin role to alice in admin realm (realm-scoped)
             var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
-            var hasRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == alice.Id && a.RoleId == adminRole.Id && a.ClientId == blazorWebClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            var hasRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == alice.Id && a.RoleId == adminRole.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasRole)
             {
-                db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = alice.Id, RoleId = adminRole.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = alice.Id, RoleId = adminRole.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
         }
 
-        // Ensure admin user has client assignment and admin role in admin realm
+        // Ensure admin user has client assignment and admin roles
         if (adminUser is not null)
         {
             // Assignment to admin client
@@ -384,21 +399,28 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
-            // Role assignment
+            // Admin role assignment in admin realm (realm-scoped)
             var adminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == adminRealm.Id && r.Name == "admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
-            var hasAdminRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.ClientId == adminClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            var hasAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == adminRole.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
             if (!hasAdminRole)
             {
-                db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = adminUser.Id, RoleId = adminRole.Id, ClientId = adminClient.Id, RealmId = adminRealm.Id, IsActive = true });
+                db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = adminUser.Id, RoleId = adminRole.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
-            // Platform admin role assignment (for Platform Admin UI access)
+            // Tenant-admin role assignment in default realm (realm-scoped)
+            var tenantAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == defaultRealm.Id && r.Name == "tenant-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
+            var hasTenantAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == tenantAdminRole.Id && a.RealmId == defaultRealm.Id, ct).ConfigureAwait(false);
+            if (!hasTenantAdminRole)
+            {
+                db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = adminUser.Id, RoleId = tenantAdminRole.Id, RealmId = defaultRealm.Id, IsActive = true });
+            }
+
+            // Platform admin role assignment in platform realm (realm-scoped)
             var platformAdminRole = await db.Roles.AsNoTracking().FirstAsync(r => r.RealmId == platformRealm.Id && r.Name == "platform-admin" && r.TenantId == tenantId, ct).ConfigureAwait(false);
-            var hasPlatformAdminRole = await db.UserRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == platformAdminRole.Id && a.RealmId == platformRealm.Id, ct).ConfigureAwait(false);
+            var hasPlatformAdminRole = await db.UserRealmRoleAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.RoleId == platformAdminRole.Id && a.RealmId == platformRealm.Id, ct).ConfigureAwait(false);
             if (!hasPlatformAdminRole)
             {
-                // Assign platform-admin role with admin client (platform-level access)
-                db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = adminUser.Id, RoleId = platformAdminRole.Id, ClientId = adminClient.Id, RealmId = platformRealm.Id, IsActive = true });
+                db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = adminUser.Id, RoleId = platformAdminRole.Id, RealmId = platformRealm.Id, IsActive = true });
             }
         }
 

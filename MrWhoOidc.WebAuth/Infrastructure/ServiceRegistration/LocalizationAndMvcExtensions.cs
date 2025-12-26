@@ -39,11 +39,11 @@ public static class LocalizationAndMvcExtensions
             options.Cookie.IsEssential = true;
         });
 
-        // Razor Pages (admin folder locked down by policy = admin)
+        // Razor Pages (admin folder locked down by policy = tenant-admin)
         // Multi-tenant routing added via conventions
         services.AddRazorPages(options =>
         {
-            options.Conventions.AuthorizeFolder("/Admin", "admin");
+            options.Conventions.AuthorizeFolder("/Admin", "tenant-admin");
 
             if (isMultiTenantMode)
             {

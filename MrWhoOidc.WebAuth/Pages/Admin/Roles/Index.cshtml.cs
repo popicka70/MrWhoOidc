@@ -80,7 +80,8 @@ public class IndexModel(
             return TenantAwareRedirect("/Admin/Roles");
         }
 
-        var inUse = await db.UserRoleAssignments.AnyAsync(a => a.RoleId == id);
+        var inUse = await db.UserRealmRoleAssignments.AnyAsync(a => a.RoleId == id)
+            || await db.UserClientRoleAssignments.AnyAsync(a => a.RoleId == id);
         if (inUse)
         {
             TempData["Error"] = "Cannot delete a role that is assigned to a user.";

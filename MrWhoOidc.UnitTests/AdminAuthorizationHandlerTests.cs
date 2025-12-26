@@ -30,11 +30,10 @@ public sealed class AdminAuthorizationHandlerTests
         // Seed user and assignment
         var user = new User { Username = "test-admin", Name = "Admin" };
         db.Users.Add(user);
-        db.UserRoleAssignments.Add(new UserRoleAssignment
+        db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
         {
             UserId = user.Id,
             RoleId = role.Id,
-            ClientId = Guid.NewGuid(),
             RealmId = realm.Id,
             IsActive = true
         });

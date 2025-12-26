@@ -51,7 +51,7 @@ internal sealed class TenantsClaimService(AuthDbContext db) : ITenantsClaimServi
         var userIds = userTenantRows.Select(x => x.UserId).Distinct().ToArray();
 
         var roleAssignments = await (
-            from assignment in db.UserRoleAssignments.AsNoTracking()
+            from assignment in db.UserRealmRoleAssignments.AsNoTracking()
             where assignment.IsActive && userIds.Contains(assignment.UserId)
             join role in db.Roles.AsNoTracking() on assignment.RoleId equals role.Id
             where role.IsActive

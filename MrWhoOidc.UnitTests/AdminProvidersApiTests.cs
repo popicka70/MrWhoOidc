@@ -65,7 +65,7 @@ public sealed class AdminProvidersApiTests
                         db.Roles.Add(role);
                         var user = new User { Id = userId, Username = "admin@test", Name = "Admin" };
                         db.Users.Add(user);
-                        db.UserRoleAssignments.Add(new UserRoleAssignment { UserId = user.Id, RoleId = role.Id, ClientId = Guid.NewGuid(), RealmId = realm.Id, IsActive = true });
+                        db.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment { UserId = user.Id, RoleId = role.Id, RealmId = realm.Id, IsActive = true });
                         await db.SaveChangesAsync();
                     }
 
