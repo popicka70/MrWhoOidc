@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;

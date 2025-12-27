@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Pages.Admin;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Registrations;
 
@@ -13,7 +14,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Registrations;
 public class IndexModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
-    IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
+    IMultiTenancyOptions multiTenancyOptions,
+    IRegistrationWorkflowService registrationService) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public IReadOnlyList<ItemVm> Items { get; private set; } = Array.Empty<ItemVm>();
 
@@ -65,81 +67,16 @@ public class IndexModel(
         if (reg is null) return TenantAwareRedirect("/Admin/Registrations");
         if (!string.Equals(reg.State, "pending", StringComparison.OrdinalIgnoreCase)) return TenantAwareRedirect("/Admin/Registrations");
 
-        // Normalize email and prevent duplicates
-        var normalized = reg.NormalizedEmail ?? EmailNormalizer.NormalizeForLookup(reg.Email) ?? string.Empty;
-        if (string.IsNullOrEmpty(normalized))
-        {
-            reg.State = "rejected";
-            reg.RejectedAt = DateTimeOffset.UtcNow;
-            reg.RejectedByUserId = GetCurrentUserId();
-            await db.SaveChangesAsync();
-            TempData["Error"] = "Registration rejected because the email is invalid.";
-            return TenantAwareRedirect("/Admin/Registrations");
-        }
-
-        string emailForUser;
         try
         {
-            emailForUser = EmailNormalizer.FormatForStorage(reg.Email, required: true, out var normalizedFromFormat)
-                ?? throw new ValidationException("Email is required.");
-            normalized = normalizedFromFormat ?? normalized;
+            var userId = await registrationService.ApproveRegistrationAsync(reg, GetCurrentUserId());
+            return TenantAwareRedirect($"/admin/users/edit/{userId}");
         }
-        catch (ValidationException ex)
+        catch (Exception ex)
         {
-            reg.State = "rejected";
-            reg.RejectedAt = DateTimeOffset.UtcNow;
-            reg.RejectedByUserId = GetCurrentUserId();
-            await db.SaveChangesAsync();
             TempData["Error"] = ex.Message;
             return TenantAwareRedirect("/Admin/Registrations");
         }
-
-        var existing = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized);
-        if (existing is not null)
-        {
-            reg.State = "rejected";
-            reg.RejectedAt = DateTimeOffset.UtcNow;
-            reg.RejectedByUserId = GetCurrentUserId();
-            await db.SaveChangesAsync();
-            TempData["Error"] = "Registration rejected because a user with this email already exists.";
-            return TenantAwareRedirect("/Admin/Registrations");
-        }
-
-        // Create user
-        var user = new User
-        {
-            TenantId = currentTenantId.Value,
-            Username = normalized,
-            Email = emailForUser,
-            NormalizedEmail = normalized,
-            EmailVerified = false,
-            Name = string.Join(' ', new[] { reg.FirstName, reg.LastName }.Where(s => !string.IsNullOrWhiteSpace(s)))
-        };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-
-        // Optional assign to client
-        if (reg.ClientId is Guid clientId)
-        {
-            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value);
-            if (client is not null)
-            {
-                var exists = await db.UserClientAssignments.AnyAsync(a => a.UserId == user.Id && a.ClientId == client.Id && a.RealmId == client.RealmId);
-                if (!exists)
-                {
-                    db.UserClientAssignments.Add(new UserClientAssignment { UserId = user.Id, ClientId = client.Id, RealmId = client.RealmId, IsActive = true });
-                    await db.SaveChangesAsync();
-                }
-            }
-        }
-
-        reg.State = "approved";
-        reg.ApprovedAt = DateTimeOffset.UtcNow;
-        reg.ApprovedByUserId = GetCurrentUserId();
-        await db.SaveChangesAsync();
-
-        // Go to user edit
-        return TenantAwareRedirect($"/admin/users/edit/{user.Id}");
     }
 
     public async Task<IActionResult> OnPostRejectAsync(Guid id)

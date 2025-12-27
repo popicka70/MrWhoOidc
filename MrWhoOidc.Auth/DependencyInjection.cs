@@ -11,6 +11,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Services.KeyManagement;
+using MrWhoOidc.Auth.Services.Authentication;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -97,6 +98,8 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
+        services.AddScoped<IClientAuthenticationService, ClientAuthenticationService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Users.IRegistrationService, MrWhoOidc.Auth.Services.Users.RegistrationService>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
@@ -122,6 +125,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Token.ILogoutTokenService, MrWhoOidc.Auth.Services.Token.LogoutTokenService>();
         services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();

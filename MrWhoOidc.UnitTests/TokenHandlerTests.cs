@@ -18,6 +18,8 @@ using MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 using System.Text;
 using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
+using MrWhoOidc.Auth.Protocols;
 using System.Text.Json;
 using System.Threading;
 
@@ -65,8 +67,10 @@ public sealed class TokenHandlerTests
         tokenExchange ??= new StubTokenExchangeService();
 
         var authLogger = NullLogger<ClientAuthenticator>.Instance;
+        var domainLogger = NullLogger<MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService>.Instance;
         var authOptions = Options.Create(new AuthOptions());
-        var authenticator = new ClientAuthenticator(clients, assertions, authOptions, authLogger);
+        var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
+        var authenticator = new ClientAuthenticator(domainService, authLogger);
 
         return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }

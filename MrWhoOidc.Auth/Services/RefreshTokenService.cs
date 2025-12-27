@@ -35,7 +35,7 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var hash = Hash(token);
-        db.Tokens.Add(new Token
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
         {
             Type = "refresh",
             TokenHash = hash,

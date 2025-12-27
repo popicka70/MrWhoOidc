@@ -1,9 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Users;
 using MrWhoOidc.UnitTests.TestDoubles;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
+using Moq;
 
 namespace MrWhoOidc.UnitTests.Helpers;
 
@@ -25,6 +27,10 @@ public static class ExternalOidcTestServiceCollectionExtensions
         services.TryAddScoped<RecordingUserAccountProvisioner>();
         services.TryAddScoped<IUserAccountProvisioner>(sp => sp.GetRequiredService<RecordingUserAccountProvisioner>());
 
+        // RegistrationWorkflowService now depends on IRegistrationService.
+        services.TryAddScoped<IRegistrationService>(_ => new Mock<IRegistrationService>().Object);
+
         return services;
     }
 }
+

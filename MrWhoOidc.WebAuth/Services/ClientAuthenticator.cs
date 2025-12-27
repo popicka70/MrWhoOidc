@@ -2,18 +2,12 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
 using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Services;
-
-public enum ClientAuthenticationUsage
-{
-    TokenEndpoint,
-    Introspection,
-    Revocation
-}
 
 public class ClientAuthenticationContext
 {
@@ -38,13 +32,13 @@ public interface IClientAuthenticator
 }
 
 public class ClientAuthenticator(
-    IClientStore clientStore,
-    IClientAssertionValidator assertionValidator,
-    IOptions<AuthOptions> authOptions,
+    IClientAuthenticationService authService,
     ILogger<ClientAuthenticator> logger) : IClientAuthenticator
 {
     public async Task<ClientAuthenticationResult> AuthenticateAsync(HttpContext http, ClientAuthenticationContext context)
     {
+        logger.LogDebug("Starting client authentication for usage {Usage}", context.Usage);
+
         // 1. Extract Credentials
         string? clientId = null;
         string? clientSecret = null;
@@ -82,138 +76,44 @@ public class ClientAuthenticator(
             return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "invalid_request", error_description = "Missing client_id" }));
         }
 
-        // 2. Load Client
-        var client = await clientStore.FindByClientIdAsync(clientId);
-        if (client is null)
-        {
-            return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "unauthorized_client", error_description = "Unknown client" }));
-        }
+        // 2. Get mTLS thumbprint if available
+        string? mtlsThumbprint = null;
+        var cert = await http.Connection.GetClientCertificateAsync();
+        mtlsThumbprint = cert?.Thumbprint;
 
-        // 3. mTLS Checks
-        if (ShouldCheckMtls(context, client))
-        {
-            var allowedThumbprints = GetAllowedMtlsThumbprints(context, client, clientId);
-            if (allowedThumbprints is { Length: > 0 })
-            {
-                var cert = await http.Connection.GetClientCertificateAsync();
-                var presented = cert?.Thumbprint;
-                var ok = !string.IsNullOrEmpty(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase));
-                if (!ok)
-                {
-                    logger.LogWarning("Client authentication failed: mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(clientId));
-                    http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
-                    return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.Mtls, Results.Unauthorized());
-                }
-            }
-        }
+        // 3. Delegate to Auth Service
+        var input = new ClientCredentialInput(
+            ClientId: clientId,
+            Usage: context.Usage,
+            GrantType: context.GrantType,
+            ClientSecret: clientSecret,
+            ClientAssertionType: clientAssertionType,
+            ClientAssertion: clientAssertion,
+            MtlsThumbprint: mtlsThumbprint,
+            EndpointUrl: http.GetEndpointUrl()
+        );
 
-        // 4. Authenticate (Secret or Assertion)
-        bool authenticated = false;
-        bool usedPrivateKeyJwt = false;
+        var result = await authService.AuthenticateAsync(input, http.RequestAborted);
 
-        if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
+        if (!result.IsSuccess)
         {
-            if (!client.AllowPrivateKeyJwt)
+            if (result.Error == "invalid_client" && result.ErrorDescription == "mtls_required")
             {
-                logger.LogWarning("Client authentication failed: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(clientId));
-                return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.PrivateKeyJwt, Results.BadRequest(new { error = "unauthorized_client", error_description = "private_key_jwt disabled" }));
-            }
-            usedPrivateKeyJwt = true;
-            
-            // Determine endpoint URL for audience validation
-            var endpoint = http.GetEndpointUrl();
-            
-            authenticated = await assertionValidator.ValidateAsync(clientId, clientAssertion, endpoint);
-            if (!authenticated)
-            {
-                logger.LogWarning("Client authentication failed: private_key_jwt validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId));
-            }
-        }
-        else
-        {
-            // Client Secret
-            // Check policies if Client Credentials Grant
-            if (context.Usage == ClientAuthenticationUsage.TokenEndpoint && 
-                string.Equals(context.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
-            {
-#pragma warning disable CS0618
-                if (string.IsNullOrEmpty(client.ClientSecretHash))
-                {
-                    logger.LogWarning("Client authentication failed: public client not allowed for client_credentials {ClientIdHash}", Bucketization.Bucket(clientId));
-                    return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "unauthorized_client" }));
-                }
-#pragma warning restore CS0618
-
-                if (usedBasic && !client.AllowClientSecretBasic)
-                {
-                    logger.LogWarning("Client authentication failed: client_secret_basic disabled for client {ClientIdHash}", Bucketization.Bucket(clientId));
-                    return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.ClientSecretBasic, Results.BadRequest(new { error = "unauthorized_client", error_description = "client_secret_basic disabled" }));
-                }
-                if (!usedBasic && !client.AllowClientSecretPost)
-                {
-                    logger.LogWarning("Client authentication failed: client_secret_post disabled for client {ClientIdHash}", Bucketization.Bucket(clientId));
-                    return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.ClientSecretPost, Results.BadRequest(new { error = "unauthorized_client", error_description = "client_secret_post disabled" }));
-                }
+                http.Response.Headers["WWW-Authenticate"] = "Bearer error=invalid_client, error_description=mtls_required";
+                return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.Mtls, Results.Unauthorized());
             }
 
-            authenticated = await clientStore.ValidateClientSecretAsync(clientId, clientSecret);
-            if (!authenticated)
-            {
-                logger.LogWarning("Client authentication failed: secret validation failed for client {ClientIdHash}", Bucketization.Bucket(clientId));
-            }
+            return new ClientAuthenticationResult(false, result.Client, ClientAuthenticationMethod.None, Results.BadRequest(new { error = result.Error ?? "unauthorized_client", error_description = result.ErrorDescription }));
         }
 
-        if (!authenticated)
-        {
-            return new ClientAuthenticationResult(false, client, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "unauthorized_client" }));
-        }
+        // 4. Determine method for WebAuth result
+        var method = ClientAuthenticationMethod.None;
+        if (!string.IsNullOrEmpty(clientAssertion)) method = ClientAuthenticationMethod.PrivateKeyJwt;
+        else if (usedBasic) method = ClientAuthenticationMethod.ClientSecretBasic;
+        else if (!string.IsNullOrEmpty(clientSecret)) method = ClientAuthenticationMethod.ClientSecretPost;
+        else if (!string.IsNullOrEmpty(mtlsThumbprint)) method = ClientAuthenticationMethod.Mtls;
 
-        var method = usedPrivateKeyJwt ? ClientAuthenticationMethod.PrivateKeyJwt : (usedBasic ? ClientAuthenticationMethod.ClientSecretBasic : ClientAuthenticationMethod.ClientSecretPost);
-        return new ClientAuthenticationResult(true, client, method, null);
-    }
-
-    private bool ShouldCheckMtls(ClientAuthenticationContext context, Client client)
-    {
-        if (context.Usage == ClientAuthenticationUsage.TokenEndpoint && 
-            string.Equals(context.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
-        {
-            return true;
-        }
-        if (context.Usage == ClientAuthenticationUsage.Introspection)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    private string[]? GetAllowedMtlsThumbprints(ClientAuthenticationContext context, Client client, string clientId)
-    {
-        if (context.Usage == ClientAuthenticationUsage.TokenEndpoint)
-        {
-            if (!string.IsNullOrWhiteSpace(client.M2MMtlsThumbprintsJson))
-            {
-                try { return JsonSerializer.Deserialize<string[]>(client.M2MMtlsThumbprintsJson); }
-                catch { return null; }
-            }
-        }
-        else if (context.Usage == ClientAuthenticationUsage.Introspection)
-        {
-             // Check client-specific
-            if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
-            {
-                try { return JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson); }
-                catch { }
-            }
-            // Check global
-            if (authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 })
-            {
-                if (authOptions.Value.IntrospectionMtlsCertificates.TryGetValue(clientId, out var thumbprints))
-                {
-                    return thumbprints;
-                }
-            }
-        }
-        return null;
+        return new ClientAuthenticationResult(true, result.Client, method, null);
     }
 
     private static (string? clientId, string? clientSecret) ReadBasicAuth(HttpContext http)

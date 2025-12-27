@@ -331,10 +331,10 @@ public class LogoutHandlerTests
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
-        var tokenBuilder = new LogoutTokenBuilder(keyStore);
+        var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
         var backChannel = new BackChannelLogoutEnqueuer(
             db,
-            tokenBuilder,
+            tokenService.Object,
             NullLogger<BackChannelLogoutEnqueuer>.Instance,
             audit,
             metrics,
