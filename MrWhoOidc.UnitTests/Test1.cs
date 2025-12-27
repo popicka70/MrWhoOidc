@@ -1,4 +1,4 @@
-﻿namespace MrWhoOidc.UnitTests
+namespace MrWhoOidc.UnitTests
 {
     [TestClass]
     public sealed class Test1

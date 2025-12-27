@@ -203,7 +203,7 @@ internal static class EndpointMappingExtensions
 
         routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
 
-        routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.Handle(ctx))
+        routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-userinfo");
         routes.MapMethods("/userinfo", new[] { "OPTIONS" }, () => Results.Ok())

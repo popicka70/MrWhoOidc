@@ -7,6 +7,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using System.Text;
@@ -34,7 +36,7 @@ public sealed class ParHandlerTests
         IOptions<OidcOptions>? oidcOptions = null)
     {
         var logger = NullLogger<ParHandler>.Instance;
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
 
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
@@ -553,15 +555,14 @@ public sealed class ParHandlerTests
 
         public Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
         {
-            var result = new AuthorizeValidationResult
-            {
-                IsValid = _valid,
-                Error = _error,
-                ErrorDescription = _errorDescription,
-                ClientId = request.client_id,
-                RedirectUri = request.redirect_uri,
-                Scopes = new[] { "openid" }
-            };
+            var result = new AuthorizeValidationResult(
+                IsValid: _valid,
+                Error: _error,
+                ErrorDescription: _errorDescription,
+                ClientId: request.client_id,
+                RedirectUri: request.redirect_uri,
+                Scopes: new[] { "openid" }
+            );
             return Task.FromResult(result);
         }
     }

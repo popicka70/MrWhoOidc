@@ -14,7 +14,7 @@ public sealed class FederatedLogoutEntryHandler(
     IOptions<FederatedLogoutOptions> fedOpts,
     ILogger<FederatedLogoutEntryHandler> logger,
     IAuditSink audit,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     LocalLogoutHandler localLogout)
 {
     /// <summary>

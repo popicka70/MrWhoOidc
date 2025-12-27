@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -19,14 +20,13 @@ public sealed class AuthorizationCodeServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var settingsService = new MockTenantSettingsService();
         var svc = new AuthorizationCodeService(db, meta, tenantAccessor, settingsService);
-        var valid = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = "c1",
-            RedirectUri = "https://app/cb",
-            Scopes = new[] { "openid" },
-            Nonce = "n"
-        };
+        var valid = new AuthorizeValidationResult(
+            IsValid: true,
+            ClientId: "c1",
+            RedirectUri: "https://app/cb",
+            Scopes: new[] { "openid" },
+            Nonce: "n"
+        );
         var (ok, err, redirect, code) = await svc.IssueAsync(valid, Guid.NewGuid());
         Assert.IsTrue(ok);
         Assert.IsNotNull(code);

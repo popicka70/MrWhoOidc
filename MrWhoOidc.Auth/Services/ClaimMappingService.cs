@@ -5,8 +5,18 @@ using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for mapping external identity provider claims to local claims.
+/// </summary>
 public interface IClaimMappingService
 {
+    /// <summary>
+    /// Applies claim mappings for a specific provider to a set of source claims.
+    /// </summary>
+    /// <param name="providerId">The ID of the identity provider.</param>
+    /// <param name="source">The source claims from the external provider.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A dictionary of mapped local claims.</returns>
     Task<Dictionary<string, string>> ApplyAsync(Guid providerId, IReadOnlyDictionary<string, string?> source, CancellationToken ct = default);
 }
 

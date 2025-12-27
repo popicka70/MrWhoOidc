@@ -3,19 +3,51 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using System.Globalization;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for creating and signing JSON Web Tokens (JWT).
+/// </summary>
 public interface IJwtService
 {
-    string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null);
-    string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null);
+    /// <summary>
+    /// Creates a signed JWT.
+    /// </summary>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="audience">The audience.</param>
+    /// <param name="claims">The claims to include.</param>
+    /// <param name="expires">The expiration time.</param>
+    /// <param name="nonce">Optional nonce.</param>
+    /// <param name="accessTokenHash">Optional access token hash (at_hash).</param>
+    /// <param name="authTime">Optional authentication time (auth_time).</param>
+    /// <param name="tokenType">Optional token type (typ header).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A signed JWT string.</returns>
+    Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an encrypted (and signed) JWT.
+    /// </summary>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="audience">The audience.</param>
+    /// <param name="claims">The claims to include.</param>
+    /// <param name="expires">The expiration time.</param>
+    /// <param name="encryptingCredentials">The credentials used for encryption.</param>
+    /// <param name="nonce">Optional nonce.</param>
+    /// <param name="accessTokenHash">Optional access token hash (at_hash).</param>
+    /// <param name="authTime">Optional authentication time (auth_time).</param>
+    /// <param name="tokenType">Optional token type (typ header).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An encrypted JWT string.</returns>
+    Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
 }
 
-internal sealed class JwtService(IKeyStore keyStore) : IJwtService
+internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
 {
-    public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
+    public async Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
@@ -26,10 +58,8 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         var now = DateTimeOffset.UtcNow;
         list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
-        // Use JsonWebKey to avoid lifetime issues with RSA instances
-        var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
-        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
-        var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
+        var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
 
         var token = new JwtSecurityToken(
             issuer: issuer,
@@ -49,7 +79,7 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         return handler.WriteToken(token);
     }
 
-    public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
+    public async Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
     {
         var list = new List<Claim>(claims);
         if (!string.IsNullOrEmpty(nonce)) list.Add(new Claim("nonce", nonce));
@@ -60,9 +90,8 @@ internal sealed class JwtService(IKeyStore keyStore) : IJwtService
         var now = DateTimeOffset.UtcNow;
         list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
-        var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
-        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
-        var signingCreds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
+        var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+        var signingCreds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
 
         var descriptor = new SecurityTokenDescriptor
         {

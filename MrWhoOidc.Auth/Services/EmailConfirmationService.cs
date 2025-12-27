@@ -8,10 +8,34 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for managing email confirmation tokens and verification.
+/// </summary>
 public interface IEmailConfirmationService
 {
+    /// <summary>
+    /// Creates a confirmation token for a user's primary email.
+    /// </summary>
+    /// <param name="user">The user.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The creation result.</returns>
     Task<EmailConfirmationCreateResult> CreatePrimaryConfirmationAsync(User user, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a confirmation token for a user's alternative email.
+    /// </summary>
+    /// <param name="user">The user.</param>
+    /// <param name="alternative">The alternative email entity.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The creation result.</returns>
     Task<EmailConfirmationCreateResult> CreateAlternativeConfirmationAsync(User user, UserAlternativeEmail alternative, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verifies an email confirmation token.
+    /// </summary>
+    /// <param name="token">The token to verify.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The verification result.</returns>
     Task<EmailConfirmationVerifyResult> ConfirmAsync(string? token, CancellationToken cancellationToken = default);
 }
 

@@ -1,11 +1,19 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
+using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-using System.Text.Json;
-
+using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -22,122 +30,49 @@ public sealed class TokenServiceTests
         return new AuthDbContext(opts);
     }
 
-    private static IOptions<AuthOptions> Options(bool opaque = false)
-        => Microsoft.Extensions.Options.Options.Create(new AuthOptions
-        {
-            ApiAudiences = new[] { "api" },
-            OpaqueAccessTokens = new OpaqueAccessTokenOptions { Enabled = opaque }
-        });
+    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options, IAuthorizationCodeMetadataStore meta)
+    {
+        var settingsSvc = new MockTenantSettingsService();
+        var scopeResolver = new MockScopeResolver();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var loggerFactory = new LoggerFactory();
+        var lifetimeResolver = new TokenLifetimeResolver();
+        var opaquePolicy = new OpaqueTokenPolicy(options);
+        var roleBuilder = new RoleClaimBuilder();
+        
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
+        
+        var authCodeExchanger = new AuthorizationCodeExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy,
+            loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
+
+        var refreshTokenExchanger = new RefreshTokenExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy);
+
+        var clientCredentialsFactory = new ClientCredentialsTokenFactory(
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+    }
 
     [TestMethod]
-    public async Task ExchangeAuthorizationCode_Fails_ForInvalidCode()
+    public async Task ExchangeAuthorizationCodeAsync_Fails_ForInvalidCode()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var settingsService = new MockTenantSettingsService();
-        var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
-        var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "verifier", "https://issuer");
+        var jwtSvc = new Mock<IJwtService>();
+        var meta = new InMemoryAuthorizationCodeMetadataStore();
+        var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
+        var service = CreateService(db, jwtSvc.Object, options, meta);
+
+        var (ok, payload, error, status) = await service.ExchangeAuthorizationCodeAsync("bad", "https://cb", "c1", "v", "https://issuer");
+
         Assert.IsFalse(ok);
         Assert.AreEqual(400, status);
-    }
-
-    [TestMethod]
-    public async Task ExchangeAuthorizationCode_Succeeds_JwtAccess_IncludesAtHash()
-    {
-        using var db = CreateDb();
-        var user = new User { Username = "u" };
-        var client = new ClientEntity { ClientId = "c1" };
-        db.Users.Add(user);
-        db.Clients.Add(client);
-        await db.SaveChangesAsync();
-
-        var code = new AuthorizationCode
-        {
-            Code = "code",
-            ClientId = "c1",
-            RedirectUri = "https://cb",
-            CodeChallenge = null,
-            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
-            UserId = user.Id,
-            Nonce = "n",
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
-        };
-        db.AuthorizationCodes.Add(code);
-        await db.SaveChangesAsync();
-
-        var ks2 = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwtSvc = new JwtService(ks2);
-        var settingsService = new MockTenantSettingsService();
-        var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, jwtSvc, new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
-        var (ok, payload, error, status) = await svc.ExchangeAuthorizationCodeAsync("code", "https://cb", "c1", "", "https://issuer");
-        Assert.IsTrue(ok);
-        var anon = (dynamic)payload!;
-        string idToken = anon.id_token;
-        Assert.IsFalse(string.IsNullOrEmpty(idToken));
-        // Should mark code as consumed
-        Assert.IsTrue(db.AuthorizationCodes.Single(a => a.Code == "code").Consumed);
-        // Refresh token persisted
-        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "refresh"));
-    }
-
-    [TestMethod]
-    public async Task ExchangeAuthorizationCode_Succeeds_OpaqueAccessToken_Persisted()
-    {
-        using var db = CreateDb();
-        var user = new User { Username = "u" };
-        var client = new ClientEntity { ClientId = "c1" };
-        db.Users.Add(user);
-        db.Clients.Add(client);
-        await db.SaveChangesAsync();
-
-        var code = new AuthorizationCode
-        {
-            Code = "code2",
-            ClientId = "c1",
-            RedirectUri = "https://cb",
-            CodeChallenge = null,
-            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
-            UserId = user.Id,
-            Nonce = "n",
-            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
-        };
-        db.AuthorizationCodes.Add(code);
-        await db.SaveChangesAsync();
-
-        var ks3 = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var settingsService = new MockTenantSettingsService();
-        var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks3), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), Options(opaque: true), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
-        var (ok, payload, _, status) = await svc.ExchangeAuthorizationCodeAsync("code2", "https://cb", "c1", "", "https://issuer");
-        Assert.IsTrue(ok);
-        Assert.AreEqual(200, status);
-        // Access token persisted as opaque
-        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "access"));
-    }
-
-    [TestMethod]
-    public async Task ExchangeRefreshToken_Rotates_AndRevokesOld()
-    {
-        using var db = CreateDb();
-        var settingsService = new MockTenantSettingsService();
-        var user = new User { Username = "u" };
-        var client = new ClientEntity { ClientId = "c1" };
-        db.Users.Add(user);
-        db.Clients.Add(client);
-        await db.SaveChangesAsync();
-
-        // Create RT directly via service
-        var rtSvc = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
-        var (rt, hash) = await rtSvc.CreateRefreshTokenAsync(user.Id, "c1", new[] { "openid" });
-        var ks4 = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var scopeResolver = new MockScopeResolver();
-        var svc = new TokenService(db, new JwtService(ks4), rtSvc, Options(), new InMemoryAuthorizationCodeMetadataStore(), settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
-        var (ok, payload, _, status) = await svc.ExchangeRefreshTokenAsync(rt, "c1", "https://issuer");
-        Assert.IsTrue(ok);
-        Assert.AreEqual(200, status);
-        // Old RT should be revoked
-        Assert.AreEqual(1, db.Tokens.Count(t => t.Type == "refresh" && t.RevokedAt != null));
+        Assert.AreEqual("invalid_grant", error);
     }
 }

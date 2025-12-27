@@ -128,7 +128,7 @@ public class MultiTenantE2ETests
     }
 
     [TestCleanup]
-    public void Cleanup()
+    public async Task Cleanup()
     {
         _db.Database.EnsureDeleted();
         _db.Dispose();
@@ -354,7 +354,7 @@ public class MultiTenantE2ETests
         // Set up services with tenant 1 context
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", "Acme Corporation", "https://localhost:5001/t/acme");
         var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
-        var jwtService = new JwtService(keyStore);
+        var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Act - Create ID token using JwtService
         var claims = new[]
@@ -362,12 +362,12 @@ public class MultiTenantE2ETests
             new System.Security.Claims.Claim("sub", user1.Id.ToString()),
             new System.Security.Claims.Claim("email", user1.Email)
         };
-        var idToken = jwtService.CreateJwt(
+        var idToken = await jwtService.CreateJwtAsync(
             issuer: "https://localhost:5001/t/acme",
             audience: client1.ClientId,
             claims: claims,
             expires: DateTimeOffset.UtcNow.AddHours(1)
-        );
+        ).ConfigureAwait(false);
 
         // Assert - Parse token and verify issuer
         var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
@@ -405,7 +405,7 @@ public class MultiTenantE2ETests
         // Set up services with tenant 2 context
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", "Contoso Ltd", "https://localhost:5001/t/contoso");
         var keyStore = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
-        var jwtService = new JwtService(keyStore);
+        var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Act - Create ID token
         var claims = new[]
@@ -413,12 +413,12 @@ public class MultiTenantE2ETests
             new System.Security.Claims.Claim("sub", user2.Id.ToString()),
             new System.Security.Claims.Claim("email", user2.Email)
         };
-        var idToken = jwtService.CreateJwt(
+        var idToken = await jwtService.CreateJwtAsync(
             issuer: "https://localhost:5001/t/contoso",
             audience: client2.ClientId,
             claims: claims,
             expires: DateTimeOffset.UtcNow.AddHours(1)
-        );
+        ).ConfigureAwait(false);
 
         // Assert - Verify issuer is different from tenant 1
         var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
@@ -437,22 +437,22 @@ public class MultiTenantE2ETests
 
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
         var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
-        var jwtService1 = new JwtService(keyStore1);
+        var jwtService1 = TestJwtServiceFactory.Create(keyStore1);
 
         var claims = new[] { new System.Security.Claims.Claim("sub", user1.Id.ToString()) };
-        var tenant1Token = jwtService1.CreateJwt(
+        var tenant1Token = await jwtService1.CreateJwtAsync(
             issuer: "https://localhost:5001/t/acme",
             audience: client1.ClientId,
             claims: claims,
             expires: DateTimeOffset.UtcNow.AddHours(1)
-        );
+        ).ConfigureAwait(false);
 
         // Act - Try to validate tenant 1 token in tenant 2 context
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", issuerUri: "https://localhost:5001/t/contoso");
         var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
-        var validator2 = new TokenValidator(keyStore2);
+        var validator2 = TestTokenValidatorFactory.Create(keyStore2);
 
-        var (valid, principal, error) = validator2.Validate(tenant1Token, "https://localhost:5001/t/acme");
+        var (valid, principal, error) = await validator2.ValidateAsync(tenant1Token, "https://localhost:5001/t/acme");
 
         // Assert - Validation should fail (tenant 2 doesn't have tenant 1's keys)
         Assert.IsFalse(valid, "Token from tenant 1 should fail validation in tenant 2 context");
@@ -577,7 +577,7 @@ public class MultiTenantE2ETests
         // Arrange
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
         var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
-        var jwtService = new JwtService(keyStore);
+        var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Get the active signing key to know its kid
         var signingKey = await keyStore.GetActiveSigningKeyAsync();
@@ -585,12 +585,12 @@ public class MultiTenantE2ETests
 
         // Act - Create token
         var claims = new[] { new System.Security.Claims.Claim("sub", "user123") };
-        var token = jwtService.CreateJwt(
+        var token = await jwtService.CreateJwtAsync(
             issuer: "https://localhost:5001/t/acme",
             audience: "test-client",
             claims: claims,
             expires: DateTimeOffset.UtcNow.AddHours(1)
-        );
+        ).ConfigureAwait(false);
 
         // Assert - Verify kid in token header
         var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
@@ -601,4 +601,7 @@ public class MultiTenantE2ETests
 
     #endregion
 }
+
+
+
 

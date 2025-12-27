@@ -14,7 +14,7 @@ public sealed class EndSessionHandler(
     PostLogoutRedirectValidator redirectValidator,
     ITokenValidator tokenValidator,
     IAuditSink audit,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     ILogger<EndSessionHandler> logger)
 {
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class EndSessionHandler(
         {
             var effectiveClientId = !string.IsNullOrEmpty(request.ClientId)
                 ? request.ClientId
-                : TryInferClientIdFromIdTokenHint(request.IdTokenHint, issuer, tokenValidator, logger);
+                : await TryInferClientIdFromIdTokenHintAsync(request.IdTokenHint, issuer, tokenValidator, logger).ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(effectiveClientId))
             {
@@ -86,7 +86,7 @@ public sealed class EndSessionHandler(
         return Uri.TryCreate(uri, UriKind.Absolute, out var parsed) ? parsed.Host : null;
     }
 
-    private static string? TryInferClientIdFromIdTokenHint(
+    private static async Task<string?> TryInferClientIdFromIdTokenHintAsync(
         string? idTokenHint,
         string issuer,
         ITokenValidator tokenValidator,
@@ -97,7 +97,7 @@ public sealed class EndSessionHandler(
             return null;
         }
 
-        var validation = tokenValidator.Validate(idTokenHint, issuer);
+        var validation = await tokenValidator.ValidateAsync(idTokenHint, issuer).ConfigureAwait(false);
         if (!validation.ok)
         {
             logger.LogInformation("id_token_hint validation failed while inferring client_id for logout redirect.");

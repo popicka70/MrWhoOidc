@@ -14,7 +14,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 public sealed class PostLogoutRedirectValidator(
     AuthDbContext db,
     IAuditSink audit,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     ILogger<PostLogoutRedirectValidator> logger)
 {
     /// <summary>

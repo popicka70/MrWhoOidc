@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Infrastructure;
@@ -13,10 +14,10 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 /// </summary>
 public sealed class BackChannelLogoutEnqueuer(
     AuthDbContext db,
-    LogoutTokenBuilder tokenBuilder,
+    ILogoutTokenService tokenService,
     ILogger<BackChannelLogoutEnqueuer> logger,
     IAuditSink audit,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     IOptionsMonitor<BackchannelFeatureOptions> featureOpts,
     IConfiguration config)
 {
@@ -52,9 +53,12 @@ public sealed class BackChannelLogoutEnqueuer(
         var allowList = config.GetSection("Backchannel:AllowHosts").Get<string[]>() ?? Array.Empty<string>();
         var blockList = config.GetSection("Backchannel:BlockHosts").Get<string[]>() ?? Array.Empty<string>();
 
+        var sub = idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sub") : null;
+        var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null);
+
         foreach (var client in clients)
         {
-            var token = tokenBuilder.CreateLogoutToken(issuer, client.ClientId, idTokenHint, sidFromQuery);
+            var token = await tokenService.CreateLogoutTokenAsync(issuer, client.ClientId, sub, sid, cancellationToken).ConfigureAwait(false);
             if (token is null)
             {
                 logger.LogWarning("Skipping BCL for client {ClientId}: unable to create logout token (no sub or sid)", client.ClientId);
@@ -78,11 +82,6 @@ public sealed class BackChannelLogoutEnqueuer(
                     continue;
                 }
             }
-
-            var sid = string.IsNullOrEmpty(sidFromQuery)
-                ? (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null)
-                : sidFromQuery;
-            var sub = idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sub") : null;
 
             var entity = new BackchannelLogoutNotification
             {

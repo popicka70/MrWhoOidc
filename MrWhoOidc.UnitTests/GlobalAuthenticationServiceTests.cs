@@ -68,7 +68,7 @@ public sealed class GlobalAuthenticationServiceTests
         var account = await SeedUserAccountWithMembership(db);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -92,7 +92,7 @@ public sealed class GlobalAuthenticationServiceTests
         var account = await SeedUserAccountWithMembership(db);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -114,7 +114,7 @@ public sealed class GlobalAuthenticationServiceTests
         await SeedUserAccountWithMembership(db);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -135,7 +135,7 @@ public sealed class GlobalAuthenticationServiceTests
         using var db = CreateDb();
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -168,7 +168,7 @@ public sealed class GlobalAuthenticationServiceTests
         await db.SaveChangesAsync();
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -195,7 +195,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -217,7 +217,7 @@ public sealed class GlobalAuthenticationServiceTests
         await SeedUserAccountWithMembership(db, totpEnabled: true);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -238,7 +238,7 @@ public sealed class GlobalAuthenticationServiceTests
         var account = await SeedUserAccountWithMembership(db);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -263,7 +263,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -290,7 +290,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -316,7 +316,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -336,7 +336,7 @@ public sealed class GlobalAuthenticationServiceTests
         var account = await SeedUserAccountWithMembership(db);
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -359,7 +359,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);
@@ -383,7 +383,7 @@ public sealed class GlobalAuthenticationServiceTests
 
         var userAccountService = new UserAccountService(db, NullLogger<UserAccountService>.Instance);
         var hasher = new DummyHasher();
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
 
         var svc = new GlobalAuthenticationService(userAccountService, hasher, metrics, logger);

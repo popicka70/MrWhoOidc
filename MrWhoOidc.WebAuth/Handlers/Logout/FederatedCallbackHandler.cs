@@ -10,7 +10,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Logout;
 public sealed class FederatedCallbackHandler(
     IUpstreamLogoutService upstreamLogoutSvc,
     IAuditSink audit,
-    OidcMetrics metrics)
+    OidcEndpointMetrics metrics)
 {
     /// <summary>
     /// Validates the federated callback state and redirects appropriately.

@@ -10,12 +10,7 @@ internal static class AdminApiHelpers
         return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = false });
     }
 
-    public static string ComputeSha256Hex(string input)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
+    public static string ComputeSha256Hex(string input) => MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input);
 
     public static (bool Ok, string Summary, string? Message, int KeyCount, int UniqueKidCount, List<string> DuplicateKids)? ComputeJwksStatus(string? jwksJson)
     {
@@ -53,3 +48,4 @@ internal static class AdminApiHelpers
         }
     }
 }
+

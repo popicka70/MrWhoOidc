@@ -3,11 +3,25 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for creating and managing refresh tokens.
+/// </summary>
 public interface IRefreshTokenService
 {
+    /// <summary>
+    /// Creates a new refresh token for a user and client.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The granted scopes.</param>
+    /// <param name="ipAddress">Optional IP address of the requester.</param>
+    /// <param name="userAgent">Optional user agent of the requester.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A tuple containing the raw token and its hash.</returns>
     Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId,
         string clientId,
@@ -34,8 +48,8 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         var lifetime = TimeSpan.FromSeconds(lifetimeSeconds);
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        var hash = Hash(token);
-        db.Tokens.Add(new Token
+        var hash = CryptoHelper.ComputeSha256Base64(token);
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
         {
             Type = "refresh",
             TokenHash = hash,
@@ -50,12 +64,6 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);
-    }
-
-    static string Hash(string value)
-    {
-        using var sha = SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
     }
 }
 

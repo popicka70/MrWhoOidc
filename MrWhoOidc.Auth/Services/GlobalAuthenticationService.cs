@@ -11,7 +11,7 @@ namespace MrWhoOidc.Auth.Services;
 internal sealed class GlobalAuthenticationService(
     IUserAccountService userAccountService,
     IPasswordHasher passwordHasher,
-    OidcMetrics metrics,
+    GlobalAuthMetrics metrics,
     ILogger<GlobalAuthenticationService> logger) : IGlobalAuthenticationService
 {
     /// <summary>

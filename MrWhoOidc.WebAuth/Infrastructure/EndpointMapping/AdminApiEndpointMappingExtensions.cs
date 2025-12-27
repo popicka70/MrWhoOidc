@@ -12,6 +12,7 @@ using MrWhoOidc.WebAuth.Admin.Dto;
 using MrWhoOidc.WebAuth.Admin.Helpers;
 using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Security;
 using MrWhoOidc.Auth.Services;

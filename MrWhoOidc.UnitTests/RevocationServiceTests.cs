@@ -41,7 +41,6 @@ public sealed class RevocationServiceTests
 
     private static string Hash(string value)
     {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value)));
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(value);
     }
 }

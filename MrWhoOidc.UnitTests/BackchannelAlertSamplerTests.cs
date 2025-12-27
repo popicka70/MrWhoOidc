@@ -57,7 +57,7 @@ public class BackchannelAlertSamplerTests
         await ctx.SaveChangesAsync();
 
         var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
             Enabled = true,
@@ -100,7 +100,7 @@ public class BackchannelAlertSamplerTests
         await ctx.SaveChangesAsync();
 
         var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
             Enabled = true,
@@ -127,7 +127,7 @@ public class BackchannelAlertSamplerTests
         var dbName = Guid.NewGuid().ToString();
         await using var ctx = CreateContext(dbName); // empty DB is fine
         var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
             Enabled = true,
@@ -172,7 +172,7 @@ public class BackchannelAlertSamplerTests
         await ctx.SaveChangesAsync();
 
         var dbFactory = new TestDbFactory<AuthDbContext>(() => CreateContext(dbName));
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var opts = Options.Create(new BackchannelAlertOptions
         {
             Enabled = true,

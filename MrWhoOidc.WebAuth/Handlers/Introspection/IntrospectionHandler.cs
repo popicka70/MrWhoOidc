@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
@@ -12,7 +13,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 public sealed class IntrospectionHandler(
     OidcOptions options,
     IClientStore clientStore,
-    OidcMetrics oidcMetrics,
+    OidcEndpointMetrics oidcMetrics,
     ClientAuthenticator authenticator,
     JwtTokenIntrospector jwtIntrospector,
     OpaqueTokenIntrospector opaqueIntrospector,

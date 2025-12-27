@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -17,12 +18,12 @@ namespace MrWhoOidc.WebAuth.Handlers;
 
 public interface IUserInfoHandler
 {
-    IResult Handle(HttpContext http);
+    Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcEndpointMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
-    public IResult Handle(HttpContext http)
+    public async Task<IResult> HandleAsync(HttpContext http)
     {
         var sw = Stopwatch.StartNew();
         string outcome = "success";
@@ -62,7 +63,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 return WithWwwAuthenticate(ErrorResults.InvalidToken());
             }
 
-            var (ok, principal, _) = validator.Validate(token, issuer);
+            var (ok, principal, _) = await validator.ValidateAsync(token, issuer).ConfigureAwait(false);
             if (!ok || principal is not { })
             {
                 outcome = "failure";

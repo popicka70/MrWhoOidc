@@ -24,7 +24,9 @@ public class DataIsolationTests
     public async Task Setup()
     {
         var services = new ServiceCollection();
-        services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        services.AddDbContext<AuthDbContext>(opts => opts
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
         
         // Register test hybrid cache
         services.AddSingleton<HybridCache, TestHybridCache>();

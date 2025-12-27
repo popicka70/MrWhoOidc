@@ -1,5 +1,7 @@
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Net.Http.Headers;
@@ -16,7 +18,7 @@ public interface IParHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcMetrics metrics, ILogger<ParHandler> logger) : IParHandler
+public sealed class ParHandler(OidcOptions options, IClientStore clients, IClientAssertionValidator assertions, IAuthorizeService authorize, IPushedAuthorizationRequestStore parStore, IRequestObjectValidator requestObjects, IOptions<AuthOptions> authOptions, OidcEndpointMetrics metrics, ILogger<ParHandler> logger) : IParHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -123,22 +125,21 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
             }
             req = validation.Request!;
             var stateOverride = form["state"].ToString();
-            if (!string.IsNullOrEmpty(stateOverride)) req.state = stateOverride;
+            if (!string.IsNullOrEmpty(stateOverride)) req = req with { state = stateOverride };
         }
         else
         {
-            req = new AuthorizeRequest
-            {
-                response_type = form[OAuthConstants.Parameters.ResponseType],
-                client_id = clientId,
-                redirect_uri = form[OAuthConstants.Parameters.RedirectUri],
-                scope = form[OAuthConstants.Parameters.Scope],
-                state = form[OAuthConstants.Parameters.State],
-                nonce = form[OAuthConstants.Parameters.Nonce],
-                code_challenge = form[OAuthConstants.Parameters.CodeChallenge],
-                code_challenge_method = form[OAuthConstants.Parameters.CodeChallengeMethod],
-                resource = form[OAuthConstants.Parameters.Resource],
-            };
+            req = new AuthorizeRequest(
+                response_type: form[OAuthConstants.Parameters.ResponseType],
+                client_id: clientId,
+                redirect_uri: form[OAuthConstants.Parameters.RedirectUri],
+                scope: form[OAuthConstants.Parameters.Scope],
+                state: form[OAuthConstants.Parameters.State],
+                nonce: form[OAuthConstants.Parameters.Nonce],
+                code_challenge: form[OAuthConstants.Parameters.CodeChallenge],
+                code_challenge_method: form[OAuthConstants.Parameters.CodeChallengeMethod],
+                resource: form[OAuthConstants.Parameters.Resource]
+            );
         }
 
         var result = await authorize.ValidateAsync(req).ConfigureAwait(false);

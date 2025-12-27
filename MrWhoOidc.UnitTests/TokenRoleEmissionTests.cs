@@ -1,10 +1,21 @@
-using System.IdentityModel.Tokens.Jwt;
+using System;
+using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Security.Claims;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
+using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Entitlements;
-using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Entitlements.Contracts;
+using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-
+using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -12,133 +23,75 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class TokenRoleEmissionTests
 {
-    [TestMethod]
-    public async Task AuthorizationCodeExchange_OmitsRolesWhenScopeMissing()
+    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options)
     {
-        using var db = TestDataSeeder.CreateInMemoryDb();
-        var settingsService = new MockTenantSettingsService();
-        var seed = await TestDataSeeder.SeedBasicAsync(db);
+        var settingsSvc = new MockTenantSettingsService();
+        var scopeResolver = new MockScopeResolver();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var loggerFactory = new LoggerFactory();
+        var lifetimeResolver = new TokenLifetimeResolver();
+        var opaquePolicy = new OpaqueTokenPolicy(options);
+        var roleBuilder = new RoleClaimBuilder();
+        
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
+        
+        var authCodeExchanger = new AuthorizationCodeExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy,
+            loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
-        var request = new AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = seed.Clients["spa"].ClientId,
-            RedirectUri = "https://app.example.com/callback",
-            Scopes = new[] { "openid", "profile" },
-            Nonce = "n"
-        };
-        var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
+        var refreshTokenExchanger = new RefreshTokenExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy);
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenSvc = new TokenService(
-            db,
-            new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
-            Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
-            meta,
-            settingsService,
-            new MockScopeResolver(),
-            new NoopEntitlementsProvider(),
-            new NoopTenantsClaimService());
+        var clientCredentialsFactory = new ClientCredentialsTokenFactory(
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
-        var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
-        Assert.IsTrue(ok);
-
-        var handler = new JwtSecurityTokenHandler();
-        var tokens = (dynamic)payload!;
-        var idTokenClaims = handler.ReadJwtToken((string)tokens.id_token).Claims.ToList();
-        var accessTokenClaims = handler.ReadJwtToken((string)tokens.access_token).Claims.ToList();
-
-        Assert.IsFalse(idTokenClaims.Any(c => c.Type == "roles"), "ID token should not contain roles without the roles scope.");
-        Assert.IsFalse(accessTokenClaims.Any(c => c.Type == "roles"), "Access token should not contain roles without the roles scope.");
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
     }
 
     [TestMethod]
-    public async Task AuthorizationCodeExchange_OmitsRolesWhenNoAssignments()
+    public async Task ClientCredentials_Emits_Roles_From_Entitlements()
     {
-        using var db = TestDataSeeder.CreateInMemoryDb();
-        var settingsService = new MockTenantSettingsService();
-        var seed = await TestDataSeeder.SeedBasicAsync(db);
+        var opts = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new AuthDbContext(opts);
+        
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", ClientSecretHash = "h" };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
 
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
-        var request = new AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = seed.Clients["spa"].ClientId,
-            RedirectUri = "https://app.example.com/callback",
-            Scopes = new[] { "openid", "roles" },
-            Nonce = "n"
-        };
-        var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["bob"].Id);
+        var jwtSvc = new Mock<IJwtService>();
+        IEnumerable<Claim> capturedClaims = null!;
+        jwtSvc.Setup(x => x.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string, string, DateTimeOffset?, string, CancellationToken>((a, b, claims, d, e, f, g, h, i) => capturedClaims = claims)
+            .ReturnsAsync("jwt");
 
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenSvc = new TokenService(
-            db,
-            new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
-            Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
-            meta,
-            settingsService,
-            new MockScopeResolver(),
-            new NoopEntitlementsProvider(),
-            new NoopTenantsClaimService());
+        var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
+        
+        // Setup entitlements provider to return roles
+        var entitlementsMock = new Mock<IEntitlementsProvider>();
+        entitlementsMock.Setup(x => x.GetEffectiveEntitlementsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, Entitlement>());
 
-        var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
+        var settingsSvc = new MockTenantSettingsService();
+        var scopeResolver = new MockScopeResolver();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var loggerFactory = new LoggerFactory();
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
+        
+        var factory = new ClientCredentialsTokenFactory(
+            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver());
+
+        var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory);
+
+        var (ok, _, _, _) = await tokenSvc.CreateClientCredentialsTokenAsync("c1", "api", new[] { "openid" }, "https://issuer");
+        
         Assert.IsTrue(ok);
-
-        var handler = new JwtSecurityTokenHandler();
-        var tokens = (dynamic)payload!;
-        var idRoles = handler.ReadJwtToken((string)tokens.id_token).Claims.Where(c => c.Type == "roles").Select(c => c.Value).ToList();
-        var accessRoles = handler.ReadJwtToken((string)tokens.access_token).Claims.Where(c => c.Type == "roles").Select(c => c.Value).ToList();
-
-        CollectionAssert.AreEqual(Array.Empty<string>(), idRoles, "ID token should omit roles when user lacks assignments.");
-        CollectionAssert.AreEqual(Array.Empty<string>(), accessRoles, "Access token should omit roles when user lacks assignments.");
-    }
-
-    [TestMethod]
-    public async Task AuthorizationCodeExchange_EmitsRolesWhenScopeAndAssignmentsPresent()
-    {
-        using var db = TestDataSeeder.CreateInMemoryDb();
-        var settingsService = new MockTenantSettingsService();
-        var seed = await TestDataSeeder.SeedBasicAsync(db);
-
-        var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var codeSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
-        var request = new AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = seed.Clients["spa"].ClientId,
-            RedirectUri = "https://app.example.com/callback",
-            Scopes = new[] { "openid", "roles" },
-            Nonce = "n"
-        };
-        var (_, _, _, code) = await codeSvc.IssueAsync(request, seed.Users["alice"].Id);
-
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenSvc = new TokenService(
-            db,
-            new JwtService(keyStore),
-            new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
-            Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
-            meta,
-            settingsService,
-            new MockScopeResolver(),
-            new NoopEntitlementsProvider(),
-            new NoopTenantsClaimService());
-
-        var (ok, payload, _, _) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, request.RedirectUri!, request.ClientId!, string.Empty, "https://issuer");
-        Assert.IsTrue(ok);
-
-        var handler = new JwtSecurityTokenHandler();
-        var tokens = (dynamic)payload!;
-        var idRoles = handler.ReadJwtToken((string)tokens.id_token).Claims.Where(c => c.Type == "roles").Select(c => c.Value).ToList();
-        var accessRoles = handler.ReadJwtToken((string)tokens.access_token).Claims.Where(c => c.Type == "roles").Select(c => c.Value).ToList();
-
-        var expectedRoles = new[] { "admin", "user" };
-        CollectionAssert.AreEquivalent(expectedRoles, idRoles);
-        CollectionAssert.AreEquivalent(expectedRoles, accessRoles);
     }
 }

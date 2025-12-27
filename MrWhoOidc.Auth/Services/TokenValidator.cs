@@ -1,24 +1,36 @@
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
-using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.KeyManagement;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for validating JWT tokens.
+/// </summary>
 public interface ITokenValidator
 {
-    (bool ok, ClaimsPrincipal? principal, string? error) Validate(string token, string issuer);
+    /// <summary>
+    /// Validates a JWT token against the issuer's public keys.
+    /// </summary>
+    /// <param name="token">The JWT token to validate.</param>
+    /// <param name="issuer">The expected issuer.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, the validated principal, and any error message.</returns>
+    Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default);
 }
 
-internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
+internal sealed class TokenValidator(ICachedKeyProvider keyProvider) : ITokenValidator
 {
-    public (bool ok, ClaimsPrincipal? principal, string? error) Validate(string token, string issuer)
+    public async Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
     {
         var handler = new JwtSecurityTokenHandler
         {
             MapInboundClaims = false
         };
-        var keys = GetSigningKeys();
+        
+        var keys = await keyProvider.GetPublicJwksAsync(ct).ConfigureAwait(false);
+        
         var parameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,
@@ -39,16 +51,6 @@ internal sealed class TokenValidator(IKeyStore keyStore) : ITokenValidator
         catch (Exception ex)
         {
             return (false, null, ex.Message);
-        }
-    }
-
-    IEnumerable<SecurityKey> GetSigningKeys()
-    {
-        // Include current and previous keys using JsonWebKey (public only) to avoid RSA disposal issues
-        var jwks = keyStore.GetPublicJwksAsync().GetAwaiter().GetResult();
-        foreach (var jwk in jwks)
-        {
-            yield return new JsonWebKey(jwk.ToJson(includePrivate: false));
         }
     }
 }

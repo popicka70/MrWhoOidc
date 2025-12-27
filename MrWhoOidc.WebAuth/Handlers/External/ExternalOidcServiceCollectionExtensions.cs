@@ -30,7 +30,7 @@ public static class ExternalOidcServiceCollectionExtensions
         services.AddScoped<IExternalOidcMetricsRecorder, ExternalOidcMetricsRecorder>();
 
         // Registration service for auto-approval support
-        services.AddScoped<IRegistrationService, RegistrationService>();
+        services.AddScoped<IRegistrationWorkflowService, RegistrationWorkflowService>();
 
         return services;
     }

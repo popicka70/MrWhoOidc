@@ -83,7 +83,7 @@ public class GlobalAuthenticationIntegrationTests
 
         // Create services
         _userAccountService = new UserAccountService(_db, NullLogger<UserAccountService>.Instance);
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = NullLogger<GlobalAuthenticationService>.Instance;
         _globalAuthService = new GlobalAuthenticationService(_userAccountService, hasher, metrics, logger);
     }

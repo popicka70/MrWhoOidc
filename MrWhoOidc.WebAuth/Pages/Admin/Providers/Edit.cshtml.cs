@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
 using System.IO;

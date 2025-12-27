@@ -1,26 +1,19 @@
 using Microsoft.IdentityModel.Tokens;
-using MrWhoOidc.Auth.Crypto;
-using MrWhoOidc.Auth.Services;
-using MrWhoOidc.Auth.Utils;
-using MrWhoOidc.WebAuth.Infrastructure;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using System.IdentityModel.Tokens.Jwt;
 
-namespace MrWhoOidc.WebAuth.Handlers.Logout;
+namespace MrWhoOidc.Auth.Services.Token;
 
 /// <summary>
-/// Creates RFC 8225 compliant logout tokens for back-channel logout.
+/// Implementation of ILogoutTokenService that creates RFC 8225 compliant logout tokens.
 /// </summary>
-public sealed class LogoutTokenBuilder(IKeyStore keyStore)
+public sealed class LogoutTokenService(ICachedKeyProvider keyProvider) : ILogoutTokenService
 {
     /// <summary>
     /// Creates a logout_token JWT with the required claims per OIDC Back-Channel Logout spec.
-    /// Returns null if neither sub nor sid can be included (spec requires at least one).
     /// </summary>
-    public string? CreateLogoutToken(string issuer, string audienceClientId, string? idTokenHint, string? sidFromQuery)
+    public async Task<string?> CreateLogoutTokenAsync(string issuer, string audienceClientId, string? sub, string? sid, CancellationToken ct = default)
     {
-        var sub = idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sub") : null;
-        var sid = !string.IsNullOrEmpty(sidFromQuery) ? sidFromQuery : (idTokenHint != null ? JwtLightParser.TryGetClaim(idTokenHint, "sid") : null);
-
         if (string.IsNullOrEmpty(sub) && string.IsNullOrEmpty(sid))
         {
             // Spec requires at least one of sid or sub
@@ -47,14 +40,11 @@ public sealed class LogoutTokenBuilder(IKeyStore keyStore)
         if (!string.IsNullOrEmpty(sub)) payload["sub"] = sub;
         if (!string.IsNullOrEmpty(sid)) payload["sid"] = sid;
 
-        var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
-        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
-        var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
+        var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
 
-        var header = new JwtHeader(creds)
-        {
-            { "typ", "logout+jwt" }
-        };
+        var header = new JwtHeader(creds);
+        header["typ"] = "logout+jwt";
 
         var handler = new JwtSecurityTokenHandler();
         var token = new JwtSecurityToken(header, payload);

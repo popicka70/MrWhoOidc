@@ -48,7 +48,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
 {
     private readonly AuthDbContext _db;
     private readonly ILogger<ExternalOidcUserProvisioner> _logger;
-    private readonly IRegistrationService _registrationService;
+    private readonly IRegistrationWorkflowService _registrationService;
     private readonly IEmailConfirmationWorkflow _emailWorkflow;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IUserAccountProvisioner _accountProvisioner;
@@ -58,7 +58,7 @@ internal sealed class ExternalOidcUserProvisioner : IExternalOidcUserProvisioner
     public ExternalOidcUserProvisioner(
         AuthDbContext db,
         ILogger<ExternalOidcUserProvisioner> logger,
-        IRegistrationService registrationService,
+        IRegistrationWorkflowService registrationService,
         IEmailConfirmationWorkflow emailWorkflow,
         ITenantAccessor tenantAccessor,
         IUserAccountProvisioner accountProvisioner,

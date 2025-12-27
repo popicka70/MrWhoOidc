@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
 

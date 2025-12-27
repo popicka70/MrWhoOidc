@@ -103,7 +103,8 @@ public class AdminTenantIsolationTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new StubTenantAccessor(tenantOne.Id, tenantOne.Slug, tenantOne.Name);
-        var model = new RegistrationsIndexModel(db, tenantAccessor, DisabledMultiTenancy());
+        var registrationService = new Moq.Mock<MrWhoOidc.WebAuth.Services.IRegistrationWorkflowService>();
+        var model = new RegistrationsIndexModel(db, tenantAccessor, DisabledMultiTenancy(), registrationService.Object);
 
         var result = await model.OnPostApproveAsync(otherTenantRegistration.Id);
 

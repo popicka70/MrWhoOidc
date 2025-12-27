@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Services.Token;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Options;
@@ -33,20 +34,20 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api", "api2");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read write") },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, _, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -69,8 +70,8 @@ public sealed class TokenExchangeTests
         Assert.IsFalse(string.IsNullOrEmpty(token));
 
         // Validate token and check for 'act' and audience
-        var tv = new TokenValidator(keyStore);
-        var (vok, principal, _) = tv.Validate(token!, "https://issuer");
+        var tv = TestTokenValidatorFactory.Create(keyStore);
+        var (vok, principal, _) = await tv.ValidateAsync(token!, "https://issuer");
         Assert.IsTrue(vok);
         Assert.IsNotNull(principal);
         var act = principal!.FindFirst("act")?.Value;
@@ -83,21 +84,21 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         var cnfJson = System.Text.Json.JsonSerializer.Serialize(new { jkt = "abc" });
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("cnf", cnfJson) },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, error, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -124,22 +125,22 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         // Subject JWT contains an 'act' claim -> must be rejected as single-hop only
         var actJson = System.Text.Json.JsonSerializer.Serialize(new { sub = "some-actor" });
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("act", actJson) },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, error, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -159,4 +160,52 @@ public sealed class TokenExchangeTests
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.AreEqual("single_hop_only", doc.RootElement.GetProperty("error_description").GetString());
     }
+
+    [TestMethod]
+    public async Task TokenExchange_OpaqueSubject_RejectsInvalidAudience()
+    {
+        using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var opts = Options("api"); // Only "api" is allowed
+        var validator = TestTokenValidatorFactory.Create(keyStore);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
+
+        var userId = Guid.NewGuid();
+        var tokenValue = "opaque-token-123";
+        var hash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(tokenValue);
+        
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "access",
+            TokenHash = hash,
+            UserId = userId,
+            ClientId = "original-client",
+            Audience = "untrusted-api", // Not in allowed ApiAudiences
+            ScopesJson = "[\"read\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var (ok, _, error, status) = await svc.ExchangeTokenAsync(
+            subjectToken: tokenValue,
+            subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+            requestedTokenType: null,
+            requestedAudience: "api",
+            requestedScopes: new[] { "read" },
+            callerClientId: "caller-app",
+            issuer: "https://issuer",
+            dpopJkt: null
+        );
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+    }
 }
+
+
+

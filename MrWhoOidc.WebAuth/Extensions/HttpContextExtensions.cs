@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.AspNetCore.Http.Extensions;
 
@@ -107,5 +108,18 @@ public static class HttpContextExtensions
             httpContext.Request.Host,
             httpContext.Request.PathBase,
             httpContext.Request.Path);
+    }
+
+    public static string GetCorrelationId(this HttpContext httpContext)
+    {
+        return System.Diagnostics.Activity.Current?.Id 
+            ?? httpContext.Items["CorrelationId"] as string 
+            ?? Guid.NewGuid().ToString("N");
+    }
+
+    public static Guid? GetTenantId(this HttpContext httpContext)
+    {
+        var tenantAccessor = httpContext.RequestServices.GetService<ITenantAccessor>();
+        return tenantAccessor?.CurrentTenant?.TenantId;
     }
 }

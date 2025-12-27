@@ -6,11 +6,30 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Token;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for OAuth 2.0 Token Exchange (RFC 8693).
+/// </summary>
 public interface ITokenExchangeService
 {
+    /// <summary>
+    /// Implements RFC 8693 OAuth 2.0 Token Exchange.
+    /// Supports JWT and opaque access tokens as subject tokens.
+    /// Includes audience validation, delegation depth enforcement, and DPoP bridging policy.
+    /// </summary>
+    /// <param name="subjectToken">The token being exchanged.</param>
+    /// <param name="subjectTokenType">The type of the subject token.</param>
+    /// <param name="requestedTokenType">The type of token requested.</param>
+    /// <param name="requestedAudience">The requested audience.</param>
+    /// <param name="requestedScopes">The requested scopes.</param>
+    /// <param name="callerClientId">The client ID of the caller.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
         string? subjectTokenType,
@@ -30,6 +49,7 @@ public class TokenExchangeService(
     ITokenValidator validator,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
+    IOpaqueTokenPolicy opaquePolicy,
     IOboPolicyService? oboPolicy = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
@@ -75,7 +95,7 @@ public class TokenExchangeService(
         if (isJwt)
         {
             // Validate as local JWT access token
-            var (ok, principal, error) = validator.Validate(subjectToken, issuer);
+            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct).ConfigureAwait(false);
             if (!ok || principal is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -146,6 +166,14 @@ public class TokenExchangeService(
             userId = entity.UserId;
             subjectExpiry = entity.ExpiresAt;
             sourceAudience = entity.Audience;
+
+            // If server defines allowed ApiAudiences and token has aud, ensure aud is one of them
+            var allowedAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+            if (!string.IsNullOrEmpty(sourceAudience) && allowedAudiences.Length > 0 && !allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal))
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
             subjectCnfJkt = entity.CnfJkt;
             try { subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>(); }
             catch { subjectScopes = Array.Empty<string>(); }
@@ -257,9 +285,7 @@ public class TokenExchangeService(
         }
 
         // Issue token: JWT or opaque per config
-        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
-            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
-             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+        var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
         var jtiNew = Guid.NewGuid().ToString("N");
         string accessToken;
@@ -302,7 +328,7 @@ public class TokenExchangeService(
                 claims.Add(new("cnf", cnf));
             }
             var nowUtc = DateTimeOffset.UtcNow;
-            accessToken = jwt.CreateJwt(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+            accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
         }
 
         var payload = new

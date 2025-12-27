@@ -10,6 +10,10 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Services.KeyManagement;
+using MrWhoOidc.Auth.Services.Authentication;
+using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.Auth.Services.Authorization;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -87,6 +91,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ITenantIconService, TenantIconService>();
 
         services.AddScoped<IKeyStore, KeyStore>();
+        services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
         services.AddScoped<IUserAccountService, UserAccountService>();
@@ -95,13 +100,15 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ICurrentUserAccountResolver, CurrentUserAccountResolver>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IClientStore, ClientStore>();
+        services.AddScoped<IClientAuthenticationService, ClientAuthenticationService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Users.IRegistrationService, MrWhoOidc.Auth.Services.Users.RegistrationService>();
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
         
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
-        services.AddSingleton<OidcMetrics>();
+        services.AddSingleton<GlobalAuthMetrics>();
         
         // Global authentication service
         services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
@@ -115,11 +122,25 @@ public static class AuthServiceCollectionExtensions
     #pragma warning restore CS0618
         
         services.AddScoped<IAuthorizeService, AuthorizeService>();
+        services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
+        services.AddScoped<IConsentProcessor, ConsentProcessor>();
+        services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
+        services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();
+        services.AddScoped<MrWhoOidc.Auth.Services.Token.ILogoutTokenService, MrWhoOidc.Auth.Services.Token.LogoutTokenService>();
+        services.AddScoped<IAuthorizationCodeExchanger, AuthorizationCodeExchanger>();
+        services.AddScoped<IRefreshTokenExchanger, RefreshTokenExchanger>();
+        services.AddScoped<IClientCredentialsTokenFactory, ClientCredentialsTokenFactory>();
+        services.AddScoped<IDeviceCodeTokenFactory, DeviceCodeTokenFactory>();
+        services.AddScoped<IAccessTokenClaimBuilder, AccessTokenClaimBuilder>();
+        services.AddSingleton<ITokenLifetimeResolver, TokenLifetimeResolver>();
+        services.AddSingleton<IRoleClaimBuilder, RoleClaimBuilder>();
+        services.AddSingleton<IOpaqueTokenPolicy, OpaqueTokenPolicy>();
+        services.AddSingleton<IMtlsThumbprintResolver, MtlsThumbprintResolver>();
         services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();

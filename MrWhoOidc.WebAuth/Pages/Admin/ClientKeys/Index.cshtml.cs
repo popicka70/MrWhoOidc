@@ -183,11 +183,7 @@ public class IndexModel(AuthDbContext db) : PageModel
 
     private static string ComputeSha256Hex(string input)
     {
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
-        var sb = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash) sb.Append(b.ToString("x2"));
-        return sb.ToString();
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input);
     }
 
     private static JwksValidationStatus? ComputeJwksStatus(string? jwksJson)

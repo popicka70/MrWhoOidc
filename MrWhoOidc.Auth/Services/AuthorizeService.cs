@@ -3,11 +3,21 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for validating OIDC authorization requests.
+/// </summary>
 public interface IAuthorizeService
 {
+    /// <summary>
+    /// Validates an authorization request.
+    /// </summary>
+    /// <param name="request">The raw authorization request parameters.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A validation result containing either the validated parameters or an error.</returns>
     Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
 }
 
@@ -110,25 +120,23 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
             }
         }
 
-        return new AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = client.ClientId,
-            RedirectUri = request.redirect_uri, // keep original (with query)
-            Scopes = scopes,
-            Nonce = request.nonce,
-            CodeChallenge = request.code_challenge,
-            CodeChallengeMethod = request.code_challenge_method,
-            RequireConsent = client.RequireConsent,
-            Resource = request.resource,
-            ResponseMode = responseMode
-        };
+        return new AuthorizeValidationResult(
+            IsValid: true,
+            ClientId: client.ClientId,
+            RedirectUri: request.redirect_uri,
+            Scopes: scopes,
+            Nonce: request.nonce,
+            CodeChallenge: request.code_challenge,
+            CodeChallengeMethod: request.code_challenge_method,
+            RequireConsent: client.RequireConsent,
+            Resource: request.resource,
+            ResponseMode: responseMode
+        );
     }
 
-    static AuthorizeValidationResult Error(string code, string description) => new()
-    {
-        IsValid = false,
-        Error = code,
-        ErrorDescription = description
-    };
+    static AuthorizeValidationResult Error(string code, string description) => new AuthorizeValidationResult(
+        IsValid: false,
+        Error: code,
+        ErrorDescription: description
+    );
 }

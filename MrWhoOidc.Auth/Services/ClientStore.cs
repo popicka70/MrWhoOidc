@@ -7,18 +7,51 @@ using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for managing and retrieving OIDC clients.
+/// </summary>
 public interface IClientStore
 {
+    /// <summary>
+    /// Finds a client by its public ClientId. Results are cached using HybridCache.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The client if found; otherwise, null.</returns>
     Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates a client secret against the stored hashes. 
+    /// Supports both modern multi-secret rotation and legacy single-secret hashes.
+    /// Emits authentication metrics for success and failure.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="clientSecret">The plain-text client secret.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the secret is valid; otherwise, false.</returns>
     Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns a queryable for clients, respecting tenant isolation.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A queryable of clients.</returns>
     IQueryable<Client> QueryClients(CancellationToken ct = default);
     /// <summary>
     /// Invalidates cached client metadata for the specified client.
     /// Call this after client updates, deletions, or configuration changes.
     /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="tenantId">The tenant ID.</param>
+    /// <param name="ct">Cancellation token.</param>
     Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default);
     
-    // New methods for multi-secret support
+    /// <summary>
+    /// Gets the primary (most recently created) secret for a client.
+    /// </summary>
+    /// <param name="clientRecordId">The internal database ID of the client.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The primary secret if found; otherwise, null.</returns>
     Task<ClientSecret?> GetPrimarySecretAsync(Guid clientRecordId, CancellationToken ct = default);
     Task<List<ClientSecret>> GetActiveSecretsAsync(Guid clientRecordId, CancellationToken ct = default);
     Task<ClientSecret> CreateSecretAsync(Guid clientRecordId, string secretValue, string? description, string? createdBy, DateTime? expiresAtUtc = null, CancellationToken ct = default);
@@ -154,7 +187,25 @@ internal sealed class ClientStore(
             return string.IsNullOrEmpty(clientSecret);
         }
         if (string.IsNullOrEmpty(clientSecret)) return false;
-        return hasher.Verify(clientSecret, client.ClientSecretHash);
+        
+        var isValid = hasher.Verify(clientSecret, client.ClientSecretHash);
+        if (isValid)
+        {
+            // Record success metric for legacy secret
+            metrics?.AuthenticationSuccess.Add(1, 
+                new KeyValuePair<string, object?>("client_id", clientId), 
+                new KeyValuePair<string, object?>("is_primary", true),
+                new KeyValuePair<string, object?>("legacy", true));
+        }
+        else
+        {
+            // Record failure metric
+            metrics?.AuthenticationFailure.Add(1, 
+                new KeyValuePair<string, object?>("client_id", clientId), 
+                new KeyValuePair<string, object?>("reason", "invalid_legacy"));
+        }
+        
+        return isValid;
 #pragma warning restore CS0618 // Type or member is obsolete
     }
 

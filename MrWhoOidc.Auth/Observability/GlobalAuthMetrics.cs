@@ -5,7 +5,7 @@ namespace MrWhoOidc.Auth.Observability;
 /// <summary>
 /// Metrics for global authentication operations.
 /// </summary>
-public sealed class OidcMetrics
+public sealed class GlobalAuthMetrics
 {
     public const string MeterName = "MrWhoOidc.Auth.GlobalAuth";
     private static readonly Meter Meter = new(MeterName);

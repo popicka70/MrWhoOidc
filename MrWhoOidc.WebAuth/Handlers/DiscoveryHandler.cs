@@ -8,6 +8,7 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 

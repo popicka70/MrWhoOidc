@@ -2,12 +2,35 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for generating JWT Secured Authorization Responses (JARM).
+/// </summary>
 public interface IJarmService
 {
+    /// <summary>
+    /// Creates a successful JARM response.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="code">The authorization code.</param>
+    /// <param name="responseMode">The response mode.</param>
+    /// <param name="state">The state parameter.</param>
+    /// <returns>A signed (and optionally encrypted) JWT response.</returns>
     Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state);
+
+    /// <summary>
+    /// Creates an error JARM response.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="error">The error code.</param>
+    /// <param name="errorDescription">The error description.</param>
+    /// <param name="state">The state parameter.</param>
+    /// <returns>A signed (and optionally encrypted) JWT response.</returns>
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 
@@ -23,13 +46,13 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         };
         
         // c_hash per JARM
-        var cHash = TokenHashing.ComputeLeftHalfBase64Url(code);
+        var cHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(code);
         claims.Add(new(OidcConstants.Claims.CHash, cHash));
         
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -37,10 +60,10 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         
         if (enc is not null)
         {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
         
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
+        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     public async Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state)
@@ -56,7 +79,7 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -64,10 +87,10 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         
         if (enc is not null)
         {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
         
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
+        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     private async Task<EncryptingCredentials?> TryGetEncryptingCredentialsAsync(string? clientId)

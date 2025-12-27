@@ -61,7 +61,7 @@ public class LogoutPromptFlowTests
         var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
 
         // Create refactored handler dependencies
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var audit = new NoopAuditSink();
         var localLogout = new LocalLogoutHandler();
         var federatedEntry = new FederatedLogoutEntryHandler(
@@ -74,10 +74,10 @@ public class LogoutPromptFlowTests
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenValidator = new TokenValidator(keyStore);
-        var tokenBuilder = new LogoutTokenBuilder(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
+        var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
         var config = new ConfigurationBuilder().Build();
-        var backChannel = new BackChannelLogoutEnqueuer(db, tokenBuilder, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
+        var backChannel = new BackChannelLogoutEnqueuer(db, tokenService.Object, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
         var redirectValidator = new PostLogoutRedirectValidator(db, audit, metrics, new NullLogger<PostLogoutRedirectValidator>());
         var endSession = new EndSessionHandler(frontChannel, backChannel, redirectValidator, tokenValidator, audit, metrics, new NullLogger<EndSessionHandler>());
         var redirectResolver = new LogoutRedirectResolver(db, audit);
@@ -96,3 +96,5 @@ public class LogoutPromptFlowTests
         StringAssert.Contains(url!, "style=dark");
     }
 }
+
+

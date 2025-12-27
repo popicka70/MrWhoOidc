@@ -4,9 +4,29 @@ using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for managing user consent for OIDC scopes.
+/// </summary>
 public interface IConsentService
 {
+    /// <summary>
+    /// Checks if a user has already granted consent for the requested scopes for a specific client.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The requested scopes.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if consent is already granted; otherwise, false.</returns>
     Task<bool> HasConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default);
+
+    /// <summary>
+    /// Grants consent for the requested scopes for a specific user and client.
+    /// Uses a transaction and execution strategy to ensure consistency under high concurrency.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The scopes to grant.</param>
+    /// <param name="ct">Cancellation token.</param>
     Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default);
 }
 
@@ -38,42 +58,57 @@ internal sealed class ConsentService(AuthDbContext db, ITenantAccessor tenantAcc
 
     public async Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
     {
-        var query = db.Consents.Where(c => c.UserId == userId && c.ClientId == clientId);
-
-        // Filter by tenant if tenant context is available
-        if (tenantAccessor.CurrentTenant != null)
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
-        }
-
-        var existing = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-        var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase));
-        if (existing is null)
-        {
-            var scopesJson = System.Text.Json.JsonSerializer.Serialize(requested.Distinct(StringComparer.OrdinalIgnoreCase));
-            var consent = new Consent
+            using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+            try
             {
-                UserId = userId,
-                ClientId = clientId,
-                ScopesJson = scopesJson,
-                CreatedAt = DateTimeOffset.UtcNow
-            };
+                var query = db.Consents.Where(c => c.UserId == userId && c.ClientId == clientId);
 
-            // Set TenantId if tenant context is available
-            if (tenantAccessor.CurrentTenant != null)
-            {
-                consent.TenantId = tenantAccessor.CurrentTenant.TenantId;
+                // Filter by tenant if tenant context is available
+                if (tenantAccessor.CurrentTenant != null)
+                {
+                    query = query.Where(c => c.TenantId == tenantAccessor.CurrentTenant.TenantId);
+                }
+
+                var existing = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+                var requested = scopes.Where(s => !string.Equals(s, "openid", StringComparison.OrdinalIgnoreCase));
+                if (existing is null)
+                {
+                    var scopesJson = System.Text.Json.JsonSerializer.Serialize(requested.Distinct(StringComparer.OrdinalIgnoreCase));
+                    var consent = new Consent
+                    {
+                        UserId = userId,
+                        ClientId = clientId,
+                        ScopesJson = scopesJson,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+
+                    // Set TenantId if tenant context is available
+                    if (tenantAccessor.CurrentTenant != null)
+                    {
+                        consent.TenantId = tenantAccessor.CurrentTenant.TenantId;
+                    }
+
+                    db.Consents.Add(consent);
+                }
+                else
+                {
+                    var current = System.Text.Json.JsonSerializer.Deserialize<string[]>(existing.ScopesJson) ?? Array.Empty<string>();
+                    var merged = current.Concat(requested).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    existing.ScopesJson = System.Text.Json.JsonSerializer.Serialize(merged);
+                    existing.RevokedAt = null;
+                }
+
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
             }
-
-            db.Consents.Add(consent);
-        }
-        else
-        {
-            var current = System.Text.Json.JsonSerializer.Deserialize<string[]>(existing.ScopesJson) ?? Array.Empty<string>();
-            var merged = current.Concat(requested).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            existing.ScopesJson = System.Text.Json.JsonSerializer.Serialize(merged);
-            existing.RevokedAt = null;
-        }
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            catch
+            {
+                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                throw;
+            }
+        }).ConfigureAwait(false);
     }
 }

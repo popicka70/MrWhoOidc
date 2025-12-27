@@ -200,12 +200,12 @@ public sealed class SecurityBoundaryTests
     }
 
     [TestMethod]
-    public void Security_Audience_Mismatch_Rejected()
+    public async Task Security_Audience_Mismatch_Rejected()
     {
         using var db = CreateDb();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwtService = new JwtService(keyStore);
-        var tokenValidator = new TokenValidator(keyStore);
+        var jwtService = TestJwtServiceFactory.Create(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         // Create a token with audience "api-a"
         var claims = new[]
@@ -214,11 +214,11 @@ public sealed class SecurityBoundaryTests
             new Claim("scope", "read")
         };
 
-        var token = jwtService.CreateJwt("https://issuer.com", "api-a", claims, DateTimeOffset.UtcNow.AddHours(1));
+        var token = await jwtService.CreateJwtAsync("https://issuer.com", "api-a", claims, DateTimeOffset.UtcNow.AddHours(1)).ConfigureAwait(false);
 
         // Act: Try to validate token expecting audience "api-b"
         // Note: TokenValidator doesn't validate audience, but this demonstrates the concept
-        var (ok, principal, error) = tokenValidator.Validate(token, "https://issuer.com");
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(token, "https://issuer.com");
 
         // Assert: Token should be validated (audience check would happen at higher level)
         Assert.IsTrue(ok, "Token should be syntactically valid");
@@ -235,11 +235,11 @@ public sealed class SecurityBoundaryTests
     }
 
     [TestMethod]
-    public void Security_JWT_Algorithm_None_Rejected()
+    public async Task Security_JWT_Algorithm_None_Rejected()
     {
         using var db = CreateDb();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenValidator = new TokenValidator(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         // Create an unsigned JWT (algorithm "none" attack)
         var header = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(@"{""alg"":""none"",""typ"":""JWT""}"))
@@ -249,7 +249,7 @@ public sealed class SecurityBoundaryTests
         var unsignedToken = $"{header}.{payload}.";
 
         // Act: Try to validate the unsigned token
-        var (ok, principal, error) = tokenValidator.Validate(unsignedToken, "https://issuer.com");
+        var (ok, principal, error) = await tokenValidator.ValidateAsync(unsignedToken, "https://issuer.com");
 
         // Assert: Should reject unsigned token
         Assert.IsFalse(ok, "Unsigned token (alg=none) should be REJECTED");
@@ -368,7 +368,7 @@ public sealed class SecurityBoundaryTests
     }
 
     [TestMethod]
-    public void Security_Client_Secret_Never_In_Logs()
+    public async Task Security_Client_Secret_Never_In_Logs()
     {
         // This is more of a code review test, but we can verify hashing behavior
         var plainSecret = "super_secret_password_123";
@@ -392,3 +392,5 @@ public sealed class SecurityBoundaryTests
         Assert.IsFalse(isInvalid, "Wrong secret should NOT validate");
     }
 }
+
+

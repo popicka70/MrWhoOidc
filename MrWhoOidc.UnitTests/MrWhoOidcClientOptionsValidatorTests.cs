@@ -91,3 +91,5 @@ public class MrWhoOidcClientOptionsValidatorTests
         StringAssert.Contains(string.Join(';', result.Failures!), "Client credentials registration 'service' must configure Scopes, Resource, or Audience.");
     }
 }
+
+

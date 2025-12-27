@@ -232,8 +232,7 @@ public class DiscoverTenantModel : PageModel
         if (string.IsNullOrEmpty(email))
             return "empty";
 
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(email.ToLowerInvariant()));
-        return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.ToLowerInvariant())[..8];
     }
 }
+

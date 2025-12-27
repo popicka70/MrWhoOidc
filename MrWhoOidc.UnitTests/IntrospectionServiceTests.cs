@@ -33,15 +33,15 @@ public sealed class IntrospectionServiceTests
     }
 
     [TestMethod]
-    public void JWT_Token_Validation_Returns_Claims()
+    public async Task JWT_Token_Validation_Returns_Claims()
     {
         using var db = CreateDb();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
 
         // Setup: Create a valid JWT
         var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache());
-        var jwtService = new JwtService(keyStore);
-        var tokenValidator = new TokenValidator(keyStore);
+        var jwtService = TestJwtServiceFactory.Create(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         var userId = Guid.NewGuid();
         var claims = new[]
@@ -51,10 +51,10 @@ public sealed class IntrospectionServiceTests
             new Claim("scope", "openid profile")
         };
 
-        var token = jwtService.CreateJwt("https://op.example.com", "test-api", claims, DateTimeOffset.UtcNow.AddHours(1));
+        var token = await jwtService.CreateJwtAsync("https://op.example.com", "test-api", claims, DateTimeOffset.UtcNow.AddHours(1)).ConfigureAwait(false);
 
         // Act: Validate the JWT
-        var (isValid, principal, error) = tokenValidator.Validate(token, "https://op.example.com");
+        var (isValid, principal, error) = await tokenValidator.ValidateAsync(token, "https://op.example.com");
 
         // Assert: Should be valid with claims
         Assert.IsTrue(isValid, "JWT should be valid");
@@ -64,14 +64,14 @@ public sealed class IntrospectionServiceTests
     }
 
     [TestMethod]
-    public void JWT_Token_Expired_Returns_Invalid()
+    public async Task JWT_Token_Expired_Returns_Invalid()
     {
         using var db = CreateDb();
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
 
         // Setup: Create JWT with past expiry manually to bypass JwtService's DateTime.UtcNow hardcoding
         var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache());
-        var tokenValidator = new TokenValidator(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         var claims = new[]
         {
@@ -98,7 +98,7 @@ public sealed class IntrospectionServiceTests
         var tokenString = handler.WriteToken(token);
 
         // Act: Validate expired JWT
-        var (isValid, principal, error) = tokenValidator.Validate(tokenString, "https://op.example.com");
+        var (isValid, principal, error) = await tokenValidator.ValidateAsync(tokenString, "https://op.example.com");
 
         // Assert: Should be invalid
         Assert.IsFalse(isValid, "Expired JWT should be invalid");
@@ -442,4 +442,6 @@ public sealed class IntrospectionServiceTests
         Assert.IsNull(foundClient.ClientSecretHash, "Public client should have no secret");
     }
 }
+
+
 

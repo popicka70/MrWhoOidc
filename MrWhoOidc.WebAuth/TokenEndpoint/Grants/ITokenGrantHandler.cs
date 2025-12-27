@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Security;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using System.Threading.Tasks;
 

@@ -6,7 +6,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 /// <summary>
 /// Records metrics for introspection operations.
 /// </summary>
-internal sealed class IntrospectionMetrics(OidcMetrics metrics)
+internal sealed class IntrospectionMetrics(OidcEndpointMetrics metrics)
 {
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 

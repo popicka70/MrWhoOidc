@@ -23,7 +23,7 @@ public sealed record RegistrationIdpOption
 [AllowAnonymous]
 public class IndexModel(
     IPasswordHasher hasher,
-    IRegistrationService registrationService,
+    IRegistrationWorkflowService registrationService,
     IReturnUrlClientContextResolver clientContextResolver,
     AuthDbContext dbContext,
     IMultiTenancyOptions multiTenancyOptions,

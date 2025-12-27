@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
@@ -10,7 +11,7 @@ public interface IRevocationHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcMetrics metrics, IClientAssertionValidator assertions, OidcOptions options) : IRevocationHandler
+public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcEndpointMetrics metrics, IClientAssertionValidator assertions, OidcOptions options) : IRevocationHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {

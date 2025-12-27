@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -18,13 +19,13 @@ public sealed class ParStoreTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var store = new EfPushedAuthorizationRequestStore(db, options, tenantAccessor);
 
-        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://app.example.com/callback",
-            scope = "openid"
-        };
+        var req = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/callback",
+            scope: "openid"
+        );
         var id1 = Guid.NewGuid().ToString("N");
         var id2 = Guid.NewGuid().ToString("N");
         var id3 = Guid.NewGuid().ToString("N");
@@ -67,7 +68,7 @@ public sealed class ParStoreTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var store = new EfPushedAuthorizationRequestStore(db, options, tenantAccessor);
 
-        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest { response_type = "code", client_id = "spa", redirect_uri = "https://app.example.com/callback", scope = "openid" };
+        var req = new AuthorizeRequest(response_type: "code", client_id: "spa", redirect_uri: "https://app.example.com/callback", scope: "openid");
         var id = Guid.NewGuid().ToString("N");
         store.Create(id, req, "spa", TimeSpan.FromMilliseconds(10), null);
         System.Threading.Thread.Sleep(20);

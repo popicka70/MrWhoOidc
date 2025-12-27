@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.UnitTests.Helpers;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.External;
@@ -30,6 +31,14 @@ public sealed class ExternalOidcAutoApprovalAssignmentTests
 
                 // Use a DB-backed client store so the provisioner and registration service see the same client record.
                 services.AddScoped<IClientStore, DbBackedClientStore>();
+
+                // Register real domain services needed for auto-approval
+                services.AddScoped<MrWhoOidc.Auth.Services.Users.IRegistrationService, MrWhoOidc.Auth.Services.Users.RegistrationService>();
+                services.AddScoped<IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
+                
+                // IssuerBuilder depends on IMultiTenancyOptions
+                var mtProvider = new MultiTenancyStateProvider("default", initialEnabled: false);
+                services.AddSingleton<IMultiTenancyOptions>(mtProvider);
             },
             configureContext: http =>
             {

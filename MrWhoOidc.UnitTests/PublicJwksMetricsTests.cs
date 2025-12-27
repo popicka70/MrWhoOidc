@@ -26,7 +26,7 @@ public class PublicJwksMetricsTests
             // Signature in current target: Action<Instrument, MeterListener>
             _listener.InstrumentPublished = (instrument, listener) =>
             {
-                if (instrument.Meter.Name == OidcMetrics.MeterName && instrument.Name == "oidc.provider_jwks.zero_keys")
+                if (instrument.Meter.Name == OidcEndpointMetrics.MeterName && instrument.Name == "oidc.provider_jwks.zero_keys")
                 {
                     listener.EnableMeasurementEvents(instrument);
                 }
@@ -53,7 +53,7 @@ public class PublicJwksMetricsTests
         services.AddOptions();
         services.Configure<AuthOptions>(_ => { });
         services.AddOidcMetricsIfMissing();
-        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, OidcMetrics>();
+        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, OidcEndpointMetrics>();
         services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         var sp = services.BuildServiceProvider();
         var dbFactory = sp.GetRequiredService<IDbContextFactory<AuthDbContext>>();

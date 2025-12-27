@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Handlers.Logout;
