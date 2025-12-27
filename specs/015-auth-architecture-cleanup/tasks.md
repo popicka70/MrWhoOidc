@@ -202,27 +202,27 @@
 
 ### Tests for User Story 5
 
-- [ ] T087 [P] [US5] Create test `TokenLifetimeResolverTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T088 [P] [US5] Create test `RoleClaimBuilderTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T089 [P] [US5] Create test `OpaqueTokenPolicyTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T090 [P] [US5] Create test `MtlsThumbprintResolverTests.cs` in `MrWhoOidc.UnitTests/Services/`
+- [x] T087 [P] [US5] Create test `TokenLifetimeResolverTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T088 [P] [US5] Create test `RoleClaimBuilderTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T089 [P] [US5] Create test `OpaqueTokenPolicyTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T090 [P] [US5] Create test `MtlsThumbprintResolverTests.cs` in `MrWhoOidc.UnitTests/Services/`
 
 ### Implementation for User Story 5
 
-- [ ] T091 [P] [US5] Create `ITokenLifetimeResolver.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T092 [US5] Create `TokenLifetimeResolver.cs` implementation (consolidate lifetime calculation logic)
-- [ ] T093 [P] [US5] Create `IRoleClaimBuilder.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T094 [US5] Create `RoleClaimBuilder.cs` implementation (consolidate role claim building)
-- [ ] T095 [P] [US5] Create `IOpaqueTokenPolicy.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T096 [US5] Create `OpaqueTokenPolicy.cs` implementation (consolidate opaque token decision logic)
-- [ ] T097 [P] [US5] Create `IMtlsThumbprintResolver.cs` interface in `MrWhoOidc.Auth/Services/`
-- [ ] T098 [US5] Create `MtlsThumbprintResolver.cs` implementation (consolidate mTLS thumbprint lookup)
-- [ ] T099 [US5] Remove legacy `ComputeHash` wrapper methods, use `CryptoHelper` directly in callers
-- [ ] T100 [US5] Update all callers to use new consolidated services
-- [ ] T101 [US5] Register all new services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T102 [US5] Run grep to verify no duplicate implementations remain
-- [ ] T103 [US5] Run all tests to verify US5 implementation
-- [ ] T104 [US5] Update XML documentation for all new US5 types
+- [x] T091 [P] [US5] Create `ITokenLifetimeResolver.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T092 [US5] Create `TokenLifetimeResolver.cs` implementation (consolidate lifetime calculation logic)
+- [x] T093 [P] [US5] Create `IRoleClaimBuilder.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T094 [US5] Create `RoleClaimBuilder.cs` implementation (consolidate role claim building)
+- [x] T095 [P] [US5] Create `IOpaqueTokenPolicy.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T096 [US5] Create `OpaqueTokenPolicy.cs` implementation (consolidate opaque token decision logic)
+- [x] T097 [P] [US5] Create `IMtlsThumbprintResolver.cs` interface in `MrWhoOidc.Auth/Services/`
+- [x] T098 [US5] Create `MtlsThumbprintResolver.cs` implementation (consolidate mTLS thumbprint lookup)
+- [x] T099 [US5] Remove legacy `ComputeHash` wrapper methods, use `CryptoHelper` directly in callers
+- [x] T100 [US5] Update all callers to use new consolidated services
+- [x] T101 [US5] Register all new services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
+- [x] T102 [US5] Run grep to verify no duplicate implementations remain
+- [x] T103 [US5] Run all tests to verify US5 implementation
+- [x] T104 [US5] Update XML documentation for all new US5 types
 
 **Checkpoint**: Duplication removed - each utility exists in exactly one place
 
@@ -232,16 +232,16 @@
 
 **Purpose**: Final verification, documentation, and code quality
 
-- [ ] T105 Run `dotnet build` in Debug and Release to confirm zero warnings
+- [x] T105 Run `dotnet build` in Debug and Release to confirm zero warnings
 - [x] T106 Run `dotnet test` to confirm all tests pass (existing + new)
 - [x] T107 [P] Verify TokenService.cs is under 150 lines (FR-014)
 - [x] T108 [P] Verify AuthorizeHandler.cs is under 200 lines (FR-015)
 - [x] T109 [P] Verify no Auth files import from MrWhoOidc.WebAuth namespace (SC-005)
 - [x] T110 [P] Verify all public interfaces have XML documentation (FR-022)
-- [ ] T111 [P] Verify all services use nullable reference type annotations (FR-023)
-- [ ] T112 Run quickstart.md validation steps
-- [ ] T113 Update docs/architecture-refactoring-plan.md to mark items as complete
-- [ ] T114 Final code review and cleanup
+- [x] T111 [P] Verify all services use nullable reference type annotations (FR-023)
+- [x] T112 Run quickstart.md validation steps
+- [x] T113 Update docs/architecture-refactoring-plan.md to mark items as complete
+- [x] T114 Final code review and cleanup
 
 ---
 
