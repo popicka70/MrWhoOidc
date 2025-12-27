@@ -4,7 +4,7 @@ Purpose
 - Make AI coding agents productive quickly in this codebase by capturing architecture, conventions, and workflows actually used here.
 
 Tech stack & solution layout
-- .NET 9, C#, MSTest.
+- .NET 10, C#, MSTest.
 - Projects:
   - MrWhoOidc.Auth: core OIDC domain (protocols, persistence, crypto, key mgmt, services). EF Core + PostgreSQL via Aspire–provided connection "authdb".
   - MrWhoOidc.WebAuth: OP (authorization server) HTTP surface (minimal APIs + Razor Pages), discovery, JWKS, admin UI.
@@ -17,7 +17,7 @@ Tech stack & solution layout
 Core architectural rules (enforced by repo)
 - Do NOT add or depend on OpenIddict or Microsoft Identity Platform packages.
 - Place non-visual OIDC logic in MrWhoOidc.Auth. Keep HTTP endpoints, Razor UI, and discovery/JWKS in MrWhoOidc.WebAuth.
-- Target .NET 9 across all projects.
+- Target .NET 10 across all projects.
 - PostgreSQL via Aspire; never hardcode connection strings. Use named connection "authdb".
 
 Key endpoints and flows

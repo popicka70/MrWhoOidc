@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build stage: Restore dependencies and build the application
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy solution and project files first for better layer caching
@@ -29,7 +29,7 @@ RUN dotnet publish "MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj" \
 
 # Runtime stage: Use Ubuntu noble image with full globalization support
 # Note: Chiseled images don't include ICU libraries needed for culture-specific formatting
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-noble AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
 
 # Add OCI labels for metadata
 LABEL org.opencontainers.image.title="MrWhoOidc" \

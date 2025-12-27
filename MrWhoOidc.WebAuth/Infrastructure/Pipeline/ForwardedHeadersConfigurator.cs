@@ -70,7 +70,7 @@ internal static class ForwardedHeadersConfigurator
             {
                 try
                 {
-                    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(ip, prefix));
+                    options.KnownIPNetworks.Add(new System.Net.IPNetwork(ip, prefix));
                 }
                 catch (Exception ex)
                 {
@@ -90,7 +90,7 @@ internal static class ForwardedHeadersConfigurator
                              || configuration.GetValue<bool>("Testing:UnsafeTrustAllForwardedHeaders");
         if (unsafeTrustAll)
         {
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
             options.KnownProxies.Clear();
 
             logger.LogWarning(
@@ -108,7 +108,7 @@ internal static class ForwardedHeadersConfigurator
 
         // Production guidance: if you are behind a reverse proxy and want HTTPS redirects/correct issuer URLs,
         // you must configure KnownProxies/KnownNetworks (or enable UnsafeTrustAll as a last resort).
-        if (!environment.IsDevelopment() && !unsafeTrustAll && options.KnownProxies.Count == 0 && options.KnownNetworks.Count == 0)
+        if (!environment.IsDevelopment() && !unsafeTrustAll && options.KnownProxies.Count == 0 && options.KnownIPNetworks.Count == 0)
         {
             logger.LogWarning(
                 "Forwarded headers are enabled but no known proxies/networks are configured. " +
