@@ -18,8 +18,10 @@ using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -42,34 +44,34 @@ public sealed class AuthorizeHandlerTests
 
     private static AuthorizeHandler CreateHandler(
         AuthDbContext db,
-        IAuthorizeService? authorize = null,
+        IAuthorizeRequestValidator? validator = null,
+        IConsentProcessor? consentProcessor = null,
+        IProviderSelectionService? providerSelection = null,
+        IUserClientAssignmentService? userAssignments = null,
+        IAuthorizeResponseGenerator? responseGenerator = null,
+        IAuthorizeRequestSanitizer? sanitizer = null,
+        IAuthenticationRedirectService? authRedirect = null,
+        IAuthorizationMetadataService? metadataService = null,
+        IAuthorizeRequestOrchestrator? orchestrator = null,
         IAuthorizationCodeService? codes = null,
-        IConsentService? consents = null,
-        IAuthorizationCodeMetadataStore? meta = null,
         IPushedAuthorizationRequestStore? parStore = null,
-        IRequestObjectValidator? requestObjects = null,
-        IOptions<AuthOptions>? authOptions = null,
-        IJwtService? jwt = null,
-        IClientStore? clients = null,
-        IQrLoginHandler? qrLoginHandler = null,
-        IFeatureService? featureService = null,
-        IJarmService? jarm = null)
+        IQrLoginHandler? qrLoginHandler = null)
     {
         var metrics = new OidcEndpointMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
 
-        authorize ??= new StubAuthorizeService(true);
+        validator ??= new StubAuthorizeRequestValidator();
+        consentProcessor ??= new StubConsentProcessor();
+        providerSelection ??= new StubProviderSelectionService();
+        userAssignments ??= new StubUserClientAssignmentService();
+        responseGenerator ??= new StubAuthorizeResponseGenerator();
+        sanitizer ??= new StubAuthorizeRequestSanitizer();
+        authRedirect ??= new StubAuthenticationRedirectService();
+        metadataService ??= new StubAuthorizationMetadataService();
+        orchestrator ??= new StubAuthorizeRequestOrchestrator();
         codes ??= new StubAuthorizationCodeService();
-        consents ??= new StubConsentService();
-        meta ??= new StubAuthorizationCodeMetadataStore();
         parStore ??= new StubPushedAuthorizationRequestStore();
-        requestObjects ??= new StubRequestObjectValidator();
-        authOptions ??= Options.Create(new AuthOptions());
-        jwt ??= new StubJwtService();
-        clients ??= new StubClientStore();
         qrLoginHandler ??= new StubQrLoginHandler();
-        featureService ??= new StubFeatureService();
-        jarm ??= new StubJarmService();
 
         // Create a mock tenant accessor with default tenant
         var tenantAccessor = new MockTenantAccessor();
@@ -82,11 +84,23 @@ public sealed class AuthorizeHandlerTests
             IsMultiTenantMode = false
         });
 
-        var resolver = new AuthorizeRequestResolver(requestObjects, parStore, db, authOptions, NullLogger<AuthorizeRequestResolver>.Instance);
-
-        var continuationStore = new StubLoginContinuationStore();
-
-        return new AuthorizeHandler(authorize, codes, consents, metrics, meta, resolver, parStore, authOptions, logger, clients, db, qrLoginHandler, tenantAccessor, featureService, jarm, continuationStore);
+        return new AuthorizeHandler(
+            validator,
+            consentProcessor,
+            providerSelection,
+            userAssignments,
+            responseGenerator,
+            sanitizer,
+            authRedirect,
+            metadataService,
+            orchestrator,
+            codes,
+            metrics,
+            parStore,
+            logger,
+            db,
+            qrLoginHandler,
+            tenantAccessor);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -136,8 +150,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "Missing client_id");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "Missing client_id");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -160,8 +174,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "Missing redirect_uri");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "Missing redirect_uri");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -184,8 +198,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "unauthorized_client", errorDescription: "Unknown client_id");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "unauthorized_client", errorDescription: "Unknown client_id");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -212,8 +226,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "redirect_uri is not allowed for this client");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "redirect_uri is not allowed for this client");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -240,8 +254,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_scope", errorDescription: "The following scopes are not allowed: admin");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "invalid_scope", errorDescription: "The following scopes are not allowed: admin");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -268,8 +282,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "unsupported_response_type", errorDescription: "Only response_type=code is supported");
-        var handler = CreateHandler(db, authorize: authorize);
+        var validator = new StubAuthorizeRequestValidator(false, error: "unsupported_response_type", errorDescription: "Only response_type=code is supported");
+        var handler = CreateHandler(db, validator: validator);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -308,8 +322,8 @@ public sealed class AuthorizeHandlerTests
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -337,8 +351,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -377,8 +391,8 @@ public sealed class AuthorizeHandlerTests
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -406,8 +420,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(false, error: "invalid_request", errorDescription: "PKCE S256 is required for this client");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -460,8 +474,8 @@ public sealed class AuthorizeHandlerTests
             code_challenge_method = "S256"
         };
         var parStore = new StubPushedAuthorizationRequestStore("par123", parRequest, "test_client");
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
-        var handler = CreateHandler(db, authorize: authorize, parStore: parStore);
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback");
+        var handler = CreateHandler(db, validator: authorize, parStore: parStore);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -507,9 +521,9 @@ public sealed class AuthorizeHandlerTests
             code_challenge = new string('g', 43),
             code_challenge_method = "S256"
         };
-        var requestObjects = new StubRequestObjectValidator(valid: true, request: jarRequest, clientId: "test_client");
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback");
-        var handler = CreateHandler(db, authorize: authorize, requestObjects: requestObjects);
+        var requestObjects = new StubAuthorizeRequestOrchestrator(valid: true, request: jarRequest, clientId: "test_client");
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback");
+        var handler = CreateHandler(db, validator: authorize, orchestrator: requestObjects);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -562,11 +576,10 @@ public sealed class AuthorizeHandlerTests
         db.UserClientAssignments.Add(assignment);
         await db.SaveChangesAsync();
 
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", scopes: new[] { "openid" });
+        var validator = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", scopes: new[] { "openid" });
         var codes = new StubAuthorizationCodeService(code: "auth_code_123", redirect: "https://app/callback?code=auth_code_123&state=state_value");
-        var consents = new StubConsentService(hasConsent: true);
-        var clientStore = new StubClientStore(client);
-        var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
+        var consents = new StubConsentProcessor();
+        var handler = CreateHandler(db, validator: validator, codes: codes, consentProcessor: consents);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -630,11 +643,10 @@ public sealed class AuthorizeHandlerTests
         await db.SaveChangesAsync();
 
         var nonceValue = "nonce_value_123";
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", nonce: nonceValue, scopes: new[] { "openid" });
+        var validator = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", nonce: nonceValue, scopes: new[] { "openid" });
         var codes = new StubAuthorizationCodeService(code: "auth_code_123");
-        var consents = new StubConsentService(hasConsent: true);
-        var clientStore = new StubClientStore(client);
-        var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
+        var consents = new StubConsentProcessor();
+        var handler = CreateHandler(db, validator: validator, codes: codes, consentProcessor: consents);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -692,11 +704,12 @@ public sealed class AuthorizeHandlerTests
         await db.SaveChangesAsync();
 
         // No assignment exists initially
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", scopes: new[] { "openid" });
+        var validator = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", scopes: new[] { "openid" });
         var codes = new StubAuthorizationCodeService(code: "auth_code_123", redirect: "https://app/callback?code=auth_code_123");
-        var consents = new StubConsentService(hasConsent: true);
+        var consents = new StubConsentProcessor();
         var clientStore = new StubClientStore(client);
-        var handler = CreateHandler(db, authorize: authorize, codes: codes, consents: consents, clients: clientStore);
+        var userAssignments = new UserClientAssignmentService(db, clientStore, NullLogger<UserClientAssignmentService>.Instance);
+        var handler = CreateHandler(db, validator: validator, codes: codes, consentProcessor: consents, userAssignments: userAssignments);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -733,8 +746,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "form_post");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "form_post");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -762,8 +775,8 @@ public sealed class AuthorizeHandlerTests
     {
         // Arrange
         using var db = CreateDb();
-        var authorize = new StubAuthorizeService(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "query.jwt");
-        var handler = CreateHandler(db, authorize: authorize);
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "query.jwt");
+        var handler = CreateHandler(db, validator: authorize);
 
         var queryParams = new Dictionary<string, string>
         {
@@ -819,7 +832,7 @@ public sealed class AuthorizeHandlerTests
         }
     }
 
-    private sealed class StubAuthorizeService : IAuthorizeService
+    private sealed class StubAuthorizeRequestValidator : IAuthorizeRequestValidator
     {
         private readonly bool _isValid;
         private readonly string? _error;
@@ -829,16 +842,20 @@ public sealed class AuthorizeHandlerTests
         private readonly string[]? _scopes;
         private readonly string? _nonce;
         private readonly string? _responseMode;
+        private readonly bool _requireConsent;
+        private readonly string? _state;
 
-        public StubAuthorizeService(
-            bool isValid,
+        public StubAuthorizeRequestValidator(
+            bool isValid = true,
             string? error = null,
             string? errorDescription = null,
             string? clientId = null,
             string? redirectUri = null,
             string[]? scopes = null,
             string? nonce = null,
-            string? responseMode = null)
+            string? responseMode = null,
+            bool requireConsent = false,
+            string? state = null)
         {
             _isValid = isValid;
             _error = error;
@@ -848,21 +865,24 @@ public sealed class AuthorizeHandlerTests
             _scopes = scopes ?? new[] { "openid" };
             _nonce = nonce;
             _responseMode = responseMode;
+            _requireConsent = requireConsent;
+            _state = state;
         }
 
         public Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
         {
-            var result = new AuthorizeValidationResult
-            {
-                IsValid = _isValid,
-                Error = _error,
-                ErrorDescription = _errorDescription,
-                ClientId = _clientId ?? request.client_id,
-                RedirectUri = _redirectUri ?? request.redirect_uri,
-                Scopes = _scopes ?? new[] { "openid" },
-                Nonce = _nonce ?? request.nonce,
-                ResponseMode = _responseMode ?? request.response_mode
-            };
+            var result = new AuthorizeValidationResult(
+                IsValid: _isValid,
+                Error: _error,
+                ErrorDescription: _errorDescription,
+                ClientId: _clientId ?? request.client_id,
+                RedirectUri: _redirectUri ?? request.redirect_uri,
+                Scopes: _scopes ?? new[] { "openid" },
+                Nonce: _nonce ?? request.nonce,
+                ResponseMode: _responseMode ?? request.response_mode,
+                RequireConsent: _requireConsent,
+                State: _state ?? request.state
+            );
             return Task.FromResult(result);
         }
     }
@@ -878,7 +898,7 @@ public sealed class AuthorizeHandlerTests
             _redirect = redirect;
         }
 
-        public Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
+        public Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(MrWhoOidc.Auth.Services.Authorization.AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
         {
             var redirectUrl = _redirect ?? $"{valid.RedirectUri}?code={_code}";
             if (!string.IsNullOrEmpty(valid.ResponseMode))
@@ -1000,9 +1020,9 @@ public sealed class AuthorizeHandlerTests
             return null;
         }
 
-        public DateTimeOffset Create(string clientId, AuthorizeRequest request, string codeChallenge, TimeSpan ttl, string? hashedFingerprint)
+        public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
         {
-            return DateTimeOffset.UtcNow.Add(ttl);
+            return DateTimeOffset.UtcNow.Add(lifetime);
         }
 
         public void MarkConsumedById(string requestUri)
@@ -1015,30 +1035,27 @@ public sealed class AuthorizeHandlerTests
         }
     }
 
-    private sealed class StubRequestObjectValidator : IRequestObjectValidator
+    private sealed class StubAuthorizeRequestOrchestrator : IAuthorizeRequestOrchestrator
     {
         private readonly bool _valid;
         private readonly AuthorizeRequest? _request;
         private readonly string? _clientId;
 
-        public StubRequestObjectValidator(bool valid = true, AuthorizeRequest? request = null, string? clientId = null)
+        public StubAuthorizeRequestOrchestrator(bool valid = true, AuthorizeRequest? request = null, string? clientId = null)
         {
             _valid = valid;
             _request = request;
             _clientId = clientId;
         }
 
-        public Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
+        public Task<(IResult? error, AuthorizationContext? context)> ResolveAndValidateAsync(HttpContext http, CancellationToken ct = default)
         {
-            var result = new RequestObjectValidationResult
+            var request = _request ?? new AuthorizeRequest(client_id: _clientId);
+            if (!_valid)
             {
-                IsValid = _valid,
-                Request = _request,
-                ClientId = _clientId,
-                Error = _valid ? null : "invalid_request_object",
-                ErrorDescription = _valid ? null : "Invalid request object"
-            };
-            return Task.FromResult(result);
+                return Task.FromResult<(IResult? error, AuthorizationContext? context)>((Results.BadRequest("Invalid request"), null));
+            }
+            return Task.FromResult<(IResult? error, AuthorizationContext? context)>((null, new AuthorizationContext(request, "corr", "bucket", "query", null)));
         }
     }
 
@@ -1153,7 +1170,7 @@ public sealed class AuthorizeHandlerTests
             return Task.FromResult(Results.Ok(new { message = "QR login initiated" }) as IResult);
         }
 
-        public Task<IResult> InitiateAsync(HttpContext http, AuthorizeValidationResult validationResult, AuthorizeRequest request)
+        public Task<IResult> InitiateAsync(HttpContext http, MrWhoOidc.Auth.Services.Authorization.AuthorizeValidationResult validationResult, MrWhoOidc.Auth.Services.Authorization.AuthorizeRequest request)
         {
             return Task.FromResult(Results.Ok(new { message = "QR login initiated from authorize", clientId = validationResult.ClientId }) as IResult);
         }
@@ -1200,5 +1217,46 @@ public sealed class AuthorizeHandlerTests
         {
             return Task.FromResult("mock_jarm_error_jwt");
         }
+    }
+
+    private sealed class StubConsentProcessor : IConsentProcessor
+    {
+        public Task<ConsentDecision> EvaluateAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
+            => Task.FromResult(new ConsentDecision(false, true));
+    }
+
+    private sealed class StubProviderSelectionService : IProviderSelectionService
+    {
+        public Task<ProviderSelectionResult> EvaluateAsync(string clientId, string? idp, string? idpHint, string? lastUsedIdp, bool forceAccountSelection, CancellationToken ct = default)
+            => Task.FromResult(new ProviderSelectionResult(false, idp ?? idpHint ?? lastUsedIdp));
+    }
+
+    private sealed class StubUserClientAssignmentService : IUserClientAssignmentService
+    {
+        public Task<(bool assigned, string? error)> EnsureAssignedAsync(Guid userId, string clientId, string? idp, CancellationToken ct = default)
+            => Task.FromResult((true, (string?)null));
+    }
+
+    private sealed class StubAuthorizeResponseGenerator : IAuthorizeResponseGenerator
+    {
+        public IResult CreateSuccessResponse(HttpContext http, AuthorizeValidationResult validation, string code, string? redirectUri) => Results.Ok();
+        public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId) => Results.BadRequest();
+        public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl) => Results.Redirect(consentUrl);
+    }
+
+    private sealed class StubAuthorizeRequestSanitizer : IAuthorizeRequestSanitizer
+    {
+        public IResult? SanitizeAddressBar(HttpContext http) => null;
+    }
+
+    private sealed class StubAuthenticationRedirectService : IAuthenticationRedirectService
+    {
+        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, CancellationToken ct = default)
+            => Task.FromResult(Results.Redirect("/login") as IResult);
+    }
+
+    private sealed class StubAuthorizationMetadataService : IAuthorizationMetadataService
+    {
+        public Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

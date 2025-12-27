@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Protocols;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -228,19 +229,18 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
 
         // Extract OpenID parameters from payload
         var payload2 = unsigned.Payload;
-        var req = new AuthorizeRequest
-        {
-            response_type = payload2.TryGetValue("response_type", out var rt) ? rt?.ToString() : null,
-            client_id = clientId,
-            redirect_uri = payload2.TryGetValue("redirect_uri", out var ru) ? ru?.ToString() : null,
-            scope = payload2.TryGetValue("scope", out var sc) ? sc?.ToString() : null,
-            state = payload2.TryGetValue("state", out var st) ? st?.ToString() : null,
-            nonce = payload2.TryGetValue("nonce", out var no) ? no?.ToString() : null,
-            code_challenge = payload2.TryGetValue("code_challenge", out var cc) ? cc?.ToString() : null,
-            code_challenge_method = payload2.TryGetValue("code_challenge_method", out var ccm) ? ccm?.ToString() : null,
-            resource = payload2.TryGetValue("resource", out var res) ? res?.ToString() : null,
-            response_mode = payload2.TryGetValue("response_mode", out var rm) ? rm?.ToString() : null
-        };
+        var req = new AuthorizeRequest(
+            response_type: payload2.TryGetValue("response_type", out var rt) ? rt?.ToString() : null,
+            client_id: clientId,
+            redirect_uri: payload2.TryGetValue("redirect_uri", out var ru) ? ru?.ToString() : null,
+            scope: payload2.TryGetValue("scope", out var sc) ? sc?.ToString() : null,
+            state: payload2.TryGetValue("state", out var st) ? st?.ToString() : null,
+            nonce: payload2.TryGetValue("nonce", out var no) ? no?.ToString() : null,
+            code_challenge: payload2.TryGetValue("code_challenge", out var cc) ? cc?.ToString() : null,
+            code_challenge_method: payload2.TryGetValue("code_challenge_method", out var ccm) ? ccm?.ToString() : null,
+            resource: payload2.TryGetValue("resource", out var res) ? res?.ToString() : null,
+            response_mode: payload2.TryGetValue("response_mode", out var rm) ? rm?.ToString() : null
+        );
 
         return new RequestObjectValidationResult
         {

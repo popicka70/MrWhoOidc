@@ -13,6 +13,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.Auth.Services.Authorization;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -121,6 +122,10 @@ public static class AuthServiceCollectionExtensions
     #pragma warning restore CS0618
         
         services.AddScoped<IAuthorizeService, AuthorizeService>();
+        services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
+        services.AddScoped<IConsentProcessor, ConsentProcessor>();
+        services.AddScoped<IProviderSelectionService, ProviderSelectionService>();
+        services.AddScoped<IUserClientAssignmentService, UserClientAssignmentService>();
         services.AddScoped<IAuthorizationCodeService, AuthorizationCodeService>();
         services.AddSingleton<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
         services.AddScoped<IJwtService, JwtService>();

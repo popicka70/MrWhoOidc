@@ -3,6 +3,7 @@ using System.Text.Json;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -32,7 +33,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             ClientId = valid.ClientId!,
             UserId = userId,
             RedirectUri = valid.RedirectUri!,
-            ScopesJson = JsonSerializer.Serialize(valid.Scopes),
+            ScopesJson = JsonSerializer.Serialize(valid.Scopes ?? Array.Empty<string>()),
             Nonce = valid.Nonce,
             CodeChallenge = valid.CodeChallenge,
             CodeChallengeMethod = valid.CodeChallengeMethod,

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 

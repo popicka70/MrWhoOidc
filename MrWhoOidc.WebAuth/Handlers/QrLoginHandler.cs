@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
@@ -359,16 +360,16 @@ public sealed class QrLoginHandler : IQrLoginHandler
             _logger.LogInformation("QR confirm: generating auth code for client {ClientId}, user {UserId}", session.ClientId, userId);
 
             // Build validation result for code generation
-            var validationResult = new AuthorizeValidationResult
-            {
-                IsValid = true,
-                ClientId = session.ClientId,
-                RedirectUri = session.ReturnUrl,
-                Scopes = session.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries),
-                Nonce = session.Nonce,
-                CodeChallenge = session.CodeChallenge,
-                CodeChallengeMethod = session.CodeChallengeMethod
-            };
+            var validationResult = new AuthorizeValidationResult(
+                IsValid: true,
+                ClientId: session.ClientId,
+                RedirectUri: session.ReturnUrl,
+                Scopes: session.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries),
+                Nonce: session.Nonce,
+                CodeChallenge: session.CodeChallenge,
+                CodeChallengeMethod: session.CodeChallengeMethod,
+                State: session.State
+            );
 
             _logger.LogInformation("QR confirm: validation result - RedirectUri={RedirectUri}, Scopes={Scopes}, HasChallenge={HasChallenge}",
                 validationResult.RedirectUri,

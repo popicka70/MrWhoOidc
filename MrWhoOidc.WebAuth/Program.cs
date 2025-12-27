@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Entitlements.Options;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 using MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 using MrWhoOidc.WebAuth.Infrastructure.EndpointMapping;

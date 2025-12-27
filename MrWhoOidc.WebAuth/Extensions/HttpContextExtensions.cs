@@ -109,4 +109,17 @@ public static class HttpContextExtensions
             httpContext.Request.PathBase,
             httpContext.Request.Path);
     }
+
+    public static string GetCorrelationId(this HttpContext httpContext)
+    {
+        return System.Diagnostics.Activity.Current?.Id 
+            ?? httpContext.Items["CorrelationId"] as string 
+            ?? Guid.NewGuid().ToString("N");
+    }
+
+    public static Guid? GetTenantId(this HttpContext httpContext)
+    {
+        var tenantAccessor = httpContext.RequestServices.GetService<ITenantAccessor>();
+        return tenantAccessor?.CurrentTenant?.TenantId;
+    }
 }

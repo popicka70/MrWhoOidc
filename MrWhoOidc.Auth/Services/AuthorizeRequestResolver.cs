@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -121,7 +122,7 @@ public sealed class AuthorizeRequestResolver(
             // State override from query
             if (query.TryGetValue(OAuthConstants.Parameters.State, out var stateFromQuery) && !string.IsNullOrEmpty(stateFromQuery))
             {
-                effectiveReq.state = stateFromQuery;
+                effectiveReq = effectiveReq with { state = stateFromQuery };
             }
         }
         else if (jarRequest is not null)
@@ -151,7 +152,7 @@ public sealed class AuthorizeRequestResolver(
             }
 
             effectiveReq = jarRequest;
-            if (!string.IsNullOrEmpty(qp.state)) effectiveReq.state = qp.state;
+            if (!string.IsNullOrEmpty(qp.state)) effectiveReq = effectiveReq with { state = qp.state };
         }
         else
         {
@@ -161,10 +162,11 @@ public sealed class AuthorizeRequestResolver(
         // Default client ID resolution
         if (string.IsNullOrWhiteSpace(effectiveReq.client_id))
         {
-            effectiveReq.client_id = await db.ResolveDefaultClientIdAsync(ct);
-            if (!string.IsNullOrWhiteSpace(effectiveReq.client_id))
+            var defaultClientId = await db.ResolveDefaultClientIdAsync(ct);
+            if (!string.IsNullOrWhiteSpace(defaultClientId))
             {
-                clientBucket = Bucketization.BucketizeClientId(effectiveReq.client_id);
+                effectiveReq = effectiveReq with { client_id = defaultClientId };
+                clientBucket = Bucketization.BucketizeClientId(defaultClientId);
             }
         }
 
@@ -173,19 +175,18 @@ public sealed class AuthorizeRequestResolver(
 
     private static AuthorizeRequest MapQueryToRequest(Dictionary<string, string> query)
     {
-        return new AuthorizeRequest
-        {
-            response_type = Get(query, OAuthConstants.Parameters.ResponseType),
-            client_id = Get(query, OAuthConstants.Parameters.ClientId),
-            redirect_uri = Get(query, OAuthConstants.Parameters.RedirectUri),
-            scope = Get(query, OAuthConstants.Parameters.Scope),
-            state = Get(query, OAuthConstants.Parameters.State),
-            nonce = Get(query, OAuthConstants.Parameters.Nonce),
-            code_challenge = Get(query, OAuthConstants.Parameters.CodeChallenge),
-            code_challenge_method = Get(query, OAuthConstants.Parameters.CodeChallengeMethod),
-            resource = Get(query, OAuthConstants.Parameters.Resource),
-            response_mode = Get(query, OAuthConstants.Parameters.ResponseMode)
-        };
+        return new AuthorizeRequest(
+            response_type: Get(query, OAuthConstants.Parameters.ResponseType),
+            client_id: Get(query, OAuthConstants.Parameters.ClientId),
+            redirect_uri: Get(query, OAuthConstants.Parameters.RedirectUri),
+            scope: Get(query, OAuthConstants.Parameters.Scope),
+            state: Get(query, OAuthConstants.Parameters.State),
+            nonce: Get(query, OAuthConstants.Parameters.Nonce),
+            code_challenge: Get(query, OAuthConstants.Parameters.CodeChallenge),
+            code_challenge_method: Get(query, OAuthConstants.Parameters.CodeChallengeMethod),
+            resource: Get(query, OAuthConstants.Parameters.Resource),
+            response_mode: Get(query, OAuthConstants.Parameters.ResponseMode)
+        );
     }
 
     private static string? Get(Dictionary<string, string> d, string key) => d.TryGetValue(key, out var v) ? v : null;

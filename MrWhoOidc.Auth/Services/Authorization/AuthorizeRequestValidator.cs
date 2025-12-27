@@ -1,18 +1,16 @@
+using System;
+using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
-using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Utils;
-using MrWhoOidc.Auth.Services.Authorization;
 
-namespace MrWhoOidc.Auth.Services;
+namespace MrWhoOidc.Auth.Services.Authorization;
 
-public interface IAuthorizeService
-{
-    Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
-}
-
-internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) : IAuthorizeService
+public sealed class AuthorizeRequestValidator(AuthDbContext db, IClientStore clients) : IAuthorizeRequestValidator
 {
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
@@ -125,7 +123,7 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
         );
     }
 
-    static AuthorizeValidationResult Error(string code, string description) => new AuthorizeValidationResult(
+    private static AuthorizeValidationResult Error(string code, string description) => new(
         IsValid: false,
         Error: code,
         ErrorDescription: description

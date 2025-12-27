@@ -14,6 +14,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -64,15 +65,13 @@ public sealed class SeedUsageExamples
         var settingsSvc = new MockTenantSettingsService();
         var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
         
-        var authorizeResult = new AuthorizeValidationResult
-        {
-            IsValid = true,
-            ClientId = seed.Clients["spa"].ClientId,
-            RedirectUri = "https://app.example.com/callback",
-            Scopes = new[] { "openid", "roles" },
-            Nonce = "n",
-            CodeChallenge = null
-        };
+        var authorizeResult = new AuthorizeValidationResult(
+            IsValid: true,
+            ClientId: seed.Clients["spa"].ClientId,
+            RedirectUri: "https://app.example.com/callback",
+            Scopes: new[] { "openid", "roles" },
+            Nonce: "n"
+        );
         var (ok, _, _, code) = await acSvc.IssueAsync(authorizeResult, seed.Users["alice"].Id);
         Assert.IsTrue(ok);
 

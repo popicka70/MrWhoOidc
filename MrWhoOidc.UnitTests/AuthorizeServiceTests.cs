@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -36,27 +37,27 @@ public sealed class AuthorizeServiceTests
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
-        var reqMissingPkce = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://app.example.com/callback",
-            scope = "profile"
-        };
+        var reqMissingPkce = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/callback",
+            scope: "profile"
+        );
         var res1 = await svc.ValidateAsync(reqMissingPkce);
         Assert.IsFalse(res1.IsValid);
         StringAssert.Contains(res1.ErrorDescription!, "PKCE");
 
-        var reqNoOpenId = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://app.example.com/callback",
-            code_challenge = new string('a', 43),
-            code_challenge_method = "S256",
-            scope = "profile email",
-            nonce = "n"
-        };
+        var reqNoOpenId = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/callback",
+            code_challenge: new string('a', 43),
+            code_challenge_method: "S256",
+            scope: "profile email",
+            nonce: "n"
+        );
         var res2 = await svc.ValidateAsync(reqNoOpenId);
         Assert.IsFalse(res2.IsValid);
         Assert.AreEqual("invalid_scope", res2.Error);
@@ -82,16 +83,16 @@ public sealed class AuthorizeServiceTests
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
-        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://app.example.com/oidc-cb",
-            scope = "openid",
-            code_challenge = new string('x', 43),
-            code_challenge_method = "S256",
-            nonce = "n"
-        };
+        var req = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/oidc-cb",
+            scope: "openid",
+            code_challenge: new string('x', 43),
+            code_challenge_method: "S256",
+            nonce: "n"
+        );
         var res = await svc.ValidateAsync(req);
         Assert.IsTrue(res.IsValid);
         Assert.AreEqual("spa", res.ClientId);
@@ -121,16 +122,16 @@ public sealed class AuthorizeServiceTests
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
-        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://app.example.com/callback",
-            scope = "openid profile",
-            code_challenge = new string('p', 43),
-            code_challenge_method = "S256",
-            nonce = "n"
-        };
+        var req = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/callback",
+            scope: "openid profile",
+            code_challenge: new string('p', 43),
+            code_challenge_method: "S256",
+            nonce: "n"
+        );
 
         var res = await svc.ValidateAsync(req);
 
@@ -158,16 +159,16 @@ public sealed class AuthorizeServiceTests
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
         var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
-        var req = new MrWhoOidc.Auth.Protocols.AuthorizeRequest
-        {
-            response_type = "code",
-            client_id = "spa",
-            redirect_uri = "https://evil.example.com/callback",
-            scope = "openid",
-            code_challenge = new string('r', 43),
-            code_challenge_method = "S256",
-            nonce = "n"
-        };
+        var req = new AuthorizeRequest
+        (
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://evil.example.com/callback",
+            scope: "openid",
+            code_challenge: new string('r', 43),
+            code_challenge_method: "S256",
+            nonce: "n"
+        );
 
         var res = await svc.ValidateAsync(req);
 
