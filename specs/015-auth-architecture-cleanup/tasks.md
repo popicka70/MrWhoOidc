@@ -128,33 +128,33 @@
 
 ### Tests for User Story 3
 
-- [ ] T045 [P] [US3] Create test `AuthorizationCodeExchangerTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T046 [P] [US3] Create test `RefreshTokenExchangerTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T047 [P] [US3] Create test `ClientCredentialsTokenFactoryTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T048 [P] [US3] Create test `DeviceCodeTokenFactoryTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
-- [ ] T049 [P] [US3] Create test `AccessTokenClaimBuilderTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T045 [P] [US3] Create test `AuthorizationCodeExchangerTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T046 [P] [US3] Create test `RefreshTokenExchangerTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T047 [P] [US3] Create test `ClientCredentialsTokenFactoryTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T048 [P] [US3] Create test `DeviceCodeTokenFactoryTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
+- [x] T049 [P] [US3] Create test `AccessTokenClaimBuilderTests.cs` in `MrWhoOidc.UnitTests/Services/Token/`
 
 ### Implementation for User Story 3
 
-- [ ] T050 [P] [US3] Create `IAuthorizationCodeExchanger.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T051 [P] [US3] Create `AuthorizationCodeExchangeRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T052 [US3] Create `AuthorizationCodeExchanger.cs` implementation (extract from TokenService)
-- [ ] T053 [P] [US3] Create `IRefreshTokenExchanger.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T054 [P] [US3] Create `RefreshTokenExchangeRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T055 [US3] Create `RefreshTokenExchanger.cs` implementation (extract from TokenService)
-- [ ] T056 [P] [US3] Create `IClientCredentialsTokenFactory.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T057 [P] [US3] Create `ClientCredentialsRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T058 [US3] Create `ClientCredentialsTokenFactory.cs` implementation (extract from TokenService)
-- [ ] T059 [P] [US3] Create `IDeviceCodeTokenFactory.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T060 [P] [US3] Create `DeviceCodePollRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T061 [US3] Create `DeviceCodeTokenFactory.cs` implementation (extract from TokenService)
-- [ ] T062 [P] [US3] Create `IAccessTokenClaimBuilder.cs` interface in `MrWhoOidc.Auth/Services/Token/`
-- [ ] T063 [US3] Create `AccessTokenClaimBuilder.cs` implementation (extract claim building logic)
-- [ ] T064 [US3] Register all new token services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T065 [US3] Refactor `TokenService.cs` to delegate to extracted services (orchestrator pattern)
-- [ ] T066 [US3] Verify `TokenService.cs` is under 150 lines
-- [ ] T067 [US3] Run all tests to verify US3 implementation
-- [ ] T068 [US3] Update XML documentation for all new US3 types
+- [x] T050 [P] [US3] Create `IAuthorizationCodeExchanger.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T051 [P] [US3] Create `AuthorizationCodeExchangeRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
+- [x] T052 [US3] Create `AuthorizationCodeExchanger.cs` implementation (extract from TokenService)
+- [x] T053 [P] [US3] Create `IRefreshTokenExchanger.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T054 [P] [US3] Create `RefreshTokenExchangeRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
+- [x] T055 [US3] Create `RefreshTokenExchanger.cs` implementation (extract from TokenService)
+- [x] T056 [P] [US3] Create `IClientCredentialsTokenFactory.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T057 [P] [US3] Create `ClientCredentialsRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
+- [x] T058 [US3] Create `ClientCredentialsTokenFactory.cs` implementation (extract from TokenService)
+- [x] T059 [P] [US3] Create `IDeviceCodeTokenFactory.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T060 [P] [US3] Create `DeviceCodePollRequest.cs` record in `MrWhoOidc.Auth/Services/Token/`
+- [x] T061 [US3] Create `DeviceCodeTokenFactory.cs` implementation (extract from TokenService)
+- [x] T062 [P] [US3] Create `IAccessTokenClaimBuilder.cs` interface in `MrWhoOidc.Auth/Services/Token/`
+- [x] T063 [US3] Create `AccessTokenClaimBuilder.cs` implementation (extract claim building logic)
+- [x] T064 [US3] Register all new token services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
+- [x] T065 [US3] Refactor `TokenService.cs` to delegate to extracted services (orchestrator pattern)
+- [x] T066 [US3] Verify `TokenService.cs` is under 150 lines
+- [x] T067 [US3] Run all tests to verify US3 implementation
+- [x] T068 [US3] Update XML documentation for all new US3 types
 
 **Checkpoint**: TokenService decomposed - each service has single responsibility
 
@@ -168,27 +168,27 @@
 
 ### Tests for User Story 4
 
-- [ ] T069 [P] [US4] Create test `AuthorizeRequestValidatorTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
-- [ ] T070 [P] [US4] Create test `ConsentProcessorTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
-- [ ] T071 [P] [US4] Create test `ProviderSelectionServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
+- [x] T069 [P] [US4] Create test `AuthorizeRequestValidatorTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
+- [x] T070 [P] [US4] Create test `ConsentProcessorTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
+- [x] T071 [P] [US4] Create test `ProviderSelectionServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Authorization/`
 
 ### Implementation for User Story 4
 
-- [ ] T072 [P] [US4] Create `IAuthorizeRequestValidator.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T073 [P] [US4] Create `AuthorizeRequest.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T074 [P] [US4] Create `AuthorizeValidationResult.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T075 [US4] Create `AuthorizeRequestValidator.cs` implementation (extract validation logic)
-- [ ] T076 [P] [US4] Create `IConsentProcessor.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T077 [P] [US4] Create `ConsentDecision.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T078 [US4] Create `ConsentProcessor.cs` implementation (extract consent logic)
-- [ ] T079 [P] [US4] Create `IProviderSelectionService.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T080 [P] [US4] Create `ProviderSelectionResult.cs` and `ProviderOption.cs` records in `MrWhoOidc.Auth/Services/Authorization/`
-- [ ] T081 [US4] Create `ProviderSelectionService.cs` implementation (extract provider selection logic)
-- [ ] T082 [US4] Register all new authorization services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T083 [US4] Refactor `AuthorizeHandler.cs` in WebAuth to delegate to Auth services (orchestrator pattern)
-- [ ] T084 [US4] Verify `AuthorizeHandler.cs` is under 200 lines
-- [ ] T085 [US4] Run all tests to verify US4 implementation
-- [ ] T086 [US4] Update XML documentation for all new US4 types
+- [x] T072 [P] [US4] Create `IAuthorizeRequestValidator.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T073 [P] [US4] Create `AuthorizeRequest.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T074 [P] [US4] Create `AuthorizeValidationResult.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T075 [US4] Create `AuthorizeRequestValidator.cs` implementation (extract validation logic)
+- [x] T076 [P] [US4] Create `IConsentProcessor.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T077 [P] [US4] Create `ConsentDecision.cs` record in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T078 [US4] Create `ConsentProcessor.cs` implementation (extract consent logic)
+- [x] T079 [P] [US4] Create `IProviderSelectionService.cs` interface in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T080 [P] [US4] Create `ProviderSelectionResult.cs` and `ProviderOption.cs` records in `MrWhoOidc.Auth/Services/Authorization/`
+- [x] T081 [US4] Create `ProviderSelectionService.cs` implementation (extract provider selection logic)
+- [x] T082 [US4] Register all new authorization services in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
+- [x] T083 [US4] Refactor `AuthorizeHandler.cs` in WebAuth to delegate to Auth services (orchestrator pattern)
+- [x] T084 [US4] Verify `AuthorizeHandler.cs` is under 200 lines
+- [x] T085 [US4] Run all tests to verify US4 implementation
+- [x] T086 [US4] Update XML documentation for all new US4 types
 
 **Checkpoint**: AuthorizeHandler decomposed - each component independently testable
 
@@ -233,11 +233,11 @@
 **Purpose**: Final verification, documentation, and code quality
 
 - [ ] T105 Run `dotnet build` in Debug and Release to confirm zero warnings
-- [ ] T106 Run `dotnet test` to confirm all tests pass (existing + new)
-- [ ] T107 [P] Verify TokenService.cs is under 150 lines (FR-014)
-- [ ] T108 [P] Verify AuthorizeHandler.cs is under 200 lines (FR-015)
-- [ ] T109 [P] Verify no Auth files import from MrWhoOidc.WebAuth namespace (SC-005)
-- [ ] T110 [P] Verify all public interfaces have XML documentation (FR-022)
+- [x] T106 Run `dotnet test` to confirm all tests pass (existing + new)
+- [x] T107 [P] Verify TokenService.cs is under 150 lines (FR-014)
+- [x] T108 [P] Verify AuthorizeHandler.cs is under 200 lines (FR-015)
+- [x] T109 [P] Verify no Auth files import from MrWhoOidc.WebAuth namespace (SC-005)
+- [x] T110 [P] Verify all public interfaces have XML documentation (FR-022)
 - [ ] T111 [P] Verify all services use nullable reference type annotations (FR-023)
 - [ ] T112 Run quickstart.md validation steps
 - [ ] T113 Update docs/architecture-refactoring-plan.md to mark items as complete
