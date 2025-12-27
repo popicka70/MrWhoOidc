@@ -6,7 +6,16 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IRevocationService
 {
+    /// <summary>
+    /// Revokes a specific token (refresh or opaque access token).
+    /// Implements RFC 7009.
+    /// </summary>
     Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes all tokens (refresh and access) for a specific user and client.
+    /// Used for security remediation when token reuse is detected.
+    /// </summary>
     Task RevokeAllForUserAsync(Guid userId, string clientId, CancellationToken ct = default);
 }
 

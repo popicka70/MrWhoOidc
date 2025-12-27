@@ -9,7 +9,10 @@ namespace MrWhoOidc.UnitTests;
 public sealed class ConsentServiceTests
 {
     private static AuthDbContext CreateDb()
-        => new(new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        => new(new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .Options);
 
     [TestMethod]
     public async Task HasConsent_False_WhenNone()

@@ -11,6 +11,11 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface ITokenExchangeService
 {
+    /// <summary>
+    /// Implements RFC 8693 OAuth 2.0 Token Exchange.
+    /// Supports JWT and opaque access tokens as subject tokens.
+    /// Includes audience validation, delegation depth enforcement, and DPoP bridging policy.
+    /// </summary>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
         string? subjectTokenType,
@@ -146,6 +151,14 @@ public class TokenExchangeService(
             userId = entity.UserId;
             subjectExpiry = entity.ExpiresAt;
             sourceAudience = entity.Audience;
+
+            // If server defines allowed ApiAudiences and token has aud, ensure aud is one of them
+            var allowedAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
+            if (!string.IsNullOrEmpty(sourceAudience) && allowedAudiences.Length > 0 && !allowedAudiences.Contains(sourceAudience, StringComparer.Ordinal))
+            {
+                return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+            }
+
             subjectCnfJkt = entity.CnfJkt;
             try { subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>(); }
             catch { subjectScopes = Array.Empty<string>(); }

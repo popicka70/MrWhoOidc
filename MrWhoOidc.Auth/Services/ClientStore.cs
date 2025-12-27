@@ -9,8 +9,21 @@ namespace MrWhoOidc.Auth.Services;
 
 public interface IClientStore
 {
+    /// <summary>
+    /// Finds a client by its public ClientId. Results are cached using HybridCache.
+    /// </summary>
     Task<Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Validates a client secret against the stored hashes. 
+    /// Supports both modern multi-secret rotation and legacy single-secret hashes.
+    /// Emits authentication metrics for success and failure.
+    /// </summary>
     Task<bool> ValidateClientSecretAsync(string clientId, string? clientSecret, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns a queryable for clients, respecting tenant isolation.
+    /// </summary>
     IQueryable<Client> QueryClients(CancellationToken ct = default);
     /// <summary>
     /// Invalidates cached client metadata for the specified client.
@@ -154,7 +167,25 @@ internal sealed class ClientStore(
             return string.IsNullOrEmpty(clientSecret);
         }
         if (string.IsNullOrEmpty(clientSecret)) return false;
-        return hasher.Verify(clientSecret, client.ClientSecretHash);
+        
+        var isValid = hasher.Verify(clientSecret, client.ClientSecretHash);
+        if (isValid)
+        {
+            // Record success metric for legacy secret
+            metrics?.AuthenticationSuccess.Add(1, 
+                new KeyValuePair<string, object?>("client_id", clientId), 
+                new KeyValuePair<string, object?>("is_primary", true),
+                new KeyValuePair<string, object?>("legacy", true));
+        }
+        else
+        {
+            // Record failure metric
+            metrics?.AuthenticationFailure.Add(1, 
+                new KeyValuePair<string, object?>("client_id", clientId), 
+                new KeyValuePair<string, object?>("reason", "invalid_legacy"));
+        }
+        
+        return isValid;
 #pragma warning restore CS0618 // Type or member is obsolete
     }
 

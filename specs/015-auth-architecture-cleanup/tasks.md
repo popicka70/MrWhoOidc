@@ -64,22 +64,27 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Create test `CachedKeyProviderTests.cs` in `MrWhoOidc.UnitTests/KeyManagement/`
-- [ ] T019 [P] [US1] Create test `ConsentServiceTransactionTests.cs` in `MrWhoOidc.UnitTests/Services/`
-- [ ] T020 [P] [US1] Create test `TokenExchangeAudienceValidationTests.cs` in `MrWhoOidc.UnitTests/Services/`
+- [x] T018 [P] [US1] Create test `CachedKeyProviderTests.cs` in `MrWhoOidc.UnitTests/KeyManagement/`
+- [x] T019 [P] [US1] Create test `ConsentServiceTransactionTests.cs` in `MrWhoOidc.UnitTests/Services/`
+- [x] T020 [P] [US1] Create test `TokenExchangeAudienceValidationTests.cs` in `MrWhoOidc.UnitTests/Services/`
 
 ### Implementation for User Story 1
 
-- [ ] T021 [P] [US1] Create `ICachedKeyProvider.cs` interface in `MrWhoOidc.Auth/Services/KeyManagement/`
-- [ ] T022 [US1] Create `CachedKeyProvider.cs` implementation in `MrWhoOidc.Auth/Services/KeyManagement/`
-- [ ] T023 [US1] Register `ICachedKeyProvider` as singleton in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T024 [US1] Update `JwtService.cs` constructor to inject `ICachedKeyProvider` instead of direct `IKeyStore`
-- [ ] T025 [US1] Add key cache warmup in startup via `IHostedService` in `MrWhoOidc.WebAuth/`
-- [ ] T026 [US1] Add transaction wrapper to `ConsentService.GrantConsentAsync` using `CreateExecutionStrategy` pattern
-- [ ] T027 [US1] Add audience validation for opaque tokens in `TokenExchangeService.cs` after entity load
-- [ ] T028 [US1] Add legacy secret authentication metric emission in `ClientStore.cs` when legacy hash is used
-- [ ] T029 [US1] Run all tests to verify US1 implementation
-- [ ] T030 [US1] Update XML documentation for all new US1 types
+- [x] T021 [P] [US1] Create `ICachedKeyProvider.cs` interface in `MrWhoOidc.Auth/Services/KeyManagement/`
+- [x] T022 [US1] Create `CachedKeyProvider.cs` implementation in `MrWhoOidc.Auth/Services/KeyManagement/`
+- [x] T023 [US1] Register `ICachedKeyProvider` as singleton in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
+- [x] T024 [US1] Update `JwtService.cs` constructor to inject `ICachedKeyProvider` instead of direct `IKeyStore`
+- [x] T024a [US1] Refactor `ITokenValidator` and `IJwtService` to be asynchronous
+- [x] T024b [US1] Update `UserInfoHandler`, `IntrospectionHandler`, and `EndSessionHandler` to support async token validation
+- [x] T024c [US1] Implement Authorization Code and Refresh Token reuse protection in `TokenService`
+- [x] T024d [US1] Expand `RevocationService` to support `RevokeAllForUserAsync` and access token revocation
+- [x] T024e [US1] Create `TestTokenValidatorFactory` to simplify async validation mocking in tests
+- [x] T025 [US1] Add key cache warmup in startup via `IHostedService` in `MrWhoOidc.WebAuth/`
+- [x] T026 [US1] Add transaction wrapper to `ConsentService.GrantConsentAsync` using `CreateExecutionStrategy` pattern
+- [x] T027 [US1] Add audience validation for opaque tokens in `TokenExchangeService.cs` after entity load
+- [x] T028 [US1] Add legacy secret authentication metric emission in `ClientStore.cs` when legacy hash is used
+- [x] T029 [US1] Run all tests to verify US1 implementation
+- [x] T030 [US1] Update XML documentation for all new US1 types
 
 **Checkpoint**: Security fixes complete - token operations are thread-safe and validate consistently
 

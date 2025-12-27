@@ -159,6 +159,51 @@ public sealed class TokenExchangeTests
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.AreEqual("single_hop_only", doc.RootElement.GetProperty("error_description").GetString());
     }
+
+    [TestMethod]
+    public async Task TokenExchange_OpaqueSubject_RejectsInvalidAudience()
+    {
+        using var db = CreateDb();
+        var settingsService = new MockTenantSettingsService();
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var opts = Options("api"); // Only "api" is allowed
+        var validator = TestTokenValidatorFactory.Create(keyStore);
+        var scopeResolver = new MockScopeResolver();
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+
+        var userId = Guid.NewGuid();
+        var tokenValue = "opaque-token-123";
+        var hash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(tokenValue);
+        
+        db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
+        {
+            Type = "access",
+            TokenHash = hash,
+            UserId = userId,
+            ClientId = "original-client",
+            Audience = "untrusted-api", // Not in allowed ApiAudiences
+            ScopesJson = "[\"read\"]",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var (ok, _, error, status) = await svc.ExchangeTokenAsync(
+            subjectToken: tokenValue,
+            subjectTokenType: "urn:ietf:params:oauth:token-type:access_token",
+            requestedTokenType: null,
+            requestedAudience: "api",
+            requestedScopes: new[] { "read" },
+            callerClientId: "caller-app",
+            issuer: "https://issuer",
+            dpopJkt: null
+        );
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_grant", error);
+    }
 }
 
 
