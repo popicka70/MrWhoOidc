@@ -123,19 +123,7 @@ public class QrModel : PageModel
         }
     }
 
-    private static (string Verifier, string Challenge) GeneratePkce()
-    {
-        var bytes = new byte[32];
-        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
-        rng.GetBytes(bytes);
-        var verifier = Base64UrlEncode(bytes);
-
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var challengeBytes = sha256.ComputeHash(System.Text.Encoding.ASCII.GetBytes(verifier));
-        var challenge = Base64UrlEncode(challengeBytes);
-
-        return (verifier, challenge);
-    }
+    private static (string Verifier, string Challenge) GeneratePkce() { var verifier = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)); return (verifier, MrWhoOidc.Auth.Utils.CryptoHelper.ComputePkceS256(verifier)); }
 
     private static string Base64UrlEncode(byte[] bytes)
     {
@@ -145,10 +133,6 @@ public class QrModel : PageModel
             .Replace('/', '_');
     }
 
-    private static string ComputeHash(string input)
-    {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hashBytes)[..8].ToLowerInvariant();
-    }
+    private static string ComputeHash(string input) => MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input)[..8];
 }
+

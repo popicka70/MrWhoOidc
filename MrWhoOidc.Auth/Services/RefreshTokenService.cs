@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -34,7 +35,7 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         var lifetime = TimeSpan.FromSeconds(lifetimeSeconds);
 
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        var hash = Hash(token);
+        var hash = CryptoHelper.ComputeSha256Base64(token);
         db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
         {
             Type = "refresh",
@@ -50,12 +51,6 @@ internal sealed class RefreshTokenService(AuthDbContext db, ITenantAccessor tena
         });
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (token, hash);
-    }
-
-    static string Hash(string value)
-    {
-        using var sha = SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
     }
 }
 

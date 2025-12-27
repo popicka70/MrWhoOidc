@@ -16,6 +16,7 @@ namespace MrWhoOidc.Auth.Services.Token;
 /// </summary>
 public sealed class AccessTokenClaimBuilder(
     IScopeResolver scopeResolver,
+    IRoleClaimBuilder roleClaimBuilder,
     IOptions<AuthOptions> authOptions) : IAccessTokenClaimBuilder
 {
     public Task<IEnumerable<Claim>> BuildClaimsAsync(AccessTokenClaimRequest request, CancellationToken ct = default)
@@ -52,10 +53,7 @@ public sealed class AccessTokenClaimBuilder(
 
         if (request.Scopes.Contains(OidcConstants.Scopes.Roles) && request.RoleNames?.Length > 0)
         {
-            foreach (var r in request.RoleNames)
-            {
-                claims.Add(new(OidcConstants.Claims.Roles, r));
-            }
+            claims.AddRange(roleClaimBuilder.BuildRoleClaims(request.RoleNames));
         }
 
         if (!string.IsNullOrEmpty(request.RealmName))

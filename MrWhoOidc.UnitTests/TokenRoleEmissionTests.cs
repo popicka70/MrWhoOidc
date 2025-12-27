@@ -30,21 +30,26 @@ public sealed class TokenRoleEmissionTests
         var entitlementsProvider = new NoopEntitlementsProvider();
         var tenantsClaimService = new NoopTenantsClaimService();
         var loggerFactory = new LoggerFactory();
+        var lifetimeResolver = new TokenLifetimeResolver();
+        var opaquePolicy = new OpaqueTokenPolicy(options);
+        var roleBuilder = new RoleClaimBuilder();
         
-        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, options);
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
             options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
             options, settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<RefreshTokenExchanger>());
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
-            db, jwtSvc, options, settingsSvc, scopeResolver, 
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver,
             loggerFactory.CreateLogger<ClientCredentialsTokenFactory>());
 
         return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
@@ -80,10 +85,10 @@ public sealed class TokenRoleEmissionTests
         var scopeResolver = new MockScopeResolver();
         var tenantsClaimService = new NoopTenantsClaimService();
         var loggerFactory = new LoggerFactory();
-        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, options);
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
         
         var factory = new ClientCredentialsTokenFactory(
-            db, jwtSvc.Object, options, settingsSvc, scopeResolver, 
+            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver(),
             loggerFactory.CreateLogger<ClientCredentialsTokenFactory>());
 
         var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory);

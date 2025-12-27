@@ -196,10 +196,7 @@ public class IndexModel(
 
     private static string HashForLog(string value)
     {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
-        var hash = sha.ComputeHash(bytes);
-        return Convert.ToHexString(hash)[..8]; // First 8 chars of SHA256
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(value)[..8]; // First 8 chars of SHA256
     }
 
     private static string GenerateTemporaryPassword()

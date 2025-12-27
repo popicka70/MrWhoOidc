@@ -45,9 +45,7 @@ public sealed class LoggerAuditSink(ILogger<LoggerAuditSink> logger, Microsoft.E
         try
         {
             var input = string.IsNullOrEmpty(_pepper) ? value : ($"{_pepper}:{value}");
-            using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToHexString(hash).ToLowerInvariant();
+            return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input);
         }
         catch
         {
@@ -111,9 +109,7 @@ public sealed class ApplicationInsightsAuditSink(
         try
         {
             var input = string.IsNullOrEmpty(_pepper) ? value : ($"{_pepper}:{value}");
-            using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
-            return Convert.ToHexString(hash).ToLowerInvariant();
+            return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input);
         }
         catch
         {
@@ -139,3 +135,4 @@ public sealed class CompositeAuditSink(IEnumerable<IAuditSink> sinks) : IAuditSi
         return first?.HashValue(value);
     }
 }
+

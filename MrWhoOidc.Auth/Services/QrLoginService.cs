@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -55,7 +56,7 @@ public sealed class QrLoginService : IQrLoginService
             .TrimEnd('=');
 
         // Compute hash for database lookup
-        var hash = ComputeHash(sessionToken);
+        var hash = CryptoHelper.ComputeSha256Hex(sessionToken);
 
         var session = new QrLoginSession
         {
@@ -177,12 +178,5 @@ public sealed class QrLoginService : IQrLoginService
         await _db.SaveChangesAsync();
 
         return expiredSessions.Count;
-    }
-
-    private static string ComputeHash(string input)
-    {
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

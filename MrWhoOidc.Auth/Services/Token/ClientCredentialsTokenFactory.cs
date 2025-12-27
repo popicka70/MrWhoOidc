@@ -24,6 +24,7 @@ public sealed class ClientCredentialsTokenFactory(
     IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
+    ITokenLifetimeResolver lifetimeResolver,
     ILogger<ClientCredentialsTokenFactory> logger) : IClientCredentialsTokenFactory
 {
     public async Task<(bool ok, object? payload, string? error, int status)> CreateTokenAsync(ClientCredentialsRequest request, CancellationToken ct = default)
@@ -35,7 +36,6 @@ public sealed class ClientCredentialsTokenFactory(
         }
 
         var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
-        var defaultAccessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
         if (client is null)
@@ -104,9 +104,7 @@ public sealed class ClientCredentialsTokenFactory(
             claims.Add(new("realm", realmName));
         }
 
-        var lifetime = (client.M2MAccessTokenLifetimeSeconds.HasValue && client.M2MAccessTokenLifetimeSeconds.Value > 0)
-            ? TimeSpan.FromSeconds(client.M2MAccessTokenLifetimeSeconds.Value)
-            : defaultAccessTokenLifetime;
+        var lifetime = lifetimeResolver.ResolveAccessTokenLifetime(client, settings);
 
         var expiry = DateTimeOffset.UtcNow.Add(lifetime);
         var accessToken = await jwt.CreateJwtAsync(request.Issuer, request.Audience, claims, expiry, tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);

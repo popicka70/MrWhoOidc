@@ -30,15 +30,14 @@ public sealed class RefreshTokenExchanger(
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
     IAccessTokenClaimBuilder claimBuilder,
+    ITokenLifetimeResolver lifetimeResolver,
+    IOpaqueTokenPolicy opaquePolicy,
     ILogger<RefreshTokenExchanger> logger) : IRefreshTokenExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAsync(RefreshTokenExchangeRequest request, CancellationToken ct = default)
     {
-        var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
-        var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
-
         var hash = CryptoHelper.ComputeSha256Base64(request.RefreshToken);
         var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct).ConfigureAwait(false);
         
@@ -75,9 +74,7 @@ public sealed class RefreshTokenExchanger(
             tenantsClaimJson = await tenantsClaimService.BuildTenantsClaimJsonAsync(tokenEntity.UserId, ct).ConfigureAwait(false);
         }
 
-        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
-            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
-             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+        var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
         string? realmName = null;
@@ -102,6 +99,9 @@ public sealed class RefreshTokenExchanger(
                 roleNames = await realmRoleNamesQuery.Union(clientRoleNamesQuery).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
             }
         }
+
+        var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
+        var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings);
 
         string accessToken;
         if (opaqueEnabled)

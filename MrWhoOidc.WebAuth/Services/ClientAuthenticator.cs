@@ -33,6 +33,7 @@ public interface IClientAuthenticator
 
 public class ClientAuthenticator(
     IClientAuthenticationService authService,
+    IMtlsThumbprintResolver mtlsResolver,
     ILogger<ClientAuthenticator> logger) : IClientAuthenticator
 {
     public async Task<ClientAuthenticationResult> AuthenticateAsync(HttpContext http, ClientAuthenticationContext context)
@@ -77,9 +78,8 @@ public class ClientAuthenticator(
         }
 
         // 2. Get mTLS thumbprint if available
-        string? mtlsThumbprint = null;
         var cert = await http.Connection.GetClientCertificateAsync();
-        mtlsThumbprint = cert?.Thumbprint;
+        string? mtlsThumbprint = mtlsResolver.ResolveThumbprint(cert);
 
         // 3. Delegate to Auth Service
         var input = new ClientCredentialInput(

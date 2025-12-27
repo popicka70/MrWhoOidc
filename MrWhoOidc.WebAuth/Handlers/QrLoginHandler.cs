@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Utils;
 using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -193,7 +194,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
             _audit.Emit("qr.session.created", new
             {
                 client_id = clientId,
-                session_token_hash = ComputeHash(sessionToken),
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
                 ip = http.Connection.RemoteIpAddress?.ToString(),
                 expiry = opts.SessionLifetimeSeconds
             });
@@ -214,19 +215,19 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
     public async Task<IResult> GetStatusAsync(HttpContext http, string sessionToken)
     {
-        _logger.LogDebug("QR status check for session {SessionTokenHash}", ComputeHash(sessionToken));
+        _logger.LogDebug("QR status check for session {SessionTokenHash}", CryptoHelper.ComputeSha256Hex(sessionToken));
 
         var session = await _qrService.GetSessionAsync(sessionToken);
 
         if (session is null)
         {
-            _logger.LogWarning("QR status check: session not found for token hash {Hash}", ComputeHash(sessionToken));
+            _logger.LogWarning("QR status check: session not found for token hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
             return Results.Json(new { status = "not_found" }, statusCode: 404);
         }
 
         if (session.ExpiresAt < DateTimeOffset.UtcNow)
         {
-            _logger.LogDebug("QR session expired: {SessionTokenHash}", ComputeHash(sessionToken));
+            _logger.LogDebug("QR session expired: {SessionTokenHash}", CryptoHelper.ComputeSha256Hex(sessionToken));
             await _qrService.ExpireSessionAsync(sessionToken);
             return Results.Json(new { status = "expired" });
         }
@@ -281,12 +282,12 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.BadRequest(new { success = false, message = "Missing session token" });
         }
 
-        _logger.LogDebug("QR confirm for session hash {Hash}", ComputeHash(sessionToken));
+        _logger.LogDebug("QR confirm for session hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
 
         if (session is null)
         {
-            _logger.LogWarning("QR confirm rejected: session not found for hash {Hash}", ComputeHash(sessionToken));
+            _logger.LogWarning("QR confirm rejected: session not found for hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
             return Results.NotFound(new { success = false, message = "Session not found" });
         }
 
@@ -344,7 +345,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 {
                     user_id = userId,
                     client_id = session.ClientId,
-                    session_token_hash = ComputeHash(sessionToken),
+                    session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
                     platform_login = true,
                     success = true
                 });
@@ -400,7 +401,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
             {
                 user_id = userId,
                 client_id = session.ClientId,
-                session_token_hash = ComputeHash(sessionToken),
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
                 success = true
             });
 
@@ -430,7 +431,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.BadRequest(new { success = false, message = "Missing session token" });
         }
 
-        _logger.LogDebug("Looking up QR session to cancel, hash {Hash}", ComputeHash(sessionToken));
+        _logger.LogDebug("Looking up QR session to cancel, hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
         if (session is not null)
         {
@@ -439,7 +440,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             _audit.Emit("qr.cancel", new
             {
-                session_token_hash = ComputeHash(sessionToken),
+                session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
                 source = "desktop"
             });
         }
@@ -464,12 +465,12 @@ public sealed class QrLoginHandler : IQrLoginHandler
             return Results.BadRequest("Missing session parameter");
         }
 
-        _logger.LogDebug("🔍 [QR Mobile Landing] Looking up QR session with hash {Hash}", ComputeHash(sessionToken));
+        _logger.LogDebug("🔍 [QR Mobile Landing] Looking up QR session with hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
         var session = await _qrService.GetSessionAsync(sessionToken);
 
         if (session is null)
         {
-            _logger.LogWarning("❌ [QR Mobile Landing] Session not found for hash {Hash}", ComputeHash(sessionToken));
+            _logger.LogWarning("❌ [QR Mobile Landing] Session not found for hash {Hash}", CryptoHelper.ComputeSha256Hex(sessionToken));
             return Results.NotFound("QR session not found");
         }
 
@@ -499,7 +500,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         _audit.Emit("qr.session.scanned", new
         {
-            session_token_hash = ComputeHash(sessionToken),
+            session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken),
             mobile_ip = mobileIp,
             mobile_user_agent = mobileUserAgent
         });
@@ -530,7 +531,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
     /// </summary>
     public async Task<IResult> CompleteAsync(HttpContext http, string sessionToken)
     {
-        _logger.LogInformation("QR complete called for session {SessionHash}", ComputeHash(sessionToken));
+        _logger.LogInformation("QR complete called for session {SessionHash}", CryptoHelper.ComputeSha256Hex(sessionToken));
 
         var session = await _qrService.GetSessionAsync(sessionToken);
         if (session is null)
@@ -586,7 +587,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
         {
             user_id = user.Id,
             username = user.Username,
-            session_token_hash = ComputeHash(sessionToken)
+            session_token_hash = CryptoHelper.ComputeSha256Hex(sessionToken)
         });
 
         // Redirect to the original return URL
@@ -641,12 +642,5 @@ public sealed class QrLoginHandler : IQrLoginHandler
             .TrimEnd('=');
 
         return (verifier, challenge);
-    }
-
-    private static string ComputeHash(string input)
-    {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(input);
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

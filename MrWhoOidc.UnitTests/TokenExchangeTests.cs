@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Services.Token;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Options;
@@ -37,7 +38,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api", "api2");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -87,7 +88,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -128,7 +129,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -170,7 +171,7 @@ public sealed class TokenExchangeTests
         var opts = Options("api"); // Only "api" is allowed
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), null);
 
         var userId = Guid.NewGuid();
         var tokenValue = "opaque-token-123";
@@ -205,5 +206,6 @@ public sealed class TokenExchangeTests
         Assert.AreEqual("invalid_grant", error);
     }
 }
+
 
 

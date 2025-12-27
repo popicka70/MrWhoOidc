@@ -49,8 +49,7 @@ public sealed class ClientCredentialsTokenFactoryTests
         var scopeResolver = new MockScopeResolver();
         var logger = new Mock<ILogger<ClientCredentialsTokenFactory>>();
 
-        var factory = new ClientCredentialsTokenFactory(
-            db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, logger.Object);
+        var factory = new ClientCredentialsTokenFactory(db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, new TokenLifetimeResolver(), logger.Object);
 
         var request = new ClientCredentialsRequest("c1", "api", new[] { "openid" }, "https://issuer");
         var (ok, payload, error, status) = await factory.CreateTokenAsync(request, CancellationToken.None);
@@ -61,3 +60,5 @@ public sealed class ClientCredentialsTokenFactoryTests
         Assert.AreEqual("fake-jwt", (string)anon.access_token);
     }
 }
+
+

@@ -137,6 +137,10 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IClientCredentialsTokenFactory, ClientCredentialsTokenFactory>();
         services.AddScoped<IDeviceCodeTokenFactory, DeviceCodeTokenFactory>();
         services.AddScoped<IAccessTokenClaimBuilder, AccessTokenClaimBuilder>();
+        services.AddSingleton<ITokenLifetimeResolver, TokenLifetimeResolver>();
+        services.AddSingleton<IRoleClaimBuilder, RoleClaimBuilder>();
+        services.AddSingleton<IOpaqueTokenPolicy, OpaqueTokenPolicy>();
+        services.AddSingleton<IMtlsThumbprintResolver, MtlsThumbprintResolver>();
         services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();

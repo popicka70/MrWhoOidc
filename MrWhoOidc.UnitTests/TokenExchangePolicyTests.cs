@@ -1,3 +1,4 @@
+using MrWhoOidc.Auth.Services.Token;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Extensions.Options;
@@ -42,7 +43,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
@@ -82,8 +83,7 @@ public sealed class TokenExchangePolicyTests
         // Seed an opaque subject token with DelegationDepth = 1 (already used once)
         var userId = Guid.NewGuid();
         var raw = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var hash = Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw)));
+        var hash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(raw);
         db.Tokens.Add(new Token
         {
             Type = "access",
@@ -102,7 +102,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var result = await svc.ExchangeTokenAsync(raw, null, null, null, Array.Empty<string>(), "caller-app", "https://issuer", null);
         Assert.IsFalse(result.ok);
@@ -133,7 +133,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api-a", "api-b");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var subject = await jwt.CreateJwtAsync("https://issuer", "api-a", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
@@ -165,7 +165,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api-a", "api-b");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         // Subject from api-a (not allowed as source)
@@ -197,7 +197,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         var subject = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read") }, DateTimeOffset.UtcNow.AddMinutes(10)).ConfigureAwait(false);
@@ -228,7 +228,7 @@ public sealed class TokenExchangePolicyTests
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
-        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OboPolicyService(db, opts));
+        var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, new OpaqueTokenPolicy(opts), new OboPolicyService(db, opts));
 
         var userId = Guid.NewGuid();
         // Subject with 10 minutes remaining, requested read scope allowed by default
@@ -244,6 +244,7 @@ public sealed class TokenExchangePolicyTests
         Assert.IsTrue(exp <= 180 && exp > 0);
     }
 }
+
 
 
 

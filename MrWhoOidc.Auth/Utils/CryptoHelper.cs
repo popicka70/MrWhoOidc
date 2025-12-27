@@ -30,6 +30,16 @@ public static class CryptoHelper
     }
 
     /// <summary>
+    /// Compute SHA-256 hash and return as Base64Url string.
+    /// Used for JWK thumbprints and other OIDC/OAuth2 URL-safe hashes.
+    /// </summary>
+    public static string ComputeSha256Base64Url(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(bytes);
+    }
+
+    /// <summary>
     /// Compute SHA-256 hash and return as lowercase hex string.
     /// Used for ETags, correlation IDs, and other hex-encoded hashes.
     /// </summary>

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.Auth.Services.Token;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -35,6 +36,7 @@ public class TokenExchangeService(
     ITokenValidator validator,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
+    IOpaqueTokenPolicy opaquePolicy,
     IOboPolicyService? oboPolicy = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
@@ -270,9 +272,7 @@ public class TokenExchangeService(
         }
 
         // Issue token: JWT or opaque per config
-        var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
-            (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
-             authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+        var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
         var jtiNew = Guid.NewGuid().ToString("N");
         string accessToken;

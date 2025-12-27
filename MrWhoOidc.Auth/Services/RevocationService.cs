@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -23,7 +24,7 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
 {
     public async Task RevokeAsync(string token, string? tokenTypeHint, string clientId, string? ipAddress = null, CancellationToken ct = default)
     {
-        var hash = Hash(token);
+        var hash = CryptoHelper.ComputeSha256Base64(token);
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
         // Support both refresh and access (opaque) tokens. 
@@ -74,11 +75,5 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
             foreach (var t in tokens) t.RevokedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
-    }
-
-    static string Hash(string value)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value)));
     }
 }

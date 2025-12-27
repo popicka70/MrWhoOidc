@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -23,13 +24,13 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         };
         
         // c_hash per JARM
-        var cHash = TokenHashing.ComputeLeftHalfBase64Url(code);
+        var cHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(code);
         claims.Add(new(OidcConstants.Claims.CHash, cHash));
         
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -56,7 +57,7 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = TokenHashing.ComputeLeftHalfBase64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         

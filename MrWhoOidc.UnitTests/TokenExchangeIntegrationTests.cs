@@ -325,9 +325,7 @@ public sealed class TokenExchangeIntegrationTests
         };
         if (!string.IsNullOrEmpty(accessToken))
         {
-            using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(Encoding.ASCII.GetBytes(accessToken));
-            var ath = Base64UrlEncoder.Encode(hash);
+            var ath = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64Url(accessToken);
             claims.Add(new("ath", ath));
         }
 

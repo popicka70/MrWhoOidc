@@ -22,7 +22,8 @@ public sealed class AccessTokenClaimBuilderTests
     public async Task BuildClaimsAsync_Includes_Basic_Claims()
     {
         var scopeResolver = new MockScopeResolver();
-        var builder = new AccessTokenClaimBuilder(scopeResolver, Options());
+        var roleBuilder = new Mock<IRoleClaimBuilder>();
+        var builder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder.Object, Options());
 
         var request = new AccessTokenClaimRequest(
             UserId: Guid.NewGuid(),

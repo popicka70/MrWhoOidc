@@ -70,7 +70,7 @@ public sealed class TokenHandlerTests
         var domainLogger = NullLogger<MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService>.Instance;
         var authOptions = Options.Create(new AuthOptions());
         var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
-        var authenticator = new ClientAuthenticator(domainService, authLogger);
+        var authenticator = new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
 
         return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }

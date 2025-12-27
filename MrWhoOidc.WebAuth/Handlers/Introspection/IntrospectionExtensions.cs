@@ -13,8 +13,7 @@ internal static class IntrospectionExtensions
     /// </summary>
     public static string ComputeTokenHash(this string token)
     {
-        using var sha = SHA256.Create();
-        return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(token)));
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(token);
     }
 
     /// <summary>
@@ -42,3 +41,4 @@ internal static class IntrospectionExtensions
         return new[] { new KeyValuePair<string, object?>("client", clientBucket) };
     }
 }
+

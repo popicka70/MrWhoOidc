@@ -496,9 +496,6 @@ public class IndexModel(AuthDbContext db, IPublicJwksCache jwksCache) : PageMode
             var y = jwk.TryGetProperty("y", out var yEl) ? yEl.GetString() ?? string.Empty : string.Empty;
             json = "{" + "\"crv\":\"" + crv + "\",\"kty\":\"EC\",\"x\":\"" + x + "\",\"y\":\"" + y + "\"}";
         }
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        var bytes = Encoding.UTF8.GetBytes(json);
-        var hash = sha.ComputeHash(bytes);
-        return MrWhoOidc.Auth.Crypto.Base64Url.Encode(hash);
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64Url(json);
     }
 }

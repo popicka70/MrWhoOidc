@@ -208,10 +208,6 @@ public class MrWhoAuthorizationManagerTests
 
     private static string ComputeLeftHash(string value)
     {
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.ASCII.GetBytes(value));
-        var left = new byte[hash.Length / 2];
-        Array.Copy(hash, 0, left, 0, left.Length);
-        return Base64UrlTextEncoder.Encode(left);
+        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeLeftHalfSha256Base64Url(value);
     }
 }

@@ -31,6 +31,8 @@ public sealed class AuthorizationCodeExchanger(
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
     IAccessTokenClaimBuilder claimBuilder,
+    ITokenLifetimeResolver lifetimeResolver,
+    IOpaqueTokenPolicy opaquePolicy,
     ILogger<AuthorizationCodeExchanger> logger) : IAuthorizationCodeExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
@@ -80,9 +82,7 @@ public sealed class AuthorizationCodeExchanger(
                     audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
                 }
 
-                var opaqueEnabled = authOptions.Value.OpaqueAccessTokens?.Enabled == true &&
-                    (authOptions.Value.OpaqueAccessTokens.Audiences is null || authOptions.Value.OpaqueAccessTokens.Audiences.Length == 0 ||
-                     authOptions.Value.OpaqueAccessTokens.Audiences.Contains(audience, StringComparer.Ordinal));
+                var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
                 var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
                 var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
@@ -147,8 +147,8 @@ public sealed class AuthorizationCodeExchanger(
                 }
 
                 var settings = await settingsService.GetCurrentTenantSettingsAsync().ConfigureAwait(false);
-                var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
-                var idTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.IdTokenLifetimeSeconds ?? 3600);
+                var accessTokenLifetime = lifetimeResolver.ResolveAccessTokenLifetime(client!, settings);
+                var idTokenLifetime = lifetimeResolver.ResolveIdentityTokenLifetime(client!, settings);
 
                 string accessToken;
                 if (opaqueEnabled)
