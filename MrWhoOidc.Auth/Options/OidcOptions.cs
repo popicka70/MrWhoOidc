@@ -1,4 +1,4 @@
-namespace MrWhoOidc.WebAuth.Handlers;
+namespace MrWhoOidc.Auth.Options;
 
 public sealed class OidcOptions
 {

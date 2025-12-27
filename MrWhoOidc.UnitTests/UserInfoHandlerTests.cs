@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Handlers;
 
@@ -38,7 +39,7 @@ public sealed class UserInfoHandlerTests
     {
         var options = new OidcOptions { Issuer = "https://test.example.com" };
         var authOptions = Options.Create(new AuthOptions { ApiAudiences = ["api", "test_client"] });
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<UserInfoHandler>();
 
         validator ??= new StubTokenValidator(true, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim("sub", Guid.NewGuid().ToString()), new Claim("aud", "api"), new Claim("scope", "openid") }, "test")));
@@ -101,13 +102,13 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public void UserInfo_Missing_Authorization_Returns_401()
+    public async Task UserInfo_Missing_Authorization_Returns_401()
     {
         using var db = CreateDb();
         var handler = CreateHandler(db);
         var context = CreateHttpContext();
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
         // The handler should return a result without throwing
@@ -116,26 +117,26 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
-    public void UserInfo_Invalid_Authorization_Header_Returns_401()
+    public async Task UserInfo_Invalid_Authorization_Header_Returns_401()
     {
         using var db = CreateDb();
         var handler = CreateHandler(db);
         var context = CreateHttpContext("Basic xyz");
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
     }
 
     [TestMethod]
-    public void UserInfo_Invalid_Token_Returns_401()
+    public async Task UserInfo_Invalid_Token_Returns_401()
     {
         using var db = CreateDb();
         var validator = new StubTokenValidator(false, null);
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer invalid_token");
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
     }
@@ -168,7 +169,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
         var (status, _) = await ExecuteAsync(result, context);
@@ -190,7 +191,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator);
 
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
         Assert.AreEqual(401, status);
@@ -212,7 +213,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator);
 
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
         Assert.AreEqual(401, status);
@@ -235,7 +236,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator);
 
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
         var (status, body) = await ExecuteAsync(result, context);
 
         Assert.AreEqual(401, status);
@@ -269,7 +270,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator);
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
         // Handler executed successfully with sub claim present
@@ -307,7 +308,7 @@ public sealed class UserInfoHandlerTests
         var handler = CreateHandler(db, validator: validator, dpopValidator: dpopValidator);
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
         // Handler should return error result for invalid DPoP proof
@@ -325,9 +326,9 @@ public sealed class UserInfoHandlerTests
             _principal = principal;
         }
 
-        public (bool ok, ClaimsPrincipal? principal, string? error) Validate(string token, string issuer)
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
         {
-            return (_valid, _principal, _valid ? null : "invalid_token");
+            return Task.FromResult((_valid, _principal, _valid ? null : "invalid_token"));
         }
     }
 
@@ -392,7 +393,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer expired_token");
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -412,7 +413,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer revoked_token");
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -454,7 +455,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -496,7 +497,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -535,7 +536,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -574,7 +575,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -613,7 +614,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -677,7 +678,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -716,7 +717,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -751,7 +752,7 @@ public sealed class UserInfoHandlerTests
         var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
 
         // Act
-        var result = handler.Handle(context);
+        var result = await handler.HandleAsync(context);
 
         // Assert
         Assert.IsNotNull(result);
@@ -760,3 +761,4 @@ public sealed class UserInfoHandlerTests
         // but real implementation records via System.Diagnostics.Metrics
     }
 }
+

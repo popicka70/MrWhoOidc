@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using Microsoft.Extensions.Options;
 using System.Text;
@@ -32,7 +33,7 @@ public sealed class AuthorizeHandler(
     IAuthorizeService authorize,
     IAuthorizationCodeService codes,
     IConsentService consents,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     IAuthorizationCodeMetadataStore meta,
     IAuthorizeRequestResolver requestResolver,
     IPushedAuthorizationRequestStore parStore,

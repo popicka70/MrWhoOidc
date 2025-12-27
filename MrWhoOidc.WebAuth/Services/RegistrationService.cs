@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using System.ComponentModel.DataAnnotations;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.WebAuth.Observability;

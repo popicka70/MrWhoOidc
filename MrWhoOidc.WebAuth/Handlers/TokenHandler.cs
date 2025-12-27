@@ -17,6 +17,7 @@ using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
+using MrWhoOidc.Auth.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 

@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth;
 using Microsoft.IdentityModel.Tokens;
@@ -78,8 +79,8 @@ public sealed class ExternalOidcIntegrationTests
         // Inject a deferred IHttpClientFactory that returns the TestServer client once the app is built.
         Func<HttpClient>? deferred = null;
         services.AddSingleton<IHttpClientFactory>(sp => new DeferredHttpClientFactory(() => deferred!()));
-        services.AddSingleton<OidcMetrics>();
-        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+        services.AddSingleton<OidcEndpointMetrics>();
+        services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcEndpointMetrics>());
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 

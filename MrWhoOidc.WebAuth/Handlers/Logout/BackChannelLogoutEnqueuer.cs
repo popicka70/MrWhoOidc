@@ -16,7 +16,7 @@ public sealed class BackChannelLogoutEnqueuer(
     LogoutTokenBuilder tokenBuilder,
     ILogger<BackChannelLogoutEnqueuer> logger,
     IAuditSink audit,
-    OidcMetrics metrics,
+    OidcEndpointMetrics metrics,
     IOptionsMonitor<BackchannelFeatureOptions> featureOpts,
     IConfiguration config)
 {

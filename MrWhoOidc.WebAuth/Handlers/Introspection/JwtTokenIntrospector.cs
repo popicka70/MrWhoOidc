@@ -17,7 +17,7 @@ public sealed class JwtTokenIntrospector(
     public async Task<(Dictionary<string, object?>? Response, IResult? ErrorResult)> IntrospectAsync(
         IntrospectionContext context)
     {
-        var (isValid, principal, _) = tokenValidator.Validate(context.Request.Token, context.Issuer);
+        var (isValid, principal, _) = await tokenValidator.ValidateAsync(context.Request.Token, context.Issuer).ConfigureAwait(false);
 
         if (!isValid || principal is null)
         {

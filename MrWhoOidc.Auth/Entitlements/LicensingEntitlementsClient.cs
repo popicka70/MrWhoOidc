@@ -41,7 +41,7 @@ public sealed class LicensingEntitlementsClient(
             return new EffectiveEntitlementsResponse { Entitlements = new Dictionary<string, Entitlement>(StringComparer.OrdinalIgnoreCase) };
         }
 
-        var serviceToken = CreateServiceToken(issuer, opt.Audience);
+        var serviceToken = await CreateServiceTokenAsync(issuer, opt.Audience).ConfigureAwait(false);
 
         using var msg = new HttpRequestMessage(HttpMethod.Post, "/api/entitlements/effective")
         {
@@ -87,7 +87,7 @@ public sealed class LicensingEntitlementsClient(
 
         try
         {
-            var serviceToken = CreateServiceToken(issuer, opt.Audience, "licensing.signed-tokens");
+            var serviceToken = await CreateServiceTokenAsync(issuer, opt.Audience, "licensing.signed-tokens").ConfigureAwait(false);
 
             using var msg = new HttpRequestMessage(HttpMethod.Post, "/api/licenses/signed-token")
             {
@@ -146,7 +146,7 @@ public sealed class LicensingEntitlementsClient(
         }
     }
 
-    private string CreateServiceToken(string issuer, string audience, string scope = "licensing.entitlements")
+    private async Task<string> CreateServiceTokenAsync(string issuer, string audience, string scope = "licensing.entitlements")
     {
         var claims = new List<System.Security.Claims.Claim>
         {
@@ -155,6 +155,6 @@ public sealed class LicensingEntitlementsClient(
             new("scope", scope)
         };
 
-        return jwt.CreateJwt(issuer, audience, claims, DateTimeOffset.UtcNow.AddMinutes(1), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+        return await jwt.CreateJwtAsync(issuer, audience, claims, DateTimeOffset.UtcNow.AddMinutes(1), tokenType: SecurityConstants.JwtTokenTypes.AtJwt).ConfigureAwait(false);
     }
 }

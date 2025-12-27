@@ -249,7 +249,7 @@ public class MfaIntegrationTests
         await db.SaveChangesAsync();
 
         var userAccountService = new UserAccountService(db);
-        var metrics = new OidcMetrics();
+        var metrics = new GlobalAuthMetrics();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<GlobalAuthenticationService>.Instance;
         var authService = new GlobalAuthenticationService(
             userAccountService, 
@@ -383,14 +383,14 @@ public class MfaIntegrationTests
     {
         private readonly IUserAccountService _userAccountService;
         private readonly IPasswordHasher _passwordHasher;
-        private readonly OidcMetrics _metrics;
+        private readonly GlobalAuthMetrics _metrics;
         private const int MaxFailedAttempts = 5;
         private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
 
         public GlobalAuthenticationService(
             IUserAccountService userAccountService,
             IPasswordHasher passwordHasher,
-            OidcMetrics metrics,
+            GlobalAuthMetrics metrics,
             Microsoft.Extensions.Logging.ILogger logger)
         {
             _userAccountService = userAccountService;

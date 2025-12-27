@@ -54,8 +54,8 @@ public static class ExternalOidcTestCoreServiceCollectionExtensions
         }
         else
         {
-            services.AddSingleton<OidcMetrics>();
-            services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+            services.AddSingleton<OidcEndpointMetrics>();
+            services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcEndpointMetrics>());
         }
 
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();

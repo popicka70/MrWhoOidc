@@ -23,13 +23,13 @@
 
 **Purpose**: Create directory structure and ensure baseline is stable
 
-- [ ] T001 Run `dotnet build` to confirm baseline compiles with zero warnings
-- [ ] T002 Run `dotnet test` to confirm all existing tests pass
-- [ ] T003 [P] Create directory `MrWhoOidc.Auth/Options/` for moved configuration classes
-- [ ] T004 [P] Create directory `MrWhoOidc.Auth/Services/Authentication/` for client auth abstraction
-- [ ] T005 [P] Create directory `MrWhoOidc.Auth/Services/Token/` for decomposed token services
-- [ ] T006 [P] Create directory `MrWhoOidc.Auth/Services/Authorization/` for decomposed authorize services
-- [ ] T007 [P] Create directory `MrWhoOidc.Auth/Services/KeyManagement/` for cached key provider
+- [x] T001 Run `dotnet build` to confirm baseline compiles with zero warnings
+- [x] T002 Run `dotnet test` to confirm all existing tests pass
+- [x] T003 [P] Create directory `MrWhoOidc.Auth/Options/` for moved configuration classes
+- [x] T004 [P] Create directory `MrWhoOidc.Auth/Services/Authentication/` for client auth abstraction
+- [x] T005 [P] Create directory `MrWhoOidc.Auth/Services/Token/` for decomposed token services
+- [x] T006 [P] Create directory `MrWhoOidc.Auth/Services/Authorization/` for decomposed authorize services
+- [x] T007 [P] Create directory `MrWhoOidc.Auth/Services/KeyManagement/` for cached key provider
 
 **Checkpoint**: Directory structure ready, baseline green
 
@@ -41,16 +41,16 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 Create `MrWhoOidc.Auth/Options/OidcOptions.cs` with same content as WebAuth version
-- [ ] T009 Update all Auth usages to reference `MrWhoOidc.Auth.Options.OidcOptions`
-- [ ] T010 Update all WebAuth usages to reference `MrWhoOidc.Auth.Options.OidcOptions`
-- [ ] T011 Delete `MrWhoOidc.WebAuth/Handlers/OidcOptions.cs` after migration complete
-- [ ] T012 Rename `MrWhoOidc.Auth/Telemetry/OidcMetrics.cs` to `GlobalAuthMetrics.cs`
-- [ ] T013 Update all Auth references from `OidcMetrics` to `GlobalAuthMetrics`
-- [ ] T014 Rename `MrWhoOidc.WebAuth/Telemetry/OidcMetrics.cs` to `OidcEndpointMetrics.cs`
-- [ ] T015 Update all WebAuth references from `OidcMetrics` to `OidcEndpointMetrics`
-- [ ] T016 Run `dotnet build` to confirm all renames compile
-- [ ] T017 Run `dotnet test` to confirm no regressions from foundational changes
+- [x] T008 Create `MrWhoOidc.Auth/Options/OidcOptions.cs` with same content as WebAuth version
+- [x] T009 Update all Auth usages to reference `MrWhoOidc.Auth.Options.OidcOptions`
+- [x] T010 Update all WebAuth usages to reference `MrWhoOidc.Auth.Options.OidcOptions`
+- [x] T011 Delete `MrWhoOidc.WebAuth/Handlers/OidcOptions.cs` after migration complete
+- [x] T012 Rename `MrWhoOidc.Auth/Telemetry/OidcMetrics.cs` to `GlobalAuthMetrics.cs`
+- [x] T013 Update all Auth references from `OidcMetrics` to `GlobalAuthMetrics`
+- [x] T014 Rename `MrWhoOidc.WebAuth/Telemetry/OidcMetrics.cs` to `OidcEndpointMetrics.cs`
+- [x] T015 Update all WebAuth references from `OidcMetrics` to `OidcEndpointMetrics`
+- [x] T016 Run `dotnet build` to confirm all renames compile
+- [x] T017 Run `dotnet test` to confirm no regressions from foundational changes
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 

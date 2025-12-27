@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth;
@@ -68,8 +69,8 @@ public sealed class TokenExchangeIntegrationTests
                     });
 
                     // WebAuth endpoint dependencies
-                    services.AddSingleton<OidcMetrics>();
-                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+                    services.AddSingleton<OidcEndpointMetrics>();
+                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcEndpointMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
@@ -147,7 +148,7 @@ public sealed class TokenExchangeIntegrationTests
         return new TestHostBundle(host, clientId, clientSecret, userId);
     }
 
-    private static string CreateSubjectJwt(IHost host, Guid userId, string audience, string scopes, TimeSpan? lifetime = null, string? cnfJkt = null)
+    private static async Task<string> CreateSubjectJwtAsync(IHost host, Guid userId, string audience, string scopes, TimeSpan? lifetime = null, string? cnfJkt = null)
     {
         using var scope = host.Services.CreateScope();
         var jwt = scope.ServiceProvider.GetRequiredService<IJwtService>();
@@ -158,7 +159,7 @@ public sealed class TokenExchangeIntegrationTests
             var cnfJson = JsonSerializer.Serialize(new { jkt = cnfJkt });
             claimList.Add(new Claim("cnf", cnfJson));
         }
-        return jwt.CreateJwt(Issuer, audience, claimList, exp);
+        return await jwt.CreateJwtAsync(Issuer, audience, claimList, exp);
     }
 
     private static AuthenticationHeaderValue Basic(string id, string secret)
@@ -200,7 +201,7 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
 
         var form = new Dictionary<string, string>
         {
@@ -231,7 +232,7 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -253,7 +254,7 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read").ConfigureAwait(false);
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -276,7 +277,7 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
 
         // Create DPoP header with ath bound to subject token
         var key = GenerateDpopKey(); // Generate DPoP key
@@ -498,7 +499,7 @@ public sealed class TokenExchangeIntegrationTests
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
         var subjectKey = GenerateDpopKey();
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: subjectKey.Jkt);
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: subjectKey.Jkt).ConfigureAwait(false);
         client.DefaultRequestHeaders.Remove("DPoP");
         // Send a proof with a different key/jkt
         var otherKey = GenerateDpopKey();
@@ -527,7 +528,7 @@ public sealed class TokenExchangeIntegrationTests
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
         var keyMatch = GenerateDpopKey();
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write", cnfJkt: keyMatch.Jkt);
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write", cnfJkt: keyMatch.Jkt).ConfigureAwait(false);
         client.DefaultRequestHeaders.Remove("DPoP");
         var dpopMatch = CreateDpopProof(keyMatch, "POST", Issuer + "/token", subject);
         client.DefaultRequestHeaders.Add("DPoP", dpopMatch);
@@ -558,7 +559,7 @@ public sealed class TokenExchangeIntegrationTests
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
         // Subject without cnf
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
         client.DefaultRequestHeaders.Remove("DPoP");
         var anyKey = GenerateDpopKey();
         var dpopAny = CreateDpopProof(anyKey, "POST", Issuer + "/token", subject);
@@ -587,7 +588,7 @@ public sealed class TokenExchangeIntegrationTests
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
         var keyAllow = GenerateDpopKey();
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyAllow.Jkt);
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyAllow.Jkt).ConfigureAwait(false);
         client.DefaultRequestHeaders.Remove("DPoP");
         var dpopAllow = CreateDpopProof(keyAllow, "POST", Issuer + "/token", subject);
         client.DefaultRequestHeaders.Add("DPoP", dpopAllow);
@@ -617,7 +618,7 @@ public sealed class TokenExchangeIntegrationTests
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
         var keyDeny = GenerateDpopKey();
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyDeny.Jkt);
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read", cnfJkt: keyDeny.Jkt).ConfigureAwait(false);
         client.DefaultRequestHeaders.Remove("DPoP");
         var dpopDeny = CreateDpopProof(keyDeny, "POST", Issuer + "/token", subject);
         client.DefaultRequestHeaders.Add("DPoP", dpopDeny);
@@ -645,7 +646,7 @@ public sealed class TokenExchangeIntegrationTests
         var client = bundle.Host.GetTestClient();
         client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
 
-        var subject = CreateSubjectJwt(bundle.Host, bundle.UserId, audience: "api-x", scopes: "read write");
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-x", scopes: "read write").ConfigureAwait(false);
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -789,3 +790,4 @@ public sealed class TokenExchangeIntegrationTests
         return Convert.ToBase64String(bytes);
     }
 }
+

@@ -18,7 +18,7 @@ public class IndexModel(
     IPasswordHasher passwordHasher,
     IUserAccountService userAccountService,
     IUserAccountProvisioner accountProvisioner,
-    OidcMetrics metrics,
+    GlobalAuthMetrics metrics,
     ILogger<IndexModel> logger,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {

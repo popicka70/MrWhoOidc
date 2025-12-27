@@ -68,7 +68,7 @@ public interface IOidcMetrics
     Counter<long> CorrelationCacheStale { get; }
 }
 
-public sealed class OidcMetrics : IOidcMetrics
+public sealed class OidcEndpointMetrics : IOidcMetrics
 {
     public const string MeterName = "MrWhoOidc.WebAuth";
     private static readonly Meter Meter = new(MeterName);
@@ -136,7 +136,7 @@ public sealed class OidcMetrics : IOidcMetrics
     private long _backlog; // updated by dispatcher
     public void SetBclBacklog(long value) => _backlog = value;
 
-    public OidcMetrics()
+    public OidcEndpointMetrics()
     {
         BclPendingBacklog = Meter.CreateObservableGauge<long>("oidc.bcl.backlog", () => _backlog);
     }

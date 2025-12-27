@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using System.Text;
@@ -34,7 +35,7 @@ public sealed class ParHandlerTests
         IOptions<OidcOptions>? oidcOptions = null)
     {
         var logger = NullLogger<ParHandler>.Instance;
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
 
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();

@@ -33,20 +33,20 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api", "api2");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
         var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read write") },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, _, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -69,8 +69,8 @@ public sealed class TokenExchangeTests
         Assert.IsFalse(string.IsNullOrEmpty(token));
 
         // Validate token and check for 'act' and audience
-        var tv = new TokenValidator(keyStore);
-        var (vok, principal, _) = tv.Validate(token!, "https://issuer");
+        var tv = TestTokenValidatorFactory.Create(keyStore);
+        var (vok, principal, _) = await tv.ValidateAsync(token!, "https://issuer");
         Assert.IsTrue(vok);
         Assert.IsNotNull(principal);
         var act = principal!.FindFirst("act")?.Value;
@@ -83,21 +83,21 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
         var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         var cnfJson = System.Text.Json.JsonSerializer.Serialize(new { jkt = "abc" });
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("cnf", cnfJson) },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, error, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -124,9 +124,9 @@ public sealed class TokenExchangeTests
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
+        var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
-        var validator = new TokenValidator(keyStore);
+        var validator = TestTokenValidatorFactory.Create(keyStore);
         var scopeResolver = new MockScopeResolver();
         var svc = new TokenExchangeService(db, jwt, opts, validator, settingsService, scopeResolver, null);
 
@@ -134,12 +134,12 @@ public sealed class TokenExchangeTests
         var now = DateTimeOffset.UtcNow;
         // Subject JWT contains an 'act' claim -> must be rejected as single-hop only
         var actJson = System.Text.Json.JsonSerializer.Serialize(new { sub = "some-actor" });
-        var subject = jwt.CreateJwt(
+        var subject = await jwt.CreateJwtAsync(
             issuer: "https://issuer",
             audience: "api",
             claims: new[] { new Claim("sub", userId.ToString()), new Claim("scope", "read"), new Claim("act", actJson) },
             expires: now.AddMinutes(10)
-        );
+        ).ConfigureAwait(false);
 
         var (ok, payload, error, status) = await svc.ExchangeTokenAsync(
             subjectToken: subject,
@@ -160,3 +160,5 @@ public sealed class TokenExchangeTests
         Assert.AreEqual("single_hop_only", doc.RootElement.GetProperty("error_description").GetString());
     }
 }
+
+

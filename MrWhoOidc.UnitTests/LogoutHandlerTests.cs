@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Background;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Handlers.Logout;
@@ -166,19 +167,19 @@ public class LogoutHandlerTests
 
         var issuer = "https://issuer.example.com";
         var audit = new NoopAuditSink();
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var config = new ConfigurationBuilder().Build();
         var endSession = CreateEndSessionHandler(db, audit, metrics, config);
 
         // Create a valid, signed JWT whose aud == client_id (simulating a real id_token_hint)
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var jwt = new JwtService(keyStore);
-        var idTokenHint = jwt.CreateJwt(
+        var jwt = TestJwtServiceFactory.Create(keyStore);
+        var idTokenHint = await jwt.CreateJwtAsync(
             issuer,
             clientId,
             new[] { new Claim("sub", "user1") },
             DateTimeOffset.UtcNow.AddMinutes(5),
-            tokenType: "JWT");
+            tokenType: "JWT").ConfigureAwait(false);
 
         var http = CreateHttpContextWithIssuer(issuer,
             ("post_logout_redirect_uri", postLogout),
@@ -258,7 +259,7 @@ public class LogoutHandlerTests
     {
         var db = TestDataSeeder.CreateInMemoryDb();
         var audit = new NoopAuditSink();
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var config = new ConfigurationBuilder().Build();
 
         return new LogoutHandler(
@@ -274,7 +275,7 @@ public class LogoutHandlerTests
     {
         var db = TestDataSeeder.CreateInMemoryDb();
         var audit = new NoopAuditSink();
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var config = new ConfigurationBuilder().Build();
 
         return new LogoutHandler(
@@ -286,7 +287,7 @@ public class LogoutHandlerTests
         );
     }
 
-    private static FederatedLogoutEntryHandler CreateFederatedLogoutEntryHandler(AuthDbContext db, IAuditSink audit, OidcMetrics metrics)
+    private static FederatedLogoutEntryHandler CreateFederatedLogoutEntryHandler(AuthDbContext db, IAuditSink audit, OidcEndpointMetrics metrics)
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var upstreamLogoutSvc = new UpstreamLogoutService(
@@ -309,7 +310,7 @@ public class LogoutHandlerTests
         );
     }
 
-    private static FederatedCallbackHandler CreateFederatedCallbackHandler(AuthDbContext db, IAuditSink audit, OidcMetrics metrics)
+    private static FederatedCallbackHandler CreateFederatedCallbackHandler(AuthDbContext db, IAuditSink audit, OidcEndpointMetrics metrics)
     {
         var cache = new MemoryCache(new MemoryCacheOptions());
         var upstreamLogoutSvc = new UpstreamLogoutService(
@@ -325,11 +326,11 @@ public class LogoutHandlerTests
         return new FederatedCallbackHandler(upstreamLogoutSvc, audit, metrics);
     }
 
-    private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcMetrics metrics, IConfiguration config)
+    private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcEndpointMetrics metrics, IConfiguration config)
     {
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenValidator = new TokenValidator(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var backChannel = new BackChannelLogoutEnqueuer(
             db,
@@ -422,3 +423,5 @@ public class LogoutHandlerTests
 
     #endregion
 }
+
+

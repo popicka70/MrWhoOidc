@@ -1,4 +1,5 @@
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.AspNetCore.Http.Extensions;
 

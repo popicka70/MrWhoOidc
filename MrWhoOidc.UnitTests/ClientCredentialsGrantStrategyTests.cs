@@ -17,6 +17,7 @@ using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
@@ -58,8 +59,8 @@ public sealed class ClientCredentialsGrantStrategyTests
                         return new MrWhoOidc.UnitTests.Testing.TestTenantAccessor(db, DefaultTenantId, logger);
                     });
 
-                    services.AddSingleton<OidcMetrics>();
-                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcMetrics>());
+                    services.AddSingleton<OidcEndpointMetrics>();
+                    services.AddSingleton<IOidcMetrics>(sp => sp.GetRequiredService<OidcEndpointMetrics>());
                     services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
                     services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();

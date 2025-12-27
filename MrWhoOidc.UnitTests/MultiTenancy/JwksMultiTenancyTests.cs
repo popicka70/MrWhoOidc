@@ -67,7 +67,7 @@ public class JwksMultiTenancyTests
     }
 
     [TestCleanup]
-    public void Cleanup()
+    public async Task Cleanup()
     {
         _db?.Dispose();
         _serviceProvider?.Dispose();
@@ -461,20 +461,20 @@ public class JwksMultiTenancyTests
         var keyB = await keyStoreB.GetActiveSigningKeyAsync();
 
         // Create JwtService and TokenValidator
-        var jwtServiceA = new JwtService(keyStoreA);
-        var tokenValidatorB = new TokenValidator(keyStoreB);
+        var jwtServiceA = TestJwtServiceFactory.Create(keyStoreA);
+        var tokenValidatorB = TestTokenValidatorFactory.Create(keyStoreB);
 
         // Act - Create token in Tenant A with Tenant A's kid
         var claims = new[] { new System.Security.Claims.Claim("sub", "user123") };
-        var tokenFromA = jwtServiceA.CreateJwt(
+        var tokenFromA = await jwtServiceA.CreateJwtAsync(
             issuer: "https://auth.example.com/t/tenant-a",
             audience: "test-client",
             claims: claims,
             expires: DateTimeOffset.UtcNow.AddHours(1)
-        );
+        ).ConfigureAwait(false);
 
         // Try to validate token from A using Tenant B's keystore
-        var (valid, principal, error) = tokenValidatorB.Validate(
+        var (valid, principal, error) = await tokenValidatorB.ValidateAsync(
             tokenFromA,
             issuer: "https://auth.example.com/t/tenant-a" // Even with correct issuer
         );
@@ -580,3 +580,6 @@ public class JwksMultiTenancyTests
 
     #endregion
 }
+
+
+

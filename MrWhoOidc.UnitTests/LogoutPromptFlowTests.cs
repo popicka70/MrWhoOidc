@@ -61,7 +61,7 @@ public class LogoutPromptFlowTests
         var svc = new UpstreamLogoutService(cache, Options.Create(new FederatedLogoutOptions { Enabled = true, StateTtlSeconds = 60 }), dp, new NullLogger<UpstreamLogoutService>(), db, new TestHttpClientFactory(new HttpClient(new TestHttpHandler())), new NoopAuditSink());
 
         // Create refactored handler dependencies
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var audit = new NoopAuditSink();
         var localLogout = new LocalLogoutHandler();
         var federatedEntry = new FederatedLogoutEntryHandler(
@@ -74,7 +74,7 @@ public class LogoutPromptFlowTests
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
         var frontChannel = new FrontChannelLogoutNotifier(db);
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var tokenValidator = new TokenValidator(keyStore);
+        var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenBuilder = new LogoutTokenBuilder(keyStore);
         var config = new ConfigurationBuilder().Build();
         var backChannel = new BackChannelLogoutEnqueuer(db, tokenBuilder, new NullLogger<BackChannelLogoutEnqueuer>(), audit, metrics, new TestOptionsMonitor<MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions>(new MrWhoOidc.WebAuth.Background.BackchannelFeatureOptions { Enabled = false }), config);
@@ -96,3 +96,5 @@ public class LogoutPromptFlowTests
         StringAssert.Contains(url!, "style=dark");
     }
 }
+
+

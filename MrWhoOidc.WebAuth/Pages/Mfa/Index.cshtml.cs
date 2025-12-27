@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Services;
 using System.ComponentModel.DataAnnotations;
 using QRCoder;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.Auth.Options;
 
 namespace MrWhoOidc.WebAuth.Pages.Mfa;
 

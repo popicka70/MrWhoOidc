@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;

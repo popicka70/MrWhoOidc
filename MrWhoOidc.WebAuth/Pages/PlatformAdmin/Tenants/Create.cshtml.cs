@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Security.Admin;
 using Microsoft.Extensions.Options;

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers; // for OidcOptions
 using MrWhoOidc.WebAuth.Extensions; // for GetIssuer
 using MrWhoOidc.Auth.Services;

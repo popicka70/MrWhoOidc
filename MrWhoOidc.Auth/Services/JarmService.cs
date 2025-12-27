@@ -37,10 +37,10 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         
         if (enc is not null)
         {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
         
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
+        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     public async Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state)
@@ -64,10 +64,10 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         
         if (enc is not null)
         {
-            return jwt.CreateJwtEncrypted(issuer, clientId, claims, exp, enc);
+            return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
         
-        return jwt.CreateJwt(issuer, clientId, claims, exp);
+        return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
     private async Task<EncryptingCredentials?> TryGetEncryptingCredentialsAsync(string? clientId)

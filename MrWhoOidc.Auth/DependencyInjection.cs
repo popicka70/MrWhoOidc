@@ -10,6 +10,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -87,6 +88,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ITenantIconService, TenantIconService>();
 
         services.AddScoped<IKeyStore, KeyStore>();
+        services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
         services.AddScoped<IUserAccountService, UserAccountService>();
@@ -101,7 +103,7 @@ public static class AuthServiceCollectionExtensions
         
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
-        services.AddSingleton<OidcMetrics>();
+        services.AddSingleton<GlobalAuthMetrics>();
         
         // Global authentication service
         services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();

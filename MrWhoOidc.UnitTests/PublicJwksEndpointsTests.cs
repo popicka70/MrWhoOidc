@@ -35,7 +35,7 @@ public class PublicJwksEndpointsTests
         services.AddHybridCache(); // Required for PublicJwksCache
         services.AddLogging();
         // Register metrics early and explicitly so PublicJwksCache constructor always resolves it deterministically
-        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcMetrics>();
+        services.AddSingleton<MrWhoOidc.WebAuth.Observability.IOidcMetrics, MrWhoOidc.WebAuth.Observability.OidcEndpointMetrics>();
         services.AddScoped<IPublicJwksCache, PublicJwksCache>();
         services.Configure<AuthOptions>(o =>
         {

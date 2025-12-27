@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;

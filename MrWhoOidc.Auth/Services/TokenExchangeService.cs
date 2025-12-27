@@ -75,7 +75,7 @@ public class TokenExchangeService(
         if (isJwt)
         {
             // Validate as local JWT access token
-            var (ok, principal, error) = validator.Validate(subjectToken, issuer);
+            var (ok, principal, error) = await validator.ValidateAsync(subjectToken, issuer, ct).ConfigureAwait(false);
             if (!ok || principal is null)
             {
                 return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -302,7 +302,7 @@ public class TokenExchangeService(
                 claims.Add(new("cnf", cnf));
             }
             var nowUtc = DateTimeOffset.UtcNow;
-            accessToken = jwt.CreateJwt(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+            accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, nowUtc.Add(lifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
         }
 
         var payload = new

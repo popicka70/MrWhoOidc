@@ -20,13 +20,13 @@ public sealed class JwtServiceTests
     }
 
     [TestMethod]
-    public void CreateJwt_GeneratesToken_AndPersistsKeyOnFirstUse()
+    public async Task CreateJwt_GeneratesToken_AndPersistsKeyOnFirstUse()
     {
         using var db = CreateDb();
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var svc = new JwtService(keyStore);
+        var svc = TestJwtServiceFactory.Create(keyStore);
 
-        var token = svc.CreateJwt("https://issuer", "api", new[] { new Claim("sub", "123") }, DateTimeOffset.UtcNow.AddMinutes(5));
+        var token = await svc.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", "123") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
         Assert.IsFalse(string.IsNullOrEmpty(token));
         Assert.AreEqual(1, db.SigningKeys.Count());
     }

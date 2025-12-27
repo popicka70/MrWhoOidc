@@ -22,7 +22,7 @@ public interface ITokenService
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }
 
-internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider, ITenantsClaimService tenantsClaimService) : ITokenService
+internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTokenService refreshTokens, IRevocationService revocations, IOptions<AuthOptions> authOptions, IAuthorizationCodeMetadataStore meta, ITenantSettingsService settingsService, IScopeResolver scopeResolver, IEntitlementsProvider entitlementsProvider, ITenantsClaimService tenantsClaimService) : ITokenService
 {
     private readonly ITenantSettingsService _settingsService = settingsService;
 
@@ -38,7 +38,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
                 if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
+                {
+                    if (entity is not null && entity.Consumed)
+                    {
+                        // RFC 6749 Section 4.1.2: If an authorization code is used more than once, 
+                        // the authorization server MUST deny the request and SHOULD revoke (when possible) 
+                        // all tokens previously issued based on that authorization code.
+                        await revocations.RevokeAllForUserAsync(entity.UserId, entity.ClientId, ct).ConfigureAwait(false);
+                    }
                     return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
+                }
 
                 if (!string.Equals(entity.RedirectUri, redirectUri, StringComparison.Ordinal))
                     return (false, new { error = OAuthConstants.ErrorCodes.InvalidGrant }, OAuthConstants.ErrorCodes.InvalidGrant, 400);
@@ -233,7 +242,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
                 }
             }
 
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+            accessToken = await jwt.CreateJwtAsync(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
         }
 
         // Compute at_hash per OIDC (left-most half of SHA-256 of access token)
@@ -301,15 +310,16 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
         }
 
-        var idToken = jwt.CreateJwt(
+        var idToken = await jwt.CreateJwtAsync(
             issuer,
             clientId,
             idClaims,
             DateTimeOffset.UtcNow.Add(idTokenLifetime),
             nonce: entity.Nonce,
             accessTokenHash: atHash,
-            authTime: authTime
-        );
+            authTime: authTime,
+            ct: ct
+        ).ConfigureAwait(false);
 
         var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, clientId, scopes, ipAddress, userAgent, ct).ConfigureAwait(false);
 
@@ -346,9 +356,17 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
         var accessTokenLifetime = TimeSpan.FromSeconds(settings.Tokens?.AccessTokenLifetimeSeconds ?? 3600);
 
         var hash = Hash(refreshToken);
-        var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh" && t.RevokedAt == null, ct).ConfigureAwait(false);
+        var tokenEntity = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash && t.Type == "refresh", ct).ConfigureAwait(false);
         if (tokenEntity is null || tokenEntity.ExpiresAt < DateTimeOffset.UtcNow || !string.Equals(tokenEntity.ClientId, clientId, StringComparison.Ordinal))
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+
+        if (tokenEntity.RevokedAt != null)
+        {
+            // RFC 6749 Section 6: If a refresh token is used more than once, 
+            // the authorization server SHOULD revoke all tokens in the chain.
+            await revocations.RevokeAllForUserAsync(tokenEntity.UserId, tokenEntity.ClientId, ct).ConfigureAwait(false);
+            return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
+        }
 
         var scopes = JsonSerializer.Deserialize<string[]>(tokenEntity.ScopesJson) ?? Array.Empty<string>();
         var audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
@@ -469,7 +487,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
             {
                 accessClaims.Add(new("realm", realmName));
             }
-            accessToken = jwt.CreateJwt(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+            accessToken = await jwt.CreateJwtAsync(issuer, audience, accessClaims, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
         }
 
         // Rotation: create new refresh token and revoke the old one
@@ -586,7 +604,7 @@ internal sealed class TokenService(AuthDbContext db, IJwtService jwt, IRefreshTo
 
         // Issue JWT access token (opaque not supported for M2M yet)
         var expiry = DateTimeOffset.UtcNow.Add(lifetime);
-        var accessToken = jwt.CreateJwt(issuer, audience, claims, expiry, tokenType: SecurityConstants.JwtTokenTypes.AtJwt);
+        var accessToken = await jwt.CreateJwtAsync(issuer, audience, claims, expiry, tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
 
         var payload = new
         {

@@ -1,3 +1,4 @@
+using Moq;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -34,8 +35,9 @@ public sealed class TokenRoleEmissionTests
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
-            new JwtService(keyStore),
+            TestJwtServiceFactory.Create(keyStore),
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
+            new Mock<IRevocationService>().Object,
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
@@ -77,8 +79,9 @@ public sealed class TokenRoleEmissionTests
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
-            new JwtService(keyStore),
+            TestJwtServiceFactory.Create(keyStore),
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
+            new Mock<IRevocationService>().Object,
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
@@ -120,8 +123,9 @@ public sealed class TokenRoleEmissionTests
         var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
         var tokenSvc = new TokenService(
             db,
-            new JwtService(keyStore),
+            TestJwtServiceFactory.Create(keyStore),
             new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService),
+            new Mock<IRevocationService>().Object,
             Microsoft.Extensions.Options.Options.Create(new AuthOptions()),
             meta,
             settingsService,
@@ -142,3 +146,8 @@ public sealed class TokenRoleEmissionTests
         CollectionAssert.AreEquivalent(expectedRoles, accessRoles);
     }
 }
+
+
+
+
+

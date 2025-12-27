@@ -55,7 +55,7 @@ public sealed class AuthorizeHandlerTests
         IFeatureService? featureService = null,
         IJarmService? jarm = null)
     {
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
 
         authorize ??= new StubAuthorizeService(true);
@@ -1059,14 +1059,14 @@ public sealed class AuthorizeHandlerTests
             return "stub_refresh_token";
         }
 
-        public string CreateJwt(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
+        public Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
         {
-            return "stub_jwt";
+            return Task.FromResult("stub_jwt");
         }
 
-        public string CreateJwtEncrypted(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null)
+        public Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default)
         {
-            return "stub_jwt_encrypted";
+            return Task.FromResult("stub_jwt_encrypted");
         }
     }
 
@@ -1179,6 +1179,11 @@ public sealed class AuthorizeHandlerTests
         }
 
         public Task<IResult> ConfirmPageAsync(HttpContext http)
+        {
+            return Task.FromResult(Results.Ok() as IResult);
+        }
+
+        public Task<IResult> CompleteAsync(HttpContext http, string sessionToken)
         {
             return Task.FromResult(Results.Ok() as IResult);
         }

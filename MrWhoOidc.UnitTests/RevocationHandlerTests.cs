@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using System.Text;
@@ -19,7 +20,7 @@ public sealed class RevocationHandlerTests
         OidcOptions? options = null)
     {
         var logger = NullLogger<RevocationHandler>.Instance;
-        var metrics = new OidcMetrics();
+        var metrics = new OidcEndpointMetrics();
 
         revocations ??= new StubRevocationService();
         clients ??= new StubClientStore();
@@ -512,6 +513,11 @@ public sealed class RevocationHandlerTests
             LastTokenTypeHint = tokenTypeHint;
             LastClientId = clientId;
             LastIpAddress = ipAddress;
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeAllForUserAsync(Guid userId, string clientId, CancellationToken ct = default)
+        {
             return Task.CompletedTask;
         }
     }
