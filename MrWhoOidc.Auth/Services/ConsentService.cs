@@ -4,17 +4,29 @@ using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for managing user consent for OIDC scopes.
+/// </summary>
 public interface IConsentService
 {
     /// <summary>
     /// Checks if a user has already granted consent for the requested scopes for a specific client.
     /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The requested scopes.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if consent is already granted; otherwise, false.</returns>
     Task<bool> HasConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default);
 
     /// <summary>
     /// Grants consent for the requested scopes for a specific user and client.
     /// Uses a transaction and execution strategy to ensure consistency under high concurrency.
     /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The scopes to grant.</param>
+    /// <param name="ct">Cancellation token.</param>
     Task GrantConsentAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default);
 }
 

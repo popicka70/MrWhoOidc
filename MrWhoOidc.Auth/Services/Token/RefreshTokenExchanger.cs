@@ -26,13 +26,11 @@ public sealed class RefreshTokenExchanger(
     IRevocationService revocations,
     IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
-    IScopeResolver scopeResolver,
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
-    IOpaqueTokenPolicy opaquePolicy,
-    ILogger<RefreshTokenExchanger> logger) : IRefreshTokenExchanger
+    IOpaqueTokenPolicy opaquePolicy) : IRefreshTokenExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 

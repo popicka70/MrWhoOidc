@@ -24,8 +24,7 @@ public sealed class ClientCredentialsTokenFactory(
     IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
-    ITokenLifetimeResolver lifetimeResolver,
-    ILogger<ClientCredentialsTokenFactory> logger) : IClientCredentialsTokenFactory
+    ITokenLifetimeResolver lifetimeResolver) : IClientCredentialsTokenFactory
 {
     public async Task<(bool ok, object? payload, string? error, int status)> CreateTokenAsync(ClientCredentialsRequest request, CancellationToken ct = default)
     {

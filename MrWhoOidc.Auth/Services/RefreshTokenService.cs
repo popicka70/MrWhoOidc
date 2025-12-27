@@ -7,8 +7,21 @@ using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for creating and managing refresh tokens.
+/// </summary>
 public interface IRefreshTokenService
 {
+    /// <summary>
+    /// Creates a new refresh token for a user and client.
+    /// </summary>
+    /// <param name="userId">The user ID.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="scopes">The granted scopes.</param>
+    /// <param name="ipAddress">Optional IP address of the requester.</param>
+    /// <param name="userAgent">Optional user agent of the requester.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A tuple containing the raw token and its hash.</returns>
     Task<(string token, string hash)> CreateRefreshTokenAsync(
         Guid userId,
         string clientId,

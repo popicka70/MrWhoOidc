@@ -8,23 +8,71 @@ using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for managing QR-code based login sessions.
+/// </summary>
 public interface IQrLoginService
 {
+    /// <summary>
+    /// Creates a new QR login session.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="returnUrl">The return URL.</param>
+    /// <param name="codeChallenge">The PKCE code challenge.</param>
+    /// <param name="codeChallengeMethod">The PKCE code challenge method.</param>
+    /// <param name="state">The state parameter.</param>
+    /// <param name="nonce">The nonce parameter.</param>
+    /// <param name="scope">The requested scopes.</param>
+    /// <returns>A tuple containing the session token and the authentication URL.</returns>
     Task<(string sessionToken, string authUrl)> CreateSessionAsync(
         string clientId, string returnUrl, string codeChallenge,
         string codeChallengeMethod, string state, string? nonce, string scope);
 
+    /// <summary>
+    /// Retrieves a session by its token.
+    /// </summary>
+    /// <param name="sessionToken">The session token.</param>
+    /// <returns>The session if found; otherwise, null.</returns>
     Task<QrLoginSession?> GetSessionAsync(string sessionToken);
 
+    /// <summary>
+    /// Retrieves a session by its token hash.
+    /// </summary>
+    /// <param name="sessionTokenHash">The session token hash.</param>
+    /// <returns>The session if found; otherwise, null.</returns>
     Task<QrLoginSession?> GetSessionByHashAsync(string sessionTokenHash);
 
+    /// <summary>
+    /// Updates the status of a session.
+    /// </summary>
+    /// <param name="sessionToken">The session token.</param>
+    /// <param name="newStatus">The new status.</param>
+    /// <param name="userId">Optional user ID.</param>
+    /// <param name="authCode">Optional authorization code.</param>
+    /// <returns>True if the update was successful; otherwise, false.</returns>
     Task<bool> UpdateStatusAsync(string sessionToken, QrSessionStatus newStatus,
         Guid? userId = null, string? authCode = null);
 
+    /// <summary>
+    /// Marks a session as scanned by a mobile device.
+    /// </summary>
+    /// <param name="sessionToken">The session token.</param>
+    /// <param name="mobileIp">The IP address of the mobile device.</param>
+    /// <param name="mobileUserAgent">The user agent of the mobile device.</param>
+    /// <returns>True if the update was successful; otherwise, false.</returns>
     Task<bool> MarkScannedAsync(string sessionToken, string? mobileIp, string? mobileUserAgent);
 
+    /// <summary>
+    /// Expires a session immediately.
+    /// </summary>
+    /// <param name="sessionToken">The session token.</param>
     Task ExpireSessionAsync(string sessionToken);
 
+    /// <summary>
+    /// Cleans up expired sessions.
+    /// </summary>
+    /// <param name="olderThan">The cutoff time for expiration.</param>
+    /// <returns>The number of sessions removed.</returns>
     Task<int> CleanupExpiredSessionsAsync(DateTimeOffset olderThan);
 }
 

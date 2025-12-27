@@ -48,7 +48,7 @@ public sealed class RefreshTokenExchangerTests
         var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
         var logger = new Mock<ILogger<RefreshTokenExchanger>>();
 
-        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
 
         var request = new RefreshTokenExchangeRequest("bad", "c1", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -99,7 +99,7 @@ public sealed class RefreshTokenExchangerTests
             .ReturnsAsync(new List<System.Security.Claims.Claim>());
 
         var logger = new Mock<ILogger<RefreshTokenExchanger>>();
-        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
 
         var request = new RefreshTokenExchangeRequest("rt", "c1", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);

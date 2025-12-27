@@ -51,7 +51,7 @@ public class LogoutTokenServiceTests
     public async Task CreateLogoutTokenAsync_NoSigningKey_Throws()
     {
         _keyProviderMock.Setup(s => s.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync((RsaSecurityKey?)null);
+            .ReturnsAsync((RsaSecurityKey)null!);
 
         await Assert.ThrowsExactlyAsync<ArgumentNullException>(
             async () => await _service.CreateLogoutTokenAsync("https://issuer", "client1", "sub1", "sid1"));

@@ -1,12 +1,33 @@
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Store for metadata associated with an authorization code that is not persisted in the main database.
+/// </summary>
 public interface IAuthorizationCodeMetadataStore
 {
+    /// <summary>
+    /// Sets the authentication time for a code.
+    /// </summary>
     void SetAuthTime(string code, DateTimeOffset authTime);
+
+    /// <summary>
+    /// Tries to get the authentication time for a code.
+    /// </summary>
     bool TryGetAuthTime(string code, out DateTimeOffset authTime);
+
+    /// <summary>
+    /// Sets the resource (audience) for a code.
+    /// </summary>
     void SetResource(string code, string resource);
+
+    /// <summary>
+    /// Tries to get the resource for a code.
+    /// </summary>
     bool TryGetResource(string code, out string? resource);
-    // New: upstream context propagation
+
+    /// <summary>
+    /// Sets upstream identity provider context for a code.
+    /// </summary>
     void SetUpstream(string code, string? idp, string? acr, string? amr);
     bool TryGetUpstream(string code, out string? idp, out string? acr, out string? amr);
     // New: mapped claim propagation

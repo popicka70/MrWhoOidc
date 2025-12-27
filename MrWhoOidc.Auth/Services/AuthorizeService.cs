@@ -7,8 +7,17 @@ using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for validating OIDC authorization requests.
+/// </summary>
 public interface IAuthorizeService
 {
+    /// <summary>
+    /// Validates an authorization request.
+    /// </summary>
+    /// <param name="request">The raw authorization request parameters.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A validation result containing either the validated parameters or an error.</returns>
     Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
 }
 

@@ -101,7 +101,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         return Results.Redirect(finalUrl);
     }
 
-    private IResult JarmRedirect(string redirectUri, string responseMode, string jwt)
+    private IResult JarmRedirect(string redirectUri, string? responseMode, string jwt)
     {
         if (string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {

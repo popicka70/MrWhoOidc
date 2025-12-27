@@ -27,7 +27,6 @@ public sealed class AuthorizationCodeExchanger(
     IOptions<AuthOptions> authOptions,
     IAuthorizationCodeMetadataStore meta,
     ITenantSettingsService settingsService,
-    IScopeResolver scopeResolver,
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
     IAccessTokenClaimBuilder claimBuilder,

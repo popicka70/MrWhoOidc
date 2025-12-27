@@ -374,7 +374,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
             _logger.LogInformation("QR confirm: validation result - RedirectUri={RedirectUri}, Scopes={Scopes}, HasChallenge={HasChallenge}",
                 validationResult.RedirectUri,
-                string.Join(",", validationResult.Scopes),
+                string.Join(",", validationResult.Scopes ?? Array.Empty<string>()),
                 !string.IsNullOrEmpty(validationResult.CodeChallenge));
 
             // Generate authorization code

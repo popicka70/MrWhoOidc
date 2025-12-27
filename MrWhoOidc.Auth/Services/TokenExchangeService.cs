@@ -10,6 +10,9 @@ using MrWhoOidc.Auth.Services.Token;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for OAuth 2.0 Token Exchange (RFC 8693).
+/// </summary>
 public interface ITokenExchangeService
 {
     /// <summary>
@@ -17,6 +20,16 @@ public interface ITokenExchangeService
     /// Supports JWT and opaque access tokens as subject tokens.
     /// Includes audience validation, delegation depth enforcement, and DPoP bridging policy.
     /// </summary>
+    /// <param name="subjectToken">The token being exchanged.</param>
+    /// <param name="subjectTokenType">The type of the subject token.</param>
+    /// <param name="requestedTokenType">The type of token requested.</param>
+    /// <param name="requestedAudience">The requested audience.</param>
+    /// <param name="requestedScopes">The requested scopes.</param>
+    /// <param name="callerClientId">The client ID of the caller.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
         string subjectToken,
         string? subjectTokenType,

@@ -38,19 +38,17 @@ public sealed class MultiRealmRoleTests
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
-            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
-            lifetimeResolver, opaquePolicy,
-            loggerFactory.CreateLogger<RefreshTokenExchanger>());
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
-            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver,
-            loggerFactory.CreateLogger<ClientCredentialsTokenFactory>());
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
         return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
     }
@@ -96,8 +94,7 @@ public sealed class MultiRealmRoleTests
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
         
         var factory = new ClientCredentialsTokenFactory(
-            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver(),
-            loggerFactory.CreateLogger<ClientCredentialsTokenFactory>());
+            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver());
 
         var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory);
 

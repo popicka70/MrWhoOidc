@@ -22,6 +22,43 @@ This document provides a detailed assessment of the current architecture split b
 
 ---
 
+## Refactoring Status (December 2025)
+
+The refactoring plan outlined in this document has been **fully implemented** as part of the `015-auth-architecture-cleanup` feature.
+
+### Completed Phases
+
+1.  **Phase 1: Security Fixes**
+    *   Fixed DPoP JKT confirmation in `TokenService`.
+    *   Fixed `auth_time` fallback logic in `AuthorizeHandler`.
+    *   Implemented strict `response_mode` validation.
+2.  **Phase 2: Layer Violations**
+    *   Moved `AuthorizeValidationResult` and `AuthorizeRequest` to `MrWhoOidc.Auth`.
+    *   Moved `AuthorizeRequestResolver` to `MrWhoOidc.Auth`.
+    *   Moved `JarmService` to `MrWhoOidc.Auth`.
+    *   Moved `MtlsThumbprintResolver` to `MrWhoOidc.Auth`.
+3.  **Phase 3: God Class Decomposition (TokenService)**
+    *   Decomposed `TokenService` into `AuthorizationCodeExchanger`, `RefreshTokenExchanger`, and `ClientCredentialsTokenFactory`.
+    *   Extracted `AccessTokenClaimBuilder` and `TokenLifetimeResolver`.
+4.  **Phase 4: God Class Decomposition (AuthorizeHandler)**
+    *   Decomposed `AuthorizeHandler` into `AuthorizeService`, `AuthorizeResponseGenerator`, and `ProviderSelector`.
+    *   Extracted `AuthorizationCodeService` and `AuthorizationCodeMetadataStore`.
+5.  **Phase 5: Duplication Removal**
+    *   Consolidated token hash computation into `CryptoHelper`.
+    *   Unified metrics into `OidcMetrics` and `GlobalAuthMetrics`.
+    *   Consolidated role claim building into `RoleClaimBuilder`.
+6.  **Phase 6: Polish & Cross-Cutting Concerns**
+    *   Resolved all compiler warnings in core projects.
+    *   Added XML documentation to all public interfaces in `MrWhoOidc.Auth`.
+    *   Verified nullable reference type annotations.
+
+### Final State
+*   **Zero Warnings**: The solution builds with 0 warnings in `Auth` and `WebAuth`.
+*   **Tests**: All 772 tests pass (769 successful, 3 skipped).
+*   **Architecture**: Clean separation between protocol logic (`Auth`) and HTTP/UI surface (`WebAuth`). No layer violations remain.
+
+---
+
 ## Part 1: Architecture Assessment
 
 ### 1.1 Current Layer Responsibilities

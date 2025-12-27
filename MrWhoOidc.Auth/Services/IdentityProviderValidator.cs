@@ -6,8 +6,17 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for validating identity provider configurations.
+/// </summary>
 public interface IIdentityProviderValidator
 {
+    /// <summary>
+    /// Validates an identity provider configuration.
+    /// </summary>
+    /// <param name="provider">The identity provider to validate.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result indicating success or failure with an error message.</returns>
     Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default);
 }
 

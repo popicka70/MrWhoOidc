@@ -3,8 +3,16 @@ using System.Text;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for generating secure, URL-safe client IDs.
+/// </summary>
 public interface IClientIdGenerator
 {
+    /// <summary>
+    /// Generates a new client ID.
+    /// </summary>
+    /// <param name="length">The desired length of the ID.</param>
+    /// <returns>A secure random string.</returns>
     string Generate(int length = 24);
 }
 

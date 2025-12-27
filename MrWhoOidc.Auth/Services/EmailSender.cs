@@ -15,8 +15,16 @@ public sealed record EmailMessage
     public string? HtmlBody { get; init; }
 }
 
+/// <summary>
+/// Service for sending emails.
+/// </summary>
 public interface IEmailSender
 {
+    /// <summary>
+    /// Sends an email message.
+    /// </summary>
+    /// <param name="message">The message to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 }
 

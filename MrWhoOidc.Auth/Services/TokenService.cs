@@ -5,12 +5,26 @@ using MrWhoOidc.Auth.Services.Token;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Orchestrator service for token-related operations.
+/// </summary>
 public interface ITokenService
 {
     /// <summary>
     /// Exchanges an authorization code for an access token (and optionally a refresh token).
     /// Implements RFC 6749 Section 4.1.3 and includes protection against code reuse.
     /// </summary>
+    /// <param name="code">The authorization code.</param>
+    /// <param name="redirectUri">The redirect URI.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="codeVerifier">The PKCE code verifier.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ipAddress">Optional IP address of the requester.</param>
+    /// <param name="userAgent">Optional user agent of the requester.</param>
+    /// <param name="tenantId">Optional tenant ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
 
@@ -18,6 +32,15 @@ public interface ITokenService
     /// Exchanges a refresh token for a new access token (and optionally a new refresh token).
     /// Implements RFC 6749 Section 6 and includes protection against token reuse.
     /// </summary>
+    /// <param name="refreshToken">The refresh token.</param>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ipAddress">Optional IP address of the requester.</param>
+    /// <param name="userAgent">Optional user agent of the requester.</param>
+    /// <param name="tenantId">Optional tenant ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
         string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
 
@@ -25,6 +48,13 @@ public interface ITokenService
     /// Creates an access token for a client using the client_credentials grant.
     /// Implements RFC 6749 Section 4.4.
     /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="audience">The requested audience.</param>
+    /// <param name="requestedScopes">The requested scopes.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
 }

@@ -8,9 +8,40 @@ using System.Globalization;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for creating and signing JSON Web Tokens (JWT).
+/// </summary>
 public interface IJwtService
 {
+    /// <summary>
+    /// Creates a signed JWT.
+    /// </summary>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="audience">The audience.</param>
+    /// <param name="claims">The claims to include.</param>
+    /// <param name="expires">The expiration time.</param>
+    /// <param name="nonce">Optional nonce.</param>
+    /// <param name="accessTokenHash">Optional access token hash (at_hash).</param>
+    /// <param name="authTime">Optional authentication time (auth_time).</param>
+    /// <param name="tokenType">Optional token type (typ header).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A signed JWT string.</returns>
     Task<string> CreateJwtAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an encrypted (and signed) JWT.
+    /// </summary>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="audience">The audience.</param>
+    /// <param name="claims">The claims to include.</param>
+    /// <param name="expires">The expiration time.</param>
+    /// <param name="encryptingCredentials">The credentials used for encryption.</param>
+    /// <param name="nonce">Optional nonce.</param>
+    /// <param name="accessTokenHash">Optional access token hash (at_hash).</param>
+    /// <param name="authTime">Optional authentication time (auth_time).</param>
+    /// <param name="tokenType">Optional token type (typ header).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An encrypted JWT string.</returns>
     Task<string> CreateJwtEncryptedAsync(string issuer, string audience, IEnumerable<Claim> claims, DateTimeOffset expires, EncryptingCredentials encryptingCredentials, string? nonce = null, string? accessTokenHash = null, DateTimeOffset? authTime = null, string? tokenType = null, CancellationToken ct = default);
 }
 

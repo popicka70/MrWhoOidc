@@ -21,8 +21,20 @@ public record AuthorizeRequestResolution(
     string? ParId = null
 );
 
+/// <summary>
+/// Service for resolving authorization requests from various sources (query, PAR, JAR).
+/// </summary>
 public interface IAuthorizeRequestResolver
 {
+    /// <summary>
+    /// Resolves an authorization request.
+    /// </summary>
+    /// <param name="queryParams">The query parameters from the request.</param>
+    /// <param name="requestUriRaw">The request_uri parameter if present.</param>
+    /// <param name="roJwtFromQuery">The request parameter (JWT) if present.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The resolution result.</returns>
     Task<AuthorizeRequestResolution> ResolveAsync(
         IEnumerable<KeyValuePair<string, string>> queryParams,
         string? requestUriRaw,

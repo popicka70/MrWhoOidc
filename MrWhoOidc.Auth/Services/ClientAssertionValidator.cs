@@ -8,8 +8,19 @@ using System.Security.Claims;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for validating client assertions (private_key_jwt).
+/// </summary>
 public interface IClientAssertionValidator
 {
+    /// <summary>
+    /// Validates a client assertion for a specific client and endpoint.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="assertion">The JWT assertion.</param>
+    /// <param name="tokenEndpoint">The expected audience (token endpoint).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if the assertion is valid; otherwise, false.</returns>
     Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default);
 }
 

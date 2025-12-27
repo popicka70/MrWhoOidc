@@ -6,9 +6,31 @@ using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for generating JWT Secured Authorization Responses (JARM).
+/// </summary>
 public interface IJarmService
 {
+    /// <summary>
+    /// Creates a successful JARM response.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="code">The authorization code.</param>
+    /// <param name="responseMode">The response mode.</param>
+    /// <param name="state">The state parameter.</param>
+    /// <returns>A signed (and optionally encrypted) JWT response.</returns>
     Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state);
+
+    /// <summary>
+    /// Creates an error JARM response.
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="error">The error code.</param>
+    /// <param name="errorDescription">The error description.</param>
+    /// <param name="state">The state parameter.</param>
+    /// <returns>A signed (and optionally encrypted) JWT response.</returns>
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 

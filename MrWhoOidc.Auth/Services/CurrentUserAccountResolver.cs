@@ -6,8 +6,17 @@ using MrWhoOidc.Auth.Security;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for resolving the current user account from a claims principal.
+/// </summary>
 public interface ICurrentUserAccountResolver
 {
+    /// <summary>
+    /// Resolves the user account from the provided principal.
+    /// </summary>
+    /// <param name="principal">The claims principal.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The resolution result containing the user and account if found.</returns>
     Task<UserAccountResolution?> ResolveAsync(ClaimsPrincipal? principal, CancellationToken ct = default);
 }
 

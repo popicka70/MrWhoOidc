@@ -7,8 +7,18 @@ using MrWhoOidc.Auth.Services.Authorization;
 
 namespace MrWhoOidc.Auth.Services;
 
+/// <summary>
+/// Service for issuing OIDC authorization codes.
+/// </summary>
 public interface IAuthorizationCodeService
 {
+    /// <summary>
+    /// Issues an authorization code for a validated request and user.
+    /// </summary>
+    /// <param name="valid">The validated authorization request.</param>
+    /// <param name="userId">The ID of the authenticated user.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the issued code or an error.</returns>
     Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
 }
 
