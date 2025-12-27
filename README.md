@@ -5,7 +5,7 @@
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 9 with PostgreSQL and optional Redis caching.
+A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 10 with PostgreSQL and optional Redis caching.
 
 ## Quick Start with Docker
 

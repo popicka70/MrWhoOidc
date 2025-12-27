@@ -6,7 +6,7 @@ Purpose
 Core rules
 - Do not add or depend on OpenIddict or Microsoft identity platforms.
 - Keep non-visual OIDC logic in `MrWhoOidc.Auth`. Keep UI/pages and HTTP endpoints in `MrWhoOidc.WebAuth`.
-- Target .NET 9 for all code.
+- Target .NET 10 for all code.
 - Use PostgreSQL via Aspire. Do not hardcode connection strings. Use the Aspire-provided connection named `authdb`.
 
 EF Core migrations

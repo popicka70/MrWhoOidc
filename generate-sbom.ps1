@@ -68,7 +68,7 @@ foreach ($project in $projects) {
         }
         
         # Generate SBOM using the Microsoft SBOM tool
-        $buildOutputPath = Join-Path (Split-Path $projectPath) "bin\Release\net9.0"
+        $buildOutputPath = Join-Path (Split-Path $projectPath) "bin\Release\net10.0"
         
         dotnet sbom-tool generate `
             -b $buildOutputPath `

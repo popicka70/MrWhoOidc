@@ -81,7 +81,7 @@ foreach ($project in $allProjects) {
         if ($LASTEXITCODE -eq 0) {
             # Look for generated SBOM in obj folder
             $projectDir = Split-Path $projectPath
-            $sbomPath = Join-Path $projectDir "obj\Release\net9.0\*.spdx.json"
+            $sbomPath = Join-Path $projectDir "obj\Release\net10.0\*.spdx.json"
             
             $sbomFiles = Get-ChildItem -Path $sbomPath -ErrorAction SilentlyContinue
             

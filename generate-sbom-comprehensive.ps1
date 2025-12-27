@@ -91,7 +91,7 @@ foreach ($projectInfo in $projects) {
             ProjectName = $projectName
             ProjectType = $projectType
             ProjectPath = $project
-            TargetFramework = "net9.0"
+            TargetFramework = "net10.0"
             Timestamp = (Get-Date).ToString("o")
             NuGetPackages = @()
             ProjectReferences = @()
@@ -130,7 +130,7 @@ foreach ($projectInfo in $projects) {
         $depsList = @"
 Project: $projectName
 Type: $projectType
-Target Framework: net9.0
+Target Framework: net10.0
 Generated: $($report.Timestamp)
 
 NuGet Packages ($($report.NuGetPackages.Count)):
