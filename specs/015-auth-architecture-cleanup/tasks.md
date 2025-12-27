@@ -98,23 +98,23 @@
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Create test `ClientAuthenticationServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Authentication/`
-- [ ] T032 [P] [US2] Create test `RegistrationServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Users/`
+- [x] T031 [P] [US2] Create test `ClientAuthenticationServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Authentication/`
+- [x] T032 [P] [US2] Create test `RegistrationServiceTests.cs` in `MrWhoOidc.UnitTests/Services/Users/`
 
 ### Implementation for User Story 2
 
-- [ ] T033 [P] [US2] Create `IClientAuthenticationService.cs` interface in `MrWhoOidc.Auth/Services/Authentication/`
-- [ ] T034 [P] [US2] Create `ClientCredentialInput.cs` record in `MrWhoOidc.Auth/Services/Authentication/`
-- [ ] T035 [P] [US2] Create `ClientAuthResult.cs` record in `MrWhoOidc.Auth/Services/Authentication/`
-- [ ] T036 [US2] Create `ClientAuthenticationService.cs` implementation in `MrWhoOidc.Auth/Services/Authentication/`
-- [ ] T037 [US2] Register `IClientAuthenticationService` in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
-- [ ] T038 [US2] Refactor `ClientAuthenticator.cs` in WebAuth to extract HTTP params and delegate to Auth service
-- [ ] T039 [P] [US2] Create `IRegistrationService.cs` interface in `MrWhoOidc.Auth/Services/Users/`
-- [ ] T040 [US2] Create `RegistrationService.cs` implementation in `MrWhoOidc.Auth/Services/Users/`
-- [ ] T041 [US2] Refactor WebAuth `RegistrationService` to delegate domain logic to Auth's `IRegistrationService`
-- [ ] T042 [US2] Move logout token JWT creation from `LogoutHandler.cs` to Auth's token services
-- [ ] T043 [US2] Run all tests to verify US2 implementation
-- [ ] T044 [US2] Update XML documentation for all new US2 types
+- [x] T033 [P] [US2] Create `IClientAuthenticationService.cs` interface in `MrWhoOidc.Auth/Services/Authentication/`
+- [x] T034 [P] [US2] Create `ClientCredentialInput.cs` record in `MrWhoOidc.Auth/Services/Authentication/`
+- [x] T035 [P] [US2] Create `ClientAuthResult.cs` record in `MrWhoOidc.Auth/Services/Authentication/`
+- [x] T036 [US2] Create `ClientAuthenticationService.cs` implementation in `MrWhoOidc.Auth/Services/Authentication/`
+- [x] T037 [US2] Register `IClientAuthenticationService` in `MrWhoOidc.Auth/Extensions/ServiceCollectionExtensions.cs`
+- [x] T038 [US2] Refactor `ClientAuthenticator.cs` in WebAuth to extract HTTP params and delegate to Auth service
+- [x] T039 [P] [US2] Create `IRegistrationService.cs` interface in `MrWhoOidc.Auth/Services/Users/`
+- [x] T040 [US2] Create `RegistrationService.cs` implementation in `MrWhoOidc.Auth/Services/Users/`
+- [x] T041 [US2] Refactor WebAuth `RegistrationService` to delegate domain logic to Auth's `IRegistrationService`
+- [x] T042 [US2] Move logout token JWT creation from `LogoutHandler.cs` to Auth's token services
+- [x] T043 [US2] Run all tests to verify US2 implementation
+- [x] T044 [US2] Update XML documentation for all new US2 types
 
 **Checkpoint**: Layer violations fixed - Auth has no HTTP dependencies
 

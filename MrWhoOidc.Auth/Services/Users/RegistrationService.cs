@@ -11,6 +11,9 @@ using MrWhoOidc.Auth.Options;
 
 namespace MrWhoOidc.Auth.Services.Users;
 
+/// <summary>
+/// Implementation of IRegistrationService that handles domain-level registration logic.
+/// </summary>
 public class RegistrationService : IRegistrationService
 {
     private readonly AuthDbContext _db;
@@ -33,6 +36,9 @@ public class RegistrationService : IRegistrationService
         _accountProvisioner = accountProvisioner;
     }
 
+    /// <summary>
+    /// Creates a new registration request.
+    /// </summary>
     public async Task<RegistrationResult> CreateRegistrationAsync(RegistrationInput input, CancellationToken cancellationToken = default)
     {
         var normalized = EmailNormalizer.NormalizeForLookup(input.Email);
@@ -101,6 +107,9 @@ public class RegistrationService : IRegistrationService
         return new RegistrationResult(registration.Id, registration.State, CreatedTenantId: tenantId);
     }
 
+    /// <summary>
+    /// Approves an existing registration, creating the user and tenant if necessary.
+    /// </summary>
     public async Task<RegistrationResult> ApproveRegistrationAsync(Guid registrationId, Guid? approvingUserId = null, CancellationToken cancellationToken = default)
     {
         var registration = await _db.Set<Registration>().FirstOrDefaultAsync(r => r.Id == registrationId, cancellationToken);

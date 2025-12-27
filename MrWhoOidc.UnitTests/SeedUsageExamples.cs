@@ -1,10 +1,20 @@
-using Moq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
+using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Entitlements;
+using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
-using System.Text.Json;
-
+using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests;
@@ -12,17 +22,49 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class SeedUsageExamples
 {
-    [TestMethod]
-    public async Task SeedBasic_Allows_Complex_TokenService_Path()
+    private static ITokenService CreateService(AuthDbContext db, IJwtService jwtSvc, IOptions<AuthOptions> options, IAuthorizationCodeMetadataStore meta)
     {
-        using var db = TestDataSeeder.CreateInMemoryDb();
-        var settingsService = new MockTenantSettingsService();
+        var settingsSvc = new MockTenantSettingsService();
+        var scopeResolver = new MockScopeResolver();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var loggerFactory = new LoggerFactory();
+        
+        var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, options);
+        
+        var authCodeExchanger = new AuthorizationCodeExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            options, meta, settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
+
+        var refreshTokenExchanger = new RefreshTokenExchanger(
+            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, settingsSvc, scopeResolver, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            loggerFactory.CreateLogger<RefreshTokenExchanger>());
+
+        var clientCredentialsFactory = new ClientCredentialsTokenFactory(
+            db, jwtSvc, options, settingsSvc, scopeResolver, 
+            loggerFactory.CreateLogger<ClientCredentialsTokenFactory>());
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+    }
+
+    [TestMethod]
+    public async Task Seed_Usage_Example()
+    {
+        var opts = new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+        using var db = new AuthDbContext(opts);
         var seed = await TestDataSeeder.SeedBasicAsync(db);
 
-        // Issue an authorization code for alice -> spa with roles scope
+        // Issue a code
         var meta = new InMemoryAuthorizationCodeMetadataStore();
-        var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsService);
-        var authorizeResult = new MrWhoOidc.Auth.Protocols.AuthorizeValidationResult
+        var settingsSvc = new MockTenantSettingsService();
+        var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
+        
+        var authorizeResult = new AuthorizeValidationResult
         {
             IsValid = true,
             ClientId = seed.Clients["spa"].ClientId,
@@ -36,12 +78,10 @@ public sealed class SeedUsageExamples
 
         // Exchange it
         var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
-        var scopeResolver = new MockScopeResolver();
-        var tokenSvc = new TokenService(db, TestJwtServiceFactory.Create(ks), new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService), new Mock<IRevocationService>().Object, Microsoft.Extensions.Options.Options.Create(new AuthOptions()), meta, settingsService, scopeResolver, new NoopEntitlementsProvider(), new NoopTenantsClaimService());
+        var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
+        var tokenSvc = CreateService(db, TestJwtServiceFactory.Create(ks), options, meta);
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");
         Assert.IsTrue(ok2);
         Assert.AreEqual(200, status);
     }
 }
-
-

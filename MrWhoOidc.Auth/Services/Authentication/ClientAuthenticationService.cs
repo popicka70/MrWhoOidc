@@ -17,6 +17,12 @@ public sealed class ClientAuthenticationService(
     IOptions<AuthOptions> authOptions,
     ILogger<ClientAuthenticationService> logger) : IClientAuthenticationService
 {
+    /// <summary>
+    /// Authenticates a client based on the provided credentials.
+    /// </summary>
+    /// <param name="input">The client credentials input.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result indicating success or failure and the authenticated client.</returns>
     public async Task<ClientAuthResult> AuthenticateAsync(ClientCredentialInput input, CancellationToken ct = default)
     {
         // 1. Load Client

@@ -12,6 +12,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.Authentication;
+using MrWhoOidc.Auth.Services.Token;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -126,6 +127,11 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IJarmService, JarmService>();
         services.AddScoped<ITokenExchangeService, TokenExchangeService>();
         services.AddScoped<MrWhoOidc.Auth.Services.Token.ILogoutTokenService, MrWhoOidc.Auth.Services.Token.LogoutTokenService>();
+        services.AddScoped<IAuthorizationCodeExchanger, AuthorizationCodeExchanger>();
+        services.AddScoped<IRefreshTokenExchanger, RefreshTokenExchanger>();
+        services.AddScoped<IClientCredentialsTokenFactory, ClientCredentialsTokenFactory>();
+        services.AddScoped<IDeviceCodeTokenFactory, DeviceCodeTokenFactory>();
+        services.AddScoped<IAccessTokenClaimBuilder, AccessTokenClaimBuilder>();
         services.TryAddSingleton<IEntitlementsProvider, NoopEntitlementsProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IConsentService, ConsentService>();

@@ -4,8 +4,14 @@ using System.IdentityModel.Tokens.Jwt;
 
 namespace MrWhoOidc.Auth.Services.Token;
 
+/// <summary>
+/// Implementation of ILogoutTokenService that creates RFC 8225 compliant logout tokens.
+/// </summary>
 public sealed class LogoutTokenService(ICachedKeyProvider keyProvider) : ILogoutTokenService
 {
+    /// <summary>
+    /// Creates a logout_token JWT with the required claims per OIDC Back-Channel Logout spec.
+    /// </summary>
     public async Task<string?> CreateLogoutTokenAsync(string issuer, string audienceClientId, string? sub, string? sid, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(sub) && string.IsNullOrEmpty(sid))
