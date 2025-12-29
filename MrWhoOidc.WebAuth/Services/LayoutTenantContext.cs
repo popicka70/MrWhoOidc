@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 
@@ -63,13 +64,18 @@ public sealed class LayoutTenantContextService(
     ITenantAccessor tenantAccessor,
     ITenantSwitchingService tenantSwitchingService,
     IMultiTenancyOptions multiTenancyOptions,
-    AuthDbContext db) : ILayoutTenantContextService
+    AuthDbContext db,
+    ILogger<LayoutTenantContextService> logger) : ILayoutTenantContextService
 {
     public async Task<LayoutTenantContext> GetLayoutTenantContextAsync(HttpContext httpContext, CancellationToken ct = default)
     {
+        var requestPath = httpContext.Request.Path.Value;
+        logger.LogDebug("[LayoutTenantContext] Resolving tenant context for path: {Path}", requestPath);
+        
         // Single-tenant mode: return empty prefix
         if (!multiTenancyOptions.Enabled)
         {
+            logger.LogDebug("[LayoutTenantContext] Multi-tenancy disabled, using single-tenant mode");
             // Still try to get default tenant info for name display
             var defaultTenant = await db.Tenants.AsNoTracking()
                 .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug)
@@ -91,6 +97,7 @@ public sealed class LayoutTenantContextService(
         var middlewareTenant = tenantAccessor.CurrentTenant;
         if (middlewareTenant != null)
         {
+            logger.LogDebug("[LayoutTenantContext] Using middleware-resolved tenant: {TenantId}, Slug={Slug}", middlewareTenant.TenantId, middlewareTenant.Slug);
             return new LayoutTenantContext
             {
                 TenantId = middlewareTenant.TenantId,
@@ -101,9 +108,12 @@ public sealed class LayoutTenantContextService(
                 ResolutionSource = "url"
             };
         }
+        
+        logger.LogDebug("[LayoutTenantContext] No middleware tenant, checking session");
 
         // Priority 2: Check session for preferred tenant (set by tenant switcher)
         var sessionSlug = tenantSwitchingService.GetPreferredTenantSlug(httpContext);
+        logger.LogDebug("[LayoutTenantContext] Session slug: {SessionSlug}, Session available: {HasSession}", sessionSlug ?? "(null)", httpContext.Session != null);
         if (!string.IsNullOrEmpty(sessionSlug))
         {
             var sessionTenant = await db.Tenants.AsNoTracking()
@@ -113,6 +123,7 @@ public sealed class LayoutTenantContextService(
             
             if (sessionTenant != null)
             {
+                logger.LogDebug("[LayoutTenantContext] Using session-resolved tenant: {TenantId}, Slug={Slug}", sessionTenant.Id, sessionTenant.Slug);
                 return new LayoutTenantContext
                 {
                     TenantId = sessionTenant.Id,
@@ -123,9 +134,11 @@ public sealed class LayoutTenantContextService(
                     ResolutionSource = "session"
                 };
             }
+            logger.LogWarning("[LayoutTenantContext] Session slug '{SessionSlug}' not found in database", sessionSlug);
         }
 
         // Priority 3: Fall back to default tenant
+        logger.LogDebug("[LayoutTenantContext] Falling back to default tenant: {DefaultSlug}", multiTenancyOptions.DefaultTenantSlug);
         var fallbackTenant = await db.Tenants.AsNoTracking()
             .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
             .Select(t => new { t.Id, t.Slug, t.Name })
@@ -133,6 +146,7 @@ public sealed class LayoutTenantContextService(
         
         if (fallbackTenant != null)
         {
+            logger.LogDebug("[LayoutTenantContext] Using default tenant: {TenantId}, Slug={Slug}", fallbackTenant.Id, fallbackTenant.Slug);
             return new LayoutTenantContext
             {
                 TenantId = fallbackTenant.Id,
@@ -145,6 +159,7 @@ public sealed class LayoutTenantContextService(
         }
 
         // Last resort: no tenant found (configuration error)
+        logger.LogError("[LayoutTenantContext] No tenant found - configuration error. DefaultSlug={DefaultSlug}", multiTenancyOptions.DefaultTenantSlug);
         return new LayoutTenantContext
         {
             TenantId = Guid.Empty,

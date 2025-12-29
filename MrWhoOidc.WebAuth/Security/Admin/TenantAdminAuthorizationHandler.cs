@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
@@ -19,19 +20,22 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
     private readonly ITenantSwitchingService _tenantSwitchingService;
     private readonly IOptions<TenantAdminAuthOptions> _options;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ILogger<TenantAdminAuthorizationHandler> _logger;
 
     public TenantAdminAuthorizationHandler(
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
         ITenantSwitchingService tenantSwitchingService,
         IOptions<TenantAdminAuthOptions> options,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<TenantAdminAuthorizationHandler> logger)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
         _tenantSwitchingService = tenantSwitchingService;
         _options = options;
         _httpContextAccessor = httpContextAccessor;
+        _logger = logger;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -41,17 +45,28 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         // Get user ID from claims
         var sub = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId))
+        {
+            _logger.LogDebug("[TenantAdminAuth] No valid user ID claim found");
             return;
+        }
 
         var httpContext = _httpContextAccessor.HttpContext;
+        var requestPath = httpContext?.Request.Path.Value;
+        _logger.LogDebug("[TenantAdminAuth] Evaluating user {UserId} for path {Path}", userId, requestPath);
 
         // Helper: Get effective tenant ID (middleware-resolved or session fallback)
         Guid? GetEffectiveTenantId()
         {
             var tid = _tenantAccessor.CurrentTenant?.TenantId;
+            _logger.LogDebug("[TenantAdminAuth] Middleware tenant: {MiddlewareTenant}", tid?.ToString() ?? "(null)");
+            
             if (tid == null && httpContext != null)
             {
+                var sessionAvailable = httpContext.Session != null;
+                _logger.LogDebug("[TenantAdminAuth] Session available: {SessionAvailable}", sessionAvailable);
+                
                 tid = _tenantSwitchingService.GetPreferredTenantId(httpContext);
+                _logger.LogDebug("[TenantAdminAuth] Session tenant: {SessionTenant}", tid?.ToString() ?? "(null)");
             }
             return tid;
         }
@@ -64,10 +79,12 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
             if (!string.IsNullOrEmpty(impersonatedTenantIdStr) && Guid.TryParse(impersonatedTenantIdStr, out var impersonatedTenantId))
             {
                 var currentTenantId = GetEffectiveTenantId();
+                _logger.LogDebug("[TenantAdminAuth] Impersonation check - Impersonating: {Impersonating}, Current: {Current}", impersonatedTenantId, currentTenantId);
 
                 if (impersonatedTenantId == currentTenantId)
                 {
                     // User is a platform admin impersonating this tenant - grant access
+                    _logger.LogDebug("[TenantAdminAuth] GRANTED via impersonation");
                     context.Succeed(requirement);
                     return;
                 }
@@ -82,12 +99,15 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         {
             // No tenant context - cannot proceed
             // This can happen if middleware hasn't run yet or tenant resolution failed
+            _logger.LogWarning("[TenantAdminAuth] DENIED - No tenant context available for user {UserId}, path {Path}", userId, requestPath);
             return;
         }
 
         // Check if user has tenant-admin role in current tenant's default realm (realm-scoped)
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.TenantAdminRoleName;
+        
+        _logger.LogDebug("[TenantAdminAuth] Checking role {Role} in realm {Realm} for tenant {TenantId}", roleName, realmName, tenantId);
 
         var hasRole = await _db.UserRealmRoleAssignments.AsNoTracking()
             .Join(_db.Roles, a => a.RoleId, r => r.Id, (a, r) => new { a, r })
@@ -100,6 +120,13 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
                            && x.rl.Name == realmName);
 
         if (hasRole)
+        {
+            _logger.LogDebug("[TenantAdminAuth] GRANTED via role assignment for user {UserId}", userId);
             context.Succeed(requirement);
+        }
+        else
+        {
+            _logger.LogDebug("[TenantAdminAuth] DENIED - user {UserId} lacks role {Role} in tenant {TenantId}", userId, roleName, tenantId);
+        }
     }
 }

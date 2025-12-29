@@ -186,17 +186,44 @@ public class TenantSwitchingService(
 
     public Guid? GetPreferredTenantId(HttpContext httpContext)
     {
-        var tenantIdStr = httpContext.Session.GetString(TenantSessionKeys.PreferredTenantId);
-        if (Guid.TryParse(tenantIdStr, out var tenantId))
+        try
         {
-            return tenantId;
+            var sessionId = httpContext.Session?.Id;
+            logger.LogDebug("[GetPreferredTenantId] Session ID: {SessionId}, IsAvailable: {IsAvailable}", 
+                sessionId ?? "(no session)", httpContext.Session != null);
+            
+            var tenantIdStr = httpContext.Session?.GetString(TenantSessionKeys.PreferredTenantId);
+            logger.LogDebug("[GetPreferredTenantId] Raw session value for PreferredTenantId: {Value}", tenantIdStr ?? "(null)");
+            
+            if (Guid.TryParse(tenantIdStr, out var tenantId))
+            {
+                logger.LogDebug("[GetPreferredTenantId] Returning tenant ID: {TenantId}", tenantId);
+                return tenantId;
+            }
+            
+            logger.LogDebug("[GetPreferredTenantId] No valid tenant ID in session");
+            return null;
         }
-        return null;
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[GetPreferredTenantId] Exception accessing session");
+            return null;
+        }
     }
 
     public string? GetPreferredTenantSlug(HttpContext httpContext)
     {
-        return httpContext.Session.GetString(TenantSessionKeys.PreferredTenantSlug);
+        try
+        {
+            var slug = httpContext.Session?.GetString(TenantSessionKeys.PreferredTenantSlug);
+            logger.LogDebug("[GetPreferredTenantSlug] Session slug: {Slug}", slug ?? "(null)");
+            return slug;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[GetPreferredTenantSlug] Exception accessing session");
+            return null;
+        }
     }
 
     private async Task<List<TenantAccessInfo>> GetLegacyTenantsAsync(Guid userId)

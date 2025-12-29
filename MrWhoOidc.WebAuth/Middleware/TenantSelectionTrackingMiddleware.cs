@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
 
@@ -12,23 +13,63 @@ namespace MrWhoOidc.WebAuth.Middleware;
 public class TenantSelectionTrackingMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly ILogger<TenantSelectionTrackingMiddleware> _logger;
 
-    public TenantSelectionTrackingMiddleware(RequestDelegate next)
+    public TenantSelectionTrackingMiddleware(RequestDelegate next, ILogger<TenantSelectionTrackingMiddleware> logger)
     {
         _next = next ?? throw new ArgumentNullException(nameof(next));
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantAccessor tenantAccessor, IMultiTenancyOptions options)
     {
+        var path = context.Request.Path.Value ?? string.Empty;
+        
+        // Log session cookie status for diagnostics
+        var sessionCookieName = ".mrwhooidc.session";
+        var hasSessionCookie = context.Request.Cookies.ContainsKey(sessionCookieName);
+        var isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;
+        
         if (options.Enabled)
         {
             var tenant = tenantAccessor.CurrentTenant;
-            var path = context.Request.Path.Value ?? string.Empty;
 
-            if (tenant != null && path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase))
+            // Always log session state for diagnostic purposes
+            string? existingTenantId = null;
+            string? existingSlug = null;
+            string? sessionId = null;
+            bool sessionAvailable = false;
+            
+            try
             {
+                // Check if session is available - accessing Session may throw if not available
+                sessionAvailable = context.Session != null;
+                if (sessionAvailable)
+                {
+                    sessionId = context.Session?.Id;
+                    existingTenantId = context.Session?.GetString(TenantSessionKeys.PreferredTenantId);
+                    existingSlug = context.Session?.GetString(TenantSessionKeys.PreferredTenantSlug);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[TenantTracking] Failed to access session for path {Path}", path);
+            }
+            
+            _logger.LogDebug("[TenantTracking] Path={Path}, HasSessionCookie={HasCookie}, SessionAvailable={SessionAvailable}, SessionId={SessionId}, CurrentTenant={TenantId}, SessionTenant={SessionTenant}, SessionSlug={SessionSlug}, IsAuthenticated={IsAuthenticated}", 
+                path, hasSessionCookie, sessionAvailable, sessionId ?? "(none)", tenant?.TenantId.ToString() ?? "(null)", existingTenantId ?? "(null)", existingSlug ?? "(null)", isAuthenticated);
+
+            if (tenant != null && path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase) && sessionAvailable && context.Session != null)
+            {
+                _logger.LogDebug("[TenantTracking] Storing tenant {TenantId}/{Slug} in session for path {Path}", tenant.TenantId, tenant.Slug, path);
                 context.Session.SetString(TenantSessionKeys.PreferredTenantId, tenant.TenantId.ToString());
                 context.Session.SetString(TenantSessionKeys.PreferredTenantSlug, tenant.Slug);
+            }
+            else if (tenant == null && string.IsNullOrEmpty(existingTenantId) && isAuthenticated)
+            {
+                // IMPORTANT: If no tenant is resolved AND session has no tenant, the user may lose context
+                _logger.LogWarning("[TenantTracking] No tenant context for path {Path} and session has no stored tenant (authenticated user) - menu visibility may be affected. HasSessionCookie={HasCookie}, SessionId={SessionId}", 
+                    path, hasSessionCookie, sessionId ?? "(none)");
             }
         }
 
