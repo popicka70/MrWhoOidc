@@ -116,6 +116,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
                 Slug = x.Tenant.Slug,
                 Name = x.Tenant.Name,
                 LogoUrl = x.Tenant.LogoUrl,
+                TenantIconId = x.Tenant.TenantIconId,
                 LoginUrl = _multiTenancyOptions.Enabled ? $"/t/{x.Tenant.Slug}/login" : "/login"
             })
             .Distinct()
@@ -140,6 +141,7 @@ internal sealed class TenantDiscoveryService : ITenantDiscoveryService
                 Slug = x.Tenant.Slug,
                 Name = x.Tenant.Name,
                 LogoUrl = x.Tenant.LogoUrl,
+                TenantIconId = x.Tenant.TenantIconId,
                 LoginUrl = _multiTenancyOptions.Enabled ? $"/t/{x.Tenant.Slug}/login" : "/login"
             })
             .Distinct()

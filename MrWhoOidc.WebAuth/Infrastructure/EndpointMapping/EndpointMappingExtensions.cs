@@ -286,6 +286,37 @@ internal static class EndpointMappingExtensions
 
             return Results.File(icon.FileData, icon.ContentType, icon.FileName);
         });
+
+        // Identity Provider logo endpoint (serves logo from database)
+        routes.MapGet("/api/providers/{id:guid}/logo", async (
+            Guid id,
+            AuthDbContext db,
+            HttpContext ctx,
+            CancellationToken ct) =>
+        {
+            var provider = await db.IdentityProviders
+                .Where(p => p.Id == id)
+                .Select(p => new { p.LogoData, p.LogoContentType })
+                .FirstOrDefaultAsync(ct);
+
+            if (provider?.LogoData == null || provider.LogoData.Length == 0)
+            {
+                return Results.NotFound();
+            }
+
+            // Set cache headers for logo serving
+            ctx.Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
+            ctx.Response.Headers["ETag"] = $"\"{id}\"";
+
+            // Check if client has cached version
+            var ifNoneMatch = ctx.Request.Headers["If-None-Match"].FirstOrDefault();
+            if (ifNoneMatch == $"\"{id}\"")
+            {
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
+
+            return Results.File(provider.LogoData, provider.LogoContentType ?? "image/png");
+        });
     }
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).

@@ -184,11 +184,22 @@ else
 
             <div class="mb-3">
                 <label class="form-label">Logo</label>
-                @if (Model.Input is not null && !string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
+                @if (Model.Input is not null)
                 {
-                    <div class="mb-2">
-                        <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height:64px" />
-                    </div>
+                    @if (Model.Input.LogoData != null)
+                    {
+                        <div class="mb-2">
+                            <img src="/api/providers/@Model.Input.Id/logo" alt="Logo" style="max-height:64px" />
+                            <div class="small text-muted">Stored in database</div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
+                    {
+                        <div class="mb-2">
+                            <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height:64px" />
+                            <div class="small text-muted">External URL</div>
+                        </div>
+                    }
                 }
                 <div class="d-flex gap-2 align-items-center">
                     <input type="file" asp-for="Logo" class="form-control" accept="image/png,image/jpeg,image/svg+xml,image/webp" />

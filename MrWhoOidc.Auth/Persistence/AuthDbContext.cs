@@ -1593,6 +1593,12 @@ public class IdentityProvider
     [MaxLength(200)]
     public string? DisplayName { get; set; }
     public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
+    
+    /// <summary>
+    /// The well-known provider template used to create this IdP, or null for custom configuration.
+    /// </summary>
+    public IdentityProviders.WellKnownProviderTemplate? ProviderTemplate { get; set; }
+    
     public bool Enabled { get; set; } = true;
     public bool IsDefault { get; set; } = false;
     /// <summary>
@@ -1602,9 +1608,33 @@ public class IdentityProvider
     public bool AllowRegistration { get; set; } = false;
     [MaxLength(2000)]
     public string? LogoUrl { get; set; }
+    
+    /// <summary>
+    /// Logo image data stored in database (alternative to LogoUrl).
+    /// </summary>
+    public byte[]? LogoData { get; set; }
+    
+    /// <summary>
+    /// Content type of the logo image (e.g., "image/png", "image/svg+xml").
+    /// </summary>
+    [MaxLength(100)]
+    public string? LogoContentType { get; set; }
+
+    /// <summary>
+    /// Returns true if the provider has a logo stored in the database or a URL.
+    /// </summary>
+    public bool HasLogo => LogoData != null || !string.IsNullOrEmpty(LogoUrl);
+    
     public int SortOrder { get; set; } = 0;
     [MaxLength(8000)]
     public string? ConfigJson { get; set; } // provider-specific config (OIDC now)
+    
+    /// <summary>
+    /// Provider-specific configuration as JSON (for well-known providers like Apple, GitHub, etc.).
+    /// </summary>
+    [MaxLength(8000)]
+    public string? ProviderSpecificConfigJson { get; set; }
+    
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

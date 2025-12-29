@@ -1,0 +1,118 @@
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm
+@using MrWhoOidc.Auth.IdentityProviders
+@{
+    var template = WellKnownProviderCatalog.GetTemplate(WellKnownProviderTemplate.GitHub);
+}
+
+<div class="provider-config-github">
+    <div class="alert alert-warning mb-4">
+        <h5 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>GitHub Authentication</h5>
+        <p class="mb-1">GitHub uses OAuth 2.0 with limited OpenID Connect support. Email access requires the <code>user:email</code> scope.</p>
+        <a href="@template?.DocumentationUrl" target="_blank" rel="noopener" class="alert-link">
+            <i class="bi bi-box-arrow-up-right me-1"></i>View GitHub Developer Documentation
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-key me-1"></i>OAuth App Credentials</h5>
+
+            <div class="mb-3">
+                <label asp-for="Authority" class="form-label">Authority</label>
+                <input asp-for="Authority" class="form-control" value="https://github.com" readonly />
+                <span asp-validation-for="Authority" class="text-danger"></span>
+                <div class="form-text">GitHub's OAuth authority (fixed).</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ClientId" class="form-label">Client ID</label>
+                <input asp-for="ClientId" class="form-control" 
+                       placeholder="Iv1.xxxxxxxxxxxxxxxx" />
+                <span asp-validation-for="ClientId" class="text-danger"></span>
+                <div class="form-text">From GitHub Developer Settings → OAuth Apps.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ClientSecret" class="form-label">Client Secret</label>
+                <input asp-for="ClientSecret" type="password" class="form-control" />
+                <span asp-validation-for="ClientSecret" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
+
+            <div class="mb-3">
+                <label asp-for="ResponseType" class="form-label">Response Type</label>
+                <select asp-for="ResponseType" class="form-select">
+                    <option value="code" selected>code</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ScopesString" class="form-label">Scopes</label>
+                <input asp-for="ScopesString" class="form-control" value="read:user user:email" />
+                <div class="form-text">
+                    Common scopes: <code>read:user</code>, <code>user:email</code>, <code>read:org</code>
+                </div>
+            </div>
+
+            <div class="form-check mb-2">
+                <input asp-for="UsePKCE" class="form-check-input" checked />
+                <label asp-for="UsePKCE" class="form-check-label">Use PKCE</label>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-building me-1"></i>Organization Restrictions</h5>
+
+            <div class="mb-3">
+                <label for="GitHubAllowedOrgs" class="form-label">Allowed Organizations</label>
+                <input type="text" id="GitHubAllowedOrgs" name="GitHubConfig.AllowedOrganizations" class="form-control" 
+                       placeholder="org1, org2" />
+                <div class="form-text">Comma-separated list of GitHub organizations. Leave empty to allow any.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="GitHubAllowedTeams" class="form-label">Allowed Teams</label>
+                <input type="text" id="GitHubAllowedTeams" name="GitHubConfig.AllowedTeams" class="form-control" 
+                       placeholder="org/team1, org/team2" />
+                <div class="form-text">Format: org/team. Requires <code>read:org</code> scope.</div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input type="checkbox" id="GitHubAllowPrivateEmails" name="GitHubConfig.AllowPrivateEmails" 
+                       class="form-check-input" checked value="true" />
+                <label for="GitHubAllowPrivateEmails" class="form-check-label">Allow Private Emails</label>
+                <div class="form-text">Accept GitHub's noreply email addresses.</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-info-circle me-1"></i>Important Notes</h5>
+            
+            <div class="card bg-light">
+                <div class="card-body small">
+                    <ul class="mb-0">
+                        <li class="mb-2">
+                            <strong>Not full OIDC:</strong> GitHub doesn't provide a standard OIDC discovery endpoint. Manual endpoint configuration is used.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Email verification:</strong> Use the <code>user:email</code> scope and check the <code>verified</code> flag.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Organization membership:</strong> Requires <code>read:org</code> scope to verify organization membership.
+                        </li>
+                        <li>
+                            <strong>Private emails:</strong> Users may have private email settings; GitHub provides a noreply address.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

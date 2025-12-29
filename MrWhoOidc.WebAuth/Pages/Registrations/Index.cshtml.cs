@@ -15,9 +15,11 @@ namespace MrWhoOidc.WebAuth.Pages.Registrations;
 /// </summary>
 public sealed record RegistrationIdpOption
 {
+    public required Guid Id { get; init; }
     public required string Name { get; init; }
     public required string DisplayName { get; init; }
     public string? LogoUrl { get; init; }
+    public bool HasLogoData { get; init; }
 }
 
 [AllowAnonymous]
@@ -96,9 +98,11 @@ public class IndexModel(
                 .ThenBy(p => p.DisplayName)
                 .Select(p => new RegistrationIdpOption
                 {
+                    Id = p.Id,
                     Name = p.Name,
                     DisplayName = p.DisplayName ?? p.Name,
-                    LogoUrl = p.LogoUrl
+                    LogoUrl = p.LogoUrl,
+                    HasLogoData = p.LogoData != null
                 })
                 .ToListAsync();
 

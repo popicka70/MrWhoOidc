@@ -1,5 +1,6 @@
 @page "/admin/providers/add"
 @using MrWhoOidc.Auth.Persistence
+@using MrWhoOidc.Auth.IdentityProviders
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.AddModel
@@ -13,66 +14,220 @@
 
 <h2>Add Identity Provider</h2>
 
-<form method="post">
+<form method="post" id="addProviderForm" enctype="multipart/form-data">
     <div class="mb-3">
         <div asp-validation-summary="All" class="text-danger"></div>
     </div>
 
-    <div class="mb-3">
-        <label asp-for="Input.Name" class="form-label"></label>
-        <input asp-for="Input.Name" class="form-control" />
-        <span asp-validation-for="Input.Name" class="text-danger"></span>
-    </div>
-    <div class="mb-3">
-        <label asp-for="Input.DisplayName" class="form-label"></label>
-        <input asp-for="Input.DisplayName" class="form-control" />
-    </div>
-    <div class="mb-3">
-        <label asp-for="Input.Type" class="form-label"></label>
-        <select asp-for="Input.Type" class="form-select" asp-items="Model.TypeOptions"></select>
-    </div>
-    <div class="form-check mb-3">
-        <input asp-for="Input.Enabled" class="form-check-input" />
-        <label asp-for="Input.Enabled" class="form-check-label"></label>
-    </div>
-    <div class="form-check mb-3">
-        <input asp-for="Input.IsDefault" class="form-check-input" />
-        <label asp-for="Input.IsDefault" class="form-check-label"></label>
-    </div>
-    <div class="mb-3">
-        <label asp-for="Input.SortOrder" class="form-label"></label>
-        <input asp-for="Input.SortOrder" class="form-control" />
-    </div>
-    <div class="mb-3">
-        <label asp-for="Input.LogoUrl" class="form-label"></label>
-        <input asp-for="Input.LogoUrl" class="form-control" />
-    </div>
-
-    @if (Model.Input.Type == IdentityProviderType.Oidc)
-    {
-        <hr class="my-4" />
-        <div class="alert alert-info">
-            <strong>OIDC configuration</strong> is edited via the form below. Use extended JSON only for non-standard keys.
+    @* Step 1: Provider Template Selection *@
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Step 1: Select Provider Template</h5>
         </div>
-
-        @if (Model.OidcConfig is not null)
-        {
-            @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
-            @await Html.PartialAsync(
-                "_OidcAdvancedConfig",
-                Model.OidcConfig,
-                new ViewDataDictionary(ViewData) { ["Compact"] = true })
-        }
-    }
-    else
-    {
-        <div class="mb-3">
-            <label class="form-label">Config JSON</label>
-            <textarea asp-for="Input.ConfigJson" class="form-control font-monospace" rows="10"></textarea>
-            <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+        <div class="card-body">
+            @await Html.PartialAsync("_ProviderSelector")
         </div>
-    }
+    </div>
 
-    <button type="submit" class="btn btn-primary">Save</button>
-    <a href="@(tenantPrefix)/Admin/Providers" class="btn btn-secondary">Cancel</a>
+    @* Step 2: Basic Information *@
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Step 2: Basic Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.Name" class="form-label"></label>
+                        <input asp-for="Input.Name" class="form-control" id="ProviderName" />
+                        <span asp-validation-for="Input.Name" class="text-danger"></span>
+                        <div class="form-text">A unique identifier for this provider (e.g., "google", "entra-tenant1").</div>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.DisplayName" class="form-label"></label>
+                        <input asp-for="Input.DisplayName" class="form-control" id="ProviderDisplayName" />
+                        <div class="form-text">Shown to users on the login page.</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.Type" class="form-label"></label>
+                        <select asp-for="Input.Type" class="form-select" asp-items="Model.TypeOptions" id="ProviderType"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Input.SortOrder" class="form-label"></label>
+                        <input asp-for="Input.SortOrder" class="form-control" />
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check mb-3">
+                        <input asp-for="Input.Enabled" class="form-check-input" />
+                        <label asp-for="Input.Enabled" class="form-check-label"></label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input asp-for="Input.IsDefault" class="form-check-input" />
+                        <label asp-for="Input.IsDefault" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.LogoUrl" class="form-label"></label>
+                        <input asp-for="Input.LogoUrl" class="form-control" />
+                        <div class="form-text">Optional. External URL for the logo.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Logo" class="form-label">Upload Logo</label>
+                        <input asp-for="Logo" type="file" class="form-control" accept=".png,.jpg,.jpeg,.svg,.webp" />
+                        <div class="form-text">Optional. Upload an image to store in the database (max 512KB).</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Step 3: Provider Configuration (dynamic based on template) *@
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Step 3: Provider Configuration</h5>
+        </div>
+        <div class="card-body" id="providerConfigContainer">
+            @* Custom / Generic OIDC (default) *@
+            <div id="config-0" class="provider-config-section">
+                @if (Model.Input.Type == IdentityProviderType.Oidc)
+                {
+                    <div class="alert alert-info">
+                        <strong>Custom OIDC Provider</strong> - Configure any OpenID Connect compatible identity provider.
+                    </div>
+
+                    @if (Model.OidcConfig is not null)
+                    {
+                        @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
+                        @await Html.PartialAsync(
+                            "_OidcAdvancedConfig",
+                            Model.OidcConfig,
+                            new ViewDataDictionary(ViewData) { ["Compact"] = true })
+                    }
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Config JSON</label>
+                        <textarea asp-for="Input.ConfigJson" class="form-control font-monospace" rows="10"></textarea>
+                        <span asp-validation-for="Input.ConfigJson" class="text-danger"></span>
+                    </div>
+                }
+            </div>
+
+            @* Microsoft Entra ID *@
+            <div id="config-1" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_EntraIdConfig", Model.OidcConfig)
+                }
+            </div>
+
+            @* Google *@
+            <div id="config-2" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_GoogleConfig", Model.OidcConfig)
+                }
+            </div>
+
+            @* Facebook *@
+            <div id="config-3" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_FacebookConfig", Model.OidcConfig)
+                }
+            </div>
+
+            @* Apple *@
+            <div id="config-4" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_AppleConfig", Model.OidcConfig)
+                }
+            </div>
+
+            @* GitHub *@
+            <div id="config-5" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_GitHubConfig", Model.OidcConfig)
+                }
+            </div>
+
+            @* LinkedIn (Tier 1) - uses generic config *@
+            <div id="config-6" class="provider-config-section" style="display:none;">
+                @if (Model.OidcConfig is not null)
+                {
+                    @await Html.PartialAsync("_GenericProviderConfig", (Model.OidcConfig, WellKnownProviderTemplate.LinkedIn))
+                }
+            </div>
+
+            @* Tier 2 providers - use generic config *@
+            @foreach (var template in new[] { 
+                WellKnownProviderTemplate.Okta, 
+                WellKnownProviderTemplate.Auth0, 
+                WellKnownProviderTemplate.Keycloak, 
+                WellKnownProviderTemplate.AwsCognito,
+                WellKnownProviderTemplate.PingIdentity,
+                WellKnownProviderTemplate.OneLogin })
+            {
+                <div id="config-@((int)template)" class="provider-config-section" style="display:none;">
+                    @if (Model.OidcConfig is not null)
+                    {
+                        @await Html.PartialAsync("_GenericProviderConfig", (Model.OidcConfig, template))
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Create Provider
+        </button>
+        <a href="@(tenantPrefix)/Admin/Providers" class="btn btn-secondary">Cancel</a>
+    </div>
 </form>
+
+<script>
+    document.addEventListener('providerTemplateChanged', function(e) {
+        const templateId = e.detail.templateId;
+        
+        // Hide all config sections
+        document.querySelectorAll('.provider-config-section').forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // Show the selected config section
+        const selectedSection = document.getElementById('config-' + templateId);
+        if (selectedSection) {
+            selectedSection.style.display = 'block';
+        }
+        
+        // Auto-populate name and display name suggestions
+        const templates = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            WellKnownProviderCatalog.GetAllTemplates()
+                .ToDictionary(t => (int)t.Template, t => new { name = t.Template.ToString().ToLowerInvariant().Replace("_", "-"), displayName = t.DisplayName })));
+        
+        const nameInput = document.getElementById('ProviderName');
+        const displayNameInput = document.getElementById('ProviderDisplayName');
+        
+        if (templates[templateId] && !nameInput.value) {
+            nameInput.value = templates[templateId].name;
+        }
+        if (templates[templateId] && !displayNameInput.value) {
+            displayNameInput.value = templates[templateId].displayName;
+        }
+        
+        // Set provider type to OIDC for all well-known templates
+        if (templateId > 0) {
+            document.getElementById('ProviderType').value = '0'; // OIDC
+        }
+    });
+</script>

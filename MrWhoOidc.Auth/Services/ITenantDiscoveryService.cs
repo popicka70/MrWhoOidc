@@ -52,6 +52,11 @@ public class TenantInfo
     public string? LogoUrl { get; set; }
 
     /// <summary>
+    /// Optional tenant icon ID for database-stored icons
+    /// </summary>
+    public Guid? TenantIconId { get; set; }
+
+    /// <summary>
     /// Full login URL for this tenant (e.g., /t/acme/login)
     /// </summary>
     public string LoginUrl { get; set; } = string.Empty;

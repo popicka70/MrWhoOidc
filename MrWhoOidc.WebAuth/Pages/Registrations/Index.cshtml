@@ -60,7 +60,11 @@
                            role="listitem"
                            aria-label="Register with @idp.DisplayName"
                            data-provider-name="@idp.Name">
-                            @if (!string.IsNullOrEmpty(idp.LogoUrl))
+                            @if (idp.HasLogoData)
+                            {
+                                <img src="/api/providers/@idp.Id/logo" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
+                            }
+                            else if (!string.IsNullOrEmpty(idp.LogoUrl))
                             {
                                 <img src="@idp.LogoUrl" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
                             }
