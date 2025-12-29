@@ -200,6 +200,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, M
 // Default tenant context resolver (unified logic for menu visibility and filters)
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IDefaultTenantContextResolver, MrWhoOidc.WebAuth.Services.DefaultTenantContextResolver>();
 
+// Layout tenant context service (consistent tenant info for layout rendering)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ILayoutTenantContextService, MrWhoOidc.WebAuth.Services.LayoutTenantContextService>();
+
 // Tenant credential ticket store
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantCredentialTicketStore, MrWhoOidc.WebAuth.Services.TenantCredentialTicketStore>();
 

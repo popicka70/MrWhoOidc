@@ -2,6 +2,7 @@
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.WebAuth.Services.ITenantSwitchingService TenantSwitchingService
 @inject MrWhoOidc.WebAuth.Services.IDefaultTenantContextResolver DefaultTenantContextResolver
+@inject MrWhoOidc.WebAuth.Services.ILayoutTenantContextService LayoutTenantContextService
 @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
 @inject MrWhoOidc.Auth.Services.ITenantBrandingService BrandingService
 <!DOCTYPE html>
@@ -36,11 +37,16 @@
 <body class="page-shell">
     @{
         var hideNavbar = (ViewData["HideNavbar"] as bool?) ?? false;
-        // Get tenant context from middleware (set by TenantResolutionMiddleware)
+        
+        // UNIFIED TENANT CONTEXT RESOLUTION
+        // Uses priority: URL path > session > default tenant
+        // This ensures consistent menu rendering even on /platform-admin/* pages
+        var layoutTenantContext = await LayoutTenantContextService.GetLayoutTenantContextAsync(Context!);
+        var tenantPrefix = layoutTenantContext.UrlPrefix;
+        
+        // Keep currentTenant for backwards compatibility (some components might use it)
+        // but prefer layoutTenantContext for menu/link generation
         var currentTenant = TenantAccessor.CurrentTenant;
-        var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
-            ? $"/t/{currentTenant.Slug}" 
-            : "";
 
         // Sidebar highlighting helpers
         static string NormalizePath(string? value)
@@ -133,9 +139,9 @@
                         else
                         {
                             <i class="bi bi-shield-lock-fill icon-md text-primary"></i>
-                            @if (currentTenant != null)
+                            @if (!string.IsNullOrEmpty(layoutTenantContext.Name))
                             {
-                                <span class="text-muted small">@currentTenant.Name</span>
+                                <span class="text-muted small">@layoutTenantContext.Name</span>
                             }
                         }
                     </a>
@@ -146,9 +152,9 @@
                         <div class="dropdown">
                             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="tenantSwitcherDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-building me-1"></i>
-                                @if (currentTenant != null)
+                                @if (!string.IsNullOrEmpty(layoutTenantContext.Name))
                                 {
-                                    <span>@currentTenant.Name</span>
+                                    <span>@layoutTenantContext.Name</span>
                                 }
                                 else
                                 {
@@ -160,7 +166,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 @foreach (var tenant in userTenants)
                                 {
-                                    var isCurrent = currentTenant?.TenantId == tenant.TenantId;
+                                    var isCurrent = layoutTenantContext.TenantId == tenant.TenantId;
                                     <li>
                                         <form method="post" asp-page="/SwitchTenant" class="m-0">
                                             <input type="hidden" name="tenantId" value="@tenant.TenantId" />
@@ -287,8 +293,8 @@
                                     @* Branding and Settings - Only show in multi-tenant mode *@
                                     @if (MultiTenancyOptions.Enabled)
                                     {
-                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/branding", matchPrefix: true)" asp-page="/admin/branding" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
-                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/settings", matchPrefix: true)" asp-page="/admin/settings" asp-route-tenantSlug="@currentTenant?.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/branding", matchPrefix: true)" asp-page="/admin/branding" asp-route-tenantSlug="@layoutTenantContext.Slug"><i class="bi bi-palette-fill me-2"></i>Branding</a>
+                                        <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/settings", matchPrefix: true)" asp-page="/admin/settings" asp-route-tenantSlug="@layoutTenantContext.Slug"><i class="bi bi-gear-fill me-2"></i>Settings</a>
                                     }
                                 }
                             }
