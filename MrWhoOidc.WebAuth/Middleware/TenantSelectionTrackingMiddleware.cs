@@ -30,14 +30,17 @@ public class TenantSelectionTrackingMiddleware
         var hasSessionCookie = context.Request.Cookies.ContainsKey(sessionCookieName);
         var isAuthenticated = context.User?.Identity?.IsAuthenticated ?? false;
         
-        if (options.Enabled)
-        {
-            var tenant = tenantAccessor.CurrentTenant;
+        // IMPORTANT: Always track tenant in session when middleware resolves one,
+        // even if multi-tenancy is "disabled" by license. This is because:
+        // 1. Single-tenant mode still has a default tenant that gets resolved
+        // 2. Authorization handlers need tenant context even for platform-admin pages
+        // 3. The session must persist tenant between pages that skip tenant resolution
+        var tenant = tenantAccessor.CurrentTenant;
 
-            // Always log session state for diagnostic purposes
-            string? existingTenantId = null;
-            string? existingSlug = null;
-            string? sessionId = null;
+        // Always log session state for diagnostic purposes
+        string? existingTenantId = null;
+        string? existingSlug = null;
+        string? sessionId = null;
             bool sessionAvailable = false;
             
             try
@@ -82,7 +85,6 @@ public class TenantSelectionTrackingMiddleware
                 _logger.LogWarning("[TenantTracking] No tenant context for path {Path} and session has no stored tenant (authenticated user) - menu visibility may be affected. HasSessionCookie={HasCookie}, SessionId={SessionId}", 
                     path, hasSessionCookie, sessionId ?? "(none)");
             }
-        }
 
         await _next(context);
     }
