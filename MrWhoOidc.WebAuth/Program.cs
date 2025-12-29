@@ -197,6 +197,9 @@ builder.Services.AddScoped<MrWhoOidc.WebAuth.Seeding.ISeedManifestApplier, MrWho
 // Tenant switching service
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantSwitchingService, MrWhoOidc.WebAuth.Services.TenantSwitchingService>();
 
+// Default tenant context resolver (unified logic for menu visibility and filters)
+builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.IDefaultTenantContextResolver, MrWhoOidc.WebAuth.Services.DefaultTenantContextResolver>();
+
 // Tenant credential ticket store
 builder.Services.AddScoped<MrWhoOidc.WebAuth.Services.ITenantCredentialTicketStore, MrWhoOidc.WebAuth.Services.TenantCredentialTicketStore>();
 

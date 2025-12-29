@@ -1,6 +1,7 @@
 ﻿@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
 @inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
 @inject MrWhoOidc.WebAuth.Services.ITenantSwitchingService TenantSwitchingService
+@inject MrWhoOidc.WebAuth.Services.IDefaultTenantContextResolver DefaultTenantContextResolver
 @inject Microsoft.AspNetCore.Authorization.IAuthorizationService AuthorizationService
 @inject MrWhoOidc.Auth.Services.ITenantBrandingService BrandingService
 <!DOCTYPE html>
@@ -70,15 +71,9 @@
         string LinkClass(string baseClass, string? href, bool matchPrefix = false)
             => IsActiveHref(href, matchPrefix) ? $"{baseClass} active" : baseClass;
 
-        string? resolvedTenantSlug = currentTenant?.Slug;
-        if ((User?.Identity?.IsAuthenticated ?? false) && string.IsNullOrEmpty(resolvedTenantSlug))
-        {
-            resolvedTenantSlug = TenantSwitchingService.GetPreferredTenantSlug(Context!);
-        }
-
-        var isDefaultTenantContext = !MultiTenancyOptions.Enabled ||
-            (!string.IsNullOrEmpty(resolvedTenantSlug) &&
-             string.Equals(resolvedTenantSlug, MultiTenancyOptions.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase));
+        // Use unified resolver for consistent default tenant context determination
+        // This matches the logic in RequireDefaultTenantContextAttribute
+        var isDefaultTenantContext = DefaultTenantContextResolver.IsDefaultTenantContext(Context!);
 
         var isMyAccountArea = currentPath.StartsWith(NormalizePath($"{tenantPrefix}/account"), StringComparison.OrdinalIgnoreCase)
             || currentPath.StartsWith(NormalizePath($"{tenantPrefix}/password"), StringComparison.OrdinalIgnoreCase)

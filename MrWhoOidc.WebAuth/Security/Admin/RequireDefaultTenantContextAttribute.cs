@@ -19,9 +19,8 @@ public sealed class RequireDefaultTenantContextAttribute : TypeFilterAttribute
     }
 
     private sealed class RequireDefaultTenantContextFilter(
-        ITenantAccessor tenantAccessor,
+        IDefaultTenantContextResolver defaultTenantContextResolver,
         IMultiTenancyOptions multiTenancyOptions,
-        ITenantSwitchingService tenantSwitchingService,
         ITempDataDictionaryFactory tempDataFactory,
         ILogger<RequireDefaultTenantContextFilter> logger) : IAsyncPageFilter
     {
@@ -29,7 +28,7 @@ public sealed class RequireDefaultTenantContextAttribute : TypeFilterAttribute
 
         public async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
         {
-            if (IsDefaultTenantContext(context.HttpContext))
+            if (defaultTenantContextResolver.IsDefaultTenantContext(context.HttpContext))
             {
                 await next();
                 return;
@@ -49,28 +48,6 @@ public sealed class RequireDefaultTenantContextAttribute : TypeFilterAttribute
             {
                 context.Result = new StatusCodeResult(StatusCodes.Status403Forbidden);
             }
-        }
-
-        private bool IsDefaultTenantContext(HttpContext httpContext)
-        {
-            if (!multiTenancyOptions.Enabled)
-            {
-                return true;
-            }
-
-            var slug = tenantAccessor.CurrentTenant?.Slug;
-            if (string.IsNullOrEmpty(slug))
-            {
-                slug = tenantSwitchingService.GetPreferredTenantSlug(httpContext);
-            }
-
-            if (string.IsNullOrEmpty(slug))
-            {
-                // No recorded slug yet (e.g., first login). Assume default to avoid blocking legitimate access.
-                return true;
-            }
-
-            return string.Equals(slug, multiTenancyOptions.DefaultTenantSlug, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildDefaultTenantRedirectPath(HttpContext httpContext, string defaultSlug)
