@@ -37,6 +37,9 @@ public static class LocalizationAndMvcExtensions
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.Cookie.IsEssential = true;
+            // CRITICAL: Set cookie path to root so session is shared across all paths
+            // Without this, cookie may be scoped to /t/{slug} and not sent to /platform-admin/*
+            options.Cookie.Path = "/";
         });
 
         // Razor Pages (admin folder locked down by policy = tenant-admin)
