@@ -1,0 +1,376 @@
+@using MrWhoOidc.Auth.IdentityProviders
+@model (MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm Config, WellKnownProviderTemplate Template)
+@{
+    var template = WellKnownProviderCatalog.GetTemplate(Model.Template);
+    if (template == null)
+    {
+        <div class="alert alert-danger">Unknown provider template.</div>
+        return;
+    }
+}
+
+<div class="provider-config-generic">
+    <div class="alert alert-info mb-4">
+        <h5 class="alert-heading"><i class="bi bi-info-circle me-2"></i>@template.DisplayName</h5>
+        <p class="mb-1">@template.Description</p>
+        @if (!string.IsNullOrEmpty(template.DocumentationUrl))
+        {
+            <a href="@template.DocumentationUrl" target="_blank" rel="noopener" class="alert-link">
+                <i class="bi bi-box-arrow-up-right me-1"></i>View Documentation
+            </a>
+        }
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            @if (template.AuthorityPlaceholders.Length > 0)
+            {
+                <h5 class="mb-3"><i class="bi bi-building me-1"></i>Provider Configuration</h5>
+                
+                @foreach (var placeholder in template.AuthorityPlaceholders)
+                {
+                    <div class="mb-3">
+                        <label for="Placeholder_@placeholder.Name" class="form-label">
+                            @placeholder.Label
+                            @if (placeholder.Required)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </label>
+                        
+                        @if (placeholder.Options.Length > 0)
+                        {
+                            if (placeholder.Required)
+                            {
+                                <select id="Placeholder_@placeholder.Name" 
+                                        name="AuthorityPlaceholders[@placeholder.Name]" 
+                                        class="form-select"
+                                        required
+                                        onchange="updateGenericAuthority()">
+                                    @foreach (var option in placeholder.Options)
+                                    {
+                                        if (option.Value == placeholder.DefaultValue)
+                                        {
+                                            <option value="@option.Value" title="@option.Description" selected>@option.Label</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value" title="@option.Description">@option.Label</option>
+                                        }
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <select id="Placeholder_@placeholder.Name" 
+                                        name="AuthorityPlaceholders[@placeholder.Name]" 
+                                        class="form-select"
+                                        onchange="updateGenericAuthority()">
+                                    @foreach (var option in placeholder.Options)
+                                    {
+                                        if (option.Value == placeholder.DefaultValue)
+                                        {
+                                            <option value="@option.Value" title="@option.Description" selected>@option.Label</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value" title="@option.Description">@option.Label</option>
+                                        }
+                                    }
+                                </select>
+                            }
+                        }
+                        else
+                        {
+                            if (placeholder.Required)
+                            {
+                                <input type="text" 
+                                       id="Placeholder_@placeholder.Name" 
+                                       name="AuthorityPlaceholders[@placeholder.Name]" 
+                                       class="form-control"
+                                       placeholder="@placeholder.Placeholder"
+                                       value="@placeholder.DefaultValue"
+                                       required
+                                       onchange="updateGenericAuthority()" />
+                            }
+                            else
+                            {
+                                <input type="text" 
+                                       id="Placeholder_@placeholder.Name" 
+                                       name="AuthorityPlaceholders[@placeholder.Name]" 
+                                       class="form-control"
+                                       placeholder="@placeholder.Placeholder"
+                                       value="@placeholder.DefaultValue"
+                                       onchange="updateGenericAuthority()" />
+                            }
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(placeholder.HelpText))
+                        {
+                            <div class="form-text">@placeholder.HelpText</div>
+                        }
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label asp-for="Config.Authority" class="form-label">Authority URL</label>
+                    <input asp-for="Config.Authority" class="form-control" readonly id="GenericAuthority" />
+                    <span asp-validation-for="Config.Authority" class="text-danger"></span>
+                    <div class="form-text">Computed from the template pattern: <code>@template.AuthorityPattern</code></div>
+                </div>
+            }
+            else
+            {
+                <h5 class="mb-3"><i class="bi bi-link-45deg me-1"></i>Connection Settings</h5>
+                
+                <div class="mb-3">
+                    <label asp-for="Config.Authority" class="form-label">Authority</label>
+                    <input asp-for="Config.Authority" class="form-control" 
+                           value="@template.AuthorityPattern" readonly />
+                    <span asp-validation-for="Config.Authority" class="text-danger"></span>
+                </div>
+            }
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-key me-1"></i>Credentials</h5>
+
+            <div class="mb-3">
+                <label asp-for="Config.ClientId" class="form-label">Client ID</label>
+                <input asp-for="Config.ClientId" class="form-control" />
+                <span asp-validation-for="Config.ClientId" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Config.ClientSecret" class="form-label">Client Secret</label>
+                <input asp-for="Config.ClientSecret" type="password" class="form-control" />
+                <span asp-validation-for="Config.ClientSecret" class="text-danger"></span>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
+
+            <div class="mb-3">
+                <label asp-for="Config.ResponseType" class="form-label">Response Type</label>
+                <select asp-for="Config.ResponseType" class="form-select">
+                    <option value="code" selected>code</option>
+                    <option value="id_token">id_token</option>
+                    <option value="code id_token">code id_token</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Config.ScopesString" class="form-label">Scopes</label>
+                <input asp-for="Config.ScopesString" class="form-control" 
+                       value="@string.Join(" ", template.DefaultScopes)" />
+                <div class="form-text">Space-separated list of scopes.</div>
+            </div>
+
+            @if (template.DefaultUsePkce)
+            {
+                <div class="form-check mb-2">
+                    <input asp-for="Config.UsePKCE" class="form-check-input" checked />
+                    <label asp-for="Config.UsePKCE" class="form-check-label">Use PKCE</label>
+                </div>
+            }
+            else
+            {
+                <div class="form-check mb-2">
+                    <input asp-for="Config.UsePKCE" class="form-check-input" />
+                    <label asp-for="Config.UsePKCE" class="form-check-label">Use PKCE</label>
+                </div>
+            }
+        </div>
+
+        <div class="col-md-6">
+            @if (template.ConfigFields.Length > 0)
+            {
+                <h5 class="mb-3"><i class="bi bi-gear me-1"></i>Provider Options</h5>
+                
+                @foreach (var field in template.ConfigFields)
+                {
+                    <div class="mb-3">
+                        <label for="ConfigField_@field.Name" class="form-label">
+                            @field.Label
+                            @if (field.Required)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                        </label>
+                        
+                        @switch (field.FieldType)
+                        {
+                            case "select":
+                                if (field.Required)
+                                {
+                                    <select id="ConfigField_@field.Name" 
+                                            name="ProviderConfigFields[@field.Name]" 
+                                            class="form-select"
+                                            required>
+                                        @foreach (var option in field.Options)
+                                        {
+                                            if (option.Value == field.DefaultValue)
+                                            {
+                                                <option value="@option.Value" selected>@option.Label</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@option.Value">@option.Label</option>
+                                            }
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <select id="ConfigField_@field.Name" 
+                                            name="ProviderConfigFields[@field.Name]" 
+                                            class="form-select">
+                                        @foreach (var option in field.Options)
+                                        {
+                                            if (option.Value == field.DefaultValue)
+                                            {
+                                                <option value="@option.Value" selected>@option.Label</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@option.Value">@option.Label</option>
+                                            }
+                                        }
+                                    </select>
+                                }
+                                break;
+                                
+                            case "checkbox":
+                                if (field.DefaultValue == "true")
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" 
+                                               id="ConfigField_@field.Name" 
+                                               name="ProviderConfigFields[@field.Name]" 
+                                               class="form-check-input"
+                                               value="true"
+                                               checked />
+                                        <label class="form-check-label" for="ConfigField_@field.Name">Enable</label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" 
+                                               id="ConfigField_@field.Name" 
+                                               name="ProviderConfigFields[@field.Name]" 
+                                               class="form-check-input"
+                                               value="true" />
+                                        <label class="form-check-label" for="ConfigField_@field.Name">Enable</label>
+                                    </div>
+                                }
+                                break;
+                                
+                            case "textarea":
+                                if (field.Required)
+                                {
+                                    <textarea id="ConfigField_@field.Name" 
+                                              name="ProviderConfigFields[@field.Name]" 
+                                              class="form-control font-monospace"
+                                              rows="4"
+                                              placeholder="@field.Placeholder"
+                                              required>@field.DefaultValue</textarea>
+                                }
+                                else
+                                {
+                                    <textarea id="ConfigField_@field.Name" 
+                                              name="ProviderConfigFields[@field.Name]" 
+                                              class="form-control font-monospace"
+                                              rows="4"
+                                              placeholder="@field.Placeholder">@field.DefaultValue</textarea>
+                                }
+                                break;
+                                
+                            case "password":
+                                if (field.Required)
+                                {
+                                    <input type="password" 
+                                           id="ConfigField_@field.Name" 
+                                           name="ProviderConfigFields[@field.Name]" 
+                                           class="form-control"
+                                           placeholder="@field.Placeholder"
+                                           value="@field.DefaultValue"
+                                           required />
+                                }
+                                else
+                                {
+                                    <input type="password" 
+                                           id="ConfigField_@field.Name" 
+                                           name="ProviderConfigFields[@field.Name]" 
+                                           class="form-control"
+                                           placeholder="@field.Placeholder"
+                                           value="@field.DefaultValue" />
+                                }
+                                break;
+                                
+                            default:
+                                if (field.Required)
+                                {
+                                    <input type="text" 
+                                           id="ConfigField_@field.Name" 
+                                           name="ProviderConfigFields[@field.Name]" 
+                                           class="form-control"
+                                           placeholder="@field.Placeholder"
+                                           value="@field.DefaultValue"
+                                           required />
+                                }
+                                else
+                                {
+                                    <input type="text" 
+                                           id="ConfigField_@field.Name" 
+                                           name="ProviderConfigFields[@field.Name]" 
+                                           class="form-control"
+                                           placeholder="@field.Placeholder"
+                                           value="@field.DefaultValue" />
+                                }
+                                break;
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(field.HelpText))
+                        {
+                            <div class="form-text">@field.HelpText</div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const authorityPattern = '@template.AuthorityPattern';
+        const placeholders = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+            template.AuthorityPlaceholders.Select(p => p.Name).ToArray()));
+        
+        window.updateGenericAuthority = function() {
+            let authority = authorityPattern;
+            
+            placeholders.forEach(name => {
+                const input = document.getElementById('Placeholder_' + name);
+                if (input) {
+                    const value = input.value || '{' + name + '}';
+                    authority = authority.replace('{' + name + '}', value);
+                }
+            });
+            
+            const authorityInput = document.getElementById('GenericAuthority');
+            if (authorityInput) {
+                authorityInput.value = authority;
+            }
+        };
+        
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', updateGenericAuthority);
+    })();
+</script>

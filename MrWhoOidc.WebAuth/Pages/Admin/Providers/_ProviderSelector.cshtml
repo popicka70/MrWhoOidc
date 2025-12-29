@@ -1,0 +1,125 @@
+@using MrWhoOidc.Auth.IdentityProviders
+@{
+    var templates = WellKnownProviderCatalog.GetAllTemplates()
+        .OrderBy(t => t.Tier)
+        .ThenBy(t => t.DisplayName)
+        .ToList();
+    
+    var tier1 = templates.Where(t => t.Tier == 1).ToList();
+    var tier2 = templates.Where(t => t.Tier == 2).ToList();
+}
+
+<div class="provider-selector mb-4">
+    <h5 class="mb-3"><i class="bi bi-collection me-1"></i>Choose an Identity Provider Template</h5>
+    <p class="text-muted mb-4">
+        Select a pre-configured template for popular identity providers, or use the Custom option for a generic OIDC/SAML setup.
+    </p>
+    
+    @* Tier 1: Major providers *@
+    <div class="mb-4">
+        <h6 class="text-secondary mb-3">Popular Providers</h6>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+            <div class="col">
+                <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center active"
+                        data-template="0"
+                        onclick="selectProviderTemplate(this, 0)">
+                    <div class="provider-icon mb-2" style="width:40px;height:40px;">
+                        @Html.Raw(ProviderIcons.Custom)
+                    </div>
+                    <span class="provider-name small text-center">Custom / Generic</span>
+                </button>
+            </div>
+            @foreach (var template in tier1)
+            {
+                <div class="col">
+                    <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center"
+                            data-template="@((int)template.Template)"
+                            onclick="selectProviderTemplate(this, @((int)template.Template))"
+                            title="@template.Description">
+                        <div class="provider-icon mb-2" style="width:40px;height:40px;">
+                            @Html.Raw(template.IconSvg)
+                        </div>
+                        <span class="provider-name small text-center">@template.DisplayName</span>
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (tier2.Any())
+    {
+        @* Tier 2: Enterprise / Additional providers *@
+        <div class="mb-4">
+            <h6 class="text-secondary mb-3">Enterprise & Additional</h6>
+            <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
+                @foreach (var template in tier2)
+                {
+                    <div class="col">
+                        <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center"
+                                data-template="@((int)template.Template)"
+                                onclick="selectProviderTemplate(this, @((int)template.Template))"
+                                title="@template.Description">
+                            <div class="provider-icon mb-2" style="width:40px;height:40px;">
+                                @Html.Raw(template.IconSvg)
+                            </div>
+                            <span class="provider-name small text-center">@template.DisplayName</span>
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<input type="hidden" name="ProviderTemplate" id="ProviderTemplate" value="0" />
+
+<style>
+    .provider-card {
+        min-height: 100px;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+    }
+    .provider-card:hover {
+        border-color: var(--bs-primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .provider-card.active {
+        border-color: var(--bs-primary);
+        background-color: rgba(var(--bs-primary-rgb), 0.1);
+    }
+    .provider-card .provider-icon svg {
+        width: 100%;
+        height: 100%;
+        max-width: 40px;
+        max-height: 40px;
+    }
+    .provider-card .provider-name {
+        font-weight: 500;
+        line-height: 1.2;
+    }
+</style>
+
+<script>
+    function selectProviderTemplate(button, templateId) {
+        // Update hidden field
+        document.getElementById('ProviderTemplate').value = templateId;
+        
+        // Update visual selection
+        document.querySelectorAll('.provider-card').forEach(card => {
+            card.classList.remove('active');
+        });
+        button.classList.add('active');
+        
+        // Trigger form update to show provider-specific fields
+        if (typeof onProviderTemplateChanged === 'function') {
+            onProviderTemplateChanged(templateId);
+        }
+        
+        // Dispatch custom event for page to handle
+        const event = new CustomEvent('providerTemplateChanged', {
+            detail: { templateId: templateId }
+        });
+        document.dispatchEvent(event);
+    }
+</script>

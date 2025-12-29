@@ -78,13 +78,17 @@
                            @(describedBy is null ? null : Html.Raw($"aria-describedby=\"{describedBy}\""))
                            @(p.IsRecommended ? Html.Raw("data-autofocus=\"true\"") : null)
                            data-provider-name="@p.Name">
-                            @if (!string.IsNullOrEmpty(p.LogoUrl))
+                            @if (p.HasLogoData)
+                            {
+                                <img src="/api/providers/@p.Id/logo" alt="" class="me-2 auth-provider-logo" />
+                            }
+                            else if (!string.IsNullOrEmpty(p.LogoUrl))
                             {
                                 <img src="@p.LogoUrl" alt="" class="me-2 auth-provider-logo" />
                             }
                             else
                             {
-                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
+                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.5rem;"></i>
                             }
                             <span class="flex-grow-1">@p.Display</span>
                             @if (p.IsRecommended)

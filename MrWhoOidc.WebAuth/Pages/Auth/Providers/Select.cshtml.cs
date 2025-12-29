@@ -14,7 +14,7 @@ namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
 public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationStore) : PageModel
 {
-    public sealed record Item(string Name, string Display, string? LogoUrl, bool IsRecommended = false);
+    public sealed record Item(Guid Id, string Name, string Display, string? LogoUrl, bool HasLogoData, bool IsRecommended = false);
 
     [BindProperty(SupportsGet = true)]
     public string? Client_Id { get; set; }
@@ -109,7 +109,7 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
             .Where(m => m.ClientId == client.Id && m.Enabled)
             .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new { m, p })
             .OrderBy(x => x.m.Order)
-            .Select(x => new Item(x.p.Name, x.p.DisplayName ?? x.p.Name, x.p.LogoUrl, false))
+            .Select(x => new Item(x.p.Id, x.p.Name, x.p.DisplayName ?? x.p.Name, x.p.LogoUrl, x.p.LogoData != null, false))
             .ToListAsync();
 
         // Determine suggested provider

@@ -1,0 +1,111 @@
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm
+@using MrWhoOidc.Auth.IdentityProviders
+@{
+    var template = WellKnownProviderCatalog.GetTemplate(WellKnownProviderTemplate.Facebook);
+}
+
+<div class="provider-config-facebook">
+    <div class="alert alert-info mb-4">
+        <h5 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Facebook Login</h5>
+        <p class="mb-1">Configure Facebook Login using the OAuth 2.0 / OIDC-like protocol. Note that Facebook requires manual endpoint configuration.</p>
+        <a href="@template?.DocumentationUrl" target="_blank" rel="noopener" class="alert-link">
+            <i class="bi bi-box-arrow-up-right me-1"></i>View Facebook Developer Documentation
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-key me-1"></i>App Credentials</h5>
+
+            <div class="mb-3">
+                <label asp-for="Authority" class="form-label">Authority</label>
+                <input asp-for="Authority" class="form-control" value="https://www.facebook.com" readonly />
+                <span asp-validation-for="Authority" class="text-danger"></span>
+                <div class="form-text">Facebook's OAuth authority (fixed).</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ClientId" class="form-label">App ID</label>
+                <input asp-for="ClientId" class="form-control" 
+                       placeholder="1234567890123456" />
+                <span asp-validation-for="ClientId" class="text-danger"></span>
+                <div class="form-text">From Facebook Developers → Your App → Settings → Basic.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ClientSecret" class="form-label">App Secret</label>
+                <input asp-for="ClientSecret" type="password" class="form-control" />
+                <span asp-validation-for="ClientSecret" class="text-danger"></span>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
+
+            <div class="mb-3">
+                <label asp-for="ResponseType" class="form-label">Response Type</label>
+                <select asp-for="ResponseType" class="form-select">
+                    <option value="code" selected>code</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ScopesString" class="form-label">Permissions (Scopes)</label>
+                <input asp-for="ScopesString" class="form-control" value="openid email public_profile" />
+                <div class="form-text">
+                    Common: <code>openid</code>, <code>email</code>, <code>public_profile</code>
+                </div>
+            </div>
+
+            <div class="form-check mb-2">
+                <input asp-for="UsePKCE" class="form-check-input" checked />
+                <label asp-for="UsePKCE" class="form-check-label">Use PKCE</label>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-gear me-1"></i>Facebook-Specific Options</h5>
+
+            <div class="mb-3">
+                <label for="FacebookApiVersion" class="form-label">API Version</label>
+                <input type="text" id="FacebookApiVersion" name="FacebookConfig.ApiVersion" class="form-control" 
+                       value="v19.0" placeholder="v19.0" />
+                <div class="form-text">Facebook Graph API version. Check for the latest supported version.</div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input type="checkbox" id="FacebookEnableReauth" name="FacebookConfig.EnableReauthorization" 
+                       class="form-check-input" value="true" />
+                <label for="FacebookEnableReauth" class="form-check-label">Enable Re-authorization</label>
+                <div class="form-text">Allow re-prompting for permissions that were previously declined.</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-info-circle me-1"></i>Important Notes</h5>
+            
+            <div class="card bg-light">
+                <div class="card-body small">
+                    <ul class="mb-0">
+                        <li class="mb-2">
+                            <strong>App Review:</strong> Advanced permissions require Facebook App Review before they can be used in production.
+                        </li>
+                        <li class="mb-2">
+                            <strong>Email permission:</strong> Users can deny email access. Handle missing email gracefully.
+                        </li>
+                        <li class="mb-2">
+                            <strong>API versioning:</strong> Facebook depreciates old API versions. Plan for periodic updates.
+                        </li>
+                        <li>
+                            <strong>Test users:</strong> Use Facebook's test users feature during development.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

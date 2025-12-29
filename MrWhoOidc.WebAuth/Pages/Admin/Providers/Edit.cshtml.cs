@@ -5,15 +5,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.IdentityProviders;
 using MrWhoOidc.Auth.MultiTenancy;
-using System.IO;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Handlers;
-using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
@@ -22,7 +21,6 @@ public class EditModel(
     AuthDbContext db,
     IIdentityProviderValidator validator,
     IHttpClientFactory httpClientFactory,
-    IWebHostEnvironment env,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
     IOptions<OidcOptions> oidcOptions) : PageModel
@@ -92,7 +90,10 @@ public class EditModel(
             AllowRegistration = entity.AllowRegistration,
             SortOrder = entity.SortOrder,
             LogoUrl = entity.LogoUrl,
-            ConfigJson = entity.ConfigJson
+            LogoData = entity.LogoData,
+            ConfigJson = entity.ConfigJson,
+            ButtonBackgroundColor = entity.ButtonBackgroundColor,
+            ButtonTextColor = entity.ButtonTextColor
         };
 
         // Parse JSON to form if OIDC
@@ -164,6 +165,8 @@ public class EditModel(
         entity.AllowRegistration = Input.AllowRegistration;
         entity.SortOrder = Input.SortOrder;
         entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
+        entity.ButtonBackgroundColor = string.IsNullOrWhiteSpace(Input.ButtonBackgroundColor) ? null : Input.ButtonBackgroundColor.Trim();
+        entity.ButtonTextColor = string.IsNullOrWhiteSpace(Input.ButtonTextColor) ? null : Input.ButtonTextColor.Trim();
 
         if (Input.Type == IdentityProviderType.Oidc && OidcConfig != null && !string.IsNullOrWhiteSpace(OidcConfig.Authority))
         {
@@ -398,16 +401,15 @@ public class EditModel(
             return Page();
         }
 
-        var uploadsDir = Path.Combine(env.WebRootPath, "uploads", "providers");
-        Directory.CreateDirectory(uploadsDir);
-        var fileName = $"{entity.Id}{ext.ToLowerInvariant()}";
-        var fullPath = Path.Combine(uploadsDir, fileName);
-        using (var stream = System.IO.File.Create(fullPath))
-        {
-            await Logo.CopyToAsync(stream);
-        }
+        // Store logo in database instead of file system
+        using var ms = new MemoryStream();
+        await Logo.CopyToAsync(ms);
+        entity.LogoData = ms.ToArray();
+        entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
+        
+        // Set LogoUrl to the database-served endpoint
         var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        entity.LogoUrl = $"/uploads/providers/{fileName}?v={version}";
+        entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
@@ -435,6 +437,8 @@ public class EditModel(
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null) return NotFound();
         entity.LogoUrl = null;
+        entity.LogoData = null;
+        entity.LogoContentType = null;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
@@ -587,6 +591,27 @@ public class EditModel(
         public int SortOrder { get; set; } = 0;
         [Url]
         public string? LogoUrl { get; set; }
+        public byte[]? LogoData { get; set; }
         public string? ConfigJson { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonBackgroundColor { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonTextColor { get; set; }
     }
+
+    /// <summary>
+    /// Gets the MIME content type for a file extension.
+    /// </summary>
+    private static string GetContentType(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".svg" => "image/svg+xml",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        ".ico" => "image/x-icon",
+        _ => "application/octet-stream"
+    };
 }

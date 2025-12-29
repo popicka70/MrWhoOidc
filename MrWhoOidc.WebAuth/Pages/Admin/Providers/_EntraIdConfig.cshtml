@@ -1,0 +1,160 @@
+@model MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm
+@using MrWhoOidc.Auth.IdentityProviders
+@{
+    var template = WellKnownProviderCatalog.GetTemplate(WellKnownProviderTemplate.MicrosoftEntraId);
+}
+
+<div class="provider-config-entra">
+    <div class="alert alert-info mb-4">
+        <h5 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Microsoft Entra ID (formerly Azure AD)</h5>
+        <p class="mb-1">Configure your Microsoft Entra ID / Azure AD identity provider.</p>
+        <a href="@template?.DocumentationUrl" target="_blank" rel="noopener" class="alert-link">
+            <i class="bi bi-box-arrow-up-right me-1"></i>View Microsoft Documentation
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-building me-1"></i>Tenant Configuration</h5>
+
+            <div class="mb-3">
+                <label for="EntraTenantType" class="form-label">Tenant Type</label>
+                <select id="EntraTenantType" name="EntraConfig.TenantType" class="form-select" 
+                        onchange="updateEntraAuthority()">
+                    <option value="common">Common (any Microsoft account)</option>
+                    <option value="organizations">Organizations (work/school only)</option>
+                    <option value="consumers">Consumers (personal accounts only)</option>
+                    <option value="specific">Specific Tenant</option>
+                </select>
+                <div class="form-text">Choose which types of Microsoft accounts can sign in.</div>
+            </div>
+
+            <div class="mb-3" id="EntraTenantIdGroup" style="display:none;">
+                <label for="EntraTenantId" class="form-label">Tenant ID or Domain</label>
+                <input type="text" id="EntraTenantId" name="EntraConfig.TenantId" class="form-control" 
+                       placeholder="contoso.onmicrosoft.com or GUID"
+                       onchange="updateEntraAuthority()" />
+                <div class="form-text">Your Azure AD tenant ID (GUID) or primary domain.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Authority" class="form-label">Authority</label>
+                <input asp-for="Authority" class="form-control" readonly 
+                       id="EntraAuthority" />
+                <span asp-validation-for="Authority" class="text-danger"></span>
+                <div class="form-text">Automatically computed based on tenant type. Do not edit manually.</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-key me-1"></i>Application Credentials</h5>
+
+            <div class="mb-3">
+                <label asp-for="ClientId" class="form-label">Application (Client) ID</label>
+                <input asp-for="ClientId" class="form-control" 
+                       placeholder="00000000-0000-0000-0000-000000000000" />
+                <span asp-validation-for="ClientId" class="text-danger"></span>
+                <div class="form-text">From Azure Portal → App Registrations → Overview.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ClientSecret" class="form-label">Client Secret</label>
+                <input asp-for="ClientSecret" type="password" class="form-control" 
+                       placeholder="Enter client secret" />
+                <span asp-validation-for="ClientSecret" class="text-danger"></span>
+                <div class="form-text">Create under Certificates & Secrets in Azure Portal.</div>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4" />
+
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
+
+            <div class="mb-3">
+                <label asp-for="ResponseType" class="form-label">Response Type</label>
+                <select asp-for="ResponseType" class="form-select">
+                    <option value="code" selected>code (recommended)</option>
+                    <option value="id_token">id_token</option>
+                    <option value="code id_token">code id_token</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="ScopesString" class="form-label">Scopes</label>
+                <input asp-for="ScopesString" class="form-control" value="openid profile email" />
+                <div class="form-text">Space-separated. Entra requires "openid" for OIDC flows.</div>
+            </div>
+
+            <div class="form-check mb-2">
+                <input asp-for="UsePKCE" class="form-check-input" checked />
+                <label asp-for="UsePKCE" class="form-check-label">Use PKCE</label>
+                <div class="form-text">Strongly recommended for all flows.</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <h5 class="mb-3"><i class="bi bi-gear me-1"></i>Entra-Specific Options</h5>
+
+            <div class="mb-3">
+                <label for="EntraDomainHint" class="form-label">Domain Hint</label>
+                <input type="text" id="EntraDomainHint" name="EntraConfig.DomainHint" class="form-control" 
+                       placeholder="contoso.com" />
+                <div class="form-text">Pre-select the user's domain at login.</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="EntraPrompt" class="form-label">Prompt Behavior</label>
+                <select id="EntraPrompt" name="EntraConfig.Prompt" class="form-select">
+                    <option value="">Default</option>
+                    <option value="login">login (force re-authentication)</option>
+                    <option value="consent">consent (force consent prompt)</option>
+                    <option value="select_account" selected>select_account (show account picker)</option>
+                    <option value="none">none (silent, fail if interaction needed)</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="EntraLoginHint" class="form-label">Login Hint</label>
+                <input type="text" id="EntraLoginHint" name="EntraConfig.LoginHint" class="form-control" 
+                       placeholder="user@contoso.com" />
+                <div class="form-text">Pre-fill the username field at login.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updateEntraAuthority() {
+        const tenantType = document.getElementById('EntraTenantType').value;
+        const tenantIdGroup = document.getElementById('EntraTenantIdGroup');
+        const tenantId = document.getElementById('EntraTenantId').value;
+        const authorityInput = document.getElementById('EntraAuthority');
+        
+        // Show/hide tenant ID field
+        tenantIdGroup.style.display = tenantType === 'specific' ? 'block' : 'none';
+        
+        // Compute authority
+        let tenant;
+        switch (tenantType) {
+            case 'specific':
+                tenant = tenantId || '{tenant-id}';
+                break;
+            case 'organizations':
+                tenant = 'organizations';
+                break;
+            case 'consumers':
+                tenant = 'consumers';
+                break;
+            default:
+                tenant = 'common';
+        }
+        
+        authorityInput.value = `https://login.microsoftonline.com/${tenant}/v2.0`;
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', updateEntraAuthority);
+</script>

@@ -184,11 +184,22 @@ else
 
             <div class="mb-3">
                 <label class="form-label">Logo</label>
-                @if (Model.Input is not null && !string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
+                @if (Model.Input is not null)
                 {
-                    <div class="mb-2">
-                        <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height:64px" />
-                    </div>
+                    @if (Model.Input.LogoData != null)
+                    {
+                        <div class="mb-2">
+                            <img src="/api/providers/@Model.Input.Id/logo" alt="Logo" style="max-height:64px" />
+                            <div class="small text-muted">Stored in database</div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Model.Input.LogoUrl))
+                    {
+                        <div class="mb-2">
+                            <img src="@Model.Input.LogoUrl" alt="Logo" style="max-height:64px" />
+                            <div class="small text-muted">External URL</div>
+                        </div>
+                    }
                 }
                 <div class="d-flex gap-2 align-items-center">
                     <input type="file" asp-for="Logo" class="form-control" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
@@ -202,6 +213,29 @@ else
                 <label asp-for="Input.LogoUrl" class="form-label"></label>
                 <input asp-for="Input.LogoUrl" class="form-control" />
                 <span class="form-text">Optional direct URL; uploading overrides this.</span>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.ButtonBackgroundColor" class="form-label">Button Background Color</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" asp-for="Input.ButtonBackgroundColor" class="form-control form-control-color" title="Choose background color" />
+                            <input type="text" asp-for="Input.ButtonBackgroundColor" class="form-control" placeholder="#RRGGBB" />
+                        </div>
+                        <div class="form-text">Optional. Background color for the login button.</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.ButtonTextColor" class="form-label">Button Text Color</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" asp-for="Input.ButtonTextColor" class="form-control form-control-color" title="Choose text color" />
+                            <input type="text" asp-for="Input.ButtonTextColor" class="form-control" placeholder="#RRGGBB" />
+                        </div>
+                        <div class="form-text">Optional. Text color for the login button.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
