@@ -56,7 +56,7 @@ public class TenantSelectionTrackingMiddleware
                 _logger.LogWarning(ex, "[TenantTracking] Failed to access session for path {Path}", path);
             }
             
-            _logger.LogDebug("[TenantTracking] Path={Path}, HasSessionCookie={HasCookie}, SessionAvailable={SessionAvailable}, SessionId={SessionId}, CurrentTenant={TenantId}, SessionTenant={SessionTenant}, SessionSlug={SessionSlug}, IsAuthenticated={IsAuthenticated}", 
+            _logger.LogInformation("[TenantTracking] Path={Path}, HasSessionCookie={HasCookie}, SessionAvailable={SessionAvailable}, SessionId={SessionId}, CurrentTenant={TenantId}, SessionTenant={SessionTenant}, SessionSlug={SessionSlug}, IsAuthenticated={IsAuthenticated}", 
                 path, hasSessionCookie, sessionAvailable, sessionId ?? "(none)", tenant?.TenantId.ToString() ?? "(null)", existingTenantId ?? "(null)", existingSlug ?? "(null)", isAuthenticated);
 
             if (tenant != null && path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase) && sessionAvailable && context.Session != null)

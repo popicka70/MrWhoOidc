@@ -52,21 +52,22 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
 
         var httpContext = _httpContextAccessor.HttpContext;
         var requestPath = httpContext?.Request.Path.Value;
-        _logger.LogDebug("[TenantAdminAuth] Evaluating user {UserId} for path {Path}", userId, requestPath);
+        _logger.LogInformation("[TenantAdminAuth] Evaluating user {UserId} for path {Path}", userId, requestPath);
 
         // Helper: Get effective tenant ID (middleware-resolved or session fallback)
         Guid? GetEffectiveTenantId()
         {
             var tid = _tenantAccessor.CurrentTenant?.TenantId;
-            _logger.LogDebug("[TenantAdminAuth] Middleware tenant: {MiddlewareTenant}", tid?.ToString() ?? "(null)");
+            _logger.LogInformation("[TenantAdminAuth] Middleware tenant: {MiddlewareTenant}", tid?.ToString() ?? "(null)");
             
             if (tid == null && httpContext != null)
             {
                 var sessionAvailable = httpContext.Session != null;
-                _logger.LogDebug("[TenantAdminAuth] Session available: {SessionAvailable}", sessionAvailable);
+                var hasSessionCookie = httpContext.Request.Cookies.ContainsKey(".mrwhooidc.session");
+                _logger.LogInformation("[TenantAdminAuth] Session available: {SessionAvailable}, HasSessionCookie: {HasCookie}", sessionAvailable, hasSessionCookie);
                 
                 tid = _tenantSwitchingService.GetPreferredTenantId(httpContext);
-                _logger.LogDebug("[TenantAdminAuth] Session tenant: {SessionTenant}", tid?.ToString() ?? "(null)");
+                _logger.LogInformation("[TenantAdminAuth] Session tenant: {SessionTenant}", tid?.ToString() ?? "(null)");
             }
             return tid;
         }

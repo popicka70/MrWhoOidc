@@ -189,19 +189,19 @@ public class TenantSwitchingService(
         try
         {
             var sessionId = httpContext.Session?.Id;
-            logger.LogDebug("[GetPreferredTenantId] Session ID: {SessionId}, IsAvailable: {IsAvailable}", 
+            logger.LogInformation("[GetPreferredTenantId] Session ID: {SessionId}, IsAvailable: {IsAvailable}", 
                 sessionId ?? "(no session)", httpContext.Session != null);
             
             var tenantIdStr = httpContext.Session?.GetString(TenantSessionKeys.PreferredTenantId);
-            logger.LogDebug("[GetPreferredTenantId] Raw session value for PreferredTenantId: {Value}", tenantIdStr ?? "(null)");
+            logger.LogInformation("[GetPreferredTenantId] Raw session value for PreferredTenantId: {Value}", tenantIdStr ?? "(null)");
             
             if (Guid.TryParse(tenantIdStr, out var tenantId))
             {
-                logger.LogDebug("[GetPreferredTenantId] Returning tenant ID: {TenantId}", tenantId);
+                logger.LogInformation("[GetPreferredTenantId] Returning tenant ID: {TenantId}", tenantId);
                 return tenantId;
             }
             
-            logger.LogDebug("[GetPreferredTenantId] No valid tenant ID in session");
+            logger.LogInformation("[GetPreferredTenantId] No valid tenant ID in session");
             return null;
         }
         catch (Exception ex)
