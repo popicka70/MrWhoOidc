@@ -553,6 +553,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/api/providers/{id:guid}/logo",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/api/qr/cancel",
     "Methods": "POST",
     "RateLimiters": [
@@ -1178,6 +1187,15 @@
   },
   {
     "Pattern": "/t/{slug}/api/icon/{iconId:guid}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/providers/{id:guid}/logo",
     "Methods": "GET",
     "RateLimiters": [],
     "Authz": null,

@@ -6,6 +6,7 @@ using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests.MultiTenancy;
@@ -60,8 +61,11 @@ public class MultiTenantSecurityTests
         // Register ITenantAccessor (required by TenantAdminAuthorizationHandler)
         services.AddScoped<ITenantAccessor>(_ => MockTenantAccessor.CreateSingleTenantMode());
 
-        services.AddSingleton<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
-        services.AddSingleton<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
+        // Register ITenantSwitchingService mock (required by TenantAdminAuthorizationHandler)
+        services.AddScoped<ITenantSwitchingService, MockTenantSwitchingService>();
+
+        services.AddScoped<IAuthorizationHandler, PlatformAdminAuthorizationHandler>();
+        services.AddScoped<IAuthorizationHandler, TenantAdminAuthorizationHandler>();
         services.AddScoped<IHttpContextAccessor, HttpContextAccessor>();
 
         _serviceProvider = services.BuildServiceProvider();
@@ -553,4 +557,15 @@ public class MultiTenantSecurityTests
         Assert.AreNotEqual(tenant1EditorId, tenant2EditorId,
             "Same role name in different tenants should be separate records");
     }
+}
+
+/// <summary>
+/// Mock implementation of ITenantSwitchingService for unit tests.
+/// </summary>
+internal class MockTenantSwitchingService : ITenantSwitchingService
+{
+    public Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user) => Task.FromResult(new List<TenantAccessInfo>());
+    public Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId) => Task.CompletedTask;
+    public Guid? GetPreferredTenantId(HttpContext httpContext) => null;
+    public string? GetPreferredTenantSlug(HttpContext httpContext) => null;
 }
