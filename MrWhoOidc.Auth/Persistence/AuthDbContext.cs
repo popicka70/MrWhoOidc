@@ -1635,6 +1635,18 @@ public class IdentityProvider
     [MaxLength(8000)]
     public string? ProviderSpecificConfigJson { get; set; }
     
+    /// <summary>
+    /// Optional background color for the login button (e.g., "#0078d4").
+    /// </summary>
+    [MaxLength(20)]
+    public string? ButtonBackgroundColor { get; set; }
+    
+    /// <summary>
+    /// Optional text color for the login button (e.g., "#ffffff").
+    /// </summary>
+    [MaxLength(20)]
+    public string? ButtonTextColor { get; set; }
+    
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

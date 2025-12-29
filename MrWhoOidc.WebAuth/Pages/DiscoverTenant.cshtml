@@ -1,5 +1,6 @@
 @page
 @model MrWhoOidc.WebAuth.Pages.DiscoverTenantModel
+@using MrWhoOidc.Auth.IdentityProviders
 @{
     ViewData["Title"] = "Sign in";
     Layout = "_AuthLayout";
@@ -29,10 +30,10 @@
                     var qrReturnUrl = Model.ReturnUrl ?? "/";
                     var qrLoginUrl = $"/auth/qr?returnUrl={Uri.EscapeDataString(qrReturnUrl)}";
                 }
-                <a href="@qrLoginUrl" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-center"
+                <a href="@qrLoginUrl" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start"
                    aria-label="Sign in with QR Code">
-                    <i class="bi bi-qr-code me-2" style="font-size: 1.25rem;"></i>
-                    <span>Sign in with QR Code</span>
+                    <span class="me-2 d-flex align-items-center">@Html.Raw(ProviderIcons.QrCode)</span>
+                    <span class="flex-grow-1">Sign in with QR Code</span>
                 </a>
             </div>
             
@@ -60,11 +61,23 @@
                             callbackUrl += $"?returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         }
                         var startUrl = $"/Auth/External/Start?provider={Uri.EscapeDataString(idp.Name)}&returnUrl={Uri.EscapeDataString(callbackUrl)}";
+                        
+                        var buttonStyle = "";
+                        if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
+                        {
+                            buttonStyle += $"background-color: {idp.ButtonBackgroundColor}; border-color: {idp.ButtonBackgroundColor};";
+                        }
+                        if (!string.IsNullOrEmpty(idp.ButtonTextColor))
+                        {
+                            buttonStyle += $"color: {idp.ButtonTextColor};";
+                        }
+
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"
                            href="@startUrl"
                            role="listitem"
                            aria-label="Sign in with @idp.DisplayName"
-                           data-provider-name="@idp.Name">
+                           data-provider-name="@idp.Name"
+                           style="@buttonStyle">
                             @if (idp.HasLogoData)
                             {
                                 <img src="/api/providers/@idp.Id/logo" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
@@ -75,7 +88,7 @@
                             }
                             else
                             {
-                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.25rem;"></i>
+                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.5rem;"></i>
                             }
                             <span class="flex-grow-1">Continue with @idp.DisplayName</span>
                         </a>

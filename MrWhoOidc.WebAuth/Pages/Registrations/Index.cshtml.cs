@@ -20,6 +20,8 @@ public sealed record RegistrationIdpOption
     public required string DisplayName { get; init; }
     public string? LogoUrl { get; init; }
     public bool HasLogoData { get; init; }
+    public string? ButtonBackgroundColor { get; init; }
+    public string? ButtonTextColor { get; init; }
 }
 
 [AllowAnonymous]
@@ -102,7 +104,9 @@ public class IndexModel(
                     Name = p.Name,
                     DisplayName = p.DisplayName ?? p.Name,
                     LogoUrl = p.LogoUrl,
-                    HasLogoData = p.LogoData != null
+                    HasLogoData = p.LogoData != null,
+                    ButtonBackgroundColor = p.ButtonBackgroundColor,
+                    ButtonTextColor = p.ButtonTextColor
                 })
                 .ToListAsync();
 

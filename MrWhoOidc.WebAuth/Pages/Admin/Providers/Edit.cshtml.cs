@@ -91,7 +91,9 @@ public class EditModel(
             SortOrder = entity.SortOrder,
             LogoUrl = entity.LogoUrl,
             LogoData = entity.LogoData,
-            ConfigJson = entity.ConfigJson
+            ConfigJson = entity.ConfigJson,
+            ButtonBackgroundColor = entity.ButtonBackgroundColor,
+            ButtonTextColor = entity.ButtonTextColor
         };
 
         // Parse JSON to form if OIDC
@@ -163,6 +165,8 @@ public class EditModel(
         entity.AllowRegistration = Input.AllowRegistration;
         entity.SortOrder = Input.SortOrder;
         entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
+        entity.ButtonBackgroundColor = string.IsNullOrWhiteSpace(Input.ButtonBackgroundColor) ? null : Input.ButtonBackgroundColor.Trim();
+        entity.ButtonTextColor = string.IsNullOrWhiteSpace(Input.ButtonTextColor) ? null : Input.ButtonTextColor.Trim();
 
         if (Input.Type == IdentityProviderType.Oidc && OidcConfig != null && !string.IsNullOrWhiteSpace(OidcConfig.Authority))
         {
@@ -589,6 +593,12 @@ public class EditModel(
         public string? LogoUrl { get; set; }
         public byte[]? LogoData { get; set; }
         public string? ConfigJson { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonBackgroundColor { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonTextColor { get; set; }
     }
 
     /// <summary>

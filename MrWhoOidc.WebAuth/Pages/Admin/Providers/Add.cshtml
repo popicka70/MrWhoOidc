@@ -84,6 +84,28 @@
                     </div>
                 </div>
             </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.ButtonBackgroundColor" class="form-label">Button Background Color</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" asp-for="Input.ButtonBackgroundColor" class="form-control form-control-color" value="#ffffff" title="Choose background color" />
+                            <input type="text" asp-for="Input.ButtonBackgroundColor" class="form-control" placeholder="#RRGGBB" />
+                        </div>
+                        <div class="form-text">Optional. Background color for the login button.</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label asp-for="Input.ButtonTextColor" class="form-label">Button Text Color</label>
+                        <div class="d-flex gap-2">
+                            <input type="color" asp-for="Input.ButtonTextColor" class="form-control form-control-color" value="#000000" title="Choose text color" />
+                            <input type="text" asp-for="Input.ButtonTextColor" class="form-control" placeholder="#RRGGBB" />
+                        </div>
+                        <div class="form-text">Optional. Text color for the login button.</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

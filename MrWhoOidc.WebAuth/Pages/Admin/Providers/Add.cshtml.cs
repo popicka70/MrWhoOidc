@@ -249,6 +249,8 @@ public class AddModel(
             LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim(),
             ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim(),
             ProviderSpecificConfigJson = providerSpecificJson,
+            ButtonBackgroundColor = string.IsNullOrWhiteSpace(Input.ButtonBackgroundColor) ? null : Input.ButtonBackgroundColor.Trim(),
+            ButtonTextColor = string.IsNullOrWhiteSpace(Input.ButtonTextColor) ? null : Input.ButtonTextColor.Trim(),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -528,6 +530,12 @@ public class AddModel(
         [Url]
         public string? LogoUrl { get; set; }
         public string? ConfigJson { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonBackgroundColor { get; set; }
+        
+        [StringLength(20)]
+        public string? ButtonTextColor { get; set; }
     }
     
     public sealed class EntraConfigInput

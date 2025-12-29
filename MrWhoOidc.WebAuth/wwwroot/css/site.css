@@ -284,7 +284,7 @@ body {
 }
 
 /* Provider logo sizing and spacing */
-.auth-provider-logo { height: 24px; width: 24px; object-fit: contain; }
+.auth-provider-logo, .auth-btn .provider-icon { height: 24px; width: 24px; object-fit: contain; flex-shrink: 0; }
 
 /* Improve touch target size on mobile */
 @media (max-width: 576px) { .auth-btn { padding: .85rem 1rem; }}
