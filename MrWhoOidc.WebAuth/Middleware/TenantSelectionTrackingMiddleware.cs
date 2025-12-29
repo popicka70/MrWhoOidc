@@ -59,11 +59,18 @@ public class TenantSelectionTrackingMiddleware
             _logger.LogInformation("[TenantTracking] Path={Path}, HasSessionCookie={HasCookie}, SessionAvailable={SessionAvailable}, SessionId={SessionId}, CurrentTenant={TenantId}, SessionTenant={SessionTenant}, SessionSlug={SessionSlug}, IsAuthenticated={IsAuthenticated}", 
                 path, hasSessionCookie, sessionAvailable, sessionId ?? "(none)", tenant?.TenantId.ToString() ?? "(null)", existingTenantId ?? "(null)", existingSlug ?? "(null)", isAuthenticated);
 
-            if (tenant != null && path.StartsWith("/t/", StringComparison.OrdinalIgnoreCase) && sessionAvailable && context.Session != null)
+            // Save tenant to session whenever middleware resolves a tenant
+            // This ensures session has tenant context for pages that skip tenant resolution (e.g., /platform-admin/*)
+            // Previously only saved for /t/ paths, which caused issues when visiting root / or other tenant-resolved paths
+            if (tenant != null && sessionAvailable && context.Session != null)
             {
-                _logger.LogDebug("[TenantTracking] Storing tenant {TenantId}/{Slug} in session for path {Path}", tenant.TenantId, tenant.Slug, path);
-                context.Session.SetString(TenantSessionKeys.PreferredTenantId, tenant.TenantId.ToString());
-                context.Session.SetString(TenantSessionKeys.PreferredTenantSlug, tenant.Slug);
+                // Only update session if tenant changed or wasn't set
+                if (existingTenantId != tenant.TenantId.ToString())
+                {
+                    _logger.LogInformation("[TenantTracking] Storing tenant {TenantId}/{Slug} in session for path {Path}", tenant.TenantId, tenant.Slug, path);
+                    context.Session.SetString(TenantSessionKeys.PreferredTenantId, tenant.TenantId.ToString());
+                    context.Session.SetString(TenantSessionKeys.PreferredTenantSlug, tenant.Slug);
+                }
             }
             else if (tenant == null && string.IsNullOrEmpty(existingTenantId) && isAuthenticated)
             {
