@@ -245,6 +245,7 @@ public class AddModel(
             ProviderTemplate = selectedTemplate != WellKnownProviderTemplate.Custom ? selectedTemplate : null,
             Enabled = Input.Enabled,
             IsDefault = Input.IsDefault,
+            AllowRegistration = Input.AllowRegistration,
             SortOrder = Input.SortOrder,
             LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim(),
             ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim(),
@@ -543,6 +544,7 @@ public class AddModel(
         public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
         public bool Enabled { get; set; } = true;
         public bool IsDefault { get; set; } = false;
+        public bool AllowRegistration { get; set; } = false;
         public int SortOrder { get; set; } = 0;
         [Url]
         public string? LogoUrl { get; set; }

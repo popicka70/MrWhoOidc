@@ -59,11 +59,15 @@
                         var buttonStyle = "";
                         if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
                         {
-                            buttonStyle += $"background-color: {idp.ButtonBackgroundColor}; border-color: {idp.ButtonBackgroundColor};";
+                            buttonStyle += $"background-color: {idp.ButtonBackgroundColor};";
                         }
                         if (!string.IsNullOrEmpty(idp.ButtonTextColor))
                         {
-                            buttonStyle += $"color: {idp.ButtonTextColor};";
+                            buttonStyle += $"color: {idp.ButtonTextColor}; border-color: {idp.ButtonTextColor};";
+                        }
+                        else if (!string.IsNullOrEmpty(idp.ButtonBackgroundColor))
+                        {
+                            buttonStyle += $"border-color: {idp.ButtonBackgroundColor};";
                         }
 
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn"

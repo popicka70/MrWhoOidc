@@ -71,13 +71,29 @@
                         var url = $"/Auth/External/Start?provider={Uri.EscapeDataString(p.Name)}&clientId={Uri.EscapeDataString(Model.Client_Id!)}&returnUrl={Uri.EscapeDataString(Model.ReturnUrl)}";
                         var aria = p.IsRecommended ? $"Recommended provider {p.Display}" : $"{p.Display}";
                         var describedBy = p.IsRecommended ? "sr-recommended-text" : null;
+                        
+                        var buttonStyle = "";
+                        if (!string.IsNullOrEmpty(p.ButtonBackgroundColor))
+                        {
+                            buttonStyle += $"background-color: {p.ButtonBackgroundColor};";
+                        }
+                        if (!string.IsNullOrEmpty(p.ButtonTextColor))
+                        {
+                            buttonStyle += $"color: {p.ButtonTextColor}; border-color: {p.ButtonTextColor};";
+                        }
+                        else if (!string.IsNullOrEmpty(p.ButtonBackgroundColor))
+                        {
+                            buttonStyle += $"border-color: {p.ButtonBackgroundColor};";
+                        }
+
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn provider-option @(p.IsRecommended ? "provider-option-recommended" : null)"
                            role="listitem"
                            href="@url"
                            aria-label="@aria"
                            @(describedBy is null ? null : Html.Raw($"aria-describedby=\"{describedBy}\""))
                            @(p.IsRecommended ? Html.Raw("data-autofocus=\"true\"") : null)
-                           data-provider-name="@p.Name">
+                           data-provider-name="@p.Name"
+                           style="@buttonStyle">
                             @if (p.HasLogoData)
                             {
                                 <img src="/api/providers/@p.Id/logo" alt="" class="me-2 auth-provider-logo" />
