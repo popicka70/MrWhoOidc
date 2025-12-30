@@ -283,6 +283,20 @@ public class AddModel(
             var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
         }
+        else if (string.IsNullOrWhiteSpace(entity.LogoUrl) && selectedTemplate != WellKnownProviderTemplate.Custom)
+        {
+            // Use preset icon from template if no file uploaded and no URL provided
+            var templateDef = WellKnownProviderCatalog.GetTemplate(selectedTemplate);
+            if (templateDef != null && !string.IsNullOrEmpty(templateDef.IconSvg))
+            {
+                entity.LogoData = System.Text.Encoding.UTF8.GetBytes(templateDef.IconSvg);
+                entity.LogoContentType = "image/svg+xml";
+                
+                // Set LogoUrl to the database-served endpoint
+                var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
+            }
+        }
 
         var (ok, error) = await validator.ValidateAsync(entity);
         if (!ok)
