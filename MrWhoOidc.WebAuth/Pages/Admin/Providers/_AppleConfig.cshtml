@@ -19,9 +19,9 @@
 
             <div class="mb-3">
                 <label asp-for="Authority" class="form-label">Authority</label>
-                <input asp-for="Authority" class="form-control" value="https://appleid.apple.com" readonly />
+                <input asp-for="Authority" class="form-control" value="https://appleid.apple.com" />
                 <span asp-validation-for="Authority" class="text-danger"></span>
-                <div class="form-text">Apple's OIDC authority (fixed).</div>
+                <div class="form-text">Apple's OIDC authority. Default is <code>https://appleid.apple.com</code>.</div>
             </div>
 
             <div class="mb-3">

@@ -1,5 +1,5 @@
 @using MrWhoOidc.Auth.IdentityProviders
-@model (MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm Config, WellKnownProviderTemplate Template)
+@model (MrWhoOidc.WebAuth.Pages.Admin.Providers.OidcConfigForm OidcConfig, WellKnownProviderTemplate Template)
 @{
     var template = WellKnownProviderCatalog.GetTemplate(Model.Template);
     if (template == null)
@@ -113,10 +113,10 @@
                 }
 
                 <div class="mb-3">
-                    <label asp-for="Config.Authority" class="form-label">Authority URL</label>
-                    <input asp-for="Config.Authority" class="form-control" readonly id="GenericAuthority" />
-                    <span asp-validation-for="Config.Authority" class="text-danger"></span>
-                    <div class="form-text">Computed from the template pattern: <code>@template.AuthorityPattern</code></div>
+                    <label asp-for="OidcConfig.Authority" class="form-label">Authority URL</label>
+                    <input asp-for="OidcConfig.Authority" class="form-control" id="GenericAuthority" />
+                    <span asp-validation-for="OidcConfig.Authority" class="text-danger"></span>
+                    <div class="form-text">Computed from the template pattern: <code>@template.AuthorityPattern</code>, but can be modified.</div>
                 </div>
             }
             else
@@ -124,10 +124,10 @@
                 <h5 class="mb-3"><i class="bi bi-link-45deg me-1"></i>Connection Settings</h5>
                 
                 <div class="mb-3">
-                    <label asp-for="Config.Authority" class="form-label">Authority</label>
-                    <input asp-for="Config.Authority" class="form-control" 
-                           value="@template.AuthorityPattern" readonly />
-                    <span asp-validation-for="Config.Authority" class="text-danger"></span>
+                    <label asp-for="OidcConfig.Authority" class="form-label">Authority</label>
+                    <input asp-for="OidcConfig.Authority" class="form-control" 
+                           value="@template.AuthorityPattern" />
+                    <span asp-validation-for="OidcConfig.Authority" class="text-danger"></span>
                 </div>
             }
         </div>
@@ -136,15 +136,15 @@
             <h5 class="mb-3"><i class="bi bi-key me-1"></i>Credentials</h5>
 
             <div class="mb-3">
-                <label asp-for="Config.ClientId" class="form-label">Client ID</label>
-                <input asp-for="Config.ClientId" class="form-control" />
-                <span asp-validation-for="Config.ClientId" class="text-danger"></span>
+                <label asp-for="OidcConfig.ClientId" class="form-label">Client ID</label>
+                <input asp-for="OidcConfig.ClientId" class="form-control" />
+                <span asp-validation-for="OidcConfig.ClientId" class="text-danger"></span>
             </div>
 
             <div class="mb-3">
-                <label asp-for="Config.ClientSecret" class="form-label">Client Secret</label>
-                <input asp-for="Config.ClientSecret" type="password" class="form-control" />
-                <span asp-validation-for="Config.ClientSecret" class="text-danger"></span>
+                <label asp-for="OidcConfig.ClientSecret" class="form-label">Client Secret</label>
+                <input asp-for="OidcConfig.ClientSecret" type="password" class="form-control" />
+                <span asp-validation-for="OidcConfig.ClientSecret" class="text-danger"></span>
             </div>
         </div>
     </div>
@@ -156,8 +156,8 @@
             <h5 class="mb-3"><i class="bi bi-sliders me-1"></i>Protocol Settings</h5>
 
             <div class="mb-3">
-                <label asp-for="Config.ResponseType" class="form-label">Response Type</label>
-                <select asp-for="Config.ResponseType" class="form-select">
+                <label asp-for="OidcConfig.ResponseType" class="form-label">Response Type</label>
+                <select asp-for="OidcConfig.ResponseType" class="form-select">
                     <option value="code" selected>code</option>
                     <option value="id_token">id_token</option>
                     <option value="code id_token">code id_token</option>
@@ -165,8 +165,8 @@
             </div>
 
             <div class="mb-3">
-                <label asp-for="Config.ScopesString" class="form-label">Scopes</label>
-                <input asp-for="Config.ScopesString" class="form-control" 
+                <label asp-for="OidcConfig.ScopesString" class="form-label">Scopes</label>
+                <input asp-for="OidcConfig.ScopesString" class="form-control" 
                        value="@string.Join(" ", template.DefaultScopes)" />
                 <div class="form-text">Space-separated list of scopes.</div>
             </div>
@@ -174,15 +174,15 @@
             @if (template.DefaultUsePkce)
             {
                 <div class="form-check mb-2">
-                    <input asp-for="Config.UsePKCE" class="form-check-input" checked />
-                    <label asp-for="Config.UsePKCE" class="form-check-label">Use PKCE</label>
+                    <input asp-for="OidcConfig.UsePKCE" class="form-check-input" checked />
+                    <label asp-for="OidcConfig.UsePKCE" class="form-check-label">Use PKCE</label>
                 </div>
             }
             else
             {
                 <div class="form-check mb-2">
-                    <input asp-for="Config.UsePKCE" class="form-check-input" />
-                    <label asp-for="Config.UsePKCE" class="form-check-label">Use PKCE</label>
+                    <input asp-for="OidcConfig.UsePKCE" class="form-check-input" />
+                    <label asp-for="OidcConfig.UsePKCE" class="form-check-label">Use PKCE</label>
                 </div>
             }
         </div>

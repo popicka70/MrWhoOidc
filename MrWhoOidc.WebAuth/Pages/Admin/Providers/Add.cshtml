@@ -125,11 +125,8 @@
 
                     @if (Model.OidcConfig is not null)
                     {
-                        @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
-                        @await Html.PartialAsync(
-                            "_OidcAdvancedConfig",
-                            Model.OidcConfig,
-                            new ViewDataDictionary(ViewData) { ["Compact"] = true })
+                        <partial name="_OidcStandardConfig" for="OidcConfig" />
+                        <partial name="_OidcAdvancedConfig" for="OidcConfig" view-data='@new ViewDataDictionary(ViewData) { ["Compact"] = true }' />
                     }
                 }
                 else
@@ -146,7 +143,7 @@
             <div id="config-1" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_EntraIdConfig", Model.OidcConfig)
+                    <partial name="_EntraIdConfig" for="OidcConfig" />
                 }
             </div>
 
@@ -154,7 +151,7 @@
             <div id="config-2" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_GoogleConfig", Model.OidcConfig)
+                    <partial name="_GoogleConfig" for="OidcConfig" />
                 }
             </div>
 
@@ -162,7 +159,7 @@
             <div id="config-3" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_FacebookConfig", Model.OidcConfig)
+                    <partial name="_FacebookConfig" for="OidcConfig" />
                 }
             </div>
 
@@ -170,7 +167,7 @@
             <div id="config-4" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_AppleConfig", Model.OidcConfig)
+                    <partial name="_AppleConfig" for="OidcConfig" />
                 }
             </div>
 
@@ -178,7 +175,7 @@
             <div id="config-5" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_GitHubConfig", Model.OidcConfig)
+                    <partial name="_GitHubConfig" for="OidcConfig" />
                 }
             </div>
 
@@ -186,7 +183,7 @@
             <div id="config-6" class="provider-config-section" style="display:none;">
                 @if (Model.OidcConfig is not null)
                 {
-                    @await Html.PartialAsync("_GenericProviderConfig", (Model.OidcConfig, WellKnownProviderTemplate.LinkedIn))
+                    <partial name="_GenericProviderConfig" model='(Model.OidcConfig, WellKnownProviderTemplate.LinkedIn)' />
                 }
             </div>
 
@@ -202,7 +199,7 @@
                 <div id="config-@((int)template)" class="provider-config-section" style="display:none;">
                     @if (Model.OidcConfig is not null)
                     {
-                        @await Html.PartialAsync("_GenericProviderConfig", (Model.OidcConfig, template))
+                        <partial name="_GenericProviderConfig" model='(Model.OidcConfig, template)' />
                     }
                 </div>
             }
@@ -221,15 +218,22 @@
     document.addEventListener('providerTemplateChanged', function(e) {
         const templateId = e.detail.templateId;
         
-        // Hide all config sections
+        // Hide all config sections and DISABLE their inputs
         document.querySelectorAll('.provider-config-section').forEach(section => {
             section.style.display = 'none';
+            // Disable all inputs/selects/textareas in this section so they aren't validated or submitted
+            section.querySelectorAll('input, select, textarea').forEach(input => {
+                input.disabled = true;
+            });
         });
         
-        // Show the selected config section
+        // Show the selected config section and ENABLE its inputs
         const selectedSection = document.getElementById('config-' + templateId);
         if (selectedSection) {
             selectedSection.style.display = 'block';
+            selectedSection.querySelectorAll('input, select, textarea').forEach(input => {
+                input.disabled = false;
+            });
         }
         
         // Auto-populate name and display name suggestions
@@ -251,5 +255,14 @@
         if (templateId > 0) {
             document.getElementById('ProviderType').value = '0'; // OIDC
         }
+    });
+
+    // Initialize on load for the default selection
+    document.addEventListener('DOMContentLoaded', function() {
+        const initialTemplateId = document.getElementById('ProviderTemplate').value || '0';
+        const event = new CustomEvent('providerTemplateChanged', {
+            detail: { templateId: initialTemplateId }
+        });
+        document.dispatchEvent(event);
     });
 </script>

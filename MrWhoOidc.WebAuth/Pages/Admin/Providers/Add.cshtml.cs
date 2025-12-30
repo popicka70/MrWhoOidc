@@ -130,7 +130,7 @@ public class AddModel(
             if (templateDef != null)
             {
                 // Build authority URL from placeholders if needed
-                if (OidcConfig != null && templateDef.AuthorityPlaceholders.Length > 0)
+                if (OidcConfig != null && templateDef.AuthorityPlaceholders.Length > 0 && string.IsNullOrWhiteSpace(OidcConfig.Authority))
                 {
                     OidcConfig.Authority = BuildAuthorityFromTemplate(templateDef);
                 }
@@ -422,24 +422,27 @@ public class AddModel(
         OidcConfig.UsePKCE = templateDef.DefaultUsePkce;
         
         // Special handling for providers with fixed authorities
-        switch (templateDef.Template)
+        if (string.IsNullOrWhiteSpace(OidcConfig.Authority))
         {
-            case WellKnownProviderTemplate.Google:
-                OidcConfig.Authority = "https://accounts.google.com";
-                break;
-            case WellKnownProviderTemplate.Apple:
-                OidcConfig.Authority = "https://appleid.apple.com";
-                OidcConfig.ResponseMode = "form_post";
-                break;
-            case WellKnownProviderTemplate.GitHub:
-                OidcConfig.Authority = "https://github.com";
-                break;
-            case WellKnownProviderTemplate.Facebook:
-                OidcConfig.Authority = "https://www.facebook.com";
-                break;
-            case WellKnownProviderTemplate.LinkedIn:
-                OidcConfig.Authority = "https://www.linkedin.com/oauth";
-                break;
+            switch (templateDef.Template)
+            {
+                case WellKnownProviderTemplate.Google:
+                    OidcConfig.Authority = "https://accounts.google.com";
+                    break;
+                case WellKnownProviderTemplate.Apple:
+                    OidcConfig.Authority = "https://appleid.apple.com";
+                    OidcConfig.ResponseMode = "form_post";
+                    break;
+                case WellKnownProviderTemplate.GitHub:
+                    OidcConfig.Authority = "https://github.com";
+                    break;
+                case WellKnownProviderTemplate.Facebook:
+                    OidcConfig.Authority = "https://www.facebook.com";
+                    break;
+                case WellKnownProviderTemplate.LinkedIn:
+                    OidcConfig.Authority = "https://www.linkedin.com/oauth";
+                    break;
+            }
         }
     }
     

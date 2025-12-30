@@ -250,7 +250,7 @@ else
                         <strong>Form Editor:</strong> Edit OIDC configuration using structured fields. Changes are synchronized with the JSON tab.
                     </div>
 
-                    @await Html.PartialAsync("_OidcStandardConfig", Model.OidcConfig)
+                    <partial name="_OidcStandardConfig" for="OidcConfig" />
                 }
                 else
                 {
@@ -275,7 +275,7 @@ else
                 @if (Model.Input?.Type == IdentityProviderType.Oidc && Model.OidcConfig != null)
                 {
                     <label class="form-label">Extended parameters (JSON)</label>
-                    @await Html.PartialAsync("_OidcAdvancedConfig", Model.OidcConfig)
+                    <partial name="_OidcAdvancedConfig" for="OidcConfig" />
                 }
                 else
                 {
