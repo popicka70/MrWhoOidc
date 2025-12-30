@@ -96,7 +96,7 @@
                            style="@buttonStyle">
                             @if (p.HasLogoData)
                             {
-                                <img src="/api/providers/@p.Id/logo" alt="" class="me-2 auth-provider-logo" />
+                                <img src="/api/providers/@p.Id/logo?v=@p.UpdatedAt.ToUnixTimeSeconds()" alt="" class="me-2 auth-provider-logo" />
                             }
                             else if (!string.IsNullOrEmpty(p.LogoUrl))
                             {

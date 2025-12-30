@@ -248,6 +248,9 @@ public class AddModel(
             AllowRegistration = Input.AllowRegistration,
             SortOrder = Input.SortOrder,
             LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim(),
+            LogoStorageType = string.IsNullOrWhiteSpace(Input.LogoUrl)
+                ? IdentityProviderLogoStorageType.None
+                : IdentityProviderLogoStorageType.ExternalUrl,
             ConfigJson = string.IsNullOrWhiteSpace(Input.ConfigJson) ? null : Input.ConfigJson.Trim(),
             ProviderSpecificConfigJson = providerSpecificJson,
             ButtonBackgroundColor = string.IsNullOrWhiteSpace(Input.ButtonBackgroundColor) ? null : Input.ButtonBackgroundColor.Trim(),
@@ -279,10 +282,9 @@ public class AddModel(
             await Logo.CopyToAsync(ms);
             entity.LogoData = ms.ToArray();
             entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
-            
-            // Set LogoUrl to the database-served endpoint
-            var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
+
+            entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
+            entity.LogoUrl = null;
         }
         else if (string.IsNullOrWhiteSpace(entity.LogoUrl) && selectedTemplate != WellKnownProviderTemplate.Custom)
         {
@@ -292,10 +294,9 @@ public class AddModel(
             {
                 entity.LogoData = System.Text.Encoding.UTF8.GetBytes(templateDef.IconSvg);
                 entity.LogoContentType = "image/svg+xml";
-                
-                // Set LogoUrl to the database-served endpoint
-                var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
+
+                entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
+                entity.LogoUrl = null;
             }
         }
 

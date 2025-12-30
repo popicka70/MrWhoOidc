@@ -296,7 +296,7 @@ internal static class EndpointMappingExtensions
         {
             var provider = await db.IdentityProviders
                 .Where(p => p.Id == id)
-                .Select(p => new { p.LogoData, p.LogoContentType })
+                .Select(p => new { p.LogoData, p.LogoContentType, p.UpdatedAt })
                 .FirstOrDefaultAsync(ct);
 
             if (provider?.LogoData == null || provider.LogoData.Length == 0)
@@ -306,11 +306,12 @@ internal static class EndpointMappingExtensions
 
             // Set cache headers for logo serving
             ctx.Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
-            ctx.Response.Headers["ETag"] = $"\"{id}\"";
+            var etag = $"\"{id}:{provider.UpdatedAt.ToUnixTimeSeconds()}\"";
+            ctx.Response.Headers["ETag"] = etag;
 
             // Check if client has cached version
             var ifNoneMatch = ctx.Request.Headers["If-None-Match"].FirstOrDefault();
-            if (ifNoneMatch == $"\"{id}\"")
+            if (ifNoneMatch == etag)
             {
                 return Results.StatusCode(StatusCodes.Status304NotModified);
             }

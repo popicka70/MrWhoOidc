@@ -720,6 +720,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             b.Property(x => x.Type).IsRequired();
             b.Property(x => x.Enabled).HasDefaultValue(true);
             b.Property(x => x.IsDefault).HasDefaultValue(false);
+            b.Property(x => x.LogoStorageType).HasDefaultValue(IdentityProviderLogoStorageType.None);
             b.Property(x => x.LogoUrl).HasMaxLength(2000);
             b.Property(x => x.SortOrder).HasDefaultValue(0);
             b.Property(x => x.ConfigJson).HasMaxLength(8000);
@@ -1581,6 +1582,13 @@ public enum IdentityProviderType
     Saml = 1
 }
 
+public enum IdentityProviderLogoStorageType
+{
+    None = 0,
+    Database = 1,
+    ExternalUrl = 2
+}
+
 public class IdentityProvider
 {
     public Guid Id { get; set; } = GuidHelper.NewId();
@@ -1606,6 +1614,9 @@ public class IdentityProvider
     /// Only applicable for IdPs in the default tenant.
     /// </summary>
     public bool AllowRegistration { get; set; } = false;
+
+    public IdentityProviderLogoStorageType LogoStorageType { get; set; } = IdentityProviderLogoStorageType.None;
+
     [MaxLength(2000)]
     public string? LogoUrl { get; set; }
     
@@ -1623,7 +1634,12 @@ public class IdentityProvider
     /// <summary>
     /// Returns true if the provider has a logo stored in the database or a URL.
     /// </summary>
-    public bool HasLogo => LogoData != null || !string.IsNullOrEmpty(LogoUrl);
+    public bool HasLogo => LogoStorageType switch
+    {
+        IdentityProviderLogoStorageType.Database => LogoData != null,
+        IdentityProviderLogoStorageType.ExternalUrl => !string.IsNullOrEmpty(LogoUrl),
+        _ => false
+    };
     
     public int SortOrder { get; set; } = 0;
     [MaxLength(8000)]

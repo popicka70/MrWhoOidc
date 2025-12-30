@@ -191,7 +191,7 @@ else
                     @if (Model.Input.LogoData != null)
                     {
                         <div class="mb-2">
-                            <img src="/api/providers/@Model.Input.Id/logo" alt="Logo" style="max-height:64px" />
+                            <img src="/api/providers/@Model.Input.Id/logo?v=@Model.Input.UpdatedAt.ToUnixTimeSeconds()" alt="Logo" style="max-height:64px" />
                             <div class="small text-muted">Stored in database</div>
                         </div>
                     }
@@ -205,15 +205,15 @@ else
                 }
                 <div class="d-flex gap-2 align-items-center">
                     <input type="file" asp-for="Logo" class="form-control" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
-                    <button type="submit" class="btn btn-outline-secondary" asp-page-handler="UploadLogo">Upload</button>
-                    <button type="submit" class="btn btn-outline-danger" asp-page-handler="ClearLogo">Clear</button>
+                    <button type="submit" class="btn btn-outline-secondary" asp-page-handler="UploadLogo" formnovalidate>Upload</button>
+                    <button type="submit" class="btn btn-outline-danger" asp-page-handler="ClearLogo" formnovalidate>Clear</button>
                 </div>
                 <div class="form-text">PNG/JPG/SVG/WEBP, up to 512 KB.</div>
             </div>
 
             <div class="mb-3">
                 <label asp-for="Input.LogoUrl" class="form-label"></label>
-                <input asp-for="Input.LogoUrl" class="form-control" />
+                <input asp-for="Input.LogoUrl" type="text" class="form-control" placeholder="https://example.com/logo.png" />
                 <span class="form-text">Optional direct URL; uploading overrides this.</span>
             </div>
 

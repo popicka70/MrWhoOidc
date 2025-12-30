@@ -84,7 +84,7 @@
                            style="@buttonStyle">
                             @if (idp.HasLogoData)
                             {
-                                <img src="/api/providers/@idp.Id/logo" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
+                                <img src="/api/providers/@idp.Id/logo?v=@idp.UpdatedAt.ToUnixTimeSeconds()" alt="" class="me-2 auth-provider-logo" style="width: 24px; height: 24px; object-fit: contain;" />
                             }
                             else if (!string.IsNullOrEmpty(idp.LogoUrl))
                             {

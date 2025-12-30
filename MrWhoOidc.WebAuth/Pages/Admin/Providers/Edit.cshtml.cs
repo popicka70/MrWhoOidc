@@ -79,22 +79,7 @@ public class EditModel(
         if (entity is null)
             return NotFound();
 
-        Input = new InputModel
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            DisplayName = entity.DisplayName,
-            Type = entity.Type,
-            Enabled = entity.Enabled,
-            IsDefault = entity.IsDefault,
-            AllowRegistration = entity.AllowRegistration,
-            SortOrder = entity.SortOrder,
-            LogoUrl = entity.LogoUrl,
-            LogoData = entity.LogoData,
-            ConfigJson = entity.ConfigJson,
-            ButtonBackgroundColor = entity.ButtonBackgroundColor,
-            ButtonTextColor = entity.ButtonTextColor
-        };
+        PopulateInput(entity);
 
         // Parse JSON to form if OIDC
         if (entity.Type == IdentityProviderType.Oidc)
@@ -135,6 +120,30 @@ public class EditModel(
         return Page();
     }
 
+    private void PopulateInput(IdentityProvider entity)
+    {
+        Input = new InputModel
+        {
+            Id = entity.Id,
+            UpdatedAt = entity.UpdatedAt,
+            Name = entity.Name,
+            DisplayName = entity.DisplayName,
+            Type = entity.Type,
+            Enabled = entity.Enabled,
+            IsDefault = entity.IsDefault,
+            AllowRegistration = entity.AllowRegistration,
+            SortOrder = entity.SortOrder,
+            // Only show external logo URLs in the text box.
+            LogoUrl = entity.LogoStorageType == IdentityProviderLogoStorageType.ExternalUrl
+                ? entity.LogoUrl
+                : null,
+            LogoData = entity.LogoData,
+            ConfigJson = entity.ConfigJson,
+            ButtonBackgroundColor = entity.ButtonBackgroundColor,
+            ButtonTextColor = entity.ButtonTextColor
+        };
+    }
+
     public async Task<IActionResult> OnPostAsync(Guid id)
     {
         if (!await ValidateTenantAccessAsync(id))
@@ -164,7 +173,65 @@ public class EditModel(
         entity.IsDefault = Input.IsDefault;
         entity.AllowRegistration = Input.AllowRegistration;
         entity.SortOrder = Input.SortOrder;
-        entity.LogoUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
+
+        // Handle logo upload (takes precedence over external URL)
+        var uploadedLogo = false;
+        if (Logo != null && Logo.Length > 0)
+        {
+            uploadedLogo = true;
+
+            var maxBytes = 512 * 1024;
+            if (Logo.Length > maxBytes)
+            {
+                ModelState.AddModelError(string.Empty, "Logo too large (max 512 KB).");
+                return Page();
+            }
+
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".svg", ".webp" };
+            var ext = Path.GetExtension(Logo.FileName);
+            if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
+            {
+                ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .svg, .webp");
+                return Page();
+            }
+
+            using var ms = new MemoryStream();
+            await Logo.CopyToAsync(ms);
+            entity.LogoData = ms.ToArray();
+            entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
+
+            entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
+            entity.LogoUrl = null;
+        }
+
+        // Handle external logo URL (only when not uploading a file)
+        if (!uploadedLogo)
+        {
+            var externalUrl = string.IsNullOrWhiteSpace(Input.LogoUrl) ? null : Input.LogoUrl.Trim();
+            if (!string.IsNullOrWhiteSpace(externalUrl))
+            {
+                entity.LogoStorageType = IdentityProviderLogoStorageType.ExternalUrl;
+                entity.LogoUrl = externalUrl;
+                entity.LogoData = null;
+                entity.LogoContentType = null;
+            }
+            else
+            {
+                // If user cleared the external URL, fall back to DB logo if present, otherwise None.
+                if (entity.LogoData != null && entity.LogoData.Length > 0)
+                {
+                    entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
+                    entity.LogoUrl = null;
+                }
+                else
+                {
+                    entity.LogoStorageType = IdentityProviderLogoStorageType.None;
+                    entity.LogoUrl = null;
+                    entity.LogoContentType = null;
+                }
+            }
+        }
+
         entity.ButtonBackgroundColor = string.IsNullOrWhiteSpace(Input.ButtonBackgroundColor) ? null : Input.ButtonBackgroundColor.Trim();
         entity.ButtonTextColor = string.IsNullOrWhiteSpace(Input.ButtonTextColor) ? null : Input.ButtonTextColor.Trim();
 
@@ -266,7 +333,7 @@ public class EditModel(
         }
 
         TempData["Success"] = "Provider updated.";
-        
+
         // Build tenant-aware redirect URL
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
             "/admin/providers",
@@ -346,18 +413,7 @@ public class EditModel(
         {
             ModelState.AddModelError(string.Empty, "Select a logo file.");
             // Reload the input model for rendering
-            Input = new InputModel
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                DisplayName = entity.DisplayName,
-                Type = entity.Type,
-                Enabled = entity.Enabled,
-                IsDefault = entity.IsDefault,
-                SortOrder = entity.SortOrder,
-                LogoUrl = entity.LogoUrl,
-                ConfigJson = entity.ConfigJson
-            };
+            PopulateInput(entity);
             return Page();
         }
 
@@ -366,18 +422,7 @@ public class EditModel(
         if (Logo.Length > maxBytes)
         {
             ModelState.AddModelError(string.Empty, "Logo too large (max 512 KB).");
-            Input = new InputModel
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                DisplayName = entity.DisplayName,
-                Type = entity.Type,
-                Enabled = entity.Enabled,
-                IsDefault = entity.IsDefault,
-                SortOrder = entity.SortOrder,
-                LogoUrl = entity.LogoUrl,
-                ConfigJson = entity.ConfigJson
-            };
+            PopulateInput(entity);
             return Page();
         }
 
@@ -386,18 +431,7 @@ public class EditModel(
         if (string.IsNullOrWhiteSpace(ext) || !allowed.Contains(ext))
         {
             ModelState.AddModelError(string.Empty, "Unsupported file type. Allowed: .png, .jpg, .jpeg, .svg, .webp");
-            Input = new InputModel
-            {
-                Id = entity.Id,
-                Name = entity.Name,
-                DisplayName = entity.DisplayName,
-                Type = entity.Type,
-                Enabled = entity.Enabled,
-                IsDefault = entity.IsDefault,
-                SortOrder = entity.SortOrder,
-                LogoUrl = entity.LogoUrl,
-                ConfigJson = entity.ConfigJson
-            };
+            PopulateInput(entity);
             return Page();
         }
 
@@ -406,26 +440,14 @@ public class EditModel(
         await Logo.CopyToAsync(ms);
         entity.LogoData = ms.ToArray();
         entity.LogoContentType = Logo.ContentType ?? GetContentType(ext);
-        
-        // Set LogoUrl to the database-served endpoint
-        var version = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        entity.LogoUrl = $"/api/providers/{entity.Id}/logo?v={version}";
+
+        entity.LogoStorageType = IdentityProviderLogoStorageType.Database;
+        entity.LogoUrl = null;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
         // Repopulate Input for rendering
-        Input = new InputModel
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            DisplayName = entity.DisplayName,
-            Type = entity.Type,
-            Enabled = entity.Enabled,
-            IsDefault = entity.IsDefault,
-            SortOrder = entity.SortOrder,
-            LogoUrl = entity.LogoUrl,
-            ConfigJson = entity.ConfigJson
-        };
+        PopulateInput(entity);
 
         TempData["Success"] = "Logo uploaded.";
         return Page();
@@ -436,24 +458,14 @@ public class EditModel(
         await LoadTypesAsync();
         var entity = await db.IdentityProviders.FirstOrDefaultAsync(p => p.Id == id);
         if (entity is null) return NotFound();
+        entity.LogoStorageType = IdentityProviderLogoStorageType.None;
         entity.LogoUrl = null;
         entity.LogoData = null;
         entity.LogoContentType = null;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
 
-        Input = new InputModel
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            DisplayName = entity.DisplayName,
-            Type = entity.Type,
-            Enabled = entity.Enabled,
-            IsDefault = entity.IsDefault,
-            SortOrder = entity.SortOrder,
-            LogoUrl = entity.LogoUrl,
-            ConfigJson = entity.ConfigJson
-        };
+        PopulateInput(entity);
         TempData["Success"] = "Logo cleared.";
         return Page();
     }
@@ -576,6 +588,8 @@ public class EditModel(
     public sealed class InputModel
     {
         public Guid Id { get; set; }
+
+        public DateTimeOffset UpdatedAt { get; set; }
         [Required, StringLength(150, MinimumLength = 2)]
         public string Name { get; set; } = string.Empty;
         [StringLength(200)]
@@ -589,7 +603,7 @@ public class EditModel(
         /// </summary>
         public bool AllowRegistration { get; set; } = false;
         public int SortOrder { get; set; } = 0;
-        [Url]
+        
         public string? LogoUrl { get; set; }
         public byte[]? LogoData { get; set; }
         public string? ConfigJson { get; set; }

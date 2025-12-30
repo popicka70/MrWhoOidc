@@ -18,6 +18,7 @@ public sealed record LoginIdpOption
     public required Guid Id { get; init; }
     public required string Name { get; init; }
     public required string DisplayName { get; init; }
+    public DateTimeOffset UpdatedAt { get; init; }
     public string? LogoUrl { get; init; }
     public bool HasLogoData { get; init; }
     public string? ButtonBackgroundColor { get; init; }
@@ -142,6 +143,7 @@ public class DiscoverTenantModel : PageModel
                     Id = p.Id,
                     Name = p.Name,
                     DisplayName = p.DisplayName ?? p.Name,
+                    UpdatedAt = p.UpdatedAt,
                     LogoUrl = p.LogoUrl,
                     HasLogoData = p.LogoData != null,
                     ButtonBackgroundColor = p.ButtonBackgroundColor,
