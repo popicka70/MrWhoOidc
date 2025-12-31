@@ -177,8 +177,13 @@ internal sealed class LicenseValidator : ILicenseValidator
         }
 
         var expired = validUntil < now;
-        var graceWindowEnd = validUntil.AddDays(_options.GracePeriodDays);
-        var inGraceWindow = ! _options.StrictValidation && expired && now <= graceWindowEnd;
+
+        var inGraceWindow = false;
+        if (!_options.StrictValidation && expired && _options.GracePeriodDays > 0)
+        {
+            var graceWindowEnd = AddDaysClamped(validUntil, _options.GracePeriodDays);
+            inGraceWindow = now <= graceWindowEnd;
+        }
 
         if (expired && !inGraceWindow)
         {
@@ -214,6 +219,23 @@ internal sealed class LicenseValidator : ILicenseValidator
         };
 
         return Task.FromResult(LicenseValidationResult.Success(updated));
+    }
+
+    private static DateTimeOffset AddDaysClamped(DateTimeOffset value, int days)
+    {
+        if (days == 0)
+        {
+            return value;
+        }
+
+        try
+        {
+            return value.AddDays(days);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return days > 0 ? DateTimeOffset.MaxValue : DateTimeOffset.MinValue;
+        }
     }
 
     // Known kid values used by license signing services
