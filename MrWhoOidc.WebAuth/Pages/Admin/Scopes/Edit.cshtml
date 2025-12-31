@@ -18,7 +18,8 @@
 <form method="post" class="mt-3">
     <div class="mb-3">
         <label class="form-label">Name</label>
-        <input asp-for="Input.Name" class="form-control" disabled />
+        <input class="form-control" value="@Model.Input.Name" disabled />
+        <input asp-for="Input.Name" type="hidden" />
     </div>
     <div class="mb-3">
         <label class="form-label">Description</label>
