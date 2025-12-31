@@ -25,13 +25,15 @@ public sealed class AuthorizationCodeServiceTests
             ClientId: "c1",
             RedirectUri: "https://app/cb",
             Scopes: new[] { "openid" },
-            Nonce: "n"
+            Nonce: "n",
+            State: "s"
         );
         var (ok, err, redirect, code) = await svc.IssueAsync(valid, Guid.NewGuid());
         Assert.IsTrue(ok);
         Assert.IsNotNull(code);
         Assert.AreEqual(1, db.AuthorizationCodes.Count());
         StringAssert.Contains(redirect!, "code=");
+        StringAssert.Contains(redirect!, "state=");
         // Metadata captured
         Assert.IsTrue(meta.TryGetAuthTime(code!, out _));
     }

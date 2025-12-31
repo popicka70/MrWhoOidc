@@ -73,6 +73,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
     {
         if (!string.IsNullOrEmpty(valid.ErrorDescription)) query["error_description"] = valid.ErrorDescription;
         if (!string.IsNullOrEmpty(valid.Nonce)) query["nonce"] = valid.Nonce;
+        if (!string.IsNullOrEmpty(valid.State)) query["state"] = valid.State;
         uri.Query = query.ToString();
         return uri.ToString();
     }

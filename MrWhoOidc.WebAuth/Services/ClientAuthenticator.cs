@@ -77,6 +77,19 @@ public class ClientAuthenticator(
             return new ClientAuthenticationResult(false, null, ClientAuthenticationMethod.None, Results.BadRequest(new { error = "invalid_request", error_description = "Missing client_id" }));
         }
 
+        // Diagnostics (never log secrets/assertions): help troubleshoot token endpoint failures.
+        if (context.Usage == ClientAuthenticationUsage.TokenEndpoint)
+        {
+            logger.LogInformation(
+                "Token client authentication input: client={ClientIdHash}, usedBasic={UsedBasic}, hasSecret={HasSecret}, hasAssertion={HasAssertion}, grant_type={GrantType}, path={Path}",
+                Bucketization.Bucket(clientId),
+                usedBasic,
+                !string.IsNullOrWhiteSpace(clientSecret),
+                !string.IsNullOrWhiteSpace(clientAssertion),
+                context.GrantType,
+                http.Request.Path.Value);
+        }
+
         // 2. Get mTLS thumbprint if available
         var cert = await http.Connection.GetClientCertificateAsync();
         string? mtlsThumbprint = mtlsResolver.ResolveThumbprint(cert);

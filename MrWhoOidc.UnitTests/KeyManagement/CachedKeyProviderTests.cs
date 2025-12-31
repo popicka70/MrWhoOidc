@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Crypto;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Http;
 
 namespace MrWhoOidc.UnitTests.KeyManagement;
 
@@ -17,6 +18,7 @@ public sealed class CachedKeyProviderTests
     private Mock<IServiceScopeFactory> _scopeFactoryMock = null!;
     private Mock<IServiceScope> _scopeMock = null!;
     private Mock<IServiceProvider> _serviceProviderMock = null!;
+    private Mock<IHttpContextAccessor> _httpContextAccessorMock = null!;
     private CachedKeyProvider _provider = null!;
     private readonly Guid _tenantId = Guid.NewGuid();
 
@@ -28,6 +30,10 @@ public sealed class CachedKeyProviderTests
         _scopeFactoryMock = new Mock<IServiceScopeFactory>();
         _scopeMock = new Mock<IServiceScope>();
         _serviceProviderMock = new Mock<IServiceProvider>();
+        _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+
+        // In unit tests we use the fallback scope-based resolution.
+        _httpContextAccessorMock.Setup(a => a.HttpContext).Returns((HttpContext?)null);
 
         _scopeFactoryMock.Setup(f => f.CreateScope()).Returns(_scopeMock.Object);
         _scopeMock.Setup(s => s.ServiceProvider).Returns(_serviceProviderMock.Object);
@@ -36,7 +42,7 @@ public sealed class CachedKeyProviderTests
         
         _tenantAccessorMock.Setup(a => a.CurrentTenant).Returns(new TenantContext { TenantId = _tenantId, Slug = "test" });
         
-        _provider = new CachedKeyProvider(_scopeFactoryMock.Object);
+        _provider = new CachedKeyProvider(_scopeFactoryMock.Object, _httpContextAccessorMock.Object);
     }
 
     [TestMethod]
