@@ -31,7 +31,10 @@ public sealed class SecurityHeadersMiddleware
                 headers.TryAdd(
                     "Content-Security-Policy",
                     "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
-                    "img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'");
+                    "img-src 'self' data: https:; " +
+                    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+                    "font-src 'self' data: https://cdn.jsdelivr.net; " +
+                    "script-src 'self' 'unsafe-inline'; connect-src 'self'");
             }
 
             return Task.CompletedTask;
