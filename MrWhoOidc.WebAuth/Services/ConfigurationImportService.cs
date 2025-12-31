@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Seeding;
 using MrWhoOidc.Auth.Services;
 
@@ -19,6 +20,18 @@ public sealed class ConfigurationImportService(
 {
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly ILogger<ConfigurationImportService> _logger = logger;
+
+    private static readonly HashSet<string> AutoSeedableGlobalScopes = new(StringComparer.Ordinal)
+    {
+        OidcConstants.Scopes.OpenId,
+        OidcConstants.Scopes.Profile,
+        OidcConstants.Scopes.Email,
+        OidcConstants.Scopes.Address,
+        OidcConstants.Scopes.Phone,
+        OidcConstants.Scopes.OfflineAccess,
+        OidcConstants.Scopes.Roles,
+        OidcConstants.Scopes.Tenants
+    };
 
     /// <inheritdoc />
     public async Task<ImportPreview> PreviewImportAsync(
@@ -596,30 +609,66 @@ public sealed class ConfigurationImportService(
                                 continue;
 
                             case ConflictResolution.Overwrite:
-                                await UpdateClientAsync(existingClient, clientDef, options, cancellationToken);
-                                updatedCount++;
-                                _logger.LogInformation("Updated existing client {ClientId}", clientDef.ClientId);
+                                try
+                                {
+                                    await UpdateClientAsync(existingClient, clientDef, options, cancellationToken);
+                                    updatedCount++;
+                                    _logger.LogInformation("Updated existing client {ClientId}", clientDef.ClientId);
+                                }
+                                catch (ImportValidationException ex)
+                                {
+                                    errors.Add(ex.Error);
+                                    skippedCount++;
+                                    _logger.LogWarning("Skipped updating client {ClientId}: {Reason}", clientDef.ClientId, ex.Message);
+                                }
                                 break;
 
                             case ConflictResolution.Merge:
-                                await MergeClientAsync(existingClient, clientDef, options, cancellationToken);
-                                updatedCount++;
-                                _logger.LogInformation("Merged client {ClientId}", clientDef.ClientId);
+                                try
+                                {
+                                    await MergeClientAsync(existingClient, clientDef, options, cancellationToken);
+                                    updatedCount++;
+                                    _logger.LogInformation("Merged client {ClientId}", clientDef.ClientId);
+                                }
+                                catch (ImportValidationException ex)
+                                {
+                                    errors.Add(ex.Error);
+                                    skippedCount++;
+                                    _logger.LogWarning("Skipped merging client {ClientId}: {Reason}", clientDef.ClientId, ex.Message);
+                                }
                                 break;
 
                             case ConflictResolution.Rename:
                                 var newClientId = await GenerateUniqueClientIdAsync(clientDef.ClientId, cancellationToken);
-                                await CreateClientAsync(realmId, clientDef with { ClientId = newClientId }, options, cancellationToken);
-                                createdCount++;
-                                _logger.LogInformation("Created renamed client {NewClientId} (was {OldClientId})", newClientId, clientDef.ClientId);
+                                try
+                                {
+                                    await CreateClientAsync(realmId, clientDef with { ClientId = newClientId }, options, cancellationToken);
+                                    createdCount++;
+                                    _logger.LogInformation("Created renamed client {NewClientId} (was {OldClientId})", newClientId, clientDef.ClientId);
+                                }
+                                catch (ImportValidationException ex)
+                                {
+                                    errors.Add(ex.Error);
+                                    skippedCount++;
+                                    _logger.LogWarning("Skipped creating renamed client {NewClientId} (was {OldClientId}): {Reason}", newClientId, clientDef.ClientId, ex.Message);
+                                }
                                 break;
                         }
                     }
                     else
                     {
-                        await CreateClientAsync(realmId, clientDef, options, cancellationToken);
-                        createdCount++;
-                        _logger.LogInformation("Created client {ClientId}", clientDef.ClientId);
+                        try
+                        {
+                            await CreateClientAsync(realmId, clientDef, options, cancellationToken);
+                            createdCount++;
+                            _logger.LogInformation("Created client {ClientId}", clientDef.ClientId);
+                        }
+                        catch (ImportValidationException ex)
+                        {
+                            errors.Add(ex.Error);
+                            skippedCount++;
+                            _logger.LogWarning("Skipped creating client {ClientId}: {Reason}", clientDef.ClientId, ex.Message);
+                        }
                     }
                 }
 
@@ -1213,6 +1262,9 @@ public sealed class ConfigurationImportService(
         var realm = await _dbContext.Realms.FirstOrDefaultAsync(r => r.Id == realmId, cancellationToken);
         var tenantId = realm?.TenantId ?? Guid.Empty;
 
+        var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        await EnsureScopesExistAsync(allowedScopes, cancellationToken);
+
         var client = new Client
         {
             Id = GuidHelper.NewId(),
@@ -1282,7 +1334,7 @@ public sealed class ConfigurationImportService(
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Add scopes
-        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        foreach (var scopeName in allowedScopes)
         {
             _dbContext.ClientScopes.Add(new ClientScope
             {
@@ -1365,13 +1417,16 @@ public sealed class ConfigurationImportService(
             });
         }
 
+        var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        await EnsureScopesExistAsync(allowedScopes, cancellationToken);
+
         // Replace scopes
         var existingScopes = await _dbContext.ClientScopes
             .Where(s => s.ClientId == client.Id)
             .ToListAsync(cancellationToken);
         _dbContext.ClientScopes.RemoveRange(existingScopes);
 
-        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        foreach (var scopeName in allowedScopes)
         {
             _dbContext.ClientScopes.Add(new ClientScope
             {
@@ -1434,7 +1489,10 @@ public sealed class ConfigurationImportService(
             .Select(s => s.ScopeName)
             .ToListAsync(cancellationToken);
 
-        foreach (var scopeName in clientDef.AllowedScopes ?? [])
+        var desiredScopes = NormalizeScopeNames(clientDef.AllowedScopes);
+        await EnsureScopesExistAsync(desiredScopes, cancellationToken);
+
+        foreach (var scopeName in desiredScopes)
         {
             if (!existingScopes.Contains(scopeName))
             {
@@ -1918,6 +1976,76 @@ public sealed class ConfigurationImportService(
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
+    private static List<string> NormalizeScopeNames(IEnumerable<string>? scopes)
+        => (scopes ?? [])
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+    private async Task EnsureScopesExistAsync(List<string> scopeNames, CancellationToken cancellationToken)
+    {
+        if (scopeNames.Count == 0)
+        {
+            return;
+        }
+
+        var existing = await _dbContext.Scopes.AsNoTracking()
+            .Where(s => scopeNames.Contains(s.Name))
+            .Select(s => s.Name)
+            .ToListAsync(cancellationToken);
+
+        var missing = scopeNames
+            .Where(s => !existing.Contains(s, StringComparer.Ordinal))
+            .ToList();
+
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var toSeed = missing.Where(s => AutoSeedableGlobalScopes.Contains(s)).ToList();
+        if (toSeed.Count > 0)
+        {
+            foreach (var name in toSeed)
+            {
+                _dbContext.Scopes.Add(new Scope
+                {
+                    Name = name,
+                    TenantId = null,
+                    IsGlobal = true,
+                    IsExposed = true
+                });
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            existing = await _dbContext.Scopes.AsNoTracking()
+                .Where(s => scopeNames.Contains(s.Name))
+                .Select(s => s.Name)
+                .ToListAsync(cancellationToken);
+
+            missing = scopeNames
+                .Where(s => !existing.Contains(s, StringComparer.Ordinal))
+                .ToList();
+        }
+
+        if (missing.Count > 0)
+        {
+            throw new ImportValidationException(new ImportError
+            {
+                EntityType = "Client",
+                Code = "SCOPE_NOT_FOUND",
+                Message = $"Client references scopes that do not exist in the server database: {string.Join(", ", missing)}. Import scopes first (or create them) and retry."
+            });
+        }
+    }
+
+    private sealed class ImportValidationException(ImportError error) : Exception(error.Message)
+    {
+        public ImportError Error { get; } = error;
+    }
+
     private async Task<Guid> LogImportAuditAsync(
         Guid? tenantId,
         string entityType,
@@ -1931,6 +2059,8 @@ public sealed class ConfigurationImportService(
         string? checksum,
         CancellationToken cancellationToken)
     {
+        _dbContext.ChangeTracker.Clear();
+
         var auditLog = new ConfigurationAuditLog
         {
             TenantId = tenantId,

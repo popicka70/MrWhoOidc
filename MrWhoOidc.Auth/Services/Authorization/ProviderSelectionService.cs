@@ -40,13 +40,14 @@ public sealed class ProviderSelectionService(AuthDbContext db, IClientStore clie
         {
             providerOptions = await db.ClientIdentityProviders.AsNoTracking()
                 .Where(m => m.ClientId == client.Id && m.Enabled)
-                .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new ProviderOption(
-                    p.Name,
-                    p.DisplayName ?? p.Name,
-                    m.IsDefaultForClient,
-                    m.AutoRedirectIfSingle
-                ))
+                .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new {
+                    Name = p.Name,
+                    DisplayName = p.DisplayName ?? p.Name,
+                    IsDefault = m.IsDefaultForClient,
+                    AutoRedirect = m.AutoRedirectIfSingle
+                })
                 .OrderBy(x => x.Name)
+                .Select(x => new ProviderOption(x.Name, x.DisplayName, x.IsDefault, x.AutoRedirect))
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
         }

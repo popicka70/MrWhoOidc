@@ -230,6 +230,11 @@ internal sealed class SeedManifestApplier(
                 db.Clients.Add(client);
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
+                if (!string.IsNullOrWhiteSpace(resolvedSecret))
+                {
+                    await EnsureSeededClientSecretAsync(client, resolvedSecret, ct).ConfigureAwait(false);
+                }
+
                 await EnsureClientScopesAsync(client, clientDef, ct).ConfigureAwait(false);
 
                 await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
@@ -282,6 +287,11 @@ internal sealed class SeedManifestApplier(
                     client.ClientSecretHash = passwordHasher.Hash(resolvedClientSecret);
                     client.RequirePkce = true;
                 }
+
+                // IMPORTANT: if the client already has active secrets in the new ClientSecrets table,
+                // those take precedence over the legacy ClientSecretHash during validation.
+                // Ensure the seeded secret is present and active so token endpoint auth works.
+                await EnsureSeededClientSecretAsync(client, resolvedClientSecret, ct).ConfigureAwait(false);
             }
 #pragma warning restore CS0618
 
@@ -292,6 +302,54 @@ internal sealed class SeedManifestApplier(
 
             await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
         }
+    }
+
+    private async Task EnsureSeededClientSecretAsync(Client client, string resolvedClientSecret, CancellationToken ct)
+    {
+        // If overwrite is enabled, replace active secrets with the seeded secret.
+        // Otherwise, only seed when the client has no secrets at all.
+        var overwrite = seedOptions.Value.OverwriteClientSecrets;
+
+        var existingSecrets = await db.ClientSecrets
+            .Where(s => s.ClientId == client.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var hasAnySecrets = existingSecrets.Count > 0;
+        if (hasAnySecrets && !overwrite)
+        {
+            return;
+        }
+
+        var seedBy = "seed";
+
+        // Create + activate + make primary
+        var newSecret = await clientStore.CreateSecretAsync(client.Id, resolvedClientSecret, description: "seed", createdBy: seedBy, expiresAtUtc: null, ct: ct)
+            .ConfigureAwait(false);
+
+        await clientStore.ActivateSecretAsync(newSecret.Id, seedBy, ct).ConfigureAwait(false);
+        await clientStore.SetPrimarySecretAsync(newSecret.Id, seedBy, ct).ConfigureAwait(false);
+
+        // Revoke any existing secrets if overwriting
+        if (existingSecrets.Count > 0)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var s in existingSecrets)
+            {
+                if (s.Id == newSecret.Id) continue;
+                if (s.RevokedAtUtc != null) continue;
+                s.RevokedAtUtc = now;
+                s.RevokedBy = seedBy;
+                s.IsPrimary = false;
+            }
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        logger.LogInformation(
+            "Seed manifest ensured client secret for {ClientId} (overwrite={Overwrite}, revoked={RevokedCount})",
+            client.ClientId,
+            overwrite,
+            overwrite ? existingSecrets.Count : 0);
     }
 
     private async Task EnsureScopesAsync(SeedManifest manifest, TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)

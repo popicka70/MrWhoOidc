@@ -119,7 +119,8 @@ public sealed class AuthorizeRequestValidator(AuthDbContext db, IClientStore cli
             CodeChallengeMethod: request.code_challenge_method,
             RequireConsent: client.RequireConsent,
             Resource: request.resource,
-            ResponseMode: responseMode
+            ResponseMode: responseMode,
+            State: request.state
         );
     }
 

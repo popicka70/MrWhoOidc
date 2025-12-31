@@ -22,6 +22,9 @@ public static class AuthServiceCollectionExtensions
 {
     public static IServiceCollection AddMrWhoOidcAuthCore(this IServiceCollection services, IConfiguration? configuration = null)
     {
+        // Needed by services that may want to access request-scoped services (e.g., CachedKeyProvider)
+        services.AddHttpContextAccessor();
+
         // Multi-tenancy support
         // Note: Multi-tenancy Enabled state is controlled by license, not configuration.
         // Configuration only provides DefaultTenantSlug.
