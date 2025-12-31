@@ -1263,7 +1263,7 @@ public sealed class ConfigurationImportService(
         var tenantId = realm?.TenantId ?? Guid.Empty;
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
-        await EnsureScopesExistAsync(allowedScopes, cancellationToken);
+        await EnsureScopesExistAsync(tenantId, allowedScopes, cancellationToken);
 
         var client = new Client
         {
@@ -1418,7 +1418,7 @@ public sealed class ConfigurationImportService(
         }
 
         var allowedScopes = NormalizeScopeNames(clientDef.AllowedScopes);
-        await EnsureScopesExistAsync(allowedScopes, cancellationToken);
+        await EnsureScopesExistAsync(client.TenantId, allowedScopes, cancellationToken);
 
         // Replace scopes
         var existingScopes = await _dbContext.ClientScopes
@@ -1490,7 +1490,7 @@ public sealed class ConfigurationImportService(
             .ToListAsync(cancellationToken);
 
         var desiredScopes = NormalizeScopeNames(clientDef.AllowedScopes);
-        await EnsureScopesExistAsync(desiredScopes, cancellationToken);
+        await EnsureScopesExistAsync(client.TenantId, desiredScopes, cancellationToken);
 
         foreach (var scopeName in desiredScopes)
         {
@@ -1983,7 +1983,7 @@ public sealed class ConfigurationImportService(
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-    private async Task EnsureScopesExistAsync(List<string> scopeNames, CancellationToken cancellationToken)
+    private async Task EnsureScopesExistAsync(Guid tenantId, List<string> scopeNames, CancellationToken cancellationToken)
     {
         if (scopeNames.Count == 0)
         {
@@ -2030,14 +2030,22 @@ public sealed class ConfigurationImportService(
                 .ToList();
         }
 
+        // Auto-create remaining missing scopes as tenant-scoped/custom scopes.
+        // This keeps client import self-contained for new environments.
         if (missing.Count > 0)
         {
-            throw new ImportValidationException(new ImportError
+            foreach (var name in missing)
             {
-                EntityType = "Client",
-                Code = "SCOPE_NOT_FOUND",
-                Message = $"Client references scopes that do not exist in the server database: {string.Join(", ", missing)}. Import scopes first (or create them) and retry."
-            });
+                _dbContext.Scopes.Add(new Scope
+                {
+                    Name = name,
+                    TenantId = tenantId,
+                    IsGlobal = false,
+                    IsExposed = true
+                });
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 
