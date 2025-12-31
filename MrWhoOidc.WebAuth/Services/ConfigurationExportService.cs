@@ -19,6 +19,49 @@ public sealed class ConfigurationExportService(
     private readonly AuthDbContext _dbContext = dbContext;
     private readonly ILogger<ConfigurationExportService> _logger = logger;
 
+    private static List<ScopeSeedDefinition> BuildScopeSeedDefinitions(
+        List<string> referencedScopeNames,
+        List<Scope> scopes,
+        Tenant tenant)
+    {
+        if (referencedScopeNames.Count == 0)
+        {
+            return [];
+        }
+
+        var scopesByName = scopes.ToDictionary(s => s.Name, StringComparer.Ordinal);
+
+        var result = new List<ScopeSeedDefinition>(referencedScopeNames.Count);
+        foreach (var scopeName in referencedScopeNames.Distinct(StringComparer.Ordinal))
+        {
+            if (scopesByName.TryGetValue(scopeName, out var scope))
+            {
+                result.Add(new ScopeSeedDefinition
+                {
+                    Name = scope.Name,
+                    Description = scope.Description,
+                    IsGlobal = scope.IsGlobal,
+                    IsExposed = scope.IsExposed,
+                    TenantSlug = scope.TenantId == tenant.Id ? tenant.Slug : null
+                });
+            }
+            else
+            {
+                // Scope referenced by client but missing from catalog.
+                // Export a minimal definition so import can recreate it if desired.
+                result.Add(new ScopeSeedDefinition
+                {
+                    Name = scopeName,
+                    IsGlobal = false,
+                    IsExposed = true,
+                    TenantSlug = tenant.Slug
+                });
+            }
+        }
+
+        return result;
+    }
+
     /// <inheritdoc />
     public async Task<ExportManifest> ExportTenantAsync(
         Guid tenantId,
@@ -204,6 +247,20 @@ public sealed class ConfigurationExportService(
             }).ToList()
         };
 
+        var referencedScopeNames = realmDefinition.Clients
+            .SelectMany(c => c.AllowedScopes)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var referencedScopes = referencedScopeNames.Count == 0
+            ? []
+            : await _dbContext.Scopes
+                .AsNoTracking()
+                .Where(s => referencedScopeNames.Contains(s.Name) && (s.TenantId == null || s.TenantId == tenant.Id))
+                .ToListAsync(cancellationToken);
+
         var exportManifest = new ExportManifest
         {
             ExportType = "realm",
@@ -212,6 +269,7 @@ public sealed class ConfigurationExportService(
             Data = new SeedManifest
             {
                 Version = 1,
+                Scopes = BuildScopeSeedDefinitions(referencedScopeNames, referencedScopes, tenant),
                 Realms = [realmDefinition]
             }
         };
@@ -290,6 +348,19 @@ public sealed class ConfigurationExportService(
             client, secretsByClient, scopesByClient, idpAssignmentsByClient,
             realmLookup, providers, options.Mode);
 
+        var referencedScopeNames = clientDefinition.AllowedScopes
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Select(s => s.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var referencedScopes = referencedScopeNames.Count == 0
+            ? []
+            : await _dbContext.Scopes
+                .AsNoTracking()
+                .Where(s => referencedScopeNames.Contains(s.Name) && (s.TenantId == null || s.TenantId == tenant.Id))
+                .ToListAsync(cancellationToken);
+
         var exportManifest = new ExportManifest
         {
             ExportType = "client",
@@ -298,6 +369,7 @@ public sealed class ConfigurationExportService(
             Data = new SeedManifest
             {
                 Version = 1,
+                Scopes = BuildScopeSeedDefinitions(referencedScopeNames, referencedScopes, tenant),
                 Clients = [clientDefinition]
             }
         };
@@ -404,13 +476,13 @@ public sealed class ConfigurationExportService(
         return new SeedManifest
         {
             Version = 1,
-            Scopes = scopes.Where(s => s.TenantId == tenant.Id).Select(s => new ScopeSeedDefinition
+            Scopes = scopes.Select(s => new ScopeSeedDefinition
             {
                 Name = s.Name,
                 Description = s.Description,
-                IsGlobal = false,
+                IsGlobal = s.IsGlobal,
                 IsExposed = s.IsExposed,
-                TenantSlug = tenant.Slug
+                TenantSlug = s.TenantId == tenant.Id ? tenant.Slug : null
             }).ToList(),
             Tenants =
             [
