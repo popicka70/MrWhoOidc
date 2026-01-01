@@ -72,6 +72,21 @@ public static class ServiceCollectionExtensions
             logger.LogDebug("Configured HttpClient for MrWhoOidc client with timeout {Timeout}", http.Timeout);
         });
 
+        // Configure certificate validation bypass for development scenarios
+        httpClientBuilder.ConfigurePrimaryHttpMessageHandler(sp =>
+        {
+            var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<MrWhoOidcClientOptions>>();
+            var opts = optionsMonitor.CurrentValue;
+            var handler = new HttpClientHandler();
+            if (opts.DangerousAcceptAnyServerCertificateValidator)
+            {
+                var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("MrWhoOidc.Client.Http");
+                logger.LogWarning("DangerousAcceptAnyServerCertificateValidator is enabled - SSL certificate validation is bypassed. DO NOT use in production!");
+                handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            }
+            return handler;
+        });
+
         services.TryAddSingleton<IHttpMessageHandlerBuilderFilter, MrWhoOidcLoggingFilter>();
 
         return services;

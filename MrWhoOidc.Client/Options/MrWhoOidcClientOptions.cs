@@ -84,6 +84,12 @@ public sealed class MrWhoOidcClientOptions
     /// </summary>
     public IDictionary<string, ClientCredentialsRegistration> ClientCredentials { get; } = new Dictionary<string, ClientCredentialsRegistration>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// When true, accepts any server certificate (including self-signed).
+    /// WARNING: Only use for development/demo environments!
+    /// </summary>
+    public bool DangerousAcceptAnyServerCertificateValidator { get; set; }
+
     public JarOptions Jar { get; } = new();
 
     public JarmOptions Jarm { get; } = new();
