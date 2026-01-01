@@ -46,11 +46,24 @@ public static class HttpContextExtensions
         // Base URL used to expand relative tenant issuers.
         var baseUrl = (canonicalBaseUrl ?? requestBaseUrl).TrimEnd('/');
 
+        var multiTenancyOptions = httpContext.RequestServices.GetService<IMultiTenancyOptions>();
+        var issuerBuilder = httpContext.RequestServices.GetRequiredService<IIssuerBuilder>();
+
         var tenantIssuer = tenantAccessor?.CurrentTenant?.IssuerUri;
         if (!string.IsNullOrWhiteSpace(tenantIssuer))
         {
             if (Uri.TryCreate(tenantIssuer, UriKind.Absolute, out var absTenantIssuer))
             {
+                // Back-compat: some persisted issuers may be root-only even when multi-tenancy is enabled.
+                // In that case, prefer the mode-aware issuer builder so discovery and protocol endpoints
+                // remain tenant-scoped (e.g., https://host/t/{slug}).
+                var tenantPathCandidate = absTenantIssuer.AbsolutePath ?? string.Empty;
+                var hasTenantPath = tenantPathCandidate.IndexOf("/t/", StringComparison.OrdinalIgnoreCase) >= 0;
+                if ((multiTenancyOptions?.Enabled ?? false) && !hasTenantPath)
+                {
+                    return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
+                }
+
                 // If a canonical base URL is configured, prefer it as authoritative.
                 // This makes deployments portable (e.g., dev DB restored into cloud) and fixes
                 // cases where the stored issuer was derived from an internal binding like localhost.
@@ -68,7 +81,9 @@ public static class HttpContextExtensions
                     // If we couldn't find a tenant path, treat the tenant issuer as root.
                     if (string.IsNullOrWhiteSpace(tenantPath) || tenantPath == "/")
                     {
-                        return canonicalBaseUrl.TrimEnd('/');
+                        return (multiTenancyOptions?.Enabled ?? false)
+                            ? issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/')
+                            : canonicalBaseUrl.TrimEnd('/');
                     }
 
                     return (canonicalBaseUrl.TrimEnd('/') + tenantPath).TrimEnd('/');
@@ -79,18 +94,32 @@ public static class HttpContextExtensions
 
             // Some legacy code paths store tenant issuer as a relative path (e.g., "/t/default").
             // Normalize to an absolute issuer using the configured base URL.
+            // If the stored issuer is relative but doesn't include /t/{slug} in multi-tenant mode,
+            // prefer the mode-aware issuer builder.
+            var normalizedRelative = ("/" + tenantIssuer.TrimStart('/')).Replace("//", "/", StringComparison.Ordinal);
+            if ((multiTenancyOptions?.Enabled ?? false) && normalizedRelative.IndexOf("/t/", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
+            }
+
             return (baseUrl + "/" + tenantIssuer.TrimStart('/')).TrimEnd('/');
         }
 
         // If issuer is explicitly configured, use it (backward compatibility)
         if (!string.IsNullOrWhiteSpace(options.Issuer))
         {
+            // In multi-tenant mode, the configured issuer acts as the canonical base URL.
+            // Emit a tenant-scoped issuer when tenant context is available.
+            if ((multiTenancyOptions?.Enabled ?? false) && tenantAccessor?.CurrentTenant is not null)
+            {
+                return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
+            }
+
             return options.Issuer.TrimEnd('/');
         }
 
         // Otherwise, use mode-aware issuer builder.
         // In multi-tenant mode this requires tenant context; if not yet resolved, fall back to base URL.
-        var issuerBuilder = httpContext.RequestServices.GetRequiredService<IIssuerBuilder>();
         try
         {
             return issuerBuilder.BuildIssuer(baseUrl).TrimEnd('/');
