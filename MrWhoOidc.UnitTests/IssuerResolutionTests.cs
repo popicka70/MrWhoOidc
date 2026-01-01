@@ -28,6 +28,8 @@ public sealed class IssuerResolutionTests
                 {
                     services.AddRouting();
                     services.AddScoped<ITenantAccessor, TenantAccessor>();
+                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true });
+                    services.AddScoped<IIssuerBuilder, IssuerBuilder>();
 
                     // Simulate canonical cloud/public URL being configured.
                     services.AddSingleton(new OidcOptions
@@ -81,6 +83,8 @@ public sealed class IssuerResolutionTests
                 {
                     services.AddRouting();
                     services.AddScoped<ITenantAccessor, TenantAccessor>();
+                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true });
+                    services.AddScoped<IIssuerBuilder, IssuerBuilder>();
                     services.AddSingleton(new OidcOptions
                     {
                         PublicBaseUrl = "https://mrwho.onrender.com",

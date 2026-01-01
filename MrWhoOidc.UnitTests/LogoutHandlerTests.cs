@@ -358,6 +358,9 @@ public class LogoutHandlerTests
         services.AddAuthentication("cookie")
             .AddCookie("cookie");
         services.AddOptions();
+        services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
+        services.AddSingleton<MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions>(new MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions());
+        services.AddScoped<MrWhoOidc.Auth.MultiTenancy.IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
         var serviceProvider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext();
@@ -388,6 +391,9 @@ public class LogoutHandlerTests
             .AddCookie("cookie");
         services.AddOptions();
         services.AddSingleton(new OidcOptions { Issuer = issuer });
+        services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
+        services.AddSingleton<MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions>(new MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions());
+        services.AddScoped<MrWhoOidc.Auth.MultiTenancy.IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
         var serviceProvider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext();
