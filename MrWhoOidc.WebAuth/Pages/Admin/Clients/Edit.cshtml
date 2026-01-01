@@ -846,19 +846,18 @@
                                             <div class="btn-group btn-group-sm" role="group">
                                                 @if (secret.Status == "inactive")
                                                 {
-                                                    <form method="post" asp-page-handler="ActivateSecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id" class="d-inline">
-                                                        <button type="submit" class="btn btn-outline-success" title="Activate">
-                                                            <i class="bi bi-check-circle"></i>
-                                                        </button>
-                                                    </form>
+                                                    <button type="submit" class="btn btn-outline-success" title="Activate"
+                                                            asp-page-handler="ActivateSecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id">
+                                                        <i class="bi bi-check-circle"></i>
+                                                    </button>
                                                 }
                                                 @if (secret.Status == "active" || secret.Status == "primary")
                                                 {
-                                                    <form method="post" asp-page-handler="SetPrimarySecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id" class="d-inline">
-                                                        <button type="submit" class="btn btn-outline-warning" title="Set as Primary" @(secret.Status == "primary" ? "disabled" : null)>
-                                                            <i class="bi bi-star"></i>
-                                                        </button>
-                                                    </form>
+                                                    <button type="submit" class="btn btn-outline-warning" title="Set as Primary"
+                                                            asp-page-handler="SetPrimarySecret" asp-route-id="@Model.Id" asp-route-secretId="@secret.Id"
+                                                            disabled="@(secret.Status == "primary")">
+                                                        <i class="bi bi-star"></i>
+                                                    </button>
                                                 }
                                                 @if (secret.Status != "revoked")
                                                 {
