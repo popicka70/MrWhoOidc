@@ -28,7 +28,7 @@ public sealed class IssuerResolutionTests
                 {
                     services.AddRouting();
                     services.AddScoped<ITenantAccessor, TenantAccessor>();
-                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true });
+                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider("default", initialEnabled: true));
                     services.AddScoped<IIssuerBuilder, IssuerBuilder>();
 
                     // Simulate canonical cloud/public URL being configured.
@@ -83,7 +83,7 @@ public sealed class IssuerResolutionTests
                 {
                     services.AddRouting();
                     services.AddScoped<ITenantAccessor, TenantAccessor>();
-                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyOptions { Enabled = true });
+                    services.AddSingleton<IMultiTenancyOptions>(new MultiTenancyStateProvider("default", initialEnabled: true));
                     services.AddScoped<IIssuerBuilder, IssuerBuilder>();
                     services.AddSingleton(new OidcOptions
                     {
