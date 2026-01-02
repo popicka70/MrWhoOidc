@@ -12,6 +12,12 @@ public sealed record SeedManifest
     public int Version { get; init; } = 1;
 
     /// <summary>
+    /// Optional license definitions to install at startup (dev/test seeding).
+    /// </summary>
+    [JsonPropertyName("licenses")]
+    public List<LicenseSeedDefinition> Licenses { get; init; } = [];
+
+    /// <summary>
     /// Optional explicit scope registry definitions.
     /// These are written to the Scopes table so they can be referenced by ClientScopes.
     /// </summary>
@@ -38,6 +44,47 @@ public sealed record SeedManifest
     /// </summary>
     [JsonPropertyName("identityProviders")]
     public List<IdentityProviderSeedDefinition> IdentityProviders { get; init; } = [];
+}
+
+public sealed record LicenseSeedDefinition
+{
+    /// <summary>
+    /// Inline license token (JWT). Prefer using licenseTokenPath or licenseTokenEnv to avoid committing secrets.
+    /// </summary>
+    [JsonPropertyName("licenseToken")]
+    public string? LicenseToken { get; init; }
+
+    /// <summary>
+    /// Optional path to a file containing the license token.
+    /// Useful for Docker volume mounts.
+    /// </summary>
+    [JsonPropertyName("licenseTokenPath")]
+    public string? LicenseTokenPath { get; init; }
+
+    /// <summary>
+    /// Optional environment/config key that contains the license token.
+    /// </summary>
+    [JsonPropertyName("licenseTokenEnv")]
+    public string? LicenseTokenEnv { get; init; }
+
+    /// <summary>
+    /// Optional notes recorded during installation.
+    /// </summary>
+    [JsonPropertyName("notes")]
+    public string? Notes { get; init; }
+
+    /// <summary>
+    /// License scope: "platform" (default) or "tenant".
+    /// For tenant scope, tenantSlug is required.
+    /// </summary>
+    [JsonPropertyName("scope")]
+    public string? Scope { get; init; }
+
+    /// <summary>
+    /// Tenant slug for tenant-scoped licenses.
+    /// </summary>
+    [JsonPropertyName("tenantSlug")]
+    public string? TenantSlug { get; init; }
 }
 
 public sealed record ScopeSeedDefinition

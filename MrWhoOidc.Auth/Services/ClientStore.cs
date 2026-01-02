@@ -297,28 +297,38 @@ internal sealed class ClientStore(
 
     public async Task<bool> SetPrimarySecretAsync(Guid secretId, string updatedBy, CancellationToken ct = default)
     {
-        var secret = await db.ClientSecrets
-            .Include(s => s.Client)
-            .FirstOrDefaultAsync(s => s.Id == secretId, ct)
-            .ConfigureAwait(false);
-        
-        if (secret == null) return false;
-        
-        // Clear IsPrimary flag on all other secrets for this client
-        var otherSecrets = await db.ClientSecrets
-            .Where(s => s.ClientId == secret.ClientId && s.Id != secretId && s.IsPrimary)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
-        
-        foreach (var other in otherSecrets)
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            other.IsPrimary = false;
-        }
-        
-        secret.IsPrimary = true;
-        
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        return true;
+            var secret = await db.ClientSecrets
+                .FirstOrDefaultAsync(s => s.Id == secretId, ct)
+                .ConfigureAwait(false);
+
+            if (secret == null) return false;
+            if (secret.IsPrimary) return true;
+
+            await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+            // Clear IsPrimary flag on all other secrets for this client
+            var otherSecrets = await db.ClientSecrets
+                .Where(s => s.ClientId == secret.ClientId && s.Id != secretId && s.IsPrimary)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            foreach (var other in otherSecrets)
+            {
+                other.IsPrimary = false;
+            }
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            secret.IsPrimary = true;
+
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return true;
+        }).ConfigureAwait(false);
     }
 
     public async Task<bool> RevokeSecretAsync(Guid secretId, string revokedBy, CancellationToken ct = default)

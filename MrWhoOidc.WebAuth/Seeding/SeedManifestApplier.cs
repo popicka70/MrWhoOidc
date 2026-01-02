@@ -10,12 +10,14 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using System.Security.Claims;
+using MrWhoOidc.Auth.Licensing.Services;
 
 namespace MrWhoOidc.WebAuth.Seeding;
 
 public interface ISeedManifestApplier
 {
     Task ApplyTenantsAsync(SeedManifest manifest, string authorityBaseUrl, CancellationToken ct = default);
+    Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default);
     Task ApplyForCurrentTenantAsync(SeedManifest manifest, CancellationToken ct = default);
 }
 
@@ -31,8 +33,120 @@ internal sealed class SeedManifestApplier(
     IConfiguration configuration,
     IPasswordHasher passwordHasher,
     IClientStore clientStore,
+    ILicenseService licenseService,
     ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
 {
+    public async Task ApplyLicensesAsync(SeedManifest manifest, CancellationToken ct = default)
+    {
+        if (manifest.Licenses.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var licenseDef in manifest.Licenses)
+        {
+            try
+            {
+                var token = TryResolveLicenseToken(licenseDef);
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    logger.LogWarning("Seed manifest license definition had no token (licenseToken/licenseTokenPath/licenseTokenEnv).");
+                    continue;
+                }
+
+                var scope = licenseDef.Scope?.Trim();
+                var isTenantScope = string.Equals(scope, "tenant", StringComparison.OrdinalIgnoreCase)
+                    || (string.IsNullOrWhiteSpace(scope) && !string.IsNullOrWhiteSpace(licenseDef.TenantSlug));
+
+                Guid? tenantId = null;
+                if (isTenantScope)
+                {
+                    if (string.IsNullOrWhiteSpace(licenseDef.TenantSlug))
+                    {
+                        logger.LogWarning("Seed manifest tenant-scoped license missing tenantSlug.");
+                        continue;
+                    }
+
+                    var slug = licenseDef.TenantSlug.Trim();
+                    var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct).ConfigureAwait(false);
+                    if (tenant is null)
+                    {
+                        logger.LogWarning("Seed manifest license references unknown tenant '{TenantSlug}'.", slug);
+                        continue;
+                    }
+
+                    tenantId = tenant.Id;
+                }
+
+                var alreadyInstalled = await db.Licenses.AsNoTracking().AnyAsync(l => l.TenantId == tenantId && l.IsActive, ct).ConfigureAwait(false);
+                if (alreadyInstalled && !seedOptions.Value.OverwriteLicense)
+                {
+                    logger.LogInformation(
+                        "Seed manifest skipped license install for {Scope} (license exists and Seeding__OverwriteLicense=false).",
+                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform");
+                    continue;
+                }
+
+                var result = await licenseService.InstallLicenseAsync(
+                        token,
+                        tenantId,
+                        installedBy: null,
+                        notes: string.IsNullOrWhiteSpace(licenseDef.Notes) ? "Installed via seed manifest" : licenseDef.Notes,
+                        cancellationToken: ct)
+                    .ConfigureAwait(false);
+
+                if (result.IsValid)
+                {
+                    logger.LogInformation(
+                        "Seed manifest installed license for {Scope} (tier={Tier}).",
+                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform",
+                        result.LicenseInfo?.Tier ?? "unknown");
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Seed manifest failed to install license for {Scope}: {ErrorCode} - {ErrorMessage}",
+                        tenantId.HasValue ? $"tenant '{licenseDef.TenantSlug}'" : "platform",
+                        result.ErrorCode,
+                        result.ErrorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Never fail startup/requests due to non-critical dev/test seeding.
+                logger.LogWarning(ex, "Seed manifest license installation failed.");
+            }
+        }
+    }
+
+    private string? TryResolveLicenseToken(LicenseSeedDefinition licenseDef)
+    {
+        if (!string.IsNullOrWhiteSpace(licenseDef.LicenseTokenPath))
+        {
+            var path = licenseDef.LicenseTokenPath.Trim();
+            if (File.Exists(path))
+            {
+                var fileToken = File.ReadAllText(path);
+                if (!string.IsNullOrWhiteSpace(fileToken))
+                {
+                    return fileToken.Trim();
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(licenseDef.LicenseTokenEnv))
+        {
+            var key = licenseDef.LicenseTokenEnv.Trim();
+            var envToken = configuration[key];
+            if (!string.IsNullOrWhiteSpace(envToken))
+            {
+                return envToken.Trim();
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(licenseDef.LicenseToken) ? null : licenseDef.LicenseToken.Trim();
+    }
+
     public async Task ApplyTenantsAsync(SeedManifest manifest, string authorityBaseUrl, CancellationToken ct = default)
     {
         if (manifest.Tenants.Count == 0)

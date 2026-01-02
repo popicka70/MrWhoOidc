@@ -76,9 +76,14 @@ public sealed class AutoSeedMiddleware
                         seedManifest = await seedManifestProvider.TryLoadAsync(context.RequestAborted);
 
                         var authorityBaseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-                        if (seedManifest is not null && seedManifest.Tenants.Count > 0)
+                        if (seedManifest is not null)
                         {
-                            await seedManifestApplier.ApplyTenantsAsync(seedManifest, authorityBaseUrl, context.RequestAborted);
+                            if (seedManifest.Tenants.Count > 0)
+                            {
+                                await seedManifestApplier.ApplyTenantsAsync(seedManifest, authorityBaseUrl, context.RequestAborted);
+                            }
+
+                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
                         }
 
                         // Backwards-compatible fallback: create a default tenant if the manifest is not present.
@@ -153,6 +158,7 @@ public sealed class AutoSeedMiddleware
                 seedManifest ??= await seedManifestProvider.TryLoadAsync(context.RequestAborted);
                 if (seedManifest is not null)
                 {
+                    await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
                     await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
                 }
             }
@@ -179,6 +185,7 @@ public sealed class AutoSeedMiddleware
                         if (seedManifest is not null)
                         {
                             logger.LogInformation("Applying seed manifest updates (AllowUpdates=true) for tenant '{TenantSlug}'", currentTenant.Slug);
+                            await seedManifestApplier.ApplyLicensesAsync(seedManifest, context.RequestAborted);
                             await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, context.RequestAborted);
                         }
                     }

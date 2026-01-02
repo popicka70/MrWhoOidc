@@ -41,7 +41,7 @@ internal sealed class FeatureService : IFeatureService
 
     public async Task<IReadOnlySet<string>> GetEnabledFeaturesAsync(Guid? tenantId = null, CancellationToken cancellationToken = default)
     {
-        var license = await _licenseService.GetCurrentLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        var license = await _licenseService.GetEffectiveLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
 
         var features = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

@@ -35,4 +35,10 @@ public sealed class SeedManifestOptions
     /// Default is false to avoid unexpectedly changing secrets.
     /// </summary>
     public bool OverwriteClientSecrets { get; set; } = false;
+
+    /// <summary>
+    /// When true, overwrites/replaces existing licenses when a license is supplied in the manifest.
+    /// Default is false to avoid unexpectedly changing production licenses.
+    /// </summary>
+    public bool OverwriteLicense { get; set; } = false;
 }
