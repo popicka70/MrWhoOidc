@@ -35,9 +35,12 @@ public class MultiTenancyStateInitializer : IHostedService
             var license = await licenseService.GetCurrentLicenseAsync(null, cancellationToken);
             if (license != null)
             {
-                var enabled = license.IsFeatureEnabled(FeatureFlags.MultiTenancy);
+                var enabled = license.DeploymentMode == DeploymentMode.MultiTenant;
                 _stateProvider.UpdateState(enabled);
-                _logger.LogInformation("Multi-tenancy state initialized from license: {Enabled}", enabled);
+                _logger.LogInformation(
+                    "Multi-tenancy state initialized from license deployment mode {DeploymentMode}: {Enabled}",
+                    license.DeploymentMode,
+                    enabled);
             }
             else
             {

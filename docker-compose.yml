@@ -39,9 +39,7 @@ services:
       ForwardedHeaders__KnownNetworks__0: ${FORWARDED_HEADERS_KNOWN_NETWORK_0:-}
       ForwardedHeaders__KnownNetworks__1: ${FORWARDED_HEADERS_KNOWN_NETWORK_1:-}
       
-      # Multi-Tenancy Configuration
-      MultiTenant__Enabled: ${MULTITENANT_ENABLED:-false}
-      MultiTenant__DefaultTenantSlug: ${MULTITENANT_DEFAULT_TENANT_SLUG:-default}
+      # Multi-tenancy is controlled by the installed platform license (deployment_mode).
       
       # Redis Configuration (Optional)
       Redis__Enabled: ${REDIS_ENABLED:-false}

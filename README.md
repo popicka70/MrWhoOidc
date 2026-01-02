@@ -147,7 +147,7 @@ Required variables:
 - `OIDC_PUBLIC_BASE_URL`: Public URL for OIDC issuer
 
 Optional features:
-- `MULTITENANT_ENABLED`: Enable multi-tenancy (true/false)
+- Multi-tenancy is controlled by the installed platform license (`deployment_mode`), not by configuration.
 - `REDIS_ENABLED`: Enable Redis caching (true/false)
 - `MAIL_ENABLED`: Enable email/SMTP (true/false)
 

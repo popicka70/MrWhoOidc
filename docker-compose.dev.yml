@@ -18,9 +18,7 @@ services:
       ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
       # OIDC configuration
       Oidc__PublicBaseUrl: "https://localhost:8443"
-      # Multi-tenancy configuration
-      MultiTenancy__Enabled: "true"
-      MultiTenancy__DefaultTenantSlug: "default"
+      # Multi-tenancy is controlled by the installed platform license (deployment_mode).
       Mail__Enabled: "true"
       Mail__SmtpHost: "mailhog"
       Mail__SmtpPort: "1025"

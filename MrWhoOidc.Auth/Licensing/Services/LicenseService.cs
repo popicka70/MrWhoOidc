@@ -377,9 +377,12 @@ internal sealed class LicenseService : ILicenseService
 
             if (tenantId == null && _multiTenancyStateProvider != null)
             {
-                var enabled = businessResult.LicenseInfo.IsFeatureEnabled(FeatureFlags.MultiTenancy);
+                var enabled = businessResult.LicenseInfo.DeploymentMode == DeploymentMode.MultiTenant;
                 _multiTenancyStateProvider.UpdateState(enabled);
-                _logger.LogInformation("Updated multi-tenancy state to {Enabled} based on new platform license.", enabled);
+                _logger.LogInformation(
+                    "Updated multi-tenancy state to {Enabled} based on platform license deployment mode {DeploymentMode}.",
+                    enabled,
+                    businessResult.LicenseInfo.DeploymentMode);
             }
 
             var result = LicenseValidationResult.Success(businessResult.LicenseInfo);
