@@ -202,27 +202,49 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            var sub = principal.FindFirstValue("sub");
+
+            // Resolve user data from DB when the token does not carry profile/email claims.
+            // This keeps access tokens lean while allowing /userinfo to return scoped profile data.
+            (string? Name, string? Email, bool? EmailVerified)? userData = null;
+            if (!string.IsNullOrWhiteSpace(sub) &&
+                (scopes.Contains(OidcConstants.Scopes.Profile) || scopes.Contains(OidcConstants.Scopes.Email)) &&
+                Guid.TryParse(sub, out var lookupUserId))
+            {
+                userData = await db.Users.AsNoTracking()
+                    .Where(u => u.Id == lookupUserId)
+                    .Select(u => new ValueTuple<string?, string?, bool?>(u.Name, u.Email, u.EmailVerified))
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
+            }
+
             var payload = new Dictionary<string, object?>
             {
-                ["sub"] = principal.FindFirstValue("sub")
+                ["sub"] = sub
             };
 
             // Only include claims permitted by scopes
             if (scopes.Contains(OidcConstants.Scopes.Profile))
             {
-                var name = principal.FindFirstValue(OidcConstants.Claims.Name);
+                var name = principal.FindFirstValue(OidcConstants.Claims.Name) ?? userData?.Name;
                 if (!string.IsNullOrEmpty(name)) payload[OidcConstants.Claims.Name] = name;
             }
             if (scopes.Contains(OidcConstants.Scopes.Email))
             {
-                var email = principal.FindFirstValue(OidcConstants.Claims.Email);
+                var email = principal.FindFirstValue(OidcConstants.Claims.Email) ?? userData?.Email;
                 if (!string.IsNullOrEmpty(email)) payload[OidcConstants.Claims.Email] = email;
-                var emailVerified = principal.FindFirst(OidcConstants.Claims.EmailVerified)?.Value;
-                if (!string.IsNullOrEmpty(emailVerified) && bool.TryParse(emailVerified, out var b))
+
+                var emailVerifiedClaim = principal.FindFirst(OidcConstants.Claims.EmailVerified)?.Value;
+                if (!string.IsNullOrEmpty(emailVerifiedClaim) && bool.TryParse(emailVerifiedClaim, out var b))
+                {
                     payload["email_verified"] = b;
+                }
+                else if (userData?.EmailVerified is bool verified)
+                {
+                    payload["email_verified"] = verified;
+                }
 
                 // Optional: include array of all emails (primary + verified alternates)
-                var sub = principal.FindFirstValue("sub");
                 if (Guid.TryParse(sub, out var userId))
                 {
                     var verifiedOnly = true; // configurable later

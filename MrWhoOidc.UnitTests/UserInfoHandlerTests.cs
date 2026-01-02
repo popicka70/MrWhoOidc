@@ -175,8 +175,13 @@ public sealed class UserInfoHandlerTests
         var result = await handler.HandleAsync(context);
 
         Assert.IsNotNull(result);
-        var (status, _) = await ExecuteAsync(result, context);
+        var (status, body) = await ExecuteAsync(result, context);
         Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.AreEqual(user.Name, doc.RootElement.GetProperty("name").GetString());
+        Assert.AreEqual(user.Email, doc.RootElement.GetProperty("email").GetString());
     }
 
     [TestMethod]
