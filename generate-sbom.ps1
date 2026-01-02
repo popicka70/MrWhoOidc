@@ -23,7 +23,6 @@ $projects = @(
     "MrWhoOidc.ApiService\MrWhoOidc.ApiService.csproj",
     "MrWhoOidc.AppHost\MrWhoOidc.AppHost.csproj",
     "MrWhoOidc.Auth\MrWhoOidc.Auth.csproj",
-    "MrWhoOidc.Client\MrWhoOidc.Client.csproj",
     "MrWhoOidc.Security\MrWhoOidc.Security.csproj",
     "MrWhoOidc.ServiceDefaults\MrWhoOidc.ServiceDefaults.csproj",
     "MrWhoOidc.UnitTests\MrWhoOidc.UnitTests.csproj",

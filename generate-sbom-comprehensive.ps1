@@ -35,7 +35,6 @@ $projects = @(
     @{Path="MrWhoOidc.ApiService\MrWhoOidc.ApiService.csproj"; Type="Application"},
     @{Path="MrWhoOidc.AppHost\MrWhoOidc.AppHost.csproj"; Type="Application"},
     @{Path="MrWhoOidc.Auth\MrWhoOidc.Auth.csproj"; Type="Library"},
-    @{Path="MrWhoOidc.Client\MrWhoOidc.Client.csproj"; Type="Library"},
     @{Path="MrWhoOidc.Security\MrWhoOidc.Security.csproj"; Type="Library"},
     @{Path="MrWhoOidc.ServiceDefaults\MrWhoOidc.ServiceDefaults.csproj"; Type="Library"},
     @{Path="MrWhoOidc.UnitTests\MrWhoOidc.UnitTests.csproj"; Type="Test"},

@@ -26,7 +26,6 @@ Write-Host ""
 # Projects to generate SBOM for (excluding test projects and app host)
 $libraryProjects = @(
     "MrWhoOidc.Auth\MrWhoOidc.Auth.csproj",
-    "MrWhoOidc.Client\MrWhoOidc.Client.csproj",
     "MrWhoOidc.Security\MrWhoOidc.Security.csproj",
     "MrWhoOidc.ServiceDefaults\MrWhoOidc.ServiceDefaults.csproj"
 )

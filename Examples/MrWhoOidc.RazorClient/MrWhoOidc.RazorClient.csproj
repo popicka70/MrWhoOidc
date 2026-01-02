@@ -6,6 +6,6 @@
     <RootNamespace>MrWhoOidc.RazorClient</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\MrWhoOidc.Client\MrWhoOidc.Client.csproj" />
+    <PackageReference Include="MrWhoOidc.Client" Version="2.0.1" />
   </ItemGroup>
 </Project>
