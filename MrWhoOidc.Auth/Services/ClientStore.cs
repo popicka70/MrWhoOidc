@@ -307,6 +307,28 @@ internal sealed class ClientStore(
             if (secret == null) return false;
             if (secret.IsPrimary) return true;
 
+            // EF Core InMemory provider doesn't support transactions; tests may treat the
+            // TransactionIgnoredWarning as an error. Only use transactions for relational stores.
+            if (!db.Database.IsRelational())
+            {
+                var primarySecretsToClear = await db.ClientSecrets
+                    .Where(s => s.ClientId == secret.ClientId && s.Id != secretId && s.IsPrimary)
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
+
+                foreach (var other in primarySecretsToClear)
+                {
+                    other.IsPrimary = false;
+                }
+
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                secret.IsPrimary = true;
+
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+                return true;
+            }
+
             await using var tx = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
 
             // Clear IsPrimary flag on all other secrets for this client
