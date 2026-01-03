@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth; // Program
 using MrWhoOidc.UnitTests.Testing;
 
@@ -20,6 +21,7 @@ namespace MrWhoOidc.UnitTests;
 ///  - Backchannel health endpoint contract keys
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public class Phase0AugmentedSafetyTests
 {
     private WebApplicationFactory<Program> CreateFactory() => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
@@ -63,27 +65,38 @@ public class Phase0AugmentedSafetyTests
         using var factory = CreateFactory();
         var client = factory.CreateClient();
 
+        // Discovery can be served either from the root (single-tenant) or under /t/{slug} (multi-tenant).
+        // Some environments may load a license that enables multi-tenancy, which intentionally blocks root discovery.
+        var basePath = string.Empty;
+
         // Discovery
         var discovery = await client.GetAsync("/.well-known/openid-configuration");
+        if (discovery.StatusCode == HttpStatusCode.NotFound)
+        {
+            var mt = factory.Services.GetRequiredService<IMultiTenancyStateProvider>();
+            var slug = string.IsNullOrWhiteSpace(mt.DefaultTenantSlug) ? "default" : mt.DefaultTenantSlug;
+            basePath = $"/t/{slug}";
+            discovery = await client.GetAsync($"{basePath}/.well-known/openid-configuration");
+        }
         Assert.AreEqual(HttpStatusCode.OK, discovery.StatusCode, "discovery status");
         var discoJson = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
         Assert.IsTrue(discoJson.RootElement.TryGetProperty("issuer", out _), "issuer missing");
 
         // JWKS
-        var jwks = await client.GetAsync("/jwks");
+        var jwks = await client.GetAsync($"{basePath}/jwks");
         Assert.AreEqual(HttpStatusCode.OK, jwks.StatusCode, "jwks status");
 
         // Authorize (missing params) – expect 400 or redirect depending on handler logic; treat 200 as failure
-        var authorize = await client.GetAsync("/authorize");
+        var authorize = await client.GetAsync($"{basePath}/authorize");
         Assert.IsTrue(authorize.StatusCode == HttpStatusCode.BadRequest || (int)authorize.StatusCode == 302, $"Unexpected authorize status {(int)authorize.StatusCode}");
 
         // Token (empty POST)
-        var token = await client.PostAsync("/token", new FormUrlEncodedContent(new Dictionary<string, string>()));
+        var token = await client.PostAsync($"{basePath}/token", new FormUrlEncodedContent(new Dictionary<string, string>()));
         // Expecting 400 invalid_request
         Assert.AreEqual(HttpStatusCode.BadRequest, token.StatusCode, "token empty form should 400");
 
         // UserInfo (no auth) -> 401
-        var userinfo = await client.GetAsync("/userinfo");
+        var userinfo = await client.GetAsync($"{basePath}/userinfo");
         Assert.AreEqual(HttpStatusCode.Unauthorized, userinfo.StatusCode, "userinfo without auth should 401");
     }
 

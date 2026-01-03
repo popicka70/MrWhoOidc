@@ -22,17 +22,42 @@ public sealed class DiscoveryHandler(
     IOptions<AuthOptions> authOptions,
     AuthDbContext db,
     IFeatureService featureService,
-    ITenantAccessor tenantAccessor) : IDiscoveryHandler
+    ITenantAccessor tenantAccessor,
+    IMultiTenancyOptions multiTenancyOptions) : IDiscoveryHandler
 {
     public async Task<IResult> HandleAsync(HttpContext ctx)
     {
+        // In multi-tenant deployments, each tenant has its own issuer under /t/{slug}.
+        // Enforce that the discovery document is only served from the tenant-prefixed path.
+        // (Root-level discovery would be ambiguous and can lead clients to bind to the wrong issuer.)
+        if (multiTenancyOptions.Enabled && !ctx.Request.Path.StartsWithSegments("/t", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Tenant required",
+                detail: "In multi-tenant mode, use /t/{slug}/.well-known/openid-configuration for discovery.");
+        }
+
         // Build issuer dynamically using PublicBaseUrl configuration or request URL
         // This ensures the issuer reflects the actual public-facing URL (e.g., when running behind proxy/Docker)
         var issuer = ctx.GetIssuer(oidcOptions.Value);
         var baseUrl = issuer.TrimEnd('/');
 
-        // Pull scopes from DB (exposed only)
-        var scopes = await db.Scopes.AsNoTracking().Where(s => s.IsExposed).Select(s => s.Name).ToArrayAsync(ctx.RequestAborted);
+        // Pull scopes from DB (exposed only). In multi-tenant mode, expose global scopes plus
+        // tenant-scoped scopes for the resolved tenant.
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
+        var scopesQuery = db.Scopes.AsNoTracking().Where(s => s.IsExposed);
+        if (tenantId is not null)
+        {
+            scopesQuery = scopesQuery.Where(s => s.TenantId == null || s.TenantId == tenantId);
+        }
+        else
+        {
+            scopesQuery = scopesQuery.Where(s => s.TenantId == null);
+        }
+
+        var scopes = await scopesQuery.Select(s => s.Name).ToArrayAsync(ctx.RequestAborted);
         if (scopes.Length == 0)
         {
             scopes = OidcConstants.Scopes.AllStandardScopes;
@@ -50,7 +75,6 @@ public sealed class DiscoveryHandler(
         }
 
         // Check if AdvancedSecurity feature is enabled for PAR
-        var tenantId = tenantAccessor.CurrentTenant?.TenantId;
         var advancedSecurityEnabled = await featureService.IsFeatureEnabledAsync(
             FeatureFlags.AdvancedSecurity, tenantId, ctx.RequestAborted);
 
@@ -66,6 +90,44 @@ public sealed class DiscoveryHandler(
             })
             .Distinct(StringComparer.Ordinal)
             .OrderBy(a => a)
+            .ToArray();
+
+        // Advertise supported claims based on the scopes we expose for this tenant.
+        // This keeps discovery consistent with what /userinfo can emit.
+        var supportedScopes = scopes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var claimsSupportedList = new List<string>
+        {
+            OidcConstants.Claims.Subject
+        };
+
+        if (supportedScopes.Contains(OidcConstants.Scopes.Profile))
+        {
+            claimsSupportedList.Add(OidcConstants.Claims.Name);
+        }
+
+        if (supportedScopes.Contains(OidcConstants.Scopes.Email))
+        {
+            claimsSupportedList.Add(OidcConstants.Claims.Email);
+            claimsSupportedList.Add(OidcConstants.Claims.EmailVerified);
+            claimsSupportedList.Add("emails");
+        }
+
+        if (supportedScopes.Contains(OidcConstants.Scopes.Tenants))
+        {
+            // /userinfo exposes this under the same claim name as the scope.
+            claimsSupportedList.Add(OidcConstants.Scopes.Tenants);
+        }
+
+        if (supportedScopes.Contains(OidcConstants.Scopes.Roles))
+        {
+            claimsSupportedList.Add(OidcConstants.Claims.Roles);
+            claimsSupportedList.Add(OidcConstants.Claims.Realm);
+        }
+
+        var claimsSupported = claimsSupportedList
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(c => c, StringComparer.Ordinal)
             .ToArray();
 
         var body = new Dictionary<string, object>
@@ -108,6 +170,7 @@ public sealed class DiscoveryHandler(
             ["code_challenge_methods_supported"] = new[] { OAuthConstants.CodeChallengeMethods.S256 },
             ["id_token_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
             ["scopes_supported"] = scopes,
+            ["claims_supported"] = claimsSupported,
             ["resource_indicators_supported"] = true,
             // JAR support
             ["request_parameter_supported"] = true,
