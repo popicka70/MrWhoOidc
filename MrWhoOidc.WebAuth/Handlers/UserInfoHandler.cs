@@ -14,6 +14,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using MrWhoOidc.Auth.MultiTenancy;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -22,7 +25,7 @@ public interface IUserInfoHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcEndpointMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
+public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, IJwtService jwt, OidcEndpointMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
 
@@ -453,6 +456,95 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
             }
 
+            // Optional: return signed/encrypted JWT UserInfo response when requested by client metadata.
+            // This is driven by per-client OIDC metadata fields stored on Client.
+            var clientIdForResponse = azp;
+            Client? clientForResponse = null;
+            if (!string.IsNullOrWhiteSpace(clientIdForResponse))
+            {
+                clientForResponse = await db.Clients.AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.ClientId == clientIdForResponse)
+                    .ConfigureAwait(false);
+            }
+
+            var wantsSignedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoSignedResponseAlg);
+            var wantsEncryptedUserInfo = !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseAlg)
+                && !string.IsNullOrWhiteSpace(clientForResponse?.UserInfoEncryptedResponseEnc);
+
+            if (wantsSignedUserInfo || wantsEncryptedUserInfo)
+            {
+                if (string.IsNullOrWhiteSpace(clientIdForResponse))
+                {
+                    outcome = "failure";
+                    http.Response.Headers["Cache-Control"] = "no-store";
+                    return ErrorResults.InvalidRequest("Cannot issue a JWT UserInfo response without a client identifier (azp).");
+                }
+
+                // Ensure we are truthful: this OP uses a single active signing algorithm per tenant.
+                // If a client requests a different UserInfo signing alg, we fail fast.
+                var requestedAlg = clientForResponse?.UserInfoSignedResponseAlg;
+                if (!string.IsNullOrWhiteSpace(requestedAlg))
+                {
+                    if (string.Equals(requestedAlg, "none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outcome = "failure";
+                        http.Response.Headers["Cache-Control"] = "no-store";
+                        return ErrorResults.InvalidRequest("Unsigned (alg=none) UserInfo JWT responses are not supported.");
+                    }
+
+                    var tenantAccessor = http.RequestServices.GetService(typeof(ITenantAccessor)) as ITenantAccessor;
+                    var tenantId = tenantAccessor?.CurrentTenant?.TenantId;
+
+                    var activeSigningAlg = await db.SigningKeys
+                        .AsNoTracking()
+                        .Where(k => k.TenantId == tenantId)
+                        .OrderByDescending(k => k.CreatedAt)
+                        .Select(k => k.Alg)
+                        .FirstOrDefaultAsync()
+                        .ConfigureAwait(false);
+
+                    if (string.IsNullOrWhiteSpace(activeSigningAlg))
+                    {
+                        activeSigningAlg = SecurityConstants.JwtAlgorithms.RS256;
+                    }
+
+                    if (!string.Equals(requestedAlg, activeSigningAlg, StringComparison.Ordinal))
+                    {
+                        outcome = "failure";
+                        http.Response.Headers["Cache-Control"] = "no-store";
+                        return ErrorResults.InvalidRequest($"Client requests userinfo_signed_response_alg '{requestedAlg}', but this tenant currently signs with '{activeSigningAlg}'.");
+                    }
+                }
+
+                var claims = BuildClaims(payload);
+
+                var exp = DateTimeOffset.UtcNow.AddMinutes(5);
+
+                string jwtToken;
+                if (wantsEncryptedUserInfo)
+                {
+                    var enc = TryGetUserInfoEncryptingCredentials(clientForResponse);
+                    if (enc is null)
+                    {
+                        outcome = "failure";
+                        http.Response.Headers["Cache-Control"] = "no-store";
+                        return ErrorResults.InvalidRequest("Client requests encrypted UserInfo response, but encryption configuration is invalid.");
+                    }
+
+                    // Produce a signed+encrypted JWT (nested JWS inside JWE) for maximal interoperability.
+                    jwtToken = await jwt.CreateJwtEncryptedAsync(issuer, clientIdForResponse, claims, exp, enc, tokenType: "JWT", ct: http.RequestAborted).ConfigureAwait(false);
+                }
+                else
+                {
+                    jwtToken = await jwt.CreateJwtAsync(issuer, clientIdForResponse, claims, exp, tokenType: "JWT", ct: http.RequestAborted).ConfigureAwait(false);
+                }
+
+                logger.LogInformation("/userinfo 200 (jwt) for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
+                metrics.UserInfoSuccess.Add(1);
+                var resultJwt = Results.Text(jwtToken, "application/jwt", Encoding.UTF8);
+                return new CacheHeaderResult(resultJwt, "private, max-age=60");
+            }
+
             logger.LogInformation("/userinfo 200 for sub_hash={SubHash}", LogTokenization.HashId(payload["sub"]?.ToString()));
             metrics.UserInfoSuccess.Add(1);
             var resultJson = Results.Json(payload);
@@ -467,6 +559,97 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
 
     static IResult WithWwwAuthenticate(IResult result)
         => new WwwAuthenticateResult(result, "Bearer error=\"invalid_token\"");
+
+    private static EncryptingCredentials? TryGetUserInfoEncryptingCredentials(Client? client)
+    {
+        if (client is null) return null;
+        if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)) return null;
+        if (string.IsNullOrWhiteSpace(client.PublicJwksJson)) return null;
+
+        // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
+        if (!string.Equals(client.UserInfoEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+            || !string.Equals(client.UserInfoEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            JsonWebKey? key = null;
+
+            using (var doc = JsonDocument.Parse(client.PublicJwksJson))
+            {
+                if (doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
+                {
+                    // Prefer keys with use=enc and RSA.
+                    var rsaEnc = keys
+                        .EnumerateArray()
+                        .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase)
+                                          && k.TryGetProperty("use", out var use) && string.Equals(use.GetString(), "enc", StringComparison.OrdinalIgnoreCase));
+
+                    if (rsaEnc.ValueKind != JsonValueKind.Undefined)
+                    {
+                        key = new JsonWebKey(rsaEnc.GetRawText());
+                    }
+                    else
+                    {
+                        var rsaAny = keys
+                            .EnumerateArray()
+                            .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase));
+
+                        if (rsaAny.ValueKind != JsonValueKind.Undefined)
+                        {
+                            key = new JsonWebKey(rsaAny.GetRawText());
+                        }
+                    }
+                }
+            }
+
+            key ??= new JsonWebKey(client.PublicJwksJson);
+
+            if (!string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
+
+            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static List<Claim> BuildClaims(Dictionary<string, object?> payload)
+    {
+        var claims = new List<Claim>();
+        foreach (var kvp in payload)
+        {
+            var type = kvp.Key;
+            var value = kvp.Value;
+            switch (value)
+            {
+                case null:
+                    continue;
+                case string s:
+                    if (!string.IsNullOrWhiteSpace(s)) claims.Add(new Claim(type, s));
+                    break;
+                case bool b:
+                    claims.Add(new Claim(type, b ? "true" : "false", ClaimValueTypes.Boolean));
+                    break;
+                case string[] arr:
+                    foreach (var item in arr)
+                    {
+                        if (!string.IsNullOrWhiteSpace(item)) claims.Add(new Claim(type, item));
+                    }
+                    break;
+                case JsonElement el:
+                    claims.Add(new Claim(type, el.GetRawText(), JsonClaimValueTypes.Json));
+                    break;
+                default:
+                    claims.Add(new Claim(type, value.ToString() ?? string.Empty));
+                    break;
+            }
+        }
+        return claims;
+    }
 }
 
 internal sealed class CacheHeaderResult(IResult inner, string cacheControl) : IResult

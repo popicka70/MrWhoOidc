@@ -205,6 +205,10 @@ public sealed class DiscoveryHandler(
             ["id_token_signing_alg_values_supported"] = new[] { activeSigningAlg },
             ["id_token_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
             ["id_token_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
+            // UserInfo signed/encrypted JWT response support
+            ["userinfo_signing_alg_values_supported"] = new[] { activeSigningAlg },
+            ["userinfo_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
+            ["userinfo_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
             ["acr_values_supported"] = authOptions.Value.AcrValuesSupported,
             ["service_documentation"] = authOptions.Value.ServiceDocumentationUrl ?? string.Empty,
             ["op_policy_uri"] = authOptions.Value.OpPolicyUrl ?? string.Empty,

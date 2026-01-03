@@ -1285,6 +1285,17 @@ public class Client
     [MaxLength(50)]
     public string? IdTokenEncryptedResponseEnc { get; set; }
 
+    // OIDC Core: userinfo_signed_response_alg / userinfo_encrypted_response_alg / userinfo_encrypted_response_enc
+    // When configured, the OP returns a JWT (JWS/JWE) from the UserInfo endpoint instead of JSON.
+    [MaxLength(50)]
+    public string? UserInfoSignedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? UserInfoEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? UserInfoEncryptedResponseEnc { get; set; }
+
     // New: policy knobs moved from appsettings to per-client storage
     public bool RequirePar { get; set; } = false;
     [MaxLength(2000)]

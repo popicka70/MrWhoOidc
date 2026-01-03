@@ -100,7 +100,8 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
             Audience = audience,
             NotBefore = DateTime.UtcNow,
             Expires = expires.UtcDateTime,
-            Claims = list.ToDictionary(c => c.Type, c => (object)c.Value),
+            // Use Subject to preserve duplicate claims and value types (e.g., JSON, Integer64).
+            Subject = new ClaimsIdentity(list),
             SigningCredentials = signingCreds,
             EncryptingCredentials = encryptingCredentials,
             TokenType = tokenType

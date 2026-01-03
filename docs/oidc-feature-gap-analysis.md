@@ -190,18 +190,18 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Implementation:**
 ```csharp
-["userinfo_signing_alg_values_supported"] = new[] { "RS256", "ES256", "none" },
+["userinfo_signing_alg_values_supported"] = new[] { "<active tenant signing alg>" },
 ["userinfo_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
-["userinfo_encryption_enc_values_supported"] = new[] { "A256GCM" }
+["userinfo_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" }
 ```
 
 **Tasks:**
-- [ ] Add `userinfo_signed_response_alg` to Client entity
-- [ ] Add `userinfo_encrypted_response_alg/enc` to Client entity
-- [ ] Modify UserInfoHandler to return JWT when requested
-- [ ] Support nested JWE for signed+encrypted responses
-- [ ] Add discovery metadata
-- [ ] Add tests
+- [x] Add `userinfo_signed_response_alg` to Client entity (stored as `UserInfoSignedResponseAlg`)
+- [x] Add `userinfo_encrypted_response_alg/enc` to Client entity (stored as `UserInfoEncryptedResponseAlg` / `UserInfoEncryptedResponseEnc`)
+- [x] Modify UserInfoHandler to return JWT when requested (returns `application/jwt`)
+- [x] Support nested JWE for signed+encrypted responses (JWS + JWE via `JwtService.CreateJwtEncryptedAsync`)
+- [x] Add discovery metadata
+- [x] Add tests
 
 ---
 
