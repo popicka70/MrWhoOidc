@@ -390,9 +390,12 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
-        Assert.IsTrue(loc!.StartsWith("https://app/callback", StringComparison.Ordinal));
-        Assert.IsTrue(loc.Contains("error=login_required", StringComparison.Ordinal));
-        Assert.IsTrue(loc.Contains("state=state1", StringComparison.Ordinal));
+        var uri = new Uri(loc!);
+        Assert.AreEqual("https", uri.Scheme, $"Expected https scheme; got Location='{loc}'");
+        Assert.AreEqual("app", uri.Host, $"Expected host=app; got Location='{loc}'");
+        Assert.AreEqual("/callback", uri.AbsolutePath, $"Expected path=/callback; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("error=login_required", StringComparison.Ordinal), $"Expected login_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state1", StringComparison.Ordinal), $"Expected state=state1; got Location='{loc}'");
     }
 
     [TestMethod]
@@ -408,7 +411,8 @@ public sealed class AuthorizeHandlerTests
             state: "state2");
 
         var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
-        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+        var consents = new StubConsentProcessor(requiresConsent: true, hasConsent: false);
+        var handler = CreateHandler(db, validator: validator, consentProcessor: consents, responseGenerator: responseGenerator);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -435,8 +439,8 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
-        Assert.IsTrue(loc!.Contains("error=consent_required", StringComparison.Ordinal));
-        Assert.IsTrue(loc.Contains("state=state2", StringComparison.Ordinal));
+        Assert.IsTrue(loc!.Contains("error=consent_required", StringComparison.Ordinal), $"Expected consent_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state2", StringComparison.Ordinal), $"Expected state=state2; got Location='{loc}'");
     }
 
     [TestMethod]
@@ -482,8 +486,8 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
-        Assert.IsTrue(loc!.Contains("error=login_required", StringComparison.Ordinal));
-        Assert.IsTrue(loc.Contains("state=state3", StringComparison.Ordinal));
+        Assert.IsTrue(loc!.Contains("error=login_required", StringComparison.Ordinal), $"Expected login_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state3", StringComparison.Ordinal), $"Expected state=state3; got Location='{loc}'");
     }
 
     [TestMethod]
@@ -534,8 +538,8 @@ public sealed class AuthorizeHandlerTests
         Assert.IsNotNull(result);
         var loc = await ExecuteRedirectLocationAsync(result, context);
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
-        Assert.IsTrue(loc!.Contains("error=acr_values_not_supported", StringComparison.Ordinal));
-        Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal));
+        Assert.IsTrue(loc!.Contains("error=acr_values_not_supported", StringComparison.Ordinal), $"Expected acr_values_not_supported; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal), $"Expected state=state4; got Location='{loc}'");
     }
 
     [TestMethod]
@@ -1036,6 +1040,9 @@ public sealed class AuthorizeHandlerTests
         private readonly string? _responseMode;
         private readonly bool _requireConsent;
         private readonly string? _state;
+        private readonly string[]? _promptValues;
+        private readonly int? _maxAgeSeconds;
+        private readonly string[]? _acrValues;
 
         public StubAuthorizeRequestValidator(
             bool isValid = true,
@@ -1047,7 +1054,10 @@ public sealed class AuthorizeHandlerTests
             string? nonce = null,
             string? responseMode = null,
             bool requireConsent = false,
-            string? state = null)
+            string? state = null,
+            string[]? promptValues = null,
+            int? maxAgeSeconds = null,
+            string[]? acrValues = null)
         {
             _isValid = isValid;
             _error = error;
@@ -1059,10 +1069,36 @@ public sealed class AuthorizeHandlerTests
             _responseMode = responseMode;
             _requireConsent = requireConsent;
             _state = state;
+            _promptValues = promptValues;
+            _maxAgeSeconds = maxAgeSeconds;
+            _acrValues = acrValues;
         }
 
         public Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
         {
+            var promptValues = _promptValues
+                ?? (string.IsNullOrWhiteSpace(request.prompt)
+                    ? null
+                    : request.prompt
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(p => p.Trim().ToLowerInvariant())
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
+
+            int? maxAgeSeconds = _maxAgeSeconds;
+            if (maxAgeSeconds is null && !string.IsNullOrWhiteSpace(request.max_age) && int.TryParse(request.max_age, out var parsedMaxAge) && parsedMaxAge >= 0)
+            {
+                maxAgeSeconds = parsedMaxAge;
+            }
+
+            var acrValues = _acrValues
+                ?? (string.IsNullOrWhiteSpace(request.acr_values)
+                    ? null
+                    : request.acr_values
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
+
             var result = new AuthorizeValidationResult(
                 IsValid: _isValid,
                 Error: _error,
@@ -1073,7 +1109,10 @@ public sealed class AuthorizeHandlerTests
                 Nonce: _nonce ?? request.nonce,
                 ResponseMode: _responseMode ?? request.response_mode,
                 RequireConsent: _requireConsent,
-                State: _state ?? request.state
+                State: _state ?? request.state,
+                PromptValues: promptValues,
+                MaxAgeSeconds: maxAgeSeconds,
+                AcrValues: acrValues
             );
             return Task.FromResult(result);
         }
@@ -1242,7 +1281,31 @@ public sealed class AuthorizeHandlerTests
 
         public Task<(IResult? error, AuthorizationContext? context)> ResolveAndValidateAsync(HttpContext http, CancellationToken ct = default)
         {
-            var request = _request ?? new AuthorizeRequest(client_id: _clientId);
+            static string? Q(HttpContext ctx, string key)
+            {
+                var v = ctx.Request.Query[key].ToString();
+                return string.IsNullOrWhiteSpace(v) ? null : v;
+            }
+
+            var request = _request ?? new AuthorizeRequest(
+                response_type: Q(http, "response_type"),
+                client_id: _clientId ?? Q(http, "client_id"),
+                redirect_uri: Q(http, "redirect_uri"),
+                scope: Q(http, "scope"),
+                state: Q(http, "state"),
+                nonce: Q(http, "nonce"),
+                code_challenge: Q(http, "code_challenge"),
+                code_challenge_method: Q(http, "code_challenge_method"),
+                resource: Q(http, "resource"),
+                response_mode: Q(http, "response_mode"),
+                prompt: Q(http, "prompt"),
+                max_age: Q(http, "max_age"),
+                id_token_hint: Q(http, "id_token_hint"),
+                login_hint: Q(http, "login_hint"),
+                acr_values: Q(http, "acr_values"),
+                display: Q(http, "display"),
+                ui_locales: Q(http, "ui_locales"),
+                claims: Q(http, "claims"));
             if (!_valid)
             {
                 return Task.FromResult<(IResult? error, AuthorizationContext? context)>((Results.BadRequest("Invalid request"), null));
@@ -1413,8 +1476,17 @@ public sealed class AuthorizeHandlerTests
 
     private sealed class StubConsentProcessor : IConsentProcessor
     {
+        private readonly bool _requiresConsent;
+        private readonly bool _hasConsent;
+
+        public StubConsentProcessor(bool requiresConsent = false, bool hasConsent = true)
+        {
+            _requiresConsent = requiresConsent;
+            _hasConsent = hasConsent;
+        }
+
         public Task<ConsentDecision> EvaluateAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
-            => Task.FromResult(new ConsentDecision(false, true));
+            => Task.FromResult(new ConsentDecision(_requiresConsent, _hasConsent));
     }
 
     private sealed class StubProviderSelectionService : IProviderSelectionService
