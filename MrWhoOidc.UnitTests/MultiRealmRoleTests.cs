@@ -37,13 +37,21 @@ public sealed class MultiRealmRoleTests
         
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
+        var keyStore = new KeyStore(
+            db,
+            MockTenantAccessor.CreateWithDefaultTenant(),
+                new MrWhoOidc.UnitTests.Helpers.TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+
         var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
             options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());

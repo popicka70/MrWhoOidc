@@ -230,8 +230,8 @@ public class JwksMultiTenancyTests
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
         
-        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
-        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
+        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         var initialKeyA = await keyStoreA.GetActiveSigningKeyAsync();
         var initialKeyB = await keyStoreB.GetActiveSigningKeyAsync();
@@ -277,7 +277,7 @@ public class JwksMultiTenancyTests
     {
         // Arrange - Create initial key for Tenant A
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
-        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         var oldKey = await keyStore.GetActiveSigningKeyAsync();
 
@@ -319,7 +319,7 @@ public class JwksMultiTenancyTests
     {
         // Arrange - Create and retire a key for Tenant A
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
-        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         var activeKey = await keyStore.GetActiveSigningKeyAsync();
 
@@ -356,8 +356,8 @@ public class JwksMultiTenancyTests
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
         
-        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
-        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
+        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         // Create initial keys
         await keyStoreA.GetActiveSigningKeyAsync();
@@ -411,8 +411,8 @@ public class JwksMultiTenancyTests
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
         
-        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
-        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
+        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         // Create initial keys for both tenants
         await keyStoreA.GetActiveSigningKeyAsync();
@@ -454,8 +454,8 @@ public class JwksMultiTenancyTests
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a", issuerUri: "https://auth.example.com/t/tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b", issuerUri: "https://auth.example.com/t/tenant-b");
         
-        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
-        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
+        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         var keyA = await keyStoreA.GetActiveSigningKeyAsync();
         var keyB = await keyStoreB.GetActiveSigningKeyAsync();
@@ -494,11 +494,11 @@ public class JwksMultiTenancyTests
     {
         // Arrange - Create keys for both tenants
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
-        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache());
+        var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         await keyStoreA.GetActiveSigningKeyAsync();
 
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
-        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache());
+        var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         await keyStoreB.GetActiveSigningKeyAsync();
 
         // Act - Switch tenant context and verify key retrieval
@@ -521,7 +521,7 @@ public class JwksMultiTenancyTests
     {
         // Arrange - Create initial key
         var tenantAccessor = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
-        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         var key1 = await keyStore.GetActiveSigningKeyAsync();
 

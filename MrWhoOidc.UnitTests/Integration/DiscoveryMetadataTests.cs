@@ -26,7 +26,7 @@ public sealed class DiscoveryMetadataTests
         {
             b.ConfigureAppConfiguration((ctx, cfg) =>
             {
-                cfg.AddInMemoryCollection(config);
+                cfg.AddTestInMemoryCollection(config);
             });
         });
 

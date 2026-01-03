@@ -73,7 +73,7 @@ public class LogoutPromptFlowTests
             localLogout);
         var federatedCallback = new FederatedCallbackHandler(svc, audit, metrics);
         var frontChannel = new FrontChannelLogoutNotifier(db);
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
         var config = new ConfigurationBuilder().Build();

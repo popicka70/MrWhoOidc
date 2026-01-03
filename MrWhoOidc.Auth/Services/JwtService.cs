@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.KeyManagement;
+using MrWhoOidc.Auth.Protocols;
 using System.Globalization;
 
 namespace MrWhoOidc.Auth.Services;
@@ -59,7 +60,7 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
         var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-        var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+        var creds = new SigningCredentials(key, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(key)));
 
         var token = new JwtSecurityToken(
             issuer: issuer,
@@ -91,7 +92,7 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         list.Add(new Claim(JwtRegisteredClaimNames.Iat, EpochTime.GetIntDate(now.UtcDateTime).ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64));
 
         var key = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-        var signingCreds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+        var signingCreds = new SigningCredentials(key, MapJwaToSecurityAlgorithms(GetJwaAlgOrDefault(key)));
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -108,5 +109,38 @@ internal sealed class JwtService(ICachedKeyProvider keyProvider) : IJwtService
         var handler = new JwtSecurityTokenHandler();
         var token = handler.CreateToken(descriptor);
         return handler.WriteToken(token);
+    }
+
+    private static string GetJwaAlgOrDefault(SecurityKey key)
+    {
+        // Prefer explicit JWK alg when present.
+        if (key is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg))
+        {
+            return jwk.Alg;
+        }
+
+        // Conservative default for backward compatibility.
+        return SecurityConstants.JwtAlgorithms.RS256;
+    }
+
+    private static string MapJwaToSecurityAlgorithms(string alg)
+    {
+        // Ensure we map to the canonical constants where available.
+        return alg.ToUpperInvariant() switch
+        {
+            SecurityConstants.JwtAlgorithms.RS256 => SecurityAlgorithms.RsaSha256,
+            SecurityConstants.JwtAlgorithms.RS384 => SecurityAlgorithms.RsaSha384,
+            SecurityConstants.JwtAlgorithms.RS512 => SecurityAlgorithms.RsaSha512,
+
+            SecurityConstants.JwtAlgorithms.PS256 => SecurityAlgorithms.RsaSsaPssSha256,
+            SecurityConstants.JwtAlgorithms.PS384 => SecurityAlgorithms.RsaSsaPssSha384,
+            SecurityConstants.JwtAlgorithms.PS512 => SecurityAlgorithms.RsaSsaPssSha512,
+
+            SecurityConstants.JwtAlgorithms.ES256 => SecurityAlgorithms.EcdsaSha256,
+            SecurityConstants.JwtAlgorithms.ES384 => SecurityAlgorithms.EcdsaSha384,
+            SecurityConstants.JwtAlgorithms.ES512 => SecurityAlgorithms.EcdsaSha512,
+
+            _ => alg
+        };
     }
 }

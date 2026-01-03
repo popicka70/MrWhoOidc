@@ -18,7 +18,7 @@ public sealed class TokenValidatorTests
     public async Task Validate_ReturnsPrincipal_ForValidToken()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(ks);
         var token = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
         var validator = TestTokenValidatorFactory.Create(ks);
@@ -32,7 +32,7 @@ public sealed class TokenValidatorTests
     public async Task Validate_Fails_ForWrongIssuer()
     {
         using var db = CreateDb();
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(ks);
         var token = await jwt.CreateJwtAsync("https://issuer", "api", new[] { new Claim("sub", "u1") }, DateTimeOffset.UtcNow.AddMinutes(5)).ConfigureAwait(false);
         var validator = TestTokenValidatorFactory.Create(ks);

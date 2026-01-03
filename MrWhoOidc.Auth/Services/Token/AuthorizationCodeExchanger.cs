@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
 using System;
@@ -15,6 +16,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.Auth.Services.Token;
 
@@ -24,6 +26,7 @@ namespace MrWhoOidc.Auth.Services.Token;
 public sealed class AuthorizationCodeExchanger(
     AuthDbContext db,
     IJwtService jwt,
+    ICachedKeyProvider keyProvider,
     IRefreshTokenService refreshTokens,
     IRevocationService revocations,
     IOptions<AuthOptions> authOptions,
@@ -228,7 +231,9 @@ public sealed class AuthorizationCodeExchanger(
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
                 }
 
-                var atHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(accessToken);
+                var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+                var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+                var atHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken, signingAlg);
 
                 var idClaims = new List<System.Security.Claims.Claim>
                 {

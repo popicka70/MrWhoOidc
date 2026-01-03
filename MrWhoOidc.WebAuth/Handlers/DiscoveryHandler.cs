@@ -130,6 +130,20 @@ public sealed class DiscoveryHandler(
             .OrderBy(c => c, StringComparer.Ordinal)
             .ToArray();
 
+        // Advertise the active tenant signing algorithm for ID tokens (and JARM signing).
+        // This keeps discovery consistent with what the server actually emits.
+        var activeSigningAlg = await db.SigningKeys
+            .AsNoTracking()
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .Select(k => k.Alg)
+            .FirstOrDefaultAsync(ctx.RequestAborted)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(activeSigningAlg))
+        {
+            activeSigningAlg = SecurityConstants.JwtAlgorithms.RS256;
+        }
+
         var body = new Dictionary<string, object>
         {
             ["issuer"] = issuer,
@@ -178,7 +192,6 @@ public sealed class DiscoveryHandler(
                 SecurityConstants.JwtAlgorithms.ES512
             },
             ["code_challenge_methods_supported"] = new[] { OAuthConstants.CodeChallengeMethods.S256 },
-            ["id_token_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
             ["scopes_supported"] = scopes,
             ["claims_supported"] = claimsSupported,
             // OIDC Discovery recommended metadata
@@ -189,6 +202,7 @@ public sealed class DiscoveryHandler(
             // ui_locales_supported is a best-effort hint (actual locale availability depends on deployed resources)
             ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,
             // acr_values_supported is optional; only advertise when configured
+            ["id_token_signing_alg_values_supported"] = new[] { activeSigningAlg },
             ["acr_values_supported"] = authOptions.Value.AcrValuesSupported,
             ["service_documentation"] = authOptions.Value.ServiceDocumentationUrl ?? string.Empty,
             ["op_policy_uri"] = authOptions.Value.OpPolicyUrl ?? string.Empty,
@@ -201,7 +215,7 @@ public sealed class DiscoveryHandler(
             // JARM support
             ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
-            ["authorization_response_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
+            ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
             ["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
             ["authorization_response_encryption_enc_values_supported"] = new[] { "A256GCM" },
             // Non-standard hints to improve DX

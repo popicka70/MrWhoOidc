@@ -353,7 +353,7 @@ public class MultiTenantE2ETests
 
         // Set up services with tenant 1 context
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", "Acme Corporation", "https://localhost:5001/t/acme");
-        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Act - Create ID token using JwtService
@@ -404,7 +404,7 @@ public class MultiTenantE2ETests
 
         // Set up services with tenant 2 context
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", "Contoso Ltd", "https://localhost:5001/t/contoso");
-        var keyStore = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenant2Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Act - Create ID token
@@ -436,7 +436,7 @@ public class MultiTenantE2ETests
         var client1 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant1Id);
 
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
-        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService1 = TestJwtServiceFactory.Create(keyStore1);
 
         var claims = new[] { new System.Security.Claims.Claim("sub", user1.Id.ToString()) };
@@ -449,7 +449,7 @@ public class MultiTenantE2ETests
 
         // Act - Try to validate tenant 1 token in tenant 2 context
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso", issuerUri: "https://localhost:5001/t/contoso");
-        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var validator2 = TestTokenValidatorFactory.Create(keyStore2);
 
         var (valid, principal, error) = await validator2.ValidateAsync(tenant1Token, "https://localhost:5001/t/acme");
@@ -520,8 +520,8 @@ public class MultiTenantE2ETests
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
 
-        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
-        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         // Act - Generate keys for both tenants
         var key1 = await keyStore1.GetActiveSigningKeyAsync();
@@ -550,8 +550,8 @@ public class MultiTenantE2ETests
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme");
         var tenant2Accessor = MockTenantAccessor.CreateWithTenant(_tenant2Id, "contoso");
 
-        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
-        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache());
+        var keyStore1 = new KeyStore(_db, tenant1Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var keyStore2 = new KeyStore(_db, tenant2Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
         await keyStore1.GetActiveSigningKeyAsync();
         await keyStore2.GetActiveSigningKeyAsync();
@@ -576,7 +576,7 @@ public class MultiTenantE2ETests
     {
         // Arrange
         var tenant1Accessor = MockTenantAccessor.CreateWithTenant(_tenant1Id, "acme", issuerUri: "https://localhost:5001/t/acme");
-        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache());
+        var keyStore = new KeyStore(_db, tenant1Accessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService = TestJwtServiceFactory.Create(keyStore);
 
         // Get the active signing key to know its kid

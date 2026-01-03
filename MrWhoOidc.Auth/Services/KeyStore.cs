@@ -1,23 +1,27 @@
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace MrWhoOidc.Auth.Services;
 
 public interface IKeyStore
 {
-    Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default);
+    Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(CancellationToken ct = default);
     Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
     Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default);
 }
 
-internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor, HybridCache cache) : IKeyStore
+internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor, HybridCache cache, IOptions<KeyRotationOptions> keyRotationOptions) : IKeyStore
 {
-    public async Task<RsaJwk> GetActiveSigningKeyAsync(CancellationToken ct = default)
+    public async Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         
@@ -41,25 +45,21 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     
                 if (current is null)
                 {
-                    // Generate a new RSA keypair and persist it
-                    using var rsa = RSA.Create(2048);
-                    var kid = Guid.NewGuid().ToString("N");
-                    var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+                    var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(keyRotationOptions.Value.SigningAlgorithm);
 
                     db.SigningKeys.Add(new Persistence.SigningKey
                     {
-                        Kid = jwk.Kid,
-                        Alg = jwk.Alg,
-                        JwkJson = jwk.ToJson(includePrivate: true),
+                        Kid = kid,
+                        Alg = alg,
+                        JwkJson = jwkJson,
                         TenantId = tenantId
                     });
                     await db.SaveChangesAsync(cancel).ConfigureAwait(false);
-                    return jwk;
+                    return new JsonWebKey(jwkJson);
                 }
 
                 // Load from DB
-                var stored = System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(current.JwkJson)!;
-                return stored;
+                return new JsonWebKey(current.JwkJson);
             },
             options,
             tags,
@@ -79,7 +79,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
         await cache.RemoveAsync(cacheKey, ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<RsaJwk>> GetPublicJwksAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         
@@ -102,28 +102,78 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     .ToListAsync(cancel)
                     .ConfigureAwait(false);
 
-                return keys
-                    .Select(k => System.Text.Json.JsonSerializer.Deserialize<RsaJwk>(k.JwkJson)!)
-                    .Select(k => new RsaJwk
-                    {
-                        Kty = k.Kty,
-                        Kid = k.Kid,
-                        Alg = k.Alg,
-                        Use = k.Use,
-                        N = k.N,
-                        E = k.E,
-                        D = null,
-                        P = null,
-                        Q = null,
-                        DP = null,
-                        DQ = null,
-                        QI = null
-                    })
-                    .ToList() as IReadOnlyList<RsaJwk>;
+                var result = new List<JsonWebKey>(capacity: keys.Count);
+                foreach (var k in keys)
+                {
+                    var jwk = new JsonWebKey(k.JwkJson);
+                    result.Add(StripPrivateKeyMaterial(jwk));
+                }
+                return result;
             },
             options,
             tags,
             ct
         ).ConfigureAwait(false);
+    }
+
+    private static (string jwkJson, string kid, string alg) GeneratePrivateSigningJwkJson(string? configuredAlg)
+    {
+        var alg = string.IsNullOrWhiteSpace(configuredAlg) ? SecurityConstants.JwtAlgorithms.RS256 : configuredAlg;
+        var kid = Guid.NewGuid().ToString("N");
+
+        if (alg.StartsWith("ES", StringComparison.OrdinalIgnoreCase))
+        {
+            var curve = alg.ToUpperInvariant() switch
+            {
+                "ES256" => ECCurve.NamedCurves.nistP256,
+                "ES384" => ECCurve.NamedCurves.nistP384,
+                // ES512 uses P-521 per JWA
+                "ES512" => ECCurve.NamedCurves.nistP521,
+                _ => ECCurve.NamedCurves.nistP256
+            };
+
+            using var ecdsa = ECDsa.Create(curve);
+            var jwk = EcJwk.FromECDsa(ecdsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true);
+            return (jwk.ToJson(includePrivate: true), jwk.Kid, jwk.Alg);
+        }
+
+        // Default to RSA for RS*/PS*
+        using var rsa = RSA.Create(2048);
+        var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true);
+        return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
+    }
+
+    private static JsonWebKey StripPrivateKeyMaterial(JsonWebKey jwk)
+    {
+        // Build a copy so we don't accidentally mutate cached instances.
+        // Preserve: kty/kid/alg/use + public parameters.
+        if (string.Equals(jwk.Kty, "EC", StringComparison.OrdinalIgnoreCase))
+        {
+            var pub = new Dictionary<string, object?>
+            {
+                ["kty"] = "EC",
+                ["kid"] = jwk.Kid,
+                ["alg"] = jwk.Alg,
+                ["use"] = jwk.Use,
+                ["crv"] = jwk.Crv,
+                ["x"] = jwk.X,
+                ["y"] = jwk.Y
+            };
+            var pubJson = JsonSerializer.Serialize(pub, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+            return new JsonWebKey(pubJson);
+        }
+
+        // RSA
+        var rsaPub = new Dictionary<string, object?>
+        {
+            ["kty"] = "RSA",
+            ["kid"] = jwk.Kid,
+            ["alg"] = jwk.Alg,
+            ["use"] = jwk.Use,
+            ["n"] = jwk.N,
+            ["e"] = jwk.E
+        };
+        var rsaJson = JsonSerializer.Serialize(rsaPub, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+        return new JsonWebKey(rsaJson);
     }
 }

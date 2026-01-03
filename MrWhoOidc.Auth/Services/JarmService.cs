@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
@@ -34,11 +35,14 @@ public interface IJarmService
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 
-public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
+public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvider keyProvider) : IJarmService
 {
     public async Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state)
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
+
+        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
         
         var claims = new List<Claim>
         {
@@ -46,13 +50,13 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         };
         
         // c_hash per JARM
-        var cHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(code);
+        var cHash = CryptoHelper.ComputeLeftHalfHashBase64Url(code, signingAlg);
         claims.Add(new(OidcConstants.Claims.CHash, cHash));
         
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -70,6 +74,9 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
 
+        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+
         var claims = new List<Claim>
         {
             new(OAuthConstants.Parameters.Error, error),
@@ -79,7 +86,7 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         

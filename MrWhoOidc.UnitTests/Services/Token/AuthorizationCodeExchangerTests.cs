@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Moq;
 using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
@@ -16,8 +18,10 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Services.Token;
+using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.UnitTests.Helpers;
 
 namespace MrWhoOidc.UnitTests.Services.Token;
@@ -44,6 +48,15 @@ public sealed class AuthorizationCodeExchangerTests
         return Microsoft.Extensions.Options.Options.Create(opts);
     }
 
+    private static ICachedKeyProvider CreateKeyProvider()
+    {
+        var mock = new Mock<ICachedKeyProvider>();
+        mock
+            .Setup(p => p.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SymmetricSecurityKey(new byte[32]));
+        return mock.Object;
+    }
+
     [TestMethod]
     public async Task ExchangeAsync_Fails_ForInvalidCode()
     {
@@ -64,7 +77,7 @@ public sealed class AuthorizationCodeExchangerTests
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
 
         var exchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
         var request = new AuthorizationCodeExchangeRequest("bad", "https://cb", "c1", "verifier", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
@@ -103,7 +116,7 @@ public sealed class AuthorizationCodeExchangerTests
         var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
 
         var exchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
+            db, jwtSvc.Object, CreateKeyProvider(), refreshSvc.Object, revocationSvc.Object, Options(), metaStore, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()), logger.Object);
 
         var code = "code123";
         var userId = Guid.NewGuid();
@@ -138,6 +151,118 @@ public sealed class AuthorizationCodeExchangerTests
         var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
         Assert.AreEqual("jwt-at", dict["access_token"]);
         Assert.AreEqual("rt", dict["refresh_token"]);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_ES256_IdToken_Alg_And_AtHash_Are_Correct()
+    {
+        using var db = CreateDb();
+
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var tenantId = tenantAccessor.CurrentTenant!.TenantId;
+
+        var keyStore = new KeyStore(
+            db,
+            tenantAccessor,
+            new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions { SigningAlgorithm = SecurityConstants.JwtAlgorithms.ES256 }));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+        var jwtSvc = TestJwtServiceFactory.Create(keyStore);
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc,
+            keyProvider,
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        var code = "code-es256";
+        var userId = Guid.NewGuid();
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+
+        var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
+        var accessToken = dict["access_token"] as string;
+        var idToken = dict["id_token"] as string;
+
+        Assert.IsFalse(string.IsNullOrWhiteSpace(accessToken));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(idToken));
+
+        var handler = new JwtSecurityTokenHandler();
+        var parsedId = handler.ReadJwtToken(idToken!);
+
+        Assert.AreEqual(SecurityConstants.JwtAlgorithms.ES256, parsedId.Header.Alg);
+
+        Assert.IsTrue(parsedId.Payload.TryGetValue("at_hash", out var atHashObj));
+        var atHash = atHashObj?.ToString();
+        var expectedAtHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken!, SecurityConstants.JwtAlgorithms.ES256);
+
+        Assert.AreEqual(expectedAtHash, atHash);
+        Assert.AreEqual(22, expectedAtHash.Length);
     }
 
     [TestMethod]
@@ -191,6 +316,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -298,6 +424,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -416,6 +543,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.RestrictIdTokenClaimsToClaimsRequest = true),
@@ -534,6 +662,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(o => o.RestrictIdTokenClaimsToClaimsRequest = true),
@@ -647,6 +776,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -755,6 +885,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -857,6 +988,7 @@ public sealed class AuthorizationCodeExchangerTests
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc.Object,
+            CreateKeyProvider(),
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),

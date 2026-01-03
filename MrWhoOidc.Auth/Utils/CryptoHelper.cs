@@ -62,6 +62,41 @@ public static class CryptoHelper
     }
 
     /// <summary>
+    /// Compute left-most half of the hash associated with the given JWS alg and return base64url encoding.
+    /// Used for at_hash, c_hash, and s_hash per OIDC/JARM specs.
+    /// </summary>
+    public static string ComputeLeftHalfHashBase64Url(string value, string jwsAlg)
+    {
+        if (string.IsNullOrWhiteSpace(jwsAlg))
+        {
+            // Backward-compatible default (RS256/ES256/etc).
+            return ComputeLeftHalfSha256Base64Url(value);
+        }
+
+        var alg = jwsAlg.Trim().ToUpperInvariant();
+        var input = Encoding.ASCII.GetBytes(value);
+
+        if (alg.EndsWith("384", StringComparison.Ordinal))
+        {
+            var bytes = SHA384.HashData(input);
+            var half = new byte[24];
+            Array.Copy(bytes, half, half.Length);
+            return Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(half);
+        }
+
+        if (alg.EndsWith("512", StringComparison.Ordinal))
+        {
+            var bytes = SHA512.HashData(input);
+            var half = new byte[32];
+            Array.Copy(bytes, half, half.Length);
+            return Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(half);
+        }
+
+        // Default to SHA-256 family (RS256/PS256/ES256/HS256).
+        return ComputeLeftHalfSha256Base64Url(value);
+    }
+
+    /// <summary>
     /// Compute SHA-256 and return first N bytes as hex string (for bucketing/short hashes).
     /// Used for client ID bucketing in metrics and logs.
     /// </summary>

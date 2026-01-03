@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Protocols;
 using System.Security.Cryptography;
 
 namespace MrWhoOidc.Auth.Services;
@@ -25,8 +26,14 @@ internal sealed class KeyRotationService(
         var opts = options.Value;
         if (!opts.Enabled) return;
 
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+
         // Find the current active key
-        var current = await db.SigningKeys.OrderByDescending(k => k.CreatedAt).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        var current = await db.SigningKeys
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
         if (current is null)
         {
             // No key yet, KeyStore will create on demand; nothing else to do
@@ -36,17 +43,38 @@ internal sealed class KeyRotationService(
         // If current key is older than RotationInterval, generate a new one and keep the old (not retired yet)
         if (DateTimeOffset.UtcNow - current.CreatedAt >= opts.RotationInterval)
         {
-            using var rsa = RSA.Create(2048);
+            var alg = string.IsNullOrWhiteSpace(opts.SigningAlgorithm) ? SecurityConstants.JwtAlgorithms.RS256 : opts.SigningAlgorithm;
             var kid = Guid.NewGuid().ToString("N");
-            var jwk = RsaJwk.FromRSA(rsa, kid, alg: "RS256", includePrivate: true);
+            string jwkJson;
+            string storedAlg;
 
-            var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+            if (alg.StartsWith("ES", StringComparison.OrdinalIgnoreCase))
+            {
+                var curve = alg.ToUpperInvariant() switch
+                {
+                    "ES256" => ECCurve.NamedCurves.nistP256,
+                    "ES384" => ECCurve.NamedCurves.nistP384,
+                    "ES512" => ECCurve.NamedCurves.nistP521,
+                    _ => ECCurve.NamedCurves.nistP256
+                };
+                using var ecdsa = ECDsa.Create(curve);
+                var ecJwk = EcJwk.FromECDsa(ecdsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true);
+                jwkJson = ecJwk.ToJson(includePrivate: true);
+                storedAlg = ecJwk.Alg;
+            }
+            else
+            {
+                using var rsa = RSA.Create(2048);
+                var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true);
+                jwkJson = rsaJwk.ToJson(includePrivate: true);
+                storedAlg = rsaJwk.Alg;
+            }
 
             db.SigningKeys.Add(new SigningKey
             {
-                Kid = jwk.Kid,
-                Alg = jwk.Alg,
-                JwkJson = jwk.ToJson(includePrivate: true),
+                Kid = kid,
+                Alg = storedAlg,
+                JwkJson = jwkJson,
                 CreatedAt = DateTimeOffset.UtcNow,
                 TenantId = tenantId
             });
@@ -62,11 +90,12 @@ internal sealed class KeyRotationService(
 
         // Retire keys older than RotationInterval + Overlap so they are no longer served
         var retireBefore = DateTimeOffset.UtcNow - (opts.RotationInterval + opts.Overlap);
-        var oldKeys = await db.SigningKeys.Where(k => k.RetiredAt == null && k.CreatedAt < retireBefore).ToListAsync(ct).ConfigureAwait(false);
+        var oldKeys = await db.SigningKeys
+            .Where(k => k.TenantId == tenantId && k.RetiredAt == null && k.CreatedAt < retireBefore)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
         if (oldKeys.Count > 0)
         {
-            var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-            
             foreach (var k in oldKeys)
             {
                 k.RetiredAt = DateTimeOffset.UtcNow;
