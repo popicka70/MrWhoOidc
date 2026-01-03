@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -104,6 +105,8 @@ public sealed class AuthorizationCodeExchanger(
 
                 var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
                     = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
+
+                var (idTokenConstraints, _) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -250,11 +253,99 @@ public sealed class AuthorizationCodeExchanger(
                 if (entity.AuthTime.HasValue) authTime = entity.AuthTime.Value;
                 else if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
 
+                var nonceForIdToken = entity.Nonce;
+                var atHashForIdToken = atHash;
+                var authTimeForIdToken = authTime;
+
                 if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
                 if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
                 if (authOptions.Value.EmitAmrInIdToken)
                 {
                     foreach (var amr in combinedAmr) idClaims.Add(new(OidcConstants.Claims.Amr, amr));
+                }
+
+                // Apply best-effort claim constraints to the ID token.
+                // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
+                if (idTokenConstraints.Count > 0)
+                {
+                    string? GetSingleValue(string claimName)
+                    {
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal) && authTimeForIdToken is not null)
+                        {
+                            return authTimeForIdToken.Value.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        }
+
+                        if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) return nonceForIdToken;
+                        if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) return atHashForIdToken;
+
+                        // For explicit claims, use the first value (if multiple values exist, the multi-value matcher below handles it).
+                        return idClaims.FirstOrDefault(c => string.Equals(c.Type, claimName, StringComparison.Ordinal))?.Value;
+                    }
+
+                    IEnumerable<string> GetAllValues(string claimName)
+                    {
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal))
+                        {
+                            var v = GetSingleValue(claimName);
+                            return v is null ? Array.Empty<string>() : new[] { v };
+                        }
+
+                        if (string.Equals(claimName, "nonce", StringComparison.Ordinal) || string.Equals(claimName, "at_hash", StringComparison.Ordinal))
+                        {
+                            var v = GetSingleValue(claimName);
+                            return v is null ? Array.Empty<string>() : new[] { v };
+                        }
+
+                        return idClaims.Where(c => string.Equals(c.Type, claimName, StringComparison.Ordinal)).Select(c => c.Value);
+                    }
+
+                    foreach (var kvp in idTokenConstraints)
+                    {
+                        var claimName = kvp.Key;
+                        var constraint = kvp.Value;
+
+                        // No value constraints? Only essential is handled later by the essential set check.
+                        if (constraint.Value is null && (constraint.Values is null || constraint.Values.Length == 0))
+                        {
+                            continue;
+                        }
+
+                        var actualValues = GetAllValues(claimName).ToArray();
+                        var hasAny = actualValues.Length > 0;
+
+                        bool matches;
+                        if (constraint.Value is not null)
+                        {
+                            matches = hasAny && actualValues.Any(v => string.Equals(v, constraint.Value, StringComparison.Ordinal));
+                        }
+                        else
+                        {
+                            matches = hasAny && actualValues.Any(v => constraint.Values!.Contains(v, StringComparer.Ordinal));
+                        }
+
+                        if (matches)
+                        {
+                            continue;
+                        }
+
+                        if (constraint.Essential)
+                        {
+                            return (false,
+                                new
+                                {
+                                    error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                    error_description = $"Essential id_token claim '{claimName}' cannot satisfy the requested value constraint."
+                                },
+                                OAuthConstants.ErrorCodes.InvalidRequest,
+                                400);
+                        }
+
+                        // Not essential: omit the claim from the ID token.
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal)) authTimeForIdToken = null;
+                        else if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) nonceForIdToken = null;
+                        else if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) atHashForIdToken = null;
+                        else idClaims.RemoveAll(c => string.Equals(c.Type, claimName, StringComparison.Ordinal));
+                    }
                 }
 
                 // Best-effort: if essential id_token claims were requested, ensure we can satisfy them.
@@ -265,7 +356,13 @@ public sealed class AuthorizationCodeExchanger(
                     var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
                     foreach (var required in essentialIdTokenClaims)
                     {
-                        if (!present.Contains(required))
+                        var satisfied = present.Contains(required)
+                            || (string.Equals(required, OidcConstants.Claims.AuthTime, StringComparison.Ordinal) && authTimeForIdToken is not null)
+                            || (string.Equals(required, "nonce", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(nonceForIdToken))
+                            || (string.Equals(required, "at_hash", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(atHashForIdToken))
+                            || string.Equals(required, JwtRegisteredClaimNames.Iat, StringComparison.Ordinal);
+
+                        if (!satisfied)
                         {
                             return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
                         }
@@ -295,9 +392,9 @@ public sealed class AuthorizationCodeExchanger(
                     request.ClientId,
                     idClaims,
                     DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                    nonce: entity.Nonce,
-                    accessTokenHash: atHash,
-                    authTime: authTime,
+                    nonce: nonceForIdToken,
+                    accessTokenHash: atHashForIdToken,
+                    authTime: authTimeForIdToken,
                     ct: ct
                 ).ConfigureAwait(false);
 

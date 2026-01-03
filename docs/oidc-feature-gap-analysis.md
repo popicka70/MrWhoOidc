@@ -2,7 +2,18 @@
 
 **Date:** 2026-01-03  
 **Version:** 1.0  
-**Status:** Proposal
+**Status:** In progress (partially implemented)
+
+## Implementation Status (Repository Reality)
+
+The following items in this roadmap have been implemented since this document was first drafted:
+
+- ✅ OIDC `claims` parameter: parsing/validation + persistence in auth-code request context, and userinfo claim filtering driven by the access token.
+- ✅ OIDC `prompt` enforcement in `/authorize` (including `prompt=none` error semantics).
+- ✅ OIDC `max_age` enforcement in `/authorize` using `auth_time` from the user session.
+- ✅ OIDC `acr_values` (basic validation + best-effort session satisfaction) and discovery support via `acr_values_supported` when configured.
+
+All tests are currently green (`dotnet test` on the solution).
 
 ## Executive Summary
 
@@ -50,7 +61,7 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Effort:** 2-4 hours  
 **Spec:** OIDC Core 1.0 §2, §3.1.2.1
 
-**Current State:** The `acr_values` parameter is accepted in authorize requests but not advertised.
+**Current State:** Implemented: `acr_values_supported` is advertised when configured; `/authorize` enforces `acr_values` best-effort.
 
 **Implementation:**
 ```csharp
@@ -61,9 +72,9 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Tasks:**
 - [ ] Define ACR value taxonomy (bronze/silver/gold or aal1/aal2/aal3)
 - [ ] Map ACR values to authentication methods
-- [ ] Add `acr_values_supported` to discovery
+- [x] Add `acr_values_supported` to discovery
 - [ ] Return actual `acr` claim in ID token based on auth method used
-- [ ] Add tests for ACR enforcement
+- [x] Add tests for ACR enforcement
 
 ---
 
@@ -197,17 +208,17 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ["claims_parameter_supported"] = true
 ```
 
-**Current State:** AuthorizeRequest accepts `claims` parameter but processing is incomplete.
+**Current State:** Implemented: claims JSON is parsed/validated, persisted with the authorization code context, and used to filter UserInfo claims.
 
 **Tasks:**
-- [ ] Parse claims JSON object from authorize request
-- [ ] Validate claims request structure
+- [x] Parse claims JSON object from authorize request
+- [x] Validate claims request structure
 - [ ] Filter ID token claims based on request
-- [ ] Filter userinfo claims based on request
+- [x] Filter userinfo claims based on request
 - [ ] Support `essential` and `voluntary` distinction
 - [ ] Support `value` and `values` constraints
-- [ ] Add discovery metadata
-- [ ] Add comprehensive tests
+- [x] Add discovery metadata
+- [x] Add comprehensive tests
 
 **Example Claims Request:**
 ```json
