@@ -42,6 +42,63 @@ public sealed class AuthorizationCodeExchanger(
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
+    private static EncryptingCredentials? TryGetIdTokenEncryptingCredentials(MrWhoOidc.Auth.Persistence.Client? client)
+    {
+        if (client is null) return null;
+        if (string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseEnc)) return null;
+        if (string.IsNullOrWhiteSpace(client.PublicJwksJson)) return null;
+
+        // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
+        if (!string.Equals(client.IdTokenEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+            || !string.Equals(client.IdTokenEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            JsonWebKey? key = null;
+
+            using (var doc = JsonDocument.Parse(client.PublicJwksJson))
+            {
+                if (doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
+                {
+                    // Prefer keys with use=enc and RSA.
+                    var rsaEnc = keys
+                        .EnumerateArray()
+                        .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase)
+                                          && k.TryGetProperty("use", out var use) && string.Equals(use.GetString(), "enc", StringComparison.OrdinalIgnoreCase));
+
+                    if (rsaEnc.ValueKind != JsonValueKind.Undefined)
+                    {
+                        key = new JsonWebKey(rsaEnc.GetRawText());
+                    }
+                    else
+                    {
+                        var rsaAny = keys
+                            .EnumerateArray()
+                            .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase));
+
+                        if (rsaAny.ValueKind != JsonValueKind.Undefined)
+                        {
+                            key = new JsonWebKey(rsaAny.GetRawText());
+                        }
+                    }
+                }
+            }
+
+            key ??= new JsonWebKey(client.PublicJwksJson);
+
+            if (!string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
+
+            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAsync(AuthorizationCodeExchangeRequest request, CancellationToken ct = default)
     {
         var strategy = db.Database.CreateExecutionStrategy();
@@ -428,6 +485,22 @@ public sealed class AuthorizationCodeExchanger(
                     authTime: authTimeForIdToken,
                     ct: ct
                 ).ConfigureAwait(false);
+
+                var idTokenEnc = TryGetIdTokenEncryptingCredentials(client);
+                if (idTokenEnc is not null)
+                {
+                    idToken = await jwt.CreateJwtEncryptedAsync(
+                        request.Issuer,
+                        request.ClientId,
+                        idClaims,
+                        DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                        idTokenEnc,
+                        nonce: nonceForIdToken,
+                        accessTokenHash: atHashForIdToken,
+                        authTime: authTimeForIdToken,
+                        ct: ct
+                    ).ConfigureAwait(false);
+                }
 
                 var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, request.ClientId, scopes, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
 

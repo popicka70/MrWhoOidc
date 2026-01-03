@@ -117,7 +117,7 @@ public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvid
             
             if (key is null) return null;
             
-            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256Gcm);
+            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
             return encCreds;
         }
         catch

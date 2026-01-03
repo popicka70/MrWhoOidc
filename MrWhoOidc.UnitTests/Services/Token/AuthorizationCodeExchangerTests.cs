@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -263,6 +264,158 @@ public sealed class AuthorizationCodeExchangerTests
 
         Assert.AreEqual(expectedAtHash, atHash);
         Assert.AreEqual(22, expectedAtHash.Length);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_EncryptedIdToken_When_Client_Requests_Encryption()
+    {
+        using var db = CreateDb();
+
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var tenantId = tenantAccessor.CurrentTenant!.TenantId;
+
+        var keyStore = new KeyStore(
+            db,
+            tenantAccessor,
+            new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions { SigningAlgorithm = SecurityConstants.JwtAlgorithms.RS256 }));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+        var jwtSvc = TestJwtServiceFactory.Create(keyStore);
+
+        // Client encryption key (RSA). Publish a public JWK (n/e) and keep the private key for decryption.
+        using var rsa = RSA.Create(2048);
+        var rsaKey = new RsaSecurityKey(rsa) { KeyId = "enc-kid" };
+        var rsaParams = rsa.ExportParameters(includePrivateParameters: false);
+        var encJwk = new JsonWebKey
+        {
+            Kty = "RSA",
+            Use = "enc",
+            Kid = rsaKey.KeyId,
+            N = Base64UrlEncoder.Encode(rsaParams.Modulus!),
+            E = Base64UrlEncoder.Encode(rsaParams.Exponent!)
+        };
+        var jwksJson = $"{{\"keys\":[{{\"kty\":\"{encJwk.Kty}\",\"use\":\"{encJwk.Use}\",\"kid\":\"{encJwk.Kid}\",\"n\":\"{encJwk.N}\",\"e\":\"{encJwk.E}\"}}]}}";
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc,
+            keyProvider,
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        var code = "code-idtoken-jwe";
+        var userId = Guid.NewGuid();
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            RealmId = realmId,
+            TenantId = tenantId,
+            PublicJwksJson = jwksJson,
+            IdTokenEncryptedResponseAlg = SecurityAlgorithms.RsaOAEP,
+            IdTokenEncryptedResponseEnc = SecurityAlgorithms.Aes256CbcHmacSha512
+        });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        var storedClient = await db.Clients.AsNoTracking().FirstAsync(c => c.ClientId == "c1");
+        Assert.AreEqual(SecurityAlgorithms.RsaOAEP, storedClient.IdTokenEncryptedResponseAlg);
+        Assert.AreEqual(SecurityAlgorithms.Aes256CbcHmacSha512, storedClient.IdTokenEncryptedResponseEnc);
+        Assert.IsTrue(!string.IsNullOrWhiteSpace(storedClient.PublicJwksJson));
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+
+        var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
+        var accessToken = dict["access_token"] as string;
+        var idToken = dict["id_token"] as string;
+
+        Assert.IsFalse(string.IsNullOrWhiteSpace(accessToken));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(idToken));
+
+        // Encrypted JWT (JWE compact serialization) has 5 parts.
+        Assert.AreEqual(5, idToken!.Split('.').Length);
+
+        // Decrypt and validate signature.
+        var activeSigningKey = await keyProvider.GetActiveSigningKeyAsync(CancellationToken.None);
+
+        var handler = new JwtSecurityTokenHandler();
+        var tvp = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = "https://issuer",
+            ValidateAudience = true,
+            ValidAudience = "c1",
+            ValidateLifetime = false,
+            IssuerSigningKey = activeSigningKey,
+            TokenDecryptionKey = rsaKey
+        };
+
+        var principal = handler.ValidateToken(idToken, tvp, out _);
+        var atHash = principal.FindFirst("at_hash")?.Value;
+        Assert.IsFalse(string.IsNullOrWhiteSpace(atHash));
+
+        var expectedAtHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken!, SecurityConstants.JwtAlgorithms.RS256);
+        Assert.AreEqual(expectedAtHash, atHash);
     }
 
     [TestMethod]

@@ -203,6 +203,8 @@ public sealed class DiscoveryHandler(
             ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,
             // acr_values_supported is optional; only advertise when configured
             ["id_token_signing_alg_values_supported"] = new[] { activeSigningAlg },
+            ["id_token_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
+            ["id_token_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
             ["acr_values_supported"] = authOptions.Value.AcrValuesSupported,
             ["service_documentation"] = authOptions.Value.ServiceDocumentationUrl ?? string.Empty,
             ["op_policy_uri"] = authOptions.Value.OpPolicyUrl ?? string.Empty,
@@ -217,7 +219,7 @@ public sealed class DiscoveryHandler(
             ["authorization_response_iss_parameter_supported"] = true,
             ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
             ["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
-            ["authorization_response_encryption_enc_values_supported"] = new[] { "A256GCM" },
+            ["authorization_response_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
             // Non-standard hints to improve DX
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
             // DPoP capability hints (experimental)

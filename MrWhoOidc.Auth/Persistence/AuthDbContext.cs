@@ -1275,6 +1275,16 @@ public class Client
     [MaxLength(2000)]
     public string? PublicJwksUri { get; set; }
 
+    // --- OIDC Response Security (Client Metadata) ---
+
+    // OIDC Core: id_token_encrypted_response_alg / id_token_encrypted_response_enc
+    // When configured, the OP returns an encrypted ID token (JWE) to this client.
+    [MaxLength(50)]
+    public string? IdTokenEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? IdTokenEncryptedResponseEnc { get; set; }
+
     // New: policy knobs moved from appsettings to per-client storage
     public bool RequirePar { get; set; } = false;
     [MaxLength(2000)]

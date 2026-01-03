@@ -148,15 +148,17 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Effort:** 4-8 hours  
 **Spec:** OIDC Core 1.0 §8
 
-**Current:** Only RS256  
-**Target:** RS256, ES256, ES384, ES512, PS256
+**Current:** Implemented (multi-alg signing end-to-end)  
+**Target:** RS256, RS384, RS512, PS256, PS384, PS512, ES256, ES384, ES512
+
+**Design note (discovery truthfulness):** This OP is configured to use exactly one active signing algorithm per tenant (via key rotation config). Therefore discovery advertises the **active** algorithm in `id_token_signing_alg_values_supported` and `authorization_response_signing_alg_values_supported`.
 
 **Tasks:**
-- [ ] Update key rotation to support EC keys for ID tokens
-- [ ] Allow client registration to specify preferred algorithm
-- [ ] Use client's `id_token_signed_response_alg` claim
-- [ ] Update discovery: `["id_token_signing_alg_values_supported"]`
-- [ ] Add tests for non-RS256 ID tokens
+- [x] Update key rotation to support EC keys for ID tokens
+- [ ] Allow client registration to specify preferred algorithm (future enhancement)
+- [ ] Use client's `id_token_signed_response_alg` client metadata (future enhancement)
+- [x] Update discovery to avoid hardcoding RS256 and remain truthful (active alg)
+- [x] Add tests for non-RS256 ID tokens (ES256 regression test)
 
 ---
 
@@ -167,17 +169,17 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Implementation:**
 ```csharp
-["id_token_encryption_alg_values_supported"] = new[] { "RSA-OAEP", "A256KW" },
-["id_token_encryption_enc_values_supported"] = new[] { "A256GCM", "A128CBC-HS256" }
+["id_token_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
+["id_token_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" }
 ```
 
 **Tasks:**
-- [ ] Add `id_token_encrypted_response_alg` to Client entity
-- [ ] Add `id_token_encrypted_response_enc` to Client entity
-- [ ] Store client's JWK or JWKs URI for encryption key
-- [ ] Implement JWE generation in TokenService
-- [ ] Add discovery metadata
-- [ ] Add tests
+- [x] Add `id_token_encrypted_response_alg` to Client entity
+- [x] Add `id_token_encrypted_response_enc` to Client entity
+- [~] Store client's encryption key material (currently: reuse `PublicJwksJson`; future: distinct enc key + JWKS URI fetching)
+- [x] Implement JWE generation for ID tokens (currently in `AuthorizationCodeExchanger` using `JwtService.CreateJwtEncryptedAsync`)
+- [x] Add discovery metadata
+- [x] Add tests
 
 ---
 
