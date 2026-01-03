@@ -231,6 +231,8 @@ public class EditModel(
             RequirePkce = client.RequirePkce,
             RequireConsent = client.RequireConsent,
             RequirePar = client.RequirePar,
+            SubjectType = client.SubjectType,
+            SectorIdentifierUri = client.SectorIdentifierUri,
             IntrospectionAudiences = introspectionAudiences,
             IntrospectionResponseFields = fields,
             IntrospectionMtlsThumbprints = mtls,
@@ -954,6 +956,54 @@ public class EditModel(
             return Page();
         }
 
+        // Validate subject identifier settings
+        var subjectType = (Input.SubjectType ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(subjectType))
+        {
+            subjectType = OidcConstants.SubjectTypes.Public;
+        }
+
+        var isPublic = string.Equals(subjectType, OidcConstants.SubjectTypes.Public, StringComparison.OrdinalIgnoreCase);
+        var isPairwise = string.Equals(subjectType, OidcConstants.SubjectTypes.Pairwise, StringComparison.OrdinalIgnoreCase);
+        if (!isPublic && !isPairwise)
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            ModelState.AddModelError("Input.SubjectType", "Subject type must be 'public' or 'pairwise'.");
+            return Page();
+        }
+
+        // Canonicalize
+        Input.SubjectType = isPairwise ? OidcConstants.SubjectTypes.Pairwise : OidcConstants.SubjectTypes.Public;
+
+        if (isPairwise && !string.IsNullOrWhiteSpace(Input.SectorIdentifierUri))
+        {
+            var sectorIdentifierUri = Input.SectorIdentifierUri.Trim();
+            if (!Uri.TryCreate(sectorIdentifierUri, UriKind.Absolute, out var parsed) || string.IsNullOrWhiteSpace(parsed.Host))
+            {
+                await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+                ModelState.AddModelError("Input.SectorIdentifierUri", "Sector identifier URI must be an absolute URI with a host.");
+                return Page();
+            }
+
+            if (!string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                await LoadRealmsAsync();
+                await LoadScopesAsync(Id);
+                KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+                JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+                ModelState.AddModelError("Input.SectorIdentifierUri", "Sector identifier URI must use HTTPS.");
+                return Page();
+            }
+
+            Input.SectorIdentifierUri = sectorIdentifierUri;
+        }
+
         // Validate JWKS JSON if provided and check kid uniqueness
         if (!string.IsNullOrWhiteSpace(Input.PublicJwksJson))
         {
@@ -1083,6 +1133,11 @@ public class EditModel(
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
         client.AllowedLogoutRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLogoutRedirectUris);
+
+        // Persist OIDC subject identifier settings
+        client.SubjectType = Input.SubjectType;
+        client.SectorIdentifierUri = string.IsNullOrWhiteSpace(Input.SectorIdentifierUri) ? null : Input.SectorIdentifierUri.Trim();
+
         // Back-channel logout fields with validation
         if (!string.IsNullOrWhiteSpace(Input.BackChannelLogoutUri))
         {
@@ -1887,6 +1942,17 @@ public class EditModel(
         public bool RequirePkce { get; set; } = true;
         public bool RequireConsent { get; set; } = true;
         public bool RequirePar { get; set; } = false;
+
+        [Display(Name = "Subject type")]
+        [Required]
+        [StringLength(20)]
+        public string SubjectType { get; set; } = OidcConstants.SubjectTypes.Public;
+
+        [Display(Name = "Sector identifier URI")]
+        [StringLength(2000)]
+        [Url]
+        public string? SectorIdentifierUri { get; set; }
+
         [DataType(DataType.Password)]
         public string? ClientSecret { get; set; }
         [Display(Name = "Introspection audiences (comma-separated)")]

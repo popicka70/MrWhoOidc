@@ -568,6 +568,8 @@ public sealed class ConfigurationExportService(
             PublicJwksUri = client.PublicJwksUri,
             AllowedLoginRedirectUris = ParseJsonArray(client.AllowedLoginRedirectUrisJson) ?? [],
             AllowedLogoutRedirectUris = ParseJsonArray(client.AllowedLogoutRedirectUrisJson) ?? [],
+            SubjectType = client.SubjectType,
+            SectorIdentifierUri = client.SectorIdentifierUri,
             AllowLocalLogin = client.AllowLocalLogin,
             AllowExternalIdp = client.AllowExternalIdp,
             AllowQrLogin = client.AllowQrLogin,

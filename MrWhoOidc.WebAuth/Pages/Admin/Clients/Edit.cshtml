@@ -133,6 +133,32 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
+                            <i class="bi bi-fingerprint me-2"></i>OIDC Subject Identifiers
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label asp-for="Input.SubjectType" class="form-label"></label>
+                                    <select asp-for="Input.SubjectType" class="form-select">
+                                        <option value="public">Public</option>
+                                        <option value="pairwise">Pairwise</option>
+                                    </select>
+                                    <span asp-validation-for="Input.SubjectType" class="text-danger"></span>
+                                    <div class="form-text">Controls whether the OIDC <code>sub</code> is public or pairwise for this client.</div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label asp-for="Input.SectorIdentifierUri" class="form-label"></label>
+                                    <input asp-for="Input.SectorIdentifierUri" class="form-control" autocomplete="off" />
+                                    <span asp-validation-for="Input.SectorIdentifierUri" class="text-danger"></span>
+                                    <div class="form-text">Optional. Used for pairwise sector resolution when configured.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
                             <i class="bi bi-door-open me-2"></i>Login methods
                         </div>
                         <div class="card-body row g-3">

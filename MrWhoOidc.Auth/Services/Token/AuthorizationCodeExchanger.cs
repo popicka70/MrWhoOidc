@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
@@ -29,6 +30,7 @@ public sealed class AuthorizationCodeExchanger(
     ITenantSettingsService settingsService,
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
+    IPairwiseSubjectService pairwiseSubjectService,
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
     IOpaqueTokenPolicy opaquePolicy,
@@ -85,6 +87,12 @@ public sealed class AuthorizationCodeExchanger(
 
                 var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == entity.UserId, ct).ConfigureAwait(false);
                 var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
+
+                var subject = entity.UserId.ToString();
+                if (client is not null)
+                {
+                    subject = await pairwiseSubjectService.GetSubjectAsync(client, entity.UserId, ct).ConfigureAwait(false);
+                }
 
                 Guid? tenantIdForEntitlements = request.TenantId ?? user?.TenantId;
                 if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
@@ -173,7 +181,8 @@ public sealed class AuthorizationCodeExchanger(
                         UpstreamAcr: upstreamAcr,
                         CombinedAmr: combinedAmr,
                         MappedClaims: mappedClaims,
-                        TenantId: tenantIdForEntitlements
+                        TenantId: tenantIdForEntitlements,
+                        Subject: subject
                     );
 
                     var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);
@@ -193,7 +202,7 @@ public sealed class AuthorizationCodeExchanger(
 
                 var idClaims = new List<System.Security.Claims.Claim>
                 {
-                    new(OidcConstants.Claims.Subject, entity.UserId.ToString())
+                    new(OidcConstants.Claims.Subject, subject)
                 };
 
                 if (user is not null)

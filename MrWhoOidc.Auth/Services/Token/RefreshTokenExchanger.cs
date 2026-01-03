@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
@@ -28,6 +29,7 @@ public sealed class RefreshTokenExchanger(
     ITenantSettingsService settingsService,
     IEntitlementsProvider entitlementsProvider,
     ITenantsClaimService tenantsClaimService,
+    IPairwiseSubjectService pairwiseSubjectService,
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
     IOpaqueTokenPolicy opaquePolicy) : IRefreshTokenExchanger
@@ -75,6 +77,11 @@ public sealed class RefreshTokenExchanger(
         var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == request.ClientId, ct).ConfigureAwait(false);
+        var subject = tokenEntity.UserId.ToString();
+        if (client is not null)
+        {
+            subject = await pairwiseSubjectService.GetSubjectAsync(client, tokenEntity.UserId, ct).ConfigureAwait(false);
+        }
         string? realmName = null;
         string[] roleNames = Array.Empty<string>();
         if (client is not null)
@@ -121,7 +128,8 @@ public sealed class RefreshTokenExchanger(
                 TenantsClaimJson: tenantsClaimJson,
                 RealmName: realmName,
                 RoleNames: roleNames,
-                TenantId: tenantIdForEntitlements
+                TenantId: tenantIdForEntitlements,
+                Subject: subject
             );
 
             var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);

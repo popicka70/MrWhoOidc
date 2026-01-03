@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using MrWhoOidc.Auth.Licensing.Entities;
 using MrWhoOidc.Auth.Persistence.Configurations;
+using MrWhoOidc.Auth.Protocols;
 using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Persistence;
@@ -23,6 +24,7 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<User> Users => Set<User>();
     public DbSet<WebAuthnCredential> WebAuthnCredentials => Set<WebAuthnCredential>();
     public DbSet<Client> Clients => Set<Client>();
+    public DbSet<PairwiseSubjectIdentifier> PairwiseSubjectIdentifiers => Set<PairwiseSubjectIdentifier>();
     public DbSet<ClientSecret> ClientSecrets => Set<ClientSecret>();
     public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
     public DbSet<AuthorizationCode> AuthorizationCodes => Set<AuthorizationCode>();
@@ -363,6 +365,13 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
             // New: per-client allowed redirect URIs
             b.Property(x => x.AllowedLoginRedirectUrisJson).HasMaxLength(4000);
             b.Property(x => x.AllowedLogoutRedirectUrisJson).HasMaxLength(4000);
+
+            // New: OIDC subject identifiers
+            b.Property(x => x.SubjectType)
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasDefaultValue(OidcConstants.SubjectTypes.Public);
+            b.Property(x => x.SectorIdentifierUri).HasMaxLength(2000);
             // New: login methods toggles
             b.Property(x => x.AllowLocalLogin).HasDefaultValue(true);
             b.Property(x => x.AllowExternalIdp).HasDefaultValue(true);
@@ -410,6 +419,36 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => x.TenantId);
+        });
+
+        // New: Pairwise subject identifiers (tenant-scoped, per user+sector)
+        modelBuilder.Entity<PairwiseSubjectIdentifier>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.TenantId).IsRequired();
+            b.Property(x => x.UserId).IsRequired();
+            b.Property(x => x.SectorIdentifier).IsRequired().HasMaxLength(255);
+            b.Property(x => x.Subject).IsRequired().HasMaxLength(200);
+            b.Property(x => x.CreatedAtUtc).IsRequired();
+
+            b.HasIndex(x => new { x.TenantId, x.UserId, x.SectorIdentifier })
+                .IsUnique()
+                .HasDatabaseName("UX_PairwiseSubjectIdentifiers_Tenant_User_Sector");
+            b.HasIndex(x => new { x.TenantId, x.Subject })
+                .IsUnique()
+                .HasDatabaseName("UX_PairwiseSubjectIdentifiers_Tenant_Subject");
+
+            b.HasIndex(x => x.TenantId);
+            b.HasIndex(x => x.UserId);
+
+            b.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // New: Client JWKS history
@@ -1249,6 +1288,12 @@ public class Client
     [MaxLength(4000)]
     public string? AllowedLogoutRedirectUrisJson { get; set; }
 
+    // New: OIDC subject identifiers
+    [MaxLength(20)]
+    public string SubjectType { get; set; } = OidcConstants.SubjectTypes.Public;
+    [MaxLength(2000)]
+    public string? SectorIdentifierUri { get; set; }
+
     // New: login methods configuration
     public bool AllowLocalLogin { get; set; } = true;
     public bool AllowExternalIdp { get; set; } = true;
@@ -1312,6 +1357,24 @@ public class Client
 
     // Navigation properties
     public List<ClientSecret> ClientSecrets { get; set; } = new();
+}
+
+public class PairwiseSubjectIdentifier
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    public Guid UserId { get; set; }
+    [MaxLength(255)]
+    public string SectorIdentifier { get; set; } = string.Empty;
+
+    // Random opaque sub (base64url)
+    [MaxLength(200)]
+    public string Subject { get; set; } = string.Empty;
+
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public class ClientSecret

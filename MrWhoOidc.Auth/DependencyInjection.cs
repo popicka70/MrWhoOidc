@@ -14,6 +14,7 @@ using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
@@ -155,6 +156,11 @@ public static class AuthServiceCollectionExtensions
         services.AddSingleton<ITotpService, TotpService>();
         services.AddScoped<IOboPolicyService, OboPolicyService>();
         services.AddSingleton<IUserAgentParser, UserAgentParser>();
+
+        // Subject identifiers (OIDC public/pairwise sub)
+        services.AddHttpClient();
+        services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
+        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
 
         // WebAuthn/FIDO2 services
         services.AddOptions<WebAuthnOptions>();
