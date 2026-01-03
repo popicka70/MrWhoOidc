@@ -171,6 +171,18 @@ public sealed class DiscoveryHandler(
             ["id_token_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
             ["scopes_supported"] = scopes,
             ["claims_supported"] = claimsSupported,
+            // OIDC Discovery recommended metadata
+            ["claim_types_supported"] = new[] { "normal" },
+            ["claims_parameter_supported"] = true,
+            ["display_values_supported"] = new[] { "page", "popup" },
+            ["prompt_values_supported"] = new[] { "none", "login", "consent", "select_account" },
+            // ui_locales_supported is a best-effort hint (actual locale availability depends on deployed resources)
+            ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,
+            // acr_values_supported is optional; only advertise when configured
+            ["acr_values_supported"] = authOptions.Value.AcrValuesSupported,
+            ["service_documentation"] = authOptions.Value.ServiceDocumentationUrl ?? string.Empty,
+            ["op_policy_uri"] = authOptions.Value.OpPolicyUrl ?? string.Empty,
+            ["op_tos_uri"] = authOptions.Value.OpTosUrl ?? string.Empty,
             ["resource_indicators_supported"] = true,
             // JAR support
             ["request_parameter_supported"] = true,
@@ -188,6 +200,23 @@ public sealed class DiscoveryHandler(
             ["dpop_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256, SecurityConstants.JwtAlgorithms.ES256 },
             ["dpop_bound_access_tokens"] = true
         };
+
+        // Remove empty optional strings to keep the discovery document clean.
+        if (body.TryGetValue("service_documentation", out var sd) && sd is string s1 && string.IsNullOrWhiteSpace(s1)) body.Remove("service_documentation");
+        if (body.TryGetValue("op_policy_uri", out var pp) && pp is string s2 && string.IsNullOrWhiteSpace(s2)) body.Remove("op_policy_uri");
+        if (body.TryGetValue("op_tos_uri", out var tos) && tos is string s3 && string.IsNullOrWhiteSpace(s3)) body.Remove("op_tos_uri");
+
+        // If UI locales are not configured, omit the field.
+        if (authOptions.Value.UiLocalesSupported is null || authOptions.Value.UiLocalesSupported.Length == 0)
+        {
+            body.Remove("ui_locales_supported");
+        }
+
+        // If ACR values are not configured, omit the field.
+        if (authOptions.Value.AcrValuesSupported is null || authOptions.Value.AcrValuesSupported.Length == 0)
+        {
+            body.Remove("acr_values_supported");
+        }
 
         // Only advertise PAR endpoint if AdvancedSecurity feature is enabled
         if (advancedSecurityEnabled)

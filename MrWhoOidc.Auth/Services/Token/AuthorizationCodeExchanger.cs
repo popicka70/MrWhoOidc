@@ -74,9 +74,14 @@ public sealed class AuthorizationCodeExchanger(
 
                 // RFC 8707: prefer resource indicator as access token audience when present
                 string audience;
-                if (meta.TryGetResource(request.Code, out var resource) && !string.IsNullOrWhiteSpace(resource))
+                var resourceFromEntity = entity.Resource;
+                if (!string.IsNullOrWhiteSpace(resourceFromEntity))
                 {
-                    audience = resource;
+                    audience = resourceFromEntity;
+                }
+                else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
+                {
+                    audience = resourceFromMeta;
                 }
                 else
                 {
@@ -96,6 +101,9 @@ public sealed class AuthorizationCodeExchanger(
 
                 Guid? tenantIdForEntitlements = request.TenantId ?? user?.TenantId;
                 if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
+
+                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
+                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -189,6 +197,15 @@ public sealed class AuthorizationCodeExchanger(
                     
                     // Add signed license tokens if present
                     var claimsList = accessClaims.ToList();
+
+                    // If an OIDC claims request specified userinfo claims, embed them into the access token.
+                    // /userinfo can then honor the request (best-effort) without server-side session state.
+                    if (requestedUserInfoClaims.Count > 0)
+                    {
+                        var json = JsonSerializer.Serialize(requestedUserInfoClaims.OrderBy(c => c, StringComparer.Ordinal).ToArray(), EntitlementsJsonOptions);
+                        claimsList.Add(new System.Security.Claims.Claim("mrwho_userinfo_claims", json));
+                    }
+
                     if (signedLicenseTokens is { Count: > 0 })
                     {
                         var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
@@ -230,13 +247,29 @@ public sealed class AuthorizationCodeExchanger(
                 }
 
                 DateTimeOffset? authTime = null;
-                if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
+                if (entity.AuthTime.HasValue) authTime = entity.AuthTime.Value;
+                else if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
 
                 if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
                 if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
                 if (authOptions.Value.EmitAmrInIdToken)
                 {
                     foreach (var amr in combinedAmr) idClaims.Add(new(OidcConstants.Claims.Amr, amr));
+                }
+
+                // Best-effort: if essential id_token claims were requested, ensure we can satisfy them.
+                // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
+                // we treat it as unsatisfied.
+                if (essentialIdTokenClaims.Count > 0)
+                {
+                    var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
+                    foreach (var required in essentialIdTokenClaims)
+                    {
+                        if (!present.Contains(required))
+                        {
+                            return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                        }
+                    }
                 }
 
                 var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();

@@ -130,7 +130,8 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
             CodeChallengeMethod: request.code_challenge_method,
             RequireConsent: client.RequireConsent,
             Resource: request.resource,
-            ResponseMode: responseMode
+            ResponseMode: responseMode,
+            State: request.state
         );
     }
 

@@ -223,6 +223,29 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 ["sub"] = sub
             };
 
+            // OIDC claims parameter support (best-effort): if the access token carries an embedded
+            // requested userinfo claims list, we filter the response down to those claims.
+            HashSet<string>? requestedUserInfoClaims = null;
+            var requestedUserInfoClaimsJson = principal.FindFirst("mrwho_userinfo_claims")?.Value;
+            if (!string.IsNullOrWhiteSpace(requestedUserInfoClaimsJson))
+            {
+                try
+                {
+                    var arr = JsonSerializer.Deserialize<string[]>(requestedUserInfoClaimsJson);
+                    if (arr is { Length: > 0 })
+                    {
+                        requestedUserInfoClaims = arr
+                            .Where(s => !string.IsNullOrWhiteSpace(s))
+                            .Select(s => s.Trim())
+                            .ToHashSet(StringComparer.Ordinal);
+                    }
+                }
+                catch
+                {
+                    // ignore invalid embedded value
+                }
+            }
+
             // Only include claims permitted by scopes
             if (scopes.Contains(OidcConstants.Scopes.Profile))
             {
@@ -307,6 +330,17 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                             payload["realm"] = db.Realms.AsNoTracking().Where(r => r.Id == client.RealmId).Select(r => r.Name).FirstOrDefault();
                         }
                     }
+                }
+            }
+
+            if (requestedUserInfoClaims is { Count: > 0 })
+            {
+                // Always include sub; only include other requested claims.
+                var keys = payload.Keys.ToArray();
+                foreach (var k in keys)
+                {
+                    if (string.Equals(k, "sub", StringComparison.Ordinal)) continue;
+                    if (!requestedUserInfoClaims.Contains(k)) payload.Remove(k);
                 }
             }
 

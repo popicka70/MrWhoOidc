@@ -75,6 +75,17 @@ public sealed class AuthOptions
     public int ProviderJwksCacheSeconds { get; set; } = 300;
     // Include encryption purpose keys when exposing provider JWKS (off by default)
     public bool ProviderJwksIncludeEncryption { get; set; } = false;
+
+    // === OIDC Discovery metadata (optional) ===
+    // Documentation/policy URLs are advertised only when set.
+    public string? ServiceDocumentationUrl { get; set; }
+    public string? OpPolicyUrl { get; set; }
+    public string? OpTosUrl { get; set; }
+    // UI locale hints (BCP47 tags). Empty => omitted from discovery.
+    public string[] UiLocalesSupported { get; set; } = Array.Empty<string>();
+    // Optional list of supported ACR values advertised in discovery.
+    // If empty, acr_values_supported is omitted and acr_values requests are not validated against a fixed allow-list.
+    public string[] AcrValuesSupported { get; set; } = Array.Empty<string>();
 }
 
 public sealed class OpaqueAccessTokenOptions

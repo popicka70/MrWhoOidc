@@ -1515,6 +1515,10 @@ public class AuthorizationCode
     public string RedirectUri { get; set; } = string.Empty;
     public string ScopesJson { get; set; } = "[]";
     public string? Nonce { get; set; }
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+    public DateTimeOffset? AuthTime { get; set; }
+    public string? ClaimsJson { get; set; }
     public string? CodeChallenge { get; set; }
     [MaxLength(10)]
     public string? CodeChallengeMethod { get; set; }
