@@ -137,10 +137,20 @@ public sealed class DiscoveryHandler(
             ["token_endpoint"] = $"{baseUrl}/token",
             ["userinfo_endpoint"] = $"{baseUrl}/userinfo",
             ["revocation_endpoint"] = $"{baseUrl}/revoke",
+            ["revocation_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
             ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
             ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
+            },
+            ["revocation_endpoint_auth_signing_alg_values_supported"] = new[]
             {
                 SecurityConstants.JwtAlgorithms.RS256,
                 SecurityConstants.JwtAlgorithms.RS384,
@@ -223,6 +233,19 @@ public sealed class DiscoveryHandler(
         {
             body["pushed_authorization_request_endpoint"] = $"{baseUrl}/par";
             body["require_pushed_authorization_requests"] = authOptions.Value.RequirePar;
+        }
+
+        // RFC 8705: mtls_endpoint_aliases (optional)
+        var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;
+        if (!string.IsNullOrWhiteSpace(mtlsBase) && Uri.TryCreate(mtlsBase.Trim(), UriKind.Absolute, out var mtlsUri))
+        {
+            var mtlsBaseUrl = mtlsUri.ToString().TrimEnd('/');
+            body["mtls_endpoint_aliases"] = new Dictionary<string, string>
+            {
+                ["token_endpoint"] = $"{mtlsBaseUrl}/token",
+                ["introspection_endpoint"] = $"{mtlsBaseUrl}/introspect",
+                ["revocation_endpoint"] = $"{mtlsBaseUrl}/revoke"
+            };
         }
 
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";

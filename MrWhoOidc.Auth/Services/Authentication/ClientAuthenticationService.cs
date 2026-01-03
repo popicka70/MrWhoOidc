@@ -33,12 +33,19 @@ public sealed class ClientAuthenticationService(
             return new ClientAuthResult(false, null, "unauthorized_client", "Unknown client");
         }
 
-        // 2. mTLS Checks
+        // 2. mTLS Checks / Authentication (RFC 8705)
+        // Notes:
+        // - Token endpoint support is currently scoped to client_credentials (M2M) via client.M2MMtlsThumbprintsJson.
+        // - When configured and presented certificate matches, mTLS can be used as the *client authentication method*
+        //   (i.e., no client_secret required for client_credentials).
+        bool mtlsConfigured = false;
+        bool mtlsMatched = false;
         if (ShouldCheckMtls(input, client))
         {
             var allowedThumbprints = GetAllowedMtlsThumbprints(input, client);
             if (allowedThumbprints is { Length: > 0 })
             {
+                mtlsConfigured = true;
                 var presented = input.MtlsThumbprint;
                 var presentedHex = input.MtlsThumbprintHexSha256;
 
@@ -52,7 +59,19 @@ public sealed class ClientAuthenticationService(
                     logger.LogWarning("Client authentication failed: mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
                     return new ClientAuthResult(false, client, "invalid_client", "mtls_required");
                 }
+
+                mtlsMatched = true;
             }
+        }
+
+        // If mTLS is configured & matched for M2M client_credentials, accept it as the authentication method.
+        // (If the caller also provided a client_assertion, we still validate the assertion below.)
+        if (mtlsConfigured && mtlsMatched &&
+            input.Usage == ClientAuthenticationUsage.TokenEndpoint &&
+            string.Equals(input.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal) &&
+            (string.IsNullOrEmpty(input.ClientAssertionType) || string.IsNullOrEmpty(input.ClientAssertion)))
+        {
+            return new ClientAuthResult(true, client);
         }
 
         // 3. Authenticate (Secret or Assertion)

@@ -8,6 +8,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
 
@@ -19,6 +20,15 @@ public sealed class DiscoveryMetadataTests
 {
     private static WebApplicationFactory<Program> CreateFactory()
         => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+
+    private static WebApplicationFactory<Program> CreateFactoryWithConfig(Dictionary<string, string?> config)
+        => CreateFactory().WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                cfg.AddInMemoryCollection(config);
+            });
+        });
 
     private static async Task<JsonDocument> GetDiscoveryAsync(WebApplicationFactory<Program> factory)
     {
@@ -130,6 +140,28 @@ public sealed class DiscoveryMetadataTests
 
         CollectionAssert.Contains(tokenMethods, "self_signed_tls_client_auth");
         CollectionAssert.Contains(introspectionMethods, "self_signed_tls_client_auth");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Emits_mtls_endpoint_aliases_When_Configured()
+    {
+        using var factory = CreateFactoryWithConfig(new()
+        {
+            ["Auth:MtlsEndpointAliasesBaseUrl"] = "https://mtls.example.com"
+        });
+
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("mtls_endpoint_aliases", out var aliases), "mtls_endpoint_aliases missing");
+        Assert.AreEqual(JsonValueKind.Object, aliases.ValueKind, "mtls_endpoint_aliases must be object");
+
+        Assert.IsTrue(aliases.TryGetProperty("token_endpoint", out var token), "token_endpoint alias missing");
+        Assert.IsTrue(aliases.TryGetProperty("introspection_endpoint", out var introspect), "introspection_endpoint alias missing");
+        Assert.IsTrue(aliases.TryGetProperty("revocation_endpoint", out var revoke), "revocation_endpoint alias missing");
+
+        Assert.AreEqual("https://mtls.example.com/token", token.GetString());
+        Assert.AreEqual("https://mtls.example.com/introspect", introspect.GetString());
+        Assert.AreEqual("https://mtls.example.com/revoke", revoke.GetString());
     }
 
     [TestMethod]

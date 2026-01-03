@@ -21,9 +21,19 @@ public sealed class AuthOptions
     // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
     public bool AllowRefreshTokenIntrospection { get; set; } = false;
 
-    // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints
-    // Thumbprints should be provided as hex without spaces and are case-insensitive.
+    // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints.
+    // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.
     public Dictionary<string, string[]> IntrospectionMtlsCertificates { get; set; } = new();
+
+    // mTLS client authentication for revocation: map client_id -> allowed certificate thumbprints
+    // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.
+    public Dictionary<string, string[]> RevocationMtlsCertificates { get; set; } = new();
+
+    // Optional RFC 8705 mtls_endpoint_aliases base URL.
+    // When set to an absolute URL (e.g., https://mtls.example.com), discovery will include mtls_endpoint_aliases
+    // pointing at token/introspection/revocation endpoints under that base. The operator is responsible for ensuring
+    // those aliases are actually protected by client certificate requirements at the edge/proxy.
+    public string? MtlsEndpointAliasesBaseUrl { get; set; }
 
     // === JAR/PAR policy ===
     // Require PAR globally (request_uri must be used; direct 'request' not accepted). Useful for large request objects or privacy.

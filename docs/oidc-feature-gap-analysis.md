@@ -252,6 +252,8 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Current State:** mTLS is implemented but not advertised.
 
+**Status (implemented):** Discovery now advertises `self_signed_tls_client_auth` for token + introspection, and the token endpoint supports mTLS-only client auth for `client_credentials` when the client has an allow-list of certificate thumbprints.
+
 **Implementation (current direction):**
 ```csharp
 // We support self-signed mTLS client authentication (thumbprint allow-list),
@@ -271,11 +273,23 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ```
 
 **Tasks:**
+
 - [x] Add `self_signed_tls_client_auth` to auth methods
 - [ ] Add `tls_client_auth` if/when subject/SAN based mapping is implemented
-- [ ] Configure mTLS base URL in options (only needed for `mtls_endpoint_aliases`)
-- [ ] Add mtls_endpoint_aliases to discovery (only if separate mTLS endpoints exist)
-- [ ] Document mTLS setup requirements
+- [x] Configure mTLS base URL in options (only needed for `mtls_endpoint_aliases`)
+- [x] Add mtls_endpoint_aliases to discovery (operator-configured)
+- [x] Document mTLS setup requirements
+
+**mTLS setup (operator notes):**
+
+- Ensure the server (or your reverse proxy) is configured to request/require client certificates for the mTLS-protected host/alias.
+- If running behind a proxy, enable certificate forwarding so `HttpContext.Connection.ClientCertificate` is populated.
+- Configure allow-lists:
+  - Token endpoint (client_credentials): per-client allow-list stored on the Client record (`M2MMtlsThumbprintsJson`).
+  - Introspection: `Auth:IntrospectionMtlsCertificates` (or per-client DB field `IntrospectionMtlsThumbprintsJson`).
+  - Revocation: `Auth:RevocationMtlsCertificates`.
+- Thumbprint formats supported for allow-lists: RFC 8705 `x5t#S256` (base64url) or SHA-256 hex fingerprint.
+- Optional discovery aliases: set `Auth:MtlsEndpointAliasesBaseUrl` (absolute URL) to emit `mtls_endpoint_aliases` pointing to `/token`, `/introspect`, `/revoke` under that base. The alias host should be the one that enforces client certificates.
 
 ---
 

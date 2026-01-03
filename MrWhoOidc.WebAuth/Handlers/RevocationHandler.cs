@@ -3,6 +3,8 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Observability;
+using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -11,7 +13,14 @@ public interface IRevocationHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class RevocationHandler(IRevocationService revocations, IClientStore clients, OidcEndpointMetrics metrics, IClientAssertionValidator assertions, OidcOptions options) : IRevocationHandler
+public sealed class RevocationHandler(
+    IRevocationService revocations,
+    IClientStore clients,
+    OidcEndpointMetrics metrics,
+    IClientAssertionValidator assertions,
+    IOptions<AuthOptions> authOptions,
+    IMtlsThumbprintResolver mtlsThumbprintResolver,
+    OidcOptions options) : IRevocationHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -38,6 +47,37 @@ public sealed class RevocationHandler(IRevocationService revocations, IClientSto
         var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
         var clientAssertion = form[OAuthConstants.Parameters.ClientAssertion].ToString();
         var revocationEndpoint = http.GetIssuer(options) + "/revoke";
+
+        // Optional mTLS client auth allow-list.
+        // If configured for this client_id, mTLS is required and sufficient.
+        if (authOptions.Value.RevocationMtlsCertificates is { Count: > 0 } &&
+            authOptions.Value.RevocationMtlsCertificates.TryGetValue(clientId, out var allowed) &&
+            allowed is { Length: > 0 })
+        {
+            var cert = http.Connection.ClientCertificate ?? await http.Connection.GetClientCertificateAsync();
+            if (cert is null)
+            {
+                return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
+            }
+
+            var presentedX5tS256 = mtlsThumbprintResolver.ResolveThumbprint(cert);
+            var presentedHex = cert.GetCertHashString(HashAlgorithmName.SHA256);
+
+            static bool HasValue(string? v) => !string.IsNullOrWhiteSpace(v);
+
+            var match =
+                (HasValue(presentedX5tS256) && allowed.Any(t => string.Equals(t, presentedX5tS256, StringComparison.OrdinalIgnoreCase))) ||
+                (HasValue(presentedHex) && allowed.Any(t => string.Equals(t, presentedHex, StringComparison.OrdinalIgnoreCase)));
+
+            if (!match)
+            {
+                return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
+            }
+
+            var ipMtls = http.Connection.RemoteIpAddress?.ToString();
+            await revocations.RevokeAsync(token, hint, clientId, ipMtls);
+            return Results.Ok();
+        }
 
         bool authenticated = false;
         if (string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) && !string.IsNullOrEmpty(clientAssertion))
