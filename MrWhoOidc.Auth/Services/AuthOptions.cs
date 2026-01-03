@@ -51,6 +51,11 @@ public sealed class AuthOptions
     // Emit amr consistently in ID and access tokens when available from upstream.
     public bool EmitAmrInIdToken { get; set; } = true;
     public bool EmitAmrInAccessToken { get; set; } = true;
+
+    // When enabled and an OIDC 'claims' request includes an 'id_token' member with one or more claims,
+    // the ID token will only include explicitly requested payload claims (plus required 'sub').
+    // This does not affect structural JWT claims (iss/aud/exp/iat) or JWT-layer OIDC fields (nonce/auth_time/at_hash).
+    public bool RestrictIdTokenClaimsToClaimsRequest { get; set; } = false;
     // Allow-list of mapped claim names we may propagate into ID/access tokens when present and policy allows.
     public string[] PropagateMappedClaimsToIdToken { get; set; } = Array.Empty<string>();
     public string[] PropagateMappedClaimsToAccessToken { get; set; } = Array.Empty<string>();

@@ -9,6 +9,7 @@
 The following items in this roadmap have been implemented since this document was first drafted:
 
 - ✅ OIDC `claims` parameter: parsing/validation + persistence in auth-code request context, and userinfo claim filtering driven by the access token.
+- ✅ OIDC `claims` parameter constraints: `essential` + `value`/`values` are enforced for **ID tokens** (at `/token`) and for **UserInfo** responses (at `/userinfo`) using constraints embedded in the access token.
 - ✅ OIDC `prompt` enforcement in `/authorize` (including `prompt=none` error semantics).
 - ✅ OIDC `max_age` enforcement in `/authorize` using `auth_time` from the user session.
 - ✅ OIDC `acr_values` (basic validation + best-effort session satisfaction) and discovery support via `acr_values_supported` when configured.
@@ -89,7 +90,7 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ```
 
 **Tasks:**
-- [ ] Add `display_values_supported` to discovery
+- [x] Add `display_values_supported` to discovery
 - [ ] Verify login pages respect `display` parameter for mobile/popup styling
 
 ---
@@ -103,6 +104,8 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ```csharp
 ["claim_types_supported"] = new[] { "normal" }
 ```
+
+**Current State:** Implemented in discovery.
 
 ---
 
@@ -118,6 +121,8 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Notes:** Extend when additional language packs are added.
 
+**Current State:** Implemented in discovery when `AuthOptions.UiLocalesSupported` is configured (omitted when empty).
+
 ---
 
 #### 1.5 Service Documentation URLs
@@ -131,6 +136,8 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ["op_policy_uri"] = "https://mrwho.local/privacy",
 ["op_tos_uri"] = "https://mrwho.local/terms"
 ```
+
+**Current State:** Implemented in discovery via `AuthOptions.ServiceDocumentationUrl`, `AuthOptions.OpPolicyUrl`, and `AuthOptions.OpTosUrl` (omitted when not configured).
 
 ---
 
@@ -213,10 +220,10 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Tasks:**
 - [x] Parse claims JSON object from authorize request
 - [x] Validate claims request structure
-- [ ] Filter ID token claims based on request
+- [x] Filter ID token claims based on request (implemented behind `AuthOptions.RestrictIdTokenClaimsToClaimsRequest`; default `false`)
 - [x] Filter userinfo claims based on request
-- [ ] Support `essential` and `voluntary` distinction
-- [ ] Support `value` and `values` constraints
+- [x] Support `essential` vs optional (ID token + userinfo)
+- [x] Support `value` and `values` constraints (ID token + userinfo)
 - [x] Add discovery metadata
 - [x] Add comprehensive tests
 

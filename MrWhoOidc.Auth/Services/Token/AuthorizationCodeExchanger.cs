@@ -106,7 +106,7 @@ public sealed class AuthorizationCodeExchanger(
                 var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
                     = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
 
-                var (idTokenConstraints, _) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
+                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -209,6 +209,16 @@ public sealed class AuthorizationCodeExchanger(
                         claimsList.Add(new System.Security.Claims.Claim("mrwho_userinfo_claims", json));
                     }
 
+                    // Also embed userinfo claim constraints (essential/value/values) so /userinfo can enforce them.
+                    if (userInfoConstraints.Count > 0)
+                    {
+                        var sorted = userInfoConstraints
+                            .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
+                            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal);
+                        var json = JsonSerializer.Serialize(sorted, EntitlementsJsonOptions);
+                        claimsList.Add(new System.Security.Claims.Claim("mrwho_userinfo_claims_constraints", json));
+                    }
+
                     if (signedLicenseTokens is { Count: > 0 })
                     {
                         var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
@@ -247,6 +257,18 @@ public sealed class AuthorizationCodeExchanger(
                 if (!string.IsNullOrWhiteSpace(tenantsClaimJson))
                 {
                     idClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
+                }
+
+                var restrictIdTokenClaims = authOptions.Value.RestrictIdTokenClaimsToClaimsRequest && requestedIdTokenClaims.Count > 0;
+                if (restrictIdTokenClaims)
+                {
+                    // When restricting, keep only explicitly requested payload claims plus required 'sub'.
+                    var keep = new HashSet<string>(requestedIdTokenClaims, StringComparer.Ordinal)
+                    {
+                        OidcConstants.Claims.Subject
+                    };
+
+                    idClaims.RemoveAll(c => !keep.Contains(c.Type));
                 }
 
                 DateTimeOffset? authTime = null;
@@ -375,6 +397,7 @@ public sealed class AuthorizationCodeExchanger(
                     foreach (var name in allowId)
                     {
                         if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue;
+                        if (restrictIdTokenClaims && !requestedIdTokenClaims.Contains(name)) continue;
                         if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                         {
                             idClaims.Add(new(name, val));
@@ -384,7 +407,10 @@ public sealed class AuthorizationCodeExchanger(
 
                 if (meta.TryGetSid(request.Code, out var sid) && !string.IsNullOrWhiteSpace(sid))
                 {
-                    idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
+                    if (!restrictIdTokenClaims || requestedIdTokenClaims.Contains(OidcConstants.Claims.Sid))
+                    {
+                        idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
+                    }
                 }
 
                 var idToken = await jwt.CreateJwtAsync(

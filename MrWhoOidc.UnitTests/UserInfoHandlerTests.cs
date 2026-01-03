@@ -185,6 +185,226 @@ public sealed class UserInfoHandlerTests
     }
 
     [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_EssentialMissingClaim_Returns_400_InvalidRequest()
+    {
+        using var db = CreateDb();
+
+        // Create test user without email
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = null,
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"email\":{\"essential\":true}}";
+        var requestedJson = "[\"email\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid email"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(400, status);
+        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_EssentialValueMismatch_Returns_400_InvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = "test@example.com",
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"email\":{\"essential\":true,\"value\":\"other@example.com\"}}";
+        var requestedJson = "[\"email\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid email"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(400, status);
+        Assert.IsTrue(body.Contains("\"error\":\"invalid_request\"", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_NonEssentialValueMismatch_OmitsClaim_AndReturns200()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = "test@example.com",
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"email\":{\"essential\":false,\"value\":\"other@example.com\"}}";
+        var requestedJson = "[\"email\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid email"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("email", out _));
+    }
+
+    [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_Values_Satisfied_For_ArrayClaim_Returns200()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = "test@example.com",
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+        db.UserAlternativeEmails.Add(new UserAlternativeEmail
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Email = "alt@example.com",
+            IsVerified = true
+        });
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"emails\":{\"essential\":true,\"values\":[\"test@example.com\"]}}";
+        var requestedJson = "[\"emails\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid email"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("emails", out var emails));
+        Assert.AreEqual(JsonValueKind.Array, emails.ValueKind);
+    }
+
+    [TestMethod]
+    public async Task UserInfo_ClaimsConstraints_Values_Mismatch_NonEssential_Omits_ArrayClaim_AndReturns200()
+    {
+        using var db = CreateDb();
+
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "testuser",
+            Email = "test@example.com",
+            Name = "Test User"
+        };
+        db.Users.Add(user);
+        db.UserAlternativeEmails.Add(new UserAlternativeEmail
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            Email = "alt@example.com",
+            IsVerified = true
+        });
+        await db.SaveChangesAsync();
+
+        var constraintsJson = "{\"emails\":{\"essential\":false,\"values\":[\"other@example.com\"]}}";
+        var requestedJson = "[\"emails\"]";
+
+        var claims = new[]
+        {
+            new Claim("sub", user.Id.ToString()),
+            new Claim("scope", "openid email"),
+            new Claim("aud", "api"),
+            new Claim("mrwho_userinfo_claims", requestedJson),
+            new Claim("mrwho_userinfo_claims_constraints", constraintsJson)
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var validator = new StubTokenValidator(true, principal);
+
+        var handler = CreateHandler(db, validator: validator);
+        var context = CreateHttpContext("Bearer " + CreateUnsignedJwt());
+
+        var result = await handler.HandleAsync(context);
+        var (status, body) = await ExecuteAsync(result, context);
+
+        Assert.AreEqual(200, status);
+
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(user.Id.ToString(), doc.RootElement.GetProperty("sub").GetString());
+        Assert.IsFalse(doc.RootElement.TryGetProperty("emails", out _));
+    }
+
+    [TestMethod]
     public async Task UserInfo_Missing_Audience_Returns_401()
     {
         using var db = CreateDb();

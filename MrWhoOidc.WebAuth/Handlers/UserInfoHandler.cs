@@ -9,6 +9,7 @@ using MrWhoOidc.WebAuth.Observability;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MrWhoOidc.Security;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
@@ -23,6 +24,13 @@ public interface IUserInfoHandler
 
 public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, OidcEndpointMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
 {
+    private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
+
+    private static readonly JsonSerializerOptions EmbeddedClaimsJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     public async Task<IResult> HandleAsync(HttpContext http)
     {
         var sw = Stopwatch.StartNew();
@@ -246,6 +254,21 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
             }
 
+            // Also honor embedded constraints for userinfo claims.
+            Dictionary<string, ClaimConstraint>? requestedUserInfoConstraints = null;
+            var requestedUserInfoConstraintsJson = principal.FindFirst("mrwho_userinfo_claims_constraints")?.Value;
+            if (!string.IsNullOrWhiteSpace(requestedUserInfoConstraintsJson))
+            {
+                try
+                {
+                    requestedUserInfoConstraints = JsonSerializer.Deserialize<Dictionary<string, ClaimConstraint>>(requestedUserInfoConstraintsJson, EmbeddedClaimsJsonOptions);
+                }
+                catch
+                {
+                    // ignore invalid embedded value
+                }
+            }
+
             // Only include claims permitted by scopes
             if (scopes.Contains(OidcConstants.Scopes.Profile))
             {
@@ -341,6 +364,92 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 {
                     if (string.Equals(k, "sub", StringComparison.Ordinal)) continue;
                     if (!requestedUserInfoClaims.Contains(k)) payload.Remove(k);
+                }
+            }
+
+            if (requestedUserInfoConstraints is { Count: > 0 })
+            {
+                static string? ScalarToString(object? value)
+                {
+                    return value switch
+                    {
+                        null => null,
+                        string s => s,
+                        bool b => b ? "true" : "false",
+                        int i => i.ToString(CultureInfo.InvariantCulture),
+                        long l => l.ToString(CultureInfo.InvariantCulture),
+                        double d => d.ToString(CultureInfo.InvariantCulture),
+                        float f => f.ToString(CultureInfo.InvariantCulture),
+                        decimal m => m.ToString(CultureInfo.InvariantCulture),
+                        JsonElement el => el.ValueKind switch
+                        {
+                            JsonValueKind.String => el.GetString(),
+                            JsonValueKind.Number => el.TryGetInt64(out var li) ? li.ToString(CultureInfo.InvariantCulture) : el.GetRawText(),
+                            JsonValueKind.True => "true",
+                            JsonValueKind.False => "false",
+                            _ => null
+                        },
+                        _ => value.ToString()
+                    };
+                }
+
+                static IEnumerable<string> GetAllValues(object? value)
+                {
+                    if (value is null) return Array.Empty<string>();
+                    if (value is string s) return new[] { s };
+                    if (value is string[] arr) return arr;
+                    if (value is IEnumerable<string> seq) return seq;
+
+                    var scalar = ScalarToString(value);
+                    return scalar is null ? Array.Empty<string>() : new[] { scalar };
+                }
+
+                foreach (var kvp in requestedUserInfoConstraints)
+                {
+                    var claimName = kvp.Key;
+                    if (string.Equals(claimName, "sub", StringComparison.Ordinal)) continue;
+
+                    var constraint = kvp.Value;
+                    payload.TryGetValue(claimName, out var current);
+                    var actualValues = GetAllValues(current).Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
+                    var hasAny = actualValues.Length > 0;
+
+                    // If there is no value constraint, only enforce essential presence.
+                    if (constraint.Value is null && (constraint.Values is null || constraint.Values.Length == 0))
+                    {
+                        if (constraint.Essential && !hasAny)
+                        {
+                            outcome = "failure";
+                            http.Response.Headers["Cache-Control"] = "no-store";
+                            return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' is not available.");
+                        }
+                        continue;
+                    }
+
+                    bool matches;
+                    if (constraint.Value is not null)
+                    {
+                        matches = hasAny && actualValues.Any(v => string.Equals(v, constraint.Value, StringComparison.Ordinal));
+                    }
+                    else
+                    {
+                        matches = hasAny && actualValues.Any(v => constraint.Values!.Contains(v, StringComparer.Ordinal));
+                    }
+
+                    if (matches)
+                    {
+                        continue;
+                    }
+
+                    if (constraint.Essential)
+                    {
+                        outcome = "failure";
+                        http.Response.Headers["Cache-Control"] = "no-store";
+                        return ErrorResults.InvalidRequest($"Essential userinfo claim '{claimName}' cannot satisfy the requested value constraint.");
+                    }
+
+                    // Not essential: omit the claim.
+                    payload.Remove(claimName);
                 }
             }
 
