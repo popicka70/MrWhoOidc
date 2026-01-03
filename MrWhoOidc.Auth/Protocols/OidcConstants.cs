@@ -6,6 +6,22 @@ namespace MrWhoOidc.Auth.Protocols;
 public static class OidcConstants
 {
     /// <summary>
+    /// OpenID Connect subject identifier types.
+    /// </summary>
+    public static class SubjectTypes
+    {
+        /// <summary>
+        /// A consistent sub value is provided to all clients.
+        /// </summary>
+        public const string Public = "public";
+
+        /// <summary>
+        /// A different sub value is provided to each client (for privacy).
+        /// </summary>
+        public const string Pairwise = "pairwise";
+    }
+
+    /// <summary>
     /// Standard OpenID Connect scope values.
     /// </summary>
     public static class Scopes
