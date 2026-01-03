@@ -297,6 +297,20 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("allowedLogoutRedirectUris")]
     public List<string> AllowedLogoutRedirectUris { get; init; } = [];
 
+    // --- Subject Identifiers ---
+
+    /// <summary>
+    /// OpenID Connect subject type: "public" or "pairwise".
+    /// </summary>
+    [JsonPropertyName("subjectType")]
+    public string? SubjectType { get; init; }
+
+    /// <summary>
+    /// Optional sector_identifier_uri for pairwise subject identifiers.
+    /// </summary>
+    [JsonPropertyName("sectorIdentifierUri")]
+    public string? SectorIdentifierUri { get; init; }
+
     // --- Login Methods ---
 
     /// <summary>

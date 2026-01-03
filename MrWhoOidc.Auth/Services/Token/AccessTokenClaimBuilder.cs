@@ -21,9 +21,10 @@ public sealed class AccessTokenClaimBuilder(
 {
     public Task<IEnumerable<Claim>> BuildClaimsAsync(AccessTokenClaimRequest request, CancellationToken ct = default)
     {
+        var subject = request.Subject ?? request.UserId.ToString();
         var claims = new List<Claim>
         {
-            new(OidcConstants.Claims.Subject, request.UserId.ToString()),
+            new(OidcConstants.Claims.Subject, subject),
             new(OAuthConstants.Parameters.Scope, string.Join(' ', request.Scopes)),
             new("jti", Guid.NewGuid().ToString("N"))
         };

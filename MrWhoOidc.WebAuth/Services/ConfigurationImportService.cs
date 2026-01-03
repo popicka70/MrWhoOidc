@@ -1283,6 +1283,8 @@ public sealed class ConfigurationImportService(
             FrontChannelLogoutUri = clientDef.FrontChannelLogoutUri,
             PublicJwksJson = clientDef.PublicJwksJson,
             PublicJwksUri = clientDef.PublicJwksUri,
+            SubjectType = string.IsNullOrWhiteSpace(clientDef.SubjectType) ? OidcConstants.SubjectTypes.Public : clientDef.SubjectType!,
+            SectorIdentifierUri = clientDef.SectorIdentifierUri,
             // Redirect URIs stored as JSON
             AllowedLoginRedirectUrisJson = clientDef.AllowedLoginRedirectUris?.Count > 0
                 ? JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris)
@@ -1365,6 +1367,9 @@ public sealed class ConfigurationImportService(
         client.FrontChannelLogoutUri = clientDef.FrontChannelLogoutUri;
         client.PublicJwksJson = clientDef.PublicJwksJson;
         client.PublicJwksUri = clientDef.PublicJwksUri;
+        if (!string.IsNullOrWhiteSpace(clientDef.SubjectType))
+            client.SubjectType = clientDef.SubjectType;
+        client.SectorIdentifierUri = clientDef.SectorIdentifierUri;
 
         // Update redirect URIs (JSON fields)
         if (clientDef.AllowedLoginRedirectUris?.Count > 0)

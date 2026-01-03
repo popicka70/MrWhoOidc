@@ -13,6 +13,7 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -42,16 +43,21 @@ public sealed class TokenServiceTests
         var roleBuilder = new RoleClaimBuilder();
         
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
+
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
-            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, settingsSvc, entitlementsProvider, tenantsClaimService, claimBuilder, 
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(

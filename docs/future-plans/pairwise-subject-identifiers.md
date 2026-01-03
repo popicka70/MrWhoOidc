@@ -6,9 +6,10 @@ Pairwise subject identifiers are a privacy-enhancing feature defined in the [Ope
 
 ## Current State
 
-MrWhoOidc currently supports only **public** subject identifiers:
-- The same `sub` value is returned to all clients for a given user
-- Advertised in discovery document: `"subject_types_supported": ["public"]`
+MrWhoOidc supports **public** and **pairwise** subject identifiers:
+- **public**: the same `sub` value is returned to all clients for a given user
+- **pairwise**: a stable, non-public `sub` is issued per client (or per sector identifier)
+- Advertised in discovery document: `"subject_types_supported": ["public", "pairwise"]`
 
 ## Why Implement Pairwise?
 
@@ -22,168 +23,54 @@ MrWhoOidc currently supports only **public** subject identifiers:
 - Consumer-facing applications with strict privacy requirements
 - B2B scenarios where partners shouldn't share user identifiers
 
-## Implementation Requirements
+## Implemented Behavior
 
-### 1. Database Schema Changes
+### 1. Database Schema
 
-Add storage for pairwise identifiers:
+Pairwise mappings are persisted via EF Core migrations.
 
-```sql
-CREATE TABLE pairwise_identifiers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    sector_identifier VARCHAR(2048) NOT NULL,
-    pairwise_sub VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    
-    CONSTRAINT uq_user_sector UNIQUE (user_id, sector_identifier),
-    CONSTRAINT uq_pairwise_sub UNIQUE (pairwise_sub)
-);
-
-CREATE INDEX ix_pairwise_user ON pairwise_identifiers(user_id);
-CREATE INDEX ix_pairwise_sector ON pairwise_identifiers(sector_identifier);
-```
+Key points:
+- Mappings are tenant-scoped and keyed by (tenant, user, sector)
+- The stored pairwise subject value is unique within a tenant
 
 ### 2. Client Configuration
 
-Extend the `Client` entity:
-
-```csharp
-public class Client
-{
-    // Existing properties...
-    
-    /// <summary>
-    /// Subject type for this client: "public" or "pairwise".
-    /// </summary>
-    public string SubjectType { get; set; } = "public";
-    
-    /// <summary>
-    /// Sector identifier URI for pairwise subject calculation.
-    /// If not set, defaults to the host of the first redirect_uri.
-    /// </summary>
-    public string? SectorIdentifierUri { get; set; }
-}
-```
+The client configuration includes:
+- `SubjectType`: `public` (default) or `pairwise`
+- `SectorIdentifierUri` (optional): HTTPS URI used to group multiple clients into a shared sector
 
 ### 3. Sector Identifier Resolution
 
-Per OIDC spec, the sector identifier determines which clients share the same pairwise `sub`:
+Sector identifier determines which clients share the same pairwise `sub`.
 
-```csharp
-public interface ISectorIdentifierResolver
-{
-    /// <summary>
-    /// Resolves the sector identifier for a client.
-    /// </summary>
-    Task<string> ResolveAsync(Client client, CancellationToken ct = default);
-}
-
-public class SectorIdentifierResolver : ISectorIdentifierResolver
-{
-    public async Task<string> ResolveAsync(Client client, CancellationToken ct = default)
-    {
-        // If sector_identifier_uri is provided, fetch and validate it
-        if (!string.IsNullOrEmpty(client.SectorIdentifierUri))
-        {
-            // Must be HTTPS
-            // Must return JSON array of redirect_uris
-            // All client redirect_uris must be in the response
-            return new Uri(client.SectorIdentifierUri).Host;
-        }
-        
-        // Default: use host from first redirect_uri
-        var firstRedirect = client.RedirectUris?.FirstOrDefault();
-        if (string.IsNullOrEmpty(firstRedirect))
-        {
-            throw new InvalidOperationException(
-                "Client must have at least one redirect_uri for pairwise subject type");
-        }
-        
-        return new Uri(firstRedirect).Host;
-    }
-}
-```
+Rules:
+- If `SectorIdentifierUri` is configured:
+  - Must be a valid absolute HTTPS URI
+  - The URI is fetched and must return a JSON array of redirect URIs
+  - The fetched set must include all of the client’s configured redirect URIs
+  - The sector identifier is the host of `SectorIdentifierUri` (normalized to lowercase)
+  - If validation fails or the URI is unreachable at issuance time, token issuance fails (no fallback)
+- If `SectorIdentifierUri` is not configured:
+  - Sector identifier is derived from the host of the client’s allowed login redirect URIs
+  - All allowed login redirect URIs must share exactly one host
+  - The derived host is normalized to lowercase
 
 ### 4. Pairwise Subject Generation
 
-```csharp
-public interface IPairwiseSubjectService
-{
-    Task<string> GetOrCreateAsync(Guid userId, string sectorIdentifier, CancellationToken ct = default);
-}
+Pairwise subjects are generated using cryptographically secure randomness and encoded as base64url (no padding), then persisted for stable reuse.
 
-public class PairwiseSubjectService : IPairwiseSubjectService
-{
-    private readonly AuthDbContext _db;
-    
-    public async Task<string> GetOrCreateAsync(Guid userId, string sectorIdentifier, CancellationToken ct = default)
-    {
-        // Check for existing mapping
-        var existing = await _db.PairwiseIdentifiers
-            .FirstOrDefaultAsync(p => p.UserId == userId && p.SectorIdentifier == sectorIdentifier, ct);
-        
-        if (existing != null)
-            return existing.PairwiseSub;
-        
-        // Generate new pairwise identifier
-        // Option A: Random UUID (simpler, no reversibility)
-        var pairwiseSub = Guid.NewGuid().ToString();
-        
-        // Option B: HMAC-based (deterministic, requires server secret)
-        // var pairwiseSub = ComputeHmac(userId, sectorIdentifier, _serverSecret);
-        
-        var entry = new PairwiseIdentifier
-        {
-            UserId = userId,
-            SectorIdentifier = sectorIdentifier,
-            PairwiseSub = pairwiseSub
-        };
-        
-        _db.PairwiseIdentifiers.Add(entry);
-        await _db.SaveChangesAsync(ct);
-        
-        return pairwiseSub;
-    }
-}
-```
+### 5. Token and UserInfo Behavior
 
-### 5. Token Generation Changes
+When a client is configured for `pairwise`, the `sub` claim value is selected via the pairwise mapping service (stable per user+sector). Public clients continue to receive the public subject.
 
-Modify token generation to use pairwise subjects when configured:
+### 6. Discovery Document
 
-```csharp
-// In token generation logic
-public async Task<string> GetSubjectClaimAsync(User user, Client client, CancellationToken ct)
-{
-    if (client.SubjectType == OidcConstants.SubjectTypes.Pairwise)
-    {
-        var sector = await _sectorResolver.ResolveAsync(client, ct);
-        return await _pairwiseService.GetOrCreateAsync(user.Id, sector, ct);
-    }
-    
-    // Public: return the actual user ID
-    return user.Id.ToString();
-}
-```
+The discovery document advertises both subject identifier types via `subject_types_supported`.
 
-### 6. Discovery Document Update
+### 7. Admin UI
 
-Update `DiscoveryHandler.cs` to advertise both types:
-
-```csharp
-["subject_types_supported"] = new[] 
-{ 
-    OidcConstants.SubjectTypes.Public, 
-    OidcConstants.SubjectTypes.Pairwise 
-},
-```
-
-### 7. Admin UI Changes
-
-- Add subject type selection to client configuration
-- Add sector identifier URI field (optional)
-- Validation: sector_identifier_uri must be HTTPS if provided
+- Client configuration UI includes subject type selection and optional sector identifier URI
+- Validation enforces that sector identifier URI is an absolute HTTPS URI (when using pairwise)
 
 ## Testing Requirements
 

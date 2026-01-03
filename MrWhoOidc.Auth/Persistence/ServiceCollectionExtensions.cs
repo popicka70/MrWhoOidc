@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Persistence;
 
@@ -9,6 +10,10 @@ public static class PersistenceServiceCollectionExtensions
 {
     public static IServiceCollection AddAuthPersistence(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHttpClient();
+        services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
+        services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
+
         // Test/diagnostic bypass: when Testing:UseInMemoryAuthDb=true, short-circuit to in-memory provider
         // This enables lightweight host startup for endpoint surface snapshot tests without requiring a PostgreSQL connection string.
         var useInMemory = configuration["Testing:UseInMemoryAuthDb"];

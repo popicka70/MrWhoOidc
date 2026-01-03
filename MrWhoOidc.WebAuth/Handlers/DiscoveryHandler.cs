@@ -77,7 +77,7 @@ public sealed class DiscoveryHandler(
             ["revocation_endpoint"] = $"{baseUrl}/revoke",
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
             ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
-            ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public },
+            ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
             ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
             {
                 SecurityConstants.JwtAlgorithms.RS256,
