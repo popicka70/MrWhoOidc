@@ -40,7 +40,13 @@ public sealed class ClientAuthenticationService(
             if (allowedThumbprints is { Length: > 0 })
             {
                 var presented = input.MtlsThumbprint;
-                var ok = !string.IsNullOrEmpty(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase));
+                var presentedHex = input.MtlsThumbprintHexSha256;
+
+                static bool HasValue(string? v) => !string.IsNullOrWhiteSpace(v);
+
+                var ok =
+                    (HasValue(presented) && allowedThumbprints.Any(a => string.Equals(a, presented, StringComparison.OrdinalIgnoreCase))) ||
+                    (HasValue(presentedHex) && allowedThumbprints.Any(a => string.Equals(a, presentedHex, StringComparison.OrdinalIgnoreCase)));
                 if (!ok)
                 {
                     logger.LogWarning("Client authentication failed: mTLS required but missing/invalid for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));

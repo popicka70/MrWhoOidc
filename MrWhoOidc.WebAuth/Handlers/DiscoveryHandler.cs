@@ -138,7 +138,7 @@ public sealed class DiscoveryHandler(
             ["userinfo_endpoint"] = $"{baseUrl}/userinfo",
             ["revocation_endpoint"] = $"{baseUrl}/revoke",
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
-            ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
+            ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
             ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
             {
@@ -157,7 +157,7 @@ public sealed class DiscoveryHandler(
             ["backchannel_logout_session_supported"] = true,
             ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
             ["grant_types_supported"] = grants.ToArray(),
-            ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
+            ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["token_endpoint_auth_signing_alg_values_supported"] = new[]
             {
                 SecurityConstants.JwtAlgorithms.RS256,

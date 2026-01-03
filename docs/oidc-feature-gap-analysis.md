@@ -252,27 +252,29 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Current State:** mTLS is implemented but not advertised.
 
-**Implementation:**
+**Implementation (current direction):**
 ```csharp
-["tls_client_certificate_bound_access_tokens"] = true,
+// We support self-signed mTLS client authentication (thumbprint allow-list),
+// but we do not currently issue TLS certificate-bound access tokens.
 ["token_endpoint_auth_methods_supported"] = new[] { 
-    "client_secret_basic", 
-    "client_secret_post", 
-    "private_key_jwt",
-    "tls_client_auth",
-    "self_signed_tls_client_auth"
+  "client_secret_basic", 
+  "client_secret_post", 
+  "private_key_jwt",
+  "self_signed_tls_client_auth"
 },
-["mtls_endpoint_aliases"] = new Dictionary<string, string> {
-    ["token_endpoint"] = $"{mtlsBaseUrl}/token",
-    ["introspection_endpoint"] = $"{mtlsBaseUrl}/introspect",
-    ["revocation_endpoint"] = $"{mtlsBaseUrl}/revoke"
+["introspection_endpoint_auth_methods_supported"] = new[] { 
+  "client_secret_basic", 
+  "client_secret_post", 
+  "private_key_jwt",
+  "self_signed_tls_client_auth"
 }
 ```
 
 **Tasks:**
-- [ ] Add `tls_client_auth` and `self_signed_tls_client_auth` to auth methods
-- [ ] Configure mTLS base URL in options
-- [ ] Add mtls_endpoint_aliases to discovery
+- [x] Add `self_signed_tls_client_auth` to auth methods
+- [ ] Add `tls_client_auth` if/when subject/SAN based mapping is implemented
+- [ ] Configure mTLS base URL in options (only needed for `mtls_endpoint_aliases`)
+- [ ] Add mtls_endpoint_aliases to discovery (only if separate mTLS endpoints exist)
 - [ ] Document mTLS setup requirements
 
 ---

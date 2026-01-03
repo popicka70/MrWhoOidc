@@ -105,6 +105,34 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_mTLS_SelfSigned_Client_Auth_For_Token_And_Introspection()
+    {
+        using var factory = CreateFactory();
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("token_endpoint_auth_methods_supported", out var tokenAuth), "token_endpoint_auth_methods_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, tokenAuth.ValueKind, "token_endpoint_auth_methods_supported must be array");
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("introspection_endpoint_auth_methods_supported", out var introspectionAuth), "introspection_endpoint_auth_methods_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, introspectionAuth.ValueKind, "introspection_endpoint_auth_methods_supported must be array");
+
+        var tokenMethods = tokenAuth.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        var introspectionMethods = introspectionAuth.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        CollectionAssert.Contains(tokenMethods, "self_signed_tls_client_auth");
+        CollectionAssert.Contains(introspectionMethods, "self_signed_tls_client_auth");
+    }
+
+    [TestMethod]
     public async Task Discovery_TenantPrefixed_Only_Advertises_Tenant_And_Global_Scopes()
     {
         using var factory = CreateFactory();

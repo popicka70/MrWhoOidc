@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Extensions;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Services;
@@ -93,6 +94,7 @@ public class ClientAuthenticator(
         // 2. Get mTLS thumbprint if available
         var cert = await http.Connection.GetClientCertificateAsync();
         string? mtlsThumbprint = mtlsResolver.ResolveThumbprint(cert);
+        string? mtlsThumbprintHex = cert?.GetCertHashString(HashAlgorithmName.SHA256);
 
         // 3. Delegate to Auth Service
         var input = new ClientCredentialInput(
@@ -103,6 +105,7 @@ public class ClientAuthenticator(
             ClientAssertionType: clientAssertionType,
             ClientAssertion: clientAssertion,
             MtlsThumbprint: mtlsThumbprint,
+            MtlsThumbprintHexSha256: mtlsThumbprintHex,
             EndpointUrl: http.GetEndpointUrl()
         );
 
