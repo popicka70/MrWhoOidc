@@ -302,6 +302,24 @@ public sealed class DiscoveryHandler(
             body["device_authorization_endpoint"] = $"{baseUrl}/device/authorize";
         }
 
+        // OpenID Connect CIBA Core 1.0
+        if (authOptions.Value.EnableCiba)
+        {
+            grants.Add(OAuthConstants.GrantTypes.Ciba);
+            body["backchannel_authentication_endpoint"] = $"{baseUrl}/bc-authorize";
+            body["backchannel_token_delivery_modes_supported"] = authOptions.Value.CibaTokenDeliveryModesSupported;
+            body["backchannel_authentication_request_signing_alg_values_supported"] = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
+            };
+            body["backchannel_user_code_parameter_supported"] = authOptions.Value.CibaUserCodeParameterSupported;
+        }
+
         // RFC 8705: mtls_endpoint_aliases (optional)
         var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;
         if (!string.IsNullOrWhiteSpace(mtlsBase) && Uri.TryCreate(mtlsBase.Trim(), UriKind.Absolute, out var mtlsUri))

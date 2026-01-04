@@ -247,6 +247,13 @@ internal static class EndpointMappingExtensions
         routes.MapMethods("/device/authorize", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
+        // OpenID Connect CIBA (Client Initiated Backchannel Authentication) endpoint
+        routes.MapPost("/bc-authorize", (ICibaAuthenticationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
+        routes.MapMethods("/bc-authorize", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+
         // External OIDC (IdP chaining) endpoints
         routes.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
         routes.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));

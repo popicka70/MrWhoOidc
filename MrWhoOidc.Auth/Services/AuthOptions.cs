@@ -136,6 +136,25 @@ public sealed class AuthOptions
     public string[] DynamicClientAllowedSchemes { get; set; } = ["https"];
     // Allow http for localhost redirect URIs in dynamic registration (development convenience)
     public bool DynamicClientAllowLocalhostHttp { get; set; } = true;
+
+    // === CIBA (Client Initiated Backchannel Authentication) - OpenID Connect CIBA Core 1.0 ===
+    // Enable CIBA endpoints and grant type.
+    public bool EnableCiba { get; set; } = false;
+    // CIBA auth_req_id lifetime in seconds (default: 120 = 2 minutes, spec default)
+    public int CibaAuthRequestLifetimeSeconds { get; set; } = 120;
+    // Minimum polling interval in seconds for poll mode (spec recommends >= 5)
+    public int CibaPollingIntervalSeconds { get; set; } = 5;
+    // Supported token delivery modes: "poll", "ping", "push"
+    // poll = client polls token endpoint with auth_req_id
+    // ping = server notifies client, client then calls token endpoint
+    // push = server pushes tokens directly to client (requires TLS client auth)
+    public string[] CibaTokenDeliveryModesSupported { get; set; } = ["poll", "ping"];
+    // Whether user_code parameter is supported (for additional user verification)
+    public bool CibaUserCodeParameterSupported { get; set; } = false;
+    // User code length (if CibaUserCodeParameterSupported=true)
+    public int CibaUserCodeLength { get; set; } = 8;
+    // Character set for CIBA user codes
+    public string CibaUserCodeCharset { get; set; } = "0123456789";
 }
 
 public sealed class OpaqueAccessTokenOptions

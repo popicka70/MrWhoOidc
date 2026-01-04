@@ -78,6 +78,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     // New: Dynamic client registration tokens (RFC 7592)
     public DbSet<DynamicRegistrationToken> DynamicRegistrationTokens => Set<DynamicRegistrationToken>();
+    // New: CIBA (Client Initiated Backchannel Authentication) requests
+    public DbSet<CibaAuthenticationRequest> CibaAuthenticationRequests => Set<CibaAuthenticationRequest>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -2034,4 +2036,95 @@ public class DynamicRegistrationToken
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Status of a CIBA (Client Initiated Backchannel Authentication) request.
+/// </summary>
+public enum CibaRequestStatus
+{
+    Pending = 0,
+    Authorized = 1,
+    Denied = 2,
+    Expired = 3
+}
+
+/// <summary>
+/// Entity representing a CIBA (Client Initiated Backchannel Authentication) request.
+/// Per OpenID Connect CIBA Core 1.0 specification.
+/// </summary>
+[Microsoft.EntityFrameworkCore.Index(nameof(AuthReqId), IsUnique = true)]
+public class CibaAuthenticationRequest
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The auth_req_id returned to the client for polling/callback.</summary>
+    [MaxLength(200)]
+    public string AuthReqId { get; set; } = string.Empty;
+
+    /// <summary>The client_id that initiated the CIBA request.</summary>
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>User identifier hint (login_hint, login_hint_token, or id_token_hint resolved subject).</summary>
+    [MaxLength(500)]
+    public string? UserIdentifierHint { get; set; }
+
+    /// <summary>The type of hint provided: login_hint, login_hint_token, id_token_hint.</summary>
+    [MaxLength(50)]
+    public string? HintType { get; set; }
+
+    /// <summary>JSON array of requested scopes.</summary>
+    public string ScopesJson { get; set; } = "[]";
+
+    /// <summary>Optional binding_message displayed to user during authentication.</summary>
+    [MaxLength(200)]
+    public string? BindingMessage { get; set; }
+
+    /// <summary>Optional user_code for user verification (when backchannel_user_code_parameter_supported=true).</summary>
+    [MaxLength(20)]
+    public string? UserCode { get; set; }
+
+    /// <summary>Optional ACR values requested by the client.</summary>
+    [MaxLength(500)]
+    public string? AcrValues { get; set; }
+
+    /// <summary>Client notification token for ping mode callback (client-provided).</summary>
+    [MaxLength(1024)]
+    public string? ClientNotificationToken { get; set; }
+
+    /// <summary>Optional resource (RFC 8707) or audience for the token.</summary>
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+
+    /// <summary>Current authorization status.</summary>
+    public CibaRequestStatus Status { get; set; } = CibaRequestStatus.Pending;
+
+    /// <summary>User ID if the user has authorized the request.</summary>
+    public Guid? UserId { get; set; }
+
+    /// <summary>When the CIBA request was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the auth_req_id expires.</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>Minimum polling interval in seconds (for poll mode).</summary>
+    public int IntervalSeconds { get; set; } = 5;
+
+    /// <summary>Last time the client polled for this request (for slow_down enforcement in poll mode).</summary>
+    public DateTimeOffset? LastPolledAt { get; set; }
+
+    /// <summary>Whether ping notification was sent (for ping mode).</summary>
+    public bool PingNotificationSent { get; set; } = false;
+
+    /// <summary>IP address of the requesting client (for audit/diagnostics).</summary>
+    [MaxLength(100)]
+    public string? ClientIpAddress { get; set; }
+
+    /// <summary>Requested expires_in from the client (optional).</summary>
+    public int? RequestedExpiresIn { get; set; }
 }

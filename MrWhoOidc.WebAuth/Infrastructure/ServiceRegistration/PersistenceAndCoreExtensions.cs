@@ -72,7 +72,10 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, ClientCredentialsGrantHandler>();
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
         services.AddScoped<ITokenGrantHandler, DeviceCodeGrantHandler>();
+        services.AddScoped<ITokenGrantHandler, CibaGrantHandler>();
         services.AddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
+        services.AddScoped<ICibaAuthenticationHandler, CibaAuthenticationHandler>();
+        services.AddScoped<ICibaNotificationService, DefaultCibaNotificationService>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
         services.AddScoped<IWebAuthnHandler, WebAuthnHandler>();

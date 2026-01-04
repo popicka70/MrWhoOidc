@@ -708,6 +708,26 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/bc-authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/bc-authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/bootstrap",
     "Methods": "POST",
     "RateLimiters": [],
@@ -1425,6 +1445,26 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/bc-authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/bc-authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -2364,6 +2404,15 @@
   },
   {
     "Pattern": "Auth/WebAuthn",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "ciba",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,
