@@ -37,6 +37,7 @@ internal static class TestWebAppFactory
                 b.UseSetting("Testing:ValidateAuthCore", "true");
                 b.UseSetting("Testing:DiagnoseAuthCore", "false");
                 b.UseSetting("Testing:DisableStaticAssets", "true");
+                b.UseSetting("Testing:DisableBackgroundServices", "true"); // Skip background services for faster tests
                 // Store unique DB name for later use
                 b.UseSetting("Testing:InMemoryDbName", uniqueDbName);
                 // Multi-tenancy: single-tenant mode for tests
@@ -56,6 +57,7 @@ internal static class TestWebAppFactory
                         ["Testing:ValidateAuthCore"] = "true",
                         ["Testing:DiagnoseAuthCore"] = "false",
                         ["Testing:DisableStaticAssets"] = "true",
+                        ["Testing:DisableBackgroundServices"] = "true", // Skip background services for faster tests
                         ["Testing:InMemoryDbName"] = uniqueDbName,
                         ["MultiTenancy:Enabled"] = "false",
                         ["MultiTenancy:DefaultTenantSlug"] = "default",

@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Security;
 using MrWhoOidc.WebAuth.Handlers;
+using MrWhoOidc.UnitTests.TestSupport;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using MrWhoOidc.WebAuth.Observability;
@@ -26,6 +27,17 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class UserInfoHandlerTests
 {
+    // Cached security keys for JWT tests - shared to avoid RSA key generation overhead
+    private static readonly RsaSecurityKey s_signingKey = SharedTestKeys.GetRsaSecurityKey("userinfo-sig-key");
+    private static readonly RsaSecurityKey s_encryptionKey = SharedTestKeys.GetRsaSecurityKeyAlt("userinfo-enc-key");
+    private static readonly string s_encryptionJwksJson = BuildRsaJwksJsonFromKey(s_encryptionKey);
+
+    private static string BuildRsaJwksJsonFromKey(RsaSecurityKey key)
+    {
+        var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(key);
+        return JsonSerializer.Serialize(jwk);
+    }
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -229,8 +241,7 @@ public sealed class UserInfoHandlerTests
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
-        using var signingRsa = RSA.Create(2048);
-        var signingKey = new RsaSecurityKey(signingRsa) { KeyId = "sig1" };
+        var signingKey = s_signingKey;
         var jwt = new TestJwtService(signingKey);
 
         var claims = new[]
@@ -281,8 +292,7 @@ public sealed class UserInfoHandlerTests
         };
         db.Users.Add(user);
 
-        using var encRsa = RSA.Create(2048);
-        var jwksJson = BuildRsaJwksJson(encRsa);
+        var jwksJson = s_encryptionJwksJson;
 
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
@@ -297,8 +307,7 @@ public sealed class UserInfoHandlerTests
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
-        using var signingRsa = RSA.Create(2048);
-        var signingKey = new RsaSecurityKey(signingRsa) { KeyId = "sig1" };
+        var signingKey = s_signingKey;
         var jwt = new TestJwtService(signingKey);
 
         var claims = new[]
@@ -330,7 +339,7 @@ public sealed class UserInfoHandlerTests
             ValidAudience = "test_client",
             ValidateLifetime = true,
             IssuerSigningKey = signingKey,
-            TokenDecryptionKey = new RsaSecurityKey(encRsa)
+            TokenDecryptionKey = s_encryptionKey
         };
 
         var principalOut = tokenHandler.ValidateToken(body, tvp, out _);

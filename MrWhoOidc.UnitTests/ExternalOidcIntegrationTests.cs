@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.UnitTests.TestDoubles;
+using MrWhoOidc.UnitTests.TestSupport;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
@@ -47,6 +48,19 @@ public sealed class ExternalOidcIntegrationTests
 {
     private const string ClientPublicId = "webapp";
     private const string EntraTenantId = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+    // Cached RSA bundles for upstream providers - shared to avoid key generation overhead
+    private static readonly RsaBundle s_up1Bundle = CreateCachedRsaBundle("up1");
+    private static readonly RsaBundle s_up2Bundle = CreateCachedRsaBundle("up2");
+
+    private static RsaBundle CreateCachedRsaBundle(string kidPrefix)
+    {
+        // Use shared keys instead of generating new ones
+        var key = kidPrefix == "up1" 
+            ? SharedTestKeys.GetRsaSecurityKey(kidPrefix + "-kid")
+            : SharedTestKeys.GetRsaSecurityKeyAlt(kidPrefix + "-kid");
+        return new RsaBundle(key, key.KeyId!);
+    }
 
     private sealed record RsaBundle(RsaSecurityKey Key, string Kid);
 
@@ -243,9 +257,8 @@ public sealed class ExternalOidcIntegrationTests
     // Helpers
     private static RsaBundle CreateRsa(string kidPrefix)
     {
-        using var rsa = RSA.Create(2048);
-        var key = new RsaSecurityKey(rsa.ExportParameters(true)) { KeyId = kidPrefix + "-kid" };
-        return new RsaBundle(key, key.KeyId!);
+        // Return cached bundle instead of generating new keys
+        return kidPrefix.StartsWith("up1") ? s_up1Bundle : s_up2Bundle;
     }
 
     private static Task WriteJwks(HttpContext ctx, RsaBundle bundle)

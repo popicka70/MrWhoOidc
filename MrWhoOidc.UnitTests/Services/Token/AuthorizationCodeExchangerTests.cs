@@ -25,6 +25,7 @@ using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests.Services.Token;
@@ -32,6 +33,9 @@ namespace MrWhoOidc.UnitTests.Services.Token;
 [TestClass]
 public sealed class AuthorizationCodeExchangerTests
 {
+    // Cached client encryption key for JWE tests
+    private static readonly RsaSecurityKey s_clientEncryptionKey = SharedTestKeys.GetRsaSecurityKeyAlt("client-enc-key");
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -384,10 +388,9 @@ public sealed class AuthorizationCodeExchangerTests
         var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
         var jwtSvc = TestJwtServiceFactory.Create(keyStore);
 
-        // Client encryption key (RSA). Publish a public JWK (n/e) and keep the private key for decryption.
-        using var rsa = RSA.Create(2048);
-        var rsaKey = new RsaSecurityKey(rsa) { KeyId = "enc-kid" };
-        var rsaParams = rsa.ExportParameters(includePrivateParameters: false);
+        // Use shared client encryption key instead of generating a new one
+        var rsaKey = s_clientEncryptionKey;
+        var rsaParams = SharedTestKeys.GetRsaParametersAlt(includePrivate: false);
         var encJwk = new JsonWebKey
         {
             Kty = "RSA",

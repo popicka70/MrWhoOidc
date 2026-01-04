@@ -7,6 +7,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
+using MrWhoOidc.UnitTests.TestSupport;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -16,6 +17,11 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class RevocationHandlerTests
 {
+    // Cache the certificate since it's expensive to create
+    private static readonly Lazy<X509Certificate2> s_cachedCertificate = new(
+        () => CreateSelfSignedCertificateInternal(),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
     private static RevocationHandler CreateHandler(
         IRevocationService? revocations = null,
         IClientStore? clients = null,
@@ -86,9 +92,12 @@ public sealed class RevocationHandlerTests
         return context;
     }
 
-    private static X509Certificate2 CreateSelfSignedCertificate()
+    private static X509Certificate2 CreateSelfSignedCertificate() => s_cachedCertificate.Value;
+
+    private static X509Certificate2 CreateSelfSignedCertificateInternal()
     {
-        using var rsa = RSA.Create(2048);
+        // Use shared RSA key instead of generating a new one
+        var rsa = SharedTestKeys.Rsa2048;
         var req = new CertificateRequest("CN=mtls-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
         req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, false));

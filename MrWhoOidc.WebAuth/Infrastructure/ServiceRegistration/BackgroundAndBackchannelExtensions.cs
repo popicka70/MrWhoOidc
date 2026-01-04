@@ -12,6 +12,16 @@ public static class BackgroundAndBackchannelExtensions
 {
     public static IServiceCollection AddMrWhoOidcBackgroundAndBackchannel(this IServiceCollection services, IConfiguration configuration)
     {
+        // Skip background services in test mode for faster test execution
+        if (configuration.GetValue<bool>("Testing:DisableBackgroundServices"))
+        {
+            // Still register the singletons needed by other services
+            services.AddSingleton(new BackchannelDispatchOptions());
+            services.Configure<BackchannelFeatureOptions>(configuration.GetSection("Backchannel"));
+            services.AddSingleton<BackchannelRuntimeState>();
+            return services;
+        }
+
         // Background cleanup for expired tokens (opaque + refresh)
         services.AddHostedService<ExpiredTokenCleanupService>();
         // PAR cleanup

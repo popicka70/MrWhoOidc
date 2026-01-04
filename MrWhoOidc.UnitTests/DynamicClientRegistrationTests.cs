@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
@@ -165,11 +166,17 @@ public sealed class DynamicClientRegistrationTests
         return tenantId;
     }
 
-    private static string GenerateTestRsaJwk()
+    // Cached JWK JSON to avoid generating RSA keys per test
+    private static readonly Lazy<string> s_testRsaJwk = new(
+        () => GenerateTestRsaJwkInternal(),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private static string GenerateTestRsaJwk() => s_testRsaJwk.Value;
+
+    private static string GenerateTestRsaJwkInternal()
     {
-        // Generate a minimal RSA JWK for testing
-        using var rsa = System.Security.Cryptography.RSA.Create(2048);
-        var parameters = rsa.ExportParameters(true);
+        // Use shared RSA key instead of generating a new one
+        var parameters = SharedTestKeys.GetRsaParameters(includePrivate: true);
         
         return JsonSerializer.Serialize(new
         {

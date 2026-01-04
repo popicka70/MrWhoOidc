@@ -8,22 +8,37 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.UnitTests.TestDoubles;
+using MrWhoOidc.UnitTests.TestSupport;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public sealed class JarmServiceTests
 {
+    // Build JWKS JSON from the shared RSA key (only done once)
+    private static readonly string SharedRsaJwksJson = BuildRsaJwksJsonFromSharedKey();
+
+    private static string BuildRsaJwksJsonFromSharedKey(string kid = "enc1")
+    {
+        static string Base64Url(byte[] bytes)
+        {
+            var s = Convert.ToBase64String(bytes);
+            return s.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        var p = SharedTestKeys.Rsa2048.ExportParameters(false);
+        var n = Base64Url(p.Modulus!);
+        var e = Base64Url(p.Exponent!);
+        return $"{{\"keys\":[{{\"kty\":\"RSA\",\"use\":\"enc\",\"kid\":\"{kid}\",\"n\":\"{n}\",\"e\":\"{e}\"}}]}}";
+    }
+
     [TestMethod]
     public async Task JarmService_DoesNotEncrypt_WhenClientHasJwksButNoAuthorizationEncSettings()
     {
-        using var rsa = RSA.Create(2048);
-        var jwksJson = BuildRsaJwksJson(rsa);
-
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             ClientId = "c1",
-            PublicJwksJson = jwksJson,
+            PublicJwksJson = SharedRsaJwksJson,
             // No AuthorizationEncryptedResponseAlg/Enc => must remain signed-only
             AuthorizationEncryptedResponseAlg = null,
             AuthorizationEncryptedResponseEnc = null
@@ -45,13 +60,10 @@ public sealed class JarmServiceTests
     [TestMethod]
     public async Task JarmService_Encrypts_WhenClientOptsIn_WithSupportedAlgEnc_AndHasJwks()
     {
-        using var rsa = RSA.Create(2048);
-        var jwksJson = BuildRsaJwksJson(rsa);
-
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             ClientId = "c1",
-            PublicJwksJson = jwksJson,
+            PublicJwksJson = SharedRsaJwksJson,
             AuthorizationEncryptedResponseAlg = SecurityAlgorithms.RsaOAEP,
             AuthorizationEncryptedResponseEnc = SecurityAlgorithms.Aes256CbcHmacSha512
         };
@@ -72,13 +84,10 @@ public sealed class JarmServiceTests
     [TestMethod]
     public async Task JarmService_DoesNotEncrypt_WhenClientOptsIn_WithUnsupportedAlgEnc()
     {
-        using var rsa = RSA.Create(2048);
-        var jwksJson = BuildRsaJwksJson(rsa);
-
         var client = new MrWhoOidc.Auth.Persistence.Client
         {
             ClientId = "c1",
-            PublicJwksJson = jwksJson,
+            PublicJwksJson = SharedRsaJwksJson,
             AuthorizationEncryptedResponseAlg = "RSA-OAEP-256",
             AuthorizationEncryptedResponseEnc = SecurityAlgorithms.Aes256CbcHmacSha512
         };
@@ -94,20 +103,6 @@ public sealed class JarmServiceTests
         Assert.AreEqual(3, token.Split('.').Length);
         Assert.AreEqual(1, jwt.SignedCount);
         Assert.AreEqual(0, jwt.EncryptedCount);
-    }
-
-    private static string BuildRsaJwksJson(RSA rsa, string kid = "enc1")
-    {
-        static string Base64Url(byte[] bytes)
-        {
-            var s = Convert.ToBase64String(bytes);
-            return s.TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        }
-
-        var p = rsa.ExportParameters(false);
-        var n = Base64Url(p.Modulus!);
-        var e = Base64Url(p.Exponent!);
-        return $"{{\"keys\":[{{\"kty\":\"RSA\",\"use\":\"enc\",\"kid\":\"{kid}\",\"n\":\"{n}\",\"e\":\"{e}\"}}]}}";
     }
 
     private sealed class RecordingJwtService : IJwtService

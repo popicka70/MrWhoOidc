@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Security;
+using MrWhoOidc.UnitTests.TestSupport;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -18,6 +19,12 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class DPoPValidatorTests
 {
+    // Use shared keys to avoid repeated RSA key generation (~20-50ms per test)
+    private static RsaSecurityKey SecurityKey => SharedTestKeys.GetRsaSecurityKey("dpop-test-key");
+    private static RsaSecurityKey SecurityKeyAlt => SharedTestKeys.GetRsaSecurityKeyAlt("dpop-test-key-alt");
+    private static SigningCredentials SigningCreds => SharedTestKeys.GetRsaSigningCredentials("dpop-test-key");
+    private static SigningCredentials SigningCredsAlt => SharedTestKeys.GetRsaSigningCredentialsAlt("dpop-test-key-alt");
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -31,12 +38,8 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create valid DPoP proof
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
-        var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(securityKey);
+        // Setup: Create valid DPoP proof using shared key
+        var jwk = SharedTestKeys.GetRsaJsonWebKey("dpop-test-key");
         jwk.KeyId = Guid.NewGuid().ToString();
 
         var jti = Guid.NewGuid().ToString();
@@ -51,7 +54,7 @@ public sealed class DPoPValidatorTests
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
         header["jwk"] = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(jwk));
 
@@ -84,18 +87,14 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create DPoP proof WITHOUT jti
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof WITHOUT jti using shared key
         var claims = new[]
         {
             new Claim("htm", "POST"),
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -121,18 +120,14 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create DPoP proof WITHOUT htm
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof WITHOUT htm using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -158,18 +153,14 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create DPoP proof WITHOUT htu
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof WITHOUT htu using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
             new Claim("htm", "POST")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -195,11 +186,7 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create DPoP proof with htm=POST but validate against GET
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof with htm=POST but validate against GET using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
@@ -207,7 +194,7 @@ public sealed class DPoPValidatorTests
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -235,11 +222,7 @@ public sealed class DPoPValidatorTests
     {
         using var db = CreateDb();
 
-        // Setup: Create DPoP proof with htu for token endpoint but validate against userinfo endpoint
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof with htu for token endpoint but validate against userinfo endpoint using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
@@ -247,7 +230,7 @@ public sealed class DPoPValidatorTests
             new Claim("htu", "https://op.example.com/token")  // Proof for /token
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -273,10 +256,8 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_JKT_Thumbprint_Calculation()
     {
-        // Setup: Create RSA key and calculate JKT thumbprint
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(securityKey);
+        // Setup: Calculate JKT thumbprint using shared key
+        var jwk = SharedTestKeys.GetRsaJsonWebKey("thumbprint-test-key");
 
         // Act: Calculate thumbprint (SHA-256 of canonical JWK)
         var thumbprint = Base64UrlEncoder.Encode(jwk.ComputeJwkThumbprint());
@@ -332,11 +313,7 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_Expired_Proof_Fails_Validation()
     {
-        // Setup: Create DPoP proof that expired
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof that expired using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
@@ -345,7 +322,7 @@ public sealed class DPoPValidatorTests
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds().ToString())
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -372,14 +349,7 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_Invalid_Signature_Fails_Validation()
     {
-        // Setup: Create DPoP proof with one key, then try to validate with different key
-        using var rsa1 = RSA.Create(2048);
-        using var rsa2 = RSA.Create(2048);
-
-        var securityKey1 = new RsaSecurityKey(rsa1);
-        var securityKey2 = new RsaSecurityKey(rsa2);
-        var signingCredentials = new SigningCredentials(securityKey1, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof with one key, then try to validate with different key (using shared keys)
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
@@ -387,7 +357,7 @@ public sealed class DPoPValidatorTests
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds); // Sign with primary key
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -408,7 +378,7 @@ public sealed class DPoPValidatorTests
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateLifetime = true,
-            IssuerSigningKey = securityKey2,  // Wrong key!
+            IssuerSigningKey = SecurityKeyAlt,  // Wrong key!
             ClockSkew = TimeSpan.Zero
         };
 
@@ -422,11 +392,7 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_Nonce_Claim_Present_When_Required()
     {
-        // Setup: Create DPoP proof with nonce
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof with nonce using shared key
         var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
         var claims = new[]
         {
@@ -436,7 +402,7 @@ public sealed class DPoPValidatorTests
             new Claim("nonce", nonce)  // Server-provided nonce
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -487,11 +453,7 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_Ath_Claim_For_Protected_Resource()
     {
-        // Setup: Create DPoP proof with ath (access token hash) for protected resource
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Create DPoP proof with ath (access token hash) for protected resource using shared key
         var accessToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...";
         var athHash = Convert.ToBase64String(SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(accessToken)));
 
@@ -503,7 +465,7 @@ public sealed class DPoPValidatorTests
             new Claim("ath", athHash)  // Access token hash binding
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
 
         var payload = new JwtPayload(
@@ -528,11 +490,7 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_Proof_Type_Header_Required()
     {
-        // Setup: Verify typ header is "dpop+jwt"
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
+        // Setup: Verify typ header is "dpop+jwt" using shared key
         var claims = new[]
         {
             new Claim("jti", Guid.NewGuid().ToString()),
@@ -540,7 +498,7 @@ public sealed class DPoPValidatorTests
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";  // Required type
 
         var payload = new JwtPayload(
@@ -564,12 +522,8 @@ public sealed class DPoPValidatorTests
     [TestMethod]
     public void DPoP_JWK_Header_Required()
     {
-        // Setup: Verify jwk header is present
-        using var rsa = RSA.Create(2048);
-        var securityKey = new RsaSecurityKey(rsa);
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.RsaSha256);
-
-        var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(securityKey);
+        // Setup: Verify jwk header is present using shared key
+        var jwk = SharedTestKeys.GetRsaJsonWebKey("jwk-header-test-key");
         jwk.KeyId = Guid.NewGuid().ToString();
 
         var claims = new[]
@@ -579,7 +533,7 @@ public sealed class DPoPValidatorTests
             new Claim("htu", "https://op.example.com/token")
         };
 
-        var header = new JwtHeader(signingCredentials);
+        var header = new JwtHeader(SigningCreds);
         header["typ"] = "dpop+jwt";
         header["jwk"] = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(jwk));
 

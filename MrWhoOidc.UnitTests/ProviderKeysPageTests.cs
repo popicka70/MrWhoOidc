@@ -9,12 +9,24 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Pages.Admin.ProviderKeys;
 using MrWhoOidc.WebAuth.Security;
+using MrWhoOidc.UnitTests.TestSupport;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public class ProviderKeysPageTests
 {
+    // Cache PEM strings since key generation is expensive
+    private static readonly Lazy<string> s_rsaPem = new(
+        () => GeneratePem(SharedTestKeys.Rsa2048.ExportPkcs8PrivateKey()),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+    
+    private static readonly Lazy<string> s_ecPem = new(
+        () => GeneratePem(SharedTestKeys.EcdsaP256.ExportPkcs8PrivateKey()),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private static string GeneratePem(byte[] der) => new string(PemEncoding.Write("PRIVATE KEY", der));
+
     private sealed class NoopJwksCache : IPublicJwksCache
     {
         public Task InvalidateAllProvidersAsync(System.Threading.CancellationToken ct = default) => Task.CompletedTask;
@@ -50,21 +62,9 @@ public class ProviderKeysPageTests
         return id;
     }
 
-    static string RsaPkcs8Pem()
-    {
-        using var rsa = RSA.Create(2048);
-        var der = rsa.ExportPkcs8PrivateKey();
-        var pem = PemEncoding.Write("PRIVATE KEY", der);
-        return new string(pem);
-    }
+    static string RsaPkcs8Pem() => s_rsaPem.Value;
 
-    static string EcPkcs8Pem()
-    {
-        using var ec = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var der = ec.ExportPkcs8PrivateKey();
-        var pem = PemEncoding.Write("PRIVATE KEY", der);
-        return new string(pem);
-    }
+    static string EcPkcs8Pem() => s_ecPem.Value;
 
     [TestMethod]
     public async Task ImportRsaPem_Signing_SetsSigUseAndStores()
