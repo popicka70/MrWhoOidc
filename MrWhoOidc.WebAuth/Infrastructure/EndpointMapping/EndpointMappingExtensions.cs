@@ -213,6 +213,16 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize"); // Use authorize rate limit to prevent abuse
 
+        // Dynamic client configuration management (RFC 7592)
+        routes.MapGet("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.GetClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapPut("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.UpdateClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapDelete("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.DeleteClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapMethods("/register/{clientId}", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+
         routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-userinfo");

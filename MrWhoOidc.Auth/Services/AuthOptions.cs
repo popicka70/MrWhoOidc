@@ -118,6 +118,24 @@ public sealed class AuthOptions
     // Character set for user codes (RFC 8628 recommends easily typeable characters, avoiding ambiguous chars like 0/O, 1/I/l)
     // Default: BCDFGHJKLMNPQRSTVWXZ (consonants only, uppercase)
     public string DeviceCodeUserCodeCharset { get; set; } = "BCDFGHJKLMNPQRSTVWXZ";
+
+    // === Dynamic Client Registration (RFC 7591/7592) ===
+    // Enable dynamic client registration endpoint (POST /register).
+    public bool EnableDynamicClientRegistration { get; set; } = false;
+    // Enable client configuration management (GET/PUT/DELETE /register/{client_id}).
+    // Requires EnableDynamicClientRegistration to be true.
+    public bool EnableClientConfigurationEndpoint { get; set; } = true;
+    // Registration access token lifetime in seconds (default: 86400 = 24 hours, 0 = never expires)
+    public int RegistrationAccessTokenLifetimeSeconds { get; set; } = 86400;
+    // Require an initial access token (Bearer token) for POST /register. When set, only pre-authorized callers can register clients.
+    public bool RequireInitialAccessToken { get; set; } = false;
+    // Valid initial access tokens (SHA-256 hashes). Only used when RequireInitialAccessToken = true.
+    // Operators should generate tokens, hash them, and add hashes here. Clients submit the plain token as Bearer.
+    public string[] InitialAccessTokenHashes { get; set; } = Array.Empty<string>();
+    // Allowed redirect URI schemes for dynamically registered clients (default: https only, http for localhost)
+    public string[] DynamicClientAllowedSchemes { get; set; } = ["https"];
+    // Allow http for localhost redirect URIs in dynamic registration (development convenience)
+    public bool DynamicClientAllowLocalhostHttp { get; set; } = true;
 }
 
 public sealed class OpaqueAccessTokenOptions

@@ -347,20 +347,43 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Effort:** 1-2 weeks  
 **Spec:** RFC 7591, RFC 7592
 
+**Current State:** Implemented.
+
 **Implementation:**
 ```csharp
 ["registration_endpoint"] = $"{baseUrl}/register"
 ```
 
 **Tasks:**
-- [ ] Create `/register` POST endpoint for initial registration
-- [ ] Implement client metadata validation per spec
-- [ ] Generate `registration_access_token`
-- [ ] Create client configuration endpoint for updates
-- [ ] Add software statement support
-- [ ] Implement initial access token protection (optional)
-- [ ] Add rate limiting
-- [ ] Add tests
+- [x] Create `/register` POST endpoint for initial registration
+- [x] Implement client metadata validation per spec
+- [x] Generate `registration_access_token`
+- [x] Create client configuration endpoint for updates (RFC 7592)
+- [x] Add software statement support (validation stub)
+- [x] Implement initial access token protection (optional)
+- [x] Add rate limiting (via existing `rl-authorize` policy)
+- [x] Add tests (21 comprehensive tests)
+
+**Configuration Options:**
+```json
+{
+  "Auth": {
+    "EnableDynamicClientRegistration": true,
+    "EnableClientConfigurationEndpoint": true,
+    "RequireInitialAccessToken": false,
+    "InitialAccessTokenHashes": [],
+    "RegistrationAccessTokenLifetimeSeconds": 86400,
+    "DynamicClientAllowedSchemes": ["https"],
+    "DynamicClientAllowLocalhostHttp": true
+  }
+}
+```
+
+**Endpoints:**
+- `POST /register` - Register a new client (RFC 7591)
+- `GET /register/{clientId}` - Read client configuration (RFC 7592)
+- `PUT /register/{clientId}` - Update client configuration (RFC 7592)
+- `DELETE /register/{clientId}` - Delete client registration (RFC 7592)
 
 ---
 
@@ -446,7 +469,7 @@ grants.Add("urn:ietf:params:oauth:grant-type:device_code");
 | 4.1 | mTLS Discovery | ✅ DONE | Low | High - Enterprise |
 | 5.1 | Check Session iFrame | ✅ DONE | Medium | Low - Deprecated |
 | 6.1 | Request Object Enc | ✅ DONE | Medium | Low - Rare use |
-| 7.1 | Dynamic Registration | MEDIUM | High | Medium - Automation |
+| 7.1 | Dynamic Registration | ✅ DONE | High | Medium - Automation |
 | 7.2 | Device Auth Grant | ✅ DONE | High | Medium - IoT/CLI |
 | 7.3 | CIBA | LOW | Very High | Low - Specialized |
 

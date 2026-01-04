@@ -96,6 +96,7 @@ public static class PersistenceAndCoreExtensions
 
         // Dynamic client registration (RFC 7591/7592)
         services.AddScoped<IRegistrationHandler, RegistrationHandler>();
+        services.AddScoped<IClientConfigurationHandler, ClientConfigurationHandler>();
 
         // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)
         services.AddHostedService<AuthCoreValidationHostedService>();

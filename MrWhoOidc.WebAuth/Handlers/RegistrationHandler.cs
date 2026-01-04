@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -18,8 +19,11 @@ public interface IRegistrationHandler
 public sealed class RegistrationHandler(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
+    IOptions<AuthOptions> authOptions,
     ILogger<RegistrationHandler> logger) : IRegistrationHandler
 {
+    private readonly AuthOptions _authOptions = authOptions.Value;
+
     private static readonly List<string> SupportedGrantTypes = new()
     {
         "authorization_code",
@@ -46,6 +50,38 @@ public sealed class RegistrationHandler(
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
+        // Check feature flag
+        if (!_authOptions.EnableDynamicClientRegistration)
+        {
+            logger.LogWarning("/register called but dynamic client registration is disabled");
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic client registration is not enabled" },
+                statusCode: 400);
+        }
+
+        // Check initial access token if required
+        if (_authOptions.RequireInitialAccessToken)
+        {
+            var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
+            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Json(
+                    new { error = "invalid_token", error_description = "Initial access token required" },
+                    statusCode: 401);
+            }
+
+            var initialToken = authHeader.Substring(7);
+            var initialTokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(initialToken)));
+
+            if (!_authOptions.InitialAccessTokenHashes.Contains(initialTokenHash, StringComparer.Ordinal))
+            {
+                logger.LogWarning("/register invalid initial access token");
+                return Results.Json(
+                    new { error = "invalid_token", error_description = "Invalid initial access token" },
+                    statusCode: 401);
+            }
+        }
+
         var tenant = tenantAccessor.CurrentTenant;
         if (tenant == null || tenant.TenantId == Guid.Empty)
         {

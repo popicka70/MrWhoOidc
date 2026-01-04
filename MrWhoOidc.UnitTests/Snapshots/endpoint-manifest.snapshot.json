@@ -1043,6 +1043,42 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/register/{clientId}",
+    "Methods": "DELETE",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "PUT",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/revoke",
     "Methods": "POST",
     "RateLimiters": [],
@@ -1537,6 +1573,42 @@
     "RateLimiters": [
       "rl-authorize"
     ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "DELETE",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "PUT",
+    "RateLimiters": [],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
