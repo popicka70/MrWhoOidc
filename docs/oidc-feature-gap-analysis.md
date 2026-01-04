@@ -1,7 +1,7 @@
 # OIDC Feature Gap Analysis and Implementation Roadmap
 
-**Date:** 2026-01-03  
-**Version:** 1.0  
+**Date:** 2026-01-04  
+**Version:** 1.1  
 **Status:** In progress (partially implemented)
 
 ## Implementation Status (Repository Reality)
@@ -13,6 +13,7 @@ The following items in this roadmap have been implemented since this document wa
 - ✅ OIDC `prompt` enforcement in `/authorize` (including `prompt=none` error semantics).
 - ✅ OIDC `max_age` enforcement in `/authorize` using `auth_time` from the user session.
 - ✅ OIDC `acr_values` (basic validation + best-effort session satisfaction) and discovery support via `acr_values_supported` when configured.
+- ✅ **Device Authorization Grant (RFC 8628)**: Full implementation including `/device/authorize` endpoint, device code generation, user verification page, polling token endpoint with `authorization_pending`/`slow_down` error handling, and feature flag gating.
 
 All tests are currently green (`dotnet test` on the solution).
 
@@ -433,51 +434,51 @@ grants.Add("urn:ietf:params:oauth:grant-type:device_code");
 
 | Phase | Feature | Priority | Effort | Business Value |
 |-------|---------|----------|--------|----------------|
-| 1.1 | ACR Values Support | HIGH | Low | High - Compliance |
-| 1.2 | Display Values | MEDIUM | Low | Medium - UX |
-| 1.3 | Claim Types | MEDIUM | Trivial | Medium - Compliance |
-| 1.4 | UI Locales | MEDIUM | Low | Medium - i18n |
-| 1.5 | Service Docs URLs | LOW | Trivial | Low - DX |
-| 2.1 | ID Token Alg Expansion | HIGH | Medium | High - FIPS |
-| 2.2 | ID Token Encryption | MEDIUM | Medium | Medium - Privacy |
-| 2.3 | UserInfo Signing/Enc | LOW | Medium | Low - Rare use |
-| 3.1 | Claims Parameter | HIGH | Medium | High - Flexibility |
-| 4.1 | mTLS Discovery | HIGH | Low | High - Enterprise |
-| 5.1 | Check Session iFrame | LOW | Medium | Low - Deprecated |
-| 6.1 | Request Object Enc | LOW | Medium | Low - Rare use |
+| 1.1 | ACR Values Support | ✅ DONE | Low | High - Compliance |
+| 1.2 | Display Values | ✅ DONE | Low | Medium - UX |
+| 1.3 | Claim Types | ✅ DONE | Trivial | Medium - Compliance |
+| 1.4 | UI Locales | ✅ DONE | Low | Medium - i18n |
+| 1.5 | Service Docs URLs | ✅ DONE | Trivial | Low - DX |
+| 2.1 | ID Token Alg Expansion | ✅ DONE | Medium | High - FIPS |
+| 2.2 | ID Token Encryption | ✅ DONE | Medium | Medium - Privacy |
+| 2.3 | UserInfo Signing/Enc | ✅ DONE | Medium | Low - Rare use |
+| 3.1 | Claims Parameter | ✅ DONE | Medium | High - Flexibility |
+| 4.1 | mTLS Discovery | ✅ DONE | Low | High - Enterprise |
+| 5.1 | Check Session iFrame | ✅ DONE | Medium | Low - Deprecated |
+| 6.1 | Request Object Enc | ✅ DONE | Medium | Low - Rare use |
 | 7.1 | Dynamic Registration | MEDIUM | High | Medium - Automation |
-| 7.2 | Device Auth Grant | MEDIUM | High | Medium - IoT/CLI |
+| 7.2 | Device Auth Grant | ✅ DONE | High | Medium - IoT/CLI |
 | 7.3 | CIBA | LOW | Very High | Low - Specialized |
 
 ---
 
 ## Recommended Implementation Order
 
-### Sprint 1 (Quick Wins - 1 Week)
-1. Add `acr_values_supported` with ACR taxonomy
-2. Add `display_values_supported`
-3. Add `claim_types_supported`
-4. Add `ui_locales_supported`
-5. Add service documentation URLs
-6. Advertise mTLS support properly
+### Sprint 1 (Quick Wins - 1 Week) ✅ COMPLETED
+1. ~~Add `acr_values_supported` with ACR taxonomy~~
+2. ~~Add `display_values_supported`~~
+3. ~~Add `claim_types_supported`~~
+4. ~~Add `ui_locales_supported`~~
+5. ~~Add service documentation URLs~~
+6. ~~Advertise mTLS support properly~~
 
-### Sprint 2 (Security & Compliance - 2 Weeks)
-1. Expand ID token signing algorithms (ES256, PS256)
-2. Implement full ACR claim emission based on auth method
-3. Implement claims parameter support
+### Sprint 2 (Security & Compliance - 2 Weeks) ✅ COMPLETED
+1. ~~Expand ID token signing algorithms (ES256, PS256)~~
+2. ~~Implement full ACR claim emission based on auth method~~
+3. ~~Implement claims parameter support~~
 
-### Sprint 3 (Advanced Security - 2 Weeks)
-1. ID token encryption
-2. Request object encryption for JAR
+### Sprint 3 (Advanced Security - 2 Weeks) ✅ COMPLETED
+1. ~~ID token encryption~~
+2. ~~Request object encryption for JAR~~
 
-### Sprint 4 (Enterprise Features - 2 Weeks)
-1. Device Authorization Grant
-2. Dynamic Client Registration
+### Sprint 4 (Enterprise Features - 2 Weeks) 🔄 IN PROGRESS
+1. ~~Device Authorization Grant~~ ✅
+2. Dynamic Client Registration ⏳
 
 ### Future Consideration
 - CIBA (only if customer demand)
-- Check Session iFrame (only if legacy RP support needed)
-- UserInfo signing/encryption (only if customer demand)
+- ~~Check Session iFrame~~ ✅ COMPLETED
+- ~~UserInfo signing/encryption~~ ✅ COMPLETED
 
 ---
 
