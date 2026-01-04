@@ -74,6 +74,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog> ConfigurationAuditLogs => Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>();
     // New: Platform-wide settings (single-row table)
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    // New: Dynamic client registration tokens (RFC 7592)
+    public DbSet<DynamicRegistrationToken> DynamicRegistrationTokens => Set<DynamicRegistrationToken>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -1935,4 +1937,25 @@ public class QrLoginSession
     public string? MobileUserAgent { get; set; }
     [MaxLength(100)]
     public string? MobileIpAddress { get; set; }
+}
+
+// New: Dynamic client registration token (RFC 7592)
+public class DynamicRegistrationToken
+{
+    [Key]
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// SHA-256 hash of the registration_access_token (stored securely, not plaintext)
+    /// </summary>
+    [MaxLength(256)]
+    public string TokenHash { get; set; } = string.Empty;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? ExpiresAt { get; set; }
 }

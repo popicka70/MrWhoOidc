@@ -92,6 +92,9 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IQrCodeGenerator, QrCodeGenerator>();
         services.AddScoped<IQrLoginHandler, QrLoginHandler>();
 
+        // Dynamic client registration (RFC 7591/7592)
+        services.AddScoped<IRegistrationHandler, RegistrationHandler>();
+
         // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)
         services.AddHostedService<AuthCoreValidationHostedService>();
         return services;

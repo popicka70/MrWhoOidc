@@ -1012,6 +1012,17 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/register",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/revoke",
     "Methods": "POST",
     "RateLimiters": [],
@@ -1478,6 +1489,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {

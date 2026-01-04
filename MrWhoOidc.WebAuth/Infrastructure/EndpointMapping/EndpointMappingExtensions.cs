@@ -208,6 +208,11 @@ internal static class EndpointMappingExtensions
 
         routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
 
+        // Dynamic client registration (RFC 7591)
+        routes.MapPost("/register", (IRegistrationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize"); // Use authorize rate limit to prevent abuse
+
         routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
             .RequireRateLimiting("rl-userinfo");
