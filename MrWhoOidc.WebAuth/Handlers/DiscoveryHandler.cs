@@ -176,6 +176,8 @@ public sealed class DiscoveryHandler(
             ["revocation_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
             ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
+            // Dynamic client registration (RFC 7591)
+            ["registration_endpoint"] = $"{baseUrl}/register",
             ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
             ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
             {
