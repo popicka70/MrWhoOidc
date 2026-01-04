@@ -8,13 +8,31 @@ using MrWhoOidc.UnitTests.Testing;
 namespace MrWhoOidc.UnitTests.MultiTenancy;
 
 [TestClass]
+[DoNotParallelize]
 public class AdminUiMultiTenantRoutingTests
 {
+    private static Lazy<WebApplicationFactory<Program>> s_defaultFactory = null!;
+    private static WebApplicationFactory<Program> DefaultFactory => s_defaultFactory.Value;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext context)
+    {
+        s_defaultFactory = new Lazy<WebApplicationFactory<Program>>(() =>
+            (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory());
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        if (s_defaultFactory?.IsValueCreated == true)
+            s_defaultFactory.Value.Dispose();
+    }
+
     [TestMethod]
     public void AdminPages_Have_TenantPrefixed_Routes_In_MultiTenant_Mode()
     {
-        // Arrange: Enable multi-tenant mode
-        var factory = TestWebAppFactory.CreateInMemory()
+        // Arrange: Enable multi-tenant mode - needs separate factory with config override
+        using var factory = ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory())
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureTestServices(services =>
@@ -103,7 +121,7 @@ public class AdminUiMultiTenantRoutingTests
     public void AdminPages_Have_RootLevel_Routes_Only_In_SingleTenant_Mode()
     {
         // Arrange: Disable multi-tenant mode (single-tenant) - this is the default for TestWebAppFactory
-        var factory = TestWebAppFactory.CreateInMemory();
+        var factory = DefaultFactory;
 
         // Act: Get the endpoint data source
         var endpoints = factory.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>();
@@ -153,7 +171,7 @@ public class AdminUiMultiTenantRoutingTests
     public void AdminPages_Count_Matches_Expected()
     {
         // This test ensures we're not accidentally breaking admin page registration
-        var factory = TestWebAppFactory.CreateInMemory();
+        var factory = DefaultFactory;
 
         var endpoints = factory.Services.GetRequiredService<Microsoft.AspNetCore.Routing.EndpointDataSource>();
         var adminPageEndpoints = endpoints.Endpoints

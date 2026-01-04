@@ -20,14 +20,34 @@ namespace MrWhoOidc.UnitTests;
 [DoNotParallelize]
 public class ProgramSurfaceSnapshotTests
 {
+    private static Lazy<WebApplicationFactory<Program>> s_factory = null!;
+    private static WebApplicationFactory<Program> Factory => s_factory.Value;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext context)
+    {
+        s_factory = new Lazy<WebApplicationFactory<Program>>(() =>
+        {
+            var f = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+            var server = f.Server; // ensure boot
+            return f;
+        });
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        if (s_factory?.IsValueCreated == true)
+            s_factory.Value.Dispose();
+    }
+
     // Updated model captures multiple rate limiter policies & whether CORS/authorization metadata present.
     private record EndpointInfo(string Pattern, string Methods, string[] RateLimiters, string? Authz, bool HasAntiforgery, bool HasCors, bool IsAnonymous);
 
     [TestMethod, TestCategory("SafetySurface")]
     public void Endpoint_Manifest_Snapshot_Is_Stable()
     {
-        var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
-        _ = factory.Server; // ensure boot
+        var factory = Factory;
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
 
         static bool ShouldIgnorePattern(string pattern, string methods)
@@ -276,7 +296,7 @@ public class ProgramSurfaceSnapshotTests
     [TestMethod, TestCategory("SafetySurface")]
     public void Defined_Rate_Limiting_Policy_Names_Are_Exact_Set()
     {
-        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        var factory = Factory;
         var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var e in dataSource.Endpoints.OfType<RouteEndpoint>())
@@ -307,7 +327,7 @@ public class ProgramSurfaceSnapshotTests
     [TestMethod, TestCategory("SafetySurface")]
     public void AdminAuthorizationHandler_Is_Scoped()
     {
-        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+        var factory = Factory;
         using var scope1 = factory.Services.CreateScope();
         var handlers1 = scope1.ServiceProvider.GetServices<IAuthorizationHandler>().Where(h => h.GetType().Name == "AdminAuthorizationHandler").ToList();
         Assert.HasCount(1, handlers1, $"Expected exactly one AdminAuthorizationHandler in scope1, found {handlers1.Count}");

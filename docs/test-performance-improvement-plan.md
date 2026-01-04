@@ -69,6 +69,15 @@ var securityKey = SharedTestKeys.GetRsaSecurityKey("test-key");
 | `Phase0AugmentedSafetyTests.cs` | 4 | Uses SharedWebAppFixture |
 | `CacheHeadersIntegrationTests.cs` | 2 | Uses SharedWebAppFixture, added [DoNotParallelize] |
 | `DisplayParameterIntegrationTests.cs` | 1 | Uses SharedWebAppFixture |
+| `ProgramSurfaceSnapshotTests.cs` | 3 | Uses ClassInit/ClassCleanup Lazy pattern |
+| `DiscoveryMetadataTests.cs` | 5 | 9 tests use Factory, 1 uses CreateFactoryWithConfig (needs isolated), 4 still use CreateFactory (mutate DB) |
+| `AdminUiMultiTenantRoutingTests.cs` | 2 | 2 tests share DefaultFactory, 1 needs custom config |
+
+**Additional Test Stability Fixes:**
+| File | Change |
+|------|--------|
+| `ClientAssertionValidatorTests.cs` | Added [DoNotParallelize] |
+| `DPoPValidatorTests.cs` | Added [DoNotParallelize] |
 
 **Pattern Applied:**
 ```csharp
@@ -108,14 +117,16 @@ public async Task MyTest()
 |-------|------------|----------|-----------|-------|
 | Baseline | 868 | 173.6s | 5.0 | Before any changes |
 | After Phase 1 | 870 | 170.5s | 5.1 | Shared keys + disabled background services |
-| After Phase 2 | 870 | 143s | 6.1 | Shared WebApplicationFactory fixtures |
+| After Phase 2 | 870 | 143s | 6.1 | Shared WebApplicationFactory fixtures (3 classes) |
+| After Phase 2+ | 870 | ~130s | 6.7 | Extended fixtures (6 classes) + flaky test fixes |
 
-**Total improvement: ~30 seconds (17% faster)**
+**Total improvement: ~44 seconds (25% faster)**
 
-> **Note:** The ~30s improvement comes primarily from:
-> 1. Eliminating ~7 WebApplicationFactory creations (~4s each = ~28s saved)
+> **Note:** The ~44s improvement comes primarily from:
+> 1. Eliminating ~18 WebApplicationFactory creations (~4s each)
 > 2. Background services no longer starting in test mode
 > 3. Shared RSA key generation
+> 4. Fixed flaky tests by adding [DoNotParallelize] to DPoPValidatorTests and ClientAssertionValidatorTests
 
 ---
 

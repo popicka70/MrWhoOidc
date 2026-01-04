@@ -19,11 +19,29 @@ namespace MrWhoOidc.UnitTests.Integration;
 [DoNotParallelize]
 public sealed class DiscoveryMetadataTests
 {
+    private static Lazy<WebApplicationFactory<Program>> s_factory = null!;
+    private static WebApplicationFactory<Program> Factory => s_factory.Value;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext _)
+    {
+        s_factory = new Lazy<WebApplicationFactory<Program>>(() =>
+            (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory());
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup()
+    {
+        if (s_factory?.IsValueCreated == true)
+            s_factory.Value.Dispose();
+    }
+
+    // For tests that need isolated DB state (mutating tests)
     private static WebApplicationFactory<Program> CreateFactory()
         => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
 
     private static WebApplicationFactory<Program> CreateFactoryWithConfig(Dictionary<string, string?> config)
-        => CreateFactory().WithWebHostBuilder(b =>
+        => ((WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory()).WithWebHostBuilder(b =>
         {
             b.ConfigureAppConfiguration((ctx, cfg) =>
             {
@@ -48,7 +66,7 @@ public sealed class DiscoveryMetadataTests
     [TestMethod]
     public async Task Discovery_Advertises_Public_And_Pairwise_Subject_Types()
     {
-        using var factory = CreateFactory();
+        var factory = Factory;
         using var doc = await GetDiscoveryAsync(factory);
         Assert.IsTrue(doc.RootElement.TryGetProperty("subject_types_supported", out var supported), "subject_types_supported missing");
         Assert.AreEqual(JsonValueKind.Array, supported.ValueKind, "subject_types_supported must be array");
@@ -66,7 +84,7 @@ public sealed class DiscoveryMetadataTests
     [TestMethod]
     public async Task Discovery_Advertises_Claims_Supported()
     {
-        using var factory = CreateFactory();
+        var factory = Factory;
         using var doc = await GetDiscoveryAsync(factory);
 
         Assert.IsTrue(doc.RootElement.TryGetProperty("claims_supported", out var supported), "claims_supported missing");
@@ -118,7 +136,7 @@ public sealed class DiscoveryMetadataTests
     [TestMethod]
     public async Task Discovery_Advertises_mTLS_SelfSigned_Client_Auth_For_Token_And_Introspection()
     {
-        using var factory = CreateFactory();
+        var factory = Factory;
         using var doc = await GetDiscoveryAsync(factory);
 
         Assert.IsTrue(doc.RootElement.TryGetProperty("token_endpoint_auth_methods_supported", out var tokenAuth), "token_endpoint_auth_methods_supported missing");
@@ -146,7 +164,7 @@ public sealed class DiscoveryMetadataTests
     [TestMethod]
     public async Task Discovery_Advertises_CheckSessionIFrame()
     {
-        using var factory = CreateFactory();
+        var factory = Factory;
         using var doc = await GetDiscoveryAsync(factory);
 
         Assert.IsTrue(doc.RootElement.TryGetProperty("check_session_iframe", out var iframe), "check_session_iframe missing");
@@ -160,7 +178,7 @@ public sealed class DiscoveryMetadataTests
     [TestMethod]
     public async Task CheckSessionIFrame_Endpoint_Is_Embeddable()
     {
-        using var factory = CreateFactory();
+        var factory = Factory;
 
         var mt = factory.Services.GetRequiredService<IMultiTenancyStateProvider>();
         mt.UpdateState(false);

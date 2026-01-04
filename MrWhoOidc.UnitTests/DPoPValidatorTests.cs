@@ -17,6 +17,7 @@ namespace MrWhoOidc.UnitTests;
 /// Covers DPoP proof JWT validation, thumbprint matching, nonce enforcement, and replay prevention.
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public sealed class DPoPValidatorTests
 {
     // Use shared keys to avoid repeated RSA key generation (~20-50ms per test)

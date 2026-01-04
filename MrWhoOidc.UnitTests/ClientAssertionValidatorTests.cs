@@ -11,6 +11,7 @@ using System.Security.Claims;
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class ClientAssertionValidatorTests
 {
     private static AuthDbContext CreateDb()
