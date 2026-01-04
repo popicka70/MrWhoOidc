@@ -344,6 +344,25 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("userInfoEncryptedResponseEnc")]
     public string? UserInfoEncryptedResponseEnc { get; init; }
 
+    /// <summary>
+    /// JWS alg for JARM authorization responses (query.jwt / fragment.jwt / form_post.jwt).
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("authorizationSignedResponseAlg")]
+    public string? AuthorizationSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE alg for encrypted JARM authorization responses.
+    /// </summary>
+    [JsonPropertyName("authorizationEncryptedResponseAlg")]
+    public string? AuthorizationEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted JARM authorization responses.
+    /// </summary>
+    [JsonPropertyName("authorizationEncryptedResponseEnc")]
+    public string? AuthorizationEncryptedResponseEnc { get; init; }
+
     // --- Login Methods ---
 
     /// <summary>

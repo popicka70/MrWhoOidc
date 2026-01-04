@@ -1296,6 +1296,17 @@ public class Client
     [MaxLength(50)]
     public string? UserInfoEncryptedResponseEnc { get; set; }
 
+    // JARM: authorization_signed_response_alg / authorization_encrypted_response_alg / authorization_encrypted_response_enc
+    // When configured, the OP returns a JWT Secured Authorization Response (JARM) and may encrypt it.
+    [MaxLength(50)]
+    public string? AuthorizationSignedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? AuthorizationEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? AuthorizationEncryptedResponseEnc { get; set; }
+
     // New: policy knobs moved from appsettings to per-client storage
     public bool RequirePar { get; set; } = false;
     [MaxLength(2000)]

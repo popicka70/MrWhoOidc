@@ -995,6 +995,35 @@ public sealed class AuthorizeHandlerTests
         // Handler supports JARM response_mode=query.jwt
     }
 
+    [TestMethod]
+    public async Task Authorize_Response_Mode_Fragment_JWT_Supported()
+    {
+        // Arrange
+        using var db = CreateDb();
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "fragment.jwt");
+        var handler = CreateHandler(db, validator: authorize);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('f', 43),
+            ["code_challenge_method"] = "S256",
+            ["response_mode"] = "fragment.jwt"
+        };
+        var context = CreateHttpContext(queryParams);
+
+        // Act
+        var result = await handler.HandleAsync(context);
+
+        // Assert
+        Assert.IsNotNull(result);
+        // Handler supports JARM response_mode=fragment.jwt
+    }
+
     // Stub implementations
     private sealed class StubFeatureService : IFeatureService
     {

@@ -53,6 +53,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         if (!string.IsNullOrEmpty(validation.RedirectUri))
         {
             if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+                string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
             {
                 var jarmJwt = jarm.CreateErrorResponseAsync(validation.ClientId!, issuer, validation.Error!, $"{validation.ErrorDescription} (corr={correlationId})", validation.State).GetAwaiter().GetResult();
@@ -78,6 +79,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         var issuer = http.GetIssuer();
 
         if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+            string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
             string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
             var jarmJwt = jarm.CreateSuccessResponseAsync(validation.ClientId!, issuer, code, validation.ResponseMode!, validation.State).GetAwaiter().GetResult();
@@ -106,6 +108,15 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         if (string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
             return Results.Extensions.RazorPage("/FormPost", new { redirectUri, response = jwt });
+        }
+
+        if (string.Equals(responseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal))
+        {
+            var fragmentUri = new UriBuilder(redirectUri);
+            var fragment = System.Web.HttpUtility.ParseQueryString(fragmentUri.Fragment.TrimStart('#'));
+            fragment["response"] = jwt;
+            fragmentUri.Fragment = fragment.ToString();
+            return Results.Redirect(fragmentUri.ToString());
         }
 
         var uri = new UriBuilder(redirectUri);

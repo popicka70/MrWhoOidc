@@ -615,6 +615,44 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">Authorization response (JARM)</div>
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-12">
+                                                    <label asp-for="Input.AuthorizationSignedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationSignedResponseAlg" class="form-select">
+                                                        <option value="">Default (tenant active signing alg)</option>
+                                                        <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationSignedResponseAlg" class="text-danger"></span>
+                                                    <div class="form-text">When set, JARM responses are signed with this alg. Must match tenant active signing alg.</div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.AuthorizationEncryptedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationEncryptedResponseAlg" class="form-select">
+                                                        <option value="">Not encrypted</option>
+                                                        <option value="RSA-OAEP">RSA-OAEP</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationEncryptedResponseAlg" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.AuthorizationEncryptedResponseEnc" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationEncryptedResponseEnc" class="form-select">
+                                                        <option value="">(none)</option>
+                                                        <option value="A256CBC-HS512">A256CBC-HS512</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationEncryptedResponseEnc" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-12 form-text">
+                                                    If encryption is set, the server returns an encrypted JARM response (JWE) and requires a client public JWKS.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

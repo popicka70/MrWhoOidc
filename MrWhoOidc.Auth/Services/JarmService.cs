@@ -107,6 +107,20 @@ public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvid
             if (string.IsNullOrEmpty(clientId)) return null;
             var client = await clients.FindByClientIdAsync(clientId);
             if (client is null) return null;
+
+            // Only encrypt JARM when the client explicitly opts in via client metadata.
+            if (string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseEnc))
+            {
+                return null;
+            }
+
+            if (!string.Equals(client.AuthorizationEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+                || !string.Equals(client.AuthorizationEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+            {
+                // Enforce supported alg/enc pair. Discovery advertises what's supported.
+                return null;
+            }
+
             var jwks = client.PublicJwksJson;
             if (string.IsNullOrWhiteSpace(jwks)) return null;
             

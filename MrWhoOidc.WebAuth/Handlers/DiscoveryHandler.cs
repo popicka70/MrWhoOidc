@@ -69,10 +69,24 @@ public sealed class DiscoveryHandler(
             OAuthConstants.GrantTypes.RefreshToken,
             OAuthConstants.GrantTypes.ClientCredentials
         };
+        
+        // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
+        // only advertise authorization response encryption algorithms when at least one client in this
+        // tenant is configured for it.
         if (authOptions.Value.EnableTokenExchange)
         {
             grants.Add(OAuthConstants.GrantTypes.TokenExchange);
         }
+
+        var clientsQuery = db.Clients.AsNoTracking();
+        if (tenantId is not null)
+        {
+            clientsQuery = clientsQuery.Where(c => c.TenantId == tenantId);
+        }
+
+        var advertiseAuthorizationResponseEncryption = await clientsQuery.AnyAsync(
+            c => c.AuthorizationEncryptedResponseAlg != null && c.AuthorizationEncryptedResponseEnc != null,
+            ctx.RequestAborted);
 
         // Check if AdvancedSecurity feature is enabled for PAR
         var advancedSecurityEnabled = await featureService.IsFeatureEnabledAsync(
@@ -219,17 +233,21 @@ public sealed class DiscoveryHandler(
             ["request_uri_parameter_supported"] = true,
             ["request_object_signing_alg_values_supported"] = requestObjectAlgorithms,
             // JARM support
-            ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "form_post.jwt" },
+            ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "fragment.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
             ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
-            ["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
-            ["authorization_response_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
             // Non-standard hints to improve DX
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
             // DPoP capability hints (experimental)
             ["dpop_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256, SecurityConstants.JwtAlgorithms.ES256 },
             ["dpop_bound_access_tokens"] = true
         };
+        
+        if (advertiseAuthorizationResponseEncryption)
+        {
+            body["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };
+            body["authorization_response_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" };
+        }
 
         // Remove empty optional strings to keep the discovery document clean.
         if (body.TryGetValue("service_documentation", out var sd) && sd is string s1 && string.IsNullOrWhiteSpace(s1)) body.Remove("service_documentation");

@@ -41,7 +41,7 @@ This document analyzes the MrWhoOidc discovery document against the OpenID Conne
 | **Security** | PAR (Pushed Auth Requests) | RFC 9126 |
 | **Security** | DPoP | RFC 9449 |
 | **Security** | mTLS (partial) | RFC 8705 |
-| **Security** | JARM (JWT Auth Response) | JARM |
+| **Security** | JARM (JWT Auth Response) | JARM (query.jwt / fragment.jwt / form_post.jwt) |
 | **OAuth** | Token Introspection | RFC 7662 |
 | **OAuth** | Token Revocation | RFC 7009 |
 | **OAuth** | Token Exchange | RFC 8693 |

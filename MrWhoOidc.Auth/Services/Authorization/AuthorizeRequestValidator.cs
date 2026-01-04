@@ -101,12 +101,13 @@ public sealed class AuthorizeRequestValidator(AuthDbContext db, IClientStore cli
                 OidcConstants.ResponseModes.Fragment,
                 OidcConstants.ResponseModes.FormPost,
                 OidcConstants.ResponseModes.QueryJwt,
-                OidcConstants.ResponseModes.FormPostJwt
+                    OidcConstants.ResponseModes.FragmentJwt,
+                    OidcConstants.ResponseModes.FormPostJwt
             };
             if (!validModes.Contains(responseMode, StringComparer.Ordinal))
             {
                 return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, 
-                    $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, form_post.jwt");
+                    $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
         }
 

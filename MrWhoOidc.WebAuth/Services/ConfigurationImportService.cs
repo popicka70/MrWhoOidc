@@ -1290,6 +1290,9 @@ public sealed class ConfigurationImportService(
             UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg,
             UserInfoEncryptedResponseAlg = clientDef.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = clientDef.UserInfoEncryptedResponseEnc,
+            AuthorizationSignedResponseAlg = clientDef.AuthorizationSignedResponseAlg,
+            AuthorizationEncryptedResponseAlg = clientDef.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEnc = clientDef.AuthorizationEncryptedResponseEnc,
             // Redirect URIs stored as JSON
             AllowedLoginRedirectUrisJson = clientDef.AllowedLoginRedirectUris?.Count > 0
                 ? JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris)
@@ -1381,6 +1384,9 @@ public sealed class ConfigurationImportService(
         client.UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg;
         client.UserInfoEncryptedResponseAlg = clientDef.UserInfoEncryptedResponseAlg;
         client.UserInfoEncryptedResponseEnc = clientDef.UserInfoEncryptedResponseEnc;
+        client.AuthorizationSignedResponseAlg = clientDef.AuthorizationSignedResponseAlg;
+        client.AuthorizationEncryptedResponseAlg = clientDef.AuthorizationEncryptedResponseAlg;
+        client.AuthorizationEncryptedResponseEnc = clientDef.AuthorizationEncryptedResponseEnc;
 
         // Update redirect URIs (JSON fields)
         if (clientDef.AllowedLoginRedirectUris?.Count > 0)

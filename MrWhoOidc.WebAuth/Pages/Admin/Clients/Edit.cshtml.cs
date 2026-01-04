@@ -258,6 +258,9 @@ public class EditModel(
             UserInfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
             UserInfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
+            AuthorizationSignedResponseAlg = client.AuthorizationSignedResponseAlg,
+            AuthorizationEncryptedResponseAlg = client.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEnc = client.AuthorizationEncryptedResponseEnc,
             AllowedLoginRedirectUris = loginUris,
             AllowedLogoutRedirectUris = logoutUris,
             AllowLocalLogin = client.AllowLocalLogin,
@@ -1064,12 +1067,25 @@ public class EditModel(
         Input.UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg.Trim();
         Input.UserInfoEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseAlg) ? null : Input.UserInfoEncryptedResponseAlg.Trim();
         Input.UserInfoEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc) ? null : Input.UserInfoEncryptedResponseEnc.Trim();
+        Input.AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg.Trim();
+        Input.AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg.Trim();
+        Input.AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc.Trim();
 
         if (!string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) && !string.Equals(Input.UserInfoSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
         {
             await LoadRealmsAsync();
             await LoadScopesAsync(Id);
             ModelState.AddModelError("Input.UserInfoSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) && !string.Equals(Input.AuthorizationSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.AuthorizationSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
             KeyPreviews = BuildPreviews(Input.PublicJwksJson);
             JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
             return Page();
@@ -1087,6 +1103,12 @@ public class EditModel(
             "Input.UserInfoEncryptedResponseAlg",
             "Input.UserInfoEncryptedResponseEnc");
 
+        ValidateEncryptionPairOrError(
+            Input.AuthorizationEncryptedResponseAlg,
+            Input.AuthorizationEncryptedResponseEnc,
+            "Input.AuthorizationEncryptedResponseAlg",
+            "Input.AuthorizationEncryptedResponseEnc");
+
         if (!ModelState.IsValid)
         {
             await LoadRealmsAsync();
@@ -1098,7 +1120,8 @@ public class EditModel(
 
         // If enabling encryption, require some form of JWKS
         if ((Input.IdTokenEncryptedResponseAlg is not null || Input.IdTokenEncryptedResponseEnc is not null
-            || Input.UserInfoEncryptedResponseAlg is not null || Input.UserInfoEncryptedResponseEnc is not null)
+            || Input.UserInfoEncryptedResponseAlg is not null || Input.UserInfoEncryptedResponseEnc is not null
+            || Input.AuthorizationEncryptedResponseAlg is not null || Input.AuthorizationEncryptedResponseEnc is not null)
             && string.IsNullOrWhiteSpace(Input.PublicJwksJson)
             && string.IsNullOrWhiteSpace(Input.PublicJwksUri))
         {
@@ -1208,6 +1231,9 @@ public class EditModel(
         client.UserInfoSignedResponseAlg = Input.UserInfoSignedResponseAlg;
         client.UserInfoEncryptedResponseAlg = Input.UserInfoEncryptedResponseAlg;
         client.UserInfoEncryptedResponseEnc = Input.UserInfoEncryptedResponseEnc;
+        client.AuthorizationSignedResponseAlg = Input.AuthorizationSignedResponseAlg;
+        client.AuthorizationEncryptedResponseAlg = Input.AuthorizationEncryptedResponseAlg;
+        client.AuthorizationEncryptedResponseEnc = Input.AuthorizationEncryptedResponseEnc;
 
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
@@ -2110,6 +2136,18 @@ public class EditModel(
         [Display(Name = "UserInfo encrypted response enc")]
         [StringLength(50)]
         public string? UserInfoEncryptedResponseEnc { get; set; }
+
+        [Display(Name = "Authorization signed response alg")]
+        [StringLength(50)]
+        public string? AuthorizationSignedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response alg")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response enc")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseEnc { get; set; }
         [Display(Name = "Test signed JWT")]
         public string? TestJwt { get; set; }
         [Display(Name = "Private JWK or JWKS (one-time)")]

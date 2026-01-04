@@ -83,6 +83,9 @@ public class AddModel(
             UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg,
             UserInfoEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseAlg) ? null : Input.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc) ? null : Input.UserInfoEncryptedResponseEnc,
+                AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg,
+                AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg,
+                AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc,
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
 #pragma warning restore CS0618
@@ -127,6 +130,7 @@ public class AddModel(
     private void ValidateJwtResponseCrypto()
     {
         ValidateUserInfoSignedResponseAlg();
+        ValidateAuthorizationSignedResponseAlg();
 
         ValidateEncryptionPair(
             algKey: "Input.IdTokenEncryptedResponseAlg",
@@ -140,10 +144,18 @@ public class AddModel(
             alg: Input.UserInfoEncryptedResponseAlg,
             enc: Input.UserInfoEncryptedResponseEnc);
 
+        ValidateEncryptionPair(
+            algKey: "Input.AuthorizationEncryptedResponseAlg",
+            encKey: "Input.AuthorizationEncryptedResponseEnc",
+            alg: Input.AuthorizationEncryptedResponseAlg,
+            enc: Input.AuthorizationEncryptedResponseEnc);
+
         var encryptionEnabled = !string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseAlg)
             || !string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseEnc)
             || !string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseAlg)
-            || !string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc);
+            || !string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc)
+            || !string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg)
+            || !string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc);
 
         if (encryptionEnabled && string.IsNullOrWhiteSpace(Input.PublicJwksJson) && string.IsNullOrWhiteSpace(Input.PublicJwksUri))
         {
@@ -168,6 +180,25 @@ public class AddModel(
         if (!string.Equals(Input.UserInfoSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
         {
             ModelState.AddModelError("Input.UserInfoSignedResponseAlg", $"Must match tenant active signing alg: '{ActiveSigningAlg}'.");
+        }
+    }
+
+    private void ValidateAuthorizationSignedResponseAlg()
+    {
+        if (string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg))
+        {
+            return;
+        }
+
+        if (string.Equals(Input.AuthorizationSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError("Input.AuthorizationSignedResponseAlg", "'none' is not supported.");
+            return;
+        }
+
+        if (!string.Equals(Input.AuthorizationSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError("Input.AuthorizationSignedResponseAlg", $"Must match tenant active signing alg: '{ActiveSigningAlg}'.");
         }
     }
 
@@ -259,5 +290,17 @@ public class AddModel(
         [Display(Name = "UserInfo encrypted response enc")]
         [StringLength(50)]
         public string? UserInfoEncryptedResponseEnc { get; set; }
+
+        [Display(Name = "Authorization signed response alg")]
+        [StringLength(50)]
+        public string? AuthorizationSignedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response alg")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response enc")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseEnc { get; set; }
     }
 }
