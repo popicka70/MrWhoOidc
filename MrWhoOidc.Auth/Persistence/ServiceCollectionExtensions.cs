@@ -24,7 +24,9 @@ public static class PersistenceServiceCollectionExtensions
         }
         if (string.Equals(useInMemory, "true", StringComparison.OrdinalIgnoreCase))
         {
-            services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase("authdb-test"), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+            // Use a unique database name per test instance to avoid conflicts when tests run in parallel
+            var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-{Guid.NewGuid():N}";
+            services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
             services.AddDbContextFactory<AuthDbContext>();
             return services;
         }
@@ -42,7 +44,8 @@ public static class PersistenceServiceCollectionExtensions
             if (string.Equals(useInMemory, "true", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(allowFallback, "true", StringComparison.OrdinalIgnoreCase))
             {
-                services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase("authdb-test-missing"), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+                var dbName = configuration["Testing:InMemoryDbName"] ?? $"authdb-test-missing-{Guid.NewGuid():N}";
+                services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
                 services.AddDbContextFactory<AuthDbContext>();
                 return services;
             }

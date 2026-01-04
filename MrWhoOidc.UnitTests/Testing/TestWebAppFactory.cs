@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using Microsoft.EntityFrameworkCore;
 
 namespace MrWhoOidc.UnitTests.Testing;
 
@@ -20,7 +21,11 @@ namespace MrWhoOidc.UnitTests.Testing;
 internal static class TestWebAppFactory
 {
     internal static WebApplicationFactory<Program> CreateInMemory()
-        => new WebApplicationFactory<Program>()
+    {
+        // Use a unique database name per factory instance to avoid conflicts when tests run in parallel
+        var uniqueDbName = $"TestDb_{Guid.NewGuid():N}";
+        
+        return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b =>
             {
                 b.UseEnvironment("Development");
@@ -32,6 +37,8 @@ internal static class TestWebAppFactory
                 b.UseSetting("Testing:ValidateAuthCore", "true");
                 b.UseSetting("Testing:DiagnoseAuthCore", "false");
                 b.UseSetting("Testing:DisableStaticAssets", "true");
+                // Store unique DB name for later use
+                b.UseSetting("Testing:InMemoryDbName", uniqueDbName);
                 // Multi-tenancy: single-tenant mode for tests
                 b.UseSetting("MultiTenancy:Enabled", "false");
                 b.UseSetting("MultiTenancy:DefaultTenantSlug", "default");
@@ -49,6 +56,7 @@ internal static class TestWebAppFactory
                         ["Testing:ValidateAuthCore"] = "true",
                         ["Testing:DiagnoseAuthCore"] = "false",
                         ["Testing:DisableStaticAssets"] = "true",
+                        ["Testing:InMemoryDbName"] = uniqueDbName,
                         ["MultiTenancy:Enabled"] = "false",
                         ["MultiTenancy:DefaultTenantSlug"] = "default",
                         ["ConnectionStrings:authdb"] = "Host=localhost;Database=fake;Username=fake;Password=fake"
@@ -75,6 +83,7 @@ internal static class TestWebAppFactory
                     });
                 });
             });
+    }
 
     internal static WebApplicationFactory<Program> CreateRealDb()
         => new WebApplicationFactory<Program>()
