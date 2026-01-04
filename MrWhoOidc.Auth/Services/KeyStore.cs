@@ -14,8 +14,10 @@ namespace MrWhoOidc.Auth.Services;
 public interface IKeyStore
 {
     Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(CancellationToken ct = default);
+    Task<JsonWebKey> GetActiveEncryptionKeyAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(bool includeEncryptionKeys = false, CancellationToken ct = default);
     Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
+    Task InvalidateActiveEncryptionKeyCacheAsync(Guid tenantId, CancellationToken ct = default);
     Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default);
 }
 
@@ -38,7 +40,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
             async cancel =>
             {
                 var current = await db.SigningKeys
-                    .Where(k => k.TenantId == tenantId)
+                    .Where(k => k.TenantId == tenantId && k.Use == "sig")
                     .OrderByDescending(k => k.CreatedAt)
                     .FirstOrDefaultAsync(cancel)
                     .ConfigureAwait(false);
@@ -50,6 +52,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     db.SigningKeys.Add(new Persistence.SigningKey
                     {
                         Kid = kid,
+                        Use = "sig",
                         Alg = alg,
                         JwkJson = jwkJson,
                         TenantId = tenantId
@@ -67,23 +70,81 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
         ).ConfigureAwait(false);
     }
 
+    public async Task<JsonWebKey> GetActiveEncryptionKeyAsync(CancellationToken ct = default)
+    {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+
+        var cacheKey = $"enc:key:active:{tenantId}";
+        var options = new HybridCacheEntryOptions
+        {
+            Expiration = TimeSpan.FromMinutes(30),
+            LocalCacheExpiration = TimeSpan.FromMinutes(10)
+        };
+        var tags = new[] { "signing-keys", $"tenant:{tenantId}" };
+
+        return await cache.GetOrCreateAsync(
+            cacheKey,
+            async cancel =>
+            {
+                var current = await db.SigningKeys
+                    .Where(k => k.TenantId == tenantId && k.Use == "enc")
+                    .OrderByDescending(k => k.CreatedAt)
+                    .FirstOrDefaultAsync(cancel)
+                    .ConfigureAwait(false);
+
+                if (current is null)
+                {
+                    var (jwkJson, kid, alg) = GeneratePrivateEncryptionJwkJson();
+
+                    db.SigningKeys.Add(new Persistence.SigningKey
+                    {
+                        Kid = kid,
+                        Use = "enc",
+                        Alg = alg,
+                        JwkJson = jwkJson,
+                        TenantId = tenantId
+                    });
+                    await db.SaveChangesAsync(cancel).ConfigureAwait(false);
+
+                    // Invalidate public JWKS cache so the new enc key is published immediately
+                    await InvalidatePublicJwksCacheAsync(tenantId, cancel).ConfigureAwait(false);
+
+                    return new JsonWebKey(jwkJson);
+                }
+
+                return new JsonWebKey(current.JwkJson);
+            },
+            options,
+            tags,
+            ct
+        ).ConfigureAwait(false);
+    }
+
     public async Task InvalidateActiveSigningKeyCacheAsync(Guid tenantId, CancellationToken ct = default)
     {
         var cacheKey = $"signing:key:active:{tenantId}";
         await cache.RemoveAsync(cacheKey, ct).ConfigureAwait(false);
     }
 
-    public async Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task InvalidateActiveEncryptionKeyCacheAsync(Guid tenantId, CancellationToken ct = default)
     {
-        var cacheKey = $"signing:jwks:public:{tenantId}";
+        var cacheKey = $"enc:key:active:{tenantId}";
         await cache.RemoveAsync(cacheKey, ct).ConfigureAwait(false);
     }
 
-    public async Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(CancellationToken ct = default)
+    public async Task InvalidatePublicJwksCacheAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var cacheKeySigOnly = $"signing:jwks:public:{tenantId}:enc:false";
+        var cacheKeyWithEnc = $"signing:jwks:public:{tenantId}:enc:true";
+        await cache.RemoveAsync(cacheKeySigOnly, ct).ConfigureAwait(false);
+        await cache.RemoveAsync(cacheKeyWithEnc, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(bool includeEncryptionKeys = false, CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
         
-        var cacheKey = $"signing:jwks:public:{tenantId}";
+        var cacheKey = $"signing:jwks:public:{tenantId}:enc:{includeEncryptionKeys.ToString().ToLowerInvariant()}";
         var options = new HybridCacheEntryOptions
         {
             Expiration = TimeSpan.FromMinutes(30),         // L2 (Redis)
@@ -95,9 +156,15 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
             cacheKey,
             async cancel =>
             {
+                if (includeEncryptionKeys)
+                {
+                    // Ensure an enc key exists so JWKS remains consistent when encryption is enabled.
+                    _ = await GetActiveEncryptionKeyAsync(cancel).ConfigureAwait(false);
+                }
+
                 // Publish active and non-retired previous keys; hide retired keys
                 var keys = await db.SigningKeys
-                    .Where(k => k.RetiredAt == null && k.TenantId == tenantId)
+                    .Where(k => k.RetiredAt == null && k.TenantId == tenantId && (k.Use == "sig" || (includeEncryptionKeys && k.Use == "enc")))
                     .OrderByDescending(k => k.CreatedAt)
                     .ToListAsync(cancel)
                     .ConfigureAwait(false);
@@ -139,7 +206,15 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
 
         // Default to RSA for RS*/PS*
         using var rsa = RSA.Create(2048);
-        var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true);
+        var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: alg.ToUpperInvariant(), includePrivate: true, use: "sig");
+        return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
+    }
+
+    private static (string jwkJson, string kid, string alg) GeneratePrivateEncryptionJwkJson()
+    {
+        var kid = Guid.NewGuid().ToString("N");
+        using var rsa = RSA.Create(2048);
+        var rsaJwk = RsaJwk.FromRSA(rsa, kid, alg: "RSA-OAEP", includePrivate: true, use: "enc");
         return (rsaJwk.ToJson(includePrivate: true), rsaJwk.Kid, rsaJwk.Alg);
     }
 

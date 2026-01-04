@@ -232,6 +232,7 @@ public sealed class DiscoveryHandler(
             ["request_parameter_supported"] = true,
             ["request_uri_parameter_supported"] = true,
             ["request_object_signing_alg_values_supported"] = requestObjectAlgorithms,
+            // Request object encryption (JAR encryption) is opt-in; keep discovery truthful.
             // JARM support
             ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "fragment.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
@@ -242,6 +243,12 @@ public sealed class DiscoveryHandler(
             ["dpop_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256, SecurityConstants.JwtAlgorithms.ES256 },
             ["dpop_bound_access_tokens"] = true
         };
+
+        if (authOptions.Value.EnableRequestObjectEncryption)
+        {
+            body["request_object_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };
+            body["request_object_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" };
+        }
         
         if (advertiseAuthorizationResponseEncryption)
         {

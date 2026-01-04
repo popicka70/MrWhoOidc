@@ -321,9 +321,9 @@ internal static class EndpointMappingExtensions
     }
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
-    private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, CancellationToken ct)
+    private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, [FromServices] IOptions<AuthOptions> authOptions, CancellationToken ct)
     {
-        var jwks = await keyStore.GetPublicJwksAsync(ct);
+        var jwks = await keyStore.GetPublicJwksAsync(includeEncryptionKeys: authOptions.Value.EnableRequestObjectEncryption, ct: ct);
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(new { keys = jwks });
     }

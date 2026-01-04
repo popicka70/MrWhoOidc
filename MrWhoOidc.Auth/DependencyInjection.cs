@@ -186,6 +186,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IPushedAuthorizationRequestStore, EfPushedAuthorizationRequestStore>();
 
         // Request object (JAR) validator
+        services.AddScoped<IRequestObjectDecryptor, RequestObjectDecryptor>();
         services.AddScoped<IRequestObjectValidator, RequestObjectValidator>();
         services.AddScoped<IAuthorizeRequestResolver, AuthorizeRequestResolver>();
         // JAR replay cache (in-memory default). TODO: replace with distributed (e.g., Redis) when configured.

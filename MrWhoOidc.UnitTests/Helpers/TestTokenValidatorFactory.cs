@@ -14,7 +14,7 @@ public static class TestTokenValidatorFactory
         var mockProvider = new Mock<ICachedKeyProvider>();
         mockProvider.Setup(p => p.GetPublicJwksAsync(It.IsAny<CancellationToken>()))
             .Returns<CancellationToken>(async (ct) => {
-                var jwks = await keyStore.GetPublicJwksAsync(ct).ConfigureAwait(false);
+                    var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
                 return jwks.ToList().AsReadOnly();
             });
         return new TokenValidator(mockProvider.Object);

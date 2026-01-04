@@ -8,12 +8,22 @@ using MrWhoOidc.Auth.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.UnitTests.Helpers;
+using System.Text.Json;
+using MrWhoOidc.Auth.Crypto;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
 public sealed class RequestObjectValidatorTests
 {
+    private sealed class NoopRequestObjectDecryptor : IRequestObjectDecryptor
+    {
+        public Task<string?> TryDecryptToInnerJwtAsync(string requestObject, CancellationToken ct = default) => Task.FromResult<string?>(null);
+    }
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -31,7 +41,7 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new ClientEntity { ClientId = "c1" });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var (jwt, kid) = CreateSignedRequest("c1", "https://as/authorize", out var jwk);
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsFalse(result.IsValid);
@@ -73,7 +83,7 @@ public sealed class RequestObjectValidatorTests
         await db.SaveChangesAsync();
 
         var cache = new InMemoryJarReplayCache();
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), cache);
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), cache, new NoopRequestObjectDecryptor());
         // Sanity: JWT contains the expected jti
         var parsed = new JwtSecurityTokenHandler().ReadJwtToken(jwt);
         Assert.AreEqual(jti, parsed.Claims.First(c => c.Type == JwtRegisteredClaimNames.Jti).Value);
@@ -122,7 +132,7 @@ public sealed class RequestObjectValidatorTests
         );
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, aud);
         // Within 120s skew -> should still be accepted
         Assert.IsTrue(result.IsValid);
@@ -164,7 +174,7 @@ public sealed class RequestObjectValidatorTests
         );
         var jwt = new JwtSecurityTokenHandler().WriteToken(token);
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, opts, new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, aud);
         Assert.IsFalse(result.IsValid);
         Assert.AreEqual("invalid_request_object", result.Error);
@@ -178,11 +188,93 @@ public sealed class RequestObjectValidatorTests
         db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksJson = jwkJson });
         await db.SaveChangesAsync();
 
-        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache());
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), new NoopRequestObjectDecryptor());
         var result = await validator.ValidateAsync(jwt, "https://as/authorize");
         Assert.IsTrue(result.IsValid);
         Assert.AreEqual("c1", result.ClientId);
         Assert.IsNotNull(result.Request);
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Succeeds_WithEncryptedNestedRequestObject()
+    {
+        using var db = CreateDb();
+
+        // Tenant context required for KeyStore-backed decryption
+        var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
+        var tenantId = tenantAccessor.CurrentTenant!.TenantId;
+
+        db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "t1",
+            Name = "Tenant 1",
+            IssuerUri = "https://as",
+            Status = TenantStatus.Active,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+        var decryptor = new RequestObjectDecryptor(keyStore, NullLogger<RequestObjectDecryptor>.Instance);
+
+        // Create and persist an OP encryption key (enc) and extract its public key for EncryptingCredentials.
+        await keyStore.GetActiveEncryptionKeyAsync();
+        var encRow = await db.SigningKeys
+            .Where(k => k.Use == "enc")
+            .OrderByDescending(k => k.CreatedAt)
+            .FirstAsync();
+        var encRsaJwk = JsonSerializer.Deserialize<RsaJwk>(encRow.JwkJson)!;
+        using var encRsa = encRsaJwk.ToRSA();
+        var encPublic = new RsaSecurityKey(encRsa) { KeyId = encRsaJwk.Kid };
+        var encryptingCredentials = new EncryptingCredentials(encPublic, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+
+        // Client signing key (RSA) + public JWKS for validator.
+        using var clientRsa = RSA.Create(2048);
+        var clientKid = Guid.NewGuid().ToString("N");
+        var clientJwk = RsaJwk.FromRSA(clientRsa, clientKid, alg: "RS256", includePrivate: true, use: "sig");
+        var clientJwkJson = clientJwk.ToJson(includePrivate: true);
+        var clientPublicJwkJson = clientJwk.ToJson(includePrivate: false);
+
+        var clientId = "c1";
+        db.Clients.Add(new ClientEntity { ClientId = clientId, PublicJwksJson = clientPublicJwkJson });
+        await db.SaveChangesAsync();
+
+        var signingKey = new JsonWebKey(clientJwkJson);
+        var signingCreds = new SigningCredentials(signingKey, SecurityAlgorithms.RsaSha256);
+
+        var aud = "https://as/authorize";
+        var now = DateTime.UtcNow;
+        var handler = new JwtSecurityTokenHandler();
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = clientId,
+            Audience = aud,
+            NotBefore = now.AddMinutes(-1),
+            Expires = now.AddMinutes(5),
+            Claims = new Dictionary<string, object>
+            {
+                ["client_id"] = clientId,
+                ["response_type"] = "code",
+                ["redirect_uri"] = "https://cb",
+                ["scope"] = "openid"
+            },
+            SigningCredentials = signingCreds,
+            EncryptingCredentials = encryptingCredentials,
+            TokenType = "JWT"
+        };
+
+        var encryptedRequestObject = handler.CreateEncodedJwt(descriptor);
+        Assert.AreEqual(5, encryptedRequestObject.Split('.').Length, "Encrypted request object should be JWE compact");
+
+        var validator = new RequestObjectValidator(db, new ConfigurationBuilder().Build(), NullLogger<RequestObjectValidator>.Instance, Options(), new InMemoryJarReplayCache(), decryptor);
+        var result = await validator.ValidateAsync(encryptedRequestObject, aud);
+
+        Assert.IsTrue(result.IsValid);
+        Assert.AreEqual(clientId, result.ClientId);
+        Assert.IsNotNull(result.Request);
+        Assert.AreEqual("code", result.Request!.response_type);
+        Assert.AreEqual("https://cb", result.Request.redirect_uri);
     }
 
     private static (string jwt, string kid, string jwkJson) CreateSignedRequestWithJwk(string clientId, string aud)

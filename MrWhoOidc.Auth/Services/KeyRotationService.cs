@@ -30,7 +30,7 @@ internal sealed class KeyRotationService(
 
         // Find the current active key
         var current = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId)
+            .Where(k => k.TenantId == tenantId && k.Use == "sig")
             .OrderByDescending(k => k.CreatedAt)
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
@@ -73,6 +73,7 @@ internal sealed class KeyRotationService(
             db.SigningKeys.Add(new SigningKey
             {
                 Kid = kid,
+                Use = "sig",
                 Alg = storedAlg,
                 JwkJson = jwkJson,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -91,7 +92,7 @@ internal sealed class KeyRotationService(
         // Retire keys older than RotationInterval + Overlap so they are no longer served
         var retireBefore = DateTimeOffset.UtcNow - (opts.RotationInterval + opts.Overlap);
         var oldKeys = await db.SigningKeys
-            .Where(k => k.TenantId == tenantId && k.RetiredAt == null && k.CreatedAt < retireBefore)
+            .Where(k => k.TenantId == tenantId && k.Use == "sig" && k.RetiredAt == null && k.CreatedAt < retireBefore)
             .ToListAsync(ct)
             .ConfigureAwait(false);
         if (oldKeys.Count > 0)

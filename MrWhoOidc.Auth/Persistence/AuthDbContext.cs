@@ -656,7 +656,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         modelBuilder.Entity<SigningKey>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.Kid).IsRequired();
+            b.Property(x => x.Kid).IsRequired(); 
+            // JWK "use". Typically: "sig" (signing) or "enc" (encryption)
+            b.Property(x => x.Use).IsRequired().HasMaxLength(10).HasDefaultValue("sig");
             b.HasIndex(x => x.Kid).IsUnique();
             // Multi-tenancy FK (nullable for backward compat)
             b.HasOne<Tenant>()
@@ -1527,6 +1529,8 @@ public class SigningKey
     public Guid? TenantId { get; set; }
 
     public string Kid { get; set; } = string.Empty;
+    // JWK "use". Typically: "sig" (signing) or "enc" (encryption)
+    public string Use { get; set; } = "sig";
     public string Alg { get; set; } = "RS256";
     public string JwkJson { get; set; } = string.Empty; // private JWK material
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

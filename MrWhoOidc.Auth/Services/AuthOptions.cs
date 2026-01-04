@@ -54,6 +54,10 @@ public sealed class AuthOptions
     // Replay protection TTL (seconds) used when 'exp' is missing; otherwise, expiry uses 'exp' (+skew)
     public int RequestObjectReplayTtlSeconds { get; set; } = 300;
 
+    // Enable encrypted request objects (JAR encryption): OP will publish an "enc" key in JWKS and accept JWE request objects.
+    // Minimal support: RSA-OAEP + A256CBC-HS512.
+    public bool EnableRequestObjectEncryption { get; set; } = false;
+
     // PAR per-client pending entries cap (in-memory enforcement)
     public int ParClientPendingLimit { get; set; } = 50;
 

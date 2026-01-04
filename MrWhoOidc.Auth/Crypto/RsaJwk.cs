@@ -34,13 +34,14 @@ public sealed class RsaJwk
     [JsonPropertyName("dq")] public string? DQ { get; init; }
     [JsonPropertyName("qi")] public string? QI { get; init; }
 
-    public static RsaJwk FromRSA(RSA rsa, string kid, string alg = "RS256", bool includePrivate = true)
+    public static RsaJwk FromRSA(RSA rsa, string kid, string alg = "RS256", bool includePrivate = true, string use = "sig")
     {
         var p = rsa.ExportParameters(includePrivate);
         return new RsaJwk
         {
             Kid = kid,
             Alg = alg,
+            Use = use,
             N = Base64Url.Encode(p.Modulus!),
             E = Base64Url.Encode(p.Exponent!),
             D = includePrivate ? Base64Url.Encode(p.D!) : null,

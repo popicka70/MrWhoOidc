@@ -328,14 +328,14 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Implementation:**
 ```csharp
 ["request_object_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
-["request_object_encryption_enc_values_supported"] = new[] { "A256GCM" }
+["request_object_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" }
 ```
 
 **Tasks:**
-- [ ] Generate and publish OP encryption key in JWKS
-- [ ] Decrypt incoming JAR request objects
-- [ ] Add discovery metadata
-- [ ] Add tests
+- [x] Generate and publish OP encryption key in JWKS (opt-in)
+- [x] Decrypt incoming JAR request objects (expects nested signed JWT)
+- [x] Add discovery metadata (truthful; gated by config)
+- [x] Add tests
 
 ---
 
