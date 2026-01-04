@@ -311,6 +311,39 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("sectorIdentifierUri")]
     public string? SectorIdentifierUri { get; init; }
 
+    // --- OIDC Response Crypto (optional) ---
+
+    /// <summary>
+    /// JWE alg for encrypted ID tokens (e.g., "RSA-OAEP").
+    /// </summary>
+    [JsonPropertyName("idTokenEncryptedResponseAlg")]
+    public string? IdTokenEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted ID tokens (e.g., "A256CBC-HS512").
+    /// </summary>
+    [JsonPropertyName("idTokenEncryptedResponseEnc")]
+    public string? IdTokenEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// JWS alg for signed UserInfo responses (application/jwt).
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("userInfoSignedResponseAlg")]
+    public string? UserInfoSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE alg for encrypted UserInfo responses.
+    /// </summary>
+    [JsonPropertyName("userInfoEncryptedResponseAlg")]
+    public string? UserInfoEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted UserInfo responses.
+    /// </summary>
+    [JsonPropertyName("userInfoEncryptedResponseEnc")]
+    public string? UserInfoEncryptedResponseEnc { get; init; }
+
     // --- Login Methods ---
 
     /// <summary>

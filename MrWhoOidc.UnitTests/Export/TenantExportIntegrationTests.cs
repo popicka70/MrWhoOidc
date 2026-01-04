@@ -125,7 +125,12 @@ public class TenantExportIntegrationTests
             AllowedScopes = ["openid", "profile"],
             RequirePkce = true,
             AllowLocalLogin = true,
-            AllowExternalIdp = true
+            AllowExternalIdp = true,
+            IdTokenEncryptedResponseAlg = "RSA-OAEP",
+            IdTokenEncryptedResponseEnc = "A256CBC-HS512",
+            UserInfoSignedResponseAlg = "RS256",
+            UserInfoEncryptedResponseAlg = "RSA-OAEP",
+            UserInfoEncryptedResponseEnc = "A256CBC-HS512"
         };
 
         // Act
@@ -138,6 +143,11 @@ public class TenantExportIntegrationTests
         Assert.AreEqual("admin", deserialized.Realm);
         Assert.AreEqual(true, deserialized.RequirePkce);
         Assert.AreEqual(2, deserialized.AllowedScopes.Count);
+        Assert.AreEqual("RSA-OAEP", deserialized.IdTokenEncryptedResponseAlg);
+        Assert.AreEqual("A256CBC-HS512", deserialized.IdTokenEncryptedResponseEnc);
+        Assert.AreEqual("RS256", deserialized.UserInfoSignedResponseAlg);
+        Assert.AreEqual("RSA-OAEP", deserialized.UserInfoEncryptedResponseAlg);
+        Assert.AreEqual("A256CBC-HS512", deserialized.UserInfoEncryptedResponseEnc);
     }
 
     [TestMethod]

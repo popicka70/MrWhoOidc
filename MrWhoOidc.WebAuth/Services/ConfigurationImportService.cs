@@ -1285,6 +1285,11 @@ public sealed class ConfigurationImportService(
             PublicJwksUri = clientDef.PublicJwksUri,
             SubjectType = string.IsNullOrWhiteSpace(clientDef.SubjectType) ? OidcConstants.SubjectTypes.Public : clientDef.SubjectType!,
             SectorIdentifierUri = clientDef.SectorIdentifierUri,
+            IdTokenEncryptedResponseAlg = clientDef.IdTokenEncryptedResponseAlg,
+            IdTokenEncryptedResponseEnc = clientDef.IdTokenEncryptedResponseEnc,
+            UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg,
+            UserInfoEncryptedResponseAlg = clientDef.UserInfoEncryptedResponseAlg,
+            UserInfoEncryptedResponseEnc = clientDef.UserInfoEncryptedResponseEnc,
             // Redirect URIs stored as JSON
             AllowedLoginRedirectUrisJson = clientDef.AllowedLoginRedirectUris?.Count > 0
                 ? JsonSerializer.Serialize(clientDef.AllowedLoginRedirectUris)
@@ -1370,6 +1375,12 @@ public sealed class ConfigurationImportService(
         if (!string.IsNullOrWhiteSpace(clientDef.SubjectType))
             client.SubjectType = clientDef.SubjectType;
         client.SectorIdentifierUri = clientDef.SectorIdentifierUri;
+
+        client.IdTokenEncryptedResponseAlg = clientDef.IdTokenEncryptedResponseAlg;
+        client.IdTokenEncryptedResponseEnc = clientDef.IdTokenEncryptedResponseEnc;
+        client.UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg;
+        client.UserInfoEncryptedResponseAlg = clientDef.UserInfoEncryptedResponseAlg;
+        client.UserInfoEncryptedResponseEnc = clientDef.UserInfoEncryptedResponseEnc;
 
         // Update redirect URIs (JSON fields)
         if (clientDef.AllowedLoginRedirectUris?.Count > 0)
