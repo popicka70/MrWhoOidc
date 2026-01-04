@@ -1407,9 +1407,9 @@ public class EditModel(
             return;
         }
 
-        if (!string.Equals(alg, SecurityAlgorithms.RsaOaep, StringComparison.Ordinal))
+        if (!string.Equals(alg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal))
         {
-            ModelState.AddModelError(algKey, $"Unsupported alg. Supported: '{SecurityAlgorithms.RsaOaep}'.");
+            ModelState.AddModelError(algKey, $"Unsupported alg. Supported: '{SecurityAlgorithms.RsaOAEP}'.");
         }
         if (!string.Equals(enc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
         {
@@ -1421,8 +1421,9 @@ public class EditModel(
     {
         var alg = await db.SigningKeys
             .AsNoTracking()
-            .Where(k => k.TenantId == tenantId && k.IsActive)
-            .Select(k => k.Algorithm)
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .Select(k => k.Alg)
             .FirstOrDefaultAsync();
 
         return string.IsNullOrWhiteSpace(alg) ? SecurityConstants.JwtAlgorithms.RS256 : alg;
