@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,7 @@ using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.UnitTests.Helpers;
+using MrWhoOidc.WebAuth.Services;
 
 namespace MrWhoOidc.UnitTests.Services.Token;
 
@@ -985,6 +987,129 @@ public sealed class AuthorizationCodeExchangerTests
 
         // Ensure we never emit `acr` when the non-essential constraint cannot be satisfied.
         Assert.IsFalse(capturedClaimTypes.Any(set => set.Contains(OidcConstants.Claims.Acr)));
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Succeeds_When_Acr_DerivedFromAmr_EmitsAcrInIdToken()
+    {
+        using var db = CreateDb();
+
+        List<Claim>? capturedIdTokenClaims = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((issuer, aud, claims, exp, nonce, atHash, authTime, tokenType, _) =>
+            {
+                // ID token call path uses tokenType = null.
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedIdTokenClaims = claims.ToList();
+                }
+            })
+            .ReturnsAsync((string issuer, string aud, IEnumerable<Claim> claims, DateTimeOffset exp, string? nonce, string? atHash, DateTimeOffset? authTime, string? tokenType, CancellationToken _) =>
+                string.IsNullOrWhiteSpace(tokenType) ? "jwt-id" : "jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-acr-derived";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId,
+            ClaimsJson = null
+        });
+        await db.SaveChangesAsync();
+
+        // Simulate a local sign-in where only AMR is present.
+        var http = new DefaultHttpContext();
+        http.User = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new Claim(OidcConstants.Claims.Amr, "pwd")
+        ], "test"));
+
+        var metadataSvc = new AuthorizationMetadataService(metaStore, db);
+        await metadataSvc.PopulateMetadataAsync(http, code, CancellationToken.None);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+
+        Assert.IsNotNull(capturedIdTokenClaims);
+        var acr = capturedIdTokenClaims!.FirstOrDefault(c => c.Type == OidcConstants.Claims.Acr)?.Value;
+        Assert.AreEqual(OidcConstants.AcrValues.Password, acr);
     }
 
     [TestMethod]

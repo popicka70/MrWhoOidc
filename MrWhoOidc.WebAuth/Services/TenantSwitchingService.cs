@@ -332,6 +332,12 @@ public class TenantSwitchingService(
             claims.Add(new(OidcConstants.Claims.Idp, idpClaim));
         }
 
+        var acrClaim = httpContext.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
+        if (!string.IsNullOrEmpty(acrClaim))
+        {
+            claims.Add(new(OidcConstants.Claims.Acr, acrClaim));
+        }
+
         var amrClaims = httpContext.User.FindAll(OidcConstants.Claims.Amr).ToList();
         if (amrClaims.Count > 0)
         {

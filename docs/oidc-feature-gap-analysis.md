@@ -62,19 +62,19 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Effort:** 2-4 hours  
 **Spec:** OIDC Core 1.0 §2, §3.1.2.1
 
-**Current State:** Implemented: `acr_values_supported` is advertised when configured; `/authorize` enforces `acr_values` best-effort.
+**Current State:** Implemented: `acr_values_supported` is advertised when configured; `/authorize` enforces `acr_values` best-effort; local sign-in emits `acr` based on the authentication method.
 
 **Implementation:**
 ```csharp
 // In DiscoveryHandler.cs
-["acr_values_supported"] = new[] { "urn:mrwho:acr:bronze", "urn:mrwho:acr:silver", "urn:mrwho:acr:gold" }
+["acr_values_supported"] = new[] { "urn:mrwho:acr:password", "urn:mrwho:acr:mfa", "urn:mrwho:acr:passkey" }
 ```
 
 **Tasks:**
-- [ ] Define ACR value taxonomy (bronze/silver/gold or aal1/aal2/aal3)
-- [ ] Map ACR values to authentication methods
+- [x] Define ACR value taxonomy
+- [x] Map ACR values to authentication methods
 - [x] Add `acr_values_supported` to discovery
-- [ ] Return actual `acr` claim in ID token based on auth method used
+- [x] Return actual `acr` claim in ID token based on auth method used
 - [x] Add tests for ACR enforcement
 
 ---

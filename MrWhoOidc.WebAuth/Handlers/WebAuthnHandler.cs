@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -258,9 +259,10 @@ public sealed class WebAuthnHandler(
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Name, user.Username),
-                new("auth_time", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-                new("amr", "webauthn"),
-                new("idp", "local")
+                new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+                new(OidcConstants.Claims.Amr, "webauthn"),
+                new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Passkey),
+                new(OidcConstants.Claims.Idp, "local")
             };
 
             var finalIdentity = new ClaimsIdentity(finalClaims, CookieAuthenticationDefaults.AuthenticationScheme);

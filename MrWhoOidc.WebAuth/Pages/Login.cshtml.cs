@@ -382,6 +382,7 @@ public class LoginModel(
             new(ClaimTypes.Name, user.Username),
             new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new(OidcConstants.Claims.Amr, "pwd"),
+            new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Password),
             new(OidcConstants.Claims.Idp, "local")
         };
 

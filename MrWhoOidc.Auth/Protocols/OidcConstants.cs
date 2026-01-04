@@ -103,6 +103,16 @@ public static class OidcConstants
     }
 
     /// <summary>
+    /// ACR (Authentication Context Class Reference) values used by this server.
+    /// </summary>
+    public static class AcrValues
+    {
+        public const string Password = "urn:mrwho:acr:password";
+        public const string Mfa = "urn:mrwho:acr:mfa";
+        public const string Passkey = "urn:mrwho:acr:passkey";
+    }
+
+    /// <summary>
     /// Standard OpenID Connect parameter names.
     /// </summary>
     public static class Parameters

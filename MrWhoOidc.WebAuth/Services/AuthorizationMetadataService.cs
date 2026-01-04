@@ -36,6 +36,15 @@ public sealed class AuthorizationMetadataService(IAuthorizationCodeMetadataStore
         var acr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
         var amrValues = http.User.Claims.Where(c => c.Type == OidcConstants.Claims.Amr).Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
         var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
+
+        if (string.IsNullOrWhiteSpace(acr) && amrValues.Length > 0)
+        {
+            // Best-effort mapping for local sign-ins.
+            // If an upstream IdP provided an explicit acr claim, we keep it.
+            if (amrValues.Contains("mfa", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Mfa;
+            else if (amrValues.Contains("webauthn", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Passkey;
+            else if (amrValues.Contains("pwd", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Password;
+        }
         meta.SetUpstream(code, idp, acr, amr);
 
         // Also capture mapped claims with ext_map_* prefix

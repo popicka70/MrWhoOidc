@@ -64,6 +64,12 @@ public class LoginTotpModel(
             return Page();
         }
 
+        var preauthAmrValues = preauth.Principal?.FindAll(OidcConstants.Claims.Amr)
+            .Select(c => c.Value)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
         await HttpContext.SignOutAsync("preauth");
 
         var claims = new List<Claim>
@@ -71,9 +77,16 @@ public class LoginTotpModel(
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
             new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-            new(OidcConstants.Claims.Amr, "mfa"),
+            new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Mfa),
             new(OidcConstants.Claims.Idp, "local")
         };
+
+        foreach (var amr in preauthAmrValues)
+        {
+            claims.Add(new(OidcConstants.Claims.Amr, amr));
+        }
+        claims.Add(new(OidcConstants.Claims.Amr, "mfa"));
+
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 
