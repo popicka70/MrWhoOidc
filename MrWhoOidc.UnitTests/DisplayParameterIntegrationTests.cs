@@ -10,11 +10,19 @@ namespace MrWhoOidc.UnitTests;
 [DoNotParallelize]
 public sealed class DisplayParameterIntegrationTests
 {
+    // Shared fixture eliminates per-test WebApplicationFactory creation overhead
+    private static SharedWebAppFixture _fixture = null!;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext _) => _fixture = new SharedWebAppFixture();
+
+    [ClassCleanup]
+    public static void ClassCleanup() => _fixture?.Dispose();
+
     [TestMethod]
     public async Task Login_When_DisplayPopup_Enables_Popup_Layout_Otherwise_Default()
     {
-        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        using var client = _fixture.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
             BaseAddress = new Uri("https://localhost")

@@ -7,13 +7,22 @@ using MrWhoOidc.WebAuth;
 namespace MrWhoOidc.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public sealed class CacheHeadersIntegrationTests
 {
+    // Shared fixture eliminates per-test WebApplicationFactory creation overhead
+    private static SharedWebAppFixture _fixture = null!;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext _) => _fixture = new SharedWebAppFixture();
+
+    [ClassCleanup]
+    public static void ClassCleanup() => _fixture?.Dispose();
+
     [TestMethod]
     public async Task Revoke_Emits_NoStore_NoCache_Even_On_Error()
     {
-        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var client = _fixture.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         // Force an error path (wrong content type). Handler should still set cache headers.
         using var content = new StringContent("x");
@@ -26,8 +35,7 @@ public sealed class CacheHeadersIntegrationTests
     [TestMethod]
     public async Task Introspect_Emits_NoStore_NoCache_Even_On_Error()
     {
-        using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        using var client = _fixture.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         // Force an error path (wrong content type / parse error). Handler should still set cache headers.
         using var content = new StringContent("x");

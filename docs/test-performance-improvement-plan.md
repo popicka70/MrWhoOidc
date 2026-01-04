@@ -57,6 +57,47 @@ var securityKey = SharedTestKeys.GetRsaSecurityKey("test-key");
 - `BackchannelLogoutDispatcher`
 - `BackchannelAlertSampler`
 
+### ✅ Phase 2 - Shared WebApplicationFactory Fixtures (COMPLETED)
+
+**Status:** Implemented and verified  
+**Files Created:**
+- `Testing/SharedWebAppFixture.cs` - Reusable fixture for sharing WebApplicationFactory across tests in a class
+
+**Files Updated:**
+| File | Factory Instances Removed | Notes |
+|------|---------------------------|-------|
+| `Phase0AugmentedSafetyTests.cs` | 4 | Uses SharedWebAppFixture |
+| `CacheHeadersIntegrationTests.cs` | 2 | Uses SharedWebAppFixture, added [DoNotParallelize] |
+| `DisplayParameterIntegrationTests.cs` | 1 | Uses SharedWebAppFixture |
+
+**Pattern Applied:**
+```csharp
+// Before (per-test factory creation ~4s overhead)
+[TestMethod]
+public async Task MyTest()
+{
+    using var factory = (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+    using var client = factory.CreateClient();
+    // ...
+}
+
+// After (shared fixture, single factory for entire class)
+private static SharedWebAppFixture _fixture = null!;
+
+[ClassInitialize]
+public static void ClassInit(TestContext _) => _fixture = new SharedWebAppFixture();
+
+[ClassCleanup]
+public static void ClassCleanup() => _fixture?.Dispose();
+
+[TestMethod]
+public async Task MyTest()
+{
+    using var client = _fixture.CreateClient();
+    // ...
+}
+```
+
 ### ⏳ Phase 1 - Remaining Work
 
 **RequestObjectValidatorTests.cs** - Has 6+ RSA.Create calls that need more complex refactoring due to unique JTI requirements per test (replay detection tests).
@@ -66,12 +107,15 @@ var securityKey = SharedTestKeys.GetRsaSecurityKey("test-key");
 | Phase | Test Count | Duration | Tests/sec | Notes |
 |-------|------------|----------|-----------|-------|
 | Baseline | 868 | 173.6s | 5.0 | Before any changes |
-| After Phase 1.1 + 1.3 | 870 | 170.5s | 5.1 | All tests passing |
+| After Phase 1 | 870 | 170.5s | 5.1 | Shared keys + disabled background services |
+| After Phase 2 | 870 | 143s | 6.1 | Shared WebApplicationFactory fixtures |
 
-> **Note:** Initial measurements show minimal improvement (~2%). This is expected because:
-> 1. RSA key generation is fast (~20-50ms) and the total removed overhead is ~0.5-1.5s
-> 2. The dominant cost is WebApplicationFactory startup per integration test
-> 3. Phase 2 (shared fixtures) will provide the significant gains
+**Total improvement: ~30 seconds (17% faster)**
+
+> **Note:** The ~30s improvement comes primarily from:
+> 1. Eliminating ~7 WebApplicationFactory creations (~4s each = ~28s saved)
+> 2. Background services no longer starting in test mode
+> 3. Shared RSA key generation
 
 ---
 

@@ -24,13 +24,19 @@ namespace MrWhoOidc.UnitTests;
 [DoNotParallelize]
 public class Phase0AugmentedSafetyTests
 {
-    private WebApplicationFactory<Program> CreateFactory() => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+    // Shared fixture eliminates per-test WebApplicationFactory creation overhead (~4s per test)
+    private static SharedWebAppFixture _fixture = null!;
+
+    [ClassInitialize]
+    public static void ClassInit(TestContext _) => _fixture = new SharedWebAppFixture();
+
+    [ClassCleanup]
+    public static void ClassCleanup() => _fixture?.Dispose();
 
     [TestMethod, TestCategory("SafetySurface")]
     public void AdminPolicy_And_Handler_Are_Registered()
     {
-        using var factory = CreateFactory();
-        using var scope = factory.Services.CreateScope();
+        using var scope = _fixture.Services.CreateScope();
         var sp = scope.ServiceProvider;
         var auth = sp.GetRequiredService<IAuthorizationPolicyProvider>();
         var policy = auth.GetPolicyAsync("admin").GetAwaiter().GetResult();
@@ -42,8 +48,7 @@ public class Phase0AugmentedSafetyTests
     [TestMethod, TestCategory("SafetySurface")]
     public void RateLimitingPolicy_Names_Are_Stable()
     {
-        using var factory = CreateFactory();
-        var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
+        var dataSource = _fixture.Services.GetRequiredService<EndpointDataSource>();
         var adminEndpoint = dataSource.Endpoints.FirstOrDefault(e => e.DisplayName != null && e.DisplayName.Contains("/admin/api", StringComparison.OrdinalIgnoreCase));
         Assert.IsNotNull(adminEndpoint, "Admin endpoint group not found");
         var hasRlAdmin = adminEndpoint!.Metadata.Any(md =>
@@ -62,8 +67,7 @@ public class Phase0AugmentedSafetyTests
     [TestMethod, TestCategory("SafetySurface")]
     public async Task Core_Oidc_Endpoints_Functional_Probes()
     {
-        using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        using var client = _fixture.CreateClient();
 
         // Discovery can be served either from the root (single-tenant) or under /t/{slug} (multi-tenant).
         // Some environments may load a license that enables multi-tenancy, which intentionally blocks root discovery.
@@ -73,7 +77,7 @@ public class Phase0AugmentedSafetyTests
         var discovery = await client.GetAsync("/.well-known/openid-configuration");
         if (discovery.StatusCode == HttpStatusCode.NotFound)
         {
-            var mt = factory.Services.GetRequiredService<IMultiTenancyStateProvider>();
+            var mt = _fixture.Services.GetRequiredService<IMultiTenancyStateProvider>();
             var slug = string.IsNullOrWhiteSpace(mt.DefaultTenantSlug) ? "default" : mt.DefaultTenantSlug;
             basePath = $"/t/{slug}";
             discovery = await client.GetAsync($"{basePath}/.well-known/openid-configuration");
@@ -103,8 +107,7 @@ public class Phase0AugmentedSafetyTests
     [TestMethod, TestCategory("SafetySurface")]
     public async Task BackchannelHealth_Endpoint_Has_Expected_Shape()
     {
-        using var factory = CreateFactory();
-        var client = factory.CreateClient();
+        using var client = _fixture.CreateClient();
         var resp = await client.GetAsync("/health/backchannel");
         Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, "health/backchannel status");
         var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
