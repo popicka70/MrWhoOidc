@@ -41,6 +41,7 @@
             <input type="hidden" asp-for="Ctx" />
             <input type="hidden" asp-for="ReturnUrl" />
             <input type="hidden" asp-for="Email" />
+            <input type="hidden" asp-for="Display" />
             @if (!ViewData.ModelState.IsValid)
             {
                 <div class="alert alert-danger" role="alert">
@@ -87,6 +88,7 @@
                 <a asp-page="/Auth/WebAuthn" 
                    asp-route-returnUrl="@Model.ReturnUrl" 
                    asp-route-username="@Model.Username"
+                         asp-route-display="@Model.Display"
                    class="btn btn-outline-primary w-100 mb-3">
                     <i class="bi bi-shield-check me-2"></i>
                     Sign in with Security Key

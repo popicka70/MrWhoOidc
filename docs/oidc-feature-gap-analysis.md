@@ -91,7 +91,7 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 
 **Tasks:**
 - [x] Add `display_values_supported` to discovery
-- [ ] Verify login pages respect `display` parameter for mobile/popup styling
+- [x] Verify login pages respect `display` parameter for mobile/popup styling
 
 ---
 

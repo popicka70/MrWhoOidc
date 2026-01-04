@@ -1544,7 +1544,7 @@ public sealed class AuthorizeHandlerTests
 
     private sealed class StubAuthenticationRedirectService : IAuthenticationRedirectService
     {
-        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, CancellationToken ct = default)
+        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
             => Task.FromResult(Results.Redirect("/login") as IResult);
     }
 

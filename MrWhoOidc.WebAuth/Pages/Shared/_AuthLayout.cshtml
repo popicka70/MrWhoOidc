@@ -1,4 +1,10 @@
 @using MrWhoOidc.WebAuth.Services
+@{
+    var display = (string?)Context.Request.Query["display"];
+    var displayCss = string.Equals(display, "popup", StringComparison.OrdinalIgnoreCase)
+        ? "auth-display-popup"
+        : string.Empty;
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,7 +27,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MrWhoOidc.WebAuth.styles.css" asp-append-version="true" />
 </head>
-<body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) auth-scheme-body">
+<body class="@(StyleSchemes.Resolve((string?)Context.Request.Query["style"]).CssClass) @displayCss auth-scheme-body" data-auth-display="@display">
     <div class="d-flex flex-column min-vh-100">
         <main role="main" class="flex-grow-1 d-flex align-items-center justify-content-center py-4">
             <div class="w-100 px-3 auth-container">

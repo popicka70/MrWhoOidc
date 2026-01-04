@@ -131,14 +131,14 @@ public sealed class AuthorizeHandler(
 
             if (!isAuthenticated)
             {
-                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, http.RequestAborted);
+                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
             }
 
             // If the RP requested re-authentication or account selection, force an auth redirect.
             if (hasPromptLogin || hasPromptSelectAccount)
             {
                 outcome = hasPromptLogin ? "prompt_login" : "prompt_select_account";
-                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, http.RequestAborted);
+                return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
             }
 
             // max_age enforcement (OIDC): if we can't prove freshness, require re-auth.
@@ -160,7 +160,7 @@ public sealed class AuthorizeHandler(
                     }
 
                     outcome = "max_age_missing_auth_time";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, http.RequestAborted);
+                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
                 }
 
                 var ageSeconds = (int)Math.Floor((DateTimeOffset.UtcNow - authTimeUtc).TotalSeconds);
@@ -180,7 +180,7 @@ public sealed class AuthorizeHandler(
                     }
 
                     outcome = "max_age";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, http.RequestAborted);
+                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
                 }
             }
 
@@ -222,7 +222,7 @@ public sealed class AuthorizeHandler(
                     }
 
                     outcome = "acr";
-                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, http.RequestAborted);
+                    return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
                 }
             }
 

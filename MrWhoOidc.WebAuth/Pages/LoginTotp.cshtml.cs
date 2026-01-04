@@ -26,11 +26,14 @@ public class LoginTotpModel(
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Display { get; set; }
+
     public async Task<IActionResult> OnGetAsync()
     {
         var preauth = await HttpContext.AuthenticateAsync("preauth");
         if (!preauth.Succeeded)
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
         return Page();
     }
 
@@ -38,25 +41,25 @@ public class LoginTotpModel(
     {
         var preauth = await HttpContext.AuthenticateAsync("preauth");
         if (!preauth.Succeeded)
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         var sub = preauth.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(sub, out var userId))
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         // Get the per-tenant user to look up the linked UserAccount
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
         if (user is null || string.IsNullOrEmpty(user.Email))
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         // Get MFA settings from UserAccount (global)
         var account = await userAccountService.FindByEmailAsync(user.Email);
         if (account is null)
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         var (mfaEnabled, totpSecret) = await userAccountService.GetMfaStatusAsync(account.Id);
         if (!mfaEnabled || string.IsNullOrEmpty(totpSecret))
-            return RedirectToPage("/Login", new { ReturnUrl });
+            return RedirectToPage("/Login", new { ReturnUrl, Display });
 
         if (!totp.VerifyCode(totpSecret, Code, digits: 6, period: 30, window: 1))
         {
