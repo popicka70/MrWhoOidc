@@ -248,4 +248,85 @@ public sealed class DiscoveryMetadataTests
         var resp = await client.GetAsync("/.well-known/openid-configuration");
         Assert.AreEqual(HttpStatusCode.NotFound, resp.StatusCode, "root discovery should be blocked in multi-tenant mode");
     }
+
+    [TestMethod]
+    public async Task Discovery_DoesNotAdvertise_Jarm_Encryption_When_NoClient_OptsIn()
+    {
+        using var factory = CreateFactory();
+
+        // Arrange: ensure this tenant has no clients opting into JARM encryption.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var tenantId = db.Tenants.Select(t => t.Id).First();
+
+            var toRemove = db.Clients.Where(c => c.TenantId == tenantId).ToList();
+            if (toRemove.Count > 0)
+            {
+                db.Clients.RemoveRange(toRemove);
+                db.SaveChanges();
+            }
+        }
+
+        // Act
+        using var doc = await GetDiscoveryAsync(factory);
+
+        // Assert
+        Assert.IsFalse(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_alg_values_supported", out _),
+            "authorization_response_encryption_alg_values_supported should be omitted unless at least one client opts in");
+        Assert.IsFalse(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_enc_values_supported", out _),
+            "authorization_response_encryption_enc_values_supported should be omitted unless at least one client opts in");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Advertises_Jarm_Encryption_When_AnyClient_OptsIn()
+    {
+        using var factory = CreateFactory();
+
+        // Arrange: seed a client that opts into authorization response encryption.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var tenantId = db.Tenants.Select(t => t.Id).First();
+
+            // Ensure a realm exists for this tenant.
+            var realm = db.Realms.FirstOrDefault(r => r.TenantId == tenantId);
+            if (realm is null)
+            {
+                realm = new global::MrWhoOidc.Auth.Persistence.Realm { Name = "default", TenantId = tenantId };
+                db.Realms.Add(realm);
+                db.SaveChanges();
+            }
+
+            db.Clients.Add(new global::MrWhoOidc.Auth.Persistence.Client
+            {
+                TenantId = tenantId,
+                RealmId = realm.Id,
+                ClientId = "jarm-enc-client",
+                AuthorizationEncryptedResponseAlg = "RSA-OAEP",
+                AuthorizationEncryptedResponseEnc = "A256CBC-HS512"
+            });
+
+            db.SaveChanges();
+        }
+
+        // Act
+        using var doc = await GetDiscoveryAsync(factory);
+
+        // Assert
+        Assert.IsTrue(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_alg_values_supported", out var algs),
+            "authorization_response_encryption_alg_values_supported missing");
+        Assert.IsTrue(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_enc_values_supported", out var encs),
+            "authorization_response_encryption_enc_values_supported missing");
+
+        var algValues = algs.EnumerateArray().Select(e => e.GetString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+        var encValues = encs.EnumerateArray().Select(e => e.GetString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+
+        CollectionAssert.Contains(algValues!, "RSA-OAEP");
+        CollectionAssert.Contains(encValues!, "A256CBC-HS512");
+    }
 }
