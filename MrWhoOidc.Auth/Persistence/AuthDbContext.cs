@@ -1281,6 +1281,12 @@ public class Client
 
     // OIDC Core: id_token_encrypted_response_alg / id_token_encrypted_response_enc
     // When configured, the OP returns an encrypted ID token (JWE) to this client.
+    // OIDC Core: id_token_signed_response_alg
+    // When configured, the client indicates its preferred ID token signing alg.
+    // Note: this OP currently enforces tenant active signing alg.
+    [MaxLength(50)]
+    public string? IdTokenSignedResponseAlg { get; set; }
+
     [MaxLength(50)]
     public string? IdTokenEncryptedResponseAlg { get; set; }
 

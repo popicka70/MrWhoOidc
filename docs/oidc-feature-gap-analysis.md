@@ -156,7 +156,7 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Tasks:**
 - [x] Update key rotation to support EC keys for ID tokens
 - [ ] Allow client registration to specify preferred algorithm (future enhancement)
-- [ ] Use client's `id_token_signed_response_alg` client metadata (future enhancement)
+- [x] Use client's `id_token_signed_response_alg` client metadata (future enhancement)
 - [x] Update discovery to avoid hardcoding RS256 and remain truthful (active alg)
 - [x] Add tests for non-RS256 ID tokens (ES256 regression test)
 
@@ -310,11 +310,11 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 ```
 
 **Tasks:**
-- [ ] Create check_session endpoint serving iFrame
-- [ ] Implement session state calculation (`session_state` response parameter)
-- [ ] Handle postMessage for session polling
-- [ ] Add discovery metadata
-- [ ] Add tests
+- [x] Create check_session endpoint serving iFrame
+- [x] Implement session state calculation (`session_state` response parameter)
+- [x] Handle postMessage for session polling
+- [x] Add discovery metadata
+- [x] Add tests
 
 ---
 

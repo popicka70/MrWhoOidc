@@ -11,6 +11,7 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.UnitTests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Web;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -83,6 +84,42 @@ public sealed class AuthorizeResponseGeneratorTests
         Assert.AreEqual("RazorPageResult", result.GetType().Name);
     }
 
+    [TestMethod]
+    public async Task AuthorizeResponseGenerator_NonJarm_Includes_SessionState_And_Sets_Opbs_Cookie()
+    {
+        var http = CreateHttpContext();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"));
+
+        var validation = new AuthorizeValidationResult(
+            IsValid: true,
+            ClientId: "c1",
+            ResponseMode: "query",
+            State: "state1",
+            RedirectUri: "https://app/callback");
+
+        var result = gen.CreateSuccessResponse(http, validation, code: "auth_code_123", redirectUri: "https://app/callback?code=auth_code_123&state=state1");
+        var loc = await ExecuteRedirectLocationAsync(result, http);
+
+        Assert.IsNotNull(loc);
+        // Location may be relative (e.g., "/Auth/Redirect?..."), so use base URI from request context.
+        var baseUri = new Uri($"{http.Request.Scheme}://{http.Request.Host}");
+        var outer = new Uri(baseUri, loc!);
+        Assert.AreEqual("/Auth/Redirect", outer.AbsolutePath);
+
+        var outerQuery = HttpUtility.ParseQueryString(outer.Query);
+        var redirectUrl = outerQuery["redirectUrl"];
+        Assert.IsFalse(string.IsNullOrWhiteSpace(redirectUrl), "redirectUrl missing");
+
+        var inner = new Uri(redirectUrl!);
+        var innerQuery = HttpUtility.ParseQueryString(inner.Query);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["session_state"]), "session_state missing");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["iss"]), "iss missing");
+
+        // Cookie should be set so check_session_iframe JS can read it.
+        var setCookie = http.Response.Headers["Set-Cookie"].ToString();
+        Assert.IsTrue(setCookie.Contains("mrwho.opbs=", StringComparison.Ordinal), $"Expected mrwho.opbs cookie; got '{setCookie}'");
+    }
+
     private static DefaultHttpContext CreateHttpContext()
     {
         var services = new ServiceCollection();
@@ -115,7 +152,8 @@ public sealed class AuthorizeResponseGeneratorTests
 
     private static async Task<string?> ExecuteRedirectLocationAsync(IResult result, DefaultHttpContext context)
     {
-        context.Response.Headers.Clear();
+        // Only clear Location header, preserve Set-Cookie and other headers set before execute.
+        context.Response.Headers.Remove("Location");
         await result.ExecuteAsync(context);
         return context.Response.Headers.Location.FirstOrDefault();
     }

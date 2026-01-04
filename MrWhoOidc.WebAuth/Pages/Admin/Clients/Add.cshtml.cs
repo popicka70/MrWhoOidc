@@ -78,6 +78,7 @@ public class AddModel(
             AutoAssignNewUsersToClient = Input.AutoAssignNewUsersToClient,
             PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri,
             PublicJwksJson = string.IsNullOrWhiteSpace(Input.PublicJwksJson) ? null : Input.PublicJwksJson,
+            IdTokenSignedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) ? null : Input.IdTokenSignedResponseAlg,
             IdTokenEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseAlg) ? null : Input.IdTokenEncryptedResponseAlg,
             IdTokenEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseEnc) ? null : Input.IdTokenEncryptedResponseEnc,
             UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg,
@@ -129,6 +130,7 @@ public class AddModel(
 
     private void ValidateJwtResponseCrypto()
     {
+        ValidateIdTokenSignedResponseAlg();
         ValidateUserInfoSignedResponseAlg();
         ValidateAuthorizationSignedResponseAlg();
 
@@ -180,6 +182,25 @@ public class AddModel(
         if (!string.Equals(Input.UserInfoSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
         {
             ModelState.AddModelError("Input.UserInfoSignedResponseAlg", $"Must match tenant active signing alg: '{ActiveSigningAlg}'.");
+        }
+    }
+
+    private void ValidateIdTokenSignedResponseAlg()
+    {
+        if (string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg))
+        {
+            return;
+        }
+
+        if (string.Equals(Input.IdTokenSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", "'none' is not supported.");
+            return;
+        }
+
+        if (!string.Equals(Input.IdTokenSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", $"Must match tenant active signing alg: '{ActiveSigningAlg}'.");
         }
     }
 
@@ -270,6 +291,10 @@ public class AddModel(
 
         [Display(Name = "Public JWKS JSON")]
         public string? PublicJwksJson { get; set; }
+
+        [Display(Name = "ID token signed response alg")]
+        [StringLength(50)]
+        public string? IdTokenSignedResponseAlg { get; set; }
 
         [Display(Name = "ID token encrypted response alg")]
         [StringLength(50)]

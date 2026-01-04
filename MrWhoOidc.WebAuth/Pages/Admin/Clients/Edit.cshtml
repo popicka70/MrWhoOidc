@@ -551,6 +551,21 @@
 
                                 <div class="col-md-6">
                                     <div class="card">
+                                        <div class="card-header">ID token signing</div>
+                                        <div class="card-body">
+                                            <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                                            <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                                                <option value="">Default (tenant active signing alg)</option>
+                                                <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                                            </select>
+                                            <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
+                                            <div class="form-text">When set, client expresses preferred ID token signing alg. Must match tenant active signing alg.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
                                         <div class="card-header">ID token encryption (JWE)</div>
                                         <div class="card-body">
                                             <div class="row g-3">
@@ -668,6 +683,16 @@
                 </div>
                 @if (Model.KeyPreviews?.Count > 0)
                 {
+
+                    <div class="mb-3">
+                        <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                        <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                            <option value="">(default)</option>
+                            <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                        </select>
+                        <div class="form-text">Must match tenant active signing alg or be empty.</div>
+                        <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
+                    </div>
                     <div class="col-12">
                         <div class="card mb-2">
                             <div class="card-header">JWKS preview</div>

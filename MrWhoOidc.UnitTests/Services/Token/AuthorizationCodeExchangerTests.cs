@@ -157,6 +157,105 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
+    public async Task ExchangeAsync_Fails_When_IdTokenSignedResponseAlg_DoesNotMatch_ActiveTenantAlg()
+    {
+        using var db = CreateDb();
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-idtoken-alg-mismatch";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        // CreateKeyProvider() uses a symmetric key; issuer signing alg defaults to RS256.
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            RealmId = realmId,
+            TenantId = tenantId,
+            IdTokenSignedResponseAlg = SecurityConstants.JwtAlgorithms.ES256
+        });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsFalse(ok);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual("invalid_request", error);
+        Assert.IsNotNull(payload);
+
+        var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
+        Assert.AreEqual("invalid_request", dict["error"]);
+        Assert.IsTrue(((string)dict["error_description"]!).Contains("id_token_signed_response_alg", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task ExchangeAsync_ES256_IdToken_Alg_And_AtHash_Are_Correct()
     {
         using var db = CreateDb();

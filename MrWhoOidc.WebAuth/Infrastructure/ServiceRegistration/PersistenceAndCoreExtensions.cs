@@ -46,6 +46,7 @@ public static class PersistenceAndCoreExtensions
         // Protocol endpoint handlers (discovery, token, etc.)
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
+        services.AddScoped<ICheckSessionHandler, CheckSessionHandler>();
         services.AddScoped<IAuthorizeResponseGenerator, AuthorizeResponseGenerator>();
         services.AddScoped<IAuthorizeRequestSanitizer, AuthorizeRequestSanitizer>();
         services.AddScoped<IAuthenticationRedirectService, AuthenticationRedirectService>();

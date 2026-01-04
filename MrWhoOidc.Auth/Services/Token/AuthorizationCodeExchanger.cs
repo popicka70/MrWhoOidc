@@ -290,6 +290,34 @@ public sealed class AuthorizationCodeExchanger(
 
                 var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
                 var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+
+                if (client is not null && !string.IsNullOrWhiteSpace(client.IdTokenSignedResponseAlg))
+                {
+                    if (string.Equals(client.IdTokenSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return (false,
+                            new
+                            {
+                                error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                error_description = "Client 'id_token_signed_response_alg' cannot be 'none'."
+                            },
+                            OAuthConstants.ErrorCodes.InvalidRequest,
+                            400);
+                    }
+
+                    if (!string.Equals(client.IdTokenSignedResponseAlg, signingAlg, StringComparison.Ordinal))
+                    {
+                        return (false,
+                            new
+                            {
+                                error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                error_description = $"Client 'id_token_signed_response_alg' '{client.IdTokenSignedResponseAlg}' must match tenant active signing alg '{signingAlg}'."
+                            },
+                            OAuthConstants.ErrorCodes.InvalidRequest,
+                            400);
+                    }
+                }
+
                 var atHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken, signingAlg);
 
                 var idClaims = new List<System.Security.Claims.Claim>

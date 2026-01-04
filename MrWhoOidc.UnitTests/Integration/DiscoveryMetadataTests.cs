@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using System;
 
 namespace MrWhoOidc.UnitTests.Integration;
 
@@ -140,6 +141,40 @@ public sealed class DiscoveryMetadataTests
 
         CollectionAssert.Contains(tokenMethods, "self_signed_tls_client_auth");
         CollectionAssert.Contains(introspectionMethods, "self_signed_tls_client_auth");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Advertises_CheckSessionIFrame()
+    {
+        using var factory = CreateFactory();
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("check_session_iframe", out var iframe), "check_session_iframe missing");
+        Assert.AreEqual(JsonValueKind.String, iframe.ValueKind, "check_session_iframe must be string");
+
+        var val = iframe.GetString();
+        Assert.IsFalse(string.IsNullOrWhiteSpace(val), "check_session_iframe empty");
+        Assert.IsTrue(val!.EndsWith("/connect/checksession", StringComparison.Ordinal), $"Unexpected check_session_iframe='{val}'");
+    }
+
+    [TestMethod]
+    public async Task CheckSessionIFrame_Endpoint_Is_Embeddable()
+    {
+        using var factory = CreateFactory();
+
+        var mt = factory.Services.GetRequiredService<IMultiTenancyStateProvider>();
+        mt.UpdateState(false);
+
+        var client = factory.CreateClient();
+        var resp = await client.GetAsync("/connect/checksession");
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+
+        var ct = resp.Content.Headers.ContentType?.MediaType;
+        Assert.AreEqual("text/html", ct);
+
+        // Must not be DENY / none for framing.
+        Assert.IsFalse(resp.Headers.TryGetValues("X-Frame-Options", out var xfo) && string.Join(" ", xfo).Contains("DENY", StringComparison.OrdinalIgnoreCase), "X-Frame-Options DENY blocks iframe usage");
+        Assert.IsFalse(resp.Headers.TryGetValues("Content-Security-Policy", out var csp) && string.Join(" ", csp).Contains("frame-ancestors 'none'", StringComparison.OrdinalIgnoreCase), "CSP frame-ancestors 'none' blocks iframe usage");
     }
 
     [TestMethod]

@@ -1285,6 +1285,7 @@ public sealed class ConfigurationImportService(
             PublicJwksUri = clientDef.PublicJwksUri,
             SubjectType = string.IsNullOrWhiteSpace(clientDef.SubjectType) ? OidcConstants.SubjectTypes.Public : clientDef.SubjectType!,
             SectorIdentifierUri = clientDef.SectorIdentifierUri,
+            IdTokenSignedResponseAlg = clientDef.IdTokenSignedResponseAlg,
             IdTokenEncryptedResponseAlg = clientDef.IdTokenEncryptedResponseAlg,
             IdTokenEncryptedResponseEnc = clientDef.IdTokenEncryptedResponseEnc,
             UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg,
@@ -1379,6 +1380,7 @@ public sealed class ConfigurationImportService(
             client.SubjectType = clientDef.SubjectType;
         client.SectorIdentifierUri = clientDef.SectorIdentifierUri;
 
+        client.IdTokenSignedResponseAlg = clientDef.IdTokenSignedResponseAlg;
         client.IdTokenEncryptedResponseAlg = clientDef.IdTokenEncryptedResponseAlg;
         client.IdTokenEncryptedResponseEnc = clientDef.IdTokenEncryptedResponseEnc;
         client.UserInfoSignedResponseAlg = clientDef.UserInfoSignedResponseAlg;

@@ -74,6 +74,16 @@
                         </div>
 
                         <div class="col-md-6">
+                            <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                            <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                                <option value="">Default (tenant active signing alg)</option>
+                                <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                            </select>
+                            <small class="form-text text-muted">When set, client expresses preferred ID token signing alg. Must match tenant active signing alg.</small>
+                            <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-6">
                             <label asp-for="Input.PublicJwksUri" class="form-label"></label>
                             <input asp-for="Input.PublicJwksUri" class="form-control" placeholder="https://client.example.com/jwks.json" />
                             <small class="form-text text-muted">Used for encrypted ID tokens and encrypted UserInfo JWT responses.</small>
@@ -87,6 +97,16 @@
                             </select>
                             <small class="form-text text-muted">When set, the server returns a signed UserInfo JWT (application/jwt).</small>
                             <span asp-validation-for="Input.UserInfoSignedResponseAlg" class="text-danger"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                            <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                                <option value="">Default (tenant active signing alg)</option>
+                                <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                            </select>
+                            <small class="form-text text-muted">When set, the server enforces this alg for ID tokens. Must match tenant active signing alg.</small>
+                            <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
                         </div>
 
                         <div class="col-md-6">

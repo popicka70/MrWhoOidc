@@ -570,6 +570,7 @@ public sealed class ConfigurationExportService(
             AllowedLogoutRedirectUris = ParseJsonArray(client.AllowedLogoutRedirectUrisJson) ?? [],
             SubjectType = client.SubjectType,
             SectorIdentifierUri = client.SectorIdentifierUri,
+            IdTokenSignedResponseAlg = client.IdTokenSignedResponseAlg,
             IdTokenEncryptedResponseAlg = client.IdTokenEncryptedResponseAlg,
             IdTokenEncryptedResponseEnc = client.IdTokenEncryptedResponseEnc,
             UserInfoSignedResponseAlg = client.UserInfoSignedResponseAlg,

@@ -253,6 +253,7 @@ public class EditModel(
             IntrospectionMtlsThumbprints = mtls,
             PublicJwksJson = client.PublicJwksJson,
             PublicJwksUri = client.PublicJwksUri,
+            IdTokenSignedResponseAlg = client.IdTokenSignedResponseAlg,
             IdTokenEncryptedResponseAlg = client.IdTokenEncryptedResponseAlg,
             IdTokenEncryptedResponseEnc = client.IdTokenEncryptedResponseEnc,
             UserInfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
@@ -1062,6 +1063,7 @@ public class EditModel(
         }
 
         // --- OIDC response crypto settings ---
+        Input.IdTokenSignedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) ? null : Input.IdTokenSignedResponseAlg.Trim();
         Input.IdTokenEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseAlg) ? null : Input.IdTokenEncryptedResponseAlg.Trim();
         Input.IdTokenEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseEnc) ? null : Input.IdTokenEncryptedResponseEnc.Trim();
         Input.UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg.Trim();
@@ -1070,6 +1072,26 @@ public class EditModel(
         Input.AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg.Trim();
         Input.AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg.Trim();
         Input.AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc.Trim();
+
+        if (!string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) && string.Equals(Input.IdTokenSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", "'none' is not supported.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) && !string.Equals(Input.IdTokenSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
 
         if (!string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) && !string.Equals(Input.UserInfoSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
         {
@@ -1226,6 +1248,7 @@ public class EditModel(
         client.PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri;
 
         // Persist OIDC crypto response metadata
+        client.IdTokenSignedResponseAlg = Input.IdTokenSignedResponseAlg;
         client.IdTokenEncryptedResponseAlg = Input.IdTokenEncryptedResponseAlg;
         client.IdTokenEncryptedResponseEnc = Input.IdTokenEncryptedResponseEnc;
         client.UserInfoSignedResponseAlg = Input.UserInfoSignedResponseAlg;
@@ -2116,6 +2139,10 @@ public class EditModel(
         [Display(Name = "Public JWKS URI")]
         [Url]
         public string? PublicJwksUri { get; set; }
+
+        [Display(Name = "ID token signed response alg")]
+        [StringLength(50)]
+        public string? IdTokenSignedResponseAlg { get; set; }
 
         [Display(Name = "ID token encrypted response alg")]
         [StringLength(50)]

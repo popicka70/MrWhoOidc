@@ -314,6 +314,13 @@ public sealed record ClientSeedDefinition
     // --- OIDC Response Crypto (optional) ---
 
     /// <summary>
+    /// JWS alg for signed ID tokens.
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("idTokenSignedResponseAlg")]
+    public string? IdTokenSignedResponseAlg { get; init; }
+
+    /// <summary>
     /// JWE alg for encrypted ID tokens (e.g., "RSA-OAEP").
     /// </summary>
     [JsonPropertyName("idTokenEncryptedResponseAlg")]

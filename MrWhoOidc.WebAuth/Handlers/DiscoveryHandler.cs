@@ -188,6 +188,8 @@ public sealed class DiscoveryHandler(
                 SecurityConstants.JwtAlgorithms.ES512
             },
             ["jwks_uri"] = $"{baseUrl}/jwks",
+            // OIDC Session Management (check_session_iframe)
+            ["check_session_iframe"] = $"{baseUrl}/connect/checksession",
             ["end_session_endpoint"] = $"{baseUrl}/connect/endsession",
             ["frontchannel_logout_supported"] = true,
             ["frontchannel_logout_session_supported"] = true,
