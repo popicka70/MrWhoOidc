@@ -21,9 +21,19 @@ public sealed class AuthOptions
     // Whether refresh token introspection is allowed. If false, RT introspection always returns inactive.
     public bool AllowRefreshTokenIntrospection { get; set; } = false;
 
-    // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints
-    // Thumbprints should be provided as hex without spaces and are case-insensitive.
+    // mTLS client authentication for introspection: map client_id -> allowed certificate thumbprints.
+    // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.
     public Dictionary<string, string[]> IntrospectionMtlsCertificates { get; set; } = new();
+
+    // mTLS client authentication for revocation: map client_id -> allowed certificate thumbprints
+    // Thumbprints may be provided as RFC 8705 x5t#S256 (base64url) or SHA-256 hex fingerprint and are case-insensitive.
+    public Dictionary<string, string[]> RevocationMtlsCertificates { get; set; } = new();
+
+    // Optional RFC 8705 mtls_endpoint_aliases base URL.
+    // When set to an absolute URL (e.g., https://mtls.example.com), discovery will include mtls_endpoint_aliases
+    // pointing at token/introspection/revocation endpoints under that base. The operator is responsible for ensuring
+    // those aliases are actually protected by client certificate requirements at the edge/proxy.
+    public string? MtlsEndpointAliasesBaseUrl { get; set; }
 
     // === JAR/PAR policy ===
     // Require PAR globally (request_uri must be used; direct 'request' not accepted). Useful for large request objects or privacy.
@@ -44,6 +54,10 @@ public sealed class AuthOptions
     // Replay protection TTL (seconds) used when 'exp' is missing; otherwise, expiry uses 'exp' (+skew)
     public int RequestObjectReplayTtlSeconds { get; set; } = 300;
 
+    // Enable encrypted request objects (JAR encryption): OP will publish an "enc" key in JWKS and accept JWE request objects.
+    // Minimal support: RSA-OAEP + A256CBC-HS512.
+    public bool EnableRequestObjectEncryption { get; set; } = false;
+
     // PAR per-client pending entries cap (in-memory enforcement)
     public int ParClientPendingLimit { get; set; } = 50;
 
@@ -51,6 +65,11 @@ public sealed class AuthOptions
     // Emit amr consistently in ID and access tokens when available from upstream.
     public bool EmitAmrInIdToken { get; set; } = true;
     public bool EmitAmrInAccessToken { get; set; } = true;
+
+    // When enabled and an OIDC 'claims' request includes an 'id_token' member with one or more claims,
+    // the ID token will only include explicitly requested payload claims (plus required 'sub').
+    // This does not affect structural JWT claims (iss/aud/exp/iat) or JWT-layer OIDC fields (nonce/auth_time/at_hash).
+    public bool RestrictIdTokenClaimsToClaimsRequest { get; set; } = false;
     // Allow-list of mapped claim names we may propagate into ID/access tokens when present and policy allows.
     public string[] PropagateMappedClaimsToIdToken { get; set; } = Array.Empty<string>();
     public string[] PropagateMappedClaimsToAccessToken { get; set; } = Array.Empty<string>();
@@ -75,6 +94,67 @@ public sealed class AuthOptions
     public int ProviderJwksCacheSeconds { get; set; } = 300;
     // Include encryption purpose keys when exposing provider JWKS (off by default)
     public bool ProviderJwksIncludeEncryption { get; set; } = false;
+
+    // === OIDC Discovery metadata (optional) ===
+    // Documentation/policy URLs are advertised only when set.
+    public string? ServiceDocumentationUrl { get; set; }
+    public string? OpPolicyUrl { get; set; }
+    public string? OpTosUrl { get; set; }
+    // UI locale hints (BCP47 tags). Empty => omitted from discovery.
+    public string[] UiLocalesSupported { get; set; } = Array.Empty<string>();
+    // Optional list of supported ACR values advertised in discovery.
+    // If empty, acr_values_supported is omitted and acr_values requests are not validated against a fixed allow-list.
+    public string[] AcrValuesSupported { get; set; } = Array.Empty<string>();
+
+    // === Device Authorization Grant (RFC 8628) ===
+    // Enable the device authorization grant flow.
+    public bool EnableDeviceAuthorizationGrant { get; set; } = false;
+    // Device code lifetime in seconds (default: 600 = 10 minutes)
+    public int DeviceCodeLifetimeSeconds { get; set; } = 600;
+    // Minimum polling interval in seconds (RFC 8628 recommends >= 5)
+    public int DeviceCodePollingIntervalSeconds { get; set; } = 5;
+    // User code length (default: 8 characters)
+    public int DeviceCodeUserCodeLength { get; set; } = 8;
+    // Character set for user codes (RFC 8628 recommends easily typeable characters, avoiding ambiguous chars like 0/O, 1/I/l)
+    // Default: BCDFGHJKLMNPQRSTVWXZ (consonants only, uppercase)
+    public string DeviceCodeUserCodeCharset { get; set; } = "BCDFGHJKLMNPQRSTVWXZ";
+
+    // === Dynamic Client Registration (RFC 7591/7592) ===
+    // Enable dynamic client registration endpoint (POST /register).
+    public bool EnableDynamicClientRegistration { get; set; } = false;
+    // Enable client configuration management (GET/PUT/DELETE /register/{client_id}).
+    // Requires EnableDynamicClientRegistration to be true.
+    public bool EnableClientConfigurationEndpoint { get; set; } = true;
+    // Registration access token lifetime in seconds (default: 86400 = 24 hours, 0 = never expires)
+    public int RegistrationAccessTokenLifetimeSeconds { get; set; } = 86400;
+    // Require an initial access token (Bearer token) for POST /register. When set, only pre-authorized callers can register clients.
+    public bool RequireInitialAccessToken { get; set; } = false;
+    // Valid initial access tokens (SHA-256 hashes). Only used when RequireInitialAccessToken = true.
+    // Operators should generate tokens, hash them, and add hashes here. Clients submit the plain token as Bearer.
+    public string[] InitialAccessTokenHashes { get; set; } = Array.Empty<string>();
+    // Allowed redirect URI schemes for dynamically registered clients (default: https only, http for localhost)
+    public string[] DynamicClientAllowedSchemes { get; set; } = ["https"];
+    // Allow http for localhost redirect URIs in dynamic registration (development convenience)
+    public bool DynamicClientAllowLocalhostHttp { get; set; } = true;
+
+    // === CIBA (Client Initiated Backchannel Authentication) - OpenID Connect CIBA Core 1.0 ===
+    // Enable CIBA endpoints and grant type.
+    public bool EnableCiba { get; set; } = false;
+    // CIBA auth_req_id lifetime in seconds (default: 120 = 2 minutes, spec default)
+    public int CibaAuthRequestLifetimeSeconds { get; set; } = 120;
+    // Minimum polling interval in seconds for poll mode (spec recommends >= 5)
+    public int CibaPollingIntervalSeconds { get; set; } = 5;
+    // Supported token delivery modes: "poll", "ping", "push"
+    // poll = client polls token endpoint with auth_req_id
+    // ping = server notifies client, client then calls token endpoint
+    // push = server pushes tokens directly to client (requires TLS client auth)
+    public string[] CibaTokenDeliveryModesSupported { get; set; } = ["poll", "ping"];
+    // Whether user_code parameter is supported (for additional user verification)
+    public bool CibaUserCodeParameterSupported { get; set; } = false;
+    // User code length (if CibaUserCodeParameterSupported=true)
+    public int CibaUserCodeLength { get; set; } = 8;
+    // Character set for CIBA user codes
+    public string CibaUserCodeCharset { get; set; } = "0123456789";
 }
 
 public sealed class OpaqueAccessTokenOptions

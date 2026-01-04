@@ -32,12 +32,39 @@ public interface IJarReplayCache
     bool TryAdd(string key, DateTimeOffset expiresAt);
 }
 
-internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions, IJarReplayCache replayCache) : IRequestObjectValidator
+internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions, IJarReplayCache replayCache, IRequestObjectDecryptor requestObjectDecryptor) : IRequestObjectValidator
 {
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(requestJwt))
             return Invalid("invalid_request_object", "Missing request object");
+
+        // If this is a JWE, decrypt it to the inner (nested) signed JWT first.
+        // We require nested JWT so the request object still has client-authenticity via signature.
+        if (requestJwt.Split('.').Length == 5)
+        {
+            try
+            {
+                var inner = await requestObjectDecryptor.TryDecryptToInnerJwtAsync(requestJwt, ct).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(inner))
+                {
+                    logger.LogWarning("JAR: encrypted request object did not contain a nested JWT");
+                    return Invalid("invalid_request_object", "Encrypted request object missing nested JWT");
+                }
+
+                requestJwt = inner;
+            }
+            catch (NotSupportedException ex)
+            {
+                logger.LogWarning(ex, "JAR: unsupported request object encryption");
+                return Invalid("invalid_request_object", "Unsupported request object encryption");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "JAR: failed to decrypt request object");
+                return Invalid("invalid_request_object", "Failed to decrypt request object");
+            }
+        }
 
         JwtSecurityToken unsigned;
         try

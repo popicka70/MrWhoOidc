@@ -16,7 +16,8 @@ public interface IAuthenticationRedirectService
     /// <param name="http">The current HTTP context.</param>
     /// <param name="selection">The selected provider details.</param>
     /// <param name="validation">The validated authorization request.</param>
+    /// <param name="display">Optional OIDC display mode (e.g. "popup").</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An IResult representing the redirect.</returns>
-    Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, CancellationToken ct = default);
+    Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default);
 }

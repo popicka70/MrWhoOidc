@@ -538,6 +538,141 @@
                     <span asp-validation-for="Input.PublicJwksJson" class="text-danger"></span>
                 </div>
                 <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-lock me-2"></i>OIDC JWT response crypto
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12 small text-muted">
+                                    Optional per-client settings for encrypted ID tokens and signed/encrypted UserInfo JWT responses.
+                                    Tenant active signing alg: <code>@Model.ActiveSigningAlg</code>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">ID token signing</div>
+                                        <div class="card-body">
+                                            <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                                            <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                                                <option value="">Default (tenant active signing alg)</option>
+                                                <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                                            </select>
+                                            <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
+                                            <div class="form-text">When set, client expresses preferred ID token signing alg. Must match tenant active signing alg.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">ID token encryption (JWE)</div>
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.IdTokenEncryptedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.IdTokenEncryptedResponseAlg" class="form-select">
+                                                        <option value="">Not encrypted</option>
+                                                        <option value="RSA-OAEP">RSA-OAEP</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.IdTokenEncryptedResponseAlg" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.IdTokenEncryptedResponseEnc" class="form-label"></label>
+                                                    <select asp-for="Input.IdTokenEncryptedResponseEnc" class="form-select">
+                                                        <option value="">(none)</option>
+                                                        <option value="A256CBC-HS512">A256CBC-HS512</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.IdTokenEncryptedResponseEnc" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-12 form-text">
+                                                    Requires a client public JWKS (JSON or URI).
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">UserInfo as JWT (application/jwt)</div>
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-12">
+                                                    <label asp-for="Input.UserInfoSignedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.UserInfoSignedResponseAlg" class="form-select">
+                                                        <option value="">Default (JSON)</option>
+                                                        <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.UserInfoSignedResponseAlg" class="text-danger"></span>
+                                                    <div class="form-text">When set, the server returns a signed UserInfo JWT (JWS). Must match tenant active signing alg.</div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.UserInfoEncryptedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.UserInfoEncryptedResponseAlg" class="form-select">
+                                                        <option value="">Not encrypted</option>
+                                                        <option value="RSA-OAEP">RSA-OAEP</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.UserInfoEncryptedResponseAlg" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.UserInfoEncryptedResponseEnc" class="form-label"></label>
+                                                    <select asp-for="Input.UserInfoEncryptedResponseEnc" class="form-select">
+                                                        <option value="">(none)</option>
+                                                        <option value="A256CBC-HS512">A256CBC-HS512</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.UserInfoEncryptedResponseEnc" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-12 form-text">
+                                                    If encryption is set, the server returns a signed+encrypted UserInfo JWT (nested JWS inside JWE) and requires a client public JWKS.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">Authorization response (JARM)</div>
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-12">
+                                                    <label asp-for="Input.AuthorizationSignedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationSignedResponseAlg" class="form-select">
+                                                        <option value="">Default (tenant active signing alg)</option>
+                                                        <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationSignedResponseAlg" class="text-danger"></span>
+                                                    <div class="form-text">When set, JARM responses are signed with this alg. Must match tenant active signing alg.</div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.AuthorizationEncryptedResponseAlg" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationEncryptedResponseAlg" class="form-select">
+                                                        <option value="">Not encrypted</option>
+                                                        <option value="RSA-OAEP">RSA-OAEP</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationEncryptedResponseAlg" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label asp-for="Input.AuthorizationEncryptedResponseEnc" class="form-label"></label>
+                                                    <select asp-for="Input.AuthorizationEncryptedResponseEnc" class="form-select">
+                                                        <option value="">(none)</option>
+                                                        <option value="A256CBC-HS512">A256CBC-HS512</option>
+                                                    </select>
+                                                    <span asp-validation-for="Input.AuthorizationEncryptedResponseEnc" class="text-danger"></span>
+                                                </div>
+                                                <div class="col-12 form-text">
+                                                    If encryption is set, the server returns an encrypted JARM response (JWE) and requires a client public JWKS.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
                     <label asp-for="Input.PrivateJwk" class="form-label"></label>
                     <textarea asp-for="Input.PrivateJwk" class="form-control" rows="6" placeholder='Paste private JWK or JWKS; only public parts will be extracted'></textarea>
                     <div class="mt-2">
@@ -548,6 +683,16 @@
                 </div>
                 @if (Model.KeyPreviews?.Count > 0)
                 {
+
+                    <div class="mb-3">
+                        <label asp-for="Input.IdTokenSignedResponseAlg" class="form-label"></label>
+                        <select asp-for="Input.IdTokenSignedResponseAlg" class="form-select">
+                            <option value="">(default)</option>
+                            <option value="@Model.ActiveSigningAlg">@Model.ActiveSigningAlg</option>
+                        </select>
+                        <div class="form-text">Must match tenant active signing alg or be empty.</div>
+                        <span asp-validation-for="Input.IdTokenSignedResponseAlg" class="text-danger"></span>
+                    </div>
                     <div class="col-12">
                         <div class="card mb-2">
                             <div class="card-header">JWKS preview</div>

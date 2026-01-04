@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using MrWhoOidc.Auth.Entitlements;
@@ -19,6 +20,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authorization;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.UnitTests.Helpers;
@@ -35,6 +37,15 @@ public sealed class PairwiseSubjectIdentifiersTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new AuthDbContext(opts);
+    }
+
+    private static ICachedKeyProvider CreateKeyProvider()
+    {
+        var mock = new Mock<ICachedKeyProvider>();
+        mock
+            .Setup(p => p.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SymmetricSecurityKey(new byte[32]));
+        return mock.Object;
     }
 
     private static IOptions<AuthOptions> Options()
@@ -86,9 +97,18 @@ public sealed class PairwiseSubjectIdentifiersTests
         var resolver = new SectorIdentifierResolver(httpClientFactory);
         var pairwise = new PairwiseSubjectService(db, resolver, NullLogger<PairwiseSubjectService>.Instance);
 
+        var keyStore = new KeyStore(
+            db,
+            MockTenantAccessor.CreateWithTenant(tenantId, "t1"),
+            new MrWhoOidc.UnitTests.Helpers.TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+
+        var keyProvider = MrWhoOidc.UnitTests.Helpers.TestCachedKeyProviderFactory.Create(keyStore);
+
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc,
+            keyProvider,
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -200,9 +220,12 @@ public sealed class PairwiseSubjectIdentifiersTests
         var resolver = new SectorIdentifierResolver(httpClientFactory);
         var pairwise = new PairwiseSubjectService(db, resolver, NullLogger<PairwiseSubjectService>.Instance);
 
+        var keyProvider = CreateKeyProvider();
+
         var exchanger = new AuthorizationCodeExchanger(
             db,
             jwtSvc,
+            keyProvider,
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),
@@ -430,9 +453,12 @@ public sealed class PairwiseSubjectIdentifiersTests
         claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Claim>());
 
+        var keyProvider = CreateKeyProvider();
+
         return new AuthorizationCodeExchanger(
             db,
             jwtSvc,
+            keyProvider,
             refreshSvc.Object,
             revocationSvc.Object,
             Options(),

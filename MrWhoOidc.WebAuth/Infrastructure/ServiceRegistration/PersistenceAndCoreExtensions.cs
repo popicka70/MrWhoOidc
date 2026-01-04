@@ -46,6 +46,7 @@ public static class PersistenceAndCoreExtensions
         // Protocol endpoint handlers (discovery, token, etc.)
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddScoped<IAuthorizeHandler, AuthorizeHandler>();
+        services.AddScoped<ICheckSessionHandler, CheckSessionHandler>();
         services.AddScoped<IAuthorizeResponseGenerator, AuthorizeResponseGenerator>();
         services.AddScoped<IAuthorizeRequestSanitizer, AuthorizeRequestSanitizer>();
         services.AddScoped<IAuthenticationRedirectService, AuthenticationRedirectService>();
@@ -70,6 +71,11 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();
         services.AddScoped<ITokenGrantHandler, ClientCredentialsGrantHandler>();
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
+        services.AddScoped<ITokenGrantHandler, DeviceCodeGrantHandler>();
+        services.AddScoped<ITokenGrantHandler, CibaGrantHandler>();
+        services.AddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
+        services.AddScoped<ICibaAuthenticationHandler, CibaAuthenticationHandler>();
+        services.AddScoped<ICibaNotificationService, DefaultCibaNotificationService>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
         services.AddScoped<IWebAuthnHandler, WebAuthnHandler>();
@@ -90,6 +96,10 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<IQrLoginService, QrLoginService>();
         services.AddScoped<IQrCodeGenerator, QrCodeGenerator>();
         services.AddScoped<IQrLoginHandler, QrLoginHandler>();
+
+        // Dynamic client registration (RFC 7591/7592)
+        services.AddScoped<IRegistrationHandler, RegistrationHandler>();
+        services.AddScoped<IClientConfigurationHandler, ClientConfigurationHandler>();
 
         // Hosted validator (optional – only throws if Testing:ValidateAuthCore=true)
         services.AddHostedService<AuthCoreValidationHostedService>();

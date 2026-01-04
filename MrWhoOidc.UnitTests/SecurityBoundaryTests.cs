@@ -203,7 +203,7 @@ public sealed class SecurityBoundaryTests
     public async Task Security_Audience_Mismatch_Rejected()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService = TestJwtServiceFactory.Create(keyStore);
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
@@ -238,7 +238,7 @@ public sealed class SecurityBoundaryTests
     public async Task Security_JWT_Algorithm_None_Rejected()
     {
         using var db = CreateDb();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         // Create an unsigned JWT (algorithm "none" attack)

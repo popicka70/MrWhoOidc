@@ -3,7 +3,6 @@ using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.KeyManagement;
-using MrWhoOidc.Auth.Crypto;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
@@ -49,7 +48,7 @@ public sealed class CachedKeyProviderTests
     public async Task GetActiveSigningKeyAsync_CachesResult()
     {
         // Arrange
-        var jwk = new RsaJwk { Kid = "k1", Alg = "RS256", Kty = "RSA", N = "n", E = "e", D = "d" };
+        var jwk = new JsonWebKey { Kid = "k1", Alg = "RS256", Kty = "RSA", N = "n", E = "e", D = "d" };
         _keyStoreMock.Setup(k => k.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(jwk);
 
@@ -67,7 +66,7 @@ public sealed class CachedKeyProviderTests
     public async Task InvalidateCache_ClearsCache()
     {
         // Arrange
-        var jwk = new RsaJwk { Kid = "k1", Alg = "RS256", Kty = "RSA", N = "n", E = "e", D = "d" };
+        var jwk = new JsonWebKey { Kid = "k1", Alg = "RS256", Kty = "RSA", N = "n", E = "e", D = "d" };
         _keyStoreMock.Setup(k => k.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(jwk);
 

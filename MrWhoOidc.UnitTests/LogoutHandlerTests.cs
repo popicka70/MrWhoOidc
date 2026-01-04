@@ -172,7 +172,7 @@ public class LogoutHandlerTests
         var endSession = CreateEndSessionHandler(db, audit, metrics, config);
 
         // Create a valid, signed JWT whose aud == client_id (simulating a real id_token_hint)
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(keyStore);
         var idTokenHint = await jwt.CreateJwtAsync(
             issuer,
@@ -329,7 +329,7 @@ public class LogoutHandlerTests
     private static EndSessionHandler CreateEndSessionHandler(AuthDbContext db, IAuditSink audit, OidcEndpointMetrics metrics, IConfiguration config)
     {
         var frontChannel = new FrontChannelLogoutNotifier(db);
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
         var tokenService = new Moq.Mock<MrWhoOidc.Auth.Services.Token.ILogoutTokenService>();
         var backChannel = new BackChannelLogoutEnqueuer(

@@ -19,6 +19,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
@@ -58,6 +59,19 @@ public class EditModel(
     public string ClientPublicId { get; private set; } = string.Empty;
 
     public bool HasLegacyClientSecretHash { get; private set; }
+
+    public string ActiveSigningAlg { get; private set; } = SecurityConstants.JwtAlgorithms.RS256;
+
+    public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
+    {
+        var tenantId = TenantAccessor.CurrentTenant?.TenantId;
+        if (tenantId.HasValue)
+        {
+            ActiveSigningAlg = await GetActiveTenantSigningAlgorithmAsync(tenantId.Value);
+        }
+
+        await next();
+    }
 
     // Scopes tab model
     public List<Scope> AvailableScopes { get; private set; } = new();
@@ -130,6 +144,7 @@ public class EditModel(
     await LoadProviderMappingsAsync(client.Id);
     await LoadClientSecretsAsync(client.Id);
     await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
+
 
         // Build tenant-aware IdP chaining URLs
         var issuer = HttpContext.GetIssuer(oidcOptions.Value);
@@ -238,6 +253,15 @@ public class EditModel(
             IntrospectionMtlsThumbprints = mtls,
             PublicJwksJson = client.PublicJwksJson,
             PublicJwksUri = client.PublicJwksUri,
+            IdTokenSignedResponseAlg = client.IdTokenSignedResponseAlg,
+            IdTokenEncryptedResponseAlg = client.IdTokenEncryptedResponseAlg,
+            IdTokenEncryptedResponseEnc = client.IdTokenEncryptedResponseEnc,
+            UserInfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
+            UserInfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
+            UserInfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
+            AuthorizationSignedResponseAlg = client.AuthorizationSignedResponseAlg,
+            AuthorizationEncryptedResponseAlg = client.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEnc = client.AuthorizationEncryptedResponseEnc,
             AllowedLoginRedirectUris = loginUris,
             AllowedLogoutRedirectUris = logoutUris,
             AllowLocalLogin = client.AllowLocalLogin,
@@ -1038,6 +1062,99 @@ public class EditModel(
             return NotFound();
         }
 
+        // --- OIDC response crypto settings ---
+        Input.IdTokenSignedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) ? null : Input.IdTokenSignedResponseAlg.Trim();
+        Input.IdTokenEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseAlg) ? null : Input.IdTokenEncryptedResponseAlg.Trim();
+        Input.IdTokenEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.IdTokenEncryptedResponseEnc) ? null : Input.IdTokenEncryptedResponseEnc.Trim();
+        Input.UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg.Trim();
+        Input.UserInfoEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseAlg) ? null : Input.UserInfoEncryptedResponseAlg.Trim();
+        Input.UserInfoEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc) ? null : Input.UserInfoEncryptedResponseEnc.Trim();
+        Input.AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg.Trim();
+        Input.AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg.Trim();
+        Input.AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc.Trim();
+
+        if (!string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) && string.Equals(Input.IdTokenSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", "'none' is not supported.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.IdTokenSignedResponseAlg) && !string.Equals(Input.IdTokenSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.IdTokenSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) && !string.Equals(Input.UserInfoSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.UserInfoSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) && !string.Equals(Input.AuthorizationSignedResponseAlg, ActiveSigningAlg, StringComparison.Ordinal))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.AuthorizationSignedResponseAlg", $"Must match tenant active signing alg '{ActiveSigningAlg}' or be empty.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        ValidateEncryptionPairOrError(
+            Input.IdTokenEncryptedResponseAlg,
+            Input.IdTokenEncryptedResponseEnc,
+            "Input.IdTokenEncryptedResponseAlg",
+            "Input.IdTokenEncryptedResponseEnc");
+
+        ValidateEncryptionPairOrError(
+            Input.UserInfoEncryptedResponseAlg,
+            Input.UserInfoEncryptedResponseEnc,
+            "Input.UserInfoEncryptedResponseAlg",
+            "Input.UserInfoEncryptedResponseEnc");
+
+        ValidateEncryptionPairOrError(
+            Input.AuthorizationEncryptedResponseAlg,
+            Input.AuthorizationEncryptedResponseEnc,
+            "Input.AuthorizationEncryptedResponseAlg",
+            "Input.AuthorizationEncryptedResponseEnc");
+
+        if (!ModelState.IsValid)
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
+        // If enabling encryption, require some form of JWKS
+        if ((Input.IdTokenEncryptedResponseAlg is not null || Input.IdTokenEncryptedResponseEnc is not null
+            || Input.UserInfoEncryptedResponseAlg is not null || Input.UserInfoEncryptedResponseEnc is not null
+            || Input.AuthorizationEncryptedResponseAlg is not null || Input.AuthorizationEncryptedResponseEnc is not null)
+            && string.IsNullOrWhiteSpace(Input.PublicJwksJson)
+            && string.IsNullOrWhiteSpace(Input.PublicJwksUri))
+        {
+            await LoadRealmsAsync();
+            await LoadScopesAsync(Id);
+            ModelState.AddModelError("Input.PublicJwksJson", "Provide a public JWKS (JSON or URI) to enable encrypted responses.");
+            KeyPreviews = BuildPreviews(Input.PublicJwksJson);
+            JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
+            return Page();
+        }
+
         var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == Id && c.TenantId == currentTenantId.Value);
         if (client is null) return NotFound();
         // Capture old values for audit comparison
@@ -1129,6 +1246,17 @@ public class EditModel(
         // Persist JWKS/JWKS URI
         client.PublicJwksJson = string.IsNullOrWhiteSpace(Input.PublicJwksJson) ? null : Input.PublicJwksJson;
         client.PublicJwksUri = string.IsNullOrWhiteSpace(Input.PublicJwksUri) ? null : Input.PublicJwksUri;
+
+        // Persist OIDC crypto response metadata
+        client.IdTokenSignedResponseAlg = Input.IdTokenSignedResponseAlg;
+        client.IdTokenEncryptedResponseAlg = Input.IdTokenEncryptedResponseAlg;
+        client.IdTokenEncryptedResponseEnc = Input.IdTokenEncryptedResponseEnc;
+        client.UserInfoSignedResponseAlg = Input.UserInfoSignedResponseAlg;
+        client.UserInfoEncryptedResponseAlg = Input.UserInfoEncryptedResponseAlg;
+        client.UserInfoEncryptedResponseEnc = Input.UserInfoEncryptedResponseEnc;
+        client.AuthorizationSignedResponseAlg = Input.AuthorizationSignedResponseAlg;
+        client.AuthorizationEncryptedResponseAlg = Input.AuthorizationEncryptedResponseAlg;
+        client.AuthorizationEncryptedResponseEnc = Input.AuthorizationEncryptedResponseEnc;
 
         // Persist redirect allow-lists
         client.AllowedLoginRedirectUrisJson = NormalizeUrlsToJson(Input.AllowedLoginRedirectUris);
@@ -1303,6 +1431,51 @@ public class EditModel(
             });
         }
         return TenantAwareRedirect("/Admin/Clients");
+    }
+
+    private void ValidateEncryptionPairOrError(string? alg, string? enc, string algKey, string encKey)
+    {
+        // Only supported: RSA-OAEP + A256CBC-HS512. Either both empty (disabled) or both set.
+        var algSet = !string.IsNullOrWhiteSpace(alg);
+        var encSet = !string.IsNullOrWhiteSpace(enc);
+        if (!algSet && !encSet)
+        {
+            return;
+        }
+
+        if (!algSet)
+        {
+            ModelState.AddModelError(algKey, "Select an encryption alg or clear the enc value.");
+        }
+        if (!encSet)
+        {
+            ModelState.AddModelError(encKey, "Select an encryption enc or clear the alg value.");
+        }
+        if (!algSet || !encSet)
+        {
+            return;
+        }
+
+        if (!string.Equals(alg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError(algKey, $"Unsupported alg. Supported: '{SecurityAlgorithms.RsaOAEP}'.");
+        }
+        if (!string.Equals(enc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError(encKey, $"Unsupported enc. Supported: '{SecurityAlgorithms.Aes256CbcHmacSha512}'.");
+        }
+    }
+
+    private async Task<string> GetActiveTenantSigningAlgorithmAsync(Guid tenantId)
+    {
+        var alg = await db.SigningKeys
+            .AsNoTracking()
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .Select(k => k.Alg)
+            .FirstOrDefaultAsync();
+
+        return string.IsNullOrWhiteSpace(alg) ? SecurityConstants.JwtAlgorithms.RS256 : alg;
     }
 
     private static string? NormalizeUrlsToJson(string? input)
@@ -1966,6 +2139,42 @@ public class EditModel(
         [Display(Name = "Public JWKS URI")]
         [Url]
         public string? PublicJwksUri { get; set; }
+
+        [Display(Name = "ID token signed response alg")]
+        [StringLength(50)]
+        public string? IdTokenSignedResponseAlg { get; set; }
+
+        [Display(Name = "ID token encrypted response alg")]
+        [StringLength(50)]
+        public string? IdTokenEncryptedResponseAlg { get; set; }
+
+        [Display(Name = "ID token encrypted response enc")]
+        [StringLength(50)]
+        public string? IdTokenEncryptedResponseEnc { get; set; }
+
+        [Display(Name = "UserInfo signed response alg")]
+        [StringLength(50)]
+        public string? UserInfoSignedResponseAlg { get; set; }
+
+        [Display(Name = "UserInfo encrypted response alg")]
+        [StringLength(50)]
+        public string? UserInfoEncryptedResponseAlg { get; set; }
+
+        [Display(Name = "UserInfo encrypted response enc")]
+        [StringLength(50)]
+        public string? UserInfoEncryptedResponseEnc { get; set; }
+
+        [Display(Name = "Authorization signed response alg")]
+        [StringLength(50)]
+        public string? AuthorizationSignedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response alg")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseAlg { get; set; }
+
+        [Display(Name = "Authorization encrypted response enc")]
+        [StringLength(50)]
+        public string? AuthorizationEncryptedResponseEnc { get; set; }
         [Display(Name = "Test signed JWT")]
         public string? TestJwt { get; set; }
         [Display(Name = "Private JWK or JWKS (one-time)")]

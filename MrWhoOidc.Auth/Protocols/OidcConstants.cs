@@ -53,6 +53,7 @@ public static class OidcConstants
         public const string Fragment = "fragment";
         public const string FormPost = "form_post";
         public const string QueryJwt = "query.jwt";
+        public const string FragmentJwt = "fragment.jwt";
         public const string FormPostJwt = "form_post.jwt";
     }
 
@@ -99,6 +100,16 @@ public static class OidcConstants
         public const string Idp = "idp";
         public const string TenantId = "tenant_id";
         public const string Cnf = "cnf";
+    }
+
+    /// <summary>
+    /// ACR (Authentication Context Class Reference) values used by this server.
+    /// </summary>
+    public static class AcrValues
+    {
+        public const string Password = "urn:mrwho:acr:password";
+        public const string Mfa = "urn:mrwho:acr:mfa";
+        public const string Passkey = "urn:mrwho:acr:passkey";
     }
 
     /// <summary>

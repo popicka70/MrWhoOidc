@@ -45,6 +45,8 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             RedirectUri = valid.RedirectUri!,
             ScopesJson = JsonSerializer.Serialize(valid.Scopes ?? Array.Empty<string>()),
             Nonce = valid.Nonce,
+            Resource = valid.Resource,
+            ClaimsJson = valid.ClaimsJson,
             CodeChallenge = valid.CodeChallenge,
             CodeChallengeMethod = valid.CodeChallengeMethod,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(lifetimeSeconds),
@@ -60,7 +62,9 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
         {
             _meta.SetResource(code, valid.Resource);
         }
-        _meta.SetAuthTime(code, DateTimeOffset.UtcNow);
+        var now = DateTimeOffset.UtcNow;
+        entity.AuthTime = now;
+        _meta.SetAuthTime(code, now);
 
         var uri = new UriBuilder(valid.RedirectUri!);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);

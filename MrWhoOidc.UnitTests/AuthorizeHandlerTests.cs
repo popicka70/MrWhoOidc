@@ -55,7 +55,8 @@ public sealed class AuthorizeHandlerTests
         IAuthorizeRequestOrchestrator? orchestrator = null,
         IAuthorizationCodeService? codes = null,
         IPushedAuthorizationRequestStore? parStore = null,
-        IQrLoginHandler? qrLoginHandler = null)
+        IQrLoginHandler? qrLoginHandler = null,
+        MrWhoOidc.Auth.Services.AuthOptions? authOptions = null)
     {
         var metrics = new OidcEndpointMetrics();
         var logger = NullLogger<AuthorizeHandler>.Instance;
@@ -72,6 +73,7 @@ public sealed class AuthorizeHandlerTests
         codes ??= new StubAuthorizationCodeService();
         parStore ??= new StubPushedAuthorizationRequestStore();
         qrLoginHandler ??= new StubQrLoginHandler();
+        authOptions ??= new MrWhoOidc.Auth.Services.AuthOptions();
 
         // Create a mock tenant accessor with default tenant
         var tenantAccessor = new MockTenantAccessor();
@@ -97,10 +99,17 @@ public sealed class AuthorizeHandlerTests
             codes,
             metrics,
             parStore,
+            Options.Create(authOptions),
             logger,
             db,
             qrLoginHandler,
             tenantAccessor);
+    }
+
+    private static async Task<string?> ExecuteRedirectLocationAsync(IResult result, DefaultHttpContext context)
+    {
+        await result.ExecuteAsync(context);
+        return context.Response.Headers.Location.FirstOrDefault();
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -344,6 +353,193 @@ public sealed class AuthorizeHandlerTests
         // Assert
         Assert.IsNotNull(result);
         // Handler redirects to /login for unauthenticated user
+    }
+
+    [TestMethod]
+    public async Task Authorize_Prompt_None_With_No_Session_Returns_Login_Required()
+    {
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state1");
+
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "none",
+            ["state"] = "state1"
+        };
+
+        var context = CreateHttpContext(queryParams);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        var uri = new Uri(loc!);
+        Assert.AreEqual("https", uri.Scheme, $"Expected https scheme; got Location='{loc}'");
+        Assert.AreEqual("app", uri.Host, $"Expected host=app; got Location='{loc}'");
+        Assert.AreEqual("/callback", uri.AbsolutePath, $"Expected path=/callback; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("error=login_required", StringComparison.Ordinal), $"Expected login_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state1", StringComparison.Ordinal), $"Expected state=state1; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task Authorize_Prompt_None_With_ConsentRequired_Returns_Consent_Required()
+    {
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state2");
+
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var consents = new StubConsentProcessor(requiresConsent: true, hasConsent: false);
+        var handler = CreateHandler(db, validator: validator, consentProcessor: consents, responseGenerator: responseGenerator);
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "none",
+            ["state"] = "state2"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=consent_required", StringComparison.Ordinal), $"Expected consent_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state2", StringComparison.Ordinal), $"Expected state=state2; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task Authorize_Prompt_None_With_MaxAge_Exceeded_Returns_Login_Required()
+    {
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state3");
+
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+
+        var oldAuthTime = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds().ToString();
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, oldAuthTime)
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "none",
+            ["max_age"] = "1",
+            ["state"] = "state3"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=login_required", StringComparison.Ordinal), $"Expected login_required; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state3", StringComparison.Ordinal), $"Expected state=state3; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task Authorize_AcrValues_Unsupported_Returns_AcrValuesNotSupported()
+    {
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state4");
+
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var handler = CreateHandler(
+            db,
+            validator: validator,
+            responseGenerator: responseGenerator,
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions
+            {
+                AcrValuesSupported = new[] { "urn:example:acr:1" }
+            });
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["acr_values"] = "urn:example:acr:2",
+            ["state"] = "state4"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=acr_values_not_supported", StringComparison.Ordinal), $"Expected acr_values_not_supported; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal), $"Expected state=state4; got Location='{loc}'");
     }
 
     [TestMethod]
@@ -799,6 +995,35 @@ public sealed class AuthorizeHandlerTests
         // Handler supports JARM response_mode=query.jwt
     }
 
+    [TestMethod]
+    public async Task Authorize_Response_Mode_Fragment_JWT_Supported()
+    {
+        // Arrange
+        using var db = CreateDb();
+        var authorize = new StubAuthorizeRequestValidator(true, clientId: "test_client", redirectUri: "https://app/callback", responseMode: "fragment.jwt");
+        var handler = CreateHandler(db, validator: authorize);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('f', 43),
+            ["code_challenge_method"] = "S256",
+            ["response_mode"] = "fragment.jwt"
+        };
+        var context = CreateHttpContext(queryParams);
+
+        // Act
+        var result = await handler.HandleAsync(context);
+
+        // Assert
+        Assert.IsNotNull(result);
+        // Handler supports JARM response_mode=fragment.jwt
+    }
+
     // Stub implementations
     private sealed class StubFeatureService : IFeatureService
     {
@@ -844,6 +1069,9 @@ public sealed class AuthorizeHandlerTests
         private readonly string? _responseMode;
         private readonly bool _requireConsent;
         private readonly string? _state;
+        private readonly string[]? _promptValues;
+        private readonly int? _maxAgeSeconds;
+        private readonly string[]? _acrValues;
 
         public StubAuthorizeRequestValidator(
             bool isValid = true,
@@ -855,7 +1083,10 @@ public sealed class AuthorizeHandlerTests
             string? nonce = null,
             string? responseMode = null,
             bool requireConsent = false,
-            string? state = null)
+            string? state = null,
+            string[]? promptValues = null,
+            int? maxAgeSeconds = null,
+            string[]? acrValues = null)
         {
             _isValid = isValid;
             _error = error;
@@ -867,10 +1098,36 @@ public sealed class AuthorizeHandlerTests
             _responseMode = responseMode;
             _requireConsent = requireConsent;
             _state = state;
+            _promptValues = promptValues;
+            _maxAgeSeconds = maxAgeSeconds;
+            _acrValues = acrValues;
         }
 
         public Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
         {
+            var promptValues = _promptValues
+                ?? (string.IsNullOrWhiteSpace(request.prompt)
+                    ? null
+                    : request.prompt
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(p => p.Trim().ToLowerInvariant())
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
+
+            int? maxAgeSeconds = _maxAgeSeconds;
+            if (maxAgeSeconds is null && !string.IsNullOrWhiteSpace(request.max_age) && int.TryParse(request.max_age, out var parsedMaxAge) && parsedMaxAge >= 0)
+            {
+                maxAgeSeconds = parsedMaxAge;
+            }
+
+            var acrValues = _acrValues
+                ?? (string.IsNullOrWhiteSpace(request.acr_values)
+                    ? null
+                    : request.acr_values
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray());
+
             var result = new AuthorizeValidationResult(
                 IsValid: _isValid,
                 Error: _error,
@@ -881,7 +1138,10 @@ public sealed class AuthorizeHandlerTests
                 Nonce: _nonce ?? request.nonce,
                 ResponseMode: _responseMode ?? request.response_mode,
                 RequireConsent: _requireConsent,
-                State: _state ?? request.state
+                State: _state ?? request.state,
+                PromptValues: promptValues,
+                MaxAgeSeconds: maxAgeSeconds,
+                AcrValues: acrValues
             );
             return Task.FromResult(result);
         }
@@ -1050,7 +1310,31 @@ public sealed class AuthorizeHandlerTests
 
         public Task<(IResult? error, AuthorizationContext? context)> ResolveAndValidateAsync(HttpContext http, CancellationToken ct = default)
         {
-            var request = _request ?? new AuthorizeRequest(client_id: _clientId);
+            static string? Q(HttpContext ctx, string key)
+            {
+                var v = ctx.Request.Query[key].ToString();
+                return string.IsNullOrWhiteSpace(v) ? null : v;
+            }
+
+            var request = _request ?? new AuthorizeRequest(
+                response_type: Q(http, "response_type"),
+                client_id: _clientId ?? Q(http, "client_id"),
+                redirect_uri: Q(http, "redirect_uri"),
+                scope: Q(http, "scope"),
+                state: Q(http, "state"),
+                nonce: Q(http, "nonce"),
+                code_challenge: Q(http, "code_challenge"),
+                code_challenge_method: Q(http, "code_challenge_method"),
+                resource: Q(http, "resource"),
+                response_mode: Q(http, "response_mode"),
+                prompt: Q(http, "prompt"),
+                max_age: Q(http, "max_age"),
+                id_token_hint: Q(http, "id_token_hint"),
+                login_hint: Q(http, "login_hint"),
+                acr_values: Q(http, "acr_values"),
+                display: Q(http, "display"),
+                ui_locales: Q(http, "ui_locales"),
+                claims: Q(http, "claims"));
             if (!_valid)
             {
                 return Task.FromResult<(IResult? error, AuthorizationContext? context)>((Results.BadRequest("Invalid request"), null));
@@ -1221,8 +1505,17 @@ public sealed class AuthorizeHandlerTests
 
     private sealed class StubConsentProcessor : IConsentProcessor
     {
+        private readonly bool _requiresConsent;
+        private readonly bool _hasConsent;
+
+        public StubConsentProcessor(bool requiresConsent = false, bool hasConsent = true)
+        {
+            _requiresConsent = requiresConsent;
+            _hasConsent = hasConsent;
+        }
+
         public Task<ConsentDecision> EvaluateAsync(Guid userId, string clientId, string[] scopes, CancellationToken ct = default)
-            => Task.FromResult(new ConsentDecision(false, true));
+            => Task.FromResult(new ConsentDecision(_requiresConsent, _hasConsent));
     }
 
     private sealed class StubProviderSelectionService : IProviderSelectionService
@@ -1251,7 +1544,7 @@ public sealed class AuthorizeHandlerTests
 
     private sealed class StubAuthenticationRedirectService : IAuthenticationRedirectService
     {
-        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, CancellationToken ct = default)
+        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
             => Task.FromResult(Results.Redirect("/login") as IResult);
     }
 

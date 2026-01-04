@@ -256,6 +256,12 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AuthTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClaimsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -284,6 +290,10 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<string>("RedirectUri")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Resource")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("ScopesJson")
                         .IsRequired()
@@ -437,6 +447,18 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<string>("AuthorizationEncryptedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AuthorizationEncryptedResponseEnc")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AuthorizationSignedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<int>("AutoApprovalMode")
                         .HasColumnType("integer");
 
@@ -474,6 +496,18 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<string>("FrontChannelLogoutUri")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("IdTokenEncryptedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("IdTokenEncryptedResponseEnc")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("IdTokenSignedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("IntrospectionAudiencesJson")
                         .HasMaxLength(2000)
@@ -570,6 +604,18 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("UserInfoEncryptedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("UserInfoEncryptedResponseEnc")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("UserInfoSignedResponseAlg")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
@@ -768,6 +814,33 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Consents");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.DynamicRegistrationToken", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DynamicRegistrationTokens");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.EmailConfirmation", b =>
@@ -1626,6 +1699,13 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Use")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("sig");
 
                     b.HasKey("Id");
 

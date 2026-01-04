@@ -14,6 +14,7 @@ public sealed class ClientAuthenticator(
     IClientStore clientStore,
     IClientAssertionValidator assertionValidator,
     IOptions<AuthOptions> authOptions,
+    IMtlsThumbprintResolver mtlsThumbprintResolver,
     ILogger<ClientAuthenticator> logger)
 {
     public async Task<(bool Authenticated, IResult? ErrorResult)> AuthenticateAsync(IntrospectionContext context)
@@ -102,9 +103,14 @@ public sealed class ClientAuthenticator(
             return (false, Results.BadRequest(new { error = "unauthorized_client" }));
         }
 
-        var presentedThumbprint = cert.GetCertHashString(HashAlgorithmName.SHA256);
-        var match = allowedThumbprints.Any(t =>
-            string.Equals(t, presentedThumbprint, StringComparison.OrdinalIgnoreCase));
+        var presentedX5tS256 = mtlsThumbprintResolver.ResolveThumbprint(cert);
+        var presentedHex = cert.GetCertHashString(HashAlgorithmName.SHA256);
+
+        static bool HasValue(string? v) => !string.IsNullOrWhiteSpace(v);
+
+        var match =
+            (HasValue(presentedX5tS256) && allowedThumbprints.Any(t => string.Equals(t, presentedX5tS256, StringComparison.OrdinalIgnoreCase))) ||
+            (HasValue(presentedHex) && allowedThumbprints.Any(t => string.Equals(t, presentedHex, StringComparison.OrdinalIgnoreCase)));
 
         if (!match)
         {

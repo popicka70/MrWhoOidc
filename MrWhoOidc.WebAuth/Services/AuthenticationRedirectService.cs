@@ -14,7 +14,7 @@ public sealed class AuthenticationRedirectService(
     ILoginContinuationStore continuationStore,
     IAuthorizeResponseGenerator responseGenerator) : IAuthenticationRedirectService
 {
-    public async Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, CancellationToken ct = default)
+    public async Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
     {
         if (!string.IsNullOrEmpty(selection.AutoRedirectProvider))
         {
@@ -38,6 +38,14 @@ public sealed class AuthenticationRedirectService(
             var ctx = await continuationStore.StoreAsync(returnUrl2, ct).ConfigureAwait(false);
             var loginPath = BuildTenantAwareUrl("/login");
             var loginUrl = QueryHelpers.AddQueryString(loginPath, "ctx", ctx);
+
+            // OIDC display parameter: propagate only known safe values.
+            // If display=popup, the login UI uses a tighter layout without footer.
+            var normalizedDisplay = NormalizeDisplay(display);
+            if (!string.IsNullOrEmpty(normalizedDisplay))
+            {
+                loginUrl = QueryHelpers.AddQueryString(loginUrl, "display", normalizedDisplay);
+            }
             return Results.Redirect(loginUrl);
         }
 
@@ -54,5 +62,12 @@ public sealed class AuthenticationRedirectService(
             return $"/t/{currentTenant.Slug}{path}";
         }
         return path;
+    }
+
+    private static string? NormalizeDisplay(string? display)
+    {
+        if (string.IsNullOrWhiteSpace(display)) return null;
+        if (string.Equals(display, "popup", StringComparison.OrdinalIgnoreCase)) return "popup";
+        return null;
     }
 }

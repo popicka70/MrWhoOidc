@@ -8,8 +8,10 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.UnitTests.Testing;
 using MrWhoOidc.WebAuth;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using System;
 
 namespace MrWhoOidc.UnitTests.Integration;
 
@@ -19,6 +21,15 @@ public sealed class DiscoveryMetadataTests
 {
     private static WebApplicationFactory<Program> CreateFactory()
         => (WebApplicationFactory<Program>)TestWebAppFactory.CreateInMemory();
+
+    private static WebApplicationFactory<Program> CreateFactoryWithConfig(Dictionary<string, string?> config)
+        => CreateFactory().WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                cfg.AddTestInMemoryCollection(config);
+            });
+        });
 
     private static async Task<JsonDocument> GetDiscoveryAsync(WebApplicationFactory<Program> factory)
     {
@@ -105,6 +116,90 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_mTLS_SelfSigned_Client_Auth_For_Token_And_Introspection()
+    {
+        using var factory = CreateFactory();
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("token_endpoint_auth_methods_supported", out var tokenAuth), "token_endpoint_auth_methods_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, tokenAuth.ValueKind, "token_endpoint_auth_methods_supported must be array");
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("introspection_endpoint_auth_methods_supported", out var introspectionAuth), "introspection_endpoint_auth_methods_supported missing");
+        Assert.AreEqual(JsonValueKind.Array, introspectionAuth.ValueKind, "introspection_endpoint_auth_methods_supported must be array");
+
+        var tokenMethods = tokenAuth.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        var introspectionMethods = introspectionAuth.EnumerateArray()
+            .Where(e => e.ValueKind == JsonValueKind.String)
+            .Select(e => e.GetString())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+
+        CollectionAssert.Contains(tokenMethods, "self_signed_tls_client_auth");
+        CollectionAssert.Contains(introspectionMethods, "self_signed_tls_client_auth");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Advertises_CheckSessionIFrame()
+    {
+        using var factory = CreateFactory();
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("check_session_iframe", out var iframe), "check_session_iframe missing");
+        Assert.AreEqual(JsonValueKind.String, iframe.ValueKind, "check_session_iframe must be string");
+
+        var val = iframe.GetString();
+        Assert.IsFalse(string.IsNullOrWhiteSpace(val), "check_session_iframe empty");
+        Assert.IsTrue(val!.EndsWith("/connect/checksession", StringComparison.Ordinal), $"Unexpected check_session_iframe='{val}'");
+    }
+
+    [TestMethod]
+    public async Task CheckSessionIFrame_Endpoint_Is_Embeddable()
+    {
+        using var factory = CreateFactory();
+
+        var mt = factory.Services.GetRequiredService<IMultiTenancyStateProvider>();
+        mt.UpdateState(false);
+
+        var client = factory.CreateClient();
+        var resp = await client.GetAsync("/connect/checksession");
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+
+        var ct = resp.Content.Headers.ContentType?.MediaType;
+        Assert.AreEqual("text/html", ct);
+
+        // Must not be DENY / none for framing.
+        Assert.IsFalse(resp.Headers.TryGetValues("X-Frame-Options", out var xfo) && string.Join(" ", xfo).Contains("DENY", StringComparison.OrdinalIgnoreCase), "X-Frame-Options DENY blocks iframe usage");
+        Assert.IsFalse(resp.Headers.TryGetValues("Content-Security-Policy", out var csp) && string.Join(" ", csp).Contains("frame-ancestors 'none'", StringComparison.OrdinalIgnoreCase), "CSP frame-ancestors 'none' blocks iframe usage");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Emits_mtls_endpoint_aliases_When_Configured()
+    {
+        using var factory = CreateFactoryWithConfig(new()
+        {
+            ["Auth:MtlsEndpointAliasesBaseUrl"] = "https://mtls.example.com"
+        });
+
+        using var doc = await GetDiscoveryAsync(factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("mtls_endpoint_aliases", out var aliases), "mtls_endpoint_aliases missing");
+        Assert.AreEqual(JsonValueKind.Object, aliases.ValueKind, "mtls_endpoint_aliases must be object");
+
+        Assert.IsTrue(aliases.TryGetProperty("token_endpoint", out var token), "token_endpoint alias missing");
+        Assert.IsTrue(aliases.TryGetProperty("introspection_endpoint", out var introspect), "introspection_endpoint alias missing");
+        Assert.IsTrue(aliases.TryGetProperty("revocation_endpoint", out var revoke), "revocation_endpoint alias missing");
+
+        Assert.AreEqual("https://mtls.example.com/token", token.GetString());
+        Assert.AreEqual("https://mtls.example.com/introspect", introspect.GetString());
+        Assert.AreEqual("https://mtls.example.com/revoke", revoke.GetString());
+    }
+
+    [TestMethod]
     public async Task Discovery_TenantPrefixed_Only_Advertises_Tenant_And_Global_Scopes()
     {
         using var factory = CreateFactory();
@@ -187,5 +282,86 @@ public sealed class DiscoveryMetadataTests
         var client = factory.CreateClient();
         var resp = await client.GetAsync("/.well-known/openid-configuration");
         Assert.AreEqual(HttpStatusCode.NotFound, resp.StatusCode, "root discovery should be blocked in multi-tenant mode");
+    }
+
+    [TestMethod]
+    public async Task Discovery_DoesNotAdvertise_Jarm_Encryption_When_NoClient_OptsIn()
+    {
+        using var factory = CreateFactory();
+
+        // Arrange: ensure this tenant has no clients opting into JARM encryption.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var tenantId = db.Tenants.Select(t => t.Id).First();
+
+            var toRemove = db.Clients.Where(c => c.TenantId == tenantId).ToList();
+            if (toRemove.Count > 0)
+            {
+                db.Clients.RemoveRange(toRemove);
+                db.SaveChanges();
+            }
+        }
+
+        // Act
+        using var doc = await GetDiscoveryAsync(factory);
+
+        // Assert
+        Assert.IsFalse(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_alg_values_supported", out _),
+            "authorization_response_encryption_alg_values_supported should be omitted unless at least one client opts in");
+        Assert.IsFalse(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_enc_values_supported", out _),
+            "authorization_response_encryption_enc_values_supported should be omitted unless at least one client opts in");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Advertises_Jarm_Encryption_When_AnyClient_OptsIn()
+    {
+        using var factory = CreateFactory();
+
+        // Arrange: seed a client that opts into authorization response encryption.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            var tenantId = db.Tenants.Select(t => t.Id).First();
+
+            // Ensure a realm exists for this tenant.
+            var realm = db.Realms.FirstOrDefault(r => r.TenantId == tenantId);
+            if (realm is null)
+            {
+                realm = new global::MrWhoOidc.Auth.Persistence.Realm { Name = "default", TenantId = tenantId };
+                db.Realms.Add(realm);
+                db.SaveChanges();
+            }
+
+            db.Clients.Add(new global::MrWhoOidc.Auth.Persistence.Client
+            {
+                TenantId = tenantId,
+                RealmId = realm.Id,
+                ClientId = "jarm-enc-client",
+                AuthorizationEncryptedResponseAlg = "RSA-OAEP",
+                AuthorizationEncryptedResponseEnc = "A256CBC-HS512"
+            });
+
+            db.SaveChanges();
+        }
+
+        // Act
+        using var doc = await GetDiscoveryAsync(factory);
+
+        // Assert
+        Assert.IsTrue(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_alg_values_supported", out var algs),
+            "authorization_response_encryption_alg_values_supported missing");
+        Assert.IsTrue(
+            doc.RootElement.TryGetProperty("authorization_response_encryption_enc_values_supported", out var encs),
+            "authorization_response_encryption_enc_values_supported missing");
+
+        var algValues = algs.EnumerateArray().Select(e => e.GetString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+        var encValues = encs.EnumerateArray().Select(e => e.GetString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+
+        CollectionAssert.Contains(algValues!, "RSA-OAEP");
+        CollectionAssert.Contains(encValues!, "A256CBC-HS512");
     }
 }

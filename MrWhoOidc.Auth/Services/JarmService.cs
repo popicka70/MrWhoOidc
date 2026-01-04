@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
@@ -34,11 +35,14 @@ public interface IJarmService
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 
-public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
+public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvider keyProvider) : IJarmService
 {
     public async Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state)
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
+
+        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
         
         var claims = new List<Claim>
         {
@@ -46,13 +50,13 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         };
         
         // c_hash per JARM
-        var cHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(code);
+        var cHash = CryptoHelper.ComputeLeftHalfHashBase64Url(code, signingAlg);
         claims.Add(new(OidcConstants.Claims.CHash, cHash));
         
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -70,6 +74,9 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
     {
         var enc = await TryGetEncryptingCredentialsAsync(clientId);
 
+        var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
+        var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+
         var claims = new List<Claim>
         {
             new(OAuthConstants.Parameters.Error, error),
@@ -79,7 +86,7 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
-            var sHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(state);
+            var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
         
@@ -100,6 +107,20 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
             if (string.IsNullOrEmpty(clientId)) return null;
             var client = await clients.FindByClientIdAsync(clientId);
             if (client is null) return null;
+
+            // Only encrypt JARM when the client explicitly opts in via client metadata.
+            if (string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.AuthorizationEncryptedResponseEnc))
+            {
+                return null;
+            }
+
+            if (!string.Equals(client.AuthorizationEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+                || !string.Equals(client.AuthorizationEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+            {
+                // Enforce supported alg/enc pair. Discovery advertises what's supported.
+                return null;
+            }
+
             var jwks = client.PublicJwksJson;
             if (string.IsNullOrWhiteSpace(jwks)) return null;
             
@@ -110,7 +131,7 @@ public class JarmService(IClientStore clients, IJwtService jwt) : IJarmService
             
             if (key is null) return null;
             
-            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256Gcm);
+            var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
             return encCreds;
         }
         catch

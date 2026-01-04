@@ -69,10 +69,32 @@ public sealed class DiscoveryHandler(
             OAuthConstants.GrantTypes.RefreshToken,
             OAuthConstants.GrantTypes.ClientCredentials
         };
+        
+        // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
+        // only advertise authorization response encryption algorithms when at least one client in this
+        // tenant is configured for it.
         if (authOptions.Value.EnableTokenExchange)
         {
             grants.Add(OAuthConstants.GrantTypes.TokenExchange);
         }
+
+        // RFC 8628: Device Authorization Grant
+        var deviceAuthEnabled = authOptions.Value.EnableDeviceAuthorizationGrant &&
+            await featureService.IsFeatureEnabledAsync(FeatureFlags.DeviceAuthorizationGrant, tenantId, ctx.RequestAborted);
+        if (deviceAuthEnabled)
+        {
+            grants.Add(OAuthConstants.GrantTypes.DeviceCode);
+        }
+
+        var clientsQuery = db.Clients.AsNoTracking();
+        if (tenantId is not null)
+        {
+            clientsQuery = clientsQuery.Where(c => c.TenantId == tenantId);
+        }
+
+        var advertiseAuthorizationResponseEncryption = await clientsQuery.AnyAsync(
+            c => c.AuthorizationEncryptedResponseAlg != null && c.AuthorizationEncryptedResponseEnc != null,
+            ctx.RequestAborted);
 
         // Check if AdvancedSecurity feature is enabled for PAR
         var advancedSecurityEnabled = await featureService.IsFeatureEnabledAsync(
@@ -130,6 +152,20 @@ public sealed class DiscoveryHandler(
             .OrderBy(c => c, StringComparer.Ordinal)
             .ToArray();
 
+        // Advertise the active tenant signing algorithm for ID tokens (and JARM signing).
+        // This keeps discovery consistent with what the server actually emits.
+        var activeSigningAlg = await db.SigningKeys
+            .AsNoTracking()
+            .Where(k => k.TenantId == tenantId)
+            .OrderByDescending(k => k.CreatedAt)
+            .Select(k => k.Alg)
+            .FirstOrDefaultAsync(ctx.RequestAborted)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(activeSigningAlg))
+        {
+            activeSigningAlg = SecurityConstants.JwtAlgorithms.RS256;
+        }
+
         var body = new Dictionary<string, object>
         {
             ["issuer"] = issuer,
@@ -137,8 +173,9 @@ public sealed class DiscoveryHandler(
             ["token_endpoint"] = $"{baseUrl}/token",
             ["userinfo_endpoint"] = $"{baseUrl}/userinfo",
             ["revocation_endpoint"] = $"{baseUrl}/revoke",
+            ["revocation_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["introspection_endpoint"] = $"{baseUrl}/introspect",
-            ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
+            ["introspection_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["subject_types_supported"] = new[] { OidcConstants.SubjectTypes.Public, OidcConstants.SubjectTypes.Pairwise },
             ["introspection_endpoint_auth_signing_alg_values_supported"] = new[]
             {
@@ -149,7 +186,18 @@ public sealed class DiscoveryHandler(
                 SecurityConstants.JwtAlgorithms.ES384,
                 SecurityConstants.JwtAlgorithms.ES512
             },
+            ["revocation_endpoint_auth_signing_alg_values_supported"] = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
+            },
             ["jwks_uri"] = $"{baseUrl}/jwks",
+            // OIDC Session Management (check_session_iframe)
+            ["check_session_iframe"] = $"{baseUrl}/connect/checksession",
             ["end_session_endpoint"] = $"{baseUrl}/connect/endsession",
             ["frontchannel_logout_supported"] = true,
             ["frontchannel_logout_session_supported"] = true,
@@ -157,7 +205,7 @@ public sealed class DiscoveryHandler(
             ["backchannel_logout_session_supported"] = true,
             ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
             ["grant_types_supported"] = grants.ToArray(),
-            ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt" },
+            ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["token_endpoint_auth_signing_alg_values_supported"] = new[]
             {
                 SecurityConstants.JwtAlgorithms.RS256,
@@ -168,20 +216,37 @@ public sealed class DiscoveryHandler(
                 SecurityConstants.JwtAlgorithms.ES512
             },
             ["code_challenge_methods_supported"] = new[] { OAuthConstants.CodeChallengeMethods.S256 },
-            ["id_token_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
             ["scopes_supported"] = scopes,
             ["claims_supported"] = claimsSupported,
+            // OIDC Discovery recommended metadata
+            ["claim_types_supported"] = new[] { "normal" },
+            ["claims_parameter_supported"] = true,
+            ["display_values_supported"] = new[] { "page", "popup" },
+            ["prompt_values_supported"] = new[] { "none", "login", "consent", "select_account" },
+            // ui_locales_supported is a best-effort hint (actual locale availability depends on deployed resources)
+            ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,
+            // acr_values_supported is optional; only advertise when configured
+            ["id_token_signing_alg_values_supported"] = new[] { activeSigningAlg },
+            ["id_token_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
+            ["id_token_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
+            // UserInfo signed/encrypted JWT response support
+            ["userinfo_signing_alg_values_supported"] = new[] { activeSigningAlg },
+            ["userinfo_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
+            ["userinfo_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" },
+            ["acr_values_supported"] = authOptions.Value.AcrValuesSupported,
+            ["service_documentation"] = authOptions.Value.ServiceDocumentationUrl ?? string.Empty,
+            ["op_policy_uri"] = authOptions.Value.OpPolicyUrl ?? string.Empty,
+            ["op_tos_uri"] = authOptions.Value.OpTosUrl ?? string.Empty,
             ["resource_indicators_supported"] = true,
             // JAR support
             ["request_parameter_supported"] = true,
             ["request_uri_parameter_supported"] = true,
             ["request_object_signing_alg_values_supported"] = requestObjectAlgorithms,
+            // Request object encryption (JAR encryption) is opt-in; keep discovery truthful.
             // JARM support
-            ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "form_post.jwt" },
+            ["response_modes_supported"] = new[] { "query", "fragment", "form_post", "query.jwt", "fragment.jwt", "form_post.jwt" },
             ["authorization_response_iss_parameter_supported"] = true,
-            ["authorization_response_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256 },
-            ["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" },
-            ["authorization_response_encryption_enc_values_supported"] = new[] { "A256GCM" },
+            ["authorization_response_signing_alg_values_supported"] = new[] { activeSigningAlg },
             // Non-standard hints to improve DX
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
             // DPoP capability hints (experimental)
@@ -189,11 +254,83 @@ public sealed class DiscoveryHandler(
             ["dpop_bound_access_tokens"] = true
         };
 
+        if (authOptions.Value.EnableRequestObjectEncryption)
+        {
+            body["request_object_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };
+            body["request_object_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" };
+        }
+        
+        if (advertiseAuthorizationResponseEncryption)
+        {
+            body["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };
+            body["authorization_response_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" };
+        }
+
+        // Remove empty optional strings to keep the discovery document clean.
+        if (body.TryGetValue("service_documentation", out var sd) && sd is string s1 && string.IsNullOrWhiteSpace(s1)) body.Remove("service_documentation");
+        if (body.TryGetValue("op_policy_uri", out var pp) && pp is string s2 && string.IsNullOrWhiteSpace(s2)) body.Remove("op_policy_uri");
+        if (body.TryGetValue("op_tos_uri", out var tos) && tos is string s3 && string.IsNullOrWhiteSpace(s3)) body.Remove("op_tos_uri");
+
+        // If UI locales are not configured, omit the field.
+        if (authOptions.Value.UiLocalesSupported is null || authOptions.Value.UiLocalesSupported.Length == 0)
+        {
+            body.Remove("ui_locales_supported");
+        }
+
+        // If ACR values are not configured, omit the field.
+        if (authOptions.Value.AcrValuesSupported is null || authOptions.Value.AcrValuesSupported.Length == 0)
+        {
+            body.Remove("acr_values_supported");
+        }
+
+        // RFC 7591/7592: Dynamic Client Registration endpoint
+        if (authOptions.Value.EnableDynamicClientRegistration)
+        {
+            body["registration_endpoint"] = $"{baseUrl}/register";
+        }
+
         // Only advertise PAR endpoint if AdvancedSecurity feature is enabled
         if (advancedSecurityEnabled)
         {
             body["pushed_authorization_request_endpoint"] = $"{baseUrl}/par";
             body["require_pushed_authorization_requests"] = authOptions.Value.RequirePar;
+        }
+
+        // RFC 8628: Device Authorization Grant endpoint
+        if (deviceAuthEnabled)
+        {
+            body["device_authorization_endpoint"] = $"{baseUrl}/device/authorize";
+        }
+
+        // OpenID Connect CIBA Core 1.0
+        if (authOptions.Value.EnableCiba)
+        {
+            grants.Add(OAuthConstants.GrantTypes.Ciba);
+            body["backchannel_authentication_endpoint"] = $"{baseUrl}/bc-authorize";
+            body["backchannel_token_delivery_modes_supported"] = authOptions.Value.CibaTokenDeliveryModesSupported;
+            body["backchannel_authentication_request_signing_alg_values_supported"] = new[]
+            {
+                SecurityConstants.JwtAlgorithms.RS256,
+                SecurityConstants.JwtAlgorithms.RS384,
+                SecurityConstants.JwtAlgorithms.RS512,
+                SecurityConstants.JwtAlgorithms.ES256,
+                SecurityConstants.JwtAlgorithms.ES384,
+                SecurityConstants.JwtAlgorithms.ES512
+            };
+            body["backchannel_user_code_parameter_supported"] = authOptions.Value.CibaUserCodeParameterSupported;
+        }
+
+        // RFC 8705: mtls_endpoint_aliases (optional)
+        var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;
+        if (!string.IsNullOrWhiteSpace(mtlsBase) && Uri.TryCreate(mtlsBase.Trim(), UriKind.Absolute, out var mtlsUri))
+        {
+            var mtlsBaseUrl = mtlsUri.ToString().TrimEnd('/');
+            body["mtls_endpoint_aliases"] = new Dictionary<string, string>
+            {
+                ["token_endpoint"] = $"{mtlsBaseUrl}/token",
+                ["introspection_endpoint"] = $"{mtlsBaseUrl}/introspect",
+                ["revocation_endpoint"] = $"{mtlsBaseUrl}/revoke"
+            };
         }
 
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";

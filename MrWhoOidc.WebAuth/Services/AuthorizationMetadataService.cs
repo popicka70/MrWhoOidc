@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Persistence;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,27 +12,39 @@ using System.Threading.Tasks;
 
 namespace MrWhoOidc.WebAuth.Services;
 
-public sealed class AuthorizationMetadataService(IAuthorizationCodeMetadataStore meta) : IAuthorizationMetadataService
+public sealed class AuthorizationMetadataService(IAuthorizationCodeMetadataStore meta, AuthDbContext db) : IAuthorizationMetadataService
 {
-    public Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
+    public async Task PopulateMetadataAsync(HttpContext http, string code, CancellationToken ct = default)
     {
         // Capture auth_time
         var authTimeStr = http.User.FindFirst("auth_time")?.Value;
+        DateTimeOffset authTimeValue;
         if (long.TryParse(authTimeStr, out var authTime))
         {
-            meta.SetAuthTime(code, DateTimeOffset.FromUnixTimeSeconds(authTime));
+            authTimeValue = DateTimeOffset.FromUnixTimeSeconds(authTime);
         }
         else
         {
             // Fallback to current time if not present (e.g. just logged in)
-            meta.SetAuthTime(code, DateTimeOffset.UtcNow);
+            authTimeValue = DateTimeOffset.UtcNow;
         }
+
+        meta.SetAuthTime(code, authTimeValue);
 
         // New: stash upstream identity context (idp/acr/amr) for propagation into tokens
         var idp = http.User.FindFirst(OidcConstants.Claims.Idp)?.Value;
         var acr = http.User.FindFirst(OidcConstants.Claims.Acr)?.Value;
         var amrValues = http.User.Claims.Where(c => c.Type == OidcConstants.Claims.Amr).Select(c => c.Value).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
         var amr = amrValues.Length > 0 ? string.Join(' ', amrValues) : null; // store space-delimited
+
+        if (string.IsNullOrWhiteSpace(acr) && amrValues.Length > 0)
+        {
+            // Best-effort mapping for local sign-ins.
+            // If an upstream IdP provided an explicit acr claim, we keep it.
+            if (amrValues.Contains("mfa", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Mfa;
+            else if (amrValues.Contains("webauthn", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Passkey;
+            else if (amrValues.Contains("pwd", StringComparer.Ordinal)) acr = OidcConstants.AcrValues.Password;
+        }
         meta.SetUpstream(code, idp, acr, amr);
 
         // Also capture mapped claims with ext_map_* prefix
@@ -46,6 +60,17 @@ public sealed class AuthorizationMetadataService(IAuthorizationCodeMetadataStore
         var sid = http.User.FindFirst(OidcConstants.Claims.Sid)?.Value ?? Guid.NewGuid().ToString("N");
         meta.SetSid(code, sid);
 
-        return Task.CompletedTask;
+        // Persist key pieces of metadata onto the auth code row so token exchange remains correct
+        // even if the server restarts between /authorize and /token.
+        var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == code, ct).ConfigureAwait(false);
+        if (entity is not null)
+        {
+            entity.AuthTime = authTimeValue;
+            // NOTE: upstream context + sid remain in the in-memory store for now.
+            // We can extend persistence further later without changing behavior here.
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        return;
     }
 }

@@ -106,11 +106,10 @@ internal static class TestWebAppFactory
 
 /// <summary>
 /// Background service that seeds the default tenant once on startup.
-/// Uses a static flag to ensure seeding only happens once per test run (shared in-memory database).
+/// Checks if tenant already exists in database before seeding.
 /// </summary>
 internal sealed class DefaultTenantSeedingService : IHostedService
 {
-    private static int _seeded = 0;
     private readonly IServiceProvider _serviceProvider;
 
     public DefaultTenantSeedingService(IServiceProvider serviceProvider)
@@ -120,13 +119,15 @@ internal sealed class DefaultTenantSeedingService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        // Use Interlocked.CompareExchange to ensure only one thread/instance seeds the tenant
-        if (Interlocked.CompareExchange(ref _seeded, 1, 0) == 0)
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
 
-            var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
+        var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
+        
+        // Check if tenant already exists (handles shared in-memory database across tests)
+        var existingTenant = await db.Tenants.FindAsync([defaultTenantId], cancellationToken);
+        if (existingTenant == null)
+        {
             db.Tenants.Add(new Tenant
             {
                 Id = defaultTenantId,

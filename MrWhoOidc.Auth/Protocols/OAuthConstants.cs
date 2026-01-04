@@ -47,6 +47,20 @@ public static class OAuthConstants
         // Revocation parameters (RFC 7009)
         public const string Token = "token";
         public const string TokenTypeHint = "token_type_hint";
+
+        // Device Authorization Grant parameters (RFC 8628)
+        public const string DeviceCode = "device_code";
+        public const string UserCode = "user_code";
+
+        // CIBA parameters (OpenID Connect CIBA Core 1.0)
+        public const string AuthReqId = "auth_req_id";
+        public const string LoginHint = "login_hint";
+        public const string LoginHintToken = "login_hint_token";
+        public const string IdTokenHint = "id_token_hint";
+        public const string BindingMessage = "binding_message";
+        public const string ClientNotificationToken = "client_notification_token";
+        public const string RequestedExpiry = "requested_expiry";
+        public const string AcrValues = "acr_values";
     }
 
     /// <summary>
@@ -58,6 +72,10 @@ public static class OAuthConstants
         public const string RefreshToken = "refresh_token";
         public const string ClientCredentials = "client_credentials";
         public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";
+        /// <summary>Device Authorization Grant (RFC 8628).</summary>
+        public const string DeviceCode = "urn:ietf:params:oauth:grant-type:device_code";
+        /// <summary>CIBA grant type (OpenID Connect CIBA Core 1.0).</summary>
+        public const string Ciba = "urn:openid:params:grant-type:ciba";
     }
 
     /// <summary>
@@ -91,6 +109,20 @@ public static class OAuthConstants
         public const string InvalidRequestObject = "invalid_request_object";
         public const string RateLimitExceeded = "rate_limit_exceeded";
         public const string SlowDown = "slow_down";
+        /// <summary>Device Authorization Grant: authorization pending (RFC 8628).</summary>
+        public const string AuthorizationPending = "authorization_pending";
+        /// <summary>Device Authorization Grant: expired token (RFC 8628).</summary>
+        public const string ExpiredToken = "expired_token";
+        /// <summary>CIBA: Unknown user or consent not given.</summary>
+        public const string UnknownUserId = "unknown_user_id";
+        /// <summary>CIBA: Missing user code when required.</summary>
+        public const string MissingUserCode = "missing_user_code";
+        /// <summary>CIBA: Invalid user code.</summary>
+        public const string InvalidUserCode = "invalid_user_code";
+        /// <summary>CIBA: Invalid binding message.</summary>
+        public const string InvalidBindingMessage = "invalid_binding_message";
+        /// <summary>CIBA: Transaction failed (generic).</summary>
+        public const string TransactionFailed = "transaction_failed";
     }
 
     /// <summary>

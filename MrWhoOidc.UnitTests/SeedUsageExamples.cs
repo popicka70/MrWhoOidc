@@ -37,13 +37,21 @@ public sealed class SeedUsageExamples
         
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
+        var keyStore = new KeyStore(
+            db,
+            MockTenantAccessor.CreateWithDefaultTenant(),
+            new TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+
         var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
             options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
@@ -56,7 +64,9 @@ public sealed class SeedUsageExamples
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
             db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
-        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+        var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory, deviceCodeFactory);
     }
 
     [TestMethod]
@@ -85,7 +95,7 @@ public sealed class SeedUsageExamples
         Assert.IsTrue(ok);
 
         // Exchange it
-        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var ks = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
         var tokenSvc = CreateService(db, TestJwtServiceFactory.Create(ks), options, meta);
         var (ok2, payload, _, status) = await tokenSvc.ExchangeAuthorizationCodeAsync(code!, authorizeResult.RedirectUri!, authorizeResult.ClientId!, "", "https://issuer");

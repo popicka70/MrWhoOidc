@@ -15,5 +15,9 @@ public record AuthorizeValidationResult(
     bool RequireConsent = false,
     string? Resource = null,
     string? ResponseMode = null,
-    string? State = null
+    string? State = null,
+    string? ClaimsJson = null,
+    string[]? PromptValues = null,
+    int? MaxAgeSeconds = null,
+    string[]? AcrValues = null
 );

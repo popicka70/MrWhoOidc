@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Protocols;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -47,6 +48,9 @@ public class LoginModel(
     [BindProperty(SupportsGet = true)]
     public string? TicketId { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Display { get; set; }
+
     public bool ShowNotYouLink => !string.IsNullOrEmpty(Email);
 
     public TenantBranding? TenantBranding { get; set; }
@@ -61,6 +65,8 @@ public class LoginModel(
                 ModelState.AddModelError(string.Empty, "Your sign-in session expired. Please start again.");
             }
         }
+
+        Display = NormalizeDisplay(Display ?? TryGetQueryParamFromLocalUrl(ReturnUrl, "display"));
 
         logger.LogInformation("🔍 [Login Page GET] ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, Email={Email}",
             ReturnUrl?.Length ?? 0,
@@ -106,6 +112,8 @@ public class LoginModel(
                 ModelState.AddModelError(string.Empty, "Your sign-in session expired. Please start again.");
             }
         }
+
+        Display = NormalizeDisplay(Display ?? TryGetQueryParamFromLocalUrl(ReturnUrl, "display"));
 
         logger.LogInformation("🔐 [Login POST] Username={Username}, ReturnUrlLength={ReturnUrlLength}, HasCtx={HasCtx}, ModelStateValid={Valid}, CurrentTenant={TenantSlug}, TenantId={TenantId}",
             Username ?? "(null)",
@@ -216,8 +224,24 @@ public class LoginModel(
         await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
         
         logger.LogInformation("🔐 [Login MFA] User {User} requires MFA, redirecting to TOTP page", user.Username);
-        var url = Url.Page("/LoginTotp", null, new { ReturnUrl }, protocol: Request.Scheme);
+        var url = Url.Page("/LoginTotp", null, new { ReturnUrl, Display }, protocol: Request.Scheme);
         return Redirect(url ?? "/LoginTotp");
+    }
+
+    private static string? NormalizeDisplay(string? display)
+    {
+        if (string.IsNullOrWhiteSpace(display)) return null;
+        return string.Equals(display, "popup", StringComparison.OrdinalIgnoreCase) ? "popup" : null;
+    }
+
+    private static string? TryGetQueryParamFromLocalUrl(string? localUrl, string key)
+    {
+        if (string.IsNullOrWhiteSpace(localUrl)) return null;
+        if (!localUrl.StartsWith('/')) return null;
+
+        if (!Uri.TryCreate("http://local" + localUrl, UriKind.Absolute, out var uri)) return null;
+        var parsed = QueryHelpers.ParseQuery(uri.Query);
+        return parsed.TryGetValue(key, out var v) ? v.ToString() : null;
     }
 
     private static string FormatLockoutTime(DateTimeOffset? lockedUntil)
@@ -382,6 +406,7 @@ public class LoginModel(
             new(ClaimTypes.Name, user.Username),
             new(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
             new(OidcConstants.Claims.Amr, "pwd"),
+            new(OidcConstants.Claims.Acr, OidcConstants.AcrValues.Password),
             new(OidcConstants.Claims.Idp, "local")
         };
 

@@ -32,6 +32,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Token> Tokens => Set<Token>();
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
     public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
+    // New: Device Authorization Grant (RFC 8628)
+    public DbSet<DeviceCodeEntry> DeviceCodes => Set<DeviceCodeEntry>();
     public DbSet<Realm> Realms => Set<Realm>();
     // New: roles/scopes and assignments
     public DbSet<Role> Roles => Set<Role>();
@@ -74,6 +76,10 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog> ConfigurationAuditLogs => Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>();
     // New: Platform-wide settings (single-row table)
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    // New: Dynamic client registration tokens (RFC 7592)
+    public DbSet<DynamicRegistrationToken> DynamicRegistrationTokens => Set<DynamicRegistrationToken>();
+    // New: CIBA (Client Initiated Backchannel Authentication) requests
+    public DbSet<CibaAuthenticationRequest> CibaAuthenticationRequests => Set<CibaAuthenticationRequest>();
 
     // IDataProtectionKeyContext requirement
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
@@ -656,7 +662,9 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
         modelBuilder.Entity<SigningKey>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.Kid).IsRequired();
+            b.Property(x => x.Kid).IsRequired(); 
+            // JWK "use". Typically: "sig" (signing) or "enc" (encryption)
+            b.Property(x => x.Use).IsRequired().HasMaxLength(10).HasDefaultValue("sig");
             b.HasIndex(x => x.Kid).IsUnique();
             // Multi-tenancy FK (nullable for backward compat)
             b.HasOne<Tenant>()
@@ -1275,6 +1283,44 @@ public class Client
     [MaxLength(2000)]
     public string? PublicJwksUri { get; set; }
 
+    // --- OIDC Response Security (Client Metadata) ---
+
+    // OIDC Core: id_token_encrypted_response_alg / id_token_encrypted_response_enc
+    // When configured, the OP returns an encrypted ID token (JWE) to this client.
+    // OIDC Core: id_token_signed_response_alg
+    // When configured, the client indicates its preferred ID token signing alg.
+    // Note: this OP currently enforces tenant active signing alg.
+    [MaxLength(50)]
+    public string? IdTokenSignedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? IdTokenEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? IdTokenEncryptedResponseEnc { get; set; }
+
+    // OIDC Core: userinfo_signed_response_alg / userinfo_encrypted_response_alg / userinfo_encrypted_response_enc
+    // When configured, the OP returns a JWT (JWS/JWE) from the UserInfo endpoint instead of JSON.
+    [MaxLength(50)]
+    public string? UserInfoSignedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? UserInfoEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? UserInfoEncryptedResponseEnc { get; set; }
+
+    // JARM: authorization_signed_response_alg / authorization_encrypted_response_alg / authorization_encrypted_response_enc
+    // When configured, the OP returns a JWT Secured Authorization Response (JARM) and may encrypt it.
+    [MaxLength(50)]
+    public string? AuthorizationSignedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? AuthorizationEncryptedResponseAlg { get; set; }
+
+    [MaxLength(50)]
+    public string? AuthorizationEncryptedResponseEnc { get; set; }
+
     // New: policy knobs moved from appsettings to per-client storage
     public bool RequirePar { get; set; } = false;
     [MaxLength(2000)]
@@ -1495,6 +1541,8 @@ public class SigningKey
     public Guid? TenantId { get; set; }
 
     public string Kid { get; set; } = string.Empty;
+    // JWK "use". Typically: "sig" (signing) or "enc" (encryption)
+    public string Use { get; set; } = "sig";
     public string Alg { get; set; } = "RS256";
     public string JwkJson { get; set; } = string.Empty; // private JWK material
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -1515,6 +1563,10 @@ public class AuthorizationCode
     public string RedirectUri { get; set; } = string.Empty;
     public string ScopesJson { get; set; } = "[]";
     public string? Nonce { get; set; }
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+    public DateTimeOffset? AuthTime { get; set; }
+    public string? ClaimsJson { get; set; }
     public string? CodeChallenge { get; set; }
     [MaxLength(10)]
     public string? CodeChallengeMethod { get; set; }
@@ -1599,6 +1651,80 @@ public class PushedAuthorizationRequest
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
+}
+
+/// <summary>
+/// Device Authorization Grant (RFC 8628) flow state.
+/// Tracks pending device authorization requests.
+/// </summary>
+public enum DeviceCodeStatus
+{
+    /// <summary>Authorization pending - user has not yet completed verification</summary>
+    Pending = 0,
+    /// <summary>User has authorized the device</summary>
+    Authorized = 1,
+    /// <summary>User has denied the device authorization</summary>
+    Denied = 2,
+    /// <summary>The device code has expired</summary>
+    Expired = 3
+}
+
+/// <summary>
+/// Entity representing a Device Authorization Grant (RFC 8628) request.
+/// </summary>
+[Microsoft.EntityFrameworkCore.Index(nameof(DeviceCode), IsUnique = true)]
+[Microsoft.EntityFrameworkCore.Index(nameof(UserCode), IsUnique = true)]
+public class DeviceCodeEntry
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The device_code returned to the client device for polling.</summary>
+    [MaxLength(200)]
+    public string DeviceCode { get; set; } = string.Empty;
+
+    /// <summary>The user_code displayed to the user for verification.</summary>
+    [MaxLength(20)]
+    public string UserCode { get; set; } = string.Empty;
+
+    /// <summary>The client_id that initiated the device authorization request.</summary>
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>JSON array of requested scopes.</summary>
+    public string ScopesJson { get; set; } = "[]";
+
+    /// <summary>Optional resource (RFC 8707) or audience for the token.</summary>
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+
+    /// <summary>Current authorization status.</summary>
+    public DeviceCodeStatus Status { get; set; } = DeviceCodeStatus.Pending;
+
+    /// <summary>User ID if the user has authorized the request.</summary>
+    public Guid? UserId { get; set; }
+
+    /// <summary>When the device code was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the device code expires (device_code lifetime).</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>Minimum polling interval in seconds (used for slow_down response).</summary>
+    public int IntervalSeconds { get; set; } = 5;
+
+    /// <summary>Last time the client polled for this device code (for slow_down enforcement).</summary>
+    public DateTimeOffset? LastPolledAt { get; set; }
+
+    /// <summary>IP address of the requesting device (for audit/diagnostics).</summary>
+    [MaxLength(100)]
+    public string? DeviceIpAddress { get; set; }
+
+    /// <summary>User agent of the requesting device (for audit/diagnostics).</summary>
+    [MaxLength(500)]
+    public string? DeviceUserAgent { get; set; }
 }
 
 public class Registration
@@ -1889,4 +2015,116 @@ public class QrLoginSession
     public string? MobileUserAgent { get; set; }
     [MaxLength(100)]
     public string? MobileIpAddress { get; set; }
+}
+
+// New: Dynamic client registration token (RFC 7592)
+public class DynamicRegistrationToken
+{
+    [Key]
+    [MaxLength(64)]
+    public string Id { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// SHA-256 hash of the registration_access_token (stored securely, not plaintext)
+    /// </summary>
+    [MaxLength(256)]
+    public string TokenHash { get; set; } = string.Empty;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Status of a CIBA (Client Initiated Backchannel Authentication) request.
+/// </summary>
+public enum CibaRequestStatus
+{
+    Pending = 0,
+    Authorized = 1,
+    Denied = 2,
+    Expired = 3
+}
+
+/// <summary>
+/// Entity representing a CIBA (Client Initiated Backchannel Authentication) request.
+/// Per OpenID Connect CIBA Core 1.0 specification.
+/// </summary>
+[Microsoft.EntityFrameworkCore.Index(nameof(AuthReqId), IsUnique = true)]
+public class CibaAuthenticationRequest
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The auth_req_id returned to the client for polling/callback.</summary>
+    [MaxLength(200)]
+    public string AuthReqId { get; set; } = string.Empty;
+
+    /// <summary>The client_id that initiated the CIBA request.</summary>
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>User identifier hint (login_hint, login_hint_token, or id_token_hint resolved subject).</summary>
+    [MaxLength(500)]
+    public string? UserIdentifierHint { get; set; }
+
+    /// <summary>The type of hint provided: login_hint, login_hint_token, id_token_hint.</summary>
+    [MaxLength(50)]
+    public string? HintType { get; set; }
+
+    /// <summary>JSON array of requested scopes.</summary>
+    public string ScopesJson { get; set; } = "[]";
+
+    /// <summary>Optional binding_message displayed to user during authentication.</summary>
+    [MaxLength(200)]
+    public string? BindingMessage { get; set; }
+
+    /// <summary>Optional user_code for user verification (when backchannel_user_code_parameter_supported=true).</summary>
+    [MaxLength(20)]
+    public string? UserCode { get; set; }
+
+    /// <summary>Optional ACR values requested by the client.</summary>
+    [MaxLength(500)]
+    public string? AcrValues { get; set; }
+
+    /// <summary>Client notification token for ping mode callback (client-provided).</summary>
+    [MaxLength(1024)]
+    public string? ClientNotificationToken { get; set; }
+
+    /// <summary>Optional resource (RFC 8707) or audience for the token.</summary>
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+
+    /// <summary>Current authorization status.</summary>
+    public CibaRequestStatus Status { get; set; } = CibaRequestStatus.Pending;
+
+    /// <summary>User ID if the user has authorized the request.</summary>
+    public Guid? UserId { get; set; }
+
+    /// <summary>When the CIBA request was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the auth_req_id expires.</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>Minimum polling interval in seconds (for poll mode).</summary>
+    public int IntervalSeconds { get; set; } = 5;
+
+    /// <summary>Last time the client polled for this request (for slow_down enforcement in poll mode).</summary>
+    public DateTimeOffset? LastPolledAt { get; set; }
+
+    /// <summary>Whether ping notification was sent (for ping mode).</summary>
+    public bool PingNotificationSent { get; set; } = false;
+
+    /// <summary>IP address of the requesting client (for audit/diagnostics).</summary>
+    [MaxLength(100)]
+    public string? ClientIpAddress { get; set; }
+
+    /// <summary>Requested expires_in from the client (optional).</summary>
+    public int? RequestedExpiresIn { get; set; }
 }

@@ -33,7 +33,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api", "api2");
         var validator = TestTokenValidatorFactory.Create(keyStore);
@@ -83,7 +83,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
@@ -124,7 +124,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api");
         var validator = TestTokenValidatorFactory.Create(keyStore);
@@ -166,7 +166,7 @@ public sealed class TokenExchangeTests
     {
         using var db = CreateDb();
         var settingsService = new MockTenantSettingsService();
-        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache());
+        var keyStore = new KeyStore(db, MockTenantAccessor.CreateWithDefaultTenant(), new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwt = TestJwtServiceFactory.Create(keyStore);
         var opts = Options("api"); // Only "api" is allowed
         var validator = TestTokenValidatorFactory.Create(keyStore);

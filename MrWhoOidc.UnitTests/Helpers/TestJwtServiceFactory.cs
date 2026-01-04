@@ -14,7 +14,7 @@ public static class TestJwtServiceFactory
             .Returns<CancellationToken>(async (ct) => 
             {
                 var jwk = await keyStore.GetActiveSigningKeyAsync(ct);
-                return new JsonWebKey(jwk.ToJson(includePrivate: true));
+                return jwk;
             });
         
         return new JwtService(mockProvider.Object);

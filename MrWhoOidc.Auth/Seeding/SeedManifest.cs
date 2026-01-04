@@ -311,6 +311,65 @@ public sealed record ClientSeedDefinition
     [JsonPropertyName("sectorIdentifierUri")]
     public string? SectorIdentifierUri { get; init; }
 
+    // --- OIDC Response Crypto (optional) ---
+
+    /// <summary>
+    /// JWS alg for signed ID tokens.
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("idTokenSignedResponseAlg")]
+    public string? IdTokenSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE alg for encrypted ID tokens (e.g., "RSA-OAEP").
+    /// </summary>
+    [JsonPropertyName("idTokenEncryptedResponseAlg")]
+    public string? IdTokenEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted ID tokens (e.g., "A256CBC-HS512").
+    /// </summary>
+    [JsonPropertyName("idTokenEncryptedResponseEnc")]
+    public string? IdTokenEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// JWS alg for signed UserInfo responses (application/jwt).
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("userInfoSignedResponseAlg")]
+    public string? UserInfoSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE alg for encrypted UserInfo responses.
+    /// </summary>
+    [JsonPropertyName("userInfoEncryptedResponseAlg")]
+    public string? UserInfoEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted UserInfo responses.
+    /// </summary>
+    [JsonPropertyName("userInfoEncryptedResponseEnc")]
+    public string? UserInfoEncryptedResponseEnc { get; init; }
+
+    /// <summary>
+    /// JWS alg for JARM authorization responses (query.jwt / fragment.jwt / form_post.jwt).
+    /// Note: this server enforces tenant active signing alg.
+    /// </summary>
+    [JsonPropertyName("authorizationSignedResponseAlg")]
+    public string? AuthorizationSignedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE alg for encrypted JARM authorization responses.
+    /// </summary>
+    [JsonPropertyName("authorizationEncryptedResponseAlg")]
+    public string? AuthorizationEncryptedResponseAlg { get; init; }
+
+    /// <summary>
+    /// JWE enc for encrypted JARM authorization responses.
+    /// </summary>
+    [JsonPropertyName("authorizationEncryptedResponseEnc")]
+    public string? AuthorizationEncryptedResponseEnc { get; init; }
+
     // --- Login Methods ---
 
     /// <summary>

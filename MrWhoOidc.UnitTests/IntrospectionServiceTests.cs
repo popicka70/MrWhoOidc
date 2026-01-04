@@ -39,7 +39,7 @@ public sealed class IntrospectionServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
 
         // Setup: Create a valid JWT
-        var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache());
+        var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var jwtService = TestJwtServiceFactory.Create(keyStore);
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
@@ -70,7 +70,7 @@ public sealed class IntrospectionServiceTests
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
 
         // Setup: Create JWT with past expiry manually to bypass JwtService's DateTime.UtcNow hardcoding
-        var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache());
+        var keyStore = new KeyStore(db, tenantAccessor, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var tokenValidator = TestTokenValidatorFactory.Create(keyStore);
 
         var claims = new[]
@@ -82,7 +82,7 @@ public sealed class IntrospectionServiceTests
 
         // Create JWT that expired 1 hour ago (nbf: 2 hours ago, exp: 1 hour ago)
         var jwk = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
-        var jsonWebKey = new JsonWebKey(jwk.ToJson(includePrivate: true));
+        var jsonWebKey = keyStore.GetActiveSigningKeyAsync().GetAwaiter().GetResult();
         var creds = new SigningCredentials(jsonWebKey, SecurityAlgorithms.RsaSha256);
 
         var token = new JwtSecurityToken(

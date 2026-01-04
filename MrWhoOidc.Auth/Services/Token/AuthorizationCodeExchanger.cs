@@ -5,15 +5,18 @@ using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
+using MrWhoOidc.Auth.Services.KeyManagement;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Utils;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.Auth.Services.Token;
 
@@ -23,6 +26,7 @@ namespace MrWhoOidc.Auth.Services.Token;
 public sealed class AuthorizationCodeExchanger(
     AuthDbContext db,
     IJwtService jwt,
+    ICachedKeyProvider keyProvider,
     IRefreshTokenService refreshTokens,
     IRevocationService revocations,
     IOptions<AuthOptions> authOptions,
@@ -37,6 +41,63 @@ public sealed class AuthorizationCodeExchanger(
     ILogger<AuthorizationCodeExchanger> logger) : IAuthorizationCodeExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static EncryptingCredentials? TryGetIdTokenEncryptingCredentials(MrWhoOidc.Auth.Persistence.Client? client)
+    {
+        if (client is null) return null;
+        if (string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseEnc)) return null;
+        if (string.IsNullOrWhiteSpace(client.PublicJwksJson)) return null;
+
+        // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
+        if (!string.Equals(client.IdTokenEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
+            || !string.Equals(client.IdTokenEncryptedResponseEnc, SecurityAlgorithms.Aes256CbcHmacSha512, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            JsonWebKey? key = null;
+
+            using (var doc = JsonDocument.Parse(client.PublicJwksJson))
+            {
+                if (doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
+                {
+                    // Prefer keys with use=enc and RSA.
+                    var rsaEnc = keys
+                        .EnumerateArray()
+                        .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase)
+                                          && k.TryGetProperty("use", out var use) && string.Equals(use.GetString(), "enc", StringComparison.OrdinalIgnoreCase));
+
+                    if (rsaEnc.ValueKind != JsonValueKind.Undefined)
+                    {
+                        key = new JsonWebKey(rsaEnc.GetRawText());
+                    }
+                    else
+                    {
+                        var rsaAny = keys
+                            .EnumerateArray()
+                            .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase));
+
+                        if (rsaAny.ValueKind != JsonValueKind.Undefined)
+                        {
+                            key = new JsonWebKey(rsaAny.GetRawText());
+                        }
+                    }
+                }
+            }
+
+            key ??= new JsonWebKey(client.PublicJwksJson);
+
+            if (!string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
+
+            return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeAsync(AuthorizationCodeExchangeRequest request, CancellationToken ct = default)
     {
@@ -74,9 +135,14 @@ public sealed class AuthorizationCodeExchanger(
 
                 // RFC 8707: prefer resource indicator as access token audience when present
                 string audience;
-                if (meta.TryGetResource(request.Code, out var resource) && !string.IsNullOrWhiteSpace(resource))
+                var resourceFromEntity = entity.Resource;
+                if (!string.IsNullOrWhiteSpace(resourceFromEntity))
                 {
-                    audience = resource;
+                    audience = resourceFromEntity;
+                }
+                else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
+                {
+                    audience = resourceFromMeta;
                 }
                 else
                 {
@@ -96,6 +162,11 @@ public sealed class AuthorizationCodeExchanger(
 
                 Guid? tenantIdForEntitlements = request.TenantId ?? user?.TenantId;
                 if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
+
+                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
+                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
+
+                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -189,6 +260,25 @@ public sealed class AuthorizationCodeExchanger(
                     
                     // Add signed license tokens if present
                     var claimsList = accessClaims.ToList();
+
+                    // If an OIDC claims request specified userinfo claims, embed them into the access token.
+                    // /userinfo can then honor the request (best-effort) without server-side session state.
+                    if (requestedUserInfoClaims.Count > 0)
+                    {
+                        var json = JsonSerializer.Serialize(requestedUserInfoClaims.OrderBy(c => c, StringComparer.Ordinal).ToArray(), EntitlementsJsonOptions);
+                        claimsList.Add(new System.Security.Claims.Claim("mrwho_userinfo_claims", json));
+                    }
+
+                    // Also embed userinfo claim constraints (essential/value/values) so /userinfo can enforce them.
+                    if (userInfoConstraints.Count > 0)
+                    {
+                        var sorted = userInfoConstraints
+                            .OrderBy(kvp => kvp.Key, StringComparer.Ordinal)
+                            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal);
+                        var json = JsonSerializer.Serialize(sorted, EntitlementsJsonOptions);
+                        claimsList.Add(new System.Security.Claims.Claim("mrwho_userinfo_claims_constraints", json));
+                    }
+
                     if (signedLicenseTokens is { Count: > 0 })
                     {
                         var licenseJson = JsonSerializer.Serialize(signedLicenseTokens, EntitlementsJsonOptions);
@@ -198,7 +288,37 @@ public sealed class AuthorizationCodeExchanger(
                     accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
                 }
 
-                var atHash = CryptoHelper.ComputeLeftHalfSha256Base64Url(accessToken);
+                var activeKey = await keyProvider.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
+                var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
+
+                if (client is not null && !string.IsNullOrWhiteSpace(client.IdTokenSignedResponseAlg))
+                {
+                    if (string.Equals(client.IdTokenSignedResponseAlg, SecurityAlgorithms.None, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return (false,
+                            new
+                            {
+                                error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                error_description = "Client 'id_token_signed_response_alg' cannot be 'none'."
+                            },
+                            OAuthConstants.ErrorCodes.InvalidRequest,
+                            400);
+                    }
+
+                    if (!string.Equals(client.IdTokenSignedResponseAlg, signingAlg, StringComparison.Ordinal))
+                    {
+                        return (false,
+                            new
+                            {
+                                error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                error_description = $"Client 'id_token_signed_response_alg' '{client.IdTokenSignedResponseAlg}' must match tenant active signing alg '{signingAlg}'."
+                            },
+                            OAuthConstants.ErrorCodes.InvalidRequest,
+                            400);
+                    }
+                }
+
+                var atHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken, signingAlg);
 
                 var idClaims = new List<System.Security.Claims.Claim>
                 {
@@ -229,8 +349,25 @@ public sealed class AuthorizationCodeExchanger(
                     idClaims.Add(new(OidcConstants.Scopes.Tenants, tenantsClaimJson));
                 }
 
+                var restrictIdTokenClaims = authOptions.Value.RestrictIdTokenClaimsToClaimsRequest && requestedIdTokenClaims.Count > 0;
+                if (restrictIdTokenClaims)
+                {
+                    // When restricting, keep only explicitly requested payload claims plus required 'sub'.
+                    var keep = new HashSet<string>(requestedIdTokenClaims, StringComparer.Ordinal)
+                    {
+                        OidcConstants.Claims.Subject
+                    };
+
+                    idClaims.RemoveAll(c => !keep.Contains(c.Type));
+                }
+
                 DateTimeOffset? authTime = null;
-                if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
+                if (entity.AuthTime.HasValue) authTime = entity.AuthTime.Value;
+                else if (meta.TryGetAuthTime(request.Code, out var at)) authTime = at;
+
+                var nonceForIdToken = entity.Nonce;
+                var atHashForIdToken = atHash;
+                var authTimeForIdToken = authTime;
 
                 if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
                 if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
@@ -239,12 +376,118 @@ public sealed class AuthorizationCodeExchanger(
                     foreach (var amr in combinedAmr) idClaims.Add(new(OidcConstants.Claims.Amr, amr));
                 }
 
+                // Apply best-effort claim constraints to the ID token.
+                // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
+                if (idTokenConstraints.Count > 0)
+                {
+                    string? GetSingleValue(string claimName)
+                    {
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal) && authTimeForIdToken is not null)
+                        {
+                            return authTimeForIdToken.Value.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        }
+
+                        if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) return nonceForIdToken;
+                        if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) return atHashForIdToken;
+
+                        // For explicit claims, use the first value (if multiple values exist, the multi-value matcher below handles it).
+                        return idClaims.FirstOrDefault(c => string.Equals(c.Type, claimName, StringComparison.Ordinal))?.Value;
+                    }
+
+                    IEnumerable<string> GetAllValues(string claimName)
+                    {
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal))
+                        {
+                            var v = GetSingleValue(claimName);
+                            return v is null ? Array.Empty<string>() : new[] { v };
+                        }
+
+                        if (string.Equals(claimName, "nonce", StringComparison.Ordinal) || string.Equals(claimName, "at_hash", StringComparison.Ordinal))
+                        {
+                            var v = GetSingleValue(claimName);
+                            return v is null ? Array.Empty<string>() : new[] { v };
+                        }
+
+                        return idClaims.Where(c => string.Equals(c.Type, claimName, StringComparison.Ordinal)).Select(c => c.Value);
+                    }
+
+                    foreach (var kvp in idTokenConstraints)
+                    {
+                        var claimName = kvp.Key;
+                        var constraint = kvp.Value;
+
+                        // No value constraints? Only essential is handled later by the essential set check.
+                        if (constraint.Value is null && (constraint.Values is null || constraint.Values.Length == 0))
+                        {
+                            continue;
+                        }
+
+                        var actualValues = GetAllValues(claimName).ToArray();
+                        var hasAny = actualValues.Length > 0;
+
+                        bool matches;
+                        if (constraint.Value is not null)
+                        {
+                            matches = hasAny && actualValues.Any(v => string.Equals(v, constraint.Value, StringComparison.Ordinal));
+                        }
+                        else
+                        {
+                            matches = hasAny && actualValues.Any(v => constraint.Values!.Contains(v, StringComparer.Ordinal));
+                        }
+
+                        if (matches)
+                        {
+                            continue;
+                        }
+
+                        if (constraint.Essential)
+                        {
+                            return (false,
+                                new
+                                {
+                                    error = OAuthConstants.ErrorCodes.InvalidRequest,
+                                    error_description = $"Essential id_token claim '{claimName}' cannot satisfy the requested value constraint."
+                                },
+                                OAuthConstants.ErrorCodes.InvalidRequest,
+                                400);
+                        }
+
+                        // Not essential: omit the claim from the ID token.
+                        if (string.Equals(claimName, OidcConstants.Claims.AuthTime, StringComparison.Ordinal)) authTimeForIdToken = null;
+                        else if (string.Equals(claimName, "nonce", StringComparison.Ordinal)) nonceForIdToken = null;
+                        else if (string.Equals(claimName, "at_hash", StringComparison.Ordinal)) atHashForIdToken = null;
+                        else idClaims.RemoveAll(c => string.Equals(c.Type, claimName, StringComparison.Ordinal));
+                    }
+                }
+
+                // Best-effort: if essential id_token claims were requested, ensure we can satisfy them.
+                // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
+                // we treat it as unsatisfied.
+                if (essentialIdTokenClaims.Count > 0)
+                {
+                    var present = idClaims.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
+                    foreach (var required in essentialIdTokenClaims)
+                    {
+                        var satisfied = present.Contains(required)
+                            || (string.Equals(required, OidcConstants.Claims.AuthTime, StringComparison.Ordinal) && authTimeForIdToken is not null)
+                            || (string.Equals(required, "nonce", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(nonceForIdToken))
+                            || (string.Equals(required, "at_hash", StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(atHashForIdToken))
+                            || string.Equals(required, JwtRegisteredClaimNames.Iat, StringComparison.Ordinal);
+
+                        if (!satisfied)
+                        {
+                            return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                        }
+                    }
+                }
+
                 var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();
                 if (allowId.Length > 0 && mappedClaims.Count > 0)
                 {
                     foreach (var name in allowId)
                     {
                         if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue;
+                        if (restrictIdTokenClaims && !requestedIdTokenClaims.Contains(name)) continue;
                         if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
                         {
                             idClaims.Add(new(name, val));
@@ -254,7 +497,10 @@ public sealed class AuthorizationCodeExchanger(
 
                 if (meta.TryGetSid(request.Code, out var sid) && !string.IsNullOrWhiteSpace(sid))
                 {
-                    idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
+                    if (!restrictIdTokenClaims || requestedIdTokenClaims.Contains(OidcConstants.Claims.Sid))
+                    {
+                        idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
+                    }
                 }
 
                 var idToken = await jwt.CreateJwtAsync(
@@ -262,11 +508,27 @@ public sealed class AuthorizationCodeExchanger(
                     request.ClientId,
                     idClaims,
                     DateTimeOffset.UtcNow.Add(idTokenLifetime),
-                    nonce: entity.Nonce,
-                    accessTokenHash: atHash,
-                    authTime: authTime,
+                    nonce: nonceForIdToken,
+                    accessTokenHash: atHashForIdToken,
+                    authTime: authTimeForIdToken,
                     ct: ct
                 ).ConfigureAwait(false);
+
+                var idTokenEnc = TryGetIdTokenEncryptingCredentials(client);
+                if (idTokenEnc is not null)
+                {
+                    idToken = await jwt.CreateJwtEncryptedAsync(
+                        request.Issuer,
+                        request.ClientId,
+                        idClaims,
+                        DateTimeOffset.UtcNow.Add(idTokenLifetime),
+                        idTokenEnc,
+                        nonce: nonceForIdToken,
+                        accessTokenHash: atHashForIdToken,
+                        authTime: authTimeForIdToken,
+                        ct: ct
+                    ).ConfigureAwait(false);
+                }
 
                 var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, request.ClientId, scopes, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
 

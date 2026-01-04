@@ -44,12 +44,9 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
             }
 
             var jwk = await keyStore.GetActiveSigningKeyAsync(ct).ConfigureAwait(false);
-        
-            // Convert RsaJwk to SecurityKey
-            var microsoftJwk = new JsonWebKey(jwk.ToJson(includePrivate: true));
-        
-            _activeKeyCache[tenantId] = (microsoftJwk, DateTime.UtcNow.Add(CacheDuration));
-            return microsoftJwk;
+
+            _activeKeyCache[tenantId] = (jwk, DateTime.UtcNow.Add(CacheDuration));
+            return jwk;
         }
         finally
         {
@@ -80,8 +77,8 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
                 return cached.Keys;
             }
 
-            var jwks = await keyStore.GetPublicJwksAsync(ct).ConfigureAwait(false);
-            var result = jwks.Select(k => new JsonWebKey(k.ToJson(includePrivate: false))).ToList().AsReadOnly();
+                var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
+            var result = jwks.ToList().AsReadOnly();
 
             _jwksCache[tenantId] = (result, DateTime.UtcNow.Add(CacheDuration));
             return result;

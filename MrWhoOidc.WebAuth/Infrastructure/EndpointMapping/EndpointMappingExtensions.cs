@@ -189,6 +189,11 @@ internal static class EndpointMappingExtensions
         routes.MapGet("/authorize", (IAuthorizeHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireRateLimiting("rl-authorize");
 
+        // OIDC Session Management (check_session_iframe)
+        routes.MapGet("/connect/checksession", (ICheckSessionHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
+
         routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
         routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
         routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx));
@@ -202,6 +207,21 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc");
 
         routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+
+        // Dynamic client registration (RFC 7591)
+        routes.MapPost("/register", (IRegistrationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize"); // Use authorize rate limit to prevent abuse
+
+        // Dynamic client configuration management (RFC 7592)
+        routes.MapGet("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.GetClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapPut("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.UpdateClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapDelete("/register/{clientId}", (IClientConfigurationHandler h, HttpContext ctx, string clientId) => h.DeleteClientAsync(ctx, clientId))
+            .RequireCors("oidc");
+        routes.MapMethods("/register/{clientId}", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
 
         routes.MapGet("/userinfo", (IUserInfoHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
@@ -217,6 +237,21 @@ internal static class EndpointMappingExtensions
             .RequireRateLimiting("rl-par")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.AdvancedSecurity));
         routes.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+
+        // RFC 8628: Device Authorization Grant endpoint
+        routes.MapPost("/device/authorize", (IDeviceAuthorizationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.DeviceAuthorizationGrant));
+        routes.MapMethods("/device/authorize", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+
+        // OpenID Connect CIBA (Client Initiated Backchannel Authentication) endpoint
+        routes.MapPost("/bc-authorize", (ICibaAuthenticationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize");
+        routes.MapMethods("/bc-authorize", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
         // External OIDC (IdP chaining) endpoints
@@ -321,9 +356,9 @@ internal static class EndpointMappingExtensions
     }
 
     // Separate method so [FromServices] attribute is honored by minimal API binder (lambda parameter attributes can be ignored).
-    private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, CancellationToken ct)
+    private static async Task<IResult> GetServerJwks(HttpContext ctx, [FromServices] IKeyStore keyStore, [FromServices] IOptions<AuthOptions> authOptions, CancellationToken ct)
     {
-        var jwks = await keyStore.GetPublicJwksAsync(ct);
+        var jwks = await keyStore.GetPublicJwksAsync(includeEncryptionKeys: authOptions.Value.EnableRequestObjectEncryption, ct: ct);
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(new { keys = jwks });
     }

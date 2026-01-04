@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace MrWhoOidc.UnitTests;
@@ -17,6 +20,8 @@ public sealed class RevocationHandlerTests
         IRevocationService? revocations = null,
         IClientStore? clients = null,
         IClientAssertionValidator? assertions = null,
+        AuthOptions? authOptions = null,
+        IMtlsThumbprintResolver? mtlsThumbprintResolver = null,
         OidcOptions? options = null)
     {
         var logger = NullLogger<RevocationHandler>.Instance;
@@ -25,14 +30,17 @@ public sealed class RevocationHandlerTests
         revocations ??= new StubRevocationService();
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
+        authOptions ??= new AuthOptions();
+        mtlsThumbprintResolver ??= new MtlsThumbprintResolver();
         options ??= new OidcOptions { Issuer = "https://test.example.com" };
 
-        return new RevocationHandler(revocations, clients, metrics, assertions, options);
+        return new RevocationHandler(revocations, clients, metrics, assertions, Options.Create(authOptions), mtlsThumbprintResolver, options);
     }
 
     private static DefaultHttpContext CreateHttpContext(
         Dictionary<string, string>? formData = null,
         string? authorizationHeader = null,
+        X509Certificate2? clientCertificate = null,
         string? remoteIpAddress = null)
     {
         var services = new ServiceCollection();
@@ -57,6 +65,11 @@ public sealed class RevocationHandlerTests
             context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(remoteIpAddress);
         }
 
+        if (clientCertificate is not null)
+        {
+            context.Connection.ClientCertificate = clientCertificate;
+        }
+
         if (authorizationHeader != null)
         {
             context.Request.Headers.Authorization = authorizationHeader;
@@ -71,6 +84,18 @@ public sealed class RevocationHandlerTests
         }
 
         return context;
+    }
+
+    private static X509Certificate2 CreateSelfSignedCertificate()
+    {
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=mtls-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
+        req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
+
+        using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        var pfx = cert.Export(X509ContentType.Pfx);
+        return X509CertificateLoader.LoadPkcs12(pfx, (string?)null, X509KeyStorageFlags.EphemeralKeySet);
     }
 
     private static string BasicAuth(string clientId, string clientSecret)
@@ -179,7 +204,78 @@ public sealed class RevocationHandlerTests
 
         // Assert
         Assert.IsNotNull(result);
-        // Handler returns 400 unauthorized_client error
+        // Handler returns 401 unauthorized_client error
+    }
+
+    [TestMethod]
+    public async Task Revocation_mTLS_AllowListed_Client_Succeeds_Without_Secret()
+    {
+        // Arrange
+        var cert = CreateSelfSignedCertificate();
+        var resolver = new MtlsThumbprintResolver();
+        var presented = resolver.ResolveThumbprint(cert);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(presented));
+
+        var authOptions = new AuthOptions
+        {
+            RevocationMtlsCertificates = new Dictionary<string, string[]>
+            {
+                ["test_client"] = new[] { presented! }
+            }
+        };
+
+        var clientStore = new StubClientStore(authenticated: false); // would fail without mTLS path
+        var revocationService = new StubRevocationService(revoked: true);
+        var handler = CreateHandler(revocations: revocationService, clients: clientStore, authOptions: authOptions, mtlsThumbprintResolver: resolver);
+
+        var formData = new Dictionary<string, string>
+        {
+            ["token"] = "token_to_revoke",
+            ["client_id"] = "test_client"
+        };
+        var context = CreateHttpContext(formData, clientCertificate: cert, remoteIpAddress: "192.168.1.100");
+
+        // Act
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        // Assert
+        Assert.AreEqual(200, context.Response.StatusCode);
+        Assert.IsTrue(revocationService.RevokeAsyncCalled);
+        Assert.AreEqual("test_client", revocationService.LastClientId);
+    }
+
+    [TestMethod]
+    public async Task Revocation_mTLS_AllowListed_Client_Missing_Cert_Fails()
+    {
+        // Arrange
+        var authOptions = new AuthOptions
+        {
+            RevocationMtlsCertificates = new Dictionary<string, string[]>
+            {
+                ["test_client"] = new[] { "anything" }
+            }
+        };
+
+        var clientStore = new StubClientStore(authenticated: true); // should not matter when mtls is required
+        var revocationService = new StubRevocationService(revoked: true);
+        var handler = CreateHandler(revocations: revocationService, clients: clientStore, authOptions: authOptions);
+
+        var formData = new Dictionary<string, string>
+        {
+            ["token"] = "token_to_revoke",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "test_secret"
+        };
+        var context = CreateHttpContext(formData, clientCertificate: null);
+
+        // Act
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        // Assert
+        Assert.AreEqual(401, context.Response.StatusCode);
+        Assert.IsFalse(revocationService.RevokeAsyncCalled);
     }
 
     [TestMethod]

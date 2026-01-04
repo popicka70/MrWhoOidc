@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -100,13 +101,75 @@ public sealed class AuthorizeRequestValidator(AuthDbContext db, IClientStore cli
                 OidcConstants.ResponseModes.Fragment,
                 OidcConstants.ResponseModes.FormPost,
                 OidcConstants.ResponseModes.QueryJwt,
-                OidcConstants.ResponseModes.FormPostJwt
+                    OidcConstants.ResponseModes.FragmentJwt,
+                    OidcConstants.ResponseModes.FormPostJwt
             };
             if (!validModes.Contains(responseMode, StringComparer.Ordinal))
             {
                 return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, 
-                    $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, form_post.jwt");
+                    $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
+        }
+
+        // prompt (optional)
+        string[]? promptValues = null;
+        if (!string.IsNullOrWhiteSpace(request.prompt))
+        {
+            promptValues = request.prompt
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(p => p.Trim().ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            var supported = new[] { "none", "login", "consent", "select_account" };
+            var invalid = promptValues.Where(p => !supported.Contains(p, StringComparer.Ordinal)).ToArray();
+            if (invalid.Length > 0)
+            {
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest,
+                    $"Unsupported prompt value(s): {string.Join(", ", invalid)}");
+            }
+
+            if (promptValues.Contains("none", StringComparer.Ordinal) && promptValues.Length > 1)
+            {
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "prompt=none must not be combined with other prompt values");
+            }
+        }
+
+        // max_age (optional)
+        int? maxAgeSeconds = null;
+        if (!string.IsNullOrWhiteSpace(request.max_age))
+        {
+            if (!int.TryParse(request.max_age, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 0)
+            {
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "max_age must be a non-negative integer");
+            }
+            maxAgeSeconds = parsed;
+        }
+
+        // acr_values (optional)
+        string[]? acrValues = null;
+        if (!string.IsNullOrWhiteSpace(request.acr_values))
+        {
+            acrValues = request.acr_values
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        // OIDC claims parameter (optional): validate and normalize so it can be persisted with the auth code.
+        string? normalizedClaimsJson = null;
+        if (!string.IsNullOrWhiteSpace(request.claims))
+        {
+            if (!OidcClaimsRequestParser.TryNormalizeClaimsParameter(
+                    request.claims,
+                    OidcClaimsRequestParser.DefaultMaxBytes,
+                    out var normalized,
+                    out var claimsError))
+            {
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, claimsError ?? "Invalid claims parameter");
+            }
+            normalizedClaimsJson = normalized;
         }
 
         return new AuthorizeValidationResult(
@@ -120,7 +183,11 @@ public sealed class AuthorizeRequestValidator(AuthDbContext db, IClientStore cli
             RequireConsent: client.RequireConsent,
             Resource: request.resource,
             ResponseMode: responseMode,
-            State: request.state
+            State: request.state,
+            ClaimsJson: normalizedClaimsJson,
+            PromptValues: promptValues,
+            MaxAgeSeconds: maxAgeSeconds,
+            AcrValues: acrValues
         );
     }
 

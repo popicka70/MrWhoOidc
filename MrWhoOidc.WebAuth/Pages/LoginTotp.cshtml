@@ -15,6 +15,7 @@
 
         <form method="post" asp-antiforgery="true">
             <input type="hidden" asp-for="ReturnUrl" />
+            <input type="hidden" asp-for="Display" />
             <div class="form-group">
                 <label asp-for="Code" class="form-label">
                     <i class="bi bi-key icon-sm"></i> Authentication Code

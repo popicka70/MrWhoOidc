@@ -8,6 +8,9 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Extensions;
 using System;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -47,16 +50,19 @@ public interface IAuthorizeResponseGenerator
 
 public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeResponseGenerator
 {
+    private const string OpBrowserStateCookieName = "mrwho.opbs";
+
     public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId)
     {
         var issuer = http.GetIssuer();
         if (!string.IsNullOrEmpty(validation.RedirectUri))
         {
             if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+                string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
             {
                 var jarmJwt = jarm.CreateErrorResponseAsync(validation.ClientId!, issuer, validation.Error!, $"{validation.ErrorDescription} (corr={correlationId})", validation.State).GetAwaiter().GetResult();
-                return JarmRedirect(validation.RedirectUri, validation.ResponseMode, jarmJwt);
+                return JarmRedirect(validation.RedirectUri, validation.ResponseMode, jarmJwt, sessionState: null);
             }
 
             var uri = new UriBuilder(validation.RedirectUri);
@@ -76,17 +82,23 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         if (string.IsNullOrEmpty(redirectUri)) return Results.BadRequest("Missing redirect URI");
 
         var issuer = http.GetIssuer();
+        var sessionState = TryCreateSessionState(http, validation.ClientId, redirectUri);
 
         if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+            string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
             string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
             var jarmJwt = jarm.CreateSuccessResponseAsync(validation.ClientId!, issuer, code, validation.ResponseMode!, validation.State).GetAwaiter().GetResult();
-            return JarmRedirect(redirectUri, validation.ResponseMode!, jarmJwt);
+            return JarmRedirect(redirectUri, validation.ResponseMode!, jarmJwt, sessionState);
         }
 
         var uri = new UriBuilder(redirectUri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         query["iss"] = issuer;
+        if (!string.IsNullOrWhiteSpace(sessionState))
+        {
+            query["session_state"] = sessionState;
+        }
         // State is handled by the caller or already in the redirectUri if it was a PAR/JAR request
         uri.Query = query.ToString();
         
@@ -101,17 +113,73 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         return Results.Redirect(finalUrl);
     }
 
-    private IResult JarmRedirect(string redirectUri, string? responseMode, string jwt)
+    private IResult JarmRedirect(string redirectUri, string? responseMode, string jwt, string? sessionState)
     {
         if (string.Equals(responseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
-            return Results.Extensions.RazorPage("/FormPost", new { redirectUri, response = jwt });
+            // NOTE: this project currently renders a simplified FormPost result (and may not have a corresponding view).
+            // Include session_state when present for OIDC session management compatibility.
+            return Results.Extensions.RazorPage("/FormPost", new { redirectUri, response = jwt, session_state = sessionState });
+        }
+
+        if (string.Equals(responseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal))
+        {
+            var fragmentUri = new UriBuilder(redirectUri);
+            var fragment = System.Web.HttpUtility.ParseQueryString(fragmentUri.Fragment.TrimStart('#'));
+            fragment["response"] = jwt;
+            if (!string.IsNullOrWhiteSpace(sessionState))
+            {
+                fragment["session_state"] = sessionState;
+            }
+            fragmentUri.Fragment = fragment.ToString();
+            return Results.Redirect(fragmentUri.ToString());
         }
 
         var uri = new UriBuilder(redirectUri);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         query["response"] = jwt;
+        if (!string.IsNullOrWhiteSpace(sessionState))
+        {
+            query["session_state"] = sessionState;
+        }
         uri.Query = query.ToString();
         return Results.Redirect(uri.ToString());
+    }
+
+    private static string? TryCreateSessionState(HttpContext http, string? clientId, string redirectUri)
+    {
+        if (string.IsNullOrWhiteSpace(clientId)) return null;
+        if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out var uri)) return null;
+
+        var origin = uri.GetLeftPart(UriPartial.Authority);
+        var opbs = EnsureOpBrowserStateCookie(http);
+        var salt = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(16));
+
+        var input = $"{clientId} {origin} {opbs} {salt}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        var hashB64Url = Base64UrlEncoder.Encode(hash);
+        return $"{hashB64Url}.{salt}";
+    }
+
+    private static string EnsureOpBrowserStateCookie(HttpContext http)
+    {
+        if (http.Request.Cookies.TryGetValue(OpBrowserStateCookieName, out var existing) && !string.IsNullOrWhiteSpace(existing))
+        {
+            return existing;
+        }
+
+        var value = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        http.Response.Cookies.Append(
+            OpBrowserStateCookieName,
+            value,
+            new CookieOptions
+            {
+                Path = "/",
+                HttpOnly = false, // JS in check_session_iframe must read this value
+                Secure = http.Request.IsHttps,
+                SameSite = SameSiteMode.None,
+                IsEssential = true
+            });
+        return value;
     }
 }

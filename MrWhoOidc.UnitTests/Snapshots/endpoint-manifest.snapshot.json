@@ -708,6 +708,26 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/bc-authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/bc-authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/bootstrap",
     "Methods": "POST",
     "RateLimiters": [],
@@ -734,6 +754,37 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/connect/checksession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/device/authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/device/authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -998,6 +1049,53 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "DELETE",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/register/{clientId}",
+    "Methods": "PUT",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -1350,6 +1448,26 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/bc-authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/bc-authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/clients/{clientId}/jwks",
     "Methods": "GET",
     "RateLimiters": [
@@ -1367,6 +1485,37 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/connect/checksession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/device/authorize",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/device/authorize",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -1456,6 +1605,53 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "DELETE",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "OPTIONS",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/register/{clientId}",
+    "Methods": "PUT",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -2216,7 +2412,25 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "ciba",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "consent",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "device",
     "Methods": "",
     "RateLimiters": [],
     "Authz": null,

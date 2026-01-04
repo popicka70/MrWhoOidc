@@ -37,13 +37,21 @@ public sealed class TokenRoleEmissionTests
         
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
+        var keyStore = new KeyStore(
+            db,
+            MockTenantAccessor.CreateWithDefaultTenant(),
+                new MrWhoOidc.UnitTests.Helpers.TestHybridCache(),
+            Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
+
+        var keyProvider = TestCachedKeyProviderFactory.Create(keyStore);
+
         var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
         
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
             options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
@@ -56,7 +64,9 @@ public sealed class TokenRoleEmissionTests
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
             db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
-        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+        var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory, deviceCodeFactory);
     }
 
     [TestMethod]
@@ -96,7 +106,7 @@ public sealed class TokenRoleEmissionTests
         var factory = new ClientCredentialsTokenFactory(
             db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver());
 
-        var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory);
+        var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory, new Mock<IDeviceCodeTokenFactory>().Object);
 
         var (ok, _, _, _) = await tokenSvc.CreateClientCredentialsTokenAsync("c1", "api", new[] { "openid" }, "https://issuer");
         

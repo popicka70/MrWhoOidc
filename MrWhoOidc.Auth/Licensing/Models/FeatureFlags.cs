@@ -29,6 +29,7 @@ public static class FeatureFlags
     public const string RiskBasedAuth = "risk_based_auth";
     public const string HsmIntegration = "hsm_integration";
     public const string ProfessionalServices = "professional_services";
+    public const string DeviceAuthorizationGrant = "device_authorization_grant";
 
     public static IReadOnlySet<string> AllFeatures { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -48,7 +49,8 @@ public static class FeatureFlags
         WebAuthn,
         RiskBasedAuth,
         HsmIntegration,
-        ProfessionalServices
+        ProfessionalServices,
+        DeviceAuthorizationGrant
     };
 
     public static IReadOnlySet<string> PlatformOnlyFeatures { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -94,7 +96,8 @@ public static class FeatureFlags
                 BackchannelLogout,
                 LdapIntegration,
                 CustomClaimMappings,
-                AdvancedMonitoring
+                AdvancedMonitoring,
+                DeviceAuthorizationGrant
             }, StringComparer.OrdinalIgnoreCase),
             LicenseTier.EnterprisePlus => new HashSet<string>(AllFeatures, StringComparer.OrdinalIgnoreCase),
             _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
