@@ -224,6 +224,14 @@ internal static class EndpointMappingExtensions
         routes.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
+        // RFC 8628: Device Authorization Grant endpoint
+        routes.MapPost("/device/authorize", (IDeviceAuthorizationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireCors("oidc")
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.DeviceAuthorizationGrant));
+        routes.MapMethods("/device/authorize", new[] { "OPTIONS" }, () => Results.Ok())
+            .RequireCors("oidc");
+
         // External OIDC (IdP chaining) endpoints
         routes.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
         routes.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));

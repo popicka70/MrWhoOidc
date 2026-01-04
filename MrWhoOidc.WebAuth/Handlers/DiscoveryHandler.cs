@@ -78,6 +78,14 @@ public sealed class DiscoveryHandler(
             grants.Add(OAuthConstants.GrantTypes.TokenExchange);
         }
 
+        // RFC 8628: Device Authorization Grant
+        var deviceAuthEnabled = authOptions.Value.EnableDeviceAuthorizationGrant &&
+            await featureService.IsFeatureEnabledAsync(FeatureFlags.DeviceAuthorizationGrant, tenantId, ctx.RequestAborted);
+        if (deviceAuthEnabled)
+        {
+            grants.Add(OAuthConstants.GrantTypes.DeviceCode);
+        }
+
         var clientsQuery = db.Clients.AsNoTracking();
         if (tenantId is not null)
         {
@@ -280,6 +288,12 @@ public sealed class DiscoveryHandler(
         {
             body["pushed_authorization_request_endpoint"] = $"{baseUrl}/par";
             body["require_pushed_authorization_requests"] = authOptions.Value.RequirePar;
+        }
+
+        // RFC 8628: Device Authorization Grant endpoint
+        if (deviceAuthEnabled)
+        {
+            body["device_authorization_endpoint"] = $"{baseUrl}/device/authorize";
         }
 
         // RFC 8705: mtls_endpoint_aliases (optional)

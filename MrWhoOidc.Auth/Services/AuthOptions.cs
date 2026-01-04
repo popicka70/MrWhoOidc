@@ -105,6 +105,19 @@ public sealed class AuthOptions
     // Optional list of supported ACR values advertised in discovery.
     // If empty, acr_values_supported is omitted and acr_values requests are not validated against a fixed allow-list.
     public string[] AcrValuesSupported { get; set; } = Array.Empty<string>();
+
+    // === Device Authorization Grant (RFC 8628) ===
+    // Enable the device authorization grant flow.
+    public bool EnableDeviceAuthorizationGrant { get; set; } = false;
+    // Device code lifetime in seconds (default: 600 = 10 minutes)
+    public int DeviceCodeLifetimeSeconds { get; set; } = 600;
+    // Minimum polling interval in seconds (RFC 8628 recommends >= 5)
+    public int DeviceCodePollingIntervalSeconds { get; set; } = 5;
+    // User code length (default: 8 characters)
+    public int DeviceCodeUserCodeLength { get; set; } = 8;
+    // Character set for user codes (RFC 8628 recommends easily typeable characters, avoiding ambiguous chars like 0/O, 1/I/l)
+    // Default: BCDFGHJKLMNPQRSTVWXZ (consonants only, uppercase)
+    public string DeviceCodeUserCodeCharset { get; set; } = "BCDFGHJKLMNPQRSTVWXZ";
 }
 
 public sealed class OpaqueAccessTokenOptions

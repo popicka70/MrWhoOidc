@@ -368,9 +368,11 @@ These items only require updating the DiscoveryHandler to advertise existing or 
 **Effort:** 1 week  
 **Spec:** RFC 8628
 
+**Current State:** Implemented.
+
 **Implementation:**
 ```csharp
-["device_authorization_endpoint"] = $"{baseUrl}/device"
+["device_authorization_endpoint"] = $"{baseUrl}/device/authorize"
 ```
 
 **Grant Type:**
@@ -379,13 +381,28 @@ grants.Add("urn:ietf:params:oauth:grant-type:device_code");
 ```
 
 **Tasks:**
-- [ ] Create device authorization endpoint
-- [ ] Generate device_code and user_code
-- [ ] Create user verification page
-- [ ] Implement polling token endpoint logic
-- [ ] Handle slow_down and authorization_pending errors
-- [ ] Add configurable code expiration
-- [ ] Add tests
+- [x] Create device authorization endpoint (`/device/authorize`)
+- [x] Generate device_code and user_code
+- [x] Create user verification page (`/device` Razor Page)
+- [x] Implement polling token endpoint logic (`DeviceCodeGrantHandler`)
+- [x] Handle slow_down and authorization_pending errors
+- [x] Add configurable code expiration (`AuthOptions.DeviceCodeLifetimeSeconds`)
+- [x] Add feature flag (`FeatureFlags.DeviceAuthorizationGrant`)
+- [x] Add discovery metadata (conditional on feature flag)
+- [x] Add tests
+
+**Configuration Options:**
+```json
+{
+  "Auth": {
+    "EnableDeviceAuthorizationGrant": true,
+    "DeviceCodeLifetimeSeconds": 600,
+    "DeviceCodePollingIntervalSeconds": 5,
+    "DeviceCodeUserCodeLength": 8,
+    "DeviceCodeUserCodeCharset": "BCDFGHJKLMNPQRSTVWXZ"
+  }
+}
+```
 
 ---
 

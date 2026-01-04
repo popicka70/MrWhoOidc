@@ -57,6 +57,24 @@ public interface ITokenService
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
         string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an access token for a user after they authorized a device authorization grant (RFC 8628).
+    /// </summary>
+    /// <param name="clientId">The client ID.</param>
+    /// <param name="userId">The user ID who authorized the device.</param>
+    /// <param name="scopes">The authorized scopes.</param>
+    /// <param name="audience">The requested audience/resource.</param>
+    /// <param name="issuer">The issuer URI.</param>
+    /// <param name="dpopJkt">Optional DPoP JWK thumbprint.</param>
+    /// <param name="ipAddress">Optional IP address of the device.</param>
+    /// <param name="userAgent">Optional user agent of the device.</param>
+    /// <param name="tenantId">Optional tenant ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
+    Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
+        string clientId, Guid userId, string[] scopes, string audience, string issuer,
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -65,7 +83,8 @@ public interface ITokenService
 internal sealed class TokenService(
     IAuthorizationCodeExchanger authCodeExchanger,
     IRefreshTokenExchanger refreshTokenExchanger,
-    IClientCredentialsTokenFactory clientCredentialsFactory) : ITokenService
+    IClientCredentialsTokenFactory clientCredentialsFactory,
+    IDeviceCodeTokenFactory deviceCodeFactory) : ITokenService
 {
     public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
         string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
@@ -86,5 +105,13 @@ internal sealed class TokenService(
     {
         var request = new ClientCredentialsRequest(clientId, audience, requestedScopes, issuer, dpopJkt);
         return clientCredentialsFactory.CreateTokenAsync(request, ct);
+    }
+
+    public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
+        string clientId, Guid userId, string[] scopes, string audience, string issuer,
+        string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+    {
+        var request = new DeviceCodeTokenRequest(clientId, userId, scopes, audience, issuer, dpopJkt, ipAddress, userAgent, tenantId);
+        return deviceCodeFactory.CreateTokenAsync(request, ct);
     }
 }

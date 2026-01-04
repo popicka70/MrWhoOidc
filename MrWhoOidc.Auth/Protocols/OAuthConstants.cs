@@ -47,6 +47,10 @@ public static class OAuthConstants
         // Revocation parameters (RFC 7009)
         public const string Token = "token";
         public const string TokenTypeHint = "token_type_hint";
+
+        // Device Authorization Grant parameters (RFC 8628)
+        public const string DeviceCode = "device_code";
+        public const string UserCode = "user_code";
     }
 
     /// <summary>
@@ -58,6 +62,8 @@ public static class OAuthConstants
         public const string RefreshToken = "refresh_token";
         public const string ClientCredentials = "client_credentials";
         public const string TokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange";
+        /// <summary>Device Authorization Grant (RFC 8628).</summary>
+        public const string DeviceCode = "urn:ietf:params:oauth:grant-type:device_code";
     }
 
     /// <summary>
@@ -91,6 +97,10 @@ public static class OAuthConstants
         public const string InvalidRequestObject = "invalid_request_object";
         public const string RateLimitExceeded = "rate_limit_exceeded";
         public const string SlowDown = "slow_down";
+        /// <summary>Device Authorization Grant: authorization pending (RFC 8628).</summary>
+        public const string AuthorizationPending = "authorization_pending";
+        /// <summary>Device Authorization Grant: expired token (RFC 8628).</summary>
+        public const string ExpiredToken = "expired_token";
     }
 
     /// <summary>

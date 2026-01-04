@@ -696,6 +696,14 @@ public sealed class TokenHandlerTests
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
+
+        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
+            string clientId, Guid userId, string[] scopes, string audience, string issuer,
+            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+        {
+            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            return Task.FromResult((true, (object?)payload, (string?)null, 200));
+        }
     }
 
     private sealed class StubClientStore : IClientStore

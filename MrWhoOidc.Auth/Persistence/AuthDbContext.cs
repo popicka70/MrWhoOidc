@@ -32,6 +32,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<Token> Tokens => Set<Token>();
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
     public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
+    // New: Device Authorization Grant (RFC 8628)
+    public DbSet<DeviceCodeEntry> DeviceCodes => Set<DeviceCodeEntry>();
     public DbSet<Realm> Realms => Set<Realm>();
     // New: roles/scopes and assignments
     public DbSet<Role> Roles => Set<Role>();
@@ -1645,6 +1647,80 @@ public class PushedAuthorizationRequest
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset ExpiresAt { get; set; }
     public bool Consumed { get; set; }
+}
+
+/// <summary>
+/// Device Authorization Grant (RFC 8628) flow state.
+/// Tracks pending device authorization requests.
+/// </summary>
+public enum DeviceCodeStatus
+{
+    /// <summary>Authorization pending - user has not yet completed verification</summary>
+    Pending = 0,
+    /// <summary>User has authorized the device</summary>
+    Authorized = 1,
+    /// <summary>User has denied the device authorization</summary>
+    Denied = 2,
+    /// <summary>The device code has expired</summary>
+    Expired = 3
+}
+
+/// <summary>
+/// Entity representing a Device Authorization Grant (RFC 8628) request.
+/// </summary>
+[Microsoft.EntityFrameworkCore.Index(nameof(DeviceCode), IsUnique = true)]
+[Microsoft.EntityFrameworkCore.Index(nameof(UserCode), IsUnique = true)]
+public class DeviceCodeEntry
+{
+    public Guid Id { get; set; } = GuidHelper.NewId();
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+
+    /// <summary>The device_code returned to the client device for polling.</summary>
+    [MaxLength(200)]
+    public string DeviceCode { get; set; } = string.Empty;
+
+    /// <summary>The user_code displayed to the user for verification.</summary>
+    [MaxLength(20)]
+    public string UserCode { get; set; } = string.Empty;
+
+    /// <summary>The client_id that initiated the device authorization request.</summary>
+    [MaxLength(200)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>JSON array of requested scopes.</summary>
+    public string ScopesJson { get; set; } = "[]";
+
+    /// <summary>Optional resource (RFC 8707) or audience for the token.</summary>
+    [MaxLength(2000)]
+    public string? Resource { get; set; }
+
+    /// <summary>Current authorization status.</summary>
+    public DeviceCodeStatus Status { get; set; } = DeviceCodeStatus.Pending;
+
+    /// <summary>User ID if the user has authorized the request.</summary>
+    public Guid? UserId { get; set; }
+
+    /// <summary>When the device code was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>When the device code expires (device_code lifetime).</summary>
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>Minimum polling interval in seconds (used for slow_down response).</summary>
+    public int IntervalSeconds { get; set; } = 5;
+
+    /// <summary>Last time the client polled for this device code (for slow_down enforcement).</summary>
+    public DateTimeOffset? LastPolledAt { get; set; }
+
+    /// <summary>IP address of the requesting device (for audit/diagnostics).</summary>
+    [MaxLength(100)]
+    public string? DeviceIpAddress { get; set; }
+
+    /// <summary>User agent of the requesting device (for audit/diagnostics).</summary>
+    [MaxLength(500)]
+    public string? DeviceUserAgent { get; set; }
 }
 
 public class Registration

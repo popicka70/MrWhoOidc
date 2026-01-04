@@ -64,7 +64,9 @@ public sealed class TokenRoleEmissionTests
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
             db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
-        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+        var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory, deviceCodeFactory);
     }
 
     [TestMethod]
@@ -104,7 +106,7 @@ public sealed class TokenRoleEmissionTests
         var factory = new ClientCredentialsTokenFactory(
             db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver());
 
-        var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory);
+        var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory, new Mock<IDeviceCodeTokenFactory>().Object);
 
         var (ok, _, _, _) = await tokenSvc.CreateClientCredentialsTokenAsync("c1", "api", new[] { "openid" }, "https://issuer");
         

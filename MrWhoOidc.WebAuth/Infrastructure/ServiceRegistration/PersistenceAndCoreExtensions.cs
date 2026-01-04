@@ -71,6 +71,8 @@ public static class PersistenceAndCoreExtensions
         services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();
         services.AddScoped<ITokenGrantHandler, ClientCredentialsGrantHandler>();
         services.AddScoped<ITokenGrantHandler, TokenExchangeGrantHandler>();
+        services.AddScoped<ITokenGrantHandler, DeviceCodeGrantHandler>();
+        services.AddScoped<IDeviceAuthorizationHandler, DeviceAuthorizationHandler>();
         services.AddScoped<IUserInfoHandler, UserInfoHandler>();
         services.AddScoped<IRevocationHandler, RevocationHandler>();
         services.AddScoped<IWebAuthnHandler, WebAuthnHandler>();

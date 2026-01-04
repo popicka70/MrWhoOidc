@@ -64,7 +64,9 @@ public sealed class SeedUsageExamples
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
             db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
 
-        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory);
+        var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
+
+        return new TokenService(authCodeExchanger, refreshTokenExchanger, clientCredentialsFactory, deviceCodeFactory);
     }
 
     [TestMethod]
