@@ -558,10 +558,10 @@ grants.Add("urn:ietf:params:oauth:grant-type:device_code");
 
 During an automated inventory of the codebase I verified most of the features documented above and found a few remaining gaps and inconsistencies worth addressing immediately:
 
-- **Dynamic Registration: missing DELETE endpoint** (Medium priority)
-  - Observation: `POST /register`, `GET /register/{clientId}` and `PUT /register/{clientId}` are implemented, but there is no `DELETE /register/{clientId}` mapping (RFC 7592 supports client deletion).
-  - Files: `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/EndpointMappingExtensions.cs` (registration mappings), `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` (registration logic).
-  - Recommendation: add `MapDelete("/register/{clientId}", ... )` and implement a `DeleteClientAsync` method in the client configuration handler with appropriate auth checks and tests.
+- **Dynamic Registration: delete endpoint exists; registration response types tightened** (Medium priority)
+  - Observation: `POST /register`, `GET /register/{clientId}`, `PUT /register/{clientId}`, and `DELETE /register/{clientId}` are implemented. Previously, dynamic registration accepted hybrid/implicit `response_types` (e.g., `code id_token`) while the OP only supports `response_type=code`, which could confuse RPs.
+  - Files: `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` (registration validation), `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs` (authorization validation), `MrWhoOidc.UnitTests/DynamicClientRegistrationTests.cs` (tests updated).
+  - Recommendation: the server now restricts dynamic registration `response_types` to `"code"` and added a unit test `Register_HybridResponseType_Returns400`. Consider extending `AuthorizeHandler` if broader response-type support is desired.
 
 - **Registration accepts response_types that the OP does not support at runtime** (High priority)
   - Observation: `RegistrationHandler.SupportedResponseTypes` allows `id_token`, `code id_token`, etc., while the authorization endpoint and discovery advertise only `response_type=code` (see `DiscoveryHandler.cs` and `AuthorizeHandler` validation). This can confuse RPs registering clients and cause runtime errors.

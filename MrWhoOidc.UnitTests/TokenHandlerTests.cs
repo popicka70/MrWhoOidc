@@ -203,6 +203,41 @@ public sealed class TokenHandlerTests
     }
 
     [TestMethod]
+    public async Task Token_DPoP_Replay_IsRejected_At_TokenEndpoint()
+    {
+        using var db = CreateDb();
+
+        // Use a validator that returns a constant jti/jkt and a replay cache that only allows one entry
+        var dpopValidator = new StubDPoPValidator(ok: true, error: null, jkt: "test_jkt");
+        var replayCache = new OneTimeReplayCache();
+        // Provide a client_credentials grant handler so the token endpoint returns an access_token for the test
+        var clientCredsGrant = new ClientCredentialsGrantStub();
+        var handler = CreateHandler(db, dpop: dpopValidator, dpopReplayCache: replayCache, grantHandlers: new[] { clientCredsGrant });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["scope"] = "api"
+        };
+
+        // First request should succeed (DPoP proof accepted)
+        var ctx1 = CreateHttpContext(formData, authorizationHeader: BasicAuth("client", "secret"));
+        var res1 = await handler.HandleAsync(ctx1);
+        await res1.ExecuteAsync(ctx1);
+        ctx1.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
+        var body1 = new System.IO.StreamReader(ctx1.Response.Body).ReadToEnd();
+        Assert.IsTrue(body1.Contains("access_token"), "First token request did not return an access_token");
+
+        // Second request (same jti) should be rejected due to replay detection
+        var ctx2 = CreateHttpContext(formData, authorizationHeader: BasicAuth("client", "secret"));
+        var res2 = await handler.HandleAsync(ctx2);
+        await res2.ExecuteAsync(ctx2);
+        ctx2.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
+        var body2 = new System.IO.StreamReader(ctx2.Response.Body).ReadToEnd();
+        Assert.IsTrue(body2.Contains("invalid_dpop_proof"), "Replay was not detected as invalid_dpop_proof");
+    }
+
+    [TestMethod]
     public async Task Token_ClientCredentials_Invalid_Client_Assertion_Returns_Error()
     {
         // Arrange
@@ -849,6 +884,17 @@ public sealed class TokenHandlerTests
             var payload = new { access_token = "test_token", token_type = "Bearer", expires_in = 3600 };
             var result = Microsoft.AspNetCore.Http.Results.Json(payload);
             return Task.FromResult(new GrantExecutionResult(true, _success, result));
+        }
+    }
+
+    private sealed class ClientCredentialsGrantStub : ITokenGrantHandler
+    {
+        public string GrantType => "client_credentials";
+        public Task<GrantExecutionResult> TryHandleAsync(TokenRequestContext context)
+        {
+            var payload = new { access_token = "test_token", token_type = "Bearer", expires_in = 3600 };
+            var result = Microsoft.AspNetCore.Http.Results.Json(payload);
+            return Task.FromResult(new GrantExecutionResult(true, true, result));
         }
     }
 

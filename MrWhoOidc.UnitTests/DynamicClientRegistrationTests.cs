@@ -448,6 +448,27 @@ public sealed class DynamicClientRegistrationTests
     }
 
     [TestMethod]
+    public async Task Register_HybridResponseType_Returns400()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            ResponseTypes = ["code id_token"]
+        };
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task Register_PublicClient_NoSecret_Succeeds()
     {
         var db = CreateDb();

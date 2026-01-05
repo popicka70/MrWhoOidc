@@ -34,11 +34,8 @@ public sealed class RegistrationHandler(
 
     private static readonly List<string> SupportedResponseTypes = new()
     {
-        "code",
-        "code id_token",
-        "code token",
-        "code id_token token"
-    };
+        "code"
+    }; 
 
     private static readonly List<string> SupportedAuthMethods = new()
     {
