@@ -554,6 +554,42 @@ grants.Add("urn:ietf:params:oauth:grant-type:device_code");
 
 ---
 
+## Additional Findings (2026-01-05 automated scan)
+
+During an automated inventory of the codebase I verified most of the features documented above and found a few remaining gaps and inconsistencies worth addressing immediately:
+
+- **Dynamic Registration: missing DELETE endpoint** (Medium priority)
+  - Observation: `POST /register`, `GET /register/{clientId}` and `PUT /register/{clientId}` are implemented, but there is no `DELETE /register/{clientId}` mapping (RFC 7592 supports client deletion).
+  - Files: `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/EndpointMappingExtensions.cs` (registration mappings), `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` (registration logic).
+  - Recommendation: add `MapDelete("/register/{clientId}", ... )` and implement a `DeleteClientAsync` method in the client configuration handler with appropriate auth checks and tests.
+
+- **Registration accepts response_types that the OP does not support at runtime** (High priority)
+  - Observation: `RegistrationHandler.SupportedResponseTypes` allows `id_token`, `code id_token`, etc., while the authorization endpoint and discovery advertise only `response_type=code` (see `DiscoveryHandler.cs` and `AuthorizeHandler` validation). This can confuse RPs registering clients and cause runtime errors.
+  - Files: `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` (supported response types), `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs` (discovery advertises only `code`), `MrWhoOidc.WebAuth/Handlers/AuthorizeHandler.cs` and `AuthorizeHandlerTests.cs` (validation rejects non-code requests).
+  - Recommendation: either restrict dynamic registration to only accept `code` (and hybrids only when fully implemented) or expand `AuthorizeHandler`/discovery to support the additional response types and add tests.
+
+- **Discovery & mTLS messaging clarity** (Low/Medium priority)
+  - Observation: the OP advertises `self_signed_tls_client_auth` and supports `mtls_endpoint_aliases`, but it does not explicitly document whether it issues certificate-bound access tokens (`tls_client_certificate_bound_access_tokens`). Discovery currently omits that field.
+  - Files: `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs`.
+  - Recommendation: either publish `"tls_client_certificate_bound_access_tokens": true` when full CB-TLS support is implemented, or document that mTLS is used only for client authentication and not for bound access tokens.
+
+- **Integration test coverage gaps** (Medium priority)
+  - Observation: several advanced features (notably **CIBA**) have unit tests but lack end-to-end integration tests validating real flows (the code comments already note missing integration tests for CIBA).
+  - Files: `MrWhoOidc.WebAuth/Handlers/CibaAuthenticationHandler.cs`, `MrWhoOidc.UnitTests/*` (tests exist in part).
+  - Recommendation: add focused integration tests for CIBA, PAR+JAR, DPoP replay/nonce flows, and mTLS behavior (preferably in `MrWhoOidc.UnitTests` integration suite).
+
+- **Conformance checklist missing** (Low priority but high value)
+  - Observation: while this document is a good narrative gap analysis, we do not have a one-to-one conformance checklist mapping specific normative sections of the OIDC Core/Discovery/etc. to file locations and test coverage.
+  - Recommendation: add an appendix table mapping critical spec sections → implemented? → file(s) → tests. I can create that as a follow-up.
+
+---
+
+## Appendix: Conformance Checklist ✅
+
+A living conformance checklist has been created that maps OIDC normative sections to repository files and tests: see `docs/oidc-conformance-checklist.md`.
+
+---
+
 ## Testing Strategy
 
 Each feature should include:
