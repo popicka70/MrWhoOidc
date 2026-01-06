@@ -327,6 +327,63 @@ public sealed class TokenHandlerTests
     }
 
     [TestMethod]
+    public async Task Token_Mtls_ClientCredentials_E2E_Issues_Certificate_Bound_Access_Token()
+    {
+        using var db = CreateDb();
+
+        // Create a self-signed cert and compute thumbprint
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=mtls-e2e", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        var resolver = new MrWhoOidc.Auth.Services.MtlsThumbprintResolver();
+        var thumb = resolver.ResolveThumbprint(cert);
+
+        // Create client configured with M2M mtls thumbprint
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-e2e-client", ClientName = "MTLS E2E Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }) };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var clientStore = new StubClientStore(client);
+        var mtlsResolver = new MrWhoOidc.Auth.Services.MtlsThumbprintResolver();
+        var clientCredsGrant = new MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler(NullLogger<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ClientCredentialsGrantHandler>.Instance, mtlsResolver);
+        var handler = CreateHandler(db, clients: clientStore, grantHandlers: new[] { clientCredsGrant });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "mtls-e2e-client"
+            // no scope to avoid product-scope rejection
+        };
+
+        var ctx = CreateHttpContext(formData);
+        // Add minimal RequestServices required by GetIssuer (IIssuerBuilder, IMultiTenancyOptions, ITenantAccessor)
+        var svcs = new ServiceCollection();
+        svcs.AddLogging();
+        svcs.AddOptions();
+        svcs.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
+        svcs.AddSingleton<MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions>(new MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions());
+        svcs.AddScoped<MrWhoOidc.Auth.MultiTenancy.IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
+        ctx.RequestServices = svcs.BuildServiceProvider();
+        // Present cert
+        ctx.Connection.ClientCertificate = cert;
+
+        var res = await handler.HandleAsync(ctx);
+        await res.ExecuteAsync(ctx);
+        ctx.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
+        var body = new System.IO.StreamReader(ctx.Response.Body).ReadToEnd();
+
+        Assert.AreEqual(StatusCodes.Status200OK, ctx.Response.StatusCode, $"Unexpected status: {ctx.Response.StatusCode}. Body: {body}");
+        var doc = JsonDocument.Parse(body);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("access_token", out var accessTokenElement), $"No access_token in response: {body}");
+        var accessToken = accessTokenElement.GetString();
+        Assert.IsFalse(string.IsNullOrEmpty(accessToken));
+        Assert.IsTrue(doc.RootElement.TryGetProperty("cnf", out var cnf), $"No cnf in response: {body}");
+        // cnf is an object; check x5t#S256 exists
+        Assert.IsTrue(cnf.TryGetProperty("x5t#S256", out var foundThumb), $"cnf present but missing x5t#S256: {cnf}");
+        Assert.AreEqual(thumb, foundThumb.GetString());
+    }
+
+    [TestMethod]
     public async Task Token_ClientCredentials_Invalid_Client_Assertion_Returns_Error()
     {
         // Arrange
