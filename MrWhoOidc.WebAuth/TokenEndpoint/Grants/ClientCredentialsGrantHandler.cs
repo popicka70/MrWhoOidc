@@ -14,7 +14,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Validates audience/resource, parses scopes, then delegates to ITokenService.
 /// Metrics are emitted centrally by TokenHandler after GrantExecutionResult.
 /// </summary>
-public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrantHandler> logger) : ITokenGrantHandler
+public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrantHandler> logger, MrWhoOidc.Auth.Services.IMtlsThumbprintResolver mtlsResolver) : ITokenGrantHandler
 {
     public string GrantType => OAuthConstants.GrantTypes.ClientCredentials;
 
@@ -43,7 +43,14 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
         }
 
         var issuer = context.Http.GetIssuer(context.Options);
-        var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt);
+        // If client presented a certificate, resolve its x5t#S256 thumbprint for CB-TLS
+        string? mtlsX5tS256 = null;
+        var cert = context.Http.Connection.ClientCertificate;
+        if (cert != null)
+        {
+            mtlsX5tS256 = mtlsResolver.ResolveThumbprint(cert);
+        }
+        var (ok, payload, _, status) = await context.Tokens.CreateClientCredentialsTokenAsync(context.ClientId, audience, requestedScopes, issuer, context.DPoPJkt, mtlsX5tS256);
         if (!ok)
         {
             logger.LogWarning("/token client_credentials issuance failed for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));

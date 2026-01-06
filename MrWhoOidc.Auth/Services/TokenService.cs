@@ -56,7 +56,7 @@ public interface ITokenService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A result containing the success status, payload, error, and HTTP status code.</returns>
     Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
-        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default);
+        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default);
 
     /// <summary>
     /// Creates an access token for a user after they authorized a device authorization grant (RFC 8628).
@@ -101,9 +101,9 @@ internal sealed class TokenService(
     }
 
     public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
-        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+        string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default)
     {
-        var request = new ClientCredentialsRequest(clientId, audience, requestedScopes, issuer, dpopJkt);
+        var request = new ClientCredentialsRequest(clientId, audience, requestedScopes, issuer, dpopJkt, mtlsX5tS256);
         return clientCredentialsFactory.CreateTokenAsync(request, ct);
     }
 

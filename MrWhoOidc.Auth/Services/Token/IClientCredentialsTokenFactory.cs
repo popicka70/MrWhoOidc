@@ -22,5 +22,6 @@ public record ClientCredentialsRequest(
     string Audience,
     string[] RequestedScopes,
     string Issuer,
-    string? DpopJkt = null
+    string? DpopJkt = null,
+    string? MtlsX5tS256 = null
 );

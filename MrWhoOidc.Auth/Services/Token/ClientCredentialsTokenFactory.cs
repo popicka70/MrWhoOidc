@@ -91,9 +91,13 @@ public sealed class ClientCredentialsTokenFactory(
                 claims.Add(new("tenant_id", client.TenantId.ToString()));
             }
         }
-        if (!string.IsNullOrEmpty(request.DpopJkt))
+        // Build cnf claim if DPoP or MTLS binding present
+        var cnfDict = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(request.DpopJkt)) cnfDict["jkt"] = request.DpopJkt;
+        if (!string.IsNullOrEmpty(request.MtlsX5tS256)) cnfDict["x5t#S256"] = request.MtlsX5tS256;
+        if (cnfDict.Count > 0)
         {
-            var cnf = JsonSerializer.Serialize(new { jkt = request.DpopJkt });
+            var cnf = JsonSerializer.Serialize(cnfDict);
             claims.Add(new("cnf", cnf));
         }
 

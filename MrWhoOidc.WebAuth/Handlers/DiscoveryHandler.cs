@@ -252,7 +252,7 @@ public sealed class DiscoveryHandler(
             // DPoP capability hints (experimental)
             ["dpop_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256, SecurityConstants.JwtAlgorithms.ES256 },
             ["dpop_bound_access_tokens"] = true,
-            ["tls_client_certificate_bound_access_tokens"] = false
+            ["tls_client_certificate_bound_access_tokens"] = true
         };
 
         if (authOptions.Value.EnableRequestObjectEncryption)

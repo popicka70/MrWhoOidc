@@ -147,7 +147,7 @@ public sealed class CibaIntegrationTests
         // Unused for these tests
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, CancellationToken ct = default) => throw new NotImplementedException();
     }
 

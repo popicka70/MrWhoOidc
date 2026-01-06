@@ -166,7 +166,7 @@ public sealed class DiscoveryMetadataTests
     {
         using var doc = await GetDiscoveryAsync(Factory);
         Assert.IsTrue(doc.RootElement.TryGetProperty("tls_client_certificate_bound_access_tokens", out var flag), "tls_client_certificate_bound_access_tokens missing");
-        Assert.AreEqual(JsonValueKind.False, flag.ValueKind, "tls_client_certificate_bound_access_tokens should be false (server does not issue certificate-bound access tokens)");
+        Assert.AreEqual(JsonValueKind.True, flag.ValueKind, "tls_client_certificate_bound_access_tokens should be true (server issues certificate-bound access tokens)");
     }
 
     [TestMethod]

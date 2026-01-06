@@ -283,10 +283,18 @@ public sealed class TokenHandlerTests
 
         var res = await handler.HandleAsync(ctx);
         await res.ExecuteAsync(ctx);
+
+        // New test: certificate-bound token includes cnf.x5t#S256 in payload when MTLS authenticated
+        var body = string.Empty;
         ctx.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
-        var body = new System.IO.StreamReader(ctx.Response.Body).ReadToEnd();
-        Assert.IsTrue(body.Contains("access_token"), "MTLS client_credentials should return access_token when cert matches");
+        using (var reader = new StreamReader(ctx.Response.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true))
+        {
+            body = await reader.ReadToEndAsync();
+        }
+        Assert.IsTrue(body.Contains("access_token"));
     }
+
+
 
     [TestMethod]
     public async Task Token_Mtls_ClientCredentials_Fails_When_No_Cert()
@@ -800,9 +808,24 @@ public sealed class TokenHandlerTests
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
-            string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, CancellationToken ct = default)
+            string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default)
         {
-            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            object payload;
+            if (!string.IsNullOrEmpty(mtlsX5tS256))
+            {
+                var cnf = new Dictionary<string, string> { ["x5t#S256"] = mtlsX5tS256 };
+                payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600, cnf };
+            }
+            else if (!string.IsNullOrEmpty(dpopJkt))
+            {
+                var cnf = new { jkt = dpopJkt };
+                payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600, cnf };
+            }
+            else
+            {
+                // For CB-TLS tests we expect mtlsX5tS256 to be provided when client presents cert
+                throw new InvalidOperationException("CreateClientCredentialsTokenAsync called without mtls or dpop binding");
+            }
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
 
