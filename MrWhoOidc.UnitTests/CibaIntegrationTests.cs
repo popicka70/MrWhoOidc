@@ -210,6 +210,14 @@ public sealed class CibaIntegrationTests
         tokenHttp.Request.Host = new HostString("test.example.com");
         tokenHttp.Request.Method = "POST";
         tokenHttp.Features.Set<IFormFeature>(new FormFeature(tokenForm));
+        // Add RequestServices with IIssuerBuilder for CibaGrantHandler's GetIssuer call
+        var tokenServices = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        tokenServices.AddLogging();
+        tokenServices.AddOptions();
+        tokenServices.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor, MrWhoOidc.Auth.MultiTenancy.TenantAccessor>();
+        tokenServices.AddSingleton<MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions>(new MrWhoOidc.Auth.MultiTenancy.MultiTenancyOptions());
+        tokenServices.AddScoped<MrWhoOidc.Auth.MultiTenancy.IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
+        tokenHttp.RequestServices = tokenServices.BuildServiceProvider();
 
         var ctxForGrant = new TokenRequestContext(tokenHttp, OAuthConstants.GrantTypes.Ciba, "test-client", tenantId, tokenForm, oidcOpt, new StubTokenService(), null!, null, client, false);
 

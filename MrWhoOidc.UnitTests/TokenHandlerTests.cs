@@ -214,7 +214,9 @@ public sealed class TokenHandlerTests
         var replayCache = new OneTimeReplayCache();
         // Provide a client_credentials grant handler so the token endpoint returns an access_token for the test
         // Create a client and client store for authentication
-        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "client", ClientName = "DPoP Client", TenantId = Guid.NewGuid() };
+#pragma warning disable CS0618 // ClientSecretHash is obsolete but needed for client_credentials test
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "client", ClientName = "DPoP Client", TenantId = Guid.NewGuid(), ClientSecretHash = "hash" };
+#pragma warning restore CS0618
         db.Clients.Add(client);
         await db.SaveChangesAsync();
         var clientStore = new StubClientStore(client);
@@ -230,6 +232,7 @@ public sealed class TokenHandlerTests
 
         // First request should succeed (DPoP proof accepted)
         var ctx1 = CreateHttpContext(formData, authorizationHeader: BasicAuth("client", "secret"));
+        ctx1.Request.Headers["DPoP"] = "dpop_proof"; // Add DPoP header to trigger DPoP validation
         var res1 = await handler.HandleAsync(ctx1);
         await res1.ExecuteAsync(ctx1);
         ctx1.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
@@ -238,6 +241,7 @@ public sealed class TokenHandlerTests
 
         // Second request (same jti) should be rejected due to replay detection
         var ctx2 = CreateHttpContext(formData, authorizationHeader: BasicAuth("client", "secret"));
+        ctx2.Request.Headers["DPoP"] = "dpop_proof"; // Same DPoP header triggers replay check
         var res2 = await handler.HandleAsync(ctx2);
         await res2.ExecuteAsync(ctx2);
         ctx2.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
