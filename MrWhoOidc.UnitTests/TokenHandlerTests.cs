@@ -22,6 +22,8 @@ using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Protocols;
 using System.Text.Json;
 using System.Threading;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 
@@ -211,8 +213,14 @@ public sealed class TokenHandlerTests
         var dpopValidator = new StubDPoPValidator(ok: true, error: null, jkt: "test_jkt");
         var replayCache = new OneTimeReplayCache();
         // Provide a client_credentials grant handler so the token endpoint returns an access_token for the test
+        // Create a client and client store for authentication
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "client", ClientName = "DPoP Client", TenantId = Guid.NewGuid() };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+        var clientStore = new StubClientStore(client);
+
         var clientCredsGrant = new ClientCredentialsGrantStub();
-        var handler = CreateHandler(db, dpop: dpopValidator, dpopReplayCache: replayCache, grantHandlers: new[] { clientCredsGrant });
+        var handler = CreateHandler(db, clients: clientStore, dpop: dpopValidator, dpopReplayCache: replayCache, grantHandlers: new[] { clientCredsGrant });
 
         var formData = new Dictionary<string, string>
         {
@@ -235,6 +243,75 @@ public sealed class TokenHandlerTests
         ctx2.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
         var body2 = new System.IO.StreamReader(ctx2.Response.Body).ReadToEnd();
         Assert.IsTrue(body2.Contains("invalid_dpop_proof"), "Replay was not detected as invalid_dpop_proof");
+    }
+
+    [TestMethod]
+    public async Task Token_Mtls_ClientCredentials_Succeeds_When_CertMatches()
+    {
+        using var db = CreateDb();
+
+        // Create a self-signed cert and compute thumbprint
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=mtls-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
+        var resolver = new MrWhoOidc.Auth.Services.MtlsThumbprintResolver();
+        var thumb = resolver.ResolveThumbprint(cert);
+
+        // Create client configured with M2M mtls thumbprint
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-client", ClientName = "MTLS Client", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { thumb }) };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var clientCredsGrant = new ClientCredentialsGrantStub();
+        var clientStore = new StubClientStore(client);
+        var handler = CreateHandler(db, clients: clientStore, grantHandlers: new[] { clientCredsGrant });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "mtls-client",
+            ["scope"] = "api"
+        };
+
+        var ctx = CreateHttpContext(formData);
+        // Present cert
+        ctx.Connection.ClientCertificate = cert;
+
+        var res = await handler.HandleAsync(ctx);
+        await res.ExecuteAsync(ctx);
+        ctx.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
+        var body = new System.IO.StreamReader(ctx.Response.Body).ReadToEnd();
+        Assert.IsTrue(body.Contains("access_token"), "MTLS client_credentials should return access_token when cert matches");
+    }
+
+    [TestMethod]
+    public async Task Token_Mtls_ClientCredentials_Fails_When_No_Cert()
+    {
+        using var db = CreateDb();
+
+        // Create thumbprint placeholder and client expecting it
+        var fakeThumb = "abcd";
+        var client = new MrWhoOidc.Auth.Persistence.Client { Id = Guid.NewGuid(), ClientId = "mtls-client-no-cert", ClientName = "MTLS Client No Cert", TenantId = Guid.NewGuid(), M2MMtlsThumbprintsJson = System.Text.Json.JsonSerializer.Serialize(new[] { fakeThumb }) };
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var clientCredsGrant = new ClientCredentialsGrantStub();
+        var clientStore = new StubClientStore(client);
+        var handler = CreateHandler(db, clients: clientStore, grantHandlers: new[] { clientCredsGrant });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "mtls-client-no-cert",
+            ["scope"] = "api"
+        };
+
+        var ctx = CreateHttpContext(formData);
+        var res = await handler.HandleAsync(ctx);
+        await res.ExecuteAsync(ctx);
+
+        Assert.AreEqual(StatusCodes.Status401Unauthorized, ctx.Response.StatusCode, "MTLS protected client without cert should be rejected with 401");
+        Assert.IsTrue(ctx.Response.Headers.TryGetValue("WWW-Authenticate", out var headerVal) && headerVal.ToString().Contains("mtls_required"), "WWW-Authenticate header should indicate mtls_required");
     }
 
     [TestMethod]

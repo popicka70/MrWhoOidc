@@ -162,6 +162,14 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_tls_client_certificate_bound_access_tokens_Flag()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("tls_client_certificate_bound_access_tokens", out var flag), "tls_client_certificate_bound_access_tokens missing");
+        Assert.AreEqual(JsonValueKind.False, flag.ValueKind, "tls_client_certificate_bound_access_tokens should be false (server does not issue certificate-bound access tokens)");
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_CheckSessionIFrame()
     {
         var factory = Factory;

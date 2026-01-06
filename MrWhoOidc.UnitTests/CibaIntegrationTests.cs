@@ -223,6 +223,8 @@ public sealed class CibaIntegrationTests
         Assert.IsNotNull(entry);
         entry.Status = CibaRequestStatus.Authorized;
         entry.UserId = user.Id;
+        // Bypass polling slow-down by setting last polled time to the past
+        entry.LastPolledAt = DateTimeOffset.UtcNow.AddSeconds(-(entry.IntervalSeconds + 1));
         await db.SaveChangesAsync();
 
         // Poll again - should return tokens
@@ -347,6 +349,11 @@ public sealed class CibaIntegrationTests
         // Execute result and verify error code
         var outHttp = new DefaultHttpContext();
         outHttp.Response.Body = new MemoryStream();
+        // Provide minimal request services required by ASP.NET Core result execution
+        var spServices = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        spServices.AddLogging();
+        spServices.AddOptions();
+        outHttp.RequestServices = spServices.BuildServiceProvider();
         await result.Result.ExecuteAsync(outHttp);
         outHttp.Response.Body.Seek(0, System.IO.SeekOrigin.Begin);
         var outJson = await new System.IO.StreamReader(outHttp.Response.Body).ReadToEndAsync();
