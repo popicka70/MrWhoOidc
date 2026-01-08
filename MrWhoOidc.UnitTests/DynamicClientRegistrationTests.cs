@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
@@ -148,6 +149,21 @@ public sealed class DynamicClientRegistrationTests
             AllowUnconfirmedLogin = true
         };
         db.Realms.Add(realm);
+
+        // Enable dynamic registration for this tenant by selecting a realm.
+        tenant.SettingsJson = JsonSerializer.Serialize(
+            new TenantSettings
+            {
+                Auth = new AuthTenantSettings
+                {
+                    DynamicClientRegistrationRealmId = realm.Id
+                }
+            },
+            new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
 
         // Create a signing key (required for token operations)
         var signingKey = new SigningKey

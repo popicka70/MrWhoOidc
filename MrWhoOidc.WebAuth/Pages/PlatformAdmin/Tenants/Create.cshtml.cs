@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using MrWhoOidc.Auth.Settings;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Linq;
@@ -205,6 +206,22 @@ public partial class CreateModel(
                     DisplayName = $"{Input.Name} Default Realm",
                     AllowUnconfirmedLogin = true
                 };
+
+                // Default: dynamically registered clients go to the tenant default realm.
+                // Setting can be changed/disabled later in Platform Admin tenant edit screen.
+                tenant.SettingsJson = System.Text.Json.JsonSerializer.Serialize(
+                    new TenantSettings
+                    {
+                        Auth = new AuthTenantSettings
+                        {
+                            DynamicClientRegistrationRealmId = defaultRealm.Id
+                        }
+                    },
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                    });
 
                 var adminRealm = new Realm
                 {

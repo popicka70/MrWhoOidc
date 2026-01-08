@@ -75,6 +75,13 @@ public class AuthTenantSettings
     public bool? RequireMfa { get; set; }
 
     /// <summary>
+    /// Realm that will be assigned to dynamically registered clients (RFC 7591).
+    /// Null disables dynamic client registration for this tenant.
+    /// </summary>
+    [JsonPropertyName("dynamicClientRegistrationRealmId")]
+    public Guid? DynamicClientRegistrationRealmId { get; set; }
+
+    /// <summary>
     /// Password policy settings
     /// </summary>
     [JsonPropertyName("passwordPolicy")]

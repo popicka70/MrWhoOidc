@@ -2,11 +2,14 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Security.Admin;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 
@@ -25,6 +28,8 @@ public class EditModel(
     public int CurrentClientCount { get; private set; }
 
     public int CurrentIdPCount { get; private set; }
+
+    public List<SelectListItem> DynamicClientRegistrationRealmOptions { get; private set; } = new();
 
     /// <summary>
     /// Current tenant slug for building tenant-aware API URLs
@@ -94,6 +99,12 @@ public class EditModel(
         /// </summary>
         public TenantLicenseMode LicenseMode { get; set; } = TenantLicenseMode.InheritPlatform;
 
+        /// <summary>
+        /// Realm that will be assigned to dynamically registered clients (RFC 7591).
+        /// Null disables dynamic client registration for this tenant.
+        /// </summary>
+        public Guid? DynamicClientRegistrationRealmId { get; set; }
+
         public DateTimeOffset CreatedAt { get; set; }
 
         public DateTimeOffset? SuspendedAt { get; set; }
@@ -116,6 +127,7 @@ public class EditModel(
         }
 
         await LoadTenantAsync(tenant);
+        await LoadRealmOptionsAsync(tenant.Id);
         return Page();
     }
 
@@ -130,6 +142,7 @@ public class EditModel(
         if (!ModelState.IsValid)
         {
             await LoadCountsAsync(Input.Id);
+            await LoadRealmOptionsAsync(Input.Id);
             return Page();
         }
 
@@ -137,6 +150,19 @@ public class EditModel(
         if (tenant == null)
         {
             return NotFound();
+        }
+
+        await LoadRealmOptionsAsync(tenant.Id);
+
+        if (Input.DynamicClientRegistrationRealmId != null)
+        {
+            var realmExists = await db.Realms.AnyAsync(r => r.TenantId == tenant.Id && r.Id == Input.DynamicClientRegistrationRealmId.Value);
+            if (!realmExists)
+            {
+                ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.DynamicClientRegistrationRealmId)}", "Selected realm does not exist for this tenant.");
+                await LoadCountsAsync(Input.Id);
+                return Page();
+            }
         }
 
         // Update tenant properties
@@ -164,6 +190,9 @@ public class EditModel(
 
         tenant.BillingPlan = Input.BillingPlan;
         tenant.LicenseMode = Input.LicenseMode;
+
+        // Update tenant SettingsJson (dynamic client registration realm)
+        tenant.SettingsJson = UpsertDynamicRegistrationRealm(tenant.SettingsJson, Input.DynamicClientRegistrationRealmId);
 
         // Update status timestamps
         if (Input.Status == TenantStatus.Suspended && tenant.SuspendedAt == null)
@@ -244,6 +273,8 @@ public class EditModel(
 
     private async Task LoadTenantAsync(Tenant tenant)
     {
+        var dynamicRealmId = TryReadDynamicRegistrationRealmId(tenant.SettingsJson);
+
         Input = new TenantInput
         {
             Id = tenant.Id,
@@ -262,6 +293,7 @@ public class EditModel(
             AdminEmail = tenant.AdminEmail,
             BillingPlan = tenant.BillingPlan,
             LicenseMode = tenant.LicenseMode,
+            DynamicClientRegistrationRealmId = dynamicRealmId,
             CreatedAt = tenant.CreatedAt,
             SuspendedAt = tenant.SuspendedAt,
             DeletedAt = tenant.DeletedAt
@@ -275,5 +307,78 @@ public class EditModel(
         CurrentUserCount = await db.Users.CountAsync(u => u.TenantId == tenantId);
         CurrentClientCount = await db.Clients.CountAsync(c => c.TenantId == tenantId);
         CurrentIdPCount = await db.IdentityProviders.CountAsync(i => i.TenantId == tenantId);
+    }
+
+    private async Task LoadRealmOptionsAsync(Guid tenantId)
+    {
+        var realms = await db.Realms
+            .Where(r => r.TenantId == tenantId)
+            .OrderBy(r => r.DisplayName ?? r.Name)
+            .Select(r => new { r.Id, r.Name, r.DisplayName })
+            .ToListAsync();
+
+        var options = new List<SelectListItem>
+        {
+            new SelectListItem { Value = "", Text = "Disabled (no realm)" }
+        };
+
+        foreach (var realm in realms)
+        {
+            options.Add(new SelectListItem
+            {
+                Value = realm.Id.ToString(),
+                Text = string.IsNullOrWhiteSpace(realm.DisplayName) ? realm.Name : $"{realm.DisplayName} ({realm.Name})"
+            });
+        }
+
+        DynamicClientRegistrationRealmOptions = options;
+    }
+
+    private static Guid? TryReadDynamicRegistrationRealmId(string? settingsJson)
+    {
+        if (string.IsNullOrWhiteSpace(settingsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var settings = JsonSerializer.Deserialize<TenantSettings>(settingsJson);
+            return settings?.Auth?.DynamicClientRegistrationRealmId;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? UpsertDynamicRegistrationRealm(string? settingsJson, Guid? realmId)
+    {
+        TenantSettings settings;
+
+        if (string.IsNullOrWhiteSpace(settingsJson))
+        {
+            settings = new TenantSettings();
+        }
+        else
+        {
+            try
+            {
+                settings = JsonSerializer.Deserialize<TenantSettings>(settingsJson) ?? new TenantSettings();
+            }
+            catch (JsonException)
+            {
+                settings = new TenantSettings();
+            }
+        }
+
+        settings.Auth ??= new AuthTenantSettings();
+        settings.Auth.DynamicClientRegistrationRealmId = realmId;
+
+        return JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        });
     }
 }

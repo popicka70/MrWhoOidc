@@ -3,6 +3,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
 
@@ -115,6 +116,20 @@ public class TenantSeedingService : ITenantSeedingService
             };
             _db.Realms.Add(adminRealm);
 
+            // Default: dynamically registered clients go to the tenant default realm.
+            tenant.SettingsJson = System.Text.Json.JsonSerializer.Serialize(
+                new TenantSettings
+                {
+                    Auth = new AuthTenantSettings
+                    {
+                        DynamicClientRegistrationRealmId = defaultRealm.Id
+                    }
+                },
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                });
             await _db.SaveChangesAsync(ct);
 
             _logger.LogInformation("Created realms for tenant {TenantSlug}", tenantSlug);

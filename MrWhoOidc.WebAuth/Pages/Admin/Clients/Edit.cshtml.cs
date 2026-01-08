@@ -123,7 +123,8 @@ public class EditModel(
     [TempData]
     public string? SecretNewSecretValue { get; set; }
 
-    [TempData]
+    // Manual TempData handling to avoid Guid-to-String casting issues
+    // (ASP.NET deserializes GUID-like strings as System.Guid objects)
     public string? SecretNewSecretIdentifier { get; set; }
 
     public async Task<IActionResult> OnGetAsync()
@@ -138,6 +139,17 @@ public class EditModel(
             .Where(c => c.Id == Id && c.TenantId == currentTenantId.Value)
             .FirstOrDefaultAsync();
         if (client is null) return NotFound();
+
+        // Manual TempData handling for SecretNewSecretIdentifier to avoid Guid-to-String cast issues
+        if (TempData.ContainsKey("SecretNewSecretIdentifier"))
+        {
+            SecretNewSecretIdentifier = TempData["SecretNewSecretIdentifier"]?.ToString();
+        }
+        // Cleanup old malformed TempData entries (if any)
+        if (TempData.ContainsKey("SecretNewSecretId"))
+        {
+            TempData.Remove("SecretNewSecretId");
+        }
 
     await LoadRealmsAsync();
     await LoadScopesAsync(client.Id);
@@ -1806,7 +1818,7 @@ public class EditModel(
             await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
 
             SecretNewSecretValue = secretValue;
-            SecretNewSecretIdentifier = secret.Id.ToString();
+            TempData["SecretNewSecretIdentifier"] = secret.Id.ToString();
             SecretSuccessMessage = "Secret generated successfully. Save it now — you won't see it again!";
             SecretInput = new SecretInputModel();
 

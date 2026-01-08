@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
@@ -242,13 +243,23 @@ public sealed class RegistrationHandler(
         // Generate unique client_id
         var clientId = GenerateClientId();
 
-        // Get or create default realm for this tenant
-        var defaultRealm = await db.Realms
-            .FirstOrDefaultAsync(r => r.TenantId == tenantId);
-
-        if (defaultRealm == null)
+        // Resolve tenant-configured realm for dynamic registration.
+        // Null disables dynamic registration for this tenant.
+        var dynamicRealmId = await GetDynamicClientRegistrationRealmIdAsync(tenantId);
+        if (dynamicRealmId == null)
         {
-            logger.LogError("/register no realm found for tenant {TenantId}", tenantId);
+            logger.LogWarning("/register called but tenant {TenantId} has no dynamic registration realm configured", tenantId);
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic client registration is not enabled for this tenant" },
+                statusCode: 400);
+        }
+
+        var realmExists = await db.Realms
+            .AnyAsync(r => r.TenantId == tenantId && r.Id == dynamicRealmId.Value);
+
+        if (!realmExists)
+        {
+            logger.LogError("/register tenant {TenantId} configured dynamic registration realm {RealmId} does not exist", tenantId, dynamicRealmId);
             return Results.Json(
                 new { error = "server_error", error_description = "Server configuration error" },
                 statusCode: 500);
@@ -258,7 +269,7 @@ public sealed class RegistrationHandler(
         string? clientSecret = null;
         long clientSecretExpiresAt = 0; // 0 = never expires per RFC 7591
         
-        var client = MapRequestToClient(request, clientId, tenantId, defaultRealm.Id, grantTypes, responseTypes, authMethod, appType);
+        var client = MapRequestToClient(request, clientId, tenantId, dynamicRealmId.Value, grantTypes, responseTypes, authMethod, appType);
 
         if (authMethod != "none" && authMethod != "private_key_jwt")
         {
@@ -420,6 +431,30 @@ public sealed class RegistrationHandler(
     {
         // Generate cryptographically secure registration access token
         return $"rat_{Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)).Replace("+", "-").Replace("/", "_").TrimEnd('=')}";
+    }
+
+    private async Task<Guid?> GetDynamicClientRegistrationRealmIdAsync(Guid tenantId)
+    {
+        var settingsJson = await db.Tenants
+            .Where(t => t.Id == tenantId)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(settingsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var settings = JsonSerializer.Deserialize<TenantSettings>(settingsJson);
+            return settings?.Auth?.DynamicClientRegistrationRealmId;
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Failed to deserialize tenant settings JSON for tenant {TenantId}", tenantId);
+            return null;
+        }
     }
 
     private static string HashRegistrationToken(string token)
