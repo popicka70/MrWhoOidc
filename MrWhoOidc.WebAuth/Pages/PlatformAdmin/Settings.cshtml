@@ -46,17 +46,17 @@
         </div>
     }
 
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="bi bi-key me-2"></i>Authentication Options
-            </h5>
-        </div>
-        <div class="card-body">
-            <form method="post" asp-page-handler="Save">
-                @Html.AntiForgeryToken()
-                
-                <div class="mb-4">
+    <form method="post" asp-page-handler="Save">
+        @Html.AntiForgeryToken()
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-key me-2"></i>Authentication Options
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-0">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" 
                                asp-for="QrLoginAtDiscoveryEnabled" id="qrLoginToggle"
@@ -72,27 +72,16 @@
                         This requires QR Login to be enabled in the system configuration.
                     </div>
                 </div>
-                
-                <hr class="my-4" />
-                
-                <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg me-2"></i>Save Settings
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
-    </div>
 
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
-            </h5>
-        </div>
-        <div class="card-body">
-            <form method="post" asp-page-handler="Save">
-                @Html.AntiForgeryToken()
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+                </h5>
+            </div>
+            <div class="card-body">
 
                 <div class="mb-4">
                     <div class="form-check form-switch">
@@ -112,7 +101,7 @@
 
                 @if (!Model.IsMultiTenancyEnabled)
                 {
-                    <div class="mb-4">
+                    <div class="mb-0">
                         <label class="form-label fw-semibold">Realm for auto-registered clients (single-tenant)</label>
                         <select class="form-select" asp-for="SingleTenantDynamicClientRegistrationRealmId"
                                 asp-items="Model.SingleTenantDynamicClientRegistrationRealmOptions">
@@ -122,19 +111,23 @@
                         </div>
                     </div>
                 }
-
-                <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg me-2"></i>Save Settings
-                    </button>
-                </div>
-            </form>
-
-            <hr class="my-4" />
-
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <h6 class="mb-0"><i class="bi bi-key-fill me-2"></i>Initial Access Tokens</h6>
             </div>
+        </div>
+
+        <div class="d-flex justify-content-end mb-4">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="bi bi-check-lg me-2"></i>Save Settings
+            </button>
+        </div>
+    </form>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-key-fill me-2"></i>Initial Access Tokens
+            </h5>
+        </div>
+        <div class="card-body">
             <div class="form-text mb-3">
                 These tokens authorize calls to <strong>POST /register</strong>. Tokens are shown once on creation.
             </div>
