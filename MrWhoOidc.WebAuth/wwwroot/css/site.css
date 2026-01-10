@@ -1028,3 +1028,147 @@ input[readonly].form-control:focus {
   box-shadow: none;
   border-color: #ced4da;
 }
+
+/* ============================================
+   SIDEBAR & LAYOUT IMPROVEMENTS
+   ============================================ */
+
+/* Ensure the sidebar has a distinct background and clean separation */
+#sidebarNav {
+    background-color: var(--fluent-color-neutral-background-1);
+    border-right: 1px solid var(--fluent-color-neutral-stroke-2) !important;
+}
+
+/* Modernize the generic list group items used for navigation */
+#sidebarNav .list-group-item {
+    border: 1px solid transparent;
+    margin: 2px 8px;
+    border-radius: var(--fluent-border-radius-medium);
+    color: var(--fluent-color-neutral-foreground-2);
+    font-size: var(--fluent-font-size-300);
+    transition: all var(--fluent-duration-fast) var(--fluent-curve-easy-ease);
+    display: flex;
+    align-items: center;
+    padding: 0.6rem 1rem;
+}
+
+#sidebarNav .list-group-item:hover {
+    background-color: var(--fluent-color-neutral-background-3);
+    color: var(--fluent-color-neutral-foreground-1);
+}
+
+/* Active state with brand indication */
+#sidebarNav .list-group-item.active {
+    background-color: var(--fluent-color-brand-primary);
+    color: #FFFFFF !important;
+    font-weight: var(--fluent-font-weight-semibold);
+    box-shadow: var(--fluent-shadow-4);
+}
+
+/* Adjust icon colors in active state */
+#sidebarNav .list-group-item.active i {
+    color: #FFFFFF !important;
+}
+
+/* Section headers in sidebar */
+#sidebarNav .list-group-item.bg-body-tertiary {
+    background-color: transparent !important;
+    color: var(--fluent-color-neutral-foreground-3);
+    font-size: var(--fluent-font-size-200);
+    font-weight: var(--fluent-font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-top: 1.5rem;
+    padding-bottom: 0.5rem;
+    padding-left: 1.25rem;
+    margin: 0;
+    pointer-events: none;
+    border: none;
+}
+
+/* Layout container adjustments */
+.page-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.scroll-container {
+    height: 100%;
+    overflow: hidden;
+}
+
+main[role="main"] {
+    background-color: var(--fluent-color-canvas);
+    overflow-y: auto;
+    padding: var(--fluent-space-24) !important;
+}
+
+/* Card Improvements to match Cards.css but applied to Bootstrap .card usage */
+.card {
+    border: 1px solid var(--fluent-color-neutral-stroke-2);
+    border-radius: var(--fluent-border-radius-large);
+    box-shadow: var(--fluent-shadow-2);
+    background-color: var(--fluent-color-card);
+    transition: box-shadow var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+}
+
+.card:hover {
+    box-shadow: var(--fluent-shadow-4);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid var(--fluent-color-neutral-stroke-2);
+    font-weight: var(--fluent-font-weight-semibold);
+    padding: var(--fluent-space-16) var(--fluent-space-20);
+}
+
+.card-body {
+    padding: var(--fluent-space-20);
+}
+
+.card-footer {
+    background-color: transparent;
+    border-top: 1px solid var(--fluent-color-neutral-stroke-2);
+    padding: var(--fluent-space-12) var(--fluent-space-20);
+}
+
+/* Data Table Modernization */
+.table-responsive-cards .data-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.data-table thead th {
+    background-color: var(--fluent-color-neutral-background-2);
+    border-bottom: 1px solid var(--fluent-color-neutral-stroke-2);
+    color: var(--fluent-color-neutral-foreground-2);
+    font-size: var(--fluent-font-size-200);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--fluent-space-12) var(--fluent-space-16);
+}
+
+.data-table tbody td {
+    border-bottom: 1px solid var(--fluent-color-neutral-stroke-2);
+    padding: var(--fluent-space-12) var(--fluent-space-16);
+    background-color: var(--fluent-color-neutral-background-1);
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+    background-color: var(--fluent-color-neutral-background-2);
+}
+
+/* Badge Tweaks */
+.badge {
+    padding: 0.35em 0.65em;
+    font-weight: var(--fluent-font-weight-semibold);
+    border-radius: var(--fluent-border-radius-medium);
+}
+
