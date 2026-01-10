@@ -26,7 +26,7 @@ public class PasswordResetIntegrationTests
             .Options;
 
         _db = new AuthDbContext(options);
-        _hasher = new Argon2PasswordHasher();
+        _hasher = new TestPasswordHasher();
         _userAccountService = new TestUserAccountService(_db);
         _resetService = new TestPasswordResetService(_db, _userAccountService, _hasher);
         _globalAuthService = new TestGlobalAuthService(_userAccountService, _hasher);

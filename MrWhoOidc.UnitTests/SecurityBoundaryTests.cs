@@ -372,7 +372,7 @@ public sealed class SecurityBoundaryTests
     {
         // This is more of a code review test, but we can verify hashing behavior
         var plainSecret = "super_secret_password_123";
-        var hasher = new Argon2PasswordHasher();
+        var hasher = new TestPasswordHasher();
 
         // Act: Hash the secret
         var hashedSecret = hasher.Hash(plainSecret);

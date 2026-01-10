@@ -73,7 +73,7 @@ public static class TestDataSeeder
 
         if (hashClientSecret)
         {
-            var hasher = new Argon2PasswordHasher();
+            var hasher = new TestPasswordHasher();
             conf.ClientSecretHash = hasher.Hash("secret");
         }
 

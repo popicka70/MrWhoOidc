@@ -11,7 +11,7 @@ public static class SecurityConstants
     public static class HashAlgorithms
     {
         public const string Argon2id = "argon2id";
-        public const string BCrypt = "bcrypt";
+        // Legacy support only
     }
 
     /// <summary>

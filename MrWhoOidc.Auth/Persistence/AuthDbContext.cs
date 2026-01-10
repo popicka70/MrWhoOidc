@@ -1437,7 +1437,7 @@ public class ClientSecret
     public Client Client { get; set; } = null!; // Navigation property
     
     [MaxLength(500)]
-    public string SecretHash { get; set; } = string.Empty; // Argon2id/BCrypt hash
+    public string SecretHash { get; set; } = string.Empty; // PBKDF2 hash
     
     [MaxLength(100)]
     public string? Description { get; set; }    // User-friendly label ("Production secret Q4 2025")

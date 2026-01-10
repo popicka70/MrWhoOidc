@@ -61,8 +61,9 @@ public sealed class DynamicClientRegistrationTests
 
         var tenantAccessor = new TenantAccessor();
         var logger = NullLogger<RegistrationHandler>.Instance;
+        var hasher = new TestPasswordHasher();
 
-        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, platformSettingsService, initialAccessTokenService, logger);
+        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, platformSettingsService, initialAccessTokenService, hasher, logger);
         return (handler, tenantAccessor);
     }
 

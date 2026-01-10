@@ -79,7 +79,7 @@ else
         @* General Tab *@
         <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
             @* Redirect URI Configuration Card *@
-            @if ((Model.RedirectUris != null && Model.RedirectUris.Count > 0) || (Model.LogoutCallbackUris != null && Model.LogoutCallbackUris.Count > 0))
+            @if ((Model.RedirectUris != null && Model.RedirectUris.Count > 0) || (Model.LogoutCallbackUris != null && Model.LogoutCallbackUris.Count > 0) || (Model.WellKnownUrls != null && Model.WellKnownUrls.Count > 0))
             {
                 <div class="card mb-4 border-primary">
                     <div class="card-header bg-primary text-white">
@@ -91,6 +91,29 @@ else
                             <i class="bi bi-info-circle text-primary me-1"></i>
                             Configure the following callback URI(s) in your external identity provider:
                         </p>
+
+                        @if (Model.WellKnownUrls != null && Model.WellKnownUrls.Count > 0)
+                        {
+                            <h6 class="fw-bold mb-2">
+                                <i class="bi bi-file-earmark-code me-1"></i>
+                                Well Known Document URL
+                            </h6>
+                            @foreach (var uri in Model.WellKnownUrls)
+                            {
+                                <div class="input-group mb-3">
+                                    <input type="text"
+                                           class="form-control font-monospace"
+                                           value="@uri"
+                                           readonly
+                                           id="wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)" />
+                                    <button class="btn btn-outline-secondary"
+                                            type="button"
+                                            onclick="navigator.clipboard.writeText(document.getElementById('wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)').value)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            }
+                        }
                         
                         @if (Model.RedirectUris != null && Model.RedirectUris.Count > 0)
                         {

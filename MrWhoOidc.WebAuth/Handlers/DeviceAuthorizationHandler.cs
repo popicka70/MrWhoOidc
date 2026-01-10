@@ -66,7 +66,7 @@ public sealed class DeviceAuthorizationHandler(
         }
 
         // Authenticate confidential clients
-        bool isConfidentialClient = !string.IsNullOrEmpty(client.ClientSecretHash) || client.ClientSecrets.Any();
+        bool isConfidentialClient = client.ClientSecrets.Any();
         if (isConfidentialClient)
         {
             var authenticated = await AuthenticateClientAsync(http, form, clientId, clientSecretFromHeader);

@@ -47,6 +47,11 @@ public class EditModel(
     public List<string> RedirectUris { get; private set; } = new();
 
     /// <summary>
+    /// The well-known document URL(s)
+    /// </summary>
+    public List<string> WellKnownUrls { get; private set; } = new();
+
+    /// <summary>
     /// The logout callback URI(s) that the external IDP should be configured with for federated logout.
     /// This is computed based on the current tenant context and multi-tenancy settings.
     /// </summary>
@@ -488,6 +493,7 @@ public class EditModel(
     {
         RedirectUris.Clear();
         LogoutCallbackUris.Clear();
+        WellKnownUrls.Clear();
 
         // Use canonical tenant-aware issuer (may include /t/{slug})
         var baseUrl = HttpContext.GetIssuer(oidcOptions.Value);
@@ -495,9 +501,11 @@ public class EditModel(
         // The callback paths
         var authCallbackPath = "/auth/external/callback";
         var logoutCallbackPath = "/logout/federated-callback";
+        var wellKnownPath = "/.well-known/openid-configuration";
 
         RedirectUris.Add($"{baseUrl}{authCallbackPath}");
         LogoutCallbackUris.Add($"{baseUrl}{logoutCallbackPath}");
+        WellKnownUrls.Add($"{baseUrl}{wellKnownPath}");
     }
 
     private OidcConfigForm? JsonToForm(string json)

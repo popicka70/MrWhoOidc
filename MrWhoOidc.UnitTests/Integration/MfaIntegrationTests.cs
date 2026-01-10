@@ -208,7 +208,7 @@ public class MfaIntegrationTests
         await using var db = CreateInMemoryDbContext();
         
         // Set up the password hasher and authentication service
-        var passwordHasher = new Argon2PasswordHasher();
+        var passwordHasher = new TestPasswordHasher();
         var password = "TestPassword123!";
         var hash = passwordHasher.Hash(password);
 
@@ -367,14 +367,7 @@ public class MfaIntegrationTests
         }
     }
 
-    /// <summary>
-    /// Test password hasher for integration tests.
-    /// </summary>
-    private sealed class Argon2PasswordHasher : IPasswordHasher
-    {
-        public string Hash(string password) => Isopoh.Cryptography.Argon2.Argon2.Hash(password);
-        public bool Verify(string password, string hash) => Isopoh.Cryptography.Argon2.Argon2.Verify(hash, password);
-    }
+
 
     /// <summary>
     /// Test implementation wrapping the internal GlobalAuthenticationService for testing.

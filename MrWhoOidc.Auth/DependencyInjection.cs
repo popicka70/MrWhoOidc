@@ -101,7 +101,7 @@ public static class AuthServiceCollectionExtensions
 
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
-        services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
         services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<IUserTenantMembershipService, UserTenantMembershipService>();

@@ -197,7 +197,7 @@ public sealed class CibaIntegrationTests
         Assert.IsFalse(string.IsNullOrEmpty(authReqId));
 
         // Polling: should return authorization_pending
-        var tokenHandler = new CibaGrantHandler(db, new StubTokenService(), authOpt, notification, NullLogger<CibaGrantHandler>.Instance);
+        var tokenHandler = new CibaGrantHandler(db, new StubTokenService(), authOpt, NullLogger<CibaGrantHandler>.Instance);
 
         var tokenForm = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
         {
@@ -335,7 +335,7 @@ public sealed class CibaIntegrationTests
         await db.SaveChangesAsync();
 
         // Poll - should return expired_token error
-        var tokenHandler = new CibaGrantHandler(db, new StubTokenService(), authOpt, notification, NullLogger<CibaGrantHandler>.Instance);
+        var tokenHandler = new CibaGrantHandler(db, new StubTokenService(), authOpt, NullLogger<CibaGrantHandler>.Instance);
         var tokenForm = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>
         {
             ["grant_type"] = OAuthConstants.GrantTypes.Ciba,

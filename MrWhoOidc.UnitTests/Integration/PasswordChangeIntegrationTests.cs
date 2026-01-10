@@ -26,7 +26,7 @@ public class PasswordChangeIntegrationTests
             .Options;
 
         _db = new AuthDbContext(options);
-        _hasher = new Argon2PasswordHasher();
+        _hasher = new TestPasswordHasher();
         _userAccountService = new UserAccountServiceInternal(_db);
         _globalAuthService = new GlobalAuthServiceInternal(_userAccountService, _hasher);
     }

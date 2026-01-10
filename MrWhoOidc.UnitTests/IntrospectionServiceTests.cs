@@ -381,7 +381,7 @@ public sealed class IntrospectionServiceTests
 
         // Setup: Client with secret
         var realm = new Realm { Id = Guid.NewGuid(), Name = "test-realm", TenantId = DefaultTenantId };
-        var hasher = new Argon2PasswordHasher();
+        var hasher = new TestPasswordHasher();
         var correctSecret = "my_secure_secret_123";
         var wrongSecret = "wrong_secret";
 
@@ -432,7 +432,7 @@ public sealed class IntrospectionServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var clientStore = new ClientStore(db, new Argon2PasswordHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
+        var clientStore = new ClientStore(db, new TestPasswordHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Act: Find public client
         var foundClient = await clientStore.FindByClientIdAsync("public-client");

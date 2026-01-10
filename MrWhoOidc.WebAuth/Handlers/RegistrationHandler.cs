@@ -23,6 +23,7 @@ public sealed class RegistrationHandler(
     IOptions<AuthOptions> authOptions,
     IPlatformSettingsService platformSettingsService,
     IPlatformInitialAccessTokenService initialAccessTokenService,
+    IPasswordHasher passwordHasher,
     ILogger<RegistrationHandler> logger) : IRegistrationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -282,7 +283,7 @@ public sealed class RegistrationHandler(
         if (authMethod != "none" && authMethod != "private_key_jwt")
         {
             clientSecret = GenerateClientSecret();
-            var hashedSecret = BCrypt.Net.BCrypt.HashPassword(clientSecret, workFactor: 12);
+            var hashedSecret = passwordHasher.Hash(clientSecret);
             
             client.ClientSecrets = new List<ClientSecret>
             {

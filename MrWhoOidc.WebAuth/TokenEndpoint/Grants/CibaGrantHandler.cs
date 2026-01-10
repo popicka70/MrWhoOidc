@@ -19,7 +19,6 @@ public sealed class CibaGrantHandler(
     AuthDbContext db,
     ITokenService tokens,
     IOptions<AuthOptions> authOptions,
-    ICibaNotificationService notificationService,
     ILogger<CibaGrantHandler> logger) : ITokenGrantHandler
 {
     public string GrantType => OAuthConstants.GrantTypes.Ciba;

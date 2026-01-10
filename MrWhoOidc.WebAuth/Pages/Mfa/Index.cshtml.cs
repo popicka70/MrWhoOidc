@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using System.ComponentModel.DataAnnotations;
-using QRCoder;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.Auth.Options;
 
@@ -33,7 +32,7 @@ public class IndexModel(
     public string? ReturnUrl { get; set; }
 
     public bool Enabled { get; set; }
-    public string? QrPngBase64 { get; set; }
+    public string? QrCodeUri { get; set; }
     public string? Message { get; set; }
     public string? InfoBanner { get; set; }
 
@@ -69,7 +68,7 @@ public class IndexModel(
                         Enabled = true;
                         var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
                         var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
-                        QrPngBase64 = GenerateQr(secret, account.Email ?? account.Username, issuerLabel);
+                        QrCodeUri = GenerateQr(secret, account.Email ?? account.Username, issuerLabel);
                         Message = "Scan QR and confirm with a code.";
                         InfoBanner = "🔐 This will enable MFA for all your organizations.";
                         logger.LogInformation("MFA enrollment initiated for UserAccount {AccountId}", account.Id);
@@ -107,7 +106,7 @@ public class IndexModel(
                             // Regenerate QR for retry
                             var oidc = HttpContext.RequestServices.GetRequiredService<OidcOptions>();
                             var issuerLabel = (oidc.Issuer ?? oidc.PublicBaseUrl ?? (Request.Scheme + "://" + Request.Host)).TrimEnd('/');
-                            QrPngBase64 = GenerateQr(account.TotpSecret, account.Email ?? account.Username, issuerLabel);
+                            QrCodeUri = GenerateQr(account.TotpSecret, account.Email ?? account.Username, issuerLabel);
                         }
                     }
                     Enabled = account.TotpEnabled;
@@ -157,11 +156,6 @@ public class IndexModel(
 
     string GenerateQr(string secret, string account, string issuer)
     {
-        var uri = totp.GetProvisioningUri(secret, account, issuer);
-        var generator = new QRCodeGenerator();
-        var data = generator.CreateQrCode(uri, QRCodeGenerator.ECCLevel.Q);
-        var qr = new PngByteQRCode(data);
-        var pngBytes = qr.GetGraphic(20);
-        return Convert.ToBase64String(pngBytes);
+        return totp.GetProvisioningUri(secret, account, issuer);
     }
 }

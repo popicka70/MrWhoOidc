@@ -79,7 +79,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                 {
                     using var scope = app.ApplicationServices.CreateScope();
                     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-                    var hasher = new Argon2PasswordHasher();
+                    var hasher = new TestPasswordHasher();
 
                     // Seed default tenant
                     var tenant = new Tenant

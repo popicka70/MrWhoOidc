@@ -16,9 +16,11 @@ namespace MrWhoOidc.WebAuth.Services;
 /// </summary>
 public sealed class ConfigurationImportService(
     AuthDbContext dbContext,
+    IPasswordHasher passwordHasher,
     ILogger<ConfigurationImportService> logger) : IConfigurationImportService
 {
     private readonly AuthDbContext _dbContext = dbContext;
+    private readonly IPasswordHasher _passwordHasher = passwordHasher;
     private readonly ILogger<ConfigurationImportService> _logger = logger;
 
     private static readonly HashSet<string> AutoSeedableGlobalScopes = new(StringComparer.Ordinal)
@@ -1303,7 +1305,6 @@ public sealed class ConfigurationImportService(
                 : null
         };
 
-        // Handle client secret using new ClientSecrets collection
         if (!string.IsNullOrEmpty(clientDef.ClientSecretHash) && !ExportManifest.IsObfuscated(clientDef.ClientSecretHash))
         {
             client.ClientSecrets.Add(new ClientSecret
@@ -1322,7 +1323,7 @@ public sealed class ConfigurationImportService(
             {
                 Id = GuidHelper.NewId(),
                 ClientId = client.Id,
-                SecretHash = BCrypt.Net.BCrypt.HashPassword(clientDef.ClientSecret),
+                SecretHash = _passwordHasher.Hash(clientDef.ClientSecret),
                 IsPrimary = true,
                 CreatedAtUtc = DateTime.UtcNow,
                 ActivatedAtUtc = DateTime.UtcNow
@@ -1334,7 +1335,7 @@ public sealed class ConfigurationImportService(
             {
                 Id = GuidHelper.NewId(),
                 ClientId = client.Id,
-                SecretHash = BCrypt.Net.BCrypt.HashPassword(secret),
+                SecretHash = _passwordHasher.Hash(secret),
                 IsPrimary = true,
                 CreatedAtUtc = DateTime.UtcNow,
                 ActivatedAtUtc = DateTime.UtcNow
@@ -1420,7 +1421,7 @@ public sealed class ConfigurationImportService(
             {
                 Id = GuidHelper.NewId(),
                 ClientId = client.Id,
-                SecretHash = BCrypt.Net.BCrypt.HashPassword(clientDef.ClientSecret),
+                SecretHash = _passwordHasher.Hash(clientDef.ClientSecret),
                 IsPrimary = true,
                 CreatedAtUtc = DateTime.UtcNow,
                 ActivatedAtUtc = DateTime.UtcNow
@@ -1434,7 +1435,7 @@ public sealed class ConfigurationImportService(
             {
                 Id = GuidHelper.NewId(),
                 ClientId = client.Id,
-                SecretHash = BCrypt.Net.BCrypt.HashPassword(secret),
+                SecretHash = _passwordHasher.Hash(secret),
                 IsPrimary = true,
                 CreatedAtUtc = DateTime.UtcNow,
                 ActivatedAtUtc = DateTime.UtcNow

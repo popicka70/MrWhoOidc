@@ -19,10 +19,5 @@
     <PackageReference Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
   </ItemGroup>
 
-  <!-- Exclude legacy/duplicated DPoP implementation -->
-  <ItemGroup>
-    <Compile Remove="DPoP.cs" />
-  </ItemGroup>
-
 </Project>
 
