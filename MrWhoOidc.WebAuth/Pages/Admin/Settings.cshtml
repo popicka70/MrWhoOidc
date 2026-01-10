@@ -44,7 +44,7 @@
                             <label class="form-check-label" for="allowRefreshIntrospection">
                                 Allow Refresh Token Introspection
                             </label>
-                            <small class="form-text text-muted d-block">
+                            <small class="form-text text-muted d-block w-100 mt-1">
                                 Platform default: <strong>@(Model.PlatformDefaults?.Auth?.AllowRefreshTokenIntrospection?.ToString() ?? "Not set")</strong>
                             </small>
                         </div>
@@ -54,7 +54,7 @@
                             <label class="form-check-label" for="requireMfa">
                                 Require MFA for All Users
                             </label>
-                            <small class="form-text text-muted d-block">
+                            <small class="form-text text-muted d-block w-100 mt-1">
                                 Platform default: <strong>@(Model.PlatformDefaults?.Auth?.RequireMfa?.ToString() ?? "Not set")</strong>
                             </small>
                         </div>
@@ -132,7 +132,7 @@
                             <label class="form-check-label" for="qrEnabled">
                                 Enable QR Login
                             </label>
-                            <small class="form-text text-muted d-block">
+                            <small class="form-text text-muted d-block w-100 mt-1">
                                 Platform default: <strong>@(Model.PlatformDefaults?.QrLogin?.Enabled?.ToString() ?? "Not set")</strong>
                             </small>
                         </div>
