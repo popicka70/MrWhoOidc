@@ -60,6 +60,25 @@
                         </div>
                     </div>
                 </div>
+
+                @* Dynamic Client Registration *@
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="Input.DynamicClientRegistrationRealmId" class="form-label">Realm</label>
+                                <select asp-for="Input.DynamicClientRegistrationRealmId" class="form-select" asp-items="Model.DynamicClientRegistrationRealmOptions"></select>
+                                <span asp-validation-for="Input.DynamicClientRegistrationRealmId" class="text-danger small"></span>
+                                <div class="form-text">
+                                    Select which realm newly registered clients belong to. Choose “Disabled (no realm)” to turn off <strong>/register</strong> for this tenant.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 @* Password Policy *@
                 <div class="card mb-3">
@@ -198,6 +217,7 @@
                 // Clear all form fields
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
+                document.querySelectorAll('select').forEach(sel => sel.value = '');
             }
         }
     </script>

@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Settings;
 
@@ -14,17 +17,20 @@ public class SettingsModel : PageModel
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IMultiTenancyOptions _multiTenancyOptions;
     private readonly ILogger<SettingsModel> _logger;
+    private readonly AuthDbContext _db;
 
     public SettingsModel(
         ITenantSettingsService settingsService,
         ITenantAccessor tenantAccessor,
         IMultiTenancyOptions multiTenancyOptions,
-        ILogger<SettingsModel> logger)
+        ILogger<SettingsModel> logger,
+        AuthDbContext db)
     {
         _settingsService = settingsService;
         _tenantAccessor = tenantAccessor;
         _multiTenancyOptions = multiTenancyOptions;
         _logger = logger;
+        _db = db;
     }
 
     [BindProperty(SupportsGet = true)]
@@ -36,6 +42,8 @@ public class SettingsModel : PageModel
     public bool IsMultiTenantMode { get; set; }
     public string? SuccessMessage { get; set; }
     public TenantSettings? PlatformDefaults { get; set; }
+
+    public List<SelectListItem> DynamicClientRegistrationRealmOptions { get; private set; } = new();
 
     public class SettingsInput
     {
@@ -60,6 +68,9 @@ public class SettingsModel : PageModel
             get => _requireMfa ?? false;
             set => _requireMfa = value ? true : null;
         }
+
+        // Dynamic Client Registration
+        public Guid? DynamicClientRegistrationRealmId { get; set; }
 
         // Password policy
         public int? PasswordMinLength { get; set; }
@@ -134,16 +145,11 @@ public class SettingsModel : PageModel
             return RedirectToPage("/admin/clients", new { tenantSlug = TenantSlug });
         }
 
-        // Load current tenant settings
-        var settings = await _settingsService.GetTenantSettingsAsync(tenantContext.TenantId);
-        if (settings == null)
-        {
-            _logger.LogWarning("Tenant not found: {TenantId}", tenantContext.TenantId);
-            return NotFound();
-        }
+        await LoadRealmOptionsAsync(tenantContext.TenantId);
 
-        // Populate form with tenant-specific values (not merged - only overrides)
-        PopulateForm(settings);
+        // Load current tenant settings overrides (not merged)
+        var settingsOverrides = await GetTenantSettingsOverridesAsync(tenantContext.TenantId);
+        PopulateForm(settingsOverrides);
 
         return Page();
     }
@@ -173,6 +179,20 @@ public class SettingsModel : PageModel
             return Page();
         }
 
+        await LoadRealmOptionsAsync(tenantContext.TenantId);
+
+        if (Input.DynamicClientRegistrationRealmId != null)
+        {
+            var exists = await _db.Realms.AnyAsync(
+                r => r.TenantId == tenantContext.TenantId && r.Id == Input.DynamicClientRegistrationRealmId.Value);
+
+            if (!exists)
+            {
+                ModelState.AddModelError(nameof(Input.DynamicClientRegistrationRealmId), "Selected realm does not exist for this tenant.");
+                return Page();
+            }
+        }
+
         // Build settings object from input
         var settings = new TenantSettings
         {
@@ -180,6 +200,7 @@ public class SettingsModel : PageModel
             {
                 AllowRefreshTokenIntrospection = Input.GetAllowRefreshTokenIntrospection(),
                 RequireMfa = Input.GetRequireMfa(),
+                DynamicClientRegistrationRealmId = Input.DynamicClientRegistrationRealmId,
                 PasswordPolicy = new PasswordPolicySettings
                 {
                     MinLength = Input.PasswordMinLength,
@@ -225,6 +246,7 @@ public class SettingsModel : PageModel
 
         Input.SetAllowRefreshTokenIntrospection(settings.Auth?.AllowRefreshTokenIntrospection);
         Input.SetRequireMfa(settings.Auth?.RequireMfa);
+        Input.DynamicClientRegistrationRealmId = settings.Auth?.DynamicClientRegistrationRealmId;
         Input.PasswordMinLength = settings.Auth?.PasswordPolicy?.MinLength;
         Input.SetPasswordRequireUppercase(settings.Auth?.PasswordPolicy?.RequireUppercase);
         Input.SetPasswordRequireLowercase(settings.Auth?.PasswordPolicy?.RequireLowercase);
@@ -236,5 +258,52 @@ public class SettingsModel : PageModel
         Input.RefreshTokenLifetimeSeconds = settings.Tokens?.RefreshTokenLifetimeSeconds;
         Input.AuthorizationCodeLifetimeSeconds = settings.Tokens?.AuthorizationCodeLifetimeSeconds;
         Input.IdTokenLifetimeSeconds = settings.Tokens?.IdTokenLifetimeSeconds;
+    }
+
+    private async Task LoadRealmOptionsAsync(Guid tenantId)
+    {
+        var realms = await _db.Realms
+            .Where(r => r.TenantId == tenantId)
+            .OrderBy(r => r.DisplayName ?? r.Name)
+            .Select(r => new { r.Id, r.Name, r.DisplayName })
+            .ToListAsync();
+
+        var options = new List<SelectListItem>
+        {
+            new() { Value = "", Text = "Disabled (no realm)" }
+        };
+
+        foreach (var realm in realms)
+        {
+            options.Add(new SelectListItem
+            {
+                Value = realm.Id.ToString(),
+                Text = string.IsNullOrWhiteSpace(realm.DisplayName) ? realm.Name : $"{realm.DisplayName} ({realm.Name})"
+            });
+        }
+
+        DynamicClientRegistrationRealmOptions = options;
+    }
+
+    private async Task<TenantSettings> GetTenantSettingsOverridesAsync(Guid tenantId)
+    {
+        var json = await _db.Tenants
+            .Where(t => t.Id == tenantId)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new TenantSettings();
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<TenantSettings>(json) ?? new TenantSettings();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new TenantSettings();
+        }
     }
 }
