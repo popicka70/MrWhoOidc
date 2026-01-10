@@ -23,14 +23,37 @@
         </div>
     }
 
-    <div class="card">
+    @if (TempData["NewInitialAccessToken"] != null)
+    {
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-start">
+                <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                <div>
+                    <div class="fw-semibold">Initial access token created</div>
+                    <div class="small text-muted">Copy it now; it will not be shown again.</div>
+                    <div class="mt-2">
+                        <div class="input-group">
+                            <input class="form-control font-monospace" id="newInitialAccessTokenValue" readonly value="@TempData["NewInitialAccessToken"]" />
+                            <button type="button" class="btn btn-outline-secondary" id="copyNewInitialAccessTokenBtn" aria-describedby="copyNewInitialAccessTokenStatus">
+                                <i class="bi bi-clipboard me-1"></i>Copy
+                            </button>
+                        </div>
+                        <div class="small text-muted mt-1" id="copyNewInitialAccessTokenStatus" aria-live="polite"></div>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0">
                 <i class="bi bi-key me-2"></i>Authentication Options
             </h5>
         </div>
         <div class="card-body">
-            <form method="post">
+            <form method="post" asp-page-handler="Save">
                 @Html.AntiForgeryToken()
                 
                 <div class="mb-4">
@@ -60,4 +83,167 @@
             </form>
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post" asp-page-handler="Save">
+                @Html.AntiForgeryToken()
+
+                <div class="mb-4">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox"
+                               asp-for="DynamicClientRegistrationEnabled" id="dcrToggle"
+                               role="switch">
+                        <label class="form-check-label fw-semibold" for="dcrToggle">
+                            Enable Dynamic Client Registration (RFC 7591/7592)
+                        </label>
+                    </div>
+                    <div class="form-text mt-2">
+                        <i class="bi bi-shield-exclamation me-1"></i>
+                        Dynamic client registration expands the public attack surface. Initial access tokens are always required.
+                        Per-tenant realm configuration still gates whether registration is usable.
+                    </div>
+                </div>
+
+                @if (!Model.IsMultiTenancyEnabled)
+                {
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Realm for auto-registered clients (single-tenant)</label>
+                        <select class="form-select" asp-for="SingleTenantDynamicClientRegistrationRealmId"
+                                asp-items="Model.SingleTenantDynamicClientRegistrationRealmOptions">
+                        </select>
+                        <div class="form-text mt-2">
+                            Select a realm to enable registrations for the default tenant, or choose “Disabled (no realm)”.
+                        </div>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-2"></i>Save Settings
+                    </button>
+                </div>
+            </form>
+
+            <hr class="my-4" />
+
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="mb-0"><i class="bi bi-key-fill me-2"></i>Initial Access Tokens</h6>
+            </div>
+            <div class="form-text mb-3">
+                These tokens authorize calls to <strong>POST /register</strong>. Tokens are shown once on creation.
+            </div>
+
+            <form method="post" asp-page-handler="CreateInitialAccessToken" class="mb-4">
+                @Html.AntiForgeryToken()
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-8">
+                        <label class="form-label">Description (optional)</label>
+                        <input class="form-control" asp-for="NewInitialAccessTokenDescription" maxlength="200" />
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-outline-primary w-100">
+                            <i class="bi bi-plus-lg me-2"></i>Create Token
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            @if (Model.ActiveInitialAccessTokens.Count == 0)
+            {
+                <div class="text-muted">No active initial access tokens.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Created</th>
+                                <th>Created By</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var token in Model.ActiveInitialAccessTokens)
+                        {
+                            <tr>
+                                <td>@(string.IsNullOrWhiteSpace(token.Description) ? "—" : token.Description)</td>
+                                <td><span class="text-muted">@token.CreatedAt.ToString("u")</span></td>
+                                <td><span class="text-muted">@(string.IsNullOrWhiteSpace(token.CreatedBy) ? "—" : token.CreatedBy)</span></td>
+                                <td class="text-end">
+                                    <form method="post" asp-page-handler="RevokeInitialAccessToken" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@token.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-slash-circle me-1"></i>Revoke
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
 </div>
+
+@section Scripts
+{
+    <script>
+        (function () {
+            const button = document.getElementById('copyNewInitialAccessTokenBtn');
+            const input = document.getElementById('newInitialAccessTokenValue');
+            const status = document.getElementById('copyNewInitialAccessTokenStatus');
+
+            if (!button || !input) {
+                return;
+            }
+
+            function setStatus(message) {
+                if (!status) return;
+                status.textContent = message;
+                window.setTimeout(() => {
+                    if (status) status.textContent = '';
+                }, 2500);
+            }
+
+            button.addEventListener('click', async () => {
+                const value = input.value || '';
+                if (!value) {
+                    setStatus('Nothing to copy.');
+                    return;
+                }
+
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(value);
+                        setStatus('Copied to clipboard.');
+                        return;
+                    }
+                } catch {
+                    // Fall back to execCommand below.
+                }
+
+                try {
+                    input.focus();
+                    input.select();
+                    input.setSelectionRange(0, value.length);
+                    const ok = document.execCommand('copy');
+                    input.setSelectionRange(0, 0);
+                    setStatus(ok ? 'Copied to clipboard.' : 'Copy failed.');
+                } catch {
+                    setStatus('Copy failed.');
+                }
+            });
+        })();
+    </script>
+}

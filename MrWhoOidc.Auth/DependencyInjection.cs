@@ -94,6 +94,11 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
         services.AddScoped<ITenantIconService, TenantIconService>();
 
+        services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
+
+        // Platform-managed initial access tokens for RFC 7591 dynamic registration
+        services.AddScoped<IPlatformInitialAccessTokenService, PlatformInitialAccessTokenService>();
+
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddSingleton<ICachedKeyProvider, CachedKeyProvider>();
         services.AddSingleton<IPasswordHasher, Argon2PasswordHasher>();

@@ -23,6 +23,8 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class DynamicClientRegistrationTests
 {
+    private const string DefaultValidInitialAccessToken = "valid-initial-access-token";
+
     private static AuthDbContext CreateDb()
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -44,7 +46,9 @@ public sealed class DynamicClientRegistrationTests
 
     private static (RegistrationHandler handler, TenantAccessor tenantAccessor) CreateRegistrationHandler(
         AuthDbContext? db = null,
-        IOptions<AuthOptions>? authOptions = null)
+        IOptions<AuthOptions>? authOptions = null,
+        IPlatformSettingsService? platformSettingsService = null,
+        IPlatformInitialAccessTokenService? initialAccessTokenService = null)
     {
         db ??= CreateDb();
         authOptions ??= Options.Create(new AuthOptions
@@ -52,16 +56,20 @@ public sealed class DynamicClientRegistrationTests
             EnableDynamicClientRegistration = true
         });
 
+        platformSettingsService ??= new TestPlatformSettingsService(dynamicClientRegistrationEnabled: true);
+        initialAccessTokenService ??= new TestPlatformInitialAccessTokenService(validTokens: new[] { DefaultValidInitialAccessToken });
+
         var tenantAccessor = new TenantAccessor();
         var logger = NullLogger<RegistrationHandler>.Instance;
 
-        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, logger);
+        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, platformSettingsService, initialAccessTokenService, logger);
         return (handler, tenantAccessor);
     }
 
     private static (ClientConfigurationHandler handler, TenantAccessor tenantAccessor) CreateConfigurationHandler(
         AuthDbContext? db = null,
-        IOptions<AuthOptions>? authOptions = null)
+        IOptions<AuthOptions>? authOptions = null,
+        IPlatformSettingsService? platformSettingsService = null)
     {
         db ??= CreateDb();
         authOptions ??= Options.Create(new AuthOptions
@@ -70,10 +78,12 @@ public sealed class DynamicClientRegistrationTests
             EnableClientConfigurationEndpoint = true
         });
 
+        platformSettingsService ??= new TestPlatformSettingsService(dynamicClientRegistrationEnabled: true);
+
         var tenantAccessor = new TenantAccessor();
         var logger = NullLogger<ClientConfigurationHandler>.Instance;
 
-        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, logger);
+        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, logger);
         return (handler, tenantAccessor);
     }
 
@@ -81,7 +91,7 @@ public sealed class DynamicClientRegistrationTests
         string method = "POST",
         string path = "/register",
         string? body = null,
-        string? authorizationHeader = null)
+        string? authorizationHeader = $"Bearer {DefaultValidInitialAccessToken}")
     {
         var context = new DefaultHttpContext();
         context.RequestServices = CreateServiceProvider();
@@ -346,19 +356,13 @@ public sealed class DynamicClientRegistrationTests
     [TestMethod]
     public async Task Register_WithInitialAccessTokenRequired_NoToken_Returns401()
     {
-        var authOptions = Options.Create(new AuthOptions
-        {
-            EnableDynamicClientRegistration = true,
-            RequireInitialAccessToken = true,
-            InitialAccessTokenHashes = [Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("valid-token")))]
-        });
-        var (handler, _) = CreateRegistrationHandler(authOptions: authOptions);
+        var (handler, _) = CreateRegistrationHandler();
 
         var request = new ClientRegistrationRequest
         {
             RedirectUris = ["https://client.example.com/callback"]
         };
-        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request));
+        var ctx = CreateHttpContext(body: JsonSerializer.Serialize(request), authorizationHeader: null);
 
         var result = await handler.HandleAsync(ctx);
         await result.ExecuteAsync(ctx);
@@ -369,13 +373,7 @@ public sealed class DynamicClientRegistrationTests
     [TestMethod]
     public async Task Register_WithInitialAccessTokenRequired_InvalidToken_Returns401()
     {
-        var authOptions = Options.Create(new AuthOptions
-        {
-            EnableDynamicClientRegistration = true,
-            RequireInitialAccessToken = true,
-            InitialAccessTokenHashes = [Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("valid-token")))]
-        });
-        var (handler, _) = CreateRegistrationHandler(authOptions: authOptions);
+        var (handler, _) = CreateRegistrationHandler();
 
         var request = new ClientRegistrationRequest
         {
@@ -397,14 +395,8 @@ public sealed class DynamicClientRegistrationTests
         var db = CreateDb();
         var tenantId = await CreateTestTenant(db);
 
-        var validToken = "valid-initial-access-token";
-        var authOptions = Options.Create(new AuthOptions
-        {
-            EnableDynamicClientRegistration = true,
-            RequireInitialAccessToken = true,
-            InitialAccessTokenHashes = [Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(validToken)))]
-        });
-        var (handler, tenantAccessor) = CreateRegistrationHandler(db, authOptions);
+        var validToken = DefaultValidInitialAccessToken;
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
         SetTenant(tenantAccessor, tenantId);
 
         var request = new ClientRegistrationRequest
@@ -419,6 +411,48 @@ public sealed class DynamicClientRegistrationTests
         await result.ExecuteAsync(ctx);
 
         Assert.AreEqual(201, ctx.Response.StatusCode);
+    }
+
+    private sealed class TestPlatformSettingsService(bool dynamicClientRegistrationEnabled) : IPlatformSettingsService
+    {
+        private readonly PlatformSettings _settings = new()
+        {
+            DynamicClientRegistrationEnabled = dynamicClientRegistrationEnabled
+        };
+
+        public Task<PlatformSettings> GetSettingsAsync() => Task.FromResult(_settings);
+
+        public Task UpdateSettingsAsync(PlatformSettings settings, string? updatedBy)
+        {
+            _settings.DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
+            _settings.QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
+            _settings.UpdatedAt = settings.UpdatedAt;
+            _settings.UpdatedBy = updatedBy;
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> IsQrLoginAtDiscoveryEnabledAsync() => Task.FromResult(_settings.QrLoginAtDiscoveryEnabled);
+    }
+
+    private sealed class TestPlatformInitialAccessTokenService : IPlatformInitialAccessTokenService
+    {
+        private readonly HashSet<string> _validTokens;
+
+        public TestPlatformInitialAccessTokenService(IEnumerable<string> validTokens)
+        {
+            _validTokens = new HashSet<string>(validTokens ?? Array.Empty<string>(), StringComparer.Ordinal);
+        }
+
+        public Task<IReadOnlyList<PlatformInitialAccessToken>> GetActiveAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<PlatformInitialAccessToken>>(Array.Empty<PlatformInitialAccessToken>());
+
+        public Task<(PlatformInitialAccessToken Entity, string PlaintextToken)> CreateAsync(string? description, string? createdBy, CancellationToken ct = default)
+            => Task.FromResult((new PlatformInitialAccessToken { Id = Guid.NewGuid(), TokenHash = "", CreatedAt = DateTimeOffset.UtcNow }, ""));
+
+        public Task<bool> RevokeAsync(Guid id, string? revokedBy, CancellationToken ct = default) => Task.FromResult(true);
+
+        public Task<bool> ValidateAsync(string plaintextToken, CancellationToken ct = default)
+            => Task.FromResult(_validTokens.Contains(plaintextToken));
     }
 
     [TestMethod]

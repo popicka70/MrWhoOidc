@@ -21,6 +21,8 @@ public sealed class RegistrationHandler(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IOptions<AuthOptions> authOptions,
+    IPlatformSettingsService platformSettingsService,
+    IPlatformInitialAccessTokenService initialAccessTokenService,
     ILogger<RegistrationHandler> logger) : IRegistrationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -48,7 +50,7 @@ public sealed class RegistrationHandler(
 
     public async Task<IResult> HandleAsync(HttpContext http)
     {
-        // Check feature flag
+        // Check feature flag (compile-time / configuration enablement)
         if (!_authOptions.EnableDynamicClientRegistration)
         {
             logger.LogWarning("/register called but dynamic client registration is disabled");
@@ -57,27 +59,33 @@ public sealed class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // Check initial access token if required
-        if (_authOptions.RequireInitialAccessToken)
+        // Check runtime toggle (platform setting)
+        var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        if (!platformSettings.DynamicClientRegistrationEnabled)
         {
-            var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
-            if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                return Results.Json(
-                    new { error = "invalid_token", error_description = "Initial access token required" },
-                    statusCode: 401);
-            }
+            logger.LogWarning("/register called but dynamic client registration is disabled by platform settings");
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic client registration is not enabled" },
+                statusCode: 400);
+        }
 
-            var initialToken = authHeader.Substring(7);
-            var initialTokenHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(initialToken)));
+        // Always require an initial access token for POST /register.
+        // Tokens are managed via platform admin UI and stored as hashes in the database.
+        var authHeader = http.Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Json(
+                new { error = "invalid_token", error_description = "Initial access token required" },
+                statusCode: 401);
+        }
 
-            if (!_authOptions.InitialAccessTokenHashes.Contains(initialTokenHash, StringComparer.Ordinal))
-            {
-                logger.LogWarning("/register invalid initial access token");
-                return Results.Json(
-                    new { error = "invalid_token", error_description = "Invalid initial access token" },
-                    statusCode: 401);
-            }
+        var initialToken = authHeader.Substring(7).Trim();
+        if (string.IsNullOrWhiteSpace(initialToken) || !(await initialAccessTokenService.ValidateAsync(initialToken, http.RequestAborted).ConfigureAwait(false)))
+        {
+            logger.LogWarning("/register invalid initial access token");
+            return Results.Json(
+                new { error = "invalid_token", error_description = "Invalid initial access token" },
+                statusCode: 401);
         }
 
         var tenant = tenantAccessor.CurrentTenant;
@@ -299,13 +307,19 @@ public sealed class RegistrationHandler(
         var tokenHash = HashRegistrationToken(registrationToken);
 
         // Store registration token in DB for future client configuration endpoint access
+        DateTime? expiresAtUtc = null;
+        if (_authOptions.RegistrationAccessTokenLifetimeSeconds > 0)
+        {
+            expiresAtUtc = DateTime.UtcNow.AddSeconds(_authOptions.RegistrationAccessTokenLifetimeSeconds);
+        }
+
         db.DynamicRegistrationTokens.Add(new DynamicRegistrationToken
         {
             Id = Guid.NewGuid().ToString(),
             ClientId = clientId, // string client_id, not GUID
             TokenHash = tokenHash,
             CreatedAt = DateTime.UtcNow,
-            ExpiresAt = null // No expiry
+            ExpiresAt = expiresAtUtc
         });
 
         await db.SaveChangesAsync();

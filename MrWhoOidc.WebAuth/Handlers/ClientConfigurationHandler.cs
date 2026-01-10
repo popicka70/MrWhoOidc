@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
 using System.Text;
@@ -36,6 +37,7 @@ public sealed class ClientConfigurationHandler(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IOptions<AuthOptions> authOptions,
+    IPlatformSettingsService platformSettingsService,
     ILogger<ClientConfigurationHandler> logger) : IClientConfigurationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -43,7 +45,7 @@ public sealed class ClientConfigurationHandler(
     public async Task<IResult> GetClientAsync(HttpContext http, string clientId)
     {
         // Check feature flags
-        var featureError = CheckFeatureFlags("GET");
+        var featureError = await CheckFeatureFlagsAsync("GET", http.RequestAborted).ConfigureAwait(false);
         if (featureError != null) return featureError;
 
         var (client, error) = await ValidateAccessAndGetClientAsync(http, clientId);
@@ -58,7 +60,7 @@ public sealed class ClientConfigurationHandler(
     public async Task<IResult> UpdateClientAsync(HttpContext http, string clientId)
     {
         // Check feature flags
-        var featureError = CheckFeatureFlags("PUT");
+        var featureError = await CheckFeatureFlagsAsync("PUT", http.RequestAborted).ConfigureAwait(false);
         if (featureError != null) return featureError;
 
         var (client, error) = await ValidateAccessAndGetClientAsync(http, clientId);
@@ -151,7 +153,7 @@ public sealed class ClientConfigurationHandler(
     public async Task<IResult> DeleteClientAsync(HttpContext http, string clientId)
     {
         // Check feature flags
-        var featureError = CheckFeatureFlags("DELETE");
+        var featureError = await CheckFeatureFlagsAsync("DELETE", http.RequestAborted).ConfigureAwait(false);
         if (featureError != null) return featureError;
 
         var (client, error) = await ValidateAccessAndGetClientAsync(http, clientId);
@@ -256,9 +258,11 @@ public sealed class ClientConfigurationHandler(
     private ClientRegistrationResponse BuildClientResponse(Client client, HttpContext http)
     {
         // Parse stored JSON arrays
-        var redirectUris = !string.IsNullOrEmpty(client.AllowedLoginRedirectUrisJson)
-            ? JsonSerializer.Deserialize<List<string>>(client.AllowedLoginRedirectUrisJson)
-            : new List<string>();
+        List<string> redirectUris = new();
+        if (!string.IsNullOrEmpty(client.AllowedLoginRedirectUrisJson))
+        {
+            redirectUris = JsonSerializer.Deserialize<List<string>>(client.AllowedLoginRedirectUrisJson) ?? new List<string>();
+        }
 
         var postLogoutUris = !string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson)
             ? JsonSerializer.Deserialize<List<string>>(client.AllowedLogoutRedirectUrisJson)
@@ -270,8 +274,7 @@ public sealed class ClientConfigurationHandler(
             ClientSecret = null, // Never return client_secret on GET/PUT
             ClientIdIssuedAt = 0, // We don't track this
             ClientSecretExpiresAt = 0, // 0 = never expires
-            RegistrationAccessToken = null, // Don't return on GET/PUT per RFC 7592
-            RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{client.ClientId}",
+            RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{client.ClientId}"!,
             RedirectUris = redirectUris,
             ClientName = client.ClientName,
             SubjectType = client.SubjectType,
@@ -309,13 +312,31 @@ public sealed class ClientConfigurationHandler(
                host.StartsWith("[::ffff:127.");
     }
 
-    private IResult? CheckFeatureFlags(string method)
+    private async Task<IResult?> CheckFeatureFlagsAsync(string method, CancellationToken ct)
     {
         if (!_authOptions.EnableDynamicClientRegistration)
         {
             logger.LogWarning("{Method} /register/{{clientId}} called but dynamic client registration is disabled", method);
             return Results.Json(
                 new { error = "invalid_request", error_description = "Dynamic client registration is not enabled" },
+                statusCode: 400);
+        }
+
+        var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        if (!platformSettings.DynamicClientRegistrationEnabled)
+        {
+            logger.LogWarning("{Method} /register/{{clientId}} called but dynamic client registration is disabled by platform settings", method);
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic client registration is not enabled" },
+                statusCode: 400);
+        }
+
+        var dcrRealmId = await GetDynamicClientRegistrationRealmIdAsync(tenantAccessor.CurrentTenant?.TenantId, ct).ConfigureAwait(false);
+        if (dcrRealmId == null)
+        {
+            logger.LogWarning("{Method} /register/{{clientId}} called but tenant has no dynamic registration realm configured", method);
+            return Results.Json(
+                new { error = "invalid_request", error_description = "Dynamic client registration is not enabled for this tenant" },
                 statusCode: 400);
         }
 
@@ -328,5 +349,35 @@ public sealed class ClientConfigurationHandler(
         }
 
         return null;
+    }
+
+    private async Task<Guid?> GetDynamicClientRegistrationRealmIdAsync(Guid? tenantId, CancellationToken ct)
+    {
+        if (tenantId is null || tenantId.Value == Guid.Empty)
+        {
+            return null;
+        }
+
+        var settingsJson = await db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == tenantId.Value)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(settingsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var settings = JsonSerializer.Deserialize<TenantSettings>(settingsJson);
+            return settings?.Auth?.DynamicClientRegistrationRealmId;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

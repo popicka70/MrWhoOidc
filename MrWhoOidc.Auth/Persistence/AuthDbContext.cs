@@ -11,9 +11,14 @@ using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.Auth.Persistence;
 
-public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options), IDataProtectionKeyContext
+public class AuthDbContext : DbContext, IDataProtectionKeyContext
 {
     private ILogger<AuthDbContext>? _logger;
+
+    public AuthDbContext(DbContextOptions<AuthDbContext> options)
+        : base(options)
+    {
+    }
 
     // Multi-tenancy
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -76,6 +81,8 @@ public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(
     public DbSet<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog> ConfigurationAuditLogs => Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>();
     // New: Platform-wide settings (single-row table)
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    // New: Initial access tokens for dynamic client registration (platform-managed)
+    public DbSet<PlatformInitialAccessToken> PlatformInitialAccessTokens => Set<PlatformInitialAccessToken>();
     // New: Dynamic client registration tokens (RFC 7592)
     public DbSet<DynamicRegistrationToken> DynamicRegistrationTokens => Set<DynamicRegistrationToken>();
     // New: CIBA (Client Initiated Backchannel Authentication) requests

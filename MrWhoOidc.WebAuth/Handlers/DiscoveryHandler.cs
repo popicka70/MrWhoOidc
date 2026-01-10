@@ -9,6 +9,8 @@ using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
+using MrWhoOidc.Auth.Settings;
+using System.Text.Json;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -23,6 +25,7 @@ public sealed class DiscoveryHandler(
     AuthDbContext db,
     IFeatureService featureService,
     ITenantAccessor tenantAccessor,
+    IPlatformSettingsService platformSettingsService,
     IMultiTenancyOptions multiTenancyOptions) : IDiscoveryHandler
 {
     public async Task<IResult> HandleAsync(HttpContext ctx)
@@ -285,9 +288,19 @@ public sealed class DiscoveryHandler(
         }
 
         // RFC 7591/7592: Dynamic Client Registration endpoint
+        // Keep discovery truthful: advertise only when DCR is effectively usable for this tenant.
         if (authOptions.Value.EnableDynamicClientRegistration)
         {
-            body["registration_endpoint"] = $"{baseUrl}/register";
+            var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+            if (platformSettings.DynamicClientRegistrationEnabled)
+            {
+                var dcrRealmId = await GetDynamicClientRegistrationRealmIdAsync(tenantAccessor.CurrentTenant?.TenantId, ctx.RequestAborted)
+                    .ConfigureAwait(false);
+                if (dcrRealmId != null)
+                {
+                    body["registration_endpoint"] = $"{baseUrl}/register";
+                }
+            }
         }
 
         // Only advertise PAR endpoint if AdvancedSecurity feature is enabled
@@ -336,5 +349,35 @@ public sealed class DiscoveryHandler(
 
         ctx.Response.Headers["Cache-Control"] = "public, max-age=300";
         return Results.Json(body);
+    }
+
+    private async Task<Guid?> GetDynamicClientRegistrationRealmIdAsync(Guid? tenantId, CancellationToken ct)
+    {
+        if (tenantId is null || tenantId.Value == Guid.Empty)
+        {
+            return null;
+        }
+
+        var settingsJson = await db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == tenantId.Value)
+            .Select(t => t.SettingsJson)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(settingsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var settings = JsonSerializer.Deserialize<TenantSettings>(settingsJson);
+            return settings?.Auth?.DynamicClientRegistrationRealmId;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

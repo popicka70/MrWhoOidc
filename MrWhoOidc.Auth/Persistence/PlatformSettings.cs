@@ -21,6 +21,12 @@ public class PlatformSettings
     public bool QrLoginAtDiscoveryEnabled { get; set; } = false;
 
     /// <summary>
+    /// Enable Dynamic Client Registration endpoints (RFC 7591/7592) at runtime.
+    /// Default is false (opt-in feature).
+    /// </summary>
+    public bool DynamicClientRegistrationEnabled { get; set; } = false;
+
+    /// <summary>
     /// Timestamp when settings were first created.
     /// </summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

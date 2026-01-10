@@ -47,9 +47,6 @@ public static class HttpContextExtensions
         var baseUrl = (canonicalBaseUrl ?? requestBaseUrl).TrimEnd('/');
 
         var multiTenancyOptions = httpContext.RequestServices.GetService<IMultiTenancyOptions>();
-        // Only resolve IIssuerBuilder when multi-tenancy is enabled to avoid unnecessary requirements for single-tenant scenarios (e.g., in tests)
-        var issuerBuilder = (multiTenancyOptions?.Enabled ?? false) ? httpContext.RequestServices.GetRequiredService<IIssuerBuilder>() : null;
-
         // Single-tenant mode: never emit tenant-prefixed issuers (e.g., "/t/default") even if
         // tenant records contain legacy issuer values. We still accept tenant-prefixed routes for
         // compatibility, but the canonical issuer should remain the root authority.
@@ -67,6 +64,9 @@ public static class HttpContextExtensions
 
             return baseUrl;
         }
+
+        // Multi-tenant mode: issuer builder is required.
+        var issuerBuilder = httpContext.RequestServices.GetRequiredService<IIssuerBuilder>();
 
         var tenantIssuer = tenantAccessor?.CurrentTenant?.IssuerUri;
         if (!string.IsNullOrWhiteSpace(tenantIssuer))
