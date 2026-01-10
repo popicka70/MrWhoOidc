@@ -396,10 +396,10 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "m2m_client",
-            ClientSecretHash = "hash",
             RealmId = realmId,
             AllowPrivateKeyJwt = true
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -439,9 +439,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -481,9 +481,9 @@ public sealed class TokenHandlerTests
         {
             Id = Guid.NewGuid(),
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -536,9 +536,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -579,9 +579,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -622,9 +622,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -665,9 +665,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -706,9 +706,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();
@@ -792,9 +792,9 @@ public sealed class TokenHandlerTests
         {
             Id = clientGuid,
             ClientId = "test_client",
-            ClientSecretHash = "hash",
             RealmId = realmId
         };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
         db.Realms.Add(realm);
         db.Clients.Add(client);
         await db.SaveChangesAsync();

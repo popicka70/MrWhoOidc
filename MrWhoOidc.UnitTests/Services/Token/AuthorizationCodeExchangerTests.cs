@@ -478,7 +478,7 @@ public sealed class AuthorizationCodeExchangerTests
         var storedClient = await db.Clients.AsNoTracking().FirstAsync(c => c.ClientId == "c1");
         Assert.AreEqual(SecurityAlgorithms.RsaOAEP, storedClient.IdTokenEncryptedResponseAlg);
         Assert.AreEqual(SecurityAlgorithms.Aes256CbcHmacSha512, storedClient.IdTokenEncryptedResponseEnc);
-        Assert.IsTrue(!string.IsNullOrWhiteSpace(storedClient.PublicJwksJson));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(storedClient.PublicJwksJson));
 
         metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
 
