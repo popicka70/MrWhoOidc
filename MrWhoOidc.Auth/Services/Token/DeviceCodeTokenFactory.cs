@@ -17,7 +17,6 @@ namespace MrWhoOidc.Auth.Services.Token;
 public sealed class DeviceCodeTokenFactory(
     AuthDbContext db,
     IJwtService jwt,
-    IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
     ITokenLifetimeResolver lifetimeResolver) : IDeviceCodeTokenFactory
