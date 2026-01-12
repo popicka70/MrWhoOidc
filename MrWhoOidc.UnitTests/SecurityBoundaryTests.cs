@@ -380,7 +380,7 @@ public sealed class SecurityBoundaryTests
         // Assert: Hash should not contain the plain secret
         Assert.DoesNotContain(plainSecret, hashedSecret, "Hashed secret should NOT contain plain text");
         Assert.IsGreaterThan(plainSecret.Length, hashedSecret.Length, "Hash should be longer than plain secret");
-        Assert.StartsWith("$argon2", hashedSecret, "Should use Argon2");
+        Assert.StartsWith("v1:", hashedSecret, "Should use the expected password hash format");
 
         // Verify can validate
         var isValid = hasher.Verify(plainSecret, hashedSecret);
