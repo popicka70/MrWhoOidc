@@ -1,13 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: "dotnet-sdk"
+  - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
-    # Volitelné: ignoruj major/minor upgrady, nech jen patch
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
+      day: "wednesday"
+    open-pull-requests-limit: 10
