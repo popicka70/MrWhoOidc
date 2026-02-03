@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "1.0.0",
+  "description": "A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 10 with PostgreSQL and optional Redis caching",
+  "technologies": [
+    {
+      "name": ".NET",
+      "version": "10.0",
+      "category": "runtime",
+      "confidence": "high"
+    },
+    {
+      "name": "C#",
+      "version": "",
+      "category": "language",
+      "confidence": "high"
+    },
+    {
+      "name": "ASP.NET Core",
+      "version": "10.0",
+      "category": "framework",
+      "confidence": "high"
+    },
+    {
+      "name": "PostgreSQL",
+      "version": "16",
+      "category": "runtime",
+      "confidence": "high"
+    },
+    {
+      "name": "Redis",
+      "version": "7.2",
+      "category": "runtime",
+      "confidence": "high"
+    },
+    {
+      "name": "Docker",
+      "version": "",
+      "category": "tool",
+      "confidence": "high"
+    },
+    {
+      "name": "Docker Compose",
+      "version": "",
+      "category": "tool",
+      "confidence": "high"
+    },
+    {
+      "name": "Entity Framework Core",
+      "version": "10.0",
+      "category": "framework",
+      "confidence": "medium"
+    },
+    {
+      "name": "PowerShell",
+      "version": "",
+      "category": "tool",
+      "confidence": "high"
+    },
+    {
+      "name": "OpenID Connect",
+      "version": "",
+      "category": "framework",
+      "confidence": "high"
+    },
+    {
+      "name": "OAuth 2.0",
+      "version": "",
+      "category": "framework",
+      "confidence": "high"
+    }
+  ],
+  "buildCommands": [
+    {
+      "command": "docker build -t mrwhooidc:latest .",
+      "description": "Build Docker image from Dockerfile",
+      "workingDirectory": ".",
+      "source": "detected"
+    },
+    {
+      "command": "docker compose build",
+      "description": "Build services using Docker Compose",
+      "workingDirectory": ".",
+      "source": "detected"
+    },
+    {
+      "command": "dotnet build MrWhoOidc.slnx",
+      "description": "Build .NET solution using .NET CLI",
+      "workingDirectory": ".",
+      "source": "detected"
+    }
+  ],
+  "testCommands": [
+    {
+      "command": "dotnet test",
+      "description": "Run all tests in the solution",
+      "workingDirectory": ".",
+      "source": "detected"
+    },
+    {
+      "command": "dotnet test MrWhoOidc.KeyGen.Tests/MrWhoOidc.KeyGen.Tests.csproj",
+      "description": "Run KeyGen unit tests",
+      "workingDirectory": ".",
+      "source": "detected"
+    },
+    {
+      "command": "dotnet test MrWhoOidc.UnitTests/MrWhoOidc.UnitTests.csproj",
+      "description": "Run general unit tests",
+      "workingDirectory": ".",
+      "source": "detected"
+    }
+  ],
+  "importantFacts": [
+    "Multi-architecture Docker image supporting amd64 and arm64",
+    "Production-ready OIDC provider with comprehensive admin UI at /admin",
+    "Uses TLS/HTTPS with certificate management",
+    "Supports multi-tenancy with subdomain/path routing",
+    "Includes health checks and graceful degradation",
+    "Non-root container execution for security",
+    "Automatic EF Core database migrations",
+    "Optional Redis caching for 30-50% performance improvement"
+  ],
+  "createdAt": "2026-02-02T17:45:04.1235532+00:00",
+  "updatedAt": "2026-02-02T17:45:04.1235532+00:00"
+}

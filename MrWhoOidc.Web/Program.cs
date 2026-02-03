@@ -52,7 +52,8 @@ builder.Services.AddHttpClient("OidcBackchannel")
             SslOptions =
             {
                 EnabledSslProtocols = SslProtocols.Tls12,
-                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true // dev only
+                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => 
+                    builder.Environment.IsDevelopment() // Only bypass cert validation in development
             }
         };
         return new DPoPBackchannelHandler(sp.GetRequiredService<DPoPKeyStore>(), sockets);

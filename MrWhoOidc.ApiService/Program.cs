@@ -467,7 +467,7 @@ app.Run();
 public sealed class AdminAuthOptions
 {
     public string? Issuer { get; set; }
-    public bool RequireHttpsMetadata { get; set; } = false; // dev default
+    public bool RequireHttpsMetadata { get; set; } = true; // Secure by default
     public string RealmName { get; set; } = "admin";
     public string AdminRoleName { get; set; } = "admin";
 }
