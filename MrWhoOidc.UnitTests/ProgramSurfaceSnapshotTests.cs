@@ -320,7 +320,24 @@ public class ProgramSurfaceSnapshotTests
             }
         }
         var namesOrdered = names.OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        var expected = new[] { "email-discovery", "rl-admin", "rl-authorize", "rl-introspect", "rl-jwks", "rl-par", "rl-qr-cancel", "rl-qr-confirm", "rl-qr-poll", "rl-token", "rl-token-exchange", "rl-userinfo" }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var expected = new[]
+        {
+            "email-discovery",
+            "rl-admin",
+            "rl-authorize",
+            "rl-external",
+            "rl-introspect",
+            "rl-jwks",
+            "rl-logout",
+            "rl-par",
+            "rl-qr-cancel",
+            "rl-qr-confirm",
+            "rl-qr-poll",
+            "rl-revoke",
+            "rl-token",
+            "rl-token-exchange",
+            "rl-userinfo"
+        }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(expected, namesOrdered, "Rate limiting policy name set drifted.");
     }
 

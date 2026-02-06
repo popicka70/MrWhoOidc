@@ -595,7 +595,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/complete",
+    "Pattern": "/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -606,7 +606,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/challenge",
+    "Pattern": "/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -628,7 +628,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/complete",
+    "Pattern": "/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -639,7 +639,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/challenge",
+    "Pattern": "/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -652,7 +652,9 @@
   {
     "Pattern": "/auth/external/callback",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -661,7 +663,9 @@
   {
     "Pattern": "/auth/external/confirm",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -670,7 +674,9 @@
   {
     "Pattern": "/auth/external/start",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -748,15 +754,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/connect/endsession",
-    "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/connect/checksession",
     "Methods": "GET",
     "RateLimiters": [
@@ -765,6 +762,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/connect/endsession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-logout"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
     "IsAnonymous": false
   },
   {
@@ -864,7 +872,9 @@
   {
     "Pattern": "/logout",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -873,7 +883,9 @@
   {
     "Pattern": "/logout/federated-callback",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -882,7 +894,9 @@
   {
     "Pattern": "/logout/final",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1101,7 +1115,9 @@
   {
     "Pattern": "/revoke",
     "Methods": "POST",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-revoke"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1335,7 +1351,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1346,7 +1362,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1368,7 +1384,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
+    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1379,7 +1395,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1392,7 +1408,9 @@
   {
     "Pattern": "/t/{slug}/auth/external/callback",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1401,7 +1419,9 @@
   {
     "Pattern": "/t/{slug}/auth/external/confirm",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1410,7 +1430,9 @@
   {
     "Pattern": "/t/{slug}/auth/external/start",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-external"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1479,15 +1501,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/connect/endsession",
-    "Methods": "GET",
-    "RateLimiters": [],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": false,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/t/{slug}/connect/checksession",
     "Methods": "GET",
     "RateLimiters": [
@@ -1496,6 +1509,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/connect/endsession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-logout"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
     "IsAnonymous": false
   },
   {
@@ -1541,7 +1565,9 @@
   {
     "Pattern": "/t/{slug}/logout",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1550,7 +1576,9 @@
   {
     "Pattern": "/t/{slug}/logout/federated-callback",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1559,7 +1587,9 @@
   {
     "Pattern": "/t/{slug}/logout/final",
     "Methods": "GET",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-logout"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1657,7 +1687,9 @@
   {
     "Pattern": "/t/{slug}/revoke",
     "Methods": "POST",
-    "RateLimiters": [],
+    "RateLimiters": [
+      "rl-revoke"
+    ],
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
