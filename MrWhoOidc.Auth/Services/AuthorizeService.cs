@@ -2,6 +2,7 @@ using System.Text.Json;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.Auth.Services.Authorization;
 
@@ -21,7 +22,10 @@ public interface IAuthorizeService
     Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default);
 }
 
-internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) : IAuthorizeService
+internal sealed class AuthorizeService(
+    AuthDbContext db,
+    IClientStore clients,
+    ILogger<AuthorizeService> logger) : IAuthorizeService
 {
     public async Task<AuthorizeValidationResult> ValidateAsync(AuthorizeRequest request, CancellationToken ct = default)
     {
@@ -55,7 +59,13 @@ internal sealed class AuthorizeService(AuthDbContext db, IClientStore clients) :
                     return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri is not allowed for this client");
                 }
             }
-            catch { /* ignore parse errors */ }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex,
+                    "Failed to parse AllowedLoginRedirectUrisJson for client {ClientId}",
+                    client.ClientId);
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "redirect_uri allow-list is invalid for this client");
+            }
         }
 
         if (client.RequirePkce)

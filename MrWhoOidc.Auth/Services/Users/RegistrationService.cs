@@ -60,7 +60,7 @@ public class RegistrationService : IRegistrationService
             .FirstOrDefaultAsync(r => r.NormalizedEmail == normalized && r.State == "pending", cancellationToken);
         if (pendingReg is not null)
         {
-            _logger.LogInformation("Pending registration already exists for {Email}", input.Email);
+            _logger.LogInformation("Pending registration already exists for {EmailHash}", HashForLog(input.Email));
             return new RegistrationResult(pendingReg.Id, pendingReg.State);
         }
 
@@ -96,8 +96,8 @@ public class RegistrationService : IRegistrationService
         _db.Set<Registration>().Add(registration);
         await _db.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Registration created for {Email}, AutoApprove={AutoApprove}, IsExternalIdp={IsExternalIdp}",
-            input.Email, input.AutoApprove, input.IsExternalIdp);
+        _logger.LogInformation("Registration created for {EmailHash}, AutoApprove={AutoApprove}, IsExternalIdp={IsExternalIdp}",
+            HashForLog(input.Email), input.AutoApprove, input.IsExternalIdp);
 
         if (input.AutoApprove)
         {
@@ -286,5 +286,12 @@ public class RegistrationService : IRegistrationService
 
         _logger.LogInformation("Created new tenant {TenantSlug} (ID: {TenantId}) for registration", input.Slug, tenant.Id);
         return tenant.Id;
+    }
+
+    private static string HashForLog(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "[empty]";
+        var hash = value.GetHashCode(StringComparison.OrdinalIgnoreCase);
+        return $"[hash:{hash:X8}]";
     }
 }

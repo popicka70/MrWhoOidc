@@ -82,8 +82,10 @@ public class IndexModel(
 
         // Update password on UserAccount (global credential)
         var newHash = hasher.Hash(Input.NewPassword!);
-        logger.LogInformation("🔄 [Password Change] Updating password for account {AccountId}, Username={Username}, Email={Email}", 
-            account.Id, account.Username, account.Email ?? "(null)");
+        logger.LogInformation("🔄 [Password Change] Updating password for account {AccountId}, UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+            account.Id,
+            LogTokenization.HashId(account.Username),
+            LogTokenization.HashId(account.Email));
         
         await userAccountService.UpdatePasswordAsync(account.Id, newHash, null, "argon2id");
         
@@ -118,8 +120,9 @@ public class IndexModel(
             return null;
         }
         
-        logger.LogDebug("🔍 [Password] Found per-tenant User: Username={Username}, Email={Email}", 
-            user.Username, user.Email ?? "(null)");
+        logger.LogDebug("🔍 [Password] Found per-tenant User: UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+            LogTokenization.HashId(user.Username),
+            LogTokenization.HashId(user.Email));
         
         // Find the global UserAccount by email or username
         if (!string.IsNullOrEmpty(user.Email))
@@ -127,11 +130,11 @@ public class IndexModel(
             var account = await userAccountService.FindByEmailAsync(user.Email);
             if (account is not null) 
             {
-                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, Username={Username}", 
-                    account.Id, account.Username);
+                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, UsernameHash={UsernameHash}", 
+                    account.Id, LogTokenization.HashId(account.Username));
                 return account;
             }
-            logger.LogDebug("🔍 [Password] No UserAccount found by email: {Email}", user.Email);
+            logger.LogDebug("🔍 [Password] No UserAccount found by email: {EmailHash}", LogTokenization.HashId(user.Email));
         }
         
         var accountByUsername = await userAccountService.FindByUsernameAsync(user.Username);
@@ -141,8 +144,9 @@ public class IndexModel(
         }
         else
         {
-            logger.LogWarning("⚠️ [Password] No UserAccount found for User: Username={Username}, Email={Email}", 
-                user.Username, user.Email ?? "(null)");
+            logger.LogWarning("⚠️ [Password] No UserAccount found for User: UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+                LogTokenization.HashId(user.Username),
+                LogTokenization.HashId(user.Email));
         }
         
         return accountByUsername;

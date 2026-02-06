@@ -46,8 +46,11 @@ internal sealed class GlobalAuthenticationService(
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.UserNotFound);
         }
 
-        logger.LogDebug("🔍 [GlobalAuth] Found UserAccount: Id={AccountId}, Username={Username}, Email={Email}, HasPassword={HasPassword}",
-            account.Id, account.Username, account.Email ?? "(null)", !string.IsNullOrEmpty(account.PasswordHash));
+        logger.LogDebug("🔍 [GlobalAuth] Found UserAccount: Id={AccountId}, UsernameHash={UsernameHash}, EmailHash={EmailHash}, HasPassword={HasPassword}",
+            account.Id,
+            HashForLog(account.Username ?? string.Empty),
+            HashForLog(account.Email ?? string.Empty),
+            !string.IsNullOrEmpty(account.PasswordHash));
 
         // Check if account is locked out
         if (await IsLockedOutAsync(account.Id, ct).ConfigureAwait(false))
