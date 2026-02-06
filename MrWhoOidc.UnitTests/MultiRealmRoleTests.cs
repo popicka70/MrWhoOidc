@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using MrWhoOidc.Auth;
@@ -62,7 +63,7 @@ public sealed class MultiRealmRoleTests
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
-            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver, NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
 
@@ -112,7 +113,7 @@ public sealed class MultiRealmRoleTests
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
         
         var factory = new ClientCredentialsTokenFactory(
-            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver());
+            db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory, new Mock<IDeviceCodeTokenFactory>().Object);
 

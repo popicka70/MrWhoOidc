@@ -50,10 +50,10 @@ public static class RateLimitingExtensions
                     AutoReplenishment = true
                 });
             });
-            // token endpoint
+            // token endpoint (partition by client_id when present)
             options.AddPolicy("rl-token", httpContext =>
             {
-                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                var key = ExtractClientIdOrIp(httpContext);
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 30,
@@ -189,6 +189,45 @@ public static class RateLimitingExtensions
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
+            // logout endpoints
+            options.AddPolicy("rl-logout", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
+            // revocation endpoint
+            options.AddPolicy("rl-revoke", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+            });
+
+            // external OIDC endpoints
+            options.AddPolicy("rl-external", httpContext =>
+            {
+                var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
                     Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                     AutoReplenishment = true

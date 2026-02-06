@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using MrWhoOidc.Auth;
 using MrWhoOidc.Auth.Entitlements;
 using MrWhoOidc.Auth.Options;
@@ -48,9 +49,8 @@ public sealed class ClientCredentialsTokenFactoryTests
 
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
-        var logger = new Mock<ILogger<ClientCredentialsTokenFactory>>();
-
-        var factory = new ClientCredentialsTokenFactory(db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, new TokenLifetimeResolver());
+        var factory = new ClientCredentialsTokenFactory(
+            db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var request = new ClientCredentialsRequest("c1", "api", new[] { "openid" }, "https://issuer");
         var (ok, payload, error, status) = await factory.CreateTokenAsync(request, CancellationToken.None);
@@ -81,9 +81,8 @@ public sealed class ClientCredentialsTokenFactoryTests
 
         var settingsSvc = new MockTenantSettingsService();
         var scopeResolver = new MockScopeResolver();
-        var logger = new Mock<ILogger<ClientCredentialsTokenFactory>>();
-
-        var factory = new ClientCredentialsTokenFactory(db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, new TokenLifetimeResolver());
+        var factory = new ClientCredentialsTokenFactory(
+            db, jwtSvc.Object, Options(), settingsSvc, scopeResolver, new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var mtlsThumb = "thumby";
         var request = new ClientCredentialsRequest("c1", "api", Array.Empty<string>(), "https://issuer", null, mtlsThumb);

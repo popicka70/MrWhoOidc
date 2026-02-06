@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using MrWhoOidc.Auth;
@@ -69,7 +70,7 @@ public sealed class TokenServiceTests
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
-            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver);
+            db, jwtSvc, options, settingsSvc, scopeResolver, lifetimeResolver, NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var deviceCodeFactory = new Mock<IDeviceCodeTokenFactory>().Object;
 

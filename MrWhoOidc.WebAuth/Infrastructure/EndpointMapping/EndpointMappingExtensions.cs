@@ -194,10 +194,14 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc")
             .RequireRateLimiting("rl-authorize");
 
-        routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx));
-        routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx));
-        routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx));
-        routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx));
+        routes.MapGet("/logout", (ILogoutHandler h, HttpContext ctx) => h.LogoutEntryAsync(ctx))
+            .RequireRateLimiting("rl-logout");
+        routes.MapGet("/logout/federated-callback", (ILogoutHandler h, HttpContext ctx) => h.FederatedCallbackAsync(ctx))
+            .RequireRateLimiting("rl-logout");
+        routes.MapGet("/logout/final", (ILogoutHandler h, HttpContext ctx) => h.FinalRedirectAsync(ctx))
+            .RequireRateLimiting("rl-logout");
+        routes.MapGet("/connect/endsession", (ILogoutHandler h, HttpContext ctx) => h.EndSessionAsync(ctx))
+            .RequireRateLimiting("rl-logout");
 
         routes.MapPost("/token", (ITokenHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
@@ -206,7 +210,8 @@ internal static class EndpointMappingExtensions
         routes.MapMethods("/token", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 
-        routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx));
+        routes.MapPost("/revoke", (IRevocationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
+            .RequireRateLimiting("rl-revoke");
 
         // Dynamic client registration (RFC 7591)
         routes.MapPost("/register", (IRegistrationHandler h, HttpContext ctx) => h.HandleAsync(ctx))
@@ -255,9 +260,12 @@ internal static class EndpointMappingExtensions
             .RequireCors("oidc");
 
         // External OIDC (IdP chaining) endpoints
-        routes.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx));
-        routes.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx));
-        routes.MapGet("/auth/external/confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx));
+        routes.MapGet("/auth/external/start", (IExternalOidcHandler h, HttpContext ctx) => h.StartAsync(ctx))
+            .RequireRateLimiting("rl-external");
+        routes.MapGet("/auth/external/callback", (IExternalOidcHandler h, HttpContext ctx) => h.CallbackAsync(ctx))
+            .RequireRateLimiting("rl-external");
+        routes.MapGet("/auth/external/confirm", (IExternalOidcHandler h, HttpContext ctx) => h.ConfirmLinkAsync(ctx))
+            .RequireRateLimiting("rl-external");
 
         // QR login endpoints
         // Note: /auth/qr and /auth/qr-confirm are handled by Razor Pages directly

@@ -36,7 +36,10 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
         var reqMissingPkce = new AuthorizeRequest
         (
             response_type: "code",
@@ -82,7 +85,10 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
             response_type: "code",
@@ -121,7 +127,10 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
             response_type: "code",
@@ -158,7 +167,10 @@ public sealed class AuthorizeServiceTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = MockTenantAccessor.CreateWithDefaultTenant();
-        var svc = new AuthorizeService(db, new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance));
+        var svc = new AuthorizeService(
+            db,
+            new ClientStore(db, new NoopHasher(), tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance),
+            NullLogger<AuthorizeService>.Instance);
         var req = new AuthorizeRequest
         (
             response_type: "code",

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
@@ -50,6 +51,7 @@ public class TokenExchangeService(
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
     IOpaqueTokenPolicy opaquePolicy,
+    ILogger<TokenExchangeService> logger,
     IOboPolicyService? oboPolicy = null) : ITokenExchangeService
 {
     public async Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(
@@ -145,7 +147,10 @@ public class TokenExchangeService(
                         using var doc = System.Text.Json.JsonDocument.Parse(json);
                         if (doc.RootElement.TryGetProperty("jkt", out var jktEl)) subjectCnfJkt = jktEl.GetString();
                     }
-                    catch { }
+                    catch (JsonException ex)
+                    {
+                        logger.LogDebug(ex, "Token exchange subject cnf claim parse failed");
+                    }
                 }
             }
             catch
@@ -175,8 +180,15 @@ public class TokenExchangeService(
             }
 
             subjectCnfJkt = entity.CnfJkt;
-            try { subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>(); }
-            catch { subjectScopes = Array.Empty<string>(); }
+            try
+            {
+                subjectScopes = System.Text.Json.JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
+            }
+            catch (JsonException ex)
+            {
+                logger.LogDebug(ex, "Token exchange subject scopes parse failed");
+                subjectScopes = Array.Empty<string>();
+            }
             // Track delegation depth for opaque tokens
             subjectDelegationDepth = entity.DelegationDepth;
         }

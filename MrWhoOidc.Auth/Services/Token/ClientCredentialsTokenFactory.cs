@@ -24,7 +24,8 @@ public sealed class ClientCredentialsTokenFactory(
     IOptions<AuthOptions> authOptions,
     ITenantSettingsService settingsService,
     IScopeResolver scopeResolver,
-    ITokenLifetimeResolver lifetimeResolver) : IClientCredentialsTokenFactory
+    ITokenLifetimeResolver lifetimeResolver,
+    ILogger<ClientCredentialsTokenFactory> logger) : IClientCredentialsTokenFactory
 {
     public async Task<(bool ok, object? payload, string? error, int status)> CreateTokenAsync(ClientCredentialsRequest request, CancellationToken ct = default)
     {
@@ -46,7 +47,11 @@ public sealed class ClientCredentialsTokenFactory(
         if (!string.IsNullOrWhiteSpace(client.M2MAllowedAudiencesJson))
         {
             try { perClientAudiences = JsonSerializer.Deserialize<string[]>(client.M2MAllowedAudiencesJson) ?? Array.Empty<string>(); }
-            catch { perClientAudiences = Array.Empty<string>(); }
+            catch (JsonException ex)
+            {
+                logger.LogDebug(ex, "Failed to parse M2M allowed audiences for client {ClientId}", request.ClientId);
+                perClientAudiences = Array.Empty<string>();
+            }
         }
         var globalAudiences = authOptions.Value.ApiAudiences ?? Array.Empty<string>();
         var allowedAudiences = perClientAudiences.Length > 0 ? perClientAudiences : globalAudiences;

@@ -143,7 +143,11 @@ public sealed class ClientAuthenticationService(
             if (!string.IsNullOrWhiteSpace(client.M2MMtlsThumbprintsJson))
             {
                 try { return JsonSerializer.Deserialize<string[]>(client.M2MMtlsThumbprintsJson); }
-                catch { return null; }
+                catch (JsonException ex)
+                {
+                    logger.LogDebug(ex, "Failed to parse M2M mTLS thumbprints for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
+                    return null;
+                }
             }
         }
         else if (input.Usage == ClientAuthenticationUsage.Introspection)
@@ -152,7 +156,10 @@ public sealed class ClientAuthenticationService(
             if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
             {
                 try { return JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson); }
-                catch { }
+                catch (JsonException ex)
+                {
+                    logger.LogDebug(ex, "Failed to parse introspection mTLS thumbprints for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
+                }
             }
             // Check global
             if (authOptions.Value.IntrospectionMtlsCertificates is { Count: > 0 })
