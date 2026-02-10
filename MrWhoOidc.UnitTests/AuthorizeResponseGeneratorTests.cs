@@ -12,6 +12,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.UnitTests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Web;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -22,7 +23,8 @@ public sealed class AuthorizeResponseGeneratorTests
     public async Task AuthorizeResponseGenerator_QueryJwt_Places_Response_In_Query()
     {
         var http = CreateHttpContext();
-        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"));
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
 
         var validation = new AuthorizeValidationResult(
             IsValid: true,
@@ -46,7 +48,8 @@ public sealed class AuthorizeResponseGeneratorTests
     public async Task AuthorizeResponseGenerator_FragmentJwt_Places_Response_In_Fragment()
     {
         var http = CreateHttpContext();
-        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"));
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
 
         var validation = new AuthorizeValidationResult(
             IsValid: true,
@@ -70,7 +73,8 @@ public sealed class AuthorizeResponseGeneratorTests
     public void AuthorizeResponseGenerator_FormPostJwt_Returns_RazorPageResult()
     {
         var http = CreateHttpContext();
-        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"));
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
 
         var validation = new AuthorizeValidationResult(
             IsValid: true,
@@ -88,7 +92,8 @@ public sealed class AuthorizeResponseGeneratorTests
     public async Task AuthorizeResponseGenerator_NonJarm_Includes_SessionState_And_Sets_Opbs_Cookie()
     {
         var http = CreateHttpContext();
-        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"));
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var gen = new AuthorizeResponseGenerator(new StubJarmService("a.b.c"), dataProtection);
 
         var validation = new AuthorizeValidationResult(
             IsValid: true,
@@ -110,7 +115,10 @@ public sealed class AuthorizeResponseGeneratorTests
         var redirectUrl = outerQuery["redirectUrl"];
         Assert.IsFalse(string.IsNullOrWhiteSpace(redirectUrl), "redirectUrl missing");
 
-        var inner = new Uri(redirectUrl!);
+        var protector = dataProtection.CreateProtector("MrWhoOidc.WebAuth.Pages.Auth.Redirect");
+        var unprotectedUrl = protector.Unprotect(redirectUrl!);
+
+        var inner = new Uri(unprotectedUrl);
         var innerQuery = HttpUtility.ParseQueryString(inner.Query);
         Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["session_state"]), "session_state missing");
         Assert.IsFalse(string.IsNullOrWhiteSpace(innerQuery["iss"]), "iss missing");

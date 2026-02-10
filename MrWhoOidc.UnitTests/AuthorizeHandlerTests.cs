@@ -24,6 +24,7 @@ using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
+using Microsoft.AspNetCore.DataProtection;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using System.Security.Claims;
@@ -367,7 +368,8 @@ public sealed class AuthorizeHandlerTests
             scopes: new[] { "openid" },
             state: "state1");
 
-        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
         var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
 
         var queryParams = new Dictionary<string, string>
@@ -410,7 +412,8 @@ public sealed class AuthorizeHandlerTests
             scopes: new[] { "openid" },
             state: "state2");
 
-        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
         var consents = new StubConsentProcessor(requiresConsent: true, hasConsent: false);
         var handler = CreateHandler(db, validator: validator, consentProcessor: consents, responseGenerator: responseGenerator);
 
@@ -455,7 +458,8 @@ public sealed class AuthorizeHandlerTests
             scopes: new[] { "openid" },
             state: "state3");
 
-        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
         var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
 
         var oldAuthTime = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeSeconds().ToString();
@@ -502,7 +506,8 @@ public sealed class AuthorizeHandlerTests
             scopes: new[] { "openid" },
             state: "state4");
 
-        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService());
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
         var handler = CreateHandler(
             db,
             validator: validator,
