@@ -1,15 +1,19 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace MrWhoOidc.Auth.Utils;
 
 /// <summary>
 /// Central helper for normalizing and comparing redirect / post-logout URLs.
 /// Rules:
 /// - Must be absolute URI to be considered valid
-/// - Comparison ignores query string and fragment
 /// - Scheme + host are lowercased
 /// - Default port is omitted; non-default preserved
 /// - Path always starts with '/'
 /// - Trailing slash removed unless path is root ('/')
 /// - Path casing preserved (case sensitive portion)
+/// - Query string and fragment are preserved and included in comparison
 /// </summary>
 public static class UrlComparison
 {
@@ -27,10 +31,16 @@ public static class UrlComparison
         var path = string.IsNullOrEmpty(u.AbsolutePath) ? "/" : u.AbsolutePath;
         if (!path.StartsWith('/')) path = "/" + path; // safety
         if (path.Length > 1 && path.EndsWith('/')) path = path.TrimEnd('/');
-        return scheme + "://" + host + portPart + path;
+
+        // Security fix: Include query and fragment in comparison to prevent open redirect attacks
+        // and enforce strict matching per OAuth 2.0 Security Best Practices.
+        var query = u.Query;
+        var fragment = u.Fragment;
+
+        return scheme + "://" + host + portPart + path + query + fragment;
     }
 
-    /// <summary>Returns true if requested URL (ignoring query/fragment) matches any URL in the allow-list after normalization.</summary>
+    /// <summary>Returns true if requested URL matches any URL in the allow-list after normalization.</summary>
     public static bool IsAllowed(string requested, IEnumerable<string> allowList)
     {
         if (string.IsNullOrWhiteSpace(requested)) return false;
