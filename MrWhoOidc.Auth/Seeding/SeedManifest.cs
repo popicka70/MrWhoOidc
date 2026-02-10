@@ -197,6 +197,12 @@ public sealed record TenantSeedDefinition
     /// </summary>
     [JsonPropertyName("roles")]
     public List<RoleSeedDefinition> Roles { get; init; } = [];
+
+    /// <summary>
+    /// Users associated with this tenant.
+    /// </summary>
+    [JsonPropertyName("users")]
+    public List<UserSeedDefinition> Users { get; init; } = [];
 }
 
 public sealed record RealmSeedDefinition
