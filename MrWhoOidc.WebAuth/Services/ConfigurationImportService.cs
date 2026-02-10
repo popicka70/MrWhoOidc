@@ -255,6 +255,7 @@ public sealed class ConfigurationImportService(
                     await ImportRealmsAsync(tenant.Id, tenantDef.Realms ?? [], options, cancellationToken);
                     await ImportClientsAsync(tenant.Id, tenantDef, options, cancellationToken);
                     await ImportIdentityProvidersAsync(tenant.Id, tenantDef.IdentityProviders ?? [], options, cancellationToken);
+                    await ImportUsersAsync(tenant.Id, tenantDef.Users ?? [], options, cancellationToken);
                 }
             }
 
@@ -1183,6 +1184,8 @@ public sealed class ConfigurationImportService(
         realm.DisplayName = realmDef.DisplayName;
         realm.AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin ?? realm.AllowUnconfirmedLogin;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await EnsureRolesAsync(realm, realmDef.Roles, cancellationToken);
     }
 
     private async Task MergeRealmAsync(
@@ -1195,6 +1198,41 @@ public sealed class ConfigurationImportService(
             realm.DisplayName = realmDef.DisplayName;
         if (realmDef.AllowUnconfirmedLogin.HasValue)
             realm.AllowUnconfirmedLogin = realmDef.AllowUnconfirmedLogin.Value;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await EnsureRolesAsync(realm, realmDef.Roles, cancellationToken);
+    }
+
+    private async Task EnsureRolesAsync(Realm realm, List<RoleSeedDefinition> roles, CancellationToken cancellationToken)
+    {
+        if (roles == null || roles.Count == 0) return;
+
+        var existingRoles = await _dbContext.Roles
+            .Where(r => r.RealmId == realm.Id)
+            .ToDictionaryAsync(r => r.Name, r => r, cancellationToken);
+
+        foreach (var roleDef in roles)
+        {
+            if (existingRoles.TryGetValue(roleDef.Name, out var existingRole))
+            {
+                if (roleDef.IsActive.HasValue)
+                {
+                    existingRole.IsActive = roleDef.IsActive.Value;
+                }
+            }
+            else
+            {
+                var newRole = new Role
+                {
+                    Id = GuidHelper.NewId(),
+                    TenantId = realm.TenantId,
+                    RealmId = realm.Id,
+                    Name = roleDef.Name,
+                    IsActive = roleDef.IsActive ?? true
+                };
+                _dbContext.Roles.Add(newRole);
+            }
+        }
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -1960,6 +1998,170 @@ public sealed class ConfigurationImportService(
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task ImportUsersAsync(
+        Guid tenantId,
+        List<UserSeedDefinition> users,
+        ImportOptions options,
+        CancellationToken cancellationToken)
+    {
+        var realms = await _dbContext.Realms
+            .Where(r => r.TenantId == tenantId)
+            .ToDictionaryAsync(r => r.Name, r => r.Id, cancellationToken);
+
+        var clients = await _dbContext.Clients
+            .Where(c => c.TenantId == tenantId)
+            .ToDictionaryAsync(c => c.ClientId, c => c.Id, cancellationToken);
+
+        var roles = await _dbContext.Roles
+            .Where(r => r.TenantId == tenantId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var userDef in users)
+        {
+            // Check if user exists (by username in tenant)
+            var user = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.TenantId == tenantId && u.Username == userDef.Username, cancellationToken);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    Id = GuidHelper.NewId(),
+                    TenantId = tenantId,
+                    Username = userDef.Username,
+                    Email = userDef.Email,
+                    NormalizedEmail = userDef.Email?.ToUpperInvariant(),
+                    EmailVerified = userDef.EmailVerified ?? true,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                _dbContext.Users.Add(user);
+            }
+            else
+            {
+                // Update basic fields
+                if (!string.IsNullOrWhiteSpace(userDef.Email))
+                {
+                    user.Email = userDef.Email;
+                    user.NormalizedEmail = userDef.Email.ToUpperInvariant();
+                }
+                if (userDef.EmailVerified.HasValue)
+                {
+                    user.EmailVerified = userDef.EmailVerified.Value;
+                }
+            }
+
+            // Ensure UserAccount exists and password is set
+            var account = await _dbContext.UserAccounts
+                .FirstOrDefaultAsync(a => a.Username == userDef.Username, cancellationToken); // Note: UserAccount is global
+
+            if (account == null)
+            {
+                account = new UserAccount
+                {
+                    Id = user.Id, // Link by ID if creating fresh
+                    Username = userDef.Username,
+                    Email = user.Email,
+                    NormalizedEmail = user.NormalizedEmail,
+                    EmailVerified = user.EmailVerified,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                _dbContext.UserAccounts.Add(account);
+            }
+
+            // Set Password
+            var password = userDef.Password;
+            if (string.IsNullOrWhiteSpace(password) && !string.IsNullOrWhiteSpace(userDef.PasswordEnv))
+            {
+                password = Environment.GetEnvironmentVariable(userDef.PasswordEnv);
+            }
+
+            if (!string.IsNullOrWhiteSpace(password))
+            {
+                account.PasswordHash = _passwordHasher.Hash(password);
+                account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            // Ensure Membership
+            var membership = await _dbContext.UserTenantMemberships
+                .FirstOrDefaultAsync(m => m.UserAccountId == account.Id && m.TenantId == tenantId, cancellationToken);
+
+            if (membership == null)
+            {
+                _dbContext.UserTenantMemberships.Add(new UserTenantMembership
+                {
+                    UserAccountId = account.Id,
+                    TenantId = tenantId,
+                    Status = TenantMembershipStatus.Active,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Handle Role Assignments
+            foreach (var roleDef in userDef.Roles)
+            {
+                var realmName = roleDef.Realm ?? "admin";
+                if (!realms.TryGetValue(realmName, out var realmId)) continue;
+
+                var role = roles.FirstOrDefault(r => r.RealmId == realmId && r.Name == roleDef.Role);
+                if (role == null) continue;
+
+                var assignment = await _dbContext.UserRealmRoleAssignments
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.RealmId == realmId && a.RoleId == role.Id, cancellationToken);
+
+                if (assignment == null)
+                {
+                    _dbContext.UserRealmRoleAssignments.Add(new UserRealmRoleAssignment
+                    {
+                        UserId = user.Id,
+                        RealmId = realmId,
+                        RoleId = role.Id,
+                        IsActive = true
+                    });
+                }
+            }
+
+            // Handle Client Assignments
+            foreach (var clientDef in userDef.Clients)
+            {
+                if (!clients.TryGetValue(clientDef.ClientId, out var clientId)) continue;
+
+                // We need the realm ID for the assignment key.
+                // If the user definition specifies a realm, use it.
+                // Otherwise, try to find the client's realm.
+                Guid assignmentRealmId;
+                if (!string.IsNullOrWhiteSpace(clientDef.Realm) && realms.TryGetValue(clientDef.Realm, out var rid))
+                {
+                    assignmentRealmId = rid;
+                }
+                else
+                {
+                    // Look up client realm
+                    var clientEntity = await _dbContext.Clients.FindAsync(new object[] { clientId }, cancellationToken);
+                    if (clientEntity == null) continue;
+                    assignmentRealmId = clientEntity.RealmId;
+                }
+
+                var assignment = await _dbContext.UserClientAssignments
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.ClientId == clientId && a.RealmId == assignmentRealmId, cancellationToken);
+
+                if (assignment == null)
+                {
+                    _dbContext.UserClientAssignments.Add(new UserClientAssignment
+                    {
+                        UserId = user.Id,
+                        ClientId = clientId,
+                        RealmId = assignmentRealmId,
+                        IsActive = true
+                    });
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private async Task<string> GenerateUniqueTenantSlugAsync(string baseSlug, CancellationToken cancellationToken)
