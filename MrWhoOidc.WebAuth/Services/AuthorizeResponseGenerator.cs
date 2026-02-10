@@ -11,6 +11,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -48,9 +49,10 @@ public interface IAuthorizeResponseGenerator
     IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl);
 }
 
-public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeResponseGenerator
+public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectionProvider dataProtection) : IAuthorizeResponseGenerator
 {
     private const string OpBrowserStateCookieName = "mrwho.opbs";
+    private readonly IDataProtector _protector = dataProtection.CreateProtector("MrWhoOidc.WebAuth.Pages.Auth.Redirect");
 
     public IResult CreateErrorResponse(HttpContext http, AuthorizeValidationResult validation, string correlationId)
     {
@@ -102,7 +104,8 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm) : IAuthorizeRe
         // State is handled by the caller or already in the redirectUri if it was a PAR/JAR request
         uri.Query = query.ToString();
         
-        return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(uri.ToString())}");
+        var protectedUrl = _protector.Protect(uri.ToString());
+        return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(protectedUrl)}");
     }
 
     public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl)
