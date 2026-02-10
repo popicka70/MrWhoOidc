@@ -55,7 +55,7 @@ public class LicenseGenerationService : ILicenseGenerationService
         var tokenId = GuidHelper.NewId().ToString();
 
         // Load licensing private key
-        var ecdsaKey = LoadLicensingPrivateKey();
+        var ecdsaKey = await LoadLicensingPrivateKeyAsync();
 
         // Build JWT claims
         var now = DateTimeOffset.UtcNow;
@@ -257,7 +257,7 @@ public class LicenseGenerationService : ILicenseGenerationService
         }
     }
 
-    private ECDsa LoadLicensingPrivateKey()
+    private async Task<ECDsa> LoadLicensingPrivateKeyAsync()
     {
         var keyPath = _options.LicensingPrivateKeyPath;
 
@@ -276,7 +276,7 @@ public class LicenseGenerationService : ILicenseGenerationService
         try
         {
             // Read PEM file
-            var pemContent = File.ReadAllText(keyPath);
+            var pemContent = await File.ReadAllTextAsync(keyPath);
 
             // Import ECDSA private key from PEM
             var ecdsa = ECDsa.Create();
