@@ -186,7 +186,10 @@ public class IndexModel(
         // Invalidate user cache
         await userService.InvalidateUserCacheAsync(user.Id, user.Username, user.TenantId);
 
-        TempData["Success"] = $"Password reset for user '<strong>{user.Username}</strong>'.<br/>" +
+        // Security fix: XSS prevention (user input must be encoded before being used in Html.Raw)
+        var encodedUsername = System.Net.WebUtility.HtmlEncode(user.Username);
+
+        TempData["Success"] = $"Password reset for user '<strong>{encodedUsername}</strong>'.<br/>" +
             $"Temporary password: <code class='user-select-all'>{globalTempPassword}</code><br/>" +
             $"<small class='text-info'><i class='bi bi-info-circle'></i> This password applies to all {affectedTenantCount} tenant(s) the user belongs to.</small><br/>" +
             $"<small class='text-warning'><i class='bi bi-exclamation-triangle'></i> Please save this password and share it securely with the user.</small>";
