@@ -22,7 +22,6 @@ public interface IIdentityProviderValidator
 
 public sealed class IdentityProviderValidator(
     AuthDbContext db, 
-    IHttpClientFactory httpClientFactory,
     ILogger<IdentityProviderValidator> logger) : IIdentityProviderValidator
 {
     public async Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default)

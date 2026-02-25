@@ -1,4 +1,6 @@
+using System;
 using System.Net;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Utils;
 
@@ -7,7 +9,7 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public class NetworkSecurityTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("127.0.0.1", true)]
     [DataRow("10.0.0.1", true)]
     [DataRow("172.16.0.1", true)]
@@ -27,7 +29,7 @@ public class NetworkSecurityTests
         Assert.AreEqual(expected, result, $"IP {ipString} should have returned {expected}");
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("http://localhost", false)]
     [DataRow("https://127.0.0.1", false)]
     [DataRow("http://10.0.0.1/jwks", false)]
@@ -61,12 +63,26 @@ public class NetworkSecurityTests
         using var client = NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(2));
 
         // Localhost should fail
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => client.GetStringAsync("http://localhost"));
+        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://localhost"));
 
         // Loopback IP should fail
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => client.GetStringAsync("http://127.0.0.1"));
+        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://127.0.0.1"));
 
         // Private IP should fail
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => client.GetStringAsync("http://192.168.1.1"));
+        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://192.168.1.1"));
+    }
+
+    private static async Task AssertThrowsAsync<TException>(Func<Task> action) where TException : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+
+        Assert.Fail($"Expected exception {typeof(TException).Name} was not thrown.");
     }
 }
