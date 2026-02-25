@@ -64,10 +64,14 @@ public static class SectorIdentifierUriValidator
 
     private static async Task<IReadOnlyCollection<string>> FetchRedirectUrisAsync(HttpClient httpClient, Uri sectorIdentifierUri, CancellationToken ct)
     {
+        // Use a safe HttpClient to prevent SSRF via DNS rebinding or redirects to internal IPs.
+        // We use a separate instance to ensure the security-hardened ConnectCallback is used.
+        using var safeHttp = MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(10));
+
         HttpResponseMessage response;
         try
         {
-            response = await httpClient.GetAsync(sectorIdentifierUri, ct).ConfigureAwait(false);
+            response = await safeHttp.GetAsync(sectorIdentifierUri, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

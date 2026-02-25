@@ -22,7 +22,6 @@ public interface IIdentityProviderValidator
 
 public sealed class IdentityProviderValidator(
     AuthDbContext db, 
-    IHttpClientFactory httpClientFactory,
     ILogger<IdentityProviderValidator> logger) : IIdentityProviderValidator
 {
     public async Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default)
@@ -52,8 +51,8 @@ public sealed class IdentityProviderValidator(
             var metadataUrl = string.IsNullOrWhiteSpace(cfg!.DiscoveryUrl) ? CombineWellKnown(cfg.Authority) : cfg.DiscoveryUrl!;
             try
             {
-                var client = httpClientFactory.CreateClient();
-                client.Timeout = TimeSpan.FromSeconds(5);
+                // Use a safe HttpClient to prevent SSRF via DNS rebinding or redirects to internal IPs.
+                using var client = MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(5));
                 using var resp = await client.GetAsync(metadataUrl, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
