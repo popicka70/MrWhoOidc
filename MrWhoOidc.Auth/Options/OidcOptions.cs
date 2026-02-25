@@ -13,4 +13,10 @@ public sealed class OidcOptions
     
     public string[] AllowedPostLogoutRedirectUris { get; set; } = [];
     public string[] AllowedCorsOrigins { get; set; } = [];
+
+    /// <summary>
+    /// Base URL for the sample web client used during tenant seeding.
+    /// Default: "https://localhost:5001"
+    /// </summary>
+    public string SampleWebClientBaseUrl { get; set; } = "https://localhost:5001";
 }

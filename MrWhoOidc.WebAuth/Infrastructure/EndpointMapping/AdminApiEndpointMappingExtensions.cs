@@ -931,8 +931,8 @@ public static class AdminApiEndpointMappingExtensions
                 adminPassword = result.AdminPassword,
                 adminClientId = result.AdminClientId,
                 webClientId = result.WebClientId,
-                loginUrl = $"https://localhost:8443/t/{result.TenantSlug}/Login",
-                adminUrl = $"https://localhost:8443/t/{result.TenantSlug}/Admin/Users"
+                loginUrl = result.LoginUrl,
+                adminUrl = result.AdminUrl
             });
         }).WithName("SeedTenant");
 
