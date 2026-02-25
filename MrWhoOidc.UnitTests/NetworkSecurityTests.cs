@@ -63,13 +63,13 @@ public class NetworkSecurityTests
         using var client = NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(2));
 
         // Localhost should fail
-        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://localhost"));
+        await AssertThrowsAsync<HttpRequestException>(() => client.GetStringAsync("http://localhost"));
 
         // Loopback IP should fail
-        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://127.0.0.1"));
+        await AssertThrowsAsync<HttpRequestException>(() => client.GetStringAsync("http://127.0.0.1"));
 
         // Private IP should fail
-        await AssertThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("http://192.168.1.1"));
+        await AssertThrowsAsync<HttpRequestException>(() => client.GetStringAsync("http://192.168.1.1"));
     }
 
     private static async Task AssertThrowsAsync<TException>(Func<Task> action) where TException : Exception

@@ -14,41 +14,47 @@ namespace MrWhoOidc.Auth.Utils;
 public static class NetworkSecurity
 {
     /// <summary>
+    /// Creates a safe SocketsHttpHandler that prevents SSRF by validating IP addresses at connection time.
+    /// This protects against both DNS rebinding and redirects to internal resources.
+    /// </summary>
+    public static SocketsHttpHandler CreateSafeHandler() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 10,
+        ConnectCallback = async (context, cancellationToken) =>
+        {
+            var host = context.DnsEndPoint.Host;
+            var ips = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+
+            var ip = ips.FirstOrDefault(i => !IsInternal(i));
+            if (ip == null)
+            {
+                throw new InvalidOperationException($"No safe IP address found for host '{host}'.");
+            }
+
+            var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            socket.NoDelay = true;
+
+            try
+            {
+                await socket.ConnectAsync(new IPEndPoint(ip, context.DnsEndPoint.Port), cancellationToken).ConfigureAwait(false);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+    };
+
+    /// <summary>
     /// Creates a safe HttpClient that prevents SSRF by validating IP addresses at connection time.
     /// This protects against both DNS rebinding and redirects to internal resources.
     /// </summary>
     public static HttpClient CreateSafeHttpClient(TimeSpan timeout)
     {
-        var handler = new SocketsHttpHandler
-        {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10,
-            ConnectCallback = async (context, cancellationToken) =>
-            {
-                var host = context.DnsEndPoint.Host;
-                var ips = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-
-                var ip = ips.FirstOrDefault(i => !IsInternal(i));
-                if (ip == null)
-                {
-                    throw new InvalidOperationException($"No safe IP address found for host '{host}'.");
-                }
-
-                var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                socket.NoDelay = true;
-
-                try
-                {
-                    await socket.ConnectAsync(new IPEndPoint(ip, context.DnsEndPoint.Port), cancellationToken).ConfigureAwait(false);
-                    return new NetworkStream(socket, ownsSocket: true);
-                }
-                catch
-                {
-                    socket.Dispose();
-                    throw;
-                }
-            }
-        };
+        var handler = CreateSafeHandler();
 
         return new HttpClient(handler) { Timeout = timeout };
     }

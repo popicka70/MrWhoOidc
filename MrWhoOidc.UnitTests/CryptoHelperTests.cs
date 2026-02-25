@@ -14,7 +14,7 @@ public sealed class CryptoHelperTests
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
 
         // Act
-        var result = CryptoHelper.GenerateRandomString(length, chars);
+        var result = CryptoHelper.GenerateSecureRandomString(length, chars);
 
         // Assert
         Assert.AreEqual(length, result.Length);
@@ -28,7 +28,7 @@ public sealed class CryptoHelperTests
         const string chars = "ABC";
 
         // Act
-        var result = CryptoHelper.GenerateRandomString(length, chars);
+        var result = CryptoHelper.GenerateSecureRandomString(length, chars);
 
         // Assert
         foreach (var c in result)
@@ -45,8 +45,8 @@ public sealed class CryptoHelperTests
         const string chars = "abcdefghijklmnopqrstuvwxyz0123456789";
 
         // Act
-        var result1 = CryptoHelper.GenerateRandomString(length, chars);
-        var result2 = CryptoHelper.GenerateRandomString(length, chars);
+        var result1 = CryptoHelper.GenerateSecureRandomString(length, chars);
+        var result2 = CryptoHelper.GenerateSecureRandomString(length, chars);
 
         // Assert
         Assert.AreNotEqual(result1, result2);

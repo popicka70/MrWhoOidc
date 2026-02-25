@@ -11,6 +11,9 @@ namespace MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 public sealed class SectorIdentifierResolver(IHttpClientFactory httpClientFactory) : ISectorIdentifierResolver
 {
+    /// <summary>Named HttpClient configured with SSRF protection.</summary>
+    internal const string SafeHttpClientName = "sector-identifier-safe";
+
     public Task<string> ResolveSectorIdentifierAsync(Client client, CancellationToken ct = default)
     {
         if (client is null) throw new ArgumentNullException(nameof(client));
@@ -38,11 +41,8 @@ public sealed class SectorIdentifierResolver(IHttpClientFactory httpClientFactor
 
         var redirectUris = ParseAllowedLoginRedirectUris(client.AllowedLoginRedirectUrisJson);
 
-        var http = httpClientFactory.CreateClient();
-        if (http.Timeout == System.Threading.Timeout.InfiniteTimeSpan)
-        {
-            http.Timeout = TimeSpan.FromSeconds(10);
-        }
+        // Use a safe HttpClient to prevent SSRF via DNS rebinding or redirects to internal IPs.
+        var http = httpClientFactory.CreateClient(SafeHttpClientName);
 
         await SectorIdentifierUriValidator.ValidateAsync(sectorUri, redirectUris, http, ct).ConfigureAwait(false);
 

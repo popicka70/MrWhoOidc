@@ -164,6 +164,8 @@ public static class AuthServiceCollectionExtensions
 
         // Subject identifiers (OIDC public/pairwise sub)
         services.AddHttpClient();
+        services.AddHttpClient(SectorIdentifierResolver.SafeHttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHandler);
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
         services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
 
