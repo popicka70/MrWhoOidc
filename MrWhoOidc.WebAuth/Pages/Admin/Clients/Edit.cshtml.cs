@@ -717,7 +717,7 @@ public class EditModel(
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var http = MrWhoOidc.Auth.Utils.NetworkSecurity.CreateSafeHttpClient(TimeSpan.FromSeconds(10));
             var content = await http.GetStringAsync(Input.PublicJwksUri);
             // Column limit guard
             if (content.Length > 8000)
