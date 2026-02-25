@@ -31,7 +31,7 @@ internal sealed class SeedManifestProvider(
 
         try
         {
-            var json = TryGetJson(o);
+            var json = await TryGetJsonAsync(o, ct);
             if (string.IsNullOrWhiteSpace(json))
             {
                 return null;
@@ -53,7 +53,7 @@ internal sealed class SeedManifestProvider(
         }
     }
 
-    private static string? TryGetJson(SeedManifestOptions o)
+    private static async Task<string?> TryGetJsonAsync(SeedManifestOptions o, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(o.ManifestBase64))
         {
@@ -68,7 +68,7 @@ internal sealed class SeedManifestProvider(
 
         if (!string.IsNullOrWhiteSpace(o.ManifestPath) && File.Exists(o.ManifestPath))
         {
-            return File.ReadAllText(o.ManifestPath);
+            return await File.ReadAllTextAsync(o.ManifestPath, ct);
         }
 
         return null;
