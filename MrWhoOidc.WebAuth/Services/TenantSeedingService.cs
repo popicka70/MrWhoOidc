@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Options;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Handlers;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
 
 namespace MrWhoOidc.WebAuth.Services;
 
@@ -26,6 +27,7 @@ public class TenantSeedingService : ITenantSeedingService
     private readonly IUserAccountProvisioner _accountProvisioner;
     private readonly OidcOptions _oidcOptions;
     private readonly IIssuerBuilder _issuerBuilder;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public TenantSeedingService(
         AuthDbContext db,
@@ -34,7 +36,8 @@ public class TenantSeedingService : ITenantSeedingService
         ILogger<TenantSeedingService> logger,
         IUserAccountProvisioner accountProvisioner,
         IOptions<OidcOptions> oidcOptions,
-        IIssuerBuilder issuerBuilder)
+        IIssuerBuilder issuerBuilder,
+        IHttpContextAccessor httpContextAccessor)
     {
         _db = db;
         _passwordHasher = passwordHasher;
@@ -43,6 +46,7 @@ public class TenantSeedingService : ITenantSeedingService
         _accountProvisioner = accountProvisioner;
         _oidcOptions = oidcOptions.Value;
         _issuerBuilder = issuerBuilder;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<TenantSeedResult> SeedSampleTenantAsync(
@@ -76,10 +80,7 @@ public class TenantSeedingService : ITenantSeedingService
             }
 
             // Create tenant
-            var baseUrl =
-                (!string.IsNullOrWhiteSpace(_oidcOptions.PublicBaseUrl) ? _oidcOptions.PublicBaseUrl.TrimEnd('/') : null)
-                ?? (!string.IsNullOrWhiteSpace(_oidcOptions.Issuer) ? _oidcOptions.Issuer.TrimEnd('/') : null)
-                ?? "https://localhost:8443"; // dev fallback
+            var baseUrl = ResolveBaseUrl();
 
             var tenant = new Tenant
             {
@@ -185,15 +186,12 @@ public class TenantSeedingService : ITenantSeedingService
                 RequireConsent = false,
                 AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
                 {
-                    $"https://localhost:8443/t/{tenantSlug}/signin-oidc",
-                    $"http://localhost:8443/t/{tenantSlug}/signin-oidc"
+                    $"{baseUrl}/t/{tenantSlug}/signin-oidc"
                 }),
                 AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
                 {
-                    $"https://localhost:8443/t/{tenantSlug}/signout-callback-oidc",
-                    $"https://localhost:8443/t/{tenantSlug}/",
-                    $"http://localhost:8443/t/{tenantSlug}/signout-callback-oidc",
-                    $"http://localhost:8443/t/{tenantSlug}/"
+                    $"{baseUrl}/t/{tenantSlug}/signout-callback-oidc",
+                    $"{baseUrl}/t/{tenantSlug}/"
                 })
             };
 
@@ -208,15 +206,12 @@ public class TenantSeedingService : ITenantSeedingService
                 RequireConsent = false,
                 AllowedLoginRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
                 {
-                    "https://localhost:5001/signin-oidc",
-                    "http://localhost:5001/signin-oidc"
+                    $"{_oidcOptions.SampleWebClientBaseUrl.TrimEnd('/')}/signin-oidc"
                 }),
                 AllowedLogoutRedirectUrisJson = System.Text.Json.JsonSerializer.Serialize(new[]
                 {
-                    "https://localhost:5001/signout-callback-oidc",
-                    "https://localhost:5001/",
-                    "http://localhost:5001/signout-callback-oidc",
-                    "http://localhost:5001/"
+                    $"{_oidcOptions.SampleWebClientBaseUrl.TrimEnd('/')}/signout-callback-oidc",
+                    $"{_oidcOptions.SampleWebClientBaseUrl.TrimEnd('/')}/"
                 })
             };
 
@@ -286,6 +281,8 @@ public class TenantSeedingService : ITenantSeedingService
 
             _logger.LogInformation("Created {ScopeCount} standard scopes for tenant {TenantSlug}", scopes.Length, tenantSlug);
 
+            var issuer = _issuerBuilder.BuildIssuer(baseUrl, tenantSlug);
+
             return TenantSeedResult.Success(
                 tenant.Id,
                 tenantSlug,
@@ -293,7 +290,9 @@ public class TenantSeedingService : ITenantSeedingService
                 adminEmail,
                 adminPassword,
                 adminClient.ClientId,
-                webClient.ClientId
+                webClient.ClientId,
+                loginUrl: $"{issuer}/Login",
+                adminUrl: $"{issuer}/Admin/Users"
             );
         }
         catch (Exception ex)
@@ -301,6 +300,21 @@ public class TenantSeedingService : ITenantSeedingService
             _logger.LogError(ex, "Failed to seed tenant {TenantSlug}", tenantSlug);
             return TenantSeedResult.Failure($"Failed to seed tenant: {ex.Message}");
         }
+    }
+
+    private string ResolveBaseUrl()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request;
+        string? requestBaseUrl = null;
+        if (request != null && request.Host.HasValue)
+        {
+            requestBaseUrl = $"{request.Scheme}://{request.Host}{request.PathBase}";
+        }
+
+        return (!string.IsNullOrWhiteSpace(_oidcOptions.PublicBaseUrl) ? _oidcOptions.PublicBaseUrl.TrimEnd('/') : null)
+            ?? (!string.IsNullOrWhiteSpace(_oidcOptions.Issuer) ? _oidcOptions.Issuer.TrimEnd('/') : null)
+            ?? requestBaseUrl?.TrimEnd('/')
+            ?? "https://localhost:8443";
     }
 }
 
@@ -315,6 +329,8 @@ public class TenantSeedResult
     public string? AdminPassword { get; init; }
     public string? AdminClientId { get; init; }
     public string? WebClientId { get; init; }
+    public string? LoginUrl { get; init; }
+    public string? AdminUrl { get; init; }
 
     public static TenantSeedResult Success(
         Guid tenantId,
@@ -323,7 +339,9 @@ public class TenantSeedResult
         string adminEmail,
         string adminPassword,
         string adminClientId,
-        string webClientId)
+        string webClientId,
+        string? loginUrl = null,
+        string? adminUrl = null)
     {
         return new TenantSeedResult
         {
@@ -334,7 +352,9 @@ public class TenantSeedResult
             AdminEmail = adminEmail,
             AdminPassword = adminPassword,
             AdminClientId = adminClientId,
-            WebClientId = webClientId
+            WebClientId = webClientId,
+            LoginUrl = loginUrl,
+            AdminUrl = adminUrl
         };
     }
 
