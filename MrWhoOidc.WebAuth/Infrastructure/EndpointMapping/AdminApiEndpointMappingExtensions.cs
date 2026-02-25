@@ -642,19 +642,14 @@ public static class AdminApiEndpointMappingExtensions
             var warningThreshold = now.AddDays(7);   // Warning if secrets expire within 7 days
             
             // Check for clients with all secrets expired
-            var clientsWithSecrets = await db.Clients
+            var criticalClients = await db.Clients
                 .AsNoTracking()
-                .Include(c => c.ClientSecrets)
-                .Where(c => c.ClientSecrets.Any())
-                .ToListAsync(ct);
-            
-            var criticalClients = clientsWithSecrets
-                .Where(c => !c.ClientSecrets.Any(s => 
+                .Where(c => c.ClientSecrets.Any() && !c.ClientSecrets.Any(s =>
                     s.ActivatedAtUtc != null 
                     && s.RevokedAtUtc == null 
                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now)))
                 .Select(c => new { clientId = c.ClientId, tenantId = c.TenantId })
-                .ToList();
+                .ToListAsync(ct);
             
             // Check for secrets expiring soon
             var degradedSecrets = await db.ClientSecrets
