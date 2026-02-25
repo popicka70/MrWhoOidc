@@ -9,10 +9,11 @@ using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.Auth.Persistence.Extensions;
 using MrWhoOidc.WebAuth.Services;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
 
 namespace MrWhoOidc.WebAuth.Pages.Auth.Providers;
 
-public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationStore) : PageModel
+public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationStore, ILogger<SelectModel> logger) : PageModel
 {
     public sealed record Item(Guid Id, DateTimeOffset UpdatedAt, string Name, string Display, string? LogoUrl, bool HasLogoData, bool IsRecommended = false, string? ButtonBackgroundColor = null, string? ButtonTextColor = null);
 
@@ -60,7 +61,7 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
     public async Task<IActionResult> OnGetAsync()
     {
         // DEBUG: Log ReturnUrl for QR troubleshooting
-        Console.WriteLine($"[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}");
+        logger.LogDebug("[ProviderSelect] OnGetAsync: ReturnUrl={ReturnUrl}, Client_Id={Client_Id}", ReturnUrl, Client_Id);
 
         if (string.IsNullOrWhiteSpace(Client_Id))
         {
@@ -75,7 +76,7 @@ public class SelectModel(AuthDbContext db, ILoginContinuationStore continuationS
         }
 
         // DEBUG: Log ReturnUrl for QR troubleshooting
-        Console.WriteLine($"[ProviderSelect] ReturnUrl={ReturnUrl}, Client_Id={Client_Id}");
+        logger.LogDebug("[ProviderSelect] ReturnUrl={ReturnUrl}, Client_Id={Client_Id}", ReturnUrl, Client_Id);
 
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == Client_Id);
         if (client is null)

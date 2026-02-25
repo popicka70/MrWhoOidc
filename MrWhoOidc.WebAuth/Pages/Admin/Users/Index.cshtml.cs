@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Observability;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
@@ -156,7 +157,7 @@ public class IndexModel(
             .CountAsync();
 
         // Generate a random temporary password and update global UserAccount
-        var globalTempPassword = GenerateTemporaryPassword();
+        var globalTempPassword = CryptoHelper.GenerateSecureRandomString(16);
         await userAccountService.UpdatePasswordAsync(
             userAccount.Id,
             passwordHasher.Hash(globalTempPassword),
@@ -199,14 +200,6 @@ public class IndexModel(
 
     private static string HashForLog(string value)
     {
-        return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(value)[..8]; // First 8 chars of SHA256
-    }
-
-    private static string GenerateTemporaryPassword()
-    {
-        // Generate a secure random password: 16 characters, alphanumeric + symbols
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-        var random = new Random();
-        return new string(Enumerable.Range(0, 16).Select(_ => chars[random.Next(chars.Length)]).ToArray());
+        return CryptoHelper.ComputeSha256Hex(value)[..8]; // First 8 chars of SHA256
     }
 }
