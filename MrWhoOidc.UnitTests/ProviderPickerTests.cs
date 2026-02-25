@@ -11,6 +11,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.WebAuth.Pages.Auth.Providers;
 using MrWhoOidc.UnitTests.Helpers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -37,7 +38,7 @@ public class ProviderPickerTests
         var http = new DefaultHttpContext();
         var actionContext = new ActionContext(http, new RouteData(), new ActionDescriptor());
         var pageContext = new PageContext(actionContext);
-        var model = new SelectModel(db, new StubLoginContinuationStore()) { PageContext = pageContext };
+        var model = new SelectModel(db, new StubLoginContinuationStore(), NullLogger<SelectModel>.Instance) { PageContext = pageContext };
         return (model, http);
     }
 

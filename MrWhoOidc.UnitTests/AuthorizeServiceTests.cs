@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.Authorization;
@@ -187,6 +188,37 @@ public sealed class AuthorizeServiceTests
         Assert.IsFalse(res.IsValid);
         Assert.AreEqual("invalid_request", res.Error);
         StringAssert.Contains(res.ErrorDescription!, "redirect_uri");
+    }
+
+    [TestMethod]
+    public async Task ValidateAsync_Fails_WhenAllowedLoginRedirectUrisJsonIsMalformed()
+    {
+        // Arrange
+        var mockClientStore = new Mock<IClientStore>();
+        var client = new ClientEntity
+        {
+            ClientId = "spa",
+            AllowedLoginRedirectUrisJson = "not-a-json-array"
+        };
+        mockClientStore.Setup(x => x.FindByClientIdAsync("spa", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        using var db = CreateDb();
+        var svc = new AuthorizeService(db, mockClientStore.Object, NullLogger<AuthorizeService>.Instance);
+
+        var req = new AuthorizeRequest(
+            response_type: "code",
+            client_id: "spa",
+            redirect_uri: "https://app.example.com/callback"
+        );
+
+        // Act
+        var res = await svc.ValidateAsync(req);
+
+        // Assert
+        Assert.IsFalse(res.IsValid);
+        Assert.AreEqual("invalid_request", res.Error);
+        Assert.AreEqual("redirect_uri allow-list is invalid for this client", res.ErrorDescription);
     }
 
     private sealed class NoopHasher : IPasswordHasher

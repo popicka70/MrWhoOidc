@@ -622,9 +622,7 @@ public sealed class AuthorizationCodeExchanger(
             return null;
         }
 
-        var signedTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        
-        foreach (var productKey in grantedProducts)
+        var tasks = grantedProducts.Select(async productKey =>
         {
             try
             {
@@ -638,12 +636,24 @@ public sealed class AuthorizationCodeExchanger(
                 var result = await client.GetSignedLicenseTokenAsync(request, issuer, ct).ConfigureAwait(false);
                 if (result.Success && result.Response?.Token is not null)
                 {
-                    signedTokens[productKey] = result.Response.Token;
+                    return (productKey, result.Response.Token);
                 }
             }
             catch
             {
                 // Log and continue
+            }
+            return (productKey, (string?)null);
+        });
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        var signedTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, token) in results)
+        {
+            if (token is not null)
+            {
+                signedTokens[key] = token;
             }
         }
 

@@ -238,6 +238,85 @@ builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSect
 
 var app = builder.Build();
 
+// CLI: Seed command
+if (args.Length >= 2 && args[0] == "seed")
+{
+    var manifestPath = args[1];
+    if (!File.Exists(manifestPath))
+    {
+        Console.WriteLine($"Error: Manifest file not found at '{manifestPath}'");
+        return;
+    }
+
+    Console.WriteLine($"Seeding configuration from '{manifestPath}'...");
+
+    // Ensure DB migrations are applied before seeding
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+        if (db.Database.IsRelational())
+        {
+            Console.WriteLine("Applying database migrations...");
+            await db.Database.MigrateAsync();
+        }
+
+        var importService = scope.ServiceProvider.GetRequiredService<MrWhoOidc.Auth.Services.IConfigurationImportService>();
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(manifestPath);
+            var manifest = System.Text.Json.JsonSerializer.Deserialize<MrWhoOidc.Auth.Seeding.ExportManifest>(json, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (manifest == null)
+            {
+                Console.WriteLine("Error: Failed to deserialize manifest.");
+                return;
+            }
+
+            var options = new MrWhoOidc.Auth.Seeding.ImportOptions
+            {
+                ImportedBy = "cli",
+                DefaultConflictResolution = MrWhoOidc.Auth.Seeding.ConflictResolution.Overwrite
+            };
+
+            var result = await importService.ImportTenantAsync(manifest, options);
+
+            if (result.Success)
+            {
+                Console.WriteLine("Seeding completed successfully.");
+                Console.WriteLine($"Created: {result.EntitiesCreated}, Updated: {result.EntitiesUpdated}, Skipped: {result.EntitiesSkipped}");
+                if (result.Warnings.Count > 0)
+                {
+                    Console.WriteLine("Warnings:");
+                    foreach (var warning in result.Warnings)
+                    {
+                        Console.WriteLine($"- {warning}");
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Seeding failed:");
+                foreach (var error in result.Errors)
+                {
+                    Console.WriteLine($"- {error.Code}: {error.Message}");
+                }
+                Environment.Exit(1);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during seeding: {ex.Message}");
+            Environment.Exit(1);
+        }
+    }
+
+    return;
+}
+
 if (!app.Environment.IsDevelopment())
 {
     var issuer = string.IsNullOrWhiteSpace(oidcOptions.Issuer) ? null : oidcOptions.Issuer.TrimEnd('/');

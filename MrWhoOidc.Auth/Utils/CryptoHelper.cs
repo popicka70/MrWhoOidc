@@ -117,10 +117,10 @@ public static class CryptoHelper
     }
 
     /// <summary>
-    /// Generates a cryptographically secure random string of the specified length using the provided character set.
+    /// Generate a cryptographically secure random string of specified length.
     /// </summary>
-    public static string GenerateRandomString(int length, string chars)
+    public static string GenerateSecureRandomString(int length, string choices = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%")
     {
-        return RandomNumberGenerator.GetString(chars, length);
+        return RandomNumberGenerator.GetString(choices, length);
     }
 }

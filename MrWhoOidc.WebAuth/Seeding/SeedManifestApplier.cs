@@ -47,7 +47,7 @@ internal sealed class SeedManifestApplier(
         {
             try
             {
-                var token = TryResolveLicenseToken(licenseDef);
+                var token = await TryResolveLicenseTokenAsync(licenseDef, ct).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(token))
                 {
                     logger.LogWarning("Seed manifest license definition had no token (licenseToken/licenseTokenPath/licenseTokenEnv).");
@@ -119,14 +119,14 @@ internal sealed class SeedManifestApplier(
         }
     }
 
-    private string? TryResolveLicenseToken(LicenseSeedDefinition licenseDef)
+    private async Task<string?> TryResolveLicenseTokenAsync(LicenseSeedDefinition licenseDef, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(licenseDef.LicenseTokenPath))
         {
             var path = licenseDef.LicenseTokenPath.Trim();
             if (File.Exists(path))
             {
-                var fileToken = File.ReadAllText(path);
+                var fileToken = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(fileToken))
                 {
                     return fileToken.Trim();
