@@ -115,4 +115,12 @@ public static class CryptoHelper
     {
         SHA256.HashData(source, destination);
     }
+
+    /// <summary>
+    /// Generates a cryptographically secure random string of the specified length using the provided character set.
+    /// </summary>
+    public static string GenerateRandomString(int length, string chars)
+    {
+        return RandomNumberGenerator.GetString(chars, length);
+    }
 }

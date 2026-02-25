@@ -206,7 +206,6 @@ public class IndexModel(
     {
         // Generate a secure random password: 16 characters, alphanumeric + symbols
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-        var random = new Random();
-        return new string(Enumerable.Range(0, 16).Select(_ => chars[random.Next(chars.Length)]).ToArray());
+        return MrWhoOidc.Auth.Utils.CryptoHelper.GenerateRandomString(16, chars);
     }
 }
