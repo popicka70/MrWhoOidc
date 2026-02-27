@@ -1,0 +1,351 @@
+﻿# Prometheus Alerting Rules for MrWhoOidc
+
+# These rules define alerting conditions for MrWhoOidc production monitoring.
+# Import into Prometheus via rule_files configuration.
+
+groups:
+  - name: mrwhooidc-application
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: MrWhoOidcHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="mrwhooidc", status=~"5.."}[5m])) 
+          / sum(rate(http_requests_total{job="mrwhooidc"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected in MrWhoOidc"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes (threshold: 5%)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#high-error-rate"
+
+      # Elevated Error Rate (Warning)
+      - alert: MrWhoOidcElevatedErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="mrwhooidc", status=~"5.."}[5m])) 
+          / sum(rate(http_requests_total{job="mrwhooidc"}[5m])) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elevated error rate in MrWhoOidc"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 10 minutes (threshold: 2%)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#elevated-error-rate"
+
+      # Slow Response Times (P95)
+      - alert: MrWhoOidcSlowResponseP95
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket{job="mrwhooidc"}[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow response times detected (P95)")
+          description: "95th percentile response time is {{ $value | humanizeDuration }} (threshold: 2s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#slow-response-times"
+
+      # Slow Response Times (P99)
+      - alert: MrWhoOidcSlowResponseP99
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(http_request_duration_seconds_bucket{job="mrwhooidc"}[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very slow response times detected (P99)"
+          description: "99th percentile response time is {{ $value | humanizeDuration }} (threshold: 5s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#slow-response-times"
+
+      # High Authentication Failure Rate
+      - alert: MrWhoOidcHighAuthFailureRate
+        expr: |
+          sum(rate(authentication_attempts_total{job="mrwhooidc", success="false"}[5m])) 
+          / sum(rate(authentication_attempts_total{job="mrwhooidc"}[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value | humanizePercentage }} (threshold: 30%). Possible brute force attack."
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#high-auth-failure-rate"
+
+      # Token Exchange Failures
+      - alert: MrWhoOidcTokenExchangeFailures
+        expr: |
+          sum(rate(token_exchange_total{job="mrwhooidc", success="false"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Token exchange failures detected"
+          description: "{{ $value | humanize }} token exchange failures per second (threshold: 0.5/s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#token-exchange-failures"
+
+  - name: mrwhooidc-database
+    interval: 30s
+    rules:
+      # Database Connection Pool Exhaustion
+      - alert: MrWhoOidcDbConnectionPoolExhausted
+        expr: |
+          db_connection_pool_active{job="mrwhooidc"} 
+          / db_connection_pool_max{job="mrwhooidc"} > 0.9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Connection pool usage is {{ $value | humanizePercentage }} (threshold: 90%)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#database-connection-issues"
+
+      # Database Connection Errors
+      - alert: MrWhoOidcDbConnectionErrors
+        expr: |
+          sum(rate(db_connection_errors_total{job="mrwhooidc"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection errors detected"
+          description: "{{ $value | humanize }} connection errors per second (threshold: 0.1/s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#database-connection-issues"
+
+      # Slow Database Queries
+      - alert: MrWhoOidcSlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(db_query_duration_seconds_bucket{job="mrwhooidc"}[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected (P95)"
+          description: "95th percentile query time is {{ $value | humanizeDuration }} (threshold: 1s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#slow-database-queries"
+
+      # Database Replication Lag (if applicable)
+      - alert: MrWhoOidcDbReplicationLag
+        expr: |
+          db_replication_lag_seconds{job="mrwhooidc"} > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication lag is {{ $value | humanizeDuration }} (threshold: 30s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#replication-lag"
+
+      # Database Storage Space
+      - alert: MrWhoOidcDbStorageLow
+        expr: |
+          db_storage_used_bytes{job="mrwhooidc"} 
+          / db_storage_total_bytes{job="mrwhooidc"} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database storage space running low"
+          description: "Database storage usage is {{ $value | humanizePercentage }} (threshold: 85%)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#database-storage"
+
+  - name: mrwhooidc-certificates
+    interval: 1h
+    rules:
+      # Certificate Expiration (Critical)
+      - alert: MrWhoOidcCertExpiringCritical
+        expr: |
+          probe_ssl_earliest_cert_expiry{job="mrwhooidc-certs"} - time() < 86400 * 7
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "SSL certificate expiring within 7 days"
+          description: "Certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#certificate-expiration"
+
+      # Certificate Expiration (Warning)
+      - alert: MrWhoOidcCertExpiringWarning
+        expr: |
+          probe_ssl_earliest_cert_expiry{job="mrwhooidc-certs"} - time() < 86400 * 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring within 30 days"
+          description: "Certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#certificate-expiration"
+
+      # Signing Key Expiration
+      - alert: MrWhoOidcSigningKeyExpiring
+        expr: |
+          signing_key_expiry_seconds{job="mrwhooidc"} - time() < 86400 * 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Signing key expiring within 14 days"
+          description: "Signing key {{ $labels.key_id }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#signing-key-expiration"
+
+  - name: mrwhooidc-infrastructure
+    interval: 30s
+    rules:
+      # Disk Space Warning
+      - alert: MrWhoOidcDiskSpaceWarning
+        expr: |
+          (node_filesystem_avail_bytes{job="mrwhooidc-node", fstype!~"tmpfs|overlay"} 
+          / node_filesystem_size_bytes{job="mrwhooidc-node", fstype!~"tmpfs|overlay"}) < 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space running low on {{ $labels.mountpoint }}"
+          description: "Disk usage is {{ $value | humanizePercentage }} free on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#disk-space-warnings"
+
+      # Disk Space Critical
+      - alert: MrWhoOidcDiskSpaceCritical
+        expr: |
+          (node_filesystem_avail_bytes{job="mrwhooidc-node", fstype!~"tmpfs|overlay"} 
+          / node_filesystem_size_bytes{job="mrwhooidc-node", fstype!~"tmpfs|overlay"}) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space on {{ $labels.mountpoint }}"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#disk-space-warnings"
+
+      # Memory Usage High
+      - alert: MrWhoOidcMemoryHigh
+        expr: |
+          (container_memory_usage_bytes{job="mrwhooidc"} 
+          / container_spec_memory_limit_bytes{job="mrwhooidc"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Container memory usage is {{ $value | humanizePercentage }} of limit"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#memory-usage"
+
+      # CPU Usage High
+      - alert: MrWhoOidcCPUHigh
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{job="mrwhooidc"}[5m])) 
+          / sum(container_spec_cpu_quota{job="mrwhooidc"} / container_spec_cpu_period{job="mrwhooidc"}) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | humanizePercentage }} of allocated quota"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#cpu-usage"
+
+      # Container Restart Loop
+      - alert: MrWhoOidcContainerRestarts
+        expr: |
+          increase(container_last_seen{job="mrwhooidc"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container restart loop detected"
+          description: "Container {{ $labels.name }} has restarted multiple times in the last 5 minutes"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#container-restarts"
+
+  - name: mrwhooidc-availability
+    interval: 30s
+    rules:
+      # Service Down
+      - alert: MrWhoOidcServiceDown
+        expr: |
+          up{job="mrwhooidc"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MrWhoOidc service is down"
+          description: "Instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#service-down"
+
+      # Health Check Failed
+      - alert: MrWhoOidcHealthCheckFailed
+        expr: |
+          probe_success{job="mrwhooidc-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MrWhoOidc health check failed"
+          description: "Health endpoint probe failed for {{ $labels.instance }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#health-check-failed"
+
+      # Readiness Check Failed
+      - alert: MrWhoOidcNotReady
+        expr: |
+          probe_success{job="mrwhooidc-ready"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MrWhoOidc not ready"
+          description: "Readiness endpoint probe failed for {{ $labels.instance }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#readiness-check-failed"
+
+      # High Latency from Blackbox
+      - alert: MrWhoOidcHighLatency
+        expr: |
+          probe_http_duration_seconds{job="mrwhooidc-health"} > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected from external probe"
+          description: "HTTP probe latency is {{ $value | humanizeDuration }} (threshold: 3s)"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#high-latency"
+
+  - name: mrwhooidc-redis
+    interval: 30s
+    rules:
+      # Redis Connection Failed
+      - alert: MrWhoOidcRedisConnectionFailed
+        expr: |
+          redis_up{job="mrwhooidc-redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection failed"
+          description: "Cannot connect to Redis instance {{ $labels.instance }}"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#redis-connection"
+
+      # Redis Memory Usage High
+      - alert: MrWhoOidcRedisMemoryHigh
+        expr: |
+          redis_memory_used_bytes{job="mrwhooidc-redis"} 
+          / redis_memory_max_bytes{job="mrwhooidc-redis"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} of max"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#redis-memory"
+
+      # Redis Evicted Keys
+      - alert: MrWhoOidcRedisEvictions
+        expr: |
+          increase(redis_evicted_keys_total{job="mrwhooidc-redis"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis keys being evicted"
+          description: "{{ $value }} keys evicted in the last 5 minutes"
+          runbook_url: "https://github.com/popicka70/MrWhoOidc/blob/main/docs/for-operators/monitoring/alerting-rules.md#redis-evictions"
