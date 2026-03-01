@@ -12,9 +12,9 @@
 
 :root {
   /* Brand Colors - Fluent Blue Palette */
-  --fluent-color-brand-primary: #0078D4;
-  --fluent-color-brand-primary-hover: #106EBE;
-  --fluent-color-brand-primary-pressed: #005A9E;
+  --fluent-color-brand-primary: #4F46E5;
+  --fluent-color-brand-primary-hover: #4338CA;
+  --fluent-color-brand-primary-pressed: #3730A3;
   
   /* Neutral Colors */
   --fluent-color-neutral-foreground-1: #242424;
@@ -56,8 +56,8 @@
   --fluent-color-card-hover: #FAFAFA;
   
   /* Acrylic & Glass Materials */
-  --fluent-color-acrylic-background: rgba(252, 252, 252, 0.85);
-  --fluent-color-acrylic-border: rgba(0, 0, 0, 0.08);
+  --fluent-color-acrylic-background: rgba(255, 255, 255, 0.7);
+  --fluent-color-acrylic-border: rgba(255, 255, 255, 0.5);
   --fluent-color-smoke-background: rgba(0, 0, 0, 0.32);
   
   /* Focus & Selection */
@@ -75,9 +75,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     /* Brand Colors - Adjusted for dark backgrounds */
-    --fluent-color-brand-primary: #3AA0F3;
-    --fluent-color-brand-primary-hover: #4FB3FF;
-    --fluent-color-brand-primary-pressed: #298FCE;
+    --fluent-color-brand-primary: #6366F1;
+    --fluent-color-brand-primary-hover: #818CF8;
+    --fluent-color-brand-primary-pressed: #4F46E5;
     
     /* Neutral Colors - Dark Mode */
     --fluent-color-neutral-foreground-1: #FFFFFF;
@@ -124,7 +124,7 @@
     --fluent-color-smoke-background: rgba(0, 0, 0, 0.64);
     
     /* Focus & Selection - Dark */
-    --fluent-color-focus-stroke: #3AA0F3;
+    --fluent-color-focus-stroke: #6366F1;
     --fluent-color-focus-stroke-inner: #000000;
   }
 }
@@ -135,8 +135,8 @@
 
 :root {
   /* Fluent Design Shadow System (2-64 elevation levels) */
-  --fluent-shadow-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.108),
-                      0 1.6px 3.6px rgba(0, 0, 0, 0.132);
+  --fluent-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.05),
+                      0 1px 3px rgba(0, 0, 0, 0.1);
   
   --fluent-shadow-4: 0 0.9px 1.5px rgba(0, 0, 0, 0.108),
                       0 3.6px 6.0px rgba(0, 0, 0, 0.132);
@@ -154,8 +154,8 @@
                        0 2.4px 7.2px rgba(0, 0, 0, 0.108);
   
   /* Contextual Shadows */
-  --fluent-shadow-card: var(--fluent-shadow-4);
-  --fluent-shadow-card-hover: var(--fluent-shadow-8);
+  --fluent-shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --fluent-shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --fluent-shadow-flyout: var(--fluent-shadow-16);
   --fluent-shadow-dialog: var(--fluent-shadow-32);
   --fluent-shadow-overlay: var(--fluent-shadow-64);
@@ -191,10 +191,10 @@
 
 :root {
   --fluent-border-radius-none: 0;
-  --fluent-border-radius-small: 2px;
-  --fluent-border-radius-medium: 4px;
-  --fluent-border-radius-large: 8px;
-  --fluent-border-radius-xl: 12px;
+  --fluent-border-radius-small: 4px;
+  --fluent-border-radius-medium: 8px;
+  --fluent-border-radius-large: 12px;
+  --fluent-border-radius-xl: 16px;
   --fluent-border-radius-circular: 50%;
   
   /* Contextual Radius */

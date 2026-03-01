@@ -46,10 +46,10 @@ else
 
     <div class="d-flex gap-2 mb-3">
         <button type="submit" class="btn btn-primary">
-            <i class="bi bi-save me-1"></i>Save
+            <i class="ph ph-save me-1"></i>Save
         </button>
         <a href="@(tenantPrefix)/admin/providers" class="btn btn-secondary">
-            <i class="bi bi-arrow-left me-1"></i>Back to list
+            <i class="ph ph-arrow-left me-1"></i>Back to list
         </a>
     </div>
 
@@ -57,20 +57,20 @@ else
     <ul class="nav nav-tabs" id="providerTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">
-                <i class="bi bi-info-circle me-1"></i>General
+                <i class="ph ph-info me-1"></i>General
             </button>
         </li>
         @if (Model.Input?.Type == IdentityProviderType.Oidc)
         {
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="form-tab" data-bs-toggle="tab" data-bs-target="#form" type="button" role="tab" aria-controls="form" aria-selected="false">
-                    <i class="bi bi-ui-checks me-1"></i>Form Editor
+                    <i class="ph ph-ui-checks me-1"></i>Form Editor
                 </button>
             </li>
         }
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button" role="tab" aria-controls="config" aria-selected="false">
-                <i class="bi bi-code-square me-1"></i>JSON Configuration
+                <i class="ph ph-code-square me-1"></i>JSON Configuration
             </button>
         </li>
     </ul>
@@ -83,19 +83,19 @@ else
             {
                 <div class="card mb-4 border-primary">
                     <div class="card-header bg-primary text-white">
-                        <i class="bi bi-link-45deg me-1"></i>
+                        <i class="ph ph-link me-1"></i>
                         <strong>Configuration for External Identity Provider</strong>
                     </div>
                     <div class="card-body">
                         <p class="mb-3">
-                            <i class="bi bi-info-circle text-primary me-1"></i>
+                            <i class="ph ph-info text-primary me-1"></i>
                             Configure the following callback URI(s) in your external identity provider:
                         </p>
 
                         @if (Model.WellKnownUrls != null && Model.WellKnownUrls.Count > 0)
                         {
                             <h6 class="fw-bold mb-2">
-                                <i class="bi bi-file-earmark-code me-1"></i>
+                                <i class="ph ph-file-code me-1"></i>
                                 Well Known Document URL
                             </h6>
                             @foreach (var uri in Model.WellKnownUrls)
@@ -109,7 +109,7 @@ else
                                     <button class="btn btn-outline-secondary"
                                             type="button"
                                             onclick="navigator.clipboard.writeText(document.getElementById('wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)').value)">
-                                        <i class="bi bi-clipboard"></i>
+                                        <i class="ph ph-clipboard"></i>
                                     </button>
                                 </div>
                             }
@@ -118,7 +118,7 @@ else
                         @if (Model.RedirectUris != null && Model.RedirectUris.Count > 0)
                         {
                             <h6 class="fw-bold mb-2">
-                                <i class="bi bi-box-arrow-in-right me-1"></i>
+                                <i class="ph ph-sign-in me-1"></i>
                                 Authentication Redirect URI
                             </h6>
                             @foreach (var uri in Model.RedirectUris)
@@ -133,7 +133,7 @@ else
                                             type="button" 
                                             onclick="copyToClipboard('redirect-uri-@Model.RedirectUris.IndexOf(uri)', this)"
                                             title="Copy to clipboard">
-                                        <i class="bi bi-clipboard"></i>
+                                        <i class="ph ph-clipboard"></i>
                                     </button>
                                 </div>
                             }
@@ -142,7 +142,7 @@ else
                         @if (Model.LogoutCallbackUris != null && Model.LogoutCallbackUris.Count > 0)
                         {
                             <h6 class="fw-bold mb-2 mt-3">
-                                <i class="bi bi-box-arrow-left me-1"></i>
+                                <i class="ph ph-box-arrow-left me-1"></i>
                                 Logout Callback URI (Post-Logout Redirect URI)
                             </h6>
                             @foreach (var uri in Model.LogoutCallbackUris)
@@ -157,14 +157,14 @@ else
                                             type="button" 
                                             onclick="copyToClipboard('logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)', this)"
                                             title="Copy to clipboard">
-                                        <i class="bi bi-clipboard"></i>
+                                        <i class="ph ph-clipboard"></i>
                                     </button>
                                 </div>
                             }
                         }
                         
                         <small class="text-muted mt-2 d-block">
-                            <i class="bi bi-shield-check me-1"></i>
+                            <i class="ph ph-shield-check me-1"></i>
                             These URIs are tenant-aware and match your current configuration.
                         </small>
                     </div>
@@ -271,7 +271,7 @@ else
                 @if (Model.OidcConfig != null)
                 {
                     <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-1"></i>
+                        <i class="ph ph-info me-1"></i>
                         <strong>Form Editor:</strong> Edit OIDC configuration using structured fields. Changes are synchronized with the JSON tab.
                     </div>
 
@@ -280,7 +280,7 @@ else
                 else
                 {
                     <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <i class="ph ph-warning me-1"></i>
                         Could not parse existing configuration. Please use the JSON tab to fix any syntax errors.
                     </div>
                 }
@@ -292,7 +292,7 @@ else
             @if (Model.Input?.Type == IdentityProviderType.Oidc)
             {
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-1"></i>
+                    <i class="ph ph-info me-1"></i>
                     <strong>Extended JSON:</strong> Use this only for non-standard provider keys. Standard OIDC fields come from the <strong>Form Editor</strong> tab.
                 </div>
             }
@@ -311,10 +311,10 @@ else
             </div>
             <div class="d-flex gap-2 align-items-center">
                 <button type="button" class="btn btn-outline-secondary" id="formatJsonBtn">
-                    <i class="bi bi-code-slash me-1"></i>Format JSON
+                    <i class="ph ph-code-slash me-1"></i>Format JSON
                 </button>
                 <button type="submit" class="btn btn-outline-primary" asp-page-handler="Test" formnovalidate>
-                    <i class="bi bi-cloud-check me-1"></i>Test connection
+                    <i class="ph ph-cloud-check me-1"></i>Test connection
                 </button>
                 <span class="form-text">Tests discovery endpoint reachability and shows a brief summary.</span>
             </div>
@@ -334,7 +334,7 @@ else
             navigator.clipboard.writeText(input.value).then(function() {
                 // Visual feedback
                 const originalHTML = button.innerHTML;
-                button.innerHTML = '<i class="bi bi-check-lg"></i>';
+                button.innerHTML = '<i class="ph ph-check"></i>';
                 button.classList.remove('btn-outline-secondary');
                 button.classList.add('btn-success');
                 

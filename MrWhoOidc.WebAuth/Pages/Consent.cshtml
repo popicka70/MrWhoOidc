@@ -8,7 +8,7 @@
 <div class="auth-card">
     <div class="card-body p-4">
         <div class="auth-card__header">
-            <i class="bi bi-shield-check icon-xl icon-primary"></i>
+            <i class="ph ph-shield-check icon-xl icon-primary"></i>
             <h2 class="auth-card__title">Authorization Request</h2>
             <p class="auth-card__subtitle">
                 Application <strong>@Model.ClientId</strong> is requesting access to your account.
@@ -20,7 +20,7 @@
         @foreach (var scope in Model.Scopes)
         {
             <li class="list-group-item d-flex align-items-center">
-                <i class="bi bi-check2 icon-sm icon-success me-2"></i>
+                <i class="ph ph-check icon-sm icon-success me-2"></i>
                 <span>@scope</span>
             </li>
         }
@@ -35,10 +35,10 @@
             }
             <div class="action-buttons">
                 <button type="submit" class="btn btn-success flex-fill">
-                    <i class="bi bi-check-lg"></i> Allow Access
+                    <i class="ph ph-check"></i> Allow Access
                 </button>
                 <a class="btn btn-outline-danger flex-fill" href="@Model.CancelUrl">
-                    <i class="bi bi-x-lg"></i> Deny
+                    <i class="ph ph-x"></i> Deny
                 </a>
             </div>
         </form>
