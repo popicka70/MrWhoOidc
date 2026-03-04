@@ -19,7 +19,7 @@ public class StopImpersonationModel(IImpersonationService impersonationService) 
 
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
-            return Redirect(returnUrl);
+            return LocalRedirect(returnUrl);
         }
 
         // Default: redirect to platform admin dashboard

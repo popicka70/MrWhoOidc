@@ -431,7 +431,7 @@ public class LoginModel(
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
         {
             logger.LogInformation("➡️ [Login] Redirecting to ReturnUrl: {ReturnUrl}", ReturnUrl);
-            return Redirect(ReturnUrl);
+            return LocalRedirect(ReturnUrl);
         }
 
         // Build tenant-aware default redirect URL based on mode
