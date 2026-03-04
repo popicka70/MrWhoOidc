@@ -257,13 +257,18 @@ public class TenantSeedingService : ITenantSeedingService
 
             // Create standard scopes (client-scope associations)
             var scopes = new[] { "openid", "profile", "email", "roles", "offline_access", "mrwhopdf" };
+            var existingScopes = await _db.Scopes
+                .Where(s => scopes.Contains(s.Name))
+                .ToListAsync(ct);
+
+            var existingScopeNames = existingScopes.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var scopeName in scopes)
             {
                 // Check if scope already exists globally
-                var scope = await _db.Scopes.FirstOrDefaultAsync(s => s.Name == scopeName, ct);
-                if (scope == null)
+                if (!existingScopeNames.Contains(scopeName))
                 {
-                    scope = new Scope
+                    var scope = new Scope
                     {
                         Name = scopeName,
                         Description = $"{scopeName} scope",
@@ -271,6 +276,7 @@ public class TenantSeedingService : ITenantSeedingService
                         IsGlobal = string.Equals(scopeName, "mrwhopdf", StringComparison.OrdinalIgnoreCase)
                     };
                     _db.Scopes.Add(scope);
+                    existingScopeNames.Add(scopeName); // Add to avoid duplicates if creating multiple tenants concurrently (though DbContext is scoped)
                 }
 
                 // Associate scope with both clients
