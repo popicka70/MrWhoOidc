@@ -32,7 +32,7 @@ public class StartImpersonationModel(
         // Redirect to tenant admin UI
         if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
-            return Redirect(returnUrl);
+            return LocalRedirect(returnUrl);
         }
 
         // Get tenant slug for redirect

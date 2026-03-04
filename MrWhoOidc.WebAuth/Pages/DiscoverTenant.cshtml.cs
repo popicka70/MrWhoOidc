@@ -90,7 +90,7 @@ public class DiscoverTenantModel : PageModel
             // If there's a return URL, go there (it's likely an OIDC authorize flow)
             if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
             {
-                return Redirect(ReturnUrl);
+                return LocalRedirect(ReturnUrl);
             }
 
             // Otherwise, redirect to home page
