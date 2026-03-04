@@ -394,10 +394,14 @@ public sealed class ConfigurationImportService(
             {
                 await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+                var realmNames = realms.Select(r => r.Name).ToList();
+                var existingRealms = await _dbContext.Realms
+                    .Where(r => r.TenantId == tenantId && realmNames.Contains(r.Name))
+                    .ToDictionaryAsync(r => r.Name, r => r, cancellationToken);
+
                 foreach (var realmDef in realms)
                 {
-                    var existingRealm = await _dbContext.Realms
-                        .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.Name == realmDef.Name, cancellationToken);
+                    existingRealms.TryGetValue(realmDef.Name, out var existingRealm);
 
                     if (existingRealm != null)
                     {
