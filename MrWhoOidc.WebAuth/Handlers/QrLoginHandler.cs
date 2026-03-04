@@ -592,12 +592,18 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         // Redirect to the original return URL
         var returnUrl = session.ReturnUrl;
-        if (string.IsNullOrEmpty(returnUrl) || !returnUrl.StartsWith("/"))
+
+        // Ensure the URL is local to prevent Open Redirect vulnerabilities.
+        // A valid local URL starts with '/' but not '//' or '/\'.
+        if (string.IsNullOrEmpty(returnUrl) ||
+            !returnUrl.StartsWith('/') ||
+            returnUrl.StartsWith("//") ||
+            returnUrl.StartsWith("/\\"))
         {
             returnUrl = "/";
         }
 
-        return Results.Redirect(returnUrl);
+        return Results.LocalRedirect(returnUrl);
     }
 
     /// <summary>
