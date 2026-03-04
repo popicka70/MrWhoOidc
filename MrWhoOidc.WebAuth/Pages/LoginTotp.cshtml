@@ -8,7 +8,7 @@
 <div class="auth-card">
     <div class="card-body p-4">
         <div class="auth-card__header">
-            <i class="bi bi-shield-lock icon-xl icon-primary"></i>
+            <i class="ph ph-shield icon-xl icon-primary"></i>
             <h2 class="auth-card__title">Two-factor verification</h2>
             <p class="auth-card__subtitle">Enter your authentication code</p>
         </div>
@@ -18,13 +18,13 @@
             <input type="hidden" asp-for="Display" />
             <div class="form-group">
                 <label asp-for="Code" class="form-label">
-                    <i class="bi bi-key icon-sm"></i> Authentication Code
+                    <i class="ph ph-key icon-sm"></i> Authentication Code
                 </label>
                 <input asp-for="Code" class="form-control" autocomplete="one-time-code" />
                 <span asp-validation-for="Code" class="text-danger"></span>
             </div>
             <button type="submit" class="btn btn-primary w-100">
-                <i class="bi bi-check-lg"></i> Verify
+                <i class="ph ph-check"></i> Verify
             </button>
         </form>
     </div>

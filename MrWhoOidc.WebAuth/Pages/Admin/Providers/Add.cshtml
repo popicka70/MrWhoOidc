@@ -91,13 +91,13 @@
                         <label asp-for="Logo" class="form-label">Upload Logo</label>
                         <div class="d-flex align-items-start gap-3">
                             <div id="iconPreview" class="border rounded p-2 bg-light d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; flex-shrink: 0;">
-                                <i class="bi bi-image text-muted" style="font-size: 2rem;"></i>
+                                <i class="ph ph-image text-muted" style="font-size: 2rem;"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <input asp-for="Logo" type="file" class="form-control" accept=".png,.jpg,.jpeg,.svg,.webp" id="LogoUpload" />
                                 <div class="form-text">Optional. Upload an image to store in the database (max 512KB).</div>
                                 <div id="presetIconInfo" class="form-text text-success" style="display:none;">
-                                    <i class="bi bi-check-circle-fill"></i> Standard icon will be used if no file is uploaded.
+                                    <i class="ph-fill ph-check-circle"></i> Standard icon will be used if no file is uploaded.
                                 </div>
                             </div>
                         </div>
@@ -228,7 +228,7 @@
 
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">
-            <i class="bi bi-check-lg me-1"></i>Create Provider
+            <i class="ph ph-check me-1"></i>Create Provider
         </button>
         <a href="@(tenantPrefix)/Admin/Providers" class="btn btn-secondary">Cancel</a>
     </div>
@@ -290,7 +290,7 @@
                 iconPreview.innerHTML = template.iconSvg;
                 presetIconInfo.style.display = 'block';
             } else {
-                iconPreview.innerHTML = '<i class="bi bi-image text-muted" style="font-size: 2rem;"></i>';
+                iconPreview.innerHTML = '<i class="ph ph-image text-muted" style="font-size: 2rem;"></i>';
                 presetIconInfo.style.display = 'none';
             }
             
@@ -306,7 +306,7 @@
                 btnTextColorText.value = textColor;
             }
         } else {
-            iconPreview.innerHTML = '<i class="bi bi-image text-muted" style="font-size: 2rem;"></i>';
+            iconPreview.innerHTML = '<i class="ph ph-image text-muted" style="font-size: 2rem;"></i>';
             presetIconInfo.style.display = 'none';
         }
         

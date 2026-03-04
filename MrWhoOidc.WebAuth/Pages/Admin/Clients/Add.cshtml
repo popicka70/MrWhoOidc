@@ -54,7 +54,7 @@
                 <input asp-for="Input.ClientSecret" type="password" class="form-control" autocomplete="new-password" />
                 <button type="button" id="btn-generate-secret" class="btn btn-outline-secondary" title="Generate client secret">Generate</button>
                 <button type="button" id="btn-reveal-secret" class="btn btn-outline-secondary" title="Show secret" disabled>
-                    <i class="bi bi-eye"></i>
+                    <i class="ph ph-eye"></i>
                 </button>
                 <button type="button" id="btn-copy-secret" class="btn btn-outline-secondary" title="Copy to clipboard" disabled>Copy</button>
             </div>
@@ -65,7 +65,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <i class="bi bi-lock me-2"></i>OIDC JWT response crypto (optional)
+                    <i class="ph ph-lock me-2"></i>OIDC JWT response crypto (optional)
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -263,7 +263,7 @@
                         if (revealBtn){
                             revealBtn.title = 'Show secret';
                             const icon = revealBtn.querySelector('i');
-                            if (icon){ icon.className = 'bi bi-eye'; }
+                            if (icon){ icon.className = 'ph ph-eye'; }
                         }
                         updateSecretButtons(input, copyBtn, revealBtn);
                     });
@@ -277,12 +277,12 @@
                             input.setAttribute('type', 'text');
                             revealBtn.title = 'Hide secret';
                             const icon = revealBtn.querySelector('i');
-                            if (icon){ icon.className = 'bi bi-eye-slash'; }
+                            if (icon){ icon.className = 'ph ph-eye-slash'; }
                         } else {
                             input.setAttribute('type', 'password');
                             revealBtn.title = 'Show secret';
                             const icon = revealBtn.querySelector('i');
-                            if (icon){ icon.className = 'bi bi-eye'; }
+                            if (icon){ icon.className = 'ph ph-eye'; }
                         }
                     });
                 }

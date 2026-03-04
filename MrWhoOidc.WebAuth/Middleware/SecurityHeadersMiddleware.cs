@@ -40,9 +40,9 @@ public sealed class SecurityHeadersMiddleware
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
                         "img-src 'self' data: https:; " +
-                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
-                        "font-src 'self' data: https://cdn.jsdelivr.net; " +
-                        "script-src 'self' 'unsafe-inline'; connect-src 'self'");
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; " +
+                        "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com; " +
+                        "script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self'");
                 }
             }
 

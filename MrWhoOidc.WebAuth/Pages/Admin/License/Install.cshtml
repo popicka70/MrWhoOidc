@@ -56,10 +56,10 @@
         </div>
         <div class="card-footer d-flex flex-wrap gap-2">
             <button class="btn btn-outline-secondary" type="submit" asp-page-handler="Validate">
-                <i class="bi bi-search me-1"></i>Validate only
+                <i class="ph ph-search me-1"></i>Validate only
             </button>
             <button class="btn btn-primary" type="submit" asp-page-handler="Install">
-                <i class="bi bi-cloud-upload me-1"></i>Install license
+                <i class="ph ph-cloud-upload me-1"></i>Install license
             </button>
             <a class="btn btn-link ms-auto" asp-page="Index" asp-route-scope="@Model.Scope" asp-route-tenantId="@(string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase) ? Model.TenantId : null)">
                 Back to summary
@@ -127,7 +127,7 @@
                             <ul class="list-unstyled small text-muted mb-0">
                                 @foreach (var issuer in Model.ValidationSummary.Info.AllowedIssuers)
                                 {
-                                    <li><i class="bi bi-check2 me-1 text-success"></i>@issuer</li>
+                                    <li><i class="ph ph-check me-1 text-success"></i>@issuer</li>
                                 }
                             </ul>
                         }

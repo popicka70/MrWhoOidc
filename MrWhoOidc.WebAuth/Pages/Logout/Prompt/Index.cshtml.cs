@@ -15,7 +15,7 @@ namespace MrWhoOidc.WebAuth.Pages.Logout.Prompt;
 public class IndexModel : PageModel
 {
     public string ProviderDisplay { get; set; } = "Provider";
-    public string ProviderIconClass { get; set; } = "bi-box-arrow-right"; // default icon
+    public string ProviderIconClass { get; set; } = "ph ph-sign-out"; // default icon
     public string ReturnUrl { get; set; } = "/";
     public string? Style { get; set; }
     public string? ClientId { get; set; }
@@ -133,10 +133,10 @@ public class IndexModel : PageModel
     {
         return raw.ToLowerInvariant() switch
         {
-            "google" => "bi-google",
-            "auth0" => "bi-shield-lock",
-            "microsoft" or "azuread" => "bi-microsoft",
-            _ => "bi-box-arrow-right"
+            "google" => "ph ph-google-logo",
+            "auth0" => "ph ph-shield-check",
+            "microsoft" or "azuread" => "ph ph-windows-logo",
+            _ => "ph ph-sign-out"
         };
     }
 }

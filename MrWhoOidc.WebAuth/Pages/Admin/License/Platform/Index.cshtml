@@ -5,7 +5,7 @@
 }
 
 <h1 class="mb-3">
-    <i class="bi bi-award me-2"></i>Platform License
+    <i class="ph ph-medal me-2"></i>Platform License
 </h1>
 <p class="text-muted mb-4">
     The platform license governs deployment mode, maximum tenants, and enterprise features available across all tenants.
@@ -14,7 +14,7 @@
 @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>@Model.SuccessMessage
+        <i class="ph-fill ph-check-circle me-2"></i>@Model.SuccessMessage
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
@@ -22,7 +22,7 @@
 @if (!string.IsNullOrWhiteSpace(Model.InfoMessage))
 {
     <div class="alert alert-info" role="alert">
-        <i class="bi bi-info-circle-fill me-2"></i>@Model.InfoMessage
+        <i class="ph ph-info-fill me-2"></i>@Model.InfoMessage
     </div>
 }
 
@@ -40,7 +40,7 @@
             @if (!Model.Summary.Info.IsValid || Model.Summary.Info.IsExpired || Model.Summary.IsExpiringSoon)
             {
                 <div class="alert @(Model.Summary.Info.IsExpired || !Model.Summary.Info.IsValid ? "alert-danger" : "alert-warning")" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <i class="ph ph-warning-fill me-2"></i>
                     @if (!Model.Summary.Info.IsValid)
                     {
                         <text>The current platform license failed validation and some enterprise features may be unavailable.</text>
@@ -108,7 +108,7 @@
                         <ul class="list-unstyled small text-muted mb-0">
                             @foreach (var issuer in Model.Summary.Info.AllowedIssuers)
                             {
-                                <li><i class="bi bi-check2 me-1 text-success"></i>@issuer</li>
+                                <li><i class="ph ph-check me-1 text-success"></i>@issuer</li>
                             }
                         </ul>
                     }
@@ -337,9 +337,9 @@
 
 <div class="d-flex flex-wrap gap-2">
     <a class="btn btn-primary" asp-page="Install">
-        <i class="bi bi-cloud-upload me-1"></i>Install or update platform license
+        <i class="ph ph-cloud-upload me-1"></i>Install or update platform license
     </a>
     <a class="btn btn-outline-secondary" asp-page="History">
-        <i class="bi bi-clock-history me-1"></i>View history
+        <i class="ph ph-clock-counter-clockwise me-1"></i>View history
     </a>
 </div>

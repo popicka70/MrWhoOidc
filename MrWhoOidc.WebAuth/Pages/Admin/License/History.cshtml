@@ -60,7 +60,7 @@
             <input type="hidden" name="pageNumber" value="1" />
             <div class="col-md-3 col-lg-2">
                 <button class="btn btn-primary w-100" type="submit">
-                    <i class="bi bi-arrow-repeat me-1"></i>Apply
+                    <i class="ph ph-arrow-repeat me-1"></i>Apply
                 </button>
             </div>
         </div>
@@ -164,6 +164,6 @@ else if (history is not null)
 
 <div class="mt-4">
     <a class="btn btn-outline-secondary" asp-page="Index" asp-route-scope="@Model.Scope" asp-route-tenantId="@(string.Equals(Model.Scope, Model.TenantScopeTenant, StringComparison.OrdinalIgnoreCase) ? Model.TenantId : null)">
-        <i class="bi bi-arrow-left me-1"></i>Back to summary
+        <i class="ph ph-arrow-left me-1"></i>Back to summary
     </a>
 </div>

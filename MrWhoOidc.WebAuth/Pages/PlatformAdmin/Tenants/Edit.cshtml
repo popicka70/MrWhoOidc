@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="m-0">
-            <i class="bi bi-pencil text-primary me-2"></i>
+            <i class="ph ph-pencil-simple text-primary me-2"></i>
             Edit Tenant
         </h1>
         <p class="text-muted mb-0">
@@ -16,10 +16,10 @@
     </div>
     <div>
         <a class="btn btn-outline-secondary me-2" asp-page="Index">
-            <i class="bi bi-arrow-left"></i> Back to List
+            <i class="ph ph-arrow-left"></i> Back to List
         </a>
         <button type="submit" form="editTenantForm" class="btn btn-success">
-            <i class="bi bi-check-circle"></i> Save Changes
+            <i class="ph ph-check-circle"></i> Save Changes
         </button>
     </div>
 </div>
@@ -27,7 +27,7 @@
 @if (!ViewData.ModelState.IsValid)
 {
     <div class="alert alert-danger">
-        <i class="bi bi-exclamation-triangle me-2"></i>
+        <i class="ph ph-warning me-2"></i>
         <strong>Validation Error:</strong> Please correct the errors below.
     </div>
 }
@@ -35,7 +35,7 @@
 @if (TempData["SuccessMessage"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show">
-        <i class="bi bi-check-circle me-2"></i>
+        <i class="ph ph-check-circle me-2"></i>
         @TempData["SuccessMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -46,7 +46,7 @@
     
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-info-circle me-2"></i>Basic Information
+            <i class="ph ph-info me-2"></i>Basic Information
         </div>
         <div class="card-body">
             <div class="row">
@@ -83,7 +83,7 @@
                     </label>
                     <input asp-for="Input.IssuerUri" type="text" class="form-control" placeholder="https://localhost:8443/t/pop-app" />
                     <div class="form-text">
-                        <i class="bi bi-info-circle me-1"></i>
+                        <i class="ph ph-info me-1"></i>
                         Full issuer URL for this tenant (used in OIDC discovery). Must match the URL pattern used in your deployment.
                     </div>
                     <span asp-validation-for="Input.IssuerUri" class="text-danger small"></span>
@@ -94,7 +94,7 @@
     
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-gear me-2"></i>Configuration
+            <i class="ph ph-gear me-2"></i>Configuration
         </div>
         <div class="card-body">
             <div class="row">
@@ -149,7 +149,7 @@
     
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-palette me-2"></i>Branding
+            <i class="ph ph-palette me-2"></i>Branding
         </div>
         <div class="card-body">
             <!-- Icon/Logo Section -->
@@ -164,9 +164,9 @@
                             <img id="current-icon-img" src="/api/icon/@Model.Input.TenantIconId" alt="Current tenant icon" 
                                  class="image-preview" />
                             <div>
-                                <div class="text-success"><i class="bi bi-check-circle me-1"></i>Uploaded icon</div>
+                                <div class="text-success"><i class="ph ph-check-circle me-1"></i>Uploaded icon</div>
                                 <button type="button" id="delete-icon-btn" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash me-1"></i>Delete Icon
+                                    <i class="ph ph-trash me-1"></i>Delete Icon
                                 </button>
                             </div>
                         </div>
@@ -177,14 +177,14 @@
                             <img id="current-logo-img" src="@Model.Input.LogoUrl" alt="Logo from URL" 
                                  class="image-preview" />
                             <div>
-                                <div class="text-info"><i class="bi bi-link me-1"></i>From URL</div>
+                                <div class="text-info"><i class="ph ph-link me-1"></i>From URL</div>
                             </div>
                         </div>
                     }
                     else
                     {
                         <div class="text-muted">
-                            <i class="bi bi-image me-1"></i>No icon configured
+                            <i class="ph ph-image me-1"></i>No icon configured
                         </div>
                     }
                 </div>
@@ -205,9 +205,9 @@
                             <img id="preview-img" alt="Upload preview" 
                                  class="image-preview" style="border-color: var(--color-success);" />
                             <div>
-                                <div class="text-success"><i class="bi bi-cloud-arrow-up me-1"></i>Ready to upload</div>
+                                <div class="text-success"><i class="ph ph-cloud-arrow-up me-1"></i>Ready to upload</div>
                                 <button type="button" id="upload-icon-btn" class="btn btn-sm btn-success">
-                                    <i class="bi bi-upload me-1"></i>Upload Icon
+                                    <i class="ph ph-upload me-1"></i>Upload Icon
                                 </button>
                                 <button type="button" id="cancel-upload-btn" class="btn btn-sm btn-secondary ms-2">
                                     Cancel
@@ -254,7 +254,7 @@
 
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-key me-2"></i>Licensing
+            <i class="ph ph-key me-2"></i>Licensing
         </div>
         <div class="card-body">
             <div class="mb-3">
@@ -265,7 +265,7 @@
                 </select>
                 <span asp-validation-for="Input.LicenseMode" class="text-danger small"></span>
                 <div class="form-text">
-                    <i class="bi bi-info-circle me-1"></i>
+                    <i class="ph ph-info me-1"></i>
                     <strong>Inherit Platform License:</strong> Tenant uses all features from platform license (excluding platform-only features).<br />
                     <strong>Use Sublicense:</strong> Tenant requires a dedicated sublicense with its own feature/limit set.
                 </div>
@@ -274,7 +274,7 @@
             @if (Model.Input.LicenseMode == MrWhoOidc.Auth.Licensing.Models.TenantLicenseMode.Sublicense)
             {
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
+                    <i class="ph ph-info me-2"></i>
                     This tenant requires a sublicense. Go to 
                     <a asp-page="/Admin/License/Install" asp-route-tenantId="@Model.Input.Id" class="alert-link">
                         License Management
@@ -285,7 +285,7 @@
             else
             {
                 <div class="alert alert-success">
-                    <i class="bi bi-check-circle me-2"></i>
+                    <i class="ph ph-check-circle me-2"></i>
                     This tenant inherits its license from the platform. No separate sublicense required.
                 </div>
             }
@@ -294,7 +294,7 @@
 
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+            <i class="ph ph-tree-structure me-2"></i>Dynamic Client Registration
         </div>
         <div class="card-body">
             <div class="row">
@@ -312,7 +312,7 @@
     
     <div class="card mb-4">
         <div class="card-header">
-            <i class="bi bi-clock-history me-2"></i>Metadata
+            <i class="ph ph-clock-counter-clockwise me-2"></i>Metadata
         </div>
         <div class="card-body">
             <div class="row">
@@ -337,14 +337,14 @@
     <div class="d-flex justify-content-between">
         <div>
             <a class="btn btn-secondary" asp-page="Index">
-                <i class="bi bi-x-circle"></i> Cancel
+                <i class="ph ph-x-circle"></i> Cancel
             </a>
             
             @if (Model.Input.Status != MrWhoOidc.Auth.Persistence.TenantStatus.Deleted)
             {
                 <button type="submit" asp-page-handler="Suspend" class="btn btn-warning" 
                         onclick="return confirm('Are you sure you want to suspend this tenant? Users will not be able to access it.');">
-                    <i class="bi bi-pause-circle"></i> 
+                    <i class="ph ph-pause-circle"></i> 
                     @(Model.Input.Status == MrWhoOidc.Auth.Persistence.TenantStatus.Suspended ? "Activate" : "Suspend")
                 </button>
             }
@@ -355,12 +355,12 @@
             {
                 <button type="submit" asp-page-handler="Delete" class="btn btn-danger me-2" 
                         onclick="return confirm('Are you sure you want to delete this tenant? This action cannot be undone.');">
-                    <i class="bi bi-trash"></i> Delete Tenant
+                    <i class="ph ph-trash"></i> Delete Tenant
                 </button>
             }
             
             <button type="submit" class="btn btn-success">
-                <i class="bi bi-check-circle"></i> Save Changes
+                <i class="ph ph-check-circle"></i> Save Changes
             </button>
         </div>
     </div>

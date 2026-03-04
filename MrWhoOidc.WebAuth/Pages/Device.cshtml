@@ -10,7 +10,7 @@
         @if (Model.ShowUserCodeInput)
         {
             <div class="auth-card__header">
-                <i class="bi bi-phone icon-xl icon-primary"></i>
+                <i class="ph ph-device-mobile icon-xl icon-primary"></i>
                 <h2 class="auth-card__title">Authorize Device</h2>
                 <p class="auth-card__subtitle">
                     Enter the code displayed on your device to continue.
@@ -20,7 +20,7 @@
             @if (!string.IsNullOrEmpty(Model.ErrorMessage))
             {
                 <div class="alert alert-danger" role="alert">
-                    <i class="bi bi-exclamation-triangle me-2"></i>@Model.ErrorMessage
+                    <i class="ph ph-warning me-2"></i>@Model.ErrorMessage
                 </div>
             }
 
@@ -34,14 +34,14 @@
                     <div class="form-text">Enter the code shown on your device (e.g., ABCD-EFGH)</div>
                 </div>
                 <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-arrow-right me-2"></i>Continue
+                    <i class="ph ph-arrow-right me-2"></i>Continue
                 </button>
             </form>
         }
         else if (Model.ShowConfirmation)
         {
             <div class="auth-card__header">
-                <i class="bi bi-shield-check icon-xl icon-primary"></i>
+                <i class="ph ph-shield-check icon-xl icon-primary"></i>
                 <h2 class="auth-card__title">Confirm Device Access</h2>
                 <p class="auth-card__subtitle">
                     You are about to authorize a device to access your account.
@@ -52,7 +52,7 @@
                 <div class="card bg-light">
                     <div class="card-body">
                         <div class="d-flex align-items-center mb-2">
-                            <i class="bi bi-app me-2"></i>
+                            <i class="ph ph-app-window me-2"></i>
                             <strong>Application:</strong>
                             <span class="ms-2">@Model.ClientName</span>
                         </div>
@@ -64,7 +64,7 @@
                                     @foreach (var scope in Model.RequestedScopes)
                                     {
                                         <li class="d-flex align-items-center py-1">
-                                            <i class="bi bi-check2 text-success me-2"></i>
+                                            <i class="ph ph-check text-success me-2"></i>
                                             @scope
                                         </li>
                                     }
@@ -79,10 +79,10 @@
                 <input type="hidden" name="user_code" value="@Model.UserCode" />
                 <div class="action-buttons">
                     <button type="submit" name="action" value="approve" class="btn btn-success flex-fill">
-                        <i class="bi bi-check-lg me-2"></i>Authorize Device
+                        <i class="ph ph-check me-2"></i>Authorize Device
                     </button>
                     <button type="submit" name="action" value="deny" class="btn btn-outline-danger flex-fill">
-                        <i class="bi bi-x-lg me-2"></i>Deny
+                        <i class="ph ph-x me-2"></i>Deny
                     </button>
                 </div>
             </form>
@@ -90,7 +90,7 @@
         else if (Model.ShowSuccess)
         {
             <div class="auth-card__header">
-                <i class="bi bi-check-circle icon-xl icon-success"></i>
+                <i class="ph ph-check-circle icon-xl icon-success"></i>
                 <h2 class="auth-card__title">Device Authorized</h2>
                 <p class="auth-card__subtitle">
                     The device has been successfully authorized. You can close this window
@@ -101,7 +101,7 @@
         else if (Model.ShowDenied)
         {
             <div class="auth-card__header">
-                <i class="bi bi-x-circle icon-xl icon-danger"></i>
+                <i class="ph ph-x-circle icon-xl icon-danger"></i>
                 <h2 class="auth-card__title">Authorization Denied</h2>
                 <p class="auth-card__subtitle">
                     You have denied the device authorization request.

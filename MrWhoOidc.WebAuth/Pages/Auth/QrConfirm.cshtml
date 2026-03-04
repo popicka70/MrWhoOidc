@@ -13,26 +13,26 @@
             <div class="card shadow">
                 <div class="card-body p-4">
                     <div class="text-center mb-4">
-                        <i class="bi bi-shield-check text-primary icon-xl"></i>
+                        <i class="ph ph-shield-check text-primary icon-xl"></i>
                         <h2 class="mt-3">Confirm Login</h2>
                     </div>
 
                     <div class="alert alert-info mb-4">
                         <h5 class="alert-heading">
-                            <i class="bi bi-info-circle me-2"></i>
+                            <i class="ph ph-info me-2"></i>
                             Login Request
                         </h5>
                         <p class="mb-2">You are logging in to:</p>
                         <p class="mb-2"><strong>@clientName</strong></p>
                         <p class="mb-0 small text-muted">
-                            <i class="bi bi-clock me-1"></i>
+                            <i class="ph ph-clock me-1"></i>
                             Requested at: @timestamp
                         </p>
                     </div>
 
                     <div class="mb-4">
                         <p class="text-muted">
-                            <i class="bi bi-laptop me-2"></i>
+                            <i class="ph ph-laptop me-2"></i>
                             A desktop browser is waiting for your confirmation to complete the login.
                         </p>
                     </div>
@@ -42,11 +42,11 @@
                         
                         <div class="d-grid gap-2">
                             <button type="button" class="btn btn-primary btn-lg" id="confirmBtn">
-                                <i class="bi bi-check-circle me-2"></i>
+                                <i class="ph ph-check-circle me-2"></i>
                                 Confirm Login
                             </button>
                             <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
-                                <i class="bi bi-x-circle me-2"></i>
+                                <i class="ph ph-x-circle me-2"></i>
                                 Cancel
                             </button>
                         </div>
@@ -58,7 +58,7 @@
 
             <div class="text-center mt-3">
                 <small class="text-muted">
-                    <i class="bi bi-shield-lock me-1"></i>
+                    <i class="ph ph-shield me-1"></i>
                     This is a secure authentication request
                 </small>
             </div>
@@ -119,17 +119,17 @@
 
                     if (response.ok && data.success) {
                         showMessage(data.message || 'Authentication confirmed! You may close this page.', 'success');
-                        confirmBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirmed';
+                        confirmBtn.innerHTML = '<i class="ph ph-check-circle me-2"></i>Confirmed';
                     } else {
                         showMessage(data.message || 'Failed to confirm authentication.', 'danger');
-                        confirmBtn.innerHTML = '<i class="bi bi-x-circle me-2"></i>Failed';
+                        confirmBtn.innerHTML = '<i class="ph ph-x-circle me-2"></i>Failed';
                         // Re-enable cancel button
                         cancelBtn.disabled = false;
                     }
                 } catch (error) {
                     console.error('Error confirming QR login:', error);
                     showMessage('Network error. Please try again.', 'danger');
-                    confirmBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Confirm Login';
+                    confirmBtn.innerHTML = '<i class="ph ph-check-circle me-2"></i>Confirm Login';
                     confirmBtn.disabled = false;
                     cancelBtn.disabled = false;
                 }
@@ -149,7 +149,7 @@
                     });
 
                     showMessage('Login cancelled. You may close this page.', 'secondary');
-                    cancelBtn.innerHTML = '<i class="bi bi-x-circle me-2"></i>Cancelled';
+                    cancelBtn.innerHTML = '<i class="ph ph-x-circle me-2"></i>Cancelled';
                 } catch (error) {
                     console.error('Error cancelling QR login:', error);
                     showMessage('Failed to cancel. You may close this page.', 'warning');

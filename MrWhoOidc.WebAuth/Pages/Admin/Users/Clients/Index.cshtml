@@ -10,7 +10,7 @@
 @if (!string.IsNullOrEmpty(Model.TenantName))
 {
     <div class="alert alert-secondary mb-3">
-        <i class="bi bi-building"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
+        <i class="ph ph-buildings"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
         <div class="small mt-1">Only clients from this tenant can be assigned.</div>
     </div>
 }
@@ -32,7 +32,7 @@
         <div class="col-md-5">
             <div class="card h-100">
                 <div class="card-header bg-secondary text-white">
-                    <i class="bi bi-grid me-1"></i> Available Clients
+                    <i class="ph ph-grid me-1"></i> Available Clients
                     <span class="badge bg-light text-dark ms-2">@Model.AvailableClients.Count</span>
                 </div>
                 <div class="card-body p-0">
@@ -40,7 +40,7 @@
                         @if (!Model.AvailableClients.Any())
                         {
                             <div class="list-group-item text-center text-muted py-4">
-                                <i class="bi bi-grid-3x3-gap fs-4 d-block mb-2"></i>
+                                <i class="ph ph-squares-four fs-4 d-block mb-2"></i>
                                 No available clients
                             </div>
                         }
@@ -65,7 +65,7 @@
                                             name="clientId" value="@client.Id" 
                                             formnovalidate
                                             title="Assign client">
-                                        <i class="bi bi-arrow-right"></i>
+                                        <i class="ph ph-arrow-right"></i>
                                     </button>
                                 </div>
                             }
@@ -76,14 +76,14 @@
         </div>
         <div class="col-md-2 d-flex flex-column justify-content-center align-items-center gap-2">
             <div class="text-muted small text-center">
-                <i class="bi bi-arrow-left-right fs-3"></i>
+                <i class="ph ph-arrows-left-right fs-3"></i>
                 <div class="mt-2">Click buttons to<br/>assign or remove</div>
             </div>
         </div>
         <div class="col-md-5">
             <div class="card h-100">
                 <div class="card-header bg-success text-white">
-                    <i class="bi bi-check2-square me-1"></i> Assigned Clients
+                    <i class="ph ph-check-square me-1"></i> Assigned Clients
                     <span class="badge bg-light text-dark ms-2">@Model.AssignedClients.Count</span>
                 </div>
                 <div class="card-body p-0">
@@ -91,7 +91,7 @@
                         @if (!Model.AssignedClients.Any())
                         {
                             <div class="list-group-item text-center text-muted py-4">
-                                <i class="bi bi-check2-square fs-4 d-block mb-2"></i>
+                                <i class="ph ph-check-square fs-4 d-block mb-2"></i>
                                 No clients assigned
                             </div>
                         }
@@ -122,7 +122,7 @@
                                             name="clientId" value="@client.Id" 
                                             formnovalidate
                                             title="Remove assignment">
-                                        <i class="bi bi-arrow-left"></i>
+                                        <i class="ph ph-arrow-left"></i>
                                     </button>
                                 </div>
                             }

@@ -13,7 +13,7 @@
 <div class="page-header">
     <div class="page-header__content">
         <h1 class="page-header__title">
-            <i class="bi bi-people icon-md icon-primary"></i>
+            <i class="ph ph-users icon-md icon-primary"></i>
             Clients
         </h1>
         <p class="page-header__subtitle">Manage OAuth2/OIDC client applications</p>
@@ -21,10 +21,10 @@
     <div class="page-header__actions">
         <div class="btn-group">
             <a class="btn btn-outline-primary" href="@(tenantPrefix)/admin/clients/import">
-                <i class="bi bi-upload"></i> Import Client
+                <i class="ph ph-upload"></i> Import Client
             </a>
             <a class="btn btn-success" href="@(tenantPrefix)/admin/clients/add">
-                <i class="bi bi-plus-lg"></i> Add Client
+                <i class="ph ph-plus"></i> Add Client
             </a>
         </div>
     </div>
@@ -36,21 +36,21 @@
             <thead>
                 <tr>
                     <th>
-                        <i class="bi bi-key icon-sm"></i> Client ID
+                        <i class="ph ph-key icon-sm"></i> Client ID
                     </th>
                     <th>
-                        <i class="bi bi-tag icon-sm"></i> Name
+                        <i class="ph ph-tag icon-sm"></i> Name
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-diagram-3 icon-sm"></i> Realm
+                        <i class="ph ph-tree-structure icon-sm"></i> Realm
                     </th>
                     <th class="d-none d-lg-table-cell">
-                        <i class="bi bi-building icon-sm"></i> Tenant
+                        <i class="ph ph-buildings icon-sm"></i> Tenant
                     </th>
                     <th class="d-none d-md-table-cell">PKCE</th>
                     <th class="d-none d-md-table-cell">Consent</th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-gear icon-sm"></i> Status
+                        <i class="ph ph-gear icon-sm"></i> Status
                     </th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -71,7 +71,7 @@
                         @if (c.RequirePkce)
                         {
                             <span class="badge text-bg-success">
-                                <i class="bi bi-check"></i> Yes
+                                <i class="ph ph-check"></i> Yes
                             </span>
                         }
                         else
@@ -83,7 +83,7 @@
                         @if (c.RequireConsent)
                         {
                             <span class="badge text-bg-success">
-                                <i class="bi bi-check"></i> Yes
+                                <i class="ph ph-check"></i> Yes
                             </span>
                         }
                         else
@@ -95,7 +95,7 @@
                         @if (c.HasJwks)
                         {
                             <span class="badge text-bg-success">
-                                <i class="bi bi-shield-check"></i> JWKS
+                                <i class="ph ph-shield-check"></i> JWKS
                             </span>
                         }
                         else
@@ -105,7 +105,7 @@
                         @if (c.RequirePar)
                         {
                             <span class="badge text-bg-primary ms-1">
-                                <i class="bi bi-lock"></i> PAR
+                                <i class="ph ph-lock"></i> PAR
                             </span>
                         }
                     </td>

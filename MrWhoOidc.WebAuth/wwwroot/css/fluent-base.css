@@ -430,6 +430,50 @@ video {
 }
 
 /* ============================================
+   GLASSMORPHISM & PREMIUM LAYOUT
+   ============================================ */
+
+.navbar {
+  background-color: var(--fluent-color-acrylic-background) !important;
+  backdrop-filter: blur(var(--fluent-blur-medium));
+  -webkit-backdrop-filter: blur(var(--fluent-blur-medium));
+  border-bottom: 1px solid var(--fluent-color-acrylic-border) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.offcanvas-md {
+  background-color: var(--fluent-color-neutral-background-2) !important;
+  border-right: 1px solid var(--fluent-color-neutral-stroke-2) !important;
+}
+
+[data-theme="dark"] .offcanvas-md,
+@media (prefers-color-scheme: dark) {
+  .page-shell .offcanvas-md:not([data-theme="light"] *) {
+    background-color: transparent !important;
+    border-right: 1px solid var(--fluent-color-acrylic-border) !important;
+  }
+}
+
+.list-group-item {
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: var(--fluent-border-radius-medium) !important;
+  margin-bottom: 2px;
+  transition: all 0.2s ease;
+}
+
+.list-group-item:hover {
+  background-color: var(--fluent-color-neutral-background-3) !important;
+  transform: translateX(2px);
+}
+
+.list-group-item.active {
+  background-color: var(--fluent-color-brand-primary) !important;
+  color: white !important;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2) !important;
+}
+
+/* ============================================
    RESPONSIVE CONTAINERS
    ============================================ */
 

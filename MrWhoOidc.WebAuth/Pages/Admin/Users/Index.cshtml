@@ -13,7 +13,7 @@
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle icon-sm"></i>
+        <i class="ph ph-check-circle icon-sm"></i>
         @Html.Raw(TempData["Success"])
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -22,7 +22,7 @@
 @if (TempData["Error"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle icon-sm"></i>
+        <i class="ph ph-warning icon-sm"></i>
         @TempData["Error"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
@@ -31,14 +31,14 @@
 <div class="page-header">
     <div class="page-header__content">
         <h1 class="page-header__title">
-            <i class="bi bi-people-fill icon-md icon-primary"></i>
+            <i class="ph ph-users-fill icon-md icon-primary"></i>
             Users
         </h1>
         <p class="page-header__subtitle">Manage user accounts and permissions</p>
     </div>
     <div class="page-header__actions">
         <a class="btn btn-success" href="@(tenantPrefix)/admin/users/add">
-            <i class="bi bi-plus-lg"></i> Add User
+            <i class="ph ph-plus"></i> Add User
         </a>
     </div>
 </div>
@@ -48,13 +48,13 @@
         <form method="get" class="row g-3 align-items-end">
             <div class="col-md-9">
                 <label class="form-label">
-                    <i class="bi bi-search icon-sm"></i> Search
+                    <i class="ph ph-search icon-sm"></i> Search
                 </label>
                 <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search by username, email, or name..." />
             </div>
             <div class="col-md-3">
                 <button class="btn btn-primary w-100" type="submit">
-                    <i class="bi bi-funnel"></i> Filter
+                    <i class="ph ph-funnel"></i> Filter
                 </button>
             </div>
         </form>
@@ -67,19 +67,19 @@
             <thead>
                 <tr>
                     <th>
-                        <i class="bi bi-person icon-sm"></i> Username
+                        <i class="ph ph-person icon-sm"></i> Username
                     </th>
                     <th>
-                        <i class="bi bi-envelope icon-sm"></i> Email
+                        <i class="ph ph-envelope-simple icon-sm"></i> Email
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-card-text icon-sm"></i> Name
+                        <i class="ph ph-card-text icon-sm"></i> Name
                     </th>
                     <th class="d-none d-lg-table-cell">
-                        <i class="bi bi-building icon-sm"></i> Tenant
+                        <i class="ph ph-buildings icon-sm"></i> Tenant
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-calendar icon-sm"></i> Created
+                        <i class="ph ph-calendar-blank icon-sm"></i> Created
                     </th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -98,19 +98,19 @@
                     <td data-label="Actions" class="text-end">
                         <div class="action-buttons">
                             <a href="@(tenantPrefix)/admin/users/edit/@u.Id" class="btn btn-sm btn-outline-secondary" title="Edit">
-                                <i class="bi bi-pencil"></i> Edit
+                                <i class="ph ph-pencil-simple"></i> Edit
                             </a>
                             @if (Model.IsPlatformAdmin)
                             {
                                 <button type="button" class="btn btn-sm btn-outline-warning" title="Reset Password" 
                                         data-bs-toggle="modal" data-bs-target="#resetPasswordModal" 
                                         data-user-id="@u.Id" data-username="@u.Username">
-                                    <i class="bi bi-key"></i> Reset
+                                    <i class="ph ph-key"></i> Reset
                                 </button>
                             }
                             <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" 
                                     onclick="if(confirm('Delete user @u.Username? This cannot be undone.')) { document.getElementById('deleteForm_@u.Id').submit(); }">
-                                <i class="bi bi-trash"></i> Del
+                                <i class="ph ph-trash"></i> Del
                             </button>
                         </div>
                         <form id="deleteForm_@u.Id" method="post" asp-page-handler="Delete" asp-route-id="@u.Id" class="d-none"></form>
@@ -134,31 +134,31 @@
             <div class="modal-content">
                 <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title" id="resetPasswordModalLabel">
-                        <i class="bi bi-exclamation-triangle"></i> Reset Password
+                        <i class="ph ph-warning"></i> Reset Password
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-warning">
-                        <strong><i class="bi bi-globe"></i> Global Password Reset</strong>
+                        <strong><i class="ph ph-globe"></i> Global Password Reset</strong>
                         <p class="mb-0 mt-2">
                             You are about to reset the password for user "<strong id="modalUsername"></strong>".
                         </p>
                     </div>
                     <p>
-                        <i class="bi bi-info-circle text-info"></i> 
+                        <i class="ph ph-info text-info"></i> 
                         This will reset the user's password <strong>across ALL tenants</strong> they belong to.
                         The user will need to use the new temporary password to log in to any organization.
                     </p>
                     <p class="mb-0">
-                        <i class="bi bi-unlock text-success"></i> 
+                        <i class="ph ph-unlock text-success"></i> 
                         If the account is locked out, this will also unlock it.
                     </p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-warning" id="confirmResetBtn">
-                        <i class="bi bi-key"></i> Reset Password
+                        <i class="ph ph-key"></i> Reset Password
                     </button>
                 </div>
             </div>

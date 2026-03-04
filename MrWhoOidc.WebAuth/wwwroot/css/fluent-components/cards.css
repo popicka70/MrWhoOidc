@@ -20,12 +20,13 @@
   border-radius: var(--fluent-border-radius-card);
   box-shadow: var(--fluent-shadow-card);
   transition: box-shadow var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
-              transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
+    transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
 }
 
 .card:hover,
 .fluent-card:hover {
   box-shadow: var(--fluent-shadow-card-hover);
+  transform: translateY(-4px);
 }
 
 /* Interactive cards */
@@ -33,14 +34,14 @@
 .fluent-card-interactive {
   cursor: pointer;
   transition: box-shadow var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
-              transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
-              background-color var(--fluent-duration-faster) var(--fluent-curve-easy-ease);
+    transform var(--fluent-duration-normal) var(--fluent-curve-easy-ease),
+    background-color var(--fluent-duration-faster) var(--fluent-curve-easy-ease);
 }
 
 .card-interactive:hover,
 .fluent-card-interactive:hover {
   box-shadow: var(--fluent-shadow-card-hover);
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   background-color: var(--fluent-color-card-hover);
 }
 
@@ -75,9 +76,7 @@
 }
 
 .card-header:first-child {
-  border-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) 
-                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) 
-                 0 0;
+  border-radius: calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) 0 0;
 }
 
 /* ============================================
@@ -96,9 +95,7 @@
 }
 
 .card-footer:last-child {
-  border-radius: 0 0 
-                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin))
-                 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
+  border-radius: 0 0 calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin)) calc(var(--fluent-border-radius-card) - var(--fluent-stroke-width-thin));
 }
 
 /* ============================================
@@ -257,8 +254,8 @@
     flex-direction: row;
     flex-flow: row wrap;
   }
-  
-  .card-group > .card {
+
+  .card-group>.card {
     flex: 1 0 0%;
   }
 }
@@ -289,17 +286,17 @@
   gap: 0;
 }
 
-.card-list > .card {
+.card-list>.card {
   border-radius: 0;
   margin-bottom: calc(var(--fluent-stroke-width-thin) * -1);
 }
 
-.card-list > .card:first-child {
+.card-list>.card:first-child {
   border-top-left-radius: var(--fluent-border-radius-card);
   border-top-right-radius: var(--fluent-border-radius-card);
 }
 
-.card-list > .card:last-child {
+.card-list>.card:last-child {
   border-bottom-left-radius: var(--fluent-border-radius-card);
   border-bottom-right-radius: var(--fluent-border-radius-card);
   margin-bottom: 0;
@@ -310,11 +307,12 @@
    ============================================ */
 
 @media (max-width: 767px) {
+
   .card-body,
   .fluent-card-body {
     padding: var(--fluent-space-16);
   }
-  
+
   .card-header,
   .fluent-card-header,
   .card-footer,
@@ -328,13 +326,14 @@
    ============================================ */
 
 @media (prefers-reduced-motion: reduce) {
+
   .card,
   .fluent-card,
   .card-interactive,
   .fluent-card-interactive {
     transition: none;
   }
-  
+
   .card-interactive:hover,
   .fluent-card-interactive:hover {
     transform: none;

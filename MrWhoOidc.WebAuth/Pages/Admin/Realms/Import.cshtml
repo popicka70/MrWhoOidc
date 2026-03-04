@@ -13,7 +13,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="m-0">
-            <i class="bi bi-upload text-primary me-2"></i>
+            <i class="ph ph-upload text-primary me-2"></i>
             Import Realm
         </h1>
         <p class="text-muted mb-0">
@@ -22,7 +22,7 @@
     </div>
     <div>
         <a class="btn btn-outline-secondary" href="@(tenantPrefix)/admin/realms">
-            <i class="bi bi-arrow-left"></i> Back to Realms
+            <i class="ph ph-arrow-left"></i> Back to Realms
         </a>
     </div>
 </div>
@@ -30,7 +30,7 @@
 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
     <div class="alert alert-danger alert-dismissible fade show">
-        <i class="bi bi-exclamation-triangle me-2"></i>
+        <i class="ph ph-warning me-2"></i>
         <strong>Error:</strong> @Model.ErrorMessage
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
@@ -39,7 +39,7 @@
 @if (!string.IsNullOrEmpty(Model.SuccessMessage))
 {
     <div class="alert alert-success alert-dismissible fade show">
-        <i class="bi bi-check-circle me-2"></i>
+        <i class="ph ph-check-circle me-2"></i>
         @Model.SuccessMessage
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
@@ -50,7 +50,7 @@
         <!-- Upload Form -->
         <div class="card mb-4">
             <div class="card-header">
-                <i class="bi bi-file-earmark-arrow-up me-2"></i>Upload Configuration
+                <i class="ph ph-file-earmark-arrow-up me-2"></i>Upload Configuration
             </div>
             <div class="card-body">
                 <form method="post" asp-page-handler="Preview" enctype="multipart/form-data">
@@ -93,7 +93,7 @@
                     </div>
 
                     <button type="submit" class="btn btn-secondary">
-                        <i class="bi bi-search me-2"></i>Preview Import
+                        <i class="ph ph-search me-2"></i>Preview Import
                     </button>
                 </form>
             </div>
@@ -104,14 +104,14 @@
             <!-- Preview Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Preview.IsValid ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Preview.IsValid ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                    <i class="bi @(Model.Preview.IsValid ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import Preview
                 </div>
                 <div class="card-body">
                     @if (Model.Preview.ValidationErrors.Count > 0)
                     {
                         <h6 class="text-danger mb-3">
-                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <i class="ph ph-warning me-2"></i>
                             Validation Errors (@Model.Preview.ValidationErrors.Count)
                         </h6>
                         <ul class="list-group mb-4">
@@ -127,7 +127,7 @@
                     @if (Model.Preview.Conflicts.Count > 0)
                     {
                         <h6 class="text-warning mb-3">
-                            <i class="bi bi-exclamation-circle me-2"></i>
+                            <i class="ph ph-warning-circle me-2"></i>
                             Conflicts Detected (@Model.Preview.Conflicts.Count)
                         </h6>
                         <ul class="list-group mb-4">
@@ -145,7 +145,7 @@
                     @if (Model.Preview.HasObfuscatedSecrets)
                     {
                         <div class="alert alert-warning">
-                            <i class="bi bi-key me-2"></i>
+                            <i class="ph ph-key me-2"></i>
                             <strong>Obfuscated Secrets:</strong> This manifest contains @Model.Preview.ObfuscatedSecretCount obfuscated secret(s).
                             These values will need to be re-entered after import.
                         </div>
@@ -169,7 +169,7 @@
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="bi bi-upload me-2"></i>Execute Import
+                                <i class="ph ph-upload me-2"></i>Execute Import
                             </button>
                         </form>
                     }
@@ -182,7 +182,7 @@
             <!-- Import Results -->
             <div class="card mb-4">
                 <div class="card-header @(Model.Result.Success ? "bg-success text-white" : "bg-danger text-white")">
-                    <i class="bi @(Model.Result.Success ? "bi-check-circle" : "bi-x-circle") me-2"></i>
+                    <i class="bi @(Model.Result.Success ? "ph-check-circle" : "ph-x-circle") me-2"></i>
                     Import @(Model.DryRun ? "Dry Run " : "")Results
                 </div>
                 <div class="card-body">
@@ -206,7 +206,7 @@
                     @if (Model.Result.Errors.Count > 0)
                     {
                         <h6 class="text-danger mt-4">
-                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <i class="ph ph-warning me-2"></i>
                             Errors (@Model.Result.Errors.Count)
                         </h6>
                         <ul class="list-group">
@@ -222,7 +222,7 @@
                     @if (Model.Result.Warnings.Count > 0)
                     {
                         <h6 class="text-warning mt-4">
-                            <i class="bi bi-exclamation-circle me-2"></i>
+                            <i class="ph ph-warning-circle me-2"></i>
                             Warnings (@Model.Result.Warnings.Count)
                         </h6>
                         <ul class="list-group">
@@ -243,33 +243,33 @@
         {
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="bi bi-list-check me-2"></i>Manifest Contents
+                    <i class="ph ph-list-check me-2"></i>Manifest Contents
                 </div>
                 <div class="card-body">
                     <table class="table table-sm">
                         <tbody>
                             <tr>
-                                <td><i class="bi bi-building me-2 text-primary"></i>Realms</td>
+                                <td><i class="ph ph-buildings me-2 text-primary"></i>Realms</td>
                                 <td class="text-end"><span class="badge bg-secondary">@Model.Preview.RealmCount</span></td>
                             </tr>
                             @if (Model.Preview.ClientCount > 0)
                             {
                                 <tr>
-                                    <td><i class="bi bi-app me-2 text-muted"></i>Clients (within realms)</td>
+                                    <td><i class="ph ph-app-window me-2 text-muted"></i>Clients (within realms)</td>
                                     <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ClientCount</span></td>
                                 </tr>
                             }
                             @if (Model.Preview.TenantCount > 0)
                             {
                                 <tr>
-                                    <td><i class="bi bi-diagram-3 me-2 text-muted"></i>Tenants</td>
+                                    <td><i class="ph ph-tree-structure me-2 text-muted"></i>Tenants</td>
                                     <td class="text-end"><span class="badge bg-secondary">@Model.Preview.TenantCount</span></td>
                                 </tr>
                             }
                             @if (Model.Preview.ProviderCount > 0)
                             {
                                 <tr>
-                                    <td><i class="bi bi-person-badge me-2 text-muted"></i>Identity Providers</td>
+                                    <td><i class="ph ph-identification-badge me-2 text-muted"></i>Identity Providers</td>
                                     <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ProviderCount</span></td>
                                 </tr>
                             }
@@ -282,7 +282,7 @@
         <!-- Help Card -->
         <div class="card">
             <div class="card-header">
-                <i class="bi bi-question-circle me-2"></i>Import Help
+                <i class="ph ph-question-circle me-2"></i>Import Help
             </div>
             <div class="card-body">
                 <h6>Supported Formats</h6>
