@@ -136,7 +136,7 @@ public class SessionsModel(AuthDbContext db, IUserAgentParser uaParser) : PageMo
         public string Browser { get; set; } = "Unknown";
         public string Os { get; set; } = "Unknown";
         public string DeviceType { get; set; } = "desktop";
-        public string DeviceIcon { get; set; } = "bi-display";
+        public string DeviceIcon { get; set; } = "ph ph-desktop";
         public bool IsCurrentDevice { get; set; }
     }
 }

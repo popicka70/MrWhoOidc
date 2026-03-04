@@ -16,7 +16,7 @@
 <div class="page-header">
     <div class="page-header__content">
         <h1 class="page-header__title">
-            <i class="bi bi-person-plus icon-md icon-primary"></i>
+            <i class="ph ph-user-plus icon-md icon-primary"></i>
             Add user
         </h1>
     </div>
@@ -25,7 +25,7 @@
 @if (currentTenant is not null)
 {
     <div class="alert alert-info d-flex align-items-center gap-2" role="status">
-        <i class="bi bi-building"></i>
+        <i class="ph ph-buildings"></i>
         <div>User will be created in <strong>@currentTenant.Name</strong> (@currentTenant.Slug).</div>
     </div>
 }
@@ -47,7 +47,7 @@
     </div>
     <div class="action-buttons">
         <button class="btn btn-primary" type="submit">
-            <i class="bi bi-check-lg"></i> Save
+            <i class="ph ph-check"></i> Save
         </button>
         <a class="btn btn-secondary" href="@usersIndexPath">Cancel</a>
     </div>

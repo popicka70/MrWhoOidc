@@ -8,7 +8,7 @@
     <div class="page-header">
         <div class="page-header__content">
             <h1 class="page-header__title">
-                <i class="bi bi-gear icon-md icon-primary"></i>
+                <i class="ph ph-gear icon-md icon-primary"></i>
                 Tenant Settings
             </h1>
             <p class="page-header__subtitle">Override platform defaults with tenant-specific configuration</p>
@@ -18,7 +18,7 @@
     @if (Model.SuccessMessage != null)
     {
         <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="bi bi-check-circle-fill me-2"></i>@Model.SuccessMessage
+                    <i class="ph-fill ph-check-circle me-2"></i>@Model.SuccessMessage
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             }
@@ -26,7 +26,7 @@
             @if (!Model.IsMultiTenantMode)
             {
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <i class="ph ph-info-fill me-2"></i>
                     <strong>Single-Tenant Mode:</strong> Settings overrides are available in multi-tenant mode only.
                 </div>
             }
@@ -36,7 +36,7 @@
                 @* Authentication Settings *@
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-shield-check me-2"></i>Authentication
+                        <i class="ph ph-shield-check me-2"></i>Authentication
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch mb-3">
@@ -64,7 +64,7 @@
                 @* Dynamic Client Registration *@
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+                        <i class="ph ph-tree-structure me-2"></i>Dynamic Client Registration
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -83,7 +83,7 @@
                 @* Password Policy *@
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-key-fill me-2"></i>Password Policy
+                        <i class="ph ph-key-fill me-2"></i>Password Policy
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
@@ -124,7 +124,7 @@
                 @* QR Login Settings *@
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-qr-code me-2"></i>QR Login
+                        <i class="ph ph-qr-code me-2"></i>QR Login
                     </div>
                     <div class="card-body">
                         <div class="form-check form-switch mb-3">
@@ -152,7 +152,7 @@
                 @* Token Lifetimes *@
                 <div class="card mb-3">
                     <div class="card-header">
-                        <i class="bi bi-clock-history me-2"></i>Token Lifetimes
+                        <i class="ph ph-clock-counter-clockwise me-2"></i>Token Lifetimes
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
@@ -194,14 +194,14 @@
                 <div class="d-flex justify-content-between">
                     <div>
                         <a asp-page="/admin/clients" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left me-1"></i>Back
+                            <i class="ph ph-arrow-left me-1"></i>Back
                         </a>
                         <button type="button" class="btn btn-outline-secondary" onclick="resetToDefaults()">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Platform Defaults
+                            <i class="ph ph-arrow-counterclockwise me-1"></i>Reset to Platform Defaults
                         </button>
                     </div>
                     <button type="submit" class="btn btn-primary" disabled="@(!Model.IsMultiTenantMode)">
-                        <i class="bi bi-save me-1"></i>Save Settings
+                        <i class="ph ph-save me-1"></i>Save Settings
                     </button>
                 </div>
             </form>

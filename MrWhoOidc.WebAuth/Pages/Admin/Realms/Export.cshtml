@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="m-0">
-            <i class="bi bi-download text-primary me-2"></i>
+            <i class="ph ph-download text-primary me-2"></i>
             Export Realm Configuration
         </h1>
         <p class="text-muted mb-0">
@@ -20,7 +20,7 @@
     </div>
     <div>
         <a class="btn btn-outline-secondary" asp-page="Index">
-            <i class="bi bi-arrow-left"></i> Back to Realms
+            <i class="ph ph-arrow-left"></i> Back to Realms
         </a>
     </div>
 </div>
@@ -28,7 +28,7 @@
 @if (!string.IsNullOrEmpty(Model.ErrorMessage))
 {
     <div class="alert alert-danger">
-        <i class="bi bi-exclamation-triangle me-2"></i>
+        <i class="ph ph-warning me-2"></i>
         <strong>Export Error:</strong> @Model.ErrorMessage
     </div>
 }
@@ -37,7 +37,7 @@
     <div class="col-md-8">
         <div class="card mb-4">
             <div class="card-header">
-                <i class="bi bi-gear me-2"></i>Export Options
+                <i class="ph ph-gear me-2"></i>Export Options
             </div>
             <div class="card-body">
                 <form method="post">
@@ -63,7 +63,7 @@
                             <p class="text-muted small mb-0 ms-4">
                                 Includes hashed secrets for restoration without re-entering credentials.
                                 <span class="text-warning">
-                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <i class="ph ph-warning"></i>
                                     Contains sensitive data - store securely!
                                 </span>
                             </p>
@@ -71,13 +71,13 @@
                     </div>
 
                     <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
+                        <i class="ph ph-info me-2"></i>
                         <strong>Note:</strong> This export includes the realm, its clients (with scopes, secrets, IdP assignments), 
                         and roles. User data is <em>not</em> exported.
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-lg">
-                        <i class="bi bi-download me-2"></i>Download Export
+                        <i class="ph ph-download me-2"></i>Download Export
                     </button>
                 </form>
             </div>
@@ -87,22 +87,22 @@
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <i class="bi bi-list-check me-2"></i>Export Preview
+                <i class="ph ph-list-check me-2"></i>Export Preview
             </div>
             <div class="card-body">
                 <p class="text-muted mb-3">The following entities will be included:</p>
                 <table class="table table-sm">
                     <tbody>
                         <tr>
-                            <td><i class="bi bi-app me-2 text-success"></i>Clients</td>
+                            <td><i class="ph ph-app-window me-2 text-success"></i>Clients</td>
                             <td class="text-end"><span class="badge bg-secondary">@Model.Preview.ClientCount</span></td>
                         </tr>
                         <tr>
-                            <td><i class="bi bi-key me-2 text-warning"></i>Client Secrets</td>
+                            <td><i class="ph ph-key me-2 text-warning"></i>Client Secrets</td>
                             <td class="text-end"><span class="badge bg-secondary">@Model.Preview.SecretCount</span></td>
                         </tr>
                         <tr>
-                            <td><i class="bi bi-shield-check me-2 text-purple"></i>Roles</td>
+                            <td><i class="ph ph-shield-check me-2 text-purple"></i>Roles</td>
                             <td class="text-end"><span class="badge bg-secondary">@Model.Preview.RoleCount</span></td>
                         </tr>
                     </tbody>
@@ -111,7 +111,7 @@
                 @if (Model.Preview.SecretCount > 0)
                 {
                     <div class="alert alert-warning small mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <i class="ph ph-warning me-2"></i>
                         <strong>@Model.Preview.SecretCount secret(s)</strong> will be 
                         @(Model.ExportMode == "full" ? "exported as hashes" : "obfuscated").
                     </div>
@@ -132,7 +132,7 @@
                         : 'obfuscated';
                     var alertEl = document.querySelector('.alert-warning strong');
                     if (alertEl) {
-                        alertEl.parentElement.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>' + secretCount + ' secret(s)</strong> will be ' + warningText + '.';
+                        alertEl.parentElement.innerHTML = '<i class="ph ph-warning me-2"></i><strong>' + secretCount + ' secret(s)</strong> will be ' + warningText + '.';
                     }
                 }
             });

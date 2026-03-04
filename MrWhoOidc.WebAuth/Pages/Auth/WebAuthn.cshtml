@@ -20,7 +20,7 @@
             }
             else
             {
-                <i class="bi bi-shield-check text-primary icon-xl"></i>
+                <i class="ph ph-shield-check text-primary icon-xl"></i>
                 <h2 class="mt-3 mb-2 auth-heading">Sign in with Security Key</h2>
             }
             <p class="text-muted">Use your registered security key, Windows Hello, Touch ID, or mobile authenticator</p>
@@ -32,7 +32,7 @@
             {
                 <div class="mb-3" id="username-section">
                     <label for="username" class="form-label">
-                        <i class="bi bi-person me-1"></i>Username or Email (Optional)
+                        <i class="ph ph-person me-1"></i>Username or Email (Optional)
                     </label>
                     <input type="text" id="username" class="form-control" 
                            placeholder="Leave empty for usernameless authentication" 
@@ -46,14 +46,14 @@
             {
                 <input type="hidden" id="username" value="@Model.Username" />
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
+                    <i class="ph ph-info me-2"></i>
                     Signing in as <strong>@Model.Username</strong>
                 </div>
             }
 
             <div class="d-grid gap-2 mb-3">
                 <button type="button" class="btn btn-primary btn-lg" id="webauthnSignInBtn">
-                    <i class="bi bi-shield-check me-2"></i>
+                    <i class="ph ph-shield-check me-2"></i>
                     Sign in with Security Key
                 </button>
             </div>
@@ -74,7 +74,7 @@
                     <small class="text-muted">
                         <a asp-page="/Auth/Qr" asp-route-returnUrl="@Model.ReturnUrl" 
                            class="text-decoration-none">
-                            <i class="bi bi-qr-code me-1"></i>QR Code login
+                            <i class="ph ph-qr-code me-1"></i>QR Code login
                         </a>
                     </small>
                 }
@@ -204,21 +204,21 @@
             showProgress(message) {
                 const statusDiv = document.getElementById('authenticationStatus');
                 statusDiv.className = 'alert alert-info';
-                statusDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-hourglass-split me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
 
             showError(message) {
                 const statusDiv = document.getElementById('authenticationStatus');
                 statusDiv.className = 'alert alert-danger';
-                statusDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-warning me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
 
             showSuccess(message) {
                 const statusDiv = document.getElementById('authenticationStatus');
                 statusDiv.className = 'alert alert-success';
-                statusDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-check-circle me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
         }
