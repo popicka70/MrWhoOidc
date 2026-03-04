@@ -786,10 +786,16 @@ public sealed class ConfigurationImportService(
             {
                 await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+                var providerNames = providers.Select(p => p.Name).Distinct().ToList();
+                var existingProviders = await _dbContext.IdentityProviders
+                    .Where(p => p.TenantId == tenantId && providerNames.Contains(p.Name))
+                    .GroupBy(p => p.Name)
+                    .Select(g => g.First())
+                    .ToDictionaryAsync(p => p.Name, cancellationToken);
+
                 foreach (var providerDef in providers)
                 {
-                    var existingProvider = await _dbContext.IdentityProviders
-                        .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Name == providerDef.Name, cancellationToken);
+                    existingProviders.TryGetValue(providerDef.Name, out var existingProvider);
 
                     if (existingProvider != null)
                     {
