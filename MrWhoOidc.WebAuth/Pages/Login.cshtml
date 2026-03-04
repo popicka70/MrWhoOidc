@@ -18,7 +18,7 @@
             }
             else
             {
-                <i class="bi bi-box-arrow-in-right icon-xl icon-primary"></i>
+                <i class="ph ph-sign-in icon-xl icon-primary"></i>
                 <h2 class="auth-card__title">Sign in to your account</h2>
             }
             @if (!string.IsNullOrEmpty(Model.Email))
@@ -27,7 +27,7 @@
                     Signing in as <strong>@Model.Email</strong>
                     <br/>
                     <a asp-page="/DiscoverTenant" asp-route-returnUrl="@Model.ReturnUrl" class="text-decoration-none small">
-                        <i class="bi bi-arrow-left me-1"></i>Not you?
+                        <i class="ph ph-arrow-left me-1"></i>Not you?
                     </a>
                 </p>
             }
@@ -45,7 +45,7 @@
             @if (!ViewData.ModelState.IsValid)
             {
                 <div class="alert alert-danger" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <i class="ph ph-warning-fill me-2"></i>
                     <ul class="mb-0">
                         @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
                         {
@@ -56,7 +56,7 @@
             }
             <div class="form-group">
                 <label asp-for="Username" class="form-label">
-                    <i class="bi bi-person icon-sm"></i> Username or Email
+                    <i class="ph ph-person icon-sm"></i> Username or Email
                 </label>
                 <input asp-for="Username" 
                        class="form-control" 
@@ -67,7 +67,7 @@
             </div>
             <div class="form-group">
                 <label asp-for="Password" class="form-label">
-                    <i class="bi bi-lock icon-sm"></i> Password
+                    <i class="ph ph-lock icon-sm"></i> Password
                 </label>
                 <input asp-for="Password" 
                        class="form-control" 
@@ -90,28 +90,28 @@
                    asp-route-username="@Model.Username"
                          asp-route-display="@Model.Display"
                    class="btn btn-outline-primary w-100 mb-3">
-                    <i class="bi bi-shield-check me-2"></i>
+                    <i class="ph ph-shield-check me-2"></i>
                     Sign in with Security Key
                 </a>
             </div>
             
             <button type="submit" class="btn btn-primary w-100 auth-btn">
-                <i class="bi bi-box-arrow-in-right"></i> Sign in
+                <i class="ph ph-sign-in"></i> Sign in
             </button>
         </form>
 
         <div class="mt-3 text-center">
             <a asp-page="/Account/ForgotPassword" class="text-decoration-none">
-                <i class="bi bi-question-circle me-1"></i>Forgot your password?
+                <i class="ph ph-question-circle me-1"></i>Forgot your password?
             </a>
         </div>
 
         <div class="mt-4 d-flex justify-content-between">
             <a asp-page="/Registrations/Index" asp-route-returnUrl="@Model.ReturnUrl" class="text-decoration-none">
-                <i class="bi bi-person-plus me-1"></i>Register new user
+                <i class="ph ph-user-plus me-1"></i>Register new user
             </a>
             <a asp-page="/Password/Index" class="text-decoration-none">
-                <i class="bi bi-key me-1"></i>Change password
+                <i class="ph ph-key me-1"></i>Change password
             </a>
         </div>
     </div>

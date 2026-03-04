@@ -10,7 +10,7 @@
 @if (!string.IsNullOrEmpty(Model.TenantName))
 {
     <div class="alert alert-secondary mb-3">
-        <i class="bi bi-building"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
+        <i class="ph ph-buildings"></i> <strong>User Tenant:</strong> <span class="badge text-bg-info">@Model.TenantName</span>
         <div class="small mt-1">Only realms, clients, and roles from this tenant can be assigned.</div>
     </div>
 }
@@ -20,12 +20,12 @@
 <ul class="nav nav-tabs mb-3" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link @(Model.SelectedClientId.HasValue ? "" : "active")" id="realm-roles-tab" data-bs-toggle="tab" data-bs-target="#realm-roles" type="button" role="tab" aria-controls="realm-roles" aria-selected="@(!Model.SelectedClientId.HasValue ? "true" : "false")">
-            <i class="bi bi-shield-check me-1"></i> Realm Roles
+            <i class="ph ph-shield-check me-1"></i> Realm Roles
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link @(Model.SelectedClientId.HasValue ? "active" : "")" id="client-roles-tab" data-bs-toggle="tab" data-bs-target="#client-roles" type="button" role="tab" aria-controls="client-roles" aria-selected="@(Model.SelectedClientId.HasValue ? "true" : "false")">
-            <i class="bi bi-app-indicator me-1"></i> Client Roles
+            <i class="ph ph-app-window-indicator me-1"></i> Client Roles
         </button>
     </li>
 </ul>
@@ -36,7 +36,7 @@
         @if (!Model.Realms.Any())
         {
             <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle"></i> No realms available in this tenant. Create a realm first.
+                <i class="ph ph-warning"></i> No realms available in this tenant. Create a realm first.
             </div>
         }
         else
@@ -51,7 +51,7 @@
                             var isSelected = Model.SelectedRealmId == realm.Id;
                             var assignedCount = Model.RealmAssignments.Count(a => a.RealmId == realm.Id);
                             <a href="?SelectedRealmId=@realm.Id" class="btn btn-outline-primary text-start @(isSelected ? "active" : "")">
-                                <i class="bi bi-shield me-2"></i>
+                                <i class="ph ph-shield me-2"></i>
                                 <strong>@realm.Name</strong>
                                 @if (assignedCount > 0)
                                 {
@@ -87,13 +87,13 @@
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-light">
-                                    <i class="bi bi-plus-circle me-1"></i> Available Roles for <strong>@selectedRealm.Name</strong>
+                                    <i class="ph ph-plus-circle me-1"></i> Available Roles for <strong>@selectedRealm.Name</strong>
                                 </div>
                                 <div class="card-body p-0">
                                     @if (!availableRoles.Any())
                                     {
                                         <div class="p-3 text-muted text-center">
-                                            <i class="bi bi-check2-circle"></i> All roles assigned
+                                            <i class="ph ph-check-circle"></i> All roles assigned
                                         </div>
                                     }
                                     else
@@ -106,10 +106,10 @@
                                                     <input type="hidden" asp-for="RealmAddRoleId" value="@role.Id" />
                                                     <button type="submit" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-0">
                                                         <span>
-                                                            <i class="bi bi-tag text-muted me-2"></i>
+                                                            <i class="ph ph-tag text-muted me-2"></i>
                                                             <strong>@role.Name</strong>
                                                         </span>
-                                                        <i class="bi bi-arrow-right-circle text-primary"></i>
+                                                        <i class="ph ph-arrow-right-circle text-primary"></i>
                                                     </button>
                                                 </form>
                                             }
@@ -123,13 +123,13 @@
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-success text-white">
-                                    <i class="bi bi-check-circle me-1"></i> Assigned Roles
+                                    <i class="ph ph-check-circle me-1"></i> Assigned Roles
                                 </div>
                                 <div class="card-body p-0">
                                     @if (!assignedRoles.Any())
                                     {
                                         <div class="p-3 text-muted text-center">
-                                            <i class="bi bi-info-circle"></i> No roles assigned yet
+                                            <i class="ph ph-info"></i> No roles assigned yet
                                         </div>
                                     }
                                     else
@@ -139,7 +139,7 @@
                                             {
                                                 <div class="list-group-item d-flex justify-content-between align-items-center border-0">
                                                     <span>
-                                                        <i class="bi bi-tag text-success me-2"></i>
+                                                        <i class="ph ph-tag text-success me-2"></i>
                                                         <strong>@assignment.RoleName</strong>
                                                         @if (assignment.IsActive)
                                                         {
@@ -152,7 +152,7 @@
                                                     </span>
                                                     <form method="post" asp-page-handler="DeleteRealm" asp-route-roleId="@assignment.RoleId" asp-route-realmId="@assignment.RealmId" class="m-0" onsubmit="return confirm('Remove role @assignment.RoleName?');">
                                                         <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                            <i class="bi bi-x-circle"></i> Remove
+                                                            <i class="ph ph-x-circle"></i> Remove
                                                         </button>
                                                     </form>
                                                 </div>
@@ -168,7 +168,7 @@
             else
             {
                 <div class="alert alert-info">
-                    <i class="bi bi-arrow-up"></i> Select a realm above to manage role assignments
+                    <i class="ph ph-arrow-up"></i> Select a realm above to manage role assignments
                 </div>
             }
         }
@@ -179,7 +179,7 @@
         @if (!Model.Clients.Any())
         {
             <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle"></i> No clients available in this tenant. Create a client first.
+                <i class="ph ph-warning"></i> No clients available in this tenant. Create a client first.
             </div>
         }
         else
@@ -194,7 +194,7 @@
                             var isSelected = Model.SelectedClientId == client.Id;
                             var assignedCount = Model.ClientAssignments.Count(a => a.ClientGuid == client.Id);
                             <a href="?SelectedClientId=@client.Id" class="btn btn-outline-primary text-start @(isSelected ? "active" : "")">
-                                <i class="bi bi-app me-2"></i>
+                                <i class="ph ph-app-window me-2"></i>
                                 <strong>@client.ClientId</strong>
                                 @if (!string.IsNullOrEmpty(client.ClientName))
                                 {
@@ -234,13 +234,13 @@
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-light">
-                                    <i class="bi bi-plus-circle me-1"></i> Available Roles for <strong>@selectedClient.ClientId</strong>
+                                    <i class="ph ph-plus-circle me-1"></i> Available Roles for <strong>@selectedClient.ClientId</strong>
                                 </div>
                                 <div class="card-body p-0">
                                     @if (!availableRoles.Any())
                                     {
                                         <div class="p-3 text-muted text-center">
-                                            <i class="bi bi-check2-circle"></i> All roles assigned
+                                            <i class="ph ph-check-circle"></i> All roles assigned
                                         </div>
                                     }
                                     else
@@ -253,11 +253,11 @@
                                                     <input type="hidden" asp-for="ClientAddRoleId" value="@role.Id" />
                                                     <button type="submit" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center border-0">
                                                         <span>
-                                                            <i class="bi bi-tag text-muted me-2"></i>
+                                                            <i class="ph ph-tag text-muted me-2"></i>
                                                             <strong>@role.Name</strong>
                                                             <small class="text-muted ms-2">(@role.RealmName)</small>
                                                         </span>
-                                                        <i class="bi bi-arrow-right-circle text-primary"></i>
+                                                        <i class="ph ph-arrow-right-circle text-primary"></i>
                                                     </button>
                                                 </form>
                                             }
@@ -271,13 +271,13 @@
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-success text-white">
-                                    <i class="bi bi-check-circle me-1"></i> Assigned Roles
+                                    <i class="ph ph-check-circle me-1"></i> Assigned Roles
                                 </div>
                                 <div class="card-body p-0">
                                     @if (!assignedRoles.Any())
                                     {
                                         <div class="p-3 text-muted text-center">
-                                            <i class="bi bi-info-circle"></i> No roles assigned yet
+                                            <i class="ph ph-info"></i> No roles assigned yet
                                         </div>
                                     }
                                     else
@@ -287,7 +287,7 @@
                                             {
                                                 <div class="list-group-item d-flex justify-content-between align-items-center border-0">
                                                     <span>
-                                                        <i class="bi bi-tag text-success me-2"></i>
+                                                        <i class="ph ph-tag text-success me-2"></i>
                                                         <strong>@assignment.RoleName</strong>
                                                         <small class="text-muted ms-2">(@assignment.RealmName)</small>
                                                         @if (assignment.IsActive)
@@ -301,7 +301,7 @@
                                                     </span>
                                                     <form method="post" asp-page-handler="DeleteClient" asp-route-roleId="@assignment.RoleId" asp-route-clientId="@assignment.ClientGuid" class="m-0" onsubmit="return confirm('Remove role @assignment.RoleName?');">
                                                         <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                            <i class="bi bi-x-circle"></i> Remove
+                                                            <i class="ph ph-x-circle"></i> Remove
                                                         </button>
                                                     </form>
                                                 </div>
@@ -317,7 +317,7 @@
             else
             {
                 <div class="alert alert-info">
-                    <i class="bi bi-arrow-up"></i> Select a client above to manage role assignments
+                    <i class="ph ph-arrow-up"></i> Select a client above to manage role assignments
                 </div>
             }
         }

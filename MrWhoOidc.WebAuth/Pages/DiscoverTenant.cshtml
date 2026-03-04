@@ -9,7 +9,7 @@
 <div class="auth-card">
     <div class="card-body p-4">
         <div class="auth-card__header">
-            <i class="bi bi-box-arrow-in-right icon-xl icon-primary"></i>
+            <i class="ph ph-sign-in icon-xl icon-primary"></i>
             <h2 class="auth-card__title">Sign in to your account</h2>
             <p class="auth-card__subtitle">Enter your email address to continue</p>
         </div>
@@ -17,7 +17,7 @@
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
             <div class="alert alert-danger" role="alert">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <i class="ph ph-warning-fill me-2"></i>
                 @Model.ErrorMessage
             </div>
         }
@@ -92,7 +92,7 @@
                             }
                             else
                             {
-                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.5rem;"></i>
+                                <i class="ph ph-shield me-2 text-secondary" style="font-size:1.5rem;"></i>
                             }
                             <span class="flex-grow-1">Continue with @idp.DisplayName</span>
                         </a>
@@ -112,7 +112,7 @@
             
             <div class="form-group">
                 <label asp-for="Email" class="form-label">
-                    <i class="bi bi-envelope icon-sm"></i> Email address
+                    <i class="ph ph-envelope-simple icon-sm"></i> Email address
                 </label>
                 <input asp-for="Email" 
                        class="form-control form-control-lg" 
@@ -127,7 +127,7 @@
             <div class="d-grid gap-2 mb-3">
                 <button type="submit" class="btn btn-primary btn-lg">
                     Continue
-                    <i class="bi bi-arrow-right ms-2"></i>
+                    <i class="ph ph-arrow-right ms-2"></i>
                 </button>
             </div>
         </form>
@@ -144,7 +144,7 @@
             <div class="text-center mt-3">
                 <hr />
                 <p class="text-muted small mt-3">
-                    <i class="bi bi-info-circle me-1"></i>
+                    <i class="ph ph-info me-1"></i>
                     Already know your organization? 
                     <a href="#" onclick="showTenantUrlHelp(); return false;" class="text-decoration-none">
                         Sign in directly

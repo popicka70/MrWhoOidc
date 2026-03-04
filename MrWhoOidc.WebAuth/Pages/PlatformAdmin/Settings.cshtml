@@ -8,7 +8,7 @@
     <div class="page-header">
         <div class="page-header__content">
             <h1 class="page-header__title">
-                <i class="bi bi-sliders icon-md icon-primary"></i>
+                <i class="ph ph-sliders icon-md icon-primary"></i>
                 Platform Settings
             </h1>
             <p class="page-header__subtitle">System-wide settings that apply across all tenants</p>
@@ -18,7 +18,7 @@
     @if (TempData["SuccessMessage"] != null)
     {
         <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+            <i class="ph-fill ph-check-circle me-2"></i>@TempData["SuccessMessage"]
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
@@ -27,7 +27,7 @@
     {
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
             <div class="d-flex align-items-start">
-                <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                <i class="ph ph-warning-fill me-2 mt-1"></i>
                 <div>
                     <div class="fw-semibold">Initial access token created</div>
                     <div class="small text-muted">Copy it now; it will not be shown again.</div>
@@ -35,7 +35,7 @@
                         <div class="input-group">
                             <input class="form-control font-monospace" id="newInitialAccessTokenValue" readonly value="@TempData["NewInitialAccessToken"]" />
                             <button type="button" class="btn btn-outline-secondary" id="copyNewInitialAccessTokenBtn" aria-describedby="copyNewInitialAccessTokenStatus">
-                                <i class="bi bi-clipboard me-1"></i>Copy
+                                <i class="ph ph-clipboard me-1"></i>Copy
                             </button>
                         </div>
                         <div class="small text-muted mt-1" id="copyNewInitialAccessTokenStatus" aria-live="polite"></div>
@@ -52,7 +52,7 @@
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-key me-2"></i>Authentication Options
+                    <i class="ph ph-key me-2"></i>Authentication Options
                 </h5>
             </div>
             <div class="card-body">
@@ -66,7 +66,7 @@
                         </label>
                     </div>
                     <div class="form-text mt-2">
-                        <i class="bi bi-info-circle me-1"></i>
+                        <i class="ph ph-info me-1"></i>
                         When enabled, users can sign in by scanning a QR code on the 
                         <strong>/DiscoverTenant</strong> page before selecting their organization.
                         This requires QR Login to be enabled in the system configuration.
@@ -78,7 +78,7 @@
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="bi bi-diagram-3 me-2"></i>Dynamic Client Registration
+                    <i class="ph ph-tree-structure me-2"></i>Dynamic Client Registration
                 </h5>
             </div>
             <div class="card-body">
@@ -93,7 +93,7 @@
                         </label>
                     </div>
                     <div class="form-text mt-2">
-                        <i class="bi bi-shield-exclamation me-1"></i>
+                        <i class="ph ph-shield-exclamation me-1"></i>
                         Dynamic client registration expands the public attack surface. Initial access tokens are always required.
                         Per-tenant realm configuration still gates whether registration is usable.
                     </div>
@@ -116,7 +116,7 @@
 
         <div class="d-flex justify-content-end mb-4">
             <button type="submit" class="btn btn-primary btn-lg">
-                <i class="bi bi-check-lg me-2"></i>Save Settings
+                <i class="ph ph-check me-2"></i>Save Settings
             </button>
         </div>
     </form>
@@ -124,7 +124,7 @@
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">
-                <i class="bi bi-key-fill me-2"></i>Initial Access Tokens
+                <i class="ph ph-key-fill me-2"></i>Initial Access Tokens
             </h5>
         </div>
         <div class="card-body">
@@ -141,7 +141,7 @@
                     </div>
                     <div class="col-md-4">
                         <button type="submit" class="btn btn-outline-primary w-100">
-                            <i class="bi bi-plus-lg me-2"></i>Create Token
+                            <i class="ph ph-plus me-2"></i>Create Token
                         </button>
                     </div>
                 </div>
@@ -175,7 +175,7 @@
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@token.Id" />
                                         <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="bi bi-slash-circle me-1"></i>Revoke
+                                            <i class="ph ph-slash-circle me-1"></i>Revoke
                                         </button>
                                     </form>
                                 </td>

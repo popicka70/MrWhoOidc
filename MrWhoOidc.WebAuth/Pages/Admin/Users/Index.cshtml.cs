@@ -192,8 +192,8 @@ public class IndexModel(
 
         TempData["Success"] = $"Password reset for user '<strong>{encodedUsername}</strong>'.<br/>" +
             $"Temporary password: <code class='user-select-all'>{globalTempPassword}</code><br/>" +
-            $"<small class='text-info'><i class='bi bi-info-circle'></i> This password applies to all {affectedTenantCount} tenant(s) the user belongs to.</small><br/>" +
-            $"<small class='text-warning'><i class='bi bi-exclamation-triangle'></i> Please save this password and share it securely with the user.</small>";
+            $"<small class='text-info'><i class='ph ph-info'></i> This password applies to all {affectedTenantCount} tenant(s) the user belongs to.</small><br/>" +
+            $"<small class='text-warning'><i class='ph ph-warning'></i> Please save this password and share it securely with the user.</small>";
         
         return TenantAwareRedirect("/Admin/Users");
     }

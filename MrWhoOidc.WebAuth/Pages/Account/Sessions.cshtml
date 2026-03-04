@@ -17,7 +17,7 @@
 @if (!string.IsNullOrEmpty(Model.Message))
 {
     <div class="alert alert-info alert-dismissible fade show" role="alert">
-        <i class="bi bi-info-circle me-2"></i>@Model.Message
+        <i class="ph ph-info me-2"></i>@Model.Message
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
@@ -26,12 +26,12 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0"><i class="bi bi-phone me-2"></i>Your Active Sessions</h5>
+                <h5 class="card-title mb-0"><i class="ph ph-device-mobile me-2"></i>Your Active Sessions</h5>
                 @if (Model.Sessions.Count > 1)
                 {
                     <form method="post" asp-page-handler="RevokeAll" onsubmit="return confirm('Are you sure you want to revoke all other sessions? You will remain logged in on this device.');">
                         <button type="submit" class="btn btn-sm btn-outline-danger">
-                            <i class="bi bi-x-circle me-1"></i>Revoke All Others
+                            <i class="ph ph-x-circle me-1"></i>Revoke All Others
                         </button>
                     </form>
                 }
@@ -49,7 +49,7 @@
                                             @if (session.IsCurrent)
                                             {
                                                 <span class="badge bg-success me-2">
-                                                    <i class="bi bi-check-circle-fill"></i> Current Session
+                                                    <i class="ph-fill ph-check-circle"></i> Current Session
                                                 </span>
                                             }
                                             @if (session.IsCurrentDevice)
@@ -60,10 +60,10 @@
                                             }
                                             @if (!session.IsCurrent && !session.IsCurrentDevice)
                                             {
-                                                <i class="bi bi-circle me-2"></i>
+                                                <i class="ph ph-circle me-2"></i>
                                             }
                                             <h6 class="mb-0">
-                                                <i class="bi bi-key me-1"></i>
+                                                <i class="ph ph-key me-1"></i>
                                                 Token Session
                                             </h6>
                                         </div>
@@ -76,7 +76,7 @@
                                                 @if (!string.IsNullOrEmpty(session.IpAddress))
                                                 {
                                                     <span>
-                                                        <i class="bi bi-geo-alt me-1"></i>
+                                                        <i class="ph ph-geo-alt me-1"></i>
                                                         <code>@session.IpAddress</code>
                                                     </span>
                                                 }
@@ -106,13 +106,13 @@
                                             
                                             <dt class="col-sm-3 text-muted">Created</dt>
                                             <dd class="col-sm-9">
-                                                <i class="bi bi-clock me-1"></i>
+                                                <i class="ph ph-clock me-1"></i>
                                                 @session.CreatedAt.ToString("MMM d, yyyy 'at' h:mm tt")
                                             </dd>
                                             
                                             <dt class="col-sm-3 text-muted">Expires</dt>
                                             <dd class="col-sm-9">
-                                                <i class="bi bi-hourglass-split me-1"></i>
+                                                <i class="ph ph-hourglass-split me-1"></i>
                                                 @session.ExpiresAt.ToString("MMM d, yyyy 'at' h:mm tt")
                                                 @{
                                                     var remaining = session.ExpiresAt - DateTimeOffset.UtcNow;
@@ -131,14 +131,14 @@
                                         {
                                             <form method="post" asp-page-handler="Revoke" asp-route-sessionId="@session.Id" onsubmit="return confirm('Are you sure you want to revoke this session?');">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                    <i class="bi bi-x-circle"></i> Revoke
+                                                    <i class="ph ph-x-circle"></i> Revoke
                                                 </button>
                                             </form>
                                         }
                                         else
                                         {
                                             <span class="badge bg-light text-dark">
-                                                <i class="bi bi-shield-check"></i> Active
+                                                <i class="ph ph-shield-check"></i> Active
                                             </span>
                                         }
                                     </div>
@@ -150,7 +150,7 @@
                 else
                 {
                     <div class="text-center py-5">
-                        <i class="bi bi-phone text-muted icon-xl"></i>
+                        <i class="ph ph-device-mobile text-muted icon-xl"></i>
                         <p class="text-muted mt-3">No active sessions found</p>
                     </div>
                 }
@@ -161,16 +161,16 @@
     <div class="col-lg-4">
         <div class="card bg-light">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>About Sessions</h6>
+                <h6 class="card-title"><i class="ph ph-info me-2"></i>About Sessions</h6>
                 <p class="small mb-2">
                     Sessions represent active tokens issued to applications that can access your account.
                     Each session shows the device, browser, and location where it was created.
                 </p>
                 <p class="small mb-2">
-                    <strong><i class="bi bi-check-circle-fill text-success"></i> Current Session:</strong> The token session you're using right now. You cannot revoke it from here.
+                    <strong><i class="ph-fill ph-check-circle text-success"></i> Current Session:</strong> The token session you're using right now. You cannot revoke it from here.
                 </p>
                 <p class="small mb-2">
-                    <strong><i class="bi bi-display text-primary"></i> This Device:</strong> Sessions created from the same browser on this device.
+                    <strong><i class="ph ph-display text-primary"></i> This Device:</strong> Sessions created from the same browser on this device.
                 </p>
                 <p class="small mb-2">
                     <strong>Other Sessions:</strong> Sessions from other devices or browsers. Revoke them if you don't recognize the device, location, or browser.
@@ -183,16 +183,16 @@
 
         <div class="card mt-3">
             <div class="card-body">
-                <h6 class="card-title"><i class="bi bi-shield-exclamation me-2"></i>Security Notice</h6>
+                <h6 class="card-title"><i class="ph ph-shield-exclamation me-2"></i>Security Notice</h6>
                 <p class="small mb-2">
                     If you see sessions you don't recognize, revoke them immediately and change your password.
                 </p>
                 <div class="d-grid gap-2">
                     <a href="@(tenantPrefix)/Password" class="btn btn-sm btn-outline-warning">
-                        <i class="bi bi-key me-1"></i>Change Password
+                        <i class="ph ph-key me-1"></i>Change Password
                     </a>
                     <a href="@(tenantPrefix)/Mfa" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-shield-lock me-1"></i>Enable MFA
+                        <i class="ph ph-shield me-1"></i>Enable MFA
                     </a>
                 </div>
             </div>

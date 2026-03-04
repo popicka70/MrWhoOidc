@@ -10,7 +10,7 @@
             <div class="card border-danger">
                 <div class="card-header bg-danger text-white">
                     <h4 class="mb-0">
-                        <i class="bi bi-shield-x me-2"></i>Access Denied
+                        <i class="ph ph-shield-x me-2"></i>Access Denied
                     </h4>
                 </div>
                 <div class="card-body">
@@ -37,24 +37,24 @@
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
                         <a href="@Model.HomeUrl" class="btn btn-primary">
-                            <i class="bi bi-house-door me-1"></i>Go to Home
+                            <i class="ph ph-house me-1"></i>Go to Home
                         </a>
                         @if (!string.IsNullOrEmpty(Model.DashboardUrl))
                         {
                             <a href="@Model.DashboardUrl" class="btn btn-outline-secondary">
-                                <i class="bi bi-speedometer2 me-1"></i>Go to Dashboard
+                                <i class="ph ph-gauge me-1"></i>Go to Dashboard
                             </a>
                         }
                         @if (Model.IsAuthenticated)
                         {
                             <a href="@Model.AccountUrl" class="btn btn-outline-secondary">
-                                <i class="bi bi-person me-1"></i>My Account
+                                <i class="ph ph-person me-1"></i>My Account
                             </a>
                         }
                         else
                         {
                             <a href="@Model.LoginUrl" class="btn btn-success">
-                                <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+                                <i class="ph ph-sign-in me-1"></i>Sign In
                             </a>
                         }
                     </div>

@@ -13,14 +13,14 @@
 <div class="page-header">
     <div class="page-header__content">
         <h1 class="page-header__title">
-            <i class="bi bi-person-badge icon-md icon-primary"></i>
+            <i class="ph ph-identification-badge icon-md icon-primary"></i>
             Roles
         </h1>
         <p class="page-header__subtitle">Manage user roles and permissions</p>
     </div>
     <div class="page-header__actions">
         <a class="btn btn-success" href="@tenantPrefix/admin/roles/add">
-            <i class="bi bi-plus-lg"></i> Add Role
+            <i class="ph ph-plus"></i> Add Role
         </a>
     </div>
 </div>
@@ -30,7 +30,7 @@
         @if (currentTenant is not null)
         {
             <div class="alert alert-info d-flex align-items-center gap-2" role="status">
-                <i class="bi bi-building"></i>
+                <i class="ph ph-buildings"></i>
                 <div>
                     Showing roles for <strong>@currentTenant.Name</strong> (@currentTenant.Slug).
                 </div>
@@ -39,7 +39,7 @@
         <form method="get" class="row g-3 align-items-end">
             <div class="col-md-4">
                 <label class="form-label">
-                    <i class="bi bi-diagram-3 me-1"></i>Realm
+                    <i class="ph ph-tree-structure me-1"></i>Realm
                 </label>
                 <select class="form-select" name="realmId" onchange="this.form.submit()">
                     <option value="">All realms</option>
@@ -51,13 +51,13 @@
             </div>
             <div class="col-md-7">
                 <label class="form-label">
-                    <i class="bi bi-search me-1"></i>Search
+                    <i class="ph ph-search me-1"></i>Search
                 </label>
                 <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search roles..." />
             </div>
             <div class="col-md-1">
                 <button class="btn btn-primary w-100" type="submit">
-                    <i class="bi bi-funnel"></i> Filter
+                    <i class="ph ph-funnel"></i> Filter
                 </button>
             </div>
         </form>
@@ -70,16 +70,16 @@
             <thead>
                 <tr>
                     <th>
-                        <i class="bi bi-tag me-1"></i>Name
+                        <i class="ph ph-tag me-1"></i>Name
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-diagram-3 me-1"></i>Realm
+                        <i class="ph ph-tree-structure me-1"></i>Realm
                     </th>
                     <th class="d-none d-lg-table-cell">
-                        <i class="bi bi-building me-1"></i>Tenant
+                        <i class="ph ph-buildings me-1"></i>Tenant
                     </th>
                     <th class="d-none d-md-table-cell">
-                        <i class="bi bi-toggle-on me-1"></i>Active
+                        <i class="ph ph-toggle-on me-1"></i>Active
                     </th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -99,7 +99,7 @@
                         @if (r.IsActive)
                         {
                             <span class="badge text-bg-success">
-                                <i class="bi bi-check"></i> Yes
+                                <i class="ph ph-check"></i> Yes
                             </span>
                         }
                         else

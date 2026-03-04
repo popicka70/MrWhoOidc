@@ -15,7 +15,7 @@
             <div class="card">
                 <div class="card-header">
                     <h4 class="mb-0">
-                        <i class="bi bi-shield-check text-primary me-2"></i>
+                        <i class="ph ph-shield-check text-primary me-2"></i>
                         WebAuthn Security Keys
                     </h4>
                 </div>
@@ -36,7 +36,7 @@
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
                                                 <h6 class="mb-1">
-                                                    <i class="bi bi-key-fill text-success me-2"></i>
+                                                    <i class="ph ph-key-fill text-success me-2"></i>
                                                     @credential.FriendlyName
                                                 </h6>
                                                 <p class="mb-1 text-muted small">
@@ -69,14 +69,14 @@
                     else
                     {
                         <div class="alert alert-info" role="alert">
-                            <i class="bi bi-info-circle me-2"></i>
+                            <i class="ph ph-info me-2"></i>
                             You don't have any security keys registered yet. Register your first security key to enable passwordless authentication.
                         </div>
                     }
 
                     <div class="d-grid gap-2">
                         <button type="button" class="btn btn-primary" id="registerKeyBtn">
-                            <i class="bi bi-plus-circle me-2"></i>
+                            <i class="ph ph-plus-circle me-2"></i>
                             Register New Security Key
                         </button>
                     </div>
@@ -88,7 +88,7 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="bi bi-question-circle text-info me-2"></i>
+                        <i class="ph ph-question-circle text-info me-2"></i>
                         About Security Keys
                     </h5>
                 </div>
@@ -108,7 +108,7 @@
                     </ul>
 
                     <div class="alert alert-warning small" role="alert">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <i class="ph ph-warning me-1"></i>
                         <strong>Important:</strong> Keep your security keys safe and consider registering multiple keys as backups.
                     </div>
                 </div>
@@ -139,7 +139,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="confirmRegisterBtn">
-                    <i class="bi bi-shield-plus me-2"></i>
+                    <i class="ph ph-shield-plus me-2"></i>
                     Register Key
                 </button>
             </div>
@@ -250,21 +250,21 @@
             showProgress(message) {
                 const statusDiv = document.getElementById('registrationStatus');
                 statusDiv.className = 'alert alert-info';
-                statusDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-hourglass-split me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
 
             showError(message) {
                 const statusDiv = document.getElementById('registrationStatus');
                 statusDiv.className = 'alert alert-danger';
-                statusDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-warning me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
 
             showSuccess(message) {
                 const statusDiv = document.getElementById('registrationStatus');
                 statusDiv.className = 'alert alert-success';
-                statusDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
+                statusDiv.innerHTML = `<i class="ph ph-check-circle me-2"></i>${message}`;
                 statusDiv.style.display = 'block';
             }
 
@@ -277,7 +277,7 @@
                 const alertDiv = document.createElement('div');
                 alertDiv.className = 'alert alert-warning alert-dismissible fade show';
                 alertDiv.innerHTML = `
-                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <i class="ph ph-warning me-2"></i>
                     ${message}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 `;

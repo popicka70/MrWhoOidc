@@ -46,7 +46,7 @@
                 @if (recommended is not null)
                 {
                     <div class="alert alert-warning py-2 px-3 small d-flex align-items-center provider-recommendation" role="status" aria-live="polite" id="recommended-provider-banner">
-                        <i class="bi bi-star-fill me-2" aria-hidden="true"></i>
+                        <i class="ph ph-star-fill me-2" aria-hidden="true"></i>
                         <div>
                             <span class="fw-semibold">Recommended:</span>
                             <span class="ms-1">@recommended.Display</span>
@@ -104,13 +104,13 @@
                             }
                             else
                             {
-                                <i class="bi bi-shield-lock me-2 text-secondary" style="font-size:1.5rem;"></i>
+                                <i class="ph ph-shield me-2 text-secondary" style="font-size:1.5rem;"></i>
                             }
                             <span class="flex-grow-1">@p.Display</span>
                             @if (p.IsRecommended)
                             {
                                 <span class="badge rounded-pill bg-warning-subtle text-dark border border-warning ms-2 d-flex align-items-center provider-badge" title="Recommended provider" data-source="@Model.RecommendationSource">
-                                    <i class="bi bi-star-fill me-1" aria-hidden="true"></i>
+                                    <i class="ph ph-star-fill me-1" aria-hidden="true"></i>
                                     <span class="provider-badge-text">Recommended</span>
                                 </span>
                             }
@@ -120,7 +120,7 @@
                     {
                         var loginUrl = Model.LocalLoginUrl ?? "/login";
                         <a id="btn-local-login" class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@loginUrl" role="listitem" aria-label="Sign in with username and password" data-provider-name="_local">
-                            <i class="bi bi-person me-2"></i> <span>Sign in with username/password</span>
+                            <i class="ph ph-person me-2"></i> <span>Sign in with username/password</span>
                         </a>
                     }
                     @if (Model.AllowQrLogin)
@@ -133,7 +133,7 @@
                         System.Console.WriteLine($"[QR Button] Original ReturnUrl='{Model.ReturnUrl}'");
                         System.Console.WriteLine($"[QR Button] Final qrUrl='{qrUrl}'");
                         <a class="btn btn-outline-primary w-100 auth-btn d-flex align-items-center justify-content-start provider-btn" href="@qrUrl" role="listitem" aria-label="Sign in with QR code" data-provider-name="_qr">
-                            <i class="bi bi-qr-code me-2"></i> <span>Sign in with QR code</span>
+                            <i class="ph ph-qr-code me-2"></i> <span>Sign in with QR code</span>
                         </a>
                     }
                 </div>
@@ -141,7 +141,7 @@
                 <hr class="my-3" />
 
                                 <a class="btn btn-outline-primary w-100 auth-cta register-btn" asp-page="/Registrations/Index" asp-route-returnUrl="@Model.ReturnUrl" role="button" aria-label="Register a new account">
-                    <i class="bi bi-person-plus me-2"></i>
+                    <i class="ph ph-user-plus me-2"></i>
                     Register a new account
                 </a>
             </div>

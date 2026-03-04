@@ -1,11 +1,11 @@
-# MrWhoOidc
+﻿# MrWhoOidc
 
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fpopicka70%2Fmrwhooidc-blue)](https://ghcr.io/popicka70/mrwhooidc)
 [![Image Size](https://img.shields.io/badge/image%20size-%3C200MB-success)](https://ghcr.io/popicka70/mrwhooidc)
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 10 with PostgreSQL and optional Redis caching.
+A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 9.0 with PostgreSQL and optional Redis caching.
 
 ## Quick Start with Docker
 
@@ -174,11 +174,18 @@ For production deployments, see:
 - **[Security Best Practices](docs/docker-security-best-practices.md)** - Production hardening
 - **[Admin Guide](docs/admin-guide.md)** - Administrative operations
 - **[Developer Guide](docs/developer-guide.md)** - Development setup
+- **[Documentation Index](docs/index.md)** - Complete documentation hub
+
+### Operations & Security
+- **[Monitoring & Alerting](docs/for-operators/monitoring/alerting-rules.md)** - Prometheus alerting rules
+- **[Backup & Restore](docs/for-operators/backup-restore/verification-testing.md)** - Backup verification procedures
+- **[Incident Response](docs/for-security-teams/incident-response.md)** - Security incident response plan
 
 ### Protocol Documentation
-- **[OBO Client Policy](docs/obo-client-policy.md)** - On-Behalf-Of token exchange
-- **[Token Exchange E2E (DPoP)](docs/obo-dpop-requiresamejkt-e2e.md)** - DPoP with RequireSameJkt
-- **[IdP Chaining Configuration](docs/idp-chaining-client-configuration.md)** ⚠️ **Important for multi-level IdP setups**
+- **[OBO Client Policy](docs/reference/obo-client-policy.md)** - On-Behalf-Of token exchange
+- **[Token Exchange E2E (DPoP)](docs/reference/obo-dpop-requiresamejkt-e2e.md)** - DPoP with RequireSameJkt
+- **[IdP Chaining Configuration](docs/reference/idp-chaining-client-configuration.md)** ⚠️ **Important for multi-level IdP setups**
+- **[JAR Replay Cache](docs/reference/jar-replay-cache.md)** - JWT-secured authorization request caching
 
 ## Examples
 

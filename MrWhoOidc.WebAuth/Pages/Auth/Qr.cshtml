@@ -14,19 +14,19 @@
             <div class="card shadow">
                 <div class="card-body p-4 p-lg-5">
                     <h2 class="text-center mb-4">
-                        <i class="bi bi-qr-code me-2"></i>
+                        <i class="ph ph-qr-code me-2"></i>
                         Scan to Login
                     </h2>
 
                     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
                     {
                         <div class="alert alert-danger" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <i class="ph ph-warning-fill me-2"></i>
                             @Model.ErrorMessage
                         </div>
                         <div class="text-center">
                             <a href="/DiscoverTenant" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left me-2"></i>Back to Login
+                                <i class="ph ph-arrow-left me-2"></i>Back to Login
                             </a>
                         </div>
                     }
@@ -48,13 +48,13 @@
                     </div>
 
                     <div id="statusMessage" class="alert alert-info text-center" role="status" aria-live="polite">
-                        <i class="bi bi-hourglass-split me-2"></i>
+                        <i class="ph ph-hourglass-split me-2"></i>
                         <span id="statusText">Waiting for mobile device to scan</span>
                     </div>
 
                     <div class="instructions mb-4">
                         <p class="text-muted text-center mb-3">
-                            <i class="bi bi-phone me-2"></i>
+                            <i class="ph ph-device-mobile me-2"></i>
                             Scan this QR code with your mobile device camera
                         </p>
                         <ol class="text-muted ps-4">
@@ -71,7 +71,7 @@
                         <div class="input-group">
                             <input type="text" class="form-control form-control-sm font-monospace" id="qrUrlInput" readonly value="" />
                             <button class="btn btn-sm btn-outline-primary" type="button" id="copyUrlBtn">
-                                <i class="bi bi-clipboard me-1"></i>
+                                <i class="ph ph-clipboard me-1"></i>
                                 Copy
                             </button>
                         </div>
@@ -81,7 +81,7 @@
 
                     <div class="d-grid">
                         <button type="button" class="btn btn-outline-secondary" id="cancelBtn">
-                            <i class="bi bi-x-circle me-2"></i>
+                            <i class="ph ph-x-circle me-2"></i>
                             Cancel and choose different login
                         </button>
                     </div>
@@ -90,7 +90,7 @@
             </div>
 
             <p class="text-center text-muted mt-3 small">
-                <i class="bi bi-shield-check me-1"></i>
+                <i class="ph ph-shield-check me-1"></i>
                 Secure authentication via your mobile device
             </p>
         </div>
@@ -213,13 +213,13 @@
                 try {
                     await navigator.clipboard.writeText(qrUrl);
                     copySuccess.classList.remove('d-none');
-                    copyUrlBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copied!';
+                    copyUrlBtn.innerHTML = '<i class="ph ph-check me-1"></i>Copied!';
                     copyUrlBtn.classList.remove('btn-outline-primary');
                     copyUrlBtn.classList.add('btn-success');
                     
                     setTimeout(() => {
                         copySuccess.classList.add('d-none');
-                        copyUrlBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy';
+                        copyUrlBtn.innerHTML = '<i class="ph ph-clipboard me-1"></i>Copy';
                         copyUrlBtn.classList.remove('btn-success');
                         copyUrlBtn.classList.add('btn-outline-primary');
                     }, 2000);
