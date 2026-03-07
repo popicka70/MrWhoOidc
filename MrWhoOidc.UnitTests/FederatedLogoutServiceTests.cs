@@ -153,6 +153,20 @@ public class FederatedLogoutServiceTests
     }
 
     [TestMethod]
+    public async Task BuildFederatedRedirect_ReturnsParseFailedOnMalformedDiscoveryJson()
+    {
+        var authority = "https://issuer.test";
+        var disco = "{ invalid json ]";
+        var (svc, db, _, _) = BuildService(disco, authority, "foo");
+        var principal = BuildPrincipal("foo");
+
+        var res = await svc.BuildFederatedRedirectAsync(principal, null, null, "https://local.app", null, null, null, CancellationToken.None);
+
+        Assert.IsFalse(res.Success);
+        Assert.AreEqual("discovery_parse_failed", res.FailureReason);
+    }
+
+    [TestMethod]
     public async Task ValidateCallback_RejectsInvalidState()
     {
         var authority = "https://issuer.test";
