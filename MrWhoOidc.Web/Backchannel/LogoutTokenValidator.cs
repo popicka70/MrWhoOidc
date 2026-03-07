@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Services;
@@ -11,6 +10,7 @@ namespace MrWhoOidc.Web.Backchannel;
 
 public sealed class LogoutTokenValidator
 {
+    private readonly IBackchannelConfigurationProvider _configurationProvider;
     private readonly ILogger<LogoutTokenValidator> _logger;
     private readonly IHttpClientFactory _http;
     private readonly IJwksCache _jwksCache;
@@ -18,12 +18,14 @@ public sealed class LogoutTokenValidator
     private readonly BackchannelOptions _options;
 
     public LogoutTokenValidator(
+        IBackchannelConfigurationProvider configurationProvider,
         ILogger<LogoutTokenValidator> logger,
         IHttpClientFactory http,
         IJwksCache jwksCache,
         IReplayCache replayCache,
         BackchannelOptions options)
     {
+        _configurationProvider = configurationProvider;
         _logger = logger;
         _http = http;
         _jwksCache = jwksCache;
@@ -43,15 +45,7 @@ public sealed class LogoutTokenValidator
             if (string.IsNullOrEmpty(_options.Authority) || string.IsNullOrEmpty(_options.ClientId))
                 return new Result(false, null, null, "Authority/ClientId not configured");
 
-            // Discover configuration (including JWKS URI) with optional http for dev
-            var metadataAddress = _options.Authority.TrimEnd('/') + "/.well-known/openid-configuration";
-            var requireHttps = metadataAddress.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-            var configManager = new ConfigurationManager<OpenIdConnectConfiguration>(
-                metadataAddress,
-                new OpenIdConnectConfigurationRetriever(),
-                new HttpDocumentRetriever { RequireHttps = requireHttps });
-
-            var config = await configManager.GetConfigurationAsync(ct);
+            var config = await _configurationProvider.GetConfigurationAsync(_options.Authority, ct);
             var issuer = config.Issuer?.TrimEnd('/') + "/";
             var expectedIssuer = _options.Authority.TrimEnd('/') + "/";
             if (!string.Equals(issuer, expectedIssuer, StringComparison.Ordinal))
@@ -101,6 +95,9 @@ public sealed class LogoutTokenValidator
             if (!string.Equals(jwt.Header.Typ, "logout+jwt", StringComparison.OrdinalIgnoreCase))
                 return new Result(false, null, null, "typ header must be 'logout+jwt'");
 
+            if (principal.HasClaim(claim => string.Equals(claim.Type, "nonce", StringComparison.Ordinal)))
+                return new Result(false, null, null, "nonce claim is not allowed");
+
             // Required events claim
             var events = principal.FindFirst("events")?.Value;
             if (string.IsNullOrEmpty(events)) return new Result(false, null, null, "missing events claim");
@@ -127,9 +124,12 @@ public sealed class LogoutTokenValidator
                          ?? principal.FindFirst("iat")?.Value;
             if (string.IsNullOrEmpty(iatRaw)) return new Result(false, null, null, "missing iat");
             if (!long.TryParse(iatRaw, out var iatSeconds)) return new Result(false, null, null, "invalid iat");
+            var now = DateTimeOffset.UtcNow;
             var iat = DateTimeOffset.FromUnixTimeSeconds(iatSeconds);
-            if (iat > DateTimeOffset.UtcNow.Add(_options.AllowedClockSkew))
+            if (iat > now.Add(_options.AllowedClockSkew))
                 return new Result(false, null, null, "iat in future");
+            if (now - iat > _options.MaxLogoutTokenAge.Add(_options.AllowedClockSkew))
+                return new Result(false, null, null, "logout token too old");
 
             var sid = principal.FindFirst("sid")?.Value;
             var sub = principal.FindFirst("sub")?.Value;

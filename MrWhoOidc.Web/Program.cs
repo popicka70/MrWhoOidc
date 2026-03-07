@@ -36,6 +36,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddOptions<BackchannelOptions>();
+builder.Services.Configure<BackchannelOptions>(builder.Configuration.GetSection("Backchannel"));
 
 // DPoP key store for OIDC backchannel
 builder.Services.AddSingleton<DPoPKeyStore>();
@@ -261,18 +262,18 @@ else
 
 // JWKS cache and validator
 builder.Services.AddSingleton<IJwksCache, JwksCache>();
+builder.Services.AddSingleton<IBackchannelConfigurationProvider, BackchannelConfigurationProvider>();
 builder.Services.AddSingleton(sp =>
 {
     // Bind options snapshot for validator
     var cfg = sp.GetRequiredService<IConfiguration>();
+    var opts = new BackchannelOptions();
+    cfg.GetSection("Backchannel").Bind(opts);
     var authority = cfg["Oidc:Authority"] ?? cfg["OIDC:Authority"] ?? string.Empty;
     var clientId = cfg["Oidc:ClientId"] ?? cfg["OIDC:ClientId"] ?? "blazor-web";
-    var opts = new BackchannelOptions
-    {
-        Enabled = true,
-        Authority = authority,
-        ClientId = clientId
-    };
+    opts.Enabled = true;
+    opts.Authority = authority;
+    opts.ClientId = clientId;
     return opts;
 });
 builder.Services.AddSingleton<LogoutTokenValidator>();
@@ -359,15 +360,13 @@ app.MapPost("/backchannel-logout", async ctx =>
 
     var opts = ctx.RequestServices.GetRequiredService<BackchannelOptions>();
     var store = ctx.RequestServices.GetRequiredService<IRevocationStore>();
-    if (!string.IsNullOrEmpty(result.Sid))
+    if (string.IsNullOrEmpty(result.Sid))
     {
-        await store.RevokeSidAsync(result.Sid!, opts.SidTtl, ctx.RequestAborted);
+        // This sample RP only indexes sessions by sid. Reject sub-only logout tokens instead of returning a false success.
+        ctx.Response.StatusCode = 400; return;
     }
-    else if (!string.IsNullOrEmpty(result.Sub))
-    {
-        // For sub-only, a real app would map sub->local sessions; here we have no per-user session index
-        ctx.Response.StatusCode = 200; return;
-    }
+
+    await store.RevokeSidAsync(result.Sid, opts.SidTtl, ctx.RequestAborted);
 
     ctx.Response.StatusCode = 200;
 }).ExcludeFromDescription();
