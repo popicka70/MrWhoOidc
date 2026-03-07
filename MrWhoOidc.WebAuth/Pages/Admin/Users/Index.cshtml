@@ -10,11 +10,23 @@
         : "";
 }
 
+@if (TempData["ResetPassword_Username"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ph ph-check-circle icon-sm"></i>
+        Password reset for user '<strong>@TempData["ResetPassword_Username"]</strong>'.<br/>
+        Temporary password: <code class='user-select-all'>@TempData["ResetPassword_TempPassword"]</code><br/>
+        <small class='text-info'><i class='ph ph-info'></i> This password applies to all @TempData["ResetPassword_AffectedTenantCount"] tenant(s) the user belongs to.</small><br/>
+        <small class='text-warning'><i class='ph ph-warning'></i> Please save this password and share it securely with the user.</small>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
 @if (TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <i class="ph ph-check-circle icon-sm"></i>
-        @Html.Raw(TempData["Success"])
+        @TempData["Success"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
