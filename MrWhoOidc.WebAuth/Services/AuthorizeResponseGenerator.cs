@@ -59,7 +59,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         var issuer = http.GetIssuer();
         if (!string.IsNullOrEmpty(validation.RedirectUri))
         {
-            if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+            if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
                 string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
             {
@@ -86,7 +86,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         var issuer = http.GetIssuer();
         var sessionState = TryCreateSessionState(http, validation.ClientId, redirectUri);
 
-        if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) || 
+        if (string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.QueryJwt, StringComparison.Ordinal) ||
             string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FragmentJwt, StringComparison.Ordinal) ||
             string.Equals(validation.ResponseMode, OidcConstants.ResponseModes.FormPostJwt, StringComparison.Ordinal))
         {
@@ -103,7 +103,7 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
         }
         // State is handled by the caller or already in the redirectUri if it was a PAR/JAR request
         uri.Query = query.ToString();
-        
+
         var protectedUrl = _protector.Protect(uri.ToString());
         return Results.Redirect($"/Auth/Redirect?redirectUrl={Uri.EscapeDataString(protectedUrl)}");
     }

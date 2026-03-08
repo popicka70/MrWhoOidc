@@ -67,11 +67,11 @@ public class InstallModel : LicensePageModelBase
             var result = await _licenseService.ValidateLicenseKeyAsync(cleanedKey, cancellationToken).ConfigureAwait(false);
             var now = _timeProvider.GetUtcNow();
             ValidationPreview = LicenseDtoMapper.ToDto(result, now);
-            
+
             if (ValidationPreview.License is not null)
             {
                 ValidationSummary = BuildSummary(ValidationPreview.License, now);
-                
+
                 // Additional validation: ensure it's a platform license
                 if (!string.Equals(ValidationPreview.License.Scope, "platform", StringComparison.OrdinalIgnoreCase))
                 {
@@ -116,7 +116,7 @@ public class InstallModel : LicensePageModelBase
 
             // First validate to check scope
             var validationResult = await _licenseService.ValidateLicenseKeyAsync(cleanedKey, cancellationToken).ConfigureAwait(false);
-            if (validationResult.LicenseInfo is not null && 
+            if (validationResult.LicenseInfo is not null &&
                 validationResult.LicenseInfo.Scope != LicenseScope.Platform)
             {
                 var now = _timeProvider.GetUtcNow();
@@ -134,7 +134,7 @@ public class InstallModel : LicensePageModelBase
             }
 
             var notes = string.IsNullOrWhiteSpace(Input.Notes) ? null : Input.Notes.Trim();
-            
+
             // Install with null tenantId for platform license
             var result = await _licenseService.InstallLicenseAsync(
                 cleanedKey,

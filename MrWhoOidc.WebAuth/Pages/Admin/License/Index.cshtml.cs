@@ -67,7 +67,7 @@ public class IndexModel : LicensePageModelBase
         {
             var currentTenant = TenantAccessor.CurrentTenant;
             var tenantId = currentTenant?.TenantId;
-            
+
             var info = await _licenseService.GetCurrentLicenseAsync(tenantId, cancellationToken).ConfigureAwait(false);
             if (info is not null)
             {

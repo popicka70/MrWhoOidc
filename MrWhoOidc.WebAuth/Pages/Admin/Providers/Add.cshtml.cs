@@ -14,8 +14,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
 public class AddModel(
-    AuthDbContext db, 
-    IIdentityProviderValidator validator, 
+    AuthDbContext db,
+    IIdentityProviderValidator validator,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
@@ -24,52 +24,52 @@ public class AddModel(
 
     [BindProperty]
     public OidcConfigForm? OidcConfig { get; set; }
-    
+
     [BindProperty]
     public IFormFile? Logo { get; set; }
-    
+
     /// <summary>
     /// Selected provider template (0 = Custom, 1 = Entra, etc.)
     /// </summary>
     [BindProperty]
     public int ProviderTemplate { get; set; }
-    
+
     /// <summary>
     /// Authority URL placeholders for template-based providers.
     /// </summary>
     [BindProperty]
     public Dictionary<string, string> AuthorityPlaceholders { get; set; } = new();
-    
+
     /// <summary>
     /// Provider-specific config fields.
     /// </summary>
     [BindProperty]
     public Dictionary<string, string> ProviderConfigFields { get; set; } = new();
-    
+
     /// <summary>
     /// Entra ID specific configuration.
     /// </summary>
     [BindProperty]
     public EntraConfigInput? EntraConfig { get; set; }
-    
+
     /// <summary>
     /// Google specific configuration.
     /// </summary>
     [BindProperty]
     public GoogleConfigInput? GoogleConfig { get; set; }
-    
+
     /// <summary>
     /// Facebook specific configuration.
     /// </summary>
     [BindProperty]
     public FacebookConfigInput? FacebookConfig { get; set; }
-    
+
     /// <summary>
     /// Apple specific configuration.
     /// </summary>
     [BindProperty]
     public AppleConfigInput? AppleConfig { get; set; }
-    
+
     /// <summary>
     /// GitHub specific configuration.
     /// </summary>
@@ -112,17 +112,17 @@ public class AddModel(
                 ModelState.Remove(k);
             }
         }
-        
+
         // Remove template-specific validation errors for unselected templates
         RemoveUnusedTemplateValidationErrors();
 
         if (!ModelState.IsValid)
             return Page();
-        
+
         // Process template-specific configuration
         var selectedTemplate = (WellKnownProviderTemplate)ProviderTemplate;
         string? providerSpecificJson = null;
-        
+
         if (selectedTemplate != WellKnownProviderTemplate.Custom)
         {
             // Apply template defaults and build provider-specific config
@@ -134,10 +134,10 @@ public class AddModel(
                 {
                     OidcConfig.Authority = BuildAuthorityFromTemplate(templateDef);
                 }
-                
+
                 // Apply template defaults to OidcConfig
                 ApplyTemplateDefaults(templateDef);
-                
+
                 // Build provider-specific JSON
                 providerSpecificJson = BuildProviderSpecificJson(selectedTemplate);
             }
@@ -168,7 +168,7 @@ public class AddModel(
                     return Page();
                 }
             }
-            
+
             // Add provider-specific extra params
             extraParams = AddProviderSpecificParams(selectedTemplate, extraParams);
 
@@ -308,7 +308,7 @@ public class AddModel(
         }
 
         db.IdentityProviders.Add(entity);
-        
+
         // Add default claim mappings for well-known providers
         if (selectedTemplate != WellKnownProviderTemplate.Custom)
         {
@@ -329,9 +329,9 @@ public class AddModel(
                 }
             }
         }
-        
+
         await db.SaveChangesAsync();
-        
+
         // Build tenant-aware redirect URL
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
             "/Admin/Providers",
@@ -357,12 +357,12 @@ public class AddModel(
         ".webp" => "image/webp",
         _ => "application/octet-stream"
     };
-    
+
     private void RemoveUnusedTemplateValidationErrors()
     {
         var prefixesToRemove = new List<string>();
         var selectedTemplate = (WellKnownProviderTemplate)ProviderTemplate;
-        
+
         // Only keep validation for the selected template's config
         if (selectedTemplate != WellKnownProviderTemplate.MicrosoftEntraId)
             prefixesToRemove.Add("EntraConfig.");
@@ -374,7 +374,7 @@ public class AddModel(
             prefixesToRemove.Add("AppleConfig.");
         if (selectedTemplate != WellKnownProviderTemplate.GitHub)
             prefixesToRemove.Add("GitHubConfig.");
-            
+
         foreach (var prefix in prefixesToRemove)
         {
             var keys = ModelState.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -384,11 +384,11 @@ public class AddModel(
             }
         }
     }
-    
+
     private string BuildAuthorityFromTemplate(ProviderTemplateDefinition templateDef)
     {
         var authority = templateDef.AuthorityPattern;
-        
+
         // Handle Entra ID special case
         if (templateDef.Template == WellKnownProviderTemplate.MicrosoftEntraId && EntraConfig != null)
         {
@@ -401,7 +401,7 @@ public class AddModel(
             };
             return $"https://login.microsoftonline.com/{tenant}/v2.0";
         }
-        
+
         // Replace placeholders from AuthorityPlaceholders dictionary
         foreach (var placeholder in templateDef.AuthorityPlaceholders)
         {
@@ -414,29 +414,29 @@ public class AddModel(
                 authority = authority.Replace($"{{{placeholder.Name}}}", placeholder.DefaultValue);
             }
         }
-        
+
         return authority;
     }
-    
+
     private void ApplyTemplateDefaults(ProviderTemplateDefinition templateDef)
     {
         if (OidcConfig == null) return;
-        
+
         // Apply default scopes if not already set
         if (string.IsNullOrWhiteSpace(OidcConfig.ScopesString))
         {
             OidcConfig.ScopesString = string.Join(" ", templateDef.DefaultScopes);
         }
-        
+
         // Apply default response type
         if (string.IsNullOrWhiteSpace(OidcConfig.ResponseType))
         {
             OidcConfig.ResponseType = templateDef.ResponseType;
         }
-        
+
         // Apply PKCE setting
         OidcConfig.UsePKCE = templateDef.DefaultUsePkce;
-        
+
         // Special handling for providers with fixed authorities
         if (string.IsNullOrWhiteSpace(OidcConfig.Authority))
         {
@@ -461,11 +461,11 @@ public class AddModel(
             }
         }
     }
-    
+
     private Dictionary<string, string>? AddProviderSpecificParams(WellKnownProviderTemplate template, Dictionary<string, string>? existingParams)
     {
         existingParams ??= new Dictionary<string, string>();
-        
+
         switch (template)
         {
             case WellKnownProviderTemplate.MicrosoftEntraId when EntraConfig != null:
@@ -476,7 +476,7 @@ public class AddModel(
                 if (!string.IsNullOrWhiteSpace(EntraConfig.Prompt))
                     OidcConfig!.Prompt = EntraConfig.Prompt;
                 break;
-                
+
             case WellKnownProviderTemplate.Google when GoogleConfig != null:
                 if (!string.IsNullOrWhiteSpace(GoogleConfig.HostedDomain))
                     existingParams["hd"] = GoogleConfig.HostedDomain;
@@ -488,10 +488,10 @@ public class AddModel(
                     OidcConfig!.Prompt = GoogleConfig.Prompt;
                 break;
         }
-        
+
         return existingParams.Count > 0 ? existingParams : null;
     }
-    
+
     private string? BuildProviderSpecificJson(WellKnownProviderTemplate template)
     {
         object? config = template switch
@@ -530,9 +530,9 @@ public class AddModel(
             },
             _ => null
         };
-        
+
         if (config == null) return null;
-        
+
         return JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = false });
     }
 
@@ -550,14 +550,14 @@ public class AddModel(
         [Url]
         public string? LogoUrl { get; set; }
         public string? ConfigJson { get; set; }
-        
+
         [StringLength(20)]
         public string? ButtonBackgroundColor { get; set; }
-        
+
         [StringLength(20)]
         public string? ButtonTextColor { get; set; }
     }
-    
+
     public sealed class EntraConfigInput
     {
         public string? TenantType { get; set; }
@@ -566,7 +566,7 @@ public class AddModel(
         public string? LoginHint { get; set; }
         public string? Prompt { get; set; }
     }
-    
+
     public sealed class GoogleConfigInput
     {
         public string? HostedDomain { get; set; }
@@ -574,20 +574,20 @@ public class AddModel(
         public string? Prompt { get; set; }
         public string? AccessType { get; set; }
     }
-    
+
     public sealed class FacebookConfigInput
     {
         public string? ApiVersion { get; set; }
         public bool EnableReauthorization { get; set; }
     }
-    
+
     public sealed class AppleConfigInput
     {
         public string? TeamId { get; set; }
         public string? KeyId { get; set; }
         public string? PrivateKey { get; set; }
     }
-    
+
     public sealed class GitHubConfigInput
     {
         public string? AllowedOrganizations { get; set; }

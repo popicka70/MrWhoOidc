@@ -75,7 +75,7 @@ public sealed class DiscoveryHandler(
             OAuthConstants.GrantTypes.RefreshToken,
             OAuthConstants.GrantTypes.ClientCredentials
         };
-        
+
         // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
         // only advertise authorization response encryption algorithms when at least one client in this
         // tenant is configured for it.
@@ -265,7 +265,7 @@ public sealed class DiscoveryHandler(
             body["request_object_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };
             body["request_object_encryption_enc_values_supported"] = new[] { "A256CBC-HS512" };
         }
-        
+
         if (advertiseAuthorizationResponseEncryption)
         {
             body["authorization_response_encryption_alg_values_supported"] = new[] { "RSA-OAEP" };

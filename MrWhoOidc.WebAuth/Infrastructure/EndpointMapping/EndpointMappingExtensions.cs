@@ -115,7 +115,7 @@ internal static class EndpointMappingExtensions
         // Multi-tenancy state is determined at runtime from license (via IMultiTenancyOptions),
         // but routes must be mapped at startup before the license is loaded.
         // The handlers will enforce mode-appropriate behavior at request time.
-        
+
         // Register tenant-prefixed routes for multi-tenant mode
         var tenantGroup = app.MapGroup("/t/{slug}");
         MapOidcEndpoints(tenantGroup);
@@ -284,20 +284,20 @@ internal static class EndpointMappingExtensions
             .RequireAuthorization()
             .RequireRateLimiting("rl-authorize")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
-        
+
         routes.MapPost("/api/webauthn/registration/complete", (IWebAuthnHandler h, HttpContext ctx) => h.RegistrationCompletionAsync(ctx))
             .RequireAuthorization()
             .RequireRateLimiting("rl-authorize")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
-        
+
         routes.MapPost("/api/webauthn/authentication/challenge", (IWebAuthnHandler h, HttpContext ctx) => h.AuthenticationChallengeAsync(ctx))
             .RequireRateLimiting("rl-authorize")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
-        
+
         routes.MapPost("/api/webauthn/authentication/complete", (IWebAuthnHandler h, HttpContext ctx) => h.AuthenticationCompletionAsync(ctx))
             .RequireRateLimiting("rl-authorize")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
-        
+
         routes.MapGet("/api/webauthn/credentials", (IWebAuthnHandler h, HttpContext ctx) => h.GetUserCredentialsAsync(ctx))
             .RequireAuthorization()
             .RequireRateLimiting("rl-authorize")
@@ -305,7 +305,7 @@ internal static class EndpointMappingExtensions
 
         // Tenant icon endpoint (public access for display in UI)
         routes.MapGet("/api/icon/{iconId:guid}", async (
-            Guid iconId, 
+            Guid iconId,
             MrWhoOidc.Auth.Services.ITenantIconService iconService,
             HttpContext ctx,
             CancellationToken ct) =>

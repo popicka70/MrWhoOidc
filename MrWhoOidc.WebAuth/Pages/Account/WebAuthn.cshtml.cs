@@ -27,7 +27,7 @@ public class WebAuthnModel(
             }
 
             var credentials = await webAuthnService.GetUserCredentialsAsync(userId.Value);
-            
+
             Credentials = credentials.Select(c => new WebAuthnCredentialViewModel
             {
                 Id = c.Id,
@@ -38,7 +38,7 @@ public class WebAuthnModel(
                 IsActive = c.IsActive
             }).ToArray();
 
-            logger.LogInformation("Retrieved {Count} WebAuthn credentials for user {UserId}", 
+            logger.LogInformation("Retrieved {Count} WebAuthn credentials for user {UserId}",
                 Credentials.Count, userId);
         }
         catch (Exception ex)

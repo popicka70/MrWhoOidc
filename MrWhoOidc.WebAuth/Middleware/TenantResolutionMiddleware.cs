@@ -42,14 +42,14 @@ public class TenantResolutionMiddleware
     {
         var path = context.Request.Path.Value ?? "/";
 
-        _logger.LogDebug("🌐 [TenantResolution] START - Path={Path}, MultiTenantEnabled={Enabled}, DefaultSlug={DefaultSlug}", 
+        _logger.LogDebug("🌐 [TenantResolution] START - Path={Path}, MultiTenantEnabled={Enabled}, DefaultSlug={DefaultSlug}",
             path, options.Enabled, options.DefaultTenantSlug);
 
         UserAccountResolution? resolvedUser = null;
         if (context.User?.Identity?.IsAuthenticated ?? false)
         {
             resolvedUser = await currentUserAccountResolver.ResolveAsync(context.User, context.RequestAborted);
-            _logger.LogDebug("🌐 [TenantResolution] Authenticated user resolved: UserId={UserId}, UserAccountId={UserAccountId}", 
+            _logger.LogDebug("🌐 [TenantResolution] Authenticated user resolved: UserId={UserId}, UserAccountId={UserAccountId}",
                 resolvedUser?.UserId, resolvedUser?.UserAccountId);
         }
 
@@ -63,8 +63,8 @@ public class TenantResolutionMiddleware
 
         // Resolve tenant
         var tenantContext = await tenantResolver.ResolveTenantAsync(path, context.RequestAborted);
-        
-        _logger.LogDebug("🌐 [TenantResolution] Resolved tenant: {TenantName} ({TenantSlug}), TenantId={TenantId}, IsMultiTenant={IsMultiTenant}", 
+
+        _logger.LogDebug("🌐 [TenantResolution] Resolved tenant: {TenantName} ({TenantSlug}), TenantId={TenantId}, IsMultiTenant={IsMultiTenant}",
             tenantContext?.Name, tenantContext?.Slug, tenantContext?.TenantId, tenantContext?.IsMultiTenantMode);
 
         if (tenantContext == null)

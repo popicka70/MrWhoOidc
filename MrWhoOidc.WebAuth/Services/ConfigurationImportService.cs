@@ -96,7 +96,7 @@ public sealed class ConfigurationImportService(
 
                 foreach (var provider in tenant.IdentityProviders ?? [])
                 {
-                    if (provider.Config?.Any(kv => 
+                    if (provider.Config?.Any(kv =>
                         kv.Value is JsonElement je && je.GetString() == ExportManifest.ObfuscatedMarker) == true)
                     {
                         warnings.Add($"Provider '{provider.Name}' has obfuscated configuration. Provide replacement values in import options.");
@@ -107,7 +107,7 @@ public sealed class ConfigurationImportService(
             // Check standalone providers for obfuscated secrets
             foreach (var provider in manifest.Data?.IdentityProviders ?? [])
             {
-                if (provider.Config?.Any(kv => 
+                if (provider.Config?.Any(kv =>
                     kv.Value is JsonElement je && je.GetString() == ExportManifest.ObfuscatedMarker) == true)
                 {
                     warnings.Add($"Provider '{provider.Name}' has obfuscated configuration. Provide replacement values in import options.");
@@ -117,17 +117,17 @@ public sealed class ConfigurationImportService(
 
         // Detect conflicts
         var conflicts = await DetectConflictsAsync(manifest, options, cancellationToken);
-        
+
         // Build entity lists
         var (toCreate, toUpdate) = BuildEntityLists(manifest, conflicts, options);
 
         // Calculate counts
         var tenantCount = manifest.Data?.Tenants?.Count ?? 0;
-        var realmCount = (manifest.Data?.Realms?.Count ?? 0) + 
+        var realmCount = (manifest.Data?.Realms?.Count ?? 0) +
                          (manifest.Data?.Tenants?.Sum(t => t.Realms?.Count ?? 0) ?? 0);
-        var clientCount = (manifest.Data?.Clients?.Count ?? 0) + 
+        var clientCount = (manifest.Data?.Clients?.Count ?? 0) +
                           (manifest.Data?.Tenants?.Sum(t => t.Clients?.Count ?? 0) ?? 0);
-        var providerCount = (manifest.Data?.IdentityProviders?.Count ?? 0) + 
+        var providerCount = (manifest.Data?.IdentityProviders?.Count ?? 0) +
                             (manifest.Data?.Tenants?.Sum(t => t.IdentityProviders?.Count ?? 0) ?? 0);
         var scopeCount = manifest.Data?.Scopes?.Count ?? 0;
 
@@ -2183,13 +2183,13 @@ public sealed class ConfigurationImportService(
     {
         var suffix = 1;
         var candidate = $"{baseSlug}_imported";
-        
+
         while (await _dbContext.Tenants.AnyAsync(t => t.Slug == candidate, cancellationToken))
         {
             suffix++;
             candidate = $"{baseSlug}_imported_{suffix}";
         }
-        
+
         return candidate;
     }
 
@@ -2197,13 +2197,13 @@ public sealed class ConfigurationImportService(
     {
         var suffix = 1;
         var candidate = $"{baseClientId}_imported";
-        
+
         while (await _dbContext.Clients.AnyAsync(c => c.ClientId == candidate, cancellationToken))
         {
             suffix++;
             candidate = $"{baseClientId}_imported_{suffix}";
         }
-        
+
         return candidate;
     }
 

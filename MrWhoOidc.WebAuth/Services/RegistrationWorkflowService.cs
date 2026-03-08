@@ -105,7 +105,7 @@ internal sealed class RegistrationWorkflowService : IRegistrationWorkflowService
         CancellationToken cancellationToken = default)
     {
         var result = await _domainService.ApproveRegistrationAsync(registration.Id, approvingUserId, cancellationToken);
-        
+
         if (result.CreatedUserId.HasValue)
         {
             var user = await _db.Users.FindAsync(new object[] { result.CreatedUserId.Value }, cancellationToken);

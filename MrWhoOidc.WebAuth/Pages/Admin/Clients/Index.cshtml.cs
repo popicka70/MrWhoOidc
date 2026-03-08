@@ -127,17 +127,17 @@ public class IndexModel(
 
         var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirectToPage();
-        
+
         // Capture for cache invalidation
         var clientId = entity.ClientId;
         var tenantId = entity.TenantId;
-        
+
         db.Clients.Remove(entity);
         await db.SaveChangesAsync();
-        
+
         // Invalidate client cache after deletion
         await clientStore.InvalidateClientCacheAsync(clientId, tenantId);
-        
+
         return TenantAwareRedirect("/Admin/Clients");
     }
 

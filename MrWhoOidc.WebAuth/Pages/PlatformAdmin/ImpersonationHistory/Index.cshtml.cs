@@ -82,18 +82,16 @@ public class IndexModel(AuthDbContext db) : PageModel
             .Where(l => l.Action == ImpersonationAction.Start)
             .CountAsync();
 
-        // Active sessions = Start logs without corresponding Stop logs
-        var startLogIds = await db.ImpersonationAuditLogs
-            .Where(l => l.Action == ImpersonationAction.Start)
-            .Select(l => l.Id)
-            .ToListAsync();
-
-        var stopLogStartIds = await db.ImpersonationAuditLogs
+        // ⚡ Bolt Optimization: Use IQueryable to calculate active sessions entirely in the database engine
+        // instead of fetching all log IDs into memory and using LINQ .Except().Count(). This prevents
+        // large memory allocations and slow database queries when impersonation history grows.
+        var stoppedLogIdsQuery = db.ImpersonationAuditLogs
             .Where(l => l.Action == ImpersonationAction.Stop && l.StartLogId != null)
-            .Select(l => l.StartLogId!.Value)
-            .ToListAsync();
+            .Select(l => l.StartLogId!.Value);
 
-        ActiveSessions = startLogIds.Except(stopLogStartIds).Count();
+        ActiveSessions = await db.ImpersonationAuditLogs
+            .Where(l => l.Action == ImpersonationAction.Start && !stoppedLogIdsQuery.Contains(l.Id))
+            .CountAsync();
     }
 
     public async Task<IActionResult> OnPostExportCsvAsync(

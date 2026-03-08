@@ -25,11 +25,11 @@ internal sealed class RazorPageResult(string pageName, object? routeValues) : IR
     public async Task ExecuteAsync(HttpContext httpContext)
     {
         var actionContext = new ActionContext(httpContext, httpContext.GetRouteData(), new ActionDescriptor());
-        
+
         // This is a simplified implementation for FormPost.jwt scenario.
         // In a real app, we'd use the full Razor Pages executor, but for OIDC FormPost 
         // we just need to render the specific /FormPost page with the provided model.
-        
+
         var executor = httpContext.RequestServices.GetRequiredService<IActionResultExecutor<PartialViewResult>>();
         var viewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
         {

@@ -16,7 +16,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Scopes;
 /// </summary>
 [Authorize(Policy = "tenant-admin")]
 public class AddModel(
-    AuthDbContext db, 
+    AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IAuthorizationService authorizationService,
     IScopeResolver scopeResolver,
@@ -27,19 +27,19 @@ public class AddModel(
     {
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
-        
+
         [StringLength(200)]
         public string? Description { get; set; }
-        
+
         public bool IsExposed { get; set; } = true;
-        
+
         // Only platform admins can set this to true
         public bool IsGlobal { get; set; } = false;
     }
 
     [BindProperty]
     public AddInput Input { get; set; } = new();
-    
+
     public bool IsPlatformAdmin { get; private set; }
 
     public async Task OnGetAsync()
@@ -51,19 +51,19 @@ public class AddModel(
     public async Task<IActionResult> OnPostAsync()
     {
         if (!ModelState.IsValid) return Page();
-        
+
         var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
         IsPlatformAdmin = platformAdminResult.Succeeded;
-        
+
         Input.Name = Input.Name.Trim();
-        
+
         // Validate: only platform admins can create global scopes
         if (Input.IsGlobal && !IsPlatformAdmin)
         {
             ModelState.AddModelError("Input.IsGlobal", "Only platform administrators can create global scopes.");
             return Page();
         }
-        
+
         // Validate: tenant admins must create tenant-scoped scopes
         Guid? targetTenantId = null;
         string? tenantSlug = null;
@@ -77,7 +77,7 @@ public class AddModel(
                 return Page();
             }
         }
-        
+
         // Validate scope name format using the validator
         var nameValidation = scopeNameValidator.ValidateScopeName(Input.Name, Input.IsGlobal, tenantSlug);
         if (!nameValidation.IsValid)
@@ -85,7 +85,7 @@ public class AddModel(
             ModelState.AddModelError("Input.Name", nameValidation.ErrorMessage!);
             return Page();
         }
-        
+
         // Check if scope name is available
         var isAvailable = await scopeResolver.IsScopeNameAvailableAsync(Input.Name, targetTenantId);
         if (!isAvailable)
@@ -94,16 +94,16 @@ public class AddModel(
             ModelState.AddModelError("Input.Name", $"A {scopeType} scope with this name already exists.");
             return Page();
         }
-        
-        db.Scopes.Add(new Scope 
-        { 
-            Name = Input.Name, 
-            Description = Input.Description, 
+
+        db.Scopes.Add(new Scope
+        {
+            Name = Input.Name,
+            Description = Input.Description,
             IsExposed = Input.IsExposed,
             IsGlobal = Input.IsGlobal,
             TenantId = targetTenantId
         });
-        
+
         await db.SaveChangesAsync();
         TempData["Success"] = $"{(Input.IsGlobal ? "Global" : "Tenant-scoped")} scope '{Input.Name}' created successfully.";
         return TenantAwareRedirect("/Admin/Scopes");

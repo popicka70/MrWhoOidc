@@ -55,7 +55,7 @@ public class DeleteModel(
         if (inUse)
         {
             TempData["Error"] = "Cannot delete a provider that is mapped to clients.";
-            
+
             // Build tenant-aware redirect URL
             var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
                 "/Admin/Providers",
@@ -70,7 +70,7 @@ public class DeleteModel(
             db.IdentityProviders.Remove(entity);
             await db.SaveChangesAsync();
         }
-        
+
         // Build tenant-aware redirect URL
         var url = TenantAwareUrlBuilder.BuildTenantPath(
             "/Admin/Providers",

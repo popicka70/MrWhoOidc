@@ -16,7 +16,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 [Authorize(Policy = "platform-admin")]
 [RequireDefaultTenantContext]
 public class EditModel(
-    AuthDbContext db, 
+    AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
 {

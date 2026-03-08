@@ -12,8 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Password;
 
 [Authorize]
 public class IndexModel(
-    AuthDbContext db, 
-    IPasswordHasher hasher, 
+    AuthDbContext db,
+    IPasswordHasher hasher,
     IPasswordPolicyService passwordPolicy,
     IUserAccountService userAccountService,
     ILogger<IndexModel> logger) : PageModel
@@ -33,7 +33,7 @@ public class IndexModel(
     public async Task<IActionResult> OnPostAsync()
     {
         var account = await GetCurrentUserAccountAsync();
-        if (account is null) 
+        if (account is null)
         {
             logger.LogWarning("⚠️ [Password Change] No UserAccount found for authenticated user");
             return RedirectToPage("/Login", new { returnUrl = Url.Page("/Password/Index") });
@@ -82,13 +82,13 @@ public class IndexModel(
 
         // Update password on UserAccount (global credential)
         var newHash = hasher.Hash(Input.NewPassword!);
-        logger.LogInformation("🔄 [Password Change] Updating password for account {AccountId}, UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+        logger.LogInformation("🔄 [Password Change] Updating password for account {AccountId}, UsernameHash={UsernameHash}, EmailHash={EmailHash}",
             account.Id,
             LogTokenization.HashId(account.Username),
             LogTokenization.HashId(account.Email));
-        
+
         await userAccountService.UpdatePasswordAsync(account.Id, newHash, null, "argon2id");
-        
+
         logger.LogInformation("✅ [Password Change] Password updated successfully for account {AccountId}", account.Id);
 
         SuccessMessage = "Password updated successfully. This change applies to all your tenants.";
@@ -105,38 +105,38 @@ public class IndexModel(
     {
         var sub = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         logger.LogDebug("🔍 [Password] Looking up UserAccount. Sub hash: {SubHash}", LogTokenization.HashId(sub));
-        
-        if (!Guid.TryParse(sub, out var userId)) 
+
+        if (!Guid.TryParse(sub, out var userId))
         {
             logger.LogWarning("⚠️ [Password] Invalid sub claim format. Sub hash: {SubHash}", LogTokenization.HashId(sub));
             return null;
         }
-        
+
         // Get the per-tenant User to find email/username
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
-        if (user is null) 
+        if (user is null)
         {
             logger.LogWarning("⚠️ [Password] Per-tenant User not found for ID: {UserId}", userId);
             return null;
         }
-        
-        logger.LogDebug("🔍 [Password] Found per-tenant User: UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+
+        logger.LogDebug("🔍 [Password] Found per-tenant User: UsernameHash={UsernameHash}, EmailHash={EmailHash}",
             LogTokenization.HashId(user.Username),
             LogTokenization.HashId(user.Email));
-        
+
         // Find the global UserAccount by email or username
         if (!string.IsNullOrEmpty(user.Email))
         {
             var account = await userAccountService.FindByEmailAsync(user.Email);
-            if (account is not null) 
+            if (account is not null)
             {
-                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, UsernameHash={UsernameHash}", 
+                logger.LogDebug("🔍 [Password] Found UserAccount by email: AccountId={AccountId}, UsernameHash={UsernameHash}",
                     account.Id, LogTokenization.HashId(account.Username));
                 return account;
             }
             logger.LogDebug("🔍 [Password] No UserAccount found by email: {EmailHash}", LogTokenization.HashId(user.Email));
         }
-        
+
         var accountByUsername = await userAccountService.FindByUsernameAsync(user.Username);
         if (accountByUsername is not null)
         {
@@ -144,11 +144,11 @@ public class IndexModel(
         }
         else
         {
-            logger.LogWarning("⚠️ [Password] No UserAccount found for User: UsernameHash={UsernameHash}, EmailHash={EmailHash}", 
+            logger.LogWarning("⚠️ [Password] No UserAccount found for User: UsernameHash={UsernameHash}, EmailHash={EmailHash}",
                 LogTokenization.HashId(user.Username),
                 LogTokenization.HashId(user.Email));
         }
-        
+
         return accountByUsername;
     }
 

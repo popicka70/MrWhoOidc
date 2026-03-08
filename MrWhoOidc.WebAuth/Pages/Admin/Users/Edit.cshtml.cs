@@ -111,10 +111,10 @@ public class EditModel(
 
         entity.Name = string.IsNullOrWhiteSpace(Input.Name) ? null : Input.Name.Trim();
         await db.SaveChangesAsync();
-        
+
         // Invalidate user cache after update
         await userService.InvalidateUserCacheAsync(entity.Id, entity.Username, entity.TenantId);
-        
+
         SetHeading(entity.Username, entity.Name);
         return TenantAwareRedirect("/Admin/Users");
     }

@@ -135,7 +135,7 @@ public class LoginModel(
 
         // Use global authentication service for credential verification
         var authResult = await globalAuthService.AuthenticateAsync(Username, Password);
-        
+
         logger.LogInformation("🔍 [Login POST] Global auth result: Succeeded={Succeeded}, FailureReason={FailureReason}",
             authResult.Succeeded,
             authResult.FailureReason?.ToString() ?? "(none)");
@@ -145,11 +145,11 @@ public class LoginModel(
             // Handle different failure reasons with appropriate messages
             var errorMessage = authResult.FailureReason switch
             {
-                AuthenticationFailureReason.AccountLocked => 
+                AuthenticationFailureReason.AccountLocked =>
                     $"Your account is temporarily locked. Please try again {FormatLockoutTime(authResult.LockedUntil)}.",
-                AuthenticationFailureReason.NoActiveMemberships => 
+                AuthenticationFailureReason.NoActiveMemberships =>
                     "Your account does not have access to any organizations. Please contact your administrator.",
-                AuthenticationFailureReason.MfaRequired => 
+                AuthenticationFailureReason.MfaRequired =>
                     null, // MFA required is not an error - we'll handle it below
                 _ => "Invalid username or password"
             };
@@ -162,14 +162,14 @@ public class LoginModel(
 
             logger.LogWarning("⚠️ [Login POST] Authentication failed: Reason={Reason}",
                 authResult.FailureReason);
-            
+
             ModelState.AddModelError(string.Empty, errorMessage!);
             return Page();
         }
 
         // Get the user for the current tenant from the memberships
         var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
-        var membership = currentTenantId.HasValue 
+        var membership = currentTenantId.HasValue
             ? authResult.Memberships.FirstOrDefault(m => m.TenantId == currentTenantId.Value)
             : authResult.Memberships.FirstOrDefault();
 
@@ -182,9 +182,9 @@ public class LoginModel(
         }
 
         // Look up the per-tenant User record for session/claims
-        var user = await users.FindByUsernameAsync(authResult.Account!.Username) 
+        var user = await users.FindByUsernameAsync(authResult.Account!.Username)
                    ?? await users.FindByUsernameOrEmailAsync(authResult.Account.Email ?? authResult.Account.Username);
-        
+
         if (user is null)
         {
             logger.LogWarning("⚠️ [Login POST] No per-tenant User record for UserAccount {AccountId} in tenant {TenantId}",
@@ -204,9 +204,9 @@ public class LoginModel(
     private async Task<IActionResult> HandleMfaRequiredAsync(UserAccount account)
     {
         // Look up the per-tenant user to get the ID for preauth
-        var user = await users.FindByUsernameAsync(account.Username) 
+        var user = await users.FindByUsernameAsync(account.Username)
                    ?? await users.FindByUsernameOrEmailAsync(account.Email ?? account.Username);
-        
+
         if (user is null)
         {
             logger.LogWarning("⚠️ [Login MFA] No per-tenant User record for UserAccount {AccountId}", account.Id);
@@ -222,7 +222,7 @@ public class LoginModel(
         };
         var identity = new ClaimsIdentity(claims, "preauth");
         await HttpContext.SignInAsync("preauth", new ClaimsPrincipal(identity));
-        
+
         logger.LogInformation("🔐 [Login MFA] User {User} requires MFA, redirecting to TOTP page", user.Username);
         var url = Url.Page("/LoginTotp", null, new { ReturnUrl, Display }, protocol: Request.Scheme);
         return Redirect(url ?? "/LoginTotp");
@@ -248,7 +248,7 @@ public class LoginModel(
     {
         if (!lockedUntil.HasValue)
             return "later";
-        
+
         var remaining = lockedUntil.Value - DateTimeOffset.UtcNow;
         if (remaining.TotalMinutes > 1)
             return $"in {(int)remaining.TotalMinutes} minutes";
@@ -416,7 +416,7 @@ public class LoginModel(
 
         // Clear both local (IP-based) and global (account-based) lockouts on successful login
         ClearAttempts(HttpContext, user.Username);
-        
+
         // Clear global lockout if user has an email (for global authentication)
         if (!string.IsNullOrEmpty(user.Email))
         {

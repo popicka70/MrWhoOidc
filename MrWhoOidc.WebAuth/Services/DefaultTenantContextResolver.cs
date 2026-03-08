@@ -35,7 +35,7 @@ public class DefaultTenantContextResolver(
 
         // Try to get tenant slug from middleware-resolved tenant first
         var slug = tenantAccessor.CurrentTenant?.Slug;
-        
+
         // Fall back to session-stored preferred tenant if not resolved by middleware
         // (e.g., for routes that skip tenant resolution like /platform-admin/*)
         if (string.IsNullOrEmpty(slug))

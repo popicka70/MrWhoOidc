@@ -35,7 +35,7 @@ public class ResetPasswordModel(
 
         var validation = await passwordResetService.ValidateTokenAsync(Token);
         TokenValid = validation.IsValid;
-        
+
         if (!validation.IsValid)
         {
             ErrorMessage = validation.ErrorMessage;
@@ -89,7 +89,7 @@ public class ResetPasswordModel(
 
         // Redeem the token and update password
         var result = await passwordResetService.RedeemTokenAsync(Token, Input.NewPassword!);
-        
+
         if (!result.IsValid)
         {
             ErrorMessage = result.ErrorMessage;

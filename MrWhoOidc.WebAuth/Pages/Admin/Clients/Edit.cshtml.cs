@@ -25,10 +25,10 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
 public class EditModel(
-    AuthDbContext db, 
-    IPasswordHasher hasher, 
-    ILogger<EditModel> logger, 
-    MrWhoOidc.WebAuth.Observability.IAuditSink audit, 
+    AuthDbContext db,
+    IPasswordHasher hasher,
+    ILogger<EditModel> logger,
+    MrWhoOidc.WebAuth.Observability.IAuditSink audit,
     IOptions<OidcOptions> oidcOptions,
     ITenantAccessor tenantAccessor,
     IClientStore clientStore,
@@ -151,24 +151,24 @@ public class EditModel(
             TempData.Remove("SecretNewSecretId");
         }
 
-    await LoadRealmsAsync();
-    await LoadScopesAsync(client.Id);
-    await LoadProviderMappingsAsync(client.Id);
-    await LoadClientSecretsAsync(client.Id);
-    await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
+        await LoadRealmsAsync();
+        await LoadScopesAsync(client.Id);
+        await LoadProviderMappingsAsync(client.Id);
+        await LoadClientSecretsAsync(client.Id);
+        await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
 
 
         // Build tenant-aware IdP chaining URLs
         var issuer = HttpContext.GetIssuer(oidcOptions.Value);
         var baseUrl = issuer.TrimEnd('/');
-        
+
         // If multi-tenancy is enabled, append tenant path to the issuer
         if (MultiTenancyOptions.Enabled && TenantAccessor.CurrentTenant != null)
         {
             var tenantSlug = TenantAccessor.CurrentTenant.Slug;
             baseUrl = $"{baseUrl}/t/{tenantSlug}";
         }
-        
+
         IdpChainingAuthorizationUrl = $"{baseUrl}/authorize";
         IdpChainingEndSessionUrl = $"{baseUrl}/connect/endsession";
 
@@ -303,16 +303,16 @@ public class EditModel(
         KeyPreviews = BuildPreviews(Input.PublicJwksJson);
         JwksStatus = ComputeJwksStatus(Input.PublicJwksJson);
 
-    ClientDisplayName = client.ClientName ?? client.ClientId;
-    ClientPublicId = client.ClientId;
+        ClientDisplayName = client.ClientName ?? client.ClientId;
+        ClientPublicId = client.ClientId;
 #pragma warning disable CS0618
-    HasLegacyClientSecretHash = !string.IsNullOrEmpty(client.ClientSecretHash);
+        HasLegacyClientSecretHash = !string.IsNullOrEmpty(client.ClientSecretHash);
 #pragma warning restore CS0618
 
-    if (SecretInput is null)
-    {
-        SecretInput = new SecretInputModel();
-    }
+        if (SecretInput is null)
+        {
+            SecretInput = new SecretInputModel();
+        }
 
         return Page();
     }
@@ -1423,10 +1423,10 @@ public class EditModel(
         client.OboDpopMode = Input.OboDpopMode;
 
         await db.SaveChangesAsync();
-        
+
         // Invalidate client cache after update
         await clientStore.InvalidateClientCacheAsync(client.ClientId, client.TenantId);
-        
+
         // Audit backchannel field changes if any
         if (!string.Equals(oldBclUri, client.BackChannelLogoutUri, StringComparison.Ordinal) || oldBclSess != client.BackChannelLogoutSessionRequired)
         {
@@ -1527,30 +1527,30 @@ public class EditModel(
     {
         // Get current tenant context for scope resolution
         var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
-        
+
         // Get available scopes for current tenant context using scope resolver
         var availableScopes = await scopeResolver.GetAvailableScopesAsync(currentTenantId);
         var availableScopeNames = availableScopes.Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
-        
+
         // Get assigned scopes for this client
         AssignedScopes = await db.ClientScopes.AsNoTracking()
             .Where(cs => cs.ClientId == clientId)
             .Select(cs => cs.ScopeName)
             .OrderBy(n => n)
             .ToListAsync();
-        
+
         // Filter available list to those not yet assigned
         var availableScopeObjects = availableScopes
             .Where(s => !AssignedScopes.Contains(s.Name, StringComparer.Ordinal))
             .OrderBy(s => s.IsGlobal ? 0 : 1) // Global scopes first
             .ThenBy(s => s.Name)
             .ToList();
-        
+
         // Group available scopes
         AvailableScopes = availableScopeObjects;
         GlobalAvailableScopes = availableScopeObjects.Where(s => s.IsGlobal).ToList();
         TenantAvailableScopes = availableScopeObjects.Where(s => !s.IsGlobal).ToList();
-        
+
         // Group assigned scopes by checking if they're standard scopes
         GlobalAssignedScopes = AssignedScopes.Where(s => scopeResolver.IsStandardScope(s)).OrderBy(s => s).ToList();
         TenantAssignedScopes = AssignedScopes.Where(s => !scopeResolver.IsStandardScope(s)).OrderBy(s => s).ToList();

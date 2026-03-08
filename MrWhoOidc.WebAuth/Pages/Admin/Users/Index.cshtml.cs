@@ -79,7 +79,7 @@ public class IndexModel(
 
         var entity = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirectToPage();
-        
+
         // Capture for cache invalidation
         var username = entity.Username;
         var tenantId = entity.TenantId;
@@ -97,10 +97,10 @@ public class IndexModel(
         }
         db.Users.Remove(entity);
         await db.SaveChangesAsync();
-        
+
         // Invalidate user cache after deletion
         await userService.InvalidateUserCacheAsync(id, username, tenantId);
-        
+
         return TenantAwareRedirect("/Admin/Users");
     }
 
@@ -121,7 +121,7 @@ public class IndexModel(
 
         // Find the per-tenant User
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value);
-        
+
         if (user is null)
         {
             TempData["Error"] = "User not found.";
@@ -140,10 +140,10 @@ public class IndexModel(
             // User not linked to UserAccount - provision one now
             logger.LogWarning("⚠️ [Admin Reset] User {UserId} not linked to UserAccount, provisioning now",
                 user.Id);
-            
+
             await accountProvisioner.EnsureAsync(user, user.TenantId, null, false, HttpContext.RequestAborted);
             userAccount = await userAccountService.FindByEmailAsync(user.Email!);
-            
+
             if (userAccount is null)
             {
                 TempData["Error"] = $"Failed to provision global account for user '{user.Username}'.";
@@ -190,7 +190,7 @@ public class IndexModel(
         TempData["ResetPassword_Username"] = user.Username;
         TempData["ResetPassword_TempPassword"] = globalTempPassword;
         TempData["ResetPassword_AffectedTenantCount"] = affectedTenantCount.ToString();
-        
+
         return TenantAwareRedirect("/Admin/Users");
     }
 

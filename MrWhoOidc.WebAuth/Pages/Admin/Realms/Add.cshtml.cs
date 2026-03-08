@@ -11,7 +11,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Realms;
 
 [Authorize(Policy = "tenant-admin")]
 public class AddModel(
-    AuthDbContext db, 
+    AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
 {
@@ -53,7 +53,7 @@ public class AddModel(
         };
         db.Realms.Add(realm);
         await db.SaveChangesAsync();
-        
+
         // Build tenant-aware redirect URL
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
             $"/Admin/Realms/Edit/{realm.Id}",

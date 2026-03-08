@@ -39,7 +39,7 @@ public sealed class RegistrationHandler(
     private static readonly List<string> SupportedResponseTypes = new()
     {
         "code"
-    }; 
+    };
 
     private static readonly List<string> SupportedAuthMethods = new()
     {
@@ -277,14 +277,14 @@ public sealed class RegistrationHandler(
         // Generate client_secret for confidential clients
         string? clientSecret = null;
         long clientSecretExpiresAt = 0; // 0 = never expires per RFC 7591
-        
+
         var client = MapRequestToClient(request, clientId, tenantId, dynamicRealmId.Value, grantTypes, responseTypes, authMethod, appType);
 
         if (authMethod != "none" && authMethod != "private_key_jwt")
         {
             clientSecret = GenerateClientSecret();
             var hashedSecret = passwordHasher.Hash(clientSecret);
-            
+
             client.ClientSecrets = new List<ClientSecret>
             {
                 new ClientSecret
@@ -336,7 +336,7 @@ public sealed class RegistrationHandler(
             ClientSecretExpiresAt = clientSecretExpiresAt,
             RegistrationAccessToken = registrationToken,
             RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{clientId}",
-            
+
             // Echo back all metadata
             RedirectUris = request.RedirectUris,
             TokenEndpointAuthMethod = authMethod,

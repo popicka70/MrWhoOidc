@@ -98,12 +98,12 @@ public class DiscoverTenantModel : PageModel
         }
 
         await LoadLoginIdpsAsync();
-        
+
         // Check if QR login should be shown
         var qrGloballyEnabled = _qrOptions.Value.Enabled;
         var qrPlatformEnabled = await _platformSettings.IsQrLoginAtDiscoveryEnabledAsync();
         ShowQrLogin = qrGloballyEnabled && qrPlatformEnabled;
-        
+
         _logger.LogDebug("QR login visibility: globalEnabled={GlobalEnabled}, platformEnabled={PlatformEnabled}, show={Show}",
             qrGloballyEnabled, qrPlatformEnabled, ShowQrLogin);
 

@@ -31,7 +31,7 @@ public class ForgotPasswordModel(
         }
 
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-        
+
         logger.LogInformation("🔑 [Password Reset] Reset requested for email {EmailHash}",
             HashForLog(Input.Email!));
 

@@ -40,7 +40,7 @@ public abstract class TenantAwarePageModel : PageModel
     protected IActionResult TenantAwareRedirect(string pagePath, object? routeValues = null)
     {
         string url;
-        
+
         if (routeValues != null)
         {
             // Extract query parameters from route values object
@@ -74,7 +74,7 @@ public abstract class TenantAwarePageModel : PageModel
     protected IActionResult TenantAwareRedirectToPage()
     {
         var currentPath = HttpContext.Request.Path.Value ?? "/";
-        
+
         // If already has tenant prefix, just redirect to current path
         if (currentPath.StartsWith("/t/", StringComparison.OrdinalIgnoreCase))
         {

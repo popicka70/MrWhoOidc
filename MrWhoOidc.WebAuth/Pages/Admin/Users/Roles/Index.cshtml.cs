@@ -135,12 +135,12 @@ public class IndexModel(
         logger.LogInformation("User isPlatformAdmin: {IsPlatformAdmin}", isPlatformAdmin);
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
+
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
             logger.LogInformation("Current tenant from TenantAccessor: {CurrentTenantId}", currentTenantId);
-            
+
             if (!currentTenantId.HasValue)
             {
                 logger.LogWarning("No current tenant found in TenantAccessor, redirecting to Users/Index");
@@ -161,11 +161,11 @@ public class IndexModel(
         // Validate realm belongs to user's tenant
         var realmValid = await db.Realms.AsNoTracking()
             .AnyAsync(r => r.Id == SelectedRealmId.Value && r.TenantId == user.TenantId);
-        
+
         logger.LogInformation(
             "Realm validation: RealmId={RealmId}, UserTenantId={UserTenantId}, IsValid={IsValid}",
             SelectedRealmId.Value, user.TenantId, realmValid);
-        
+
         if (!realmValid)
         {
             logger.LogWarning("Realm {RealmId} is not valid for user tenant {UserTenantId}", SelectedRealmId.Value, user.TenantId);
@@ -175,11 +175,11 @@ public class IndexModel(
         // Validate role belongs to user's tenant AND the selected realm
         var roleValid = await db.Roles.AsNoTracking()
             .AnyAsync(r => r.Id == RealmAddRoleId && r.TenantId == user.TenantId && r.RealmId == SelectedRealmId.Value);
-        
+
         logger.LogInformation(
             "Role validation: RoleId={RoleId}, RealmId={RealmId}, UserTenantId={UserTenantId}, IsValid={IsValid}",
             RealmAddRoleId, SelectedRealmId.Value, user.TenantId, roleValid);
-        
+
         if (!roleValid)
         {
             logger.LogWarning(
@@ -213,7 +213,7 @@ public class IndexModel(
         {
             logger.LogInformation("Role assignment already exists, skipping creation");
         }
-        
+
         logger.LogInformation("Redirecting to: userId={UserId}, SelectedRealmId={RealmId}", UserId, SelectedRealmId);
         return RedirectToPage(new { userId = UserId, SelectedRealmId });
     }
@@ -243,7 +243,7 @@ public class IndexModel(
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
+
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;

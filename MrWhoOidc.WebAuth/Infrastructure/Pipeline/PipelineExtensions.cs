@@ -97,7 +97,7 @@ public static class PipelineExtensions
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
-    app.UseMiddleware<FeatureGatingMiddleware>();
+        app.UseMiddleware<FeatureGatingMiddleware>();
 
         // Tenant-aware redirect: redirect users from tenant-unaware URLs to tenant-specific versions
         app.UseTenantAwareRedirect();
@@ -138,12 +138,12 @@ public static class PipelineExtensions
             // For user-facing routes, re-execute pipeline to render error page
             // For 404 errors, include kebab-case URL suggestion if applicable
             var originalPath = request.Path.Value ?? "/";
-            
+
             if (response.StatusCode == 404)
             {
                 // Check if PascalCase URL might have kebab-case equivalent
                 var suggestion = MrWhoOidc.WebAuth.Extensions.UrlConversionHelper.SuggestKebabCase(originalPath);
-                
+
                 request.Path = "/NotFound";
                 if (!string.IsNullOrEmpty(suggestion))
                 {
@@ -160,7 +160,7 @@ public static class PipelineExtensions
                 request.Path = "/Error";
                 request.QueryString = new QueryString($"?statusCode={response.StatusCode}");
             }
-            
+
             await context.Next(http);
         });
 

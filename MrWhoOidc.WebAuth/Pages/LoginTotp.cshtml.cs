@@ -14,8 +14,8 @@ namespace MrWhoOidc.WebAuth.Pages;
 
 [AllowAnonymous]
 public class LoginTotpModel(
-    AuthDbContext db, 
-    ITotpService totp, 
+    AuthDbContext db,
+    ITotpService totp,
     IUserAccountService userAccountService,
     ILogger<LoginTotpModel> logger) : PageModel
 {

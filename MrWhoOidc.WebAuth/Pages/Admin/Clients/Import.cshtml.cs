@@ -90,7 +90,7 @@ public class ImportModel(
                 .SelectMany(t => t.Realms ?? [])
                 .SelectMany(r => r.Clients ?? []).Count() ?? 0;
             var clientCount = standaloneClientCount + realmNestedClientCount + tenantClientCount + tenantRealmClientCount;
-            
+
             if (clientCount == 0)
             {
                 ErrorMessage = "The manifest does not contain any client configurations.";

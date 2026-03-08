@@ -48,9 +48,9 @@ public sealed class WebAuthnHandler(
             }
 
             var user = await dbContext.Users
-                .FirstOrDefaultAsync(u => u.Id == userId.Value && u.TenantId == tenantContext.TenantId, 
+                .FirstOrDefaultAsync(u => u.Id == userId.Value && u.TenantId == tenantContext.TenantId,
                     context.RequestAborted);
-            
+
             if (user == null)
             {
                 return Results.NotFound("User not found");
@@ -91,9 +91,9 @@ public sealed class WebAuthnHandler(
             }
 
             var user = await dbContext.Users
-                .FirstOrDefaultAsync(u => u.Id == userId.Value && u.TenantId == tenantContext.TenantId, 
+                .FirstOrDefaultAsync(u => u.Id == userId.Value && u.TenantId == tenantContext.TenantId,
                     context.RequestAborted);
-            
+
             if (user == null)
             {
                 return Results.NotFound("User not found");
@@ -101,8 +101,8 @@ public sealed class WebAuthnHandler(
 
             // Extract sessionId and attestationResponse from request
             var sessionId = requestBody.GetProperty("sessionId").GetString();
-            var friendlyName = requestBody.TryGetProperty("friendlyName", out var nameElement) 
-                ? nameElement.GetString() 
+            var friendlyName = requestBody.TryGetProperty("friendlyName", out var nameElement)
+                ? nameElement.GetString()
                 : "WebAuthn Key";
 
             // Extract the attestation response
@@ -179,12 +179,12 @@ public sealed class WebAuthnHandler(
 
             // Extract sessionId from request
             var sessionId = requestBody.GetProperty("sessionId").GetString();
-            
+
             // Extract optional return URL from request
-            var returnUrl = requestBody.TryGetProperty("returnUrl", out var returnUrlElement) 
-                ? returnUrlElement.GetString() 
+            var returnUrl = requestBody.TryGetProperty("returnUrl", out var returnUrlElement)
+                ? returnUrlElement.GetString()
                 : null;
-            
+
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
             var assertionResponse = JsonSerializer.Deserialize<AuthenticatorAssertionRawResponse>(assertionElement);
@@ -223,9 +223,9 @@ public sealed class WebAuthnHandler(
                 await context.SignInAsync("preauth", new ClaimsPrincipal(preauthIdentity));
 
                 logger.LogInformation("⚠️ [WebAuthn] User {User} requires MFA enrollment (tenant policy). Redirecting to /Mfa", user.Username);
-                
-                return Results.Json(new 
-                { 
+
+                return Results.Json(new
+                {
                     success = true,
                     requiresMfaEnrollment = true,
                     redirectUrl = "/mfa?required=true"
@@ -243,11 +243,11 @@ public sealed class WebAuthnHandler(
                 };
                 var identity = new ClaimsIdentity(claims, "preauth");
                 await context.SignInAsync("preauth", new ClaimsPrincipal(identity));
-                
+
                 logger.LogInformation("🔐 [WebAuthn] User {User} requires TOTP verification", user.Username);
-                
-                return Results.Json(new 
-                { 
+
+                return Results.Json(new
+                {
                     success = true,
                     requiresTotp = true,
                     redirectUrl = "/LoginTotp"
@@ -273,7 +273,7 @@ public sealed class WebAuthnHandler(
 
             // Build redirect URL based on return URL or default
             string redirectUrl;
-            
+
             if (!string.IsNullOrEmpty(returnUrl) && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative))
             {
                 redirectUrl = returnUrl;
@@ -299,8 +299,8 @@ public sealed class WebAuthnHandler(
                 }
             }
 
-            return Results.Json(new 
-            { 
+            return Results.Json(new
+            {
                 success = true,
                 userId = user.Id,
                 username = user.Username,

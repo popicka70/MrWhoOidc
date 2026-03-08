@@ -33,27 +33,27 @@ public sealed class LayoutTenantContext
     /// The resolved tenant ID.
     /// </summary>
     public Guid TenantId { get; init; }
-    
+
     /// <summary>
     /// The tenant slug used in URLs.
     /// </summary>
     public string Slug { get; init; } = string.Empty;
-    
+
     /// <summary>
     /// The tenant display name.
     /// </summary>
     public string Name { get; init; } = string.Empty;
-    
+
     /// <summary>
     /// The URL prefix for tenant-scoped links (e.g., "/t/default" or "" for single-tenant).
     /// </summary>
     public string UrlPrefix { get; init; } = string.Empty;
-    
+
     /// <summary>
     /// Whether multi-tenancy is enabled.
     /// </summary>
     public bool IsMultiTenantMode { get; init; }
-    
+
     /// <summary>
     /// Source of the tenant resolution: "url", "session", "default", or "none".
     /// </summary>
@@ -71,7 +71,7 @@ public sealed class LayoutTenantContextService(
     {
         var requestPath = httpContext.Request.Path.Value;
         logger.LogDebug("[LayoutTenantContext] Resolving tenant context for path: {Path}", requestPath);
-        
+
         // Single-tenant mode: return empty prefix
         if (!multiTenancyOptions.Enabled)
         {
@@ -81,7 +81,7 @@ public sealed class LayoutTenantContextService(
                 .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug)
                 .Select(t => new { t.Id, t.Slug, t.Name })
                 .FirstOrDefaultAsync(ct);
-            
+
             return new LayoutTenantContext
             {
                 TenantId = defaultTenant?.Id ?? Guid.Empty,
@@ -108,7 +108,7 @@ public sealed class LayoutTenantContextService(
                 ResolutionSource = "url"
             };
         }
-        
+
         logger.LogDebug("[LayoutTenantContext] No middleware tenant, checking session");
 
         // Priority 2: Check session for preferred tenant (set by tenant switcher)
@@ -120,7 +120,7 @@ public sealed class LayoutTenantContextService(
                 .Where(t => t.Slug == sessionSlug && t.Status == TenantStatus.Active)
                 .Select(t => new { t.Id, t.Slug, t.Name })
                 .FirstOrDefaultAsync(ct);
-            
+
             if (sessionTenant != null)
             {
                 logger.LogDebug("[LayoutTenantContext] Using session-resolved tenant: {TenantId}, Slug={Slug}", sessionTenant.Id, sessionTenant.Slug);
@@ -143,7 +143,7 @@ public sealed class LayoutTenantContextService(
             .Where(t => t.Slug == multiTenancyOptions.DefaultTenantSlug && t.Status == TenantStatus.Active)
             .Select(t => new { t.Id, t.Slug, t.Name })
             .FirstOrDefaultAsync(ct);
-        
+
         if (fallbackTenant != null)
         {
             logger.LogDebug("[LayoutTenantContext] Using default tenant: {TenantId}, Slug={Slug}", fallbackTenant.Id, fallbackTenant.Slug);

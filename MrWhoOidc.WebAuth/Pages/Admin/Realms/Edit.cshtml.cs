@@ -94,11 +94,11 @@ public class EditModel(
             }
         }
 
-    realm.Name = Input.Name;
-    realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
-    realm.AllowUnconfirmedLogin = Input.AllowUnconfirmedLogin;
+        realm.Name = Input.Name;
+        realm.DisplayName = string.IsNullOrWhiteSpace(Input.DisplayName) ? null : Input.DisplayName;
+        realm.AllowUnconfirmedLogin = Input.AllowUnconfirmedLogin;
         await db.SaveChangesAsync();
-        
+
         // Build tenant-aware redirect URL
         var redirectUrl = TenantAwareUrlBuilder.BuildTenantPath(
             "/Admin/Realms",

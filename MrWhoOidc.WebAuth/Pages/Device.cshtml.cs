@@ -82,7 +82,7 @@ public class DeviceModel(
             .FirstOrDefaultAsync(c => c.ClientId == _deviceCodeEntry.ClientId);
 
         ClientName = client?.ClientName ?? _deviceCodeEntry.ClientId;
-        
+
         try
         {
             RequestedScopes = JsonSerializer.Deserialize<string[]>(_deviceCodeEntry.ScopesJson) ?? Array.Empty<string>();

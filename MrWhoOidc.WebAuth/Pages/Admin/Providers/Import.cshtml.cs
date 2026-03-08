@@ -85,7 +85,7 @@ public class ImportModel(
             var standaloneProviderCount = manifest.Data?.IdentityProviders?.Count ?? 0;
             var nestedProviderCount = manifest.Data?.Tenants?.SelectMany(t => t.IdentityProviders ?? []).Count() ?? 0;
             var providerCount = standaloneProviderCount + nestedProviderCount;
-            
+
             if (providerCount == 0)
             {
                 ErrorMessage = "The manifest does not contain any identity provider configurations.";
