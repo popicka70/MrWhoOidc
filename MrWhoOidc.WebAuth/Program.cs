@@ -225,6 +225,9 @@ builder.Services.AddScoped<MrWhoOidc.Auth.Services.IPlatformSettingsService, MrW
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationExportService, MrWhoOidc.WebAuth.Services.ConfigurationExportService>();
 builder.Services.AddScoped<MrWhoOidc.Auth.Services.IConfigurationImportService, MrWhoOidc.WebAuth.Services.ConfigurationImportService>();
 
+// OBO Setup orchestration service (wizard provisioning)
+builder.Services.AddScoped<MrWhoOidc.Auth.Services.IOboSetupOrchestrator, MrWhoOidc.Auth.Services.OboSetupOrchestrator>();
+
 // Duplicate core auth registrations removed (extensions now responsible)
 
 // CORS policy extracted

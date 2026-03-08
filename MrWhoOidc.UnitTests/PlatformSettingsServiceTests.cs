@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 
@@ -20,13 +21,16 @@ public sealed class PlatformSettingsServiceTests
         return provider.GetRequiredService<HybridCache>();
     }
 
+    private static IOptions<AuthOptions> CreateAuthOptions(bool enableTokenExchange = false)
+        => Options.Create(new AuthOptions { EnableTokenExchange = enableTokenExchange });
+
     [TestMethod]
     public async Task GetSettingsAsync_CreatesDefault_WhenNotExists()
     {
         // Arrange
         using var db = CreateDb();
         var cache = CreateCache();
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
 
         // Act
         var settings = await service.GetSettingsAsync();
@@ -34,7 +38,20 @@ public sealed class PlatformSettingsServiceTests
         // Assert
         Assert.IsNotNull(settings);
         Assert.IsFalse(settings.QrLoginAtDiscoveryEnabled, "Default should be disabled");
+        Assert.IsFalse(settings.EnableTokenExchange, "Default should inherit disabled AuthOptions");
         Assert.AreNotEqual(Guid.Empty, settings.Id);
+    }
+
+    [TestMethod]
+    public async Task GetSettingsAsync_CreatesDefault_WithTokenExchangeInheritedFromAuthOptions()
+    {
+        using var db = CreateDb();
+        var cache = CreateCache();
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions(enableTokenExchange: true));
+
+        var settings = await service.GetSettingsAsync();
+
+        Assert.IsTrue(settings.EnableTokenExchange);
     }
 
     [TestMethod]
@@ -54,7 +71,7 @@ public sealed class PlatformSettingsServiceTests
         db.PlatformSettings.Add(existingSettings);
         await db.SaveChangesAsync();
 
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
 
         // Act
         var settings = await service.GetSettingsAsync();
@@ -73,13 +90,14 @@ public sealed class PlatformSettingsServiceTests
         using var db = new AuthDbContext(
             new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(dbName).Options);
         var cache = CreateCache();
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
         
         var settings = await service.GetSettingsAsync();
         Assert.IsFalse(settings.QrLoginAtDiscoveryEnabled);
 
         // Act
         settings.QrLoginAtDiscoveryEnabled = true;
+        settings.EnableTokenExchange = true;
         await service.UpdateSettingsAsync(settings, "test-admin");
 
         // Verify in fresh context (bypassing cache) - use same InMemory database name
@@ -93,6 +111,7 @@ public sealed class PlatformSettingsServiceTests
         // Assert
         Assert.IsNotNull(verifySettings);
         Assert.IsTrue(verifySettings.QrLoginAtDiscoveryEnabled);
+        Assert.IsTrue(verifySettings.EnableTokenExchange);
         Assert.AreEqual("test-admin", verifySettings.UpdatedBy);
     }
 
@@ -102,7 +121,7 @@ public sealed class PlatformSettingsServiceTests
         // Arrange
         using var db = CreateDb();
         var cache = CreateCache();
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
 
         // Act
         var enabled = await service.IsQrLoginAtDiscoveryEnabledAsync();
@@ -127,7 +146,7 @@ public sealed class PlatformSettingsServiceTests
         db.PlatformSettings.Add(settings);
         await db.SaveChangesAsync();
 
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
 
         // Act
         var enabled = await service.IsQrLoginAtDiscoveryEnabledAsync();
@@ -142,7 +161,7 @@ public sealed class PlatformSettingsServiceTests
         // Arrange
         using var db = CreateDb();
         var cache = CreateCache();
-        var service = new PlatformSettingsService(db, cache);
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
         
         var settings = await service.GetSettingsAsync();
         var originalUpdatedAt = settings.UpdatedAt;

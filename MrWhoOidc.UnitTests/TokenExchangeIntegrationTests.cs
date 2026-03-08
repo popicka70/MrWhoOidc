@@ -41,7 +41,7 @@ public sealed class TokenExchangeIntegrationTests
 
     private sealed record TestHostBundle(IHost Host, string ClientId, string ClientSecret, Guid UserId);
 
-    private static async Task<TestHostBundle> CreateHostAsync(Action<ClientEntity>? configureClient = null, Action<AuthOptions>? configureOptions = null)
+    private static async Task<TestHostBundle> CreateHostAsync(Action<ClientEntity>? configureClient = null, Action<AuthOptions>? configureOptions = null, Action<PlatformSettings>? configurePlatformSettings = null)
     {
         var dbName = "te-integ-" + Guid.NewGuid().ToString("N");
         var clientId = "app1";
@@ -112,6 +112,13 @@ public sealed class TokenExchangeIntegrationTests
                             CreatedAt = DateTimeOffset.UtcNow
                         };
                         db.Tenants.Add(tenant);
+
+                        if (configurePlatformSettings != null)
+                        {
+                            var platformSettings = new PlatformSettings();
+                            configurePlatformSettings(platformSettings);
+                            db.PlatformSettings.Add(platformSettings);
+                        }
 
                         var realm = new Realm { Name = "default", TenantId = DefaultTenantId };
                         db.Realms.Add(realm);
@@ -267,6 +274,29 @@ public sealed class TokenExchangeIntegrationTests
         Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
         var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.AreEqual("insufficient_scope", doc.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task TokenExchange_ReturnsUnsupportedGrantType_WhenPlatformSettingDisabled()
+    {
+        var bundle = await CreateHostAsync(configurePlatformSettings: s => s.EnableTokenExchange = false);
+        using var _ = bundle.Host;
+        var client = bundle.Host.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = Basic(bundle.ClientId, bundle.ClientSecret);
+
+        var subject = await CreateSubjectJwtAsync(bundle.Host, bundle.UserId, audience: "api-a", scopes: "read write").ConfigureAwait(false);
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "urn:ietf:params:oauth:grant-type:token-exchange",
+            ["subject_token"] = subject,
+            ["audience"] = "api-b",
+            ["scope"] = "read"
+        };
+
+        var resp = await client.PostAsync("/token", new FormUrlEncodedContent(form));
+        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+        var doc = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.AreEqual("unsupported_grant_type", doc.GetProperty("error").GetString());
     }
 
     [TestMethod]

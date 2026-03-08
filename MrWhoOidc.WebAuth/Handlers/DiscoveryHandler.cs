@@ -66,6 +66,9 @@ public sealed class DiscoveryHandler(
             scopes = OidcConstants.Scopes.AllStandardScopes;
         }
 
+        var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        var tokenExchangeEnabled = platformSettings.EnableTokenExchange ?? authOptions.Value.EnableTokenExchange;
+
         var grants = new List<string>
         {
             OAuthConstants.GrantTypes.AuthorizationCode,
@@ -76,7 +79,7 @@ public sealed class DiscoveryHandler(
         // JARM encryption is an explicit per-client opt-in. Keep discovery truthful to tenant configuration:
         // only advertise authorization response encryption algorithms when at least one client in this
         // tenant is configured for it.
-        if (authOptions.Value.EnableTokenExchange)
+        if (tokenExchangeEnabled)
         {
             grants.Add(OAuthConstants.GrantTypes.TokenExchange);
         }
@@ -290,7 +293,6 @@ public sealed class DiscoveryHandler(
         // Keep discovery truthful: advertise only when DCR is effectively usable for this tenant.
         if (authOptions.Value.EnableDynamicClientRegistration)
         {
-            var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
             if (platformSettings.DynamicClientRegistrationEnabled)
             {
                 var dcrRealmId = await GetDynamicClientRegistrationRealmIdAsync(tenantAccessor.CurrentTenant?.TenantId, ctx.RequestAborted)

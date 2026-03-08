@@ -418,7 +418,8 @@ public sealed class DynamicClientRegistrationTests
     {
         private readonly PlatformSettings _settings = new()
         {
-            DynamicClientRegistrationEnabled = dynamicClientRegistrationEnabled
+            DynamicClientRegistrationEnabled = dynamicClientRegistrationEnabled,
+            EnableTokenExchange = false
         };
 
         public Task<PlatformSettings> GetSettingsAsync() => Task.FromResult(_settings);
@@ -427,6 +428,7 @@ public sealed class DynamicClientRegistrationTests
         {
             _settings.DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
             _settings.QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
+            _settings.EnableTokenExchange = settings.EnableTokenExchange;
             _settings.UpdatedAt = settings.UpdatedAt;
             _settings.UpdatedBy = updatedBy;
             return Task.CompletedTask;

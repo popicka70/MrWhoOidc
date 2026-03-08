@@ -18,6 +18,7 @@ namespace MrWhoOidc.WebAuth.TokenEndpoint.Grants;
 /// Mirrors prior inline implementation; future: externalize rate limit.
 /// </summary>
 public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
+    IPlatformSettingsService platformSettingsService,
     IFeatureService featureService,
     IDPoPValidator dpop,
     IDPoPReplayCache dpopReplayCache,
@@ -40,7 +41,9 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
         var usedPrivateKeyJwt = context.UsedPrivateKeyJwt;
 
         // Feature flag
-        if (!authOptions.Value.EnableTokenExchange)
+        var platformSettings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        var tokenExchangeEnabled = platformSettings.EnableTokenExchange ?? authOptions.Value.EnableTokenExchange;
+        if (!tokenExchangeEnabled)
         {
             return new(true, false, ErrorResults.UnsupportedGrantType());
         }

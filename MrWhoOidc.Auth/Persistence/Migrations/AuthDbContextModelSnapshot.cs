@@ -1496,6 +1496,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<bool>("DynamicClientRegistrationEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<bool?>("EnableTokenExchange")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("QrLoginAtDiscoveryEnabled")
                         .HasColumnType("boolean");
 

@@ -8,6 +8,7 @@
   <Project Path="MrWhoOidc.ApiService/MrWhoOidc.ApiService.csproj" />
   <Project Path="MrWhoOidc.AppHost/MrWhoOidc.AppHost.csproj" />
   <Project Path="MrWhoOidc.Auth/MrWhoOidc.Auth.csproj" />
+  <Project Path="MrWhoOidc.Cli/MrWhoOidc.Cli.csproj" />
   <Project Path="MrWhoOidc.KeyGen.Tests/MrWhoOidc.KeyGen.Tests.csproj" />
   <Project Path="MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj" />
   <Project Path="MrWhoOidc.Security/MrWhoOidc.Security.csproj" />

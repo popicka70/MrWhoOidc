@@ -791,6 +791,15 @@
         </div>
 
         <div class="tab-pane fade" id="tab-obo" role="tabpanel" aria-labelledby="obo-tab" tabindex="0">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h6>On-Behalf-Of (Token Exchange)</h6>
+                    <p class="text-muted">Configure RFC 8693 token exchange policy for this client</p>
+                </div>
+                <a href="@(tenantPrefix)/admin/obo-setup?step=shape" class="btn btn-sm btn-outline-primary">
+                    <i class="ph ph-person-gear"></i> Setup Wizard
+                </a>
+            </div>
             <div class="row g-3">
                 <div class="col-12 form-check">
                     <input asp-for="Input.OboEnabled" class="form-check-input" />

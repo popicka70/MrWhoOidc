@@ -27,6 +27,12 @@ public class PlatformSettings
     public bool DynamicClientRegistrationEnabled { get; set; } = false;
 
     /// <summary>
+    /// Enable OAuth 2.0 Token Exchange (RFC 8693 / OBO) at runtime.
+    /// Null means "inherit configured AuthOptions default" for backward compatibility.
+    /// </summary>
+    public bool? EnableTokenExchange { get; set; }
+
+    /// <summary>
     /// Timestamp when settings were first created.
     /// </summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

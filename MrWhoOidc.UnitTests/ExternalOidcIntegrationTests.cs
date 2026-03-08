@@ -66,7 +66,7 @@ public sealed class ExternalOidcIntegrationTests
 
     private sealed record TestEnv(IHost Host, HttpClient Client);
 
-    private static async Task<TestEnv> CreateAsync(Action<AuthOptions>? configureAuth = null)
+    private static async Task<TestEnv> CreateAsync(Action<AuthOptions>? configureAuth = null, Action<PlatformSettings>? configurePlatformSettings = null)
     {
         var dbName = "ext-intg-" + Guid.NewGuid().ToString("N");
         var up1 = CreateRsa("up1");
@@ -129,6 +129,12 @@ public sealed class ExternalOidcIntegrationTests
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+            if (configurePlatformSettings != null)
+            {
+                var platformSettings = new PlatformSettings();
+                configurePlatformSettings(platformSettings);
+                db.PlatformSettings.Add(platformSettings);
+            }
             var realm = new Realm { Name = "default" }; db.Realms.Add(realm);
             var hasher = new TestPasswordHasher();
             var client = new ClientEntity { ClientId = ClientPublicId, ClientName = "Web App", ClientSecretHash = hasher.Hash("secret"), RealmId = realm.Id, AllowLocalLogin = false };
@@ -540,6 +546,21 @@ public sealed class ExternalOidcIntegrationTests
 
         Assert.IsTrue(root.GetProperty("grant_types_supported").EnumerateArray().Any(x => x.GetString() == "urn:openid:params:grant-type:ciba"));
         Assert.AreEqual("http://localhost/bc-authorize", root.GetProperty("backchannel_authentication_endpoint").GetString());
+    }
+
+    [TestMethod]
+    public async Task Discovery_Document_Omits_TokenExchange_When_Platform_Setting_Disabled()
+    {
+        var env = await CreateAsync(configurePlatformSettings: s => s.EnableTokenExchange = false);
+        using var _ = env.Host;
+        var client = env.Client;
+        var resp = await client.GetAsync("/.well-known/openid-configuration");
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+
+        var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+
+        Assert.IsFalse(root.GetProperty("grant_types_supported").EnumerateArray().Any(x => x.GetString() == "urn:ietf:params:oauth:grant-type:token-exchange"));
     }
 
     [TestMethod]

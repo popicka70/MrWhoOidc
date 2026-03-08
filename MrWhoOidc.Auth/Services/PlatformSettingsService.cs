@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.Auth.Services;
@@ -12,12 +13,14 @@ public class PlatformSettingsService : IPlatformSettingsService
 {
     private readonly AuthDbContext _db;
     private readonly HybridCache _cache;
+    private readonly IOptions<AuthOptions> _authOptions;
     private const string CacheKey = "platform:settings";
 
-    public PlatformSettingsService(AuthDbContext db, HybridCache cache)
+    public PlatformSettingsService(AuthDbContext db, HybridCache cache, IOptions<AuthOptions> authOptions)
     {
         _db = db;
         _cache = cache;
+        _authOptions = authOptions;
     }
 
     /// <inheritdoc />
@@ -44,7 +47,10 @@ public class PlatformSettingsService : IPlatformSettingsService
                     if (settings == null)
                     {
                         // Create default settings on first access
-                        settings = new PlatformSettings();
+                        settings = new PlatformSettings
+                        {
+                            EnableTokenExchange = _authOptions.Value.EnableTokenExchange
+                        };
                         _db.PlatformSettings.Add(settings);
                         await _db.SaveChangesAsync(ct);
                     }
