@@ -2028,6 +2028,11 @@ public sealed class ConfigurationImportService(
             .Where(r => r.TenantId == tenantId)
             .ToListAsync(cancellationToken);
 
+        var usernames = users.Select(u => u.Username).ToList();
+        var existingUserAccounts = await _dbContext.UserAccounts
+            .Where(a => usernames.Contains(a.Username))
+            .ToDictionaryAsync(a => a.Username, cancellationToken);
+
         foreach (var userDef in users)
         {
             // Check if user exists (by username in tenant)
@@ -2063,8 +2068,7 @@ public sealed class ConfigurationImportService(
             }
 
             // Ensure UserAccount exists and password is set
-            var account = await _dbContext.UserAccounts
-                .FirstOrDefaultAsync(a => a.Username == userDef.Username, cancellationToken); // Note: UserAccount is global
+            existingUserAccounts.TryGetValue(userDef.Username, out var account); // Note: UserAccount is global
 
             if (account == null)
             {
@@ -2078,6 +2082,7 @@ public sealed class ConfigurationImportService(
                     CreatedAt = DateTimeOffset.UtcNow
                 };
                 _dbContext.UserAccounts.Add(account);
+                existingUserAccounts[userDef.Username] = account;
             }
 
             // Set Password
