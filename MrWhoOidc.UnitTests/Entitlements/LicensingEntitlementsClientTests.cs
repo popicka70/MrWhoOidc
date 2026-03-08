@@ -129,4 +129,47 @@ public class LicensingEntitlementsClientTests
         Assert.AreEqual("service_error", result.Error.Error);
         Assert.AreEqual("LicensingService returned status 400", result.Error.ErrorDescription);
     }
+
+    [TestMethod]
+    public async Task GetSignedLicenseTokenAsync_WhenTaskCanceledExceptionThrown_ReturnsTimeoutError()
+    {
+        // Arrange
+        var options = new LicensingIntegrationOptions
+        {
+            Enabled = true,
+            BaseUrl = "https://example.com",
+            Audience = "test-audience"
+        };
+        var optionsMock = new Mock<IOptions<LicensingIntegrationOptions>>();
+        optionsMock.Setup(o => o.Value).Returns(options);
+
+        var jwtServiceMock = new Mock<IJwtService>();
+        jwtServiceMock
+            .Setup(j => j.CreateJwtAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IEnumerable<System.Security.Claims.Claim>>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>()))
+            .ReturnsAsync("dummy-token");
+
+        var handler = new TestHttpMessageHandler(new TaskCanceledException("Task canceled"));
+        var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(options.BaseUrl)
+        };
+
+        var logger = NullLogger<LicensingEntitlementsClient>.Instance;
+
+        var client = new LicensingEntitlementsClient(httpClient, optionsMock.Object, jwtServiceMock.Object, logger);
+        var request = new SignedLicenseTokenRequest
+        {
+            SubjectId = "sub123",
+            ProductKey = "prod123"
+        };
+
+        // Act
+        var result = await client.GetSignedLicenseTokenAsync(request, "https://issuer.com", CancellationToken.None);
+
+        // Assert
+        Assert.IsFalse(result.Success);
+        Assert.IsNotNull(result.Error);
+        Assert.AreEqual("timeout", result.Error.Error);
+        Assert.AreEqual("LicensingService request timed out", result.Error.ErrorDescription);
+    }
 }
