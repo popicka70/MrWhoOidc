@@ -23,12 +23,17 @@ dotnet tool install --global MrWhoOidc.Cli
 ### From Source (Development)
 
 ```bash
-# Build and pack
-dotnet pack MrWhoOidc.Cli/MrWhoOidc.Cli.csproj -c Release -o ./nupkg
+# Build, pack, and reinstall the global tool from the local package source
+./deploy-mrwho-cli.sh
 
-# Install locally
-dotnet tool install --global --add-source ./nupkg MrWhoOidc.Cli
+# Bump the package version first, then deploy
+./deploy-mrwho-cli.sh --bump-version
+
+# Bump the minor version instead of the default patch increment
+./deploy-mrwho-cli.sh --bump-version --bump-part minor
 ```
+
+The deploy script packs `MrWhoOidc.Cli`, removes any existing global install, and reinstalls the tool from `./nupkg`. Use `--skip-install` if you only want to produce the `.nupkg` artifact. A PowerShell variant is also available as `deploy-mrwho-cli.ps1` if you prefer `pwsh`.
 
 ## Quick Start
 
