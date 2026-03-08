@@ -894,6 +894,7 @@ public static class AdminApiEndpointMappingExtensions
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
         LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
+        RateLimitingEndpoints.MapRateLimitingEndpoints(admin, platformAdmin);
 
         platformAdmin.MapPost("/seed-tenant", async (
             MrWhoOidc.WebAuth.Services.ITenantSeedingService seedingService,

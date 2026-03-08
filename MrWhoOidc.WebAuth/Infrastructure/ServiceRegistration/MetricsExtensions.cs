@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.Auth.Services;
+using AdminServices = MrWhoOidc.WebAdmin.Services;
 
 namespace MrWhoOidc.WebAuth.Infrastructure.ServiceRegistration;
 
@@ -20,6 +21,10 @@ public static class MetricsExtensions
         {
             services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         }
+
+        // Rate Limiting Dashboard Service
+        services.AddSingleton<MrWhoOidc.WebAdmin.Services.IRateLimitingMetricsService, MrWhoOidc.WebAdmin.Services.RateLimitingMetricsService>();
+
         return services;
     }
 }

@@ -1,0 +1,198 @@
+@page "/admin/rate-limits"
+@using MrWhoOidc.WebAuth.Observability
+@using MrWhoOidc.WebAdmin.Services
+@model MrWhoOidc.WebAuth.Pages.Admin.RateLimits.IndexModel
+@{
+    ViewData["Title"] = "Rate Limiting Dashboard";
+    Layout = "/Pages/Shared/_Layout.cshtml";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Rate Limiting Dashboard</h2>
+            <p class="text-muted">Real-time monitoring of rate limiting across all OIDC endpoints.</p>
+        </div>
+        <div class="col-auto">
+            <button id="refreshBtn" class="btn btn-primary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (!Model.IsInitialized)
+    {
+        <div class="alert alert-info">Loading rate limiting data...</div>
+    }
+
+    <!-- Overview Cards -->
+    <div class="row mb-4" id="overviewCards">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Requests (24h)</h5>
+                    <h2>@(Model.TotalAllowedRequests + Model.TotalBlockedRequests)</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Allowed Requests</h5>
+                    <h2>@Model.TotalAllowedRequests.ToString("#,##0")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Blocked Requests</h5>
+                    <h2>@Model.TotalBlockedRequests.ToString("#,##0")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Block Rate</h5>
+                    <h2>@Model.BlockRatePercent.ToString("F1")%</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy Status Table -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Rate Limiting Policies</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Policy Name</th>
+                                <th>Status</th>
+                                <th>Requests (24h)</th>
+                                <th>Max/Window</th>
+                                <th>Usage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="policyTableBody">
+                            @foreach (var policy in Model.PolicyStatuses)
+                            {
+                                <tr>
+                                    <td><strong>@policy.PolicyName</strong></td>
+                                    <td>
+                                        @if (policy.IsEnabled)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        }
+                                    </td>
+                                    <td>@(policy.CurrentRequests.ToString("#,##0"))</td>
+                                    <td>60 / 1 min</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            @if (policy.PercentUsed > 80)
+                                            {
+                                                <div class="progress-bar bg-danger" role="progressbar" style="width: @Math.Min(policy.PercentUsed, 100)%"></div>
+                                            }
+                                            else if (policy.PercentUsed > 50)
+                                            {
+                                                <div class="progress-bar bg-warning" role="progressbar" style="width: @Math.Min(policy.PercentUsed, 100)%"></div>
+                                            }
+                                            else
+                                            {
+                                                <div class="progress-bar bg-success" role="progressbar" style="width: @Math.Min(policy.PercentUsed, 100)%"></div>
+                                            }
+                                        </div>
+                                        <small>@policy.PercentUsed.ToString("F1")%</small>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Blocked Events -->
+    <div class="row">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Rate Limit Events</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentEvents.Any())
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Policy</th>
+                                    <th>Client</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="eventsTableBody">
+                                @foreach (var evt in Model.RecentEvents.Take(10))
+                                {
+                                    <tr>
+                                        <td>@evt.Timestamp.ToString("HH:mm:ss")</td>
+                                        <td>@evt.PolicyName</td>
+                                        <td>@evt.ClientId</td>
+                                        <td>
+                                            @if (evt.WasBlocked)
+                                            {
+                                                <span class="badge bg-danger">Blocked</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">Allowed</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No rate limit events recorded in the last hour.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Export -->
+    <div class="row mt-4">
+        <div class="col">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h5>Meter Name: MrWhoOidc.WebAuth</h5>
+                    <p class="mb-0 text-muted">Metrics are exported via OpenTelemetry for integration with Grafana/Prometheus.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-refresh every 30 seconds
+        let refreshInterval = setInterval(() => location.reload(), 30000);
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => location.reload(), 30000);
+        });
+    </script>
+}
