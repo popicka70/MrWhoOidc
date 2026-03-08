@@ -633,49 +633,49 @@ public static class AdminApiEndpointMappingExtensions
                 .ToList();
             return Results.Ok(new { enabled = state.EmissionEnabled, backlog, openCircuits });
         }).WithName("BackchannelHealth");
-        
+
         // Client secret health endpoint
         app.MapGet("/health/client-secrets", async (AuthDbContext db, CancellationToken ct) =>
         {
             var now = DateTime.UtcNow;
             var degradedThreshold = now.AddDays(3); // Degraded if secrets expire within 3 days
             var warningThreshold = now.AddDays(7);   // Warning if secrets expire within 7 days
-            
+
             // Check for clients with all secrets expired
             var criticalClients = await db.Clients
                 .AsNoTracking()
                 .Where(c => c.ClientSecrets.Any() && !c.ClientSecrets.Any(s =>
-                    s.ActivatedAtUtc != null 
-                    && s.RevokedAtUtc == null 
+                    s.ActivatedAtUtc != null
+                    && s.RevokedAtUtc == null
                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now)))
                 .Select(c => new { clientId = c.ClientId, tenantId = c.TenantId })
                 .ToListAsync(ct);
-            
+
             // Check for secrets expiring soon
             var degradedSecrets = await db.ClientSecrets
                 .AsNoTracking()
                 .Include(s => s.Client)
-                .Where(s => s.ActivatedAtUtc != null 
-                         && s.RevokedAtUtc == null 
-                         && s.ExpiresAtUtc != null 
-                         && s.ExpiresAtUtc > now 
+                .Where(s => s.ActivatedAtUtc != null
+                         && s.RevokedAtUtc == null
+                         && s.ExpiresAtUtc != null
+                         && s.ExpiresAtUtc > now
                          && s.ExpiresAtUtc <= degradedThreshold)
                 .ToListAsync(ct);
-            
+
             var warningSecrets = await db.ClientSecrets
                 .AsNoTracking()
                 .Include(s => s.Client)
-                .Where(s => s.ActivatedAtUtc != null 
-                         && s.RevokedAtUtc == null 
-                         && s.ExpiresAtUtc != null 
-                         && s.ExpiresAtUtc > degradedThreshold 
+                .Where(s => s.ActivatedAtUtc != null
+                         && s.RevokedAtUtc == null
+                         && s.ExpiresAtUtc != null
+                         && s.ExpiresAtUtc > degradedThreshold
                          && s.ExpiresAtUtc <= warningThreshold)
                 .ToListAsync(ct);
-            
-            var status = criticalClients.Count > 0 ? "unhealthy" 
-                       : degradedSecrets.Count > 0 ? "degraded" 
+
+            var status = criticalClients.Count > 0 ? "unhealthy"
+                       : degradedSecrets.Count > 0 ? "degraded"
                        : "healthy";
-            
+
             var response = new
             {
                 status,
@@ -703,10 +703,10 @@ public static class AdminApiEndpointMappingExtensions
                     })
                 }
             };
-            
+
             return status == "unhealthy" ? Results.Problem(
-                statusCode: 503, 
-                title: "Unhealthy", 
+                statusCode: 503,
+                title: "Unhealthy",
                 detail: $"{criticalClients.Count} client(s) have no active secrets",
                 instance: "/health/client-secrets")
                 : Results.Ok(response);
@@ -890,10 +890,10 @@ public static class AdminApiEndpointMappingExtensions
             });
         }).WithName("ForwardedHeadersHealth");
 
-    // Platform Admin: On-demand tenant seeding (platform-admin only)
-    var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
+        // Platform Admin: On-demand tenant seeding (platform-admin only)
+        var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
-    LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
+        LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
 
         platformAdmin.MapPost("/seed-tenant", async (
             MrWhoOidc.WebAuth.Services.ITenantSeedingService seedingService,
@@ -1355,7 +1355,7 @@ public static class AdminApiEndpointMappingExtensions
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger("TenantIcon");
-            logger.LogInformation("GET tenant icon request for tenant {TenantId} from user {UserId}", 
+            logger.LogInformation("GET tenant icon request for tenant {TenantId} from user {UserId}",
                 tenantId, httpContext.User.Identity?.Name ?? "anonymous");
 
             // Check if user is platform admin
@@ -1369,7 +1369,7 @@ public static class AdminApiEndpointMappingExtensions
                 var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
                 if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
                 {
-                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}",
                         tenantId, currentTenantId);
                     return Results.Problem(statusCode: 403, title: "Access denied");
                 }
@@ -1397,7 +1397,7 @@ public static class AdminApiEndpointMappingExtensions
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger("TenantIcon");
-            logger.LogInformation("POST tenant icon upload request for tenant {TenantId} from user {UserId}", 
+            logger.LogInformation("POST tenant icon upload request for tenant {TenantId} from user {UserId}",
                 tenantId, httpContext.User.Identity?.Name ?? "anonymous");
 
             try
@@ -1413,7 +1413,7 @@ public static class AdminApiEndpointMappingExtensions
                     var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
                     if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
                     {
-                        logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                        logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}",
                             tenantId, currentTenantId);
                         return Results.Problem(statusCode: 403, title: "Access denied");
                     }
@@ -1434,7 +1434,7 @@ public static class AdminApiEndpointMappingExtensions
                     return Results.Problem(statusCode: 400, title: "No file provided");
                 }
 
-                logger.LogDebug("Processing file upload for tenant {TenantId}: {FileName}, Size: {FileSize}, ContentType: {ContentType}", 
+                logger.LogDebug("Processing file upload for tenant {TenantId}: {FileName}, Size: {FileSize}, ContentType: {ContentType}",
                     tenantId, file.FileName, file.Length, file.ContentType);
 
                 using var stream = file.OpenReadStream();
@@ -1470,7 +1470,7 @@ public static class AdminApiEndpointMappingExtensions
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger("TenantIcon");
-            logger.LogInformation("DELETE tenant icon request for tenant {TenantId} from user {UserId}", 
+            logger.LogInformation("DELETE tenant icon request for tenant {TenantId} from user {UserId}",
                 tenantId, httpContext.User.Identity?.Name ?? "anonymous");
 
             // Check if user is platform admin
@@ -1484,7 +1484,7 @@ public static class AdminApiEndpointMappingExtensions
                 var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
                 if (!currentTenantId.HasValue || currentTenantId.Value != tenantId)
                 {
-                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}", 
+                    logger.LogWarning("Access denied: User not authorized for tenant {TenantId}, current tenant: {CurrentTenantId}",
                         tenantId, currentTenantId);
                     return Results.Problem(statusCode: 403, title: "Access denied");
                 }

@@ -11,7 +11,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Users;
 
 [Authorize(Policy = "tenant-admin")]
 public class AddModel(
-    AuthDbContext db, 
+    AuthDbContext db,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions,
     IUserAccountProvisioner accountProvisioner) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)

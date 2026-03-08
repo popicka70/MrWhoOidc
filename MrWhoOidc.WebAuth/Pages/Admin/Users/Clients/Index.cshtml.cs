@@ -60,7 +60,7 @@ public class IndexModel(
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
+
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
@@ -112,7 +112,7 @@ public class IndexModel(
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
+
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
@@ -178,9 +178,9 @@ public class IndexModel(
 
         // Update IsActive flag
         var assignmentLookup = assignedClientIds.ToDictionary(a => a.ClientId, a => a.IsActive);
-        AssignedClients = AssignedClients.Select(c => c with 
-        { 
-            IsActive = assignmentLookup.TryGetValue(c.Id, out var isActive) && isActive 
+        AssignedClients = AssignedClients.Select(c => c with
+        {
+            IsActive = assignmentLookup.TryGetValue(c.Id, out var isActive) && isActive
         }).ToList();
 
         // Get available clients (not assigned, same tenant)

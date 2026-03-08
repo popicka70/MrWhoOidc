@@ -88,7 +88,7 @@ public sealed class AuthorizeRequestOrchestrator(
         {
             if (resolution.Mode == "jar" || resolution.Mode == "par")
             {
-                 metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
+                metrics.JarInvalid.Add(1, new TagList { new("client", clientBucket) });
             }
             logger.LogWarning("/authorize 400: resolution failed corr={Corr} client={Client} error={Error}", corr, clientBucket, resolution.Error);
             return (ErrorResults.InvalidRequest($"{resolution.ErrorDescription} (corr={corr})"), null);

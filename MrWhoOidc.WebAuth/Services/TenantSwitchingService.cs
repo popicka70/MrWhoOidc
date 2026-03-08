@@ -47,7 +47,7 @@ public class TenantSwitchingService(
     public async Task<List<TenantAccessInfo>> GetUserTenantsAsync(ClaimsPrincipal user)
     {
         logger.LogDebug("🔍 [GetUserTenants] START - Resolving tenants for user");
-        
+
         var resolved = await userAccountResolver.ResolveAsync(user);
         if (resolved is null)
         {
@@ -55,7 +55,7 @@ public class TenantSwitchingService(
             return new List<TenantAccessInfo>();
         }
 
-        logger.LogDebug("🔍 [GetUserTenants] Resolved: UserId={UserId}, UserAccountId={UserAccountId}, Email={Email}", 
+        logger.LogDebug("🔍 [GetUserTenants] Resolved: UserId={UserId}, UserAccountId={UserAccountId}, Email={Email}",
             resolved.Value.UserId, resolved.Value.UserAccountId, resolved.Value.NormalizedEmail);
 
         var normalizedEmail = resolved.Value.NormalizedEmail;
@@ -155,7 +155,7 @@ public class TenantSwitchingService(
     public async Task SwitchTenantAsync(HttpContext httpContext, Guid tenantId)
     {
         logger.LogInformation("🔀 [SwitchTenant] START - Switching to tenant {TenantId}", tenantId);
-        
+
         if (httpContext is null)
         {
             throw new ArgumentNullException(nameof(httpContext));
@@ -189,18 +189,18 @@ public class TenantSwitchingService(
         try
         {
             var sessionId = httpContext.Session?.Id;
-            logger.LogInformation("[GetPreferredTenantId] Session ID: {SessionId}, IsAvailable: {IsAvailable}", 
+            logger.LogInformation("[GetPreferredTenantId] Session ID: {SessionId}, IsAvailable: {IsAvailable}",
                 sessionId ?? "(no session)", httpContext.Session != null);
-            
+
             var tenantIdStr = httpContext.Session?.GetString(TenantSessionKeys.PreferredTenantId);
             logger.LogInformation("[GetPreferredTenantId] Raw session value for PreferredTenantId: {Value}", tenantIdStr ?? "(null)");
-            
+
             if (Guid.TryParse(tenantIdStr, out var tenantId))
             {
                 logger.LogInformation("[GetPreferredTenantId] Returning tenant ID: {TenantId}", tenantId);
                 return tenantId;
             }
-            
+
             logger.LogInformation("[GetPreferredTenantId] No valid tenant ID in session");
             return null;
         }
@@ -265,7 +265,7 @@ public class TenantSwitchingService(
     private async Task ReissueAuthenticationAsync(HttpContext httpContext, Guid tenantId)
     {
         logger.LogDebug("🔑 [ReissueAuth] START - Reissuing auth for tenant {TenantId}", tenantId);
-        
+
         if (!(httpContext.User?.Identity?.IsAuthenticated ?? false))
         {
             logger.LogWarning("🔑 [ReissueAuth] User not authenticated - skipping");
@@ -274,7 +274,7 @@ public class TenantSwitchingService(
 
         var tenantInfos = await GetUserTenantsAsync(httpContext.User);
         logger.LogDebug("🔑 [ReissueAuth] Found {Count} accessible tenants", tenantInfos.Count);
-        
+
         var targetTenant = tenantInfos.FirstOrDefault(t => t.TenantId == tenantId);
         if (targetTenant is null)
         {
@@ -282,7 +282,7 @@ public class TenantSwitchingService(
             return;
         }
 
-        logger.LogDebug("🔑 [ReissueAuth] Target tenant: {TenantName}, TenantUserId={TenantUserId}", 
+        logger.LogDebug("🔑 [ReissueAuth] Target tenant: {TenantName}, TenantUserId={TenantUserId}",
             targetTenant.TenantName, targetTenant.TenantUserId);
 
         if (targetTenant.TenantUserId == Guid.Empty)
@@ -300,7 +300,7 @@ public class TenantSwitchingService(
             return;
         }
 
-        logger.LogDebug("🔑 [ReissueAuth] Found tenant user: Username={Username}, Email={Email}, TenantId={UserTenantId}", 
+        logger.LogDebug("🔑 [ReissueAuth] Found tenant user: Username={Username}, Email={Email}, TenantId={UserTenantId}",
             tenantUser.Username, tenantUser.Email, tenantUser.TenantId);
 
         var resolution = await userAccountResolver.ResolveAsync(httpContext.User, httpContext.RequestAborted);
@@ -355,7 +355,7 @@ public class TenantSwitchingService(
         var principal = new ClaimsPrincipal(identity);
 
         await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, props);
-        logger.LogInformation("🔑 [ReissueAuth] SUCCESS - User signed in with new identity. SubjectHash={SubjectHash}, TenantId={TenantId}, Claims={ClaimCount}", 
+        logger.LogInformation("🔑 [ReissueAuth] SUCCESS - User signed in with new identity. SubjectHash={SubjectHash}, TenantId={TenantId}, Claims={ClaimCount}",
             LogTokenization.HashId(tenantUser.Id.ToString()), tenantId, claims.Count);
     }
 

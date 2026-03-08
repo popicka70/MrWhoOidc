@@ -318,7 +318,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
 
         var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _logger.LogInformation("QR confirm: NameIdentifier claim={Claim}", userIdClaim ?? "(null)");
-        
+
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
             _logger.LogWarning("QR confirm rejected: invalid user ID claim, got {Claim}", userIdClaim);
@@ -336,7 +336,7 @@ public sealed class QrLoginHandler : IQrLoginHandler
                 // Platform QR login - just mark as authenticated, no auth code needed
                 // The desktop browser will sign in the user directly via cookie
                 _logger.LogInformation("QR confirm: platform QR login for user {UserId}", userId);
-                
+
                 await _qrService.UpdateStatusAsync(sessionToken, QrSessionStatus.Authenticated, userId, authCode: null);
 
                 _logger.LogInformation("QR platform login confirmed: user {UserId}", userId);

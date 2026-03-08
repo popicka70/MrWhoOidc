@@ -42,7 +42,7 @@ public class CreateTenantModel(ITenantService tenantService, ITenantSwitchingSer
         try
         {
             var tenant = await tenantService.CreateTenantAsync(Input.Name, userId);
-            
+
             // Switch context to the new tenant
             await tenantSwitchingService.SwitchTenantAsync(HttpContext, tenant.Id);
 

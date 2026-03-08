@@ -158,8 +158,8 @@ public static class HttpContextExtensions
 
     public static string GetCorrelationId(this HttpContext httpContext)
     {
-        return System.Diagnostics.Activity.Current?.Id 
-            ?? httpContext.Items["CorrelationId"] as string 
+        return System.Diagnostics.Activity.Current?.Id
+            ?? httpContext.Items["CorrelationId"] as string
             ?? Guid.NewGuid().ToString("N");
     }
 

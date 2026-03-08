@@ -219,7 +219,7 @@ public class SelectTenantModel : PageModel
 
         if (!authResult.Succeeded)
         {
-            _logger.LogWarning("Global authentication failed for email hash {EmailHash}: {Reason}", 
+            _logger.LogWarning("Global authentication failed for email hash {EmailHash}: {Reason}",
                 HashEmail(Email!), authResult.FailureReason);
             ErrorMessage = "Invalid email or password.";
             RequiresVerification = true;

@@ -27,7 +27,7 @@ public static class TenantAwareUrlBuilder
         {
             path = "/";
         }
-        
+
         // Ensure path starts with /
         if (!path.StartsWith('/'))
         {

@@ -338,9 +338,9 @@ using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-    
+
     logger.LogInformation("Checking database migration status...");
-    
+
     if (db.Database.IsRelational())
     {
         logger.LogInformation("Database is relational, applying migrations...");
@@ -348,11 +348,11 @@ using (var scope = app.Services.CreateScope())
         {
             await db.Database.MigrateAsync();
             logger.LogInformation("Database migrations applied successfully");
-            
+
             // Check if TenantIcon table exists
             var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
             var appliedMigrations = await db.Database.GetAppliedMigrationsAsync();
-            
+
             logger.LogInformation("Applied migrations: {AppliedMigrations}", string.Join(", ", appliedMigrations));
             if (pendingMigrations.Any())
             {
@@ -368,7 +368,7 @@ using (var scope = app.Services.CreateScope())
             logger.LogError(ex, "Failed to apply database migrations: {Message}", ex.Message);
             throw;
         }
-        
+
         logger.LogInformation("Automatic tenant bootstrap on startup is disabled; use the explicit bootstrap endpoint when needed.");
     }
     else

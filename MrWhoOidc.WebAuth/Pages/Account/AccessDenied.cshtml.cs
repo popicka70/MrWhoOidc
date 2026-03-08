@@ -39,7 +39,7 @@ public class AccessDeniedModel : PageModel
             HomeUrl = tenantPrefix;
             LoginUrl = $"{tenantPrefix}/login";
             AccountUrl = $"{tenantPrefix}/Account";
-            
+
             // Check if user has admin access
             if (User?.IsInRole("admin") == true || User?.IsInRole("tenant-admin") == true)
             {
@@ -51,7 +51,7 @@ public class AccessDeniedModel : PageModel
             HomeUrl = "/";
             LoginUrl = "/login";
             AccountUrl = "/Account";
-            
+
             if (User?.IsInRole("admin") == true)
             {
                 DashboardUrl = "/Admin/Users";

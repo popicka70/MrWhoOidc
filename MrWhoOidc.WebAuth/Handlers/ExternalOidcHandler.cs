@@ -231,11 +231,11 @@ public sealed class ExternalOidcHandler : IExternalOidcHandler
         }
 
         var redirectUri = http.GetIssuer() + "/auth/external/callback";
-        
-        _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}", 
-            code.Length > 10 ? code.Substring(0, 10) + "..." : code, 
-            discovery.Response!.TokenEndpoint, 
-            redirectUri, 
+
+        _logger.LogInformation("Token exchange: code={CodePreview}, tokenEndpoint={TokenEndpoint}, redirectUri={RedirectUri}, clientId={ClientId}",
+            code.Length > 10 ? code.Substring(0, 10) + "..." : code,
+            discovery.Response!.TokenEndpoint,
+            redirectUri,
             cfg.ClientId);
 
         var tokenResult = await _tokenExchangeService.ExchangeCodeForTokensAsync(

@@ -14,9 +14,9 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Clients;
 
 [Authorize(Policy = "tenant-admin")]
 public class AddModel(
-    AuthDbContext db, 
-    IPasswordHasher hasher, 
-    IClientIdGenerator idGen, 
+    AuthDbContext db,
+    IPasswordHasher hasher,
+    IClientIdGenerator idGen,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
@@ -84,9 +84,9 @@ public class AddModel(
             UserInfoSignedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoSignedResponseAlg) ? null : Input.UserInfoSignedResponseAlg,
             UserInfoEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseAlg) ? null : Input.UserInfoEncryptedResponseAlg,
             UserInfoEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.UserInfoEncryptedResponseEnc) ? null : Input.UserInfoEncryptedResponseEnc,
-                AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg,
-                AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg,
-                AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc,
+            AuthorizationSignedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationSignedResponseAlg) ? null : Input.AuthorizationSignedResponseAlg,
+            AuthorizationEncryptedResponseAlg = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseAlg) ? null : Input.AuthorizationEncryptedResponseAlg,
+            AuthorizationEncryptedResponseEnc = string.IsNullOrWhiteSpace(Input.AuthorizationEncryptedResponseEnc) ? null : Input.AuthorizationEncryptedResponseEnc,
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
             ClientSecretHash = string.IsNullOrEmpty(Input.ClientSecret) ? null : hasher.Hash(Input.ClientSecret)
 #pragma warning restore CS0618

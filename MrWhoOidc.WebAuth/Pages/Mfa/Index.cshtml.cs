@@ -12,8 +12,8 @@ namespace MrWhoOidc.WebAuth.Pages.Mfa;
 
 [Authorize]
 public class IndexModel(
-    AuthDbContext db, 
-    ITotpService totp, 
+    AuthDbContext db,
+    ITotpService totp,
     ITenantSettingsService settingsService,
     IUserAccountService userAccountService,
     ILogger<IndexModel> logger) : PageModel

@@ -85,7 +85,7 @@ public class ImportModel(
             var standaloneRealmCount = manifest.Data?.Realms?.Count ?? 0;
             var nestedRealmCount = manifest.Data?.Tenants?.SelectMany(t => t.Realms ?? []).Count() ?? 0;
             var realmCount = standaloneRealmCount + nestedRealmCount;
-            
+
             if (realmCount == 0)
             {
                 ErrorMessage = "The manifest does not contain any realm configurations.";

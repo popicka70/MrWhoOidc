@@ -611,14 +611,14 @@ public class EditModel(
         /// </summary>
         public bool AllowRegistration { get; set; } = false;
         public int SortOrder { get; set; } = 0;
-        
+
         public string? LogoUrl { get; set; }
         public byte[]? LogoData { get; set; }
         public string? ConfigJson { get; set; }
-        
+
         [StringLength(20)]
         public string? ButtonBackgroundColor { get; set; }
-        
+
         [StringLength(20)]
         public string? ButtonTextColor { get; set; }
     }

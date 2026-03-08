@@ -123,7 +123,7 @@ public class SettingsModel : PageModel
             tenant.SettingsJson = UpsertDynamicRegistrationRealm(tenant.SettingsJson, SingleTenantDynamicClientRegistrationRealmId);
             await _db.SaveChangesAsync();
         }
-        
+
         TempData["SuccessMessage"] = "Platform settings saved successfully.";
         return RedirectToPage();
     }

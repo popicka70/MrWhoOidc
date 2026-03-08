@@ -15,14 +15,14 @@ public class SwitchTenantModel(
     public async Task<IActionResult> OnPostAsync(Guid tenantId, string? returnUrl = null)
     {
         logger.LogInformation("🔄 [TenantSwitch] START - Requested switch to tenant {TenantId}, ReturnUrl={ReturnUrl}", tenantId, returnUrl);
-        logger.LogInformation("🔄 [TenantSwitch] Current user: {UserName}, SubHash={SubHash}", 
-            User.Identity?.Name, 
+        logger.LogInformation("🔄 [TenantSwitch] Current user: {UserName}, SubHash={SubHash}",
+            User.Identity?.Name,
             LogTokenization.HashId(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value));
 
         // Verify user has access to this tenant
         var userTenants = await tenantSwitchingService.GetUserTenantsAsync(User);
-        logger.LogInformation("🔄 [TenantSwitch] User has access to {Count} tenants: {Tenants}", 
-            userTenants.Count, 
+        logger.LogInformation("🔄 [TenantSwitch] User has access to {Count} tenants: {Tenants}",
+            userTenants.Count,
             string.Join(", ", userTenants.Select(t => $"{t.TenantSlug}({t.TenantId})")));
 
         var targetTenant = userTenants.FirstOrDefault(t => t.TenantId == tenantId);
@@ -33,7 +33,7 @@ public class SwitchTenantModel(
             return Forbid();
         }
 
-        logger.LogInformation("🔄 [TenantSwitch] Target tenant found: {TenantName} ({TenantSlug}), TenantUserId={TenantUserId}, HasAdminAccess={HasAdminAccess}", 
+        logger.LogInformation("🔄 [TenantSwitch] Target tenant found: {TenantName} ({TenantSlug}), TenantUserId={TenantUserId}, HasAdminAccess={HasAdminAccess}",
             targetTenant.TenantName, targetTenant.TenantSlug, targetTenant.TenantUserId, targetTenant.HasAdminAccess);
 
         // Switch tenant in session

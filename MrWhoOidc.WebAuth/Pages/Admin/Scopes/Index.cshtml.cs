@@ -20,7 +20,7 @@ public class IndexModel(
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
     public sealed record ScopeRow(string Name, string? Description, bool IsExposed, bool IsGlobal, Guid? TenantId, string? TenantName);
-    
+
     public IReadOnlyList<ScopeRow> Scopes { get; private set; } = Array.Empty<ScopeRow>();
     public bool IsPlatformAdmin { get; private set; }
 
@@ -32,7 +32,7 @@ public class IndexModel(
 
         // Platform admins see ALL scopes, tenant admins see global + their tenant's scopes
         var query = db.Scopes.AsNoTracking();
-        
+
         if (!IsPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;
@@ -68,7 +68,7 @@ public class IndexModel(
     public async Task<IActionResult> OnPostDeleteAsync(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return TenantAwareRedirectToPage();
-        
+
         var scope = await db.Scopes.FirstOrDefaultAsync(s => s.Name == name);
         if (scope is null) return TenantAwareRedirectToPage();
 
@@ -91,7 +91,7 @@ public class IndexModel(
             TempData["Error"] = $"Cannot delete scope '{name}' because it is assigned to one or more clients.";
             return TenantAwareRedirectToPage();
         }
-        
+
         db.Scopes.Remove(scope);
         await db.SaveChangesAsync();
         TempData["Success"] = $"Scope '{name}' deleted successfully.";

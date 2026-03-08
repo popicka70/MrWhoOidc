@@ -59,13 +59,13 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         {
             var tid = _tenantAccessor.CurrentTenant?.TenantId;
             _logger.LogInformation("[TenantAdminAuth] Middleware tenant: {MiddlewareTenant}", tid?.ToString() ?? "(null)");
-            
+
             if (tid == null && httpContext != null)
             {
                 var sessionAvailable = httpContext.Session != null;
                 var hasSessionCookie = httpContext.Request.Cookies.ContainsKey(".mrwhooidc.session");
                 _logger.LogInformation("[TenantAdminAuth] Session available: {SessionAvailable}, HasSessionCookie: {HasCookie}", sessionAvailable, hasSessionCookie);
-                
+
                 tid = _tenantSwitchingService.GetPreferredTenantId(httpContext);
                 _logger.LogInformation("[TenantAdminAuth] Session tenant: {SessionTenant}", tid?.ToString() ?? "(null)");
             }
@@ -95,7 +95,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         // Get current tenant context - try middleware first, then session fallback
         // This ensures authorization works even on pages that skip tenant resolution (e.g., /platform-admin/*)
         var tenantId = GetEffectiveTenantId();
-        
+
         if (tenantId == null)
         {
             // No tenant context - cannot proceed
@@ -107,7 +107,7 @@ public sealed class TenantAdminAuthorizationHandler : AuthorizationHandler<Tenan
         // Check if user has tenant-admin role in current tenant's default realm (realm-scoped)
         var realmName = _options.Value.RealmName;
         var roleName = _options.Value.TenantAdminRoleName;
-        
+
         _logger.LogDebug("[TenantAdminAuth] Checking role {Role} in realm {Realm} for tenant {TenantId}", roleName, realmName, tenantId);
 
         var hasRole = await _db.UserRealmRoleAssignments.AsNoTracking()

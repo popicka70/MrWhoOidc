@@ -25,7 +25,7 @@ public class IndexModel(
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var userQuery = db.Users.AsNoTracking().Where(u => u.Id == UserId);
-        
+
         if (!isPlatformAdmin)
         {
             var currentTenantId = TenantAccessor.CurrentTenant?.TenantId;

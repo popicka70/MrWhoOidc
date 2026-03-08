@@ -14,8 +14,8 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.Providers;
 
 [Authorize(Policy = "tenant-admin")]
 public class ClaimMappingsModel(
-    AuthDbContext db, 
-    IClaimMappingService mapper, 
+    AuthDbContext db,
+    IClaimMappingService mapper,
     ILogger<ClaimMappingsModel> logger,
     ITenantAccessor tenantAccessor,
     IMultiTenancyOptions multiTenancyOptions) : PageModel
