@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.Services;
 
@@ -55,8 +56,11 @@ public class ForgotPasswordModel(
                 result.Account?.Id,
                 resetUrl);
 
-            // TODO: Integrate with email service
-            // await emailService.SendPasswordResetEmailAsync(result.Account!.Email!, resetUrl!);
+            var emailService = HttpContext.RequestServices.GetService<IEmailService>();
+            if (emailService != null)
+            {
+                await emailService.SendPasswordResetEmailAsync(result.Account!.Email!, resetUrl!);
+            }
         }
         else
         {
