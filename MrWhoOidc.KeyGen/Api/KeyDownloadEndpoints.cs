@@ -82,7 +82,7 @@ public static class KeyDownloadEndpoints
                 KeyPairMetadataId = metadata.Id,
                 DownloadType = "PublicKey",
                 DownloadedAt = DateTimeOffset.UtcNow,
-                DownloadedBy = null, // TODO: Add authentication
+                DownloadedBy = httpContext.User?.Identity?.Name,
                 IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
                 UserAgent = httpContext.Request.Headers.UserAgent.ToString()
             };
