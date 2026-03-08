@@ -207,7 +207,6 @@ public sealed class DiscoveryHandler(
             ["backchannel_logout_supported"] = true,
             ["backchannel_logout_session_supported"] = true,
             ["response_types_supported"] = new[] { OAuthConstants.ResponseTypes.Code },
-            ["grant_types_supported"] = grants.ToArray(),
             ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic", "client_secret_post", "private_key_jwt", "self_signed_tls_client_auth" },
             ["token_endpoint_auth_signing_alg_values_supported"] = new[]
             {
@@ -333,6 +332,8 @@ public sealed class DiscoveryHandler(
             };
             body["backchannel_user_code_parameter_supported"] = authOptions.Value.CibaUserCodeParameterSupported;
         }
+
+        body["grant_types_supported"] = grants.ToArray();
 
         // RFC 8705: mtls_endpoint_aliases (optional)
         var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;

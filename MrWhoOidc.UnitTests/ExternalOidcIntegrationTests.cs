@@ -66,7 +66,7 @@ public sealed class ExternalOidcIntegrationTests
 
     private sealed record TestEnv(IHost Host, HttpClient Client);
 
-    private static async Task<TestEnv> CreateAsync()
+    private static async Task<TestEnv> CreateAsync(Action<AuthOptions>? configureAuth = null)
     {
         var dbName = "ext-intg-" + Guid.NewGuid().ToString("N");
         var up1 = CreateRsa("up1");
@@ -120,6 +120,7 @@ public sealed class ExternalOidcIntegrationTests
         {
             o.RequestObjectAllowedAlgorithms = new[] { "RS256", "PS256", "ES256" };
             o.EnableTokenExchange = true;
+            configureAuth?.Invoke(o);
         });
 
         var app = builder.Build();
@@ -523,6 +524,22 @@ public sealed class ExternalOidcIntegrationTests
         var expected = new[] { "ES256", "PS256", "RS256" }; // configured in test harness AuthOptions override
         CollectionAssert.AreEquivalent(expected, algs, "Discovery should advertise configured JAR alg set");
         CollectionAssert.AreEqual(expected.OrderBy(a => a).ToArray(), algs.OrderBy(a => a).ToArray(), "Alg list deterministic ordering");
+    }
+
+    [TestMethod]
+    public async Task Discovery_Document_Includes_Ciba_Grant_When_Enabled()
+    {
+        var env = await CreateAsync(o => o.EnableCiba = true);
+        using var _ = env.Host;
+        var client = env.Client;
+        var resp = await client.GetAsync("/.well-known/openid-configuration");
+        Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode);
+
+        var json = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+
+        Assert.IsTrue(root.GetProperty("grant_types_supported").EnumerateArray().Any(x => x.GetString() == "urn:openid:params:grant-type:ciba"));
+        Assert.AreEqual("http://localhost/bc-authorize", root.GetProperty("backchannel_authentication_endpoint").GetString());
     }
 
     [TestMethod]
