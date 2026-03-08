@@ -1,0 +1,821 @@
+@page "/admin/obo-setup"
+@model IndexModel
+@using MrWhoOidc.Auth.Persistence
+@inject MrWhoOidc.Auth.MultiTenancy.ITenantAccessor TenantAccessor
+@inject MrWhoOidc.Auth.MultiTenancy.IMultiTenancyOptions MultiTenancyOptions
+@{
+    ViewData["Title"] = "OBO Setup Wizard";
+    var currentTenant = TenantAccessor.CurrentTenant;
+    var tenantPrefix = currentTenant != null && MultiTenancyOptions.Enabled 
+        ? $"/t/{currentTenant.Slug}" 
+        : "";
+    
+    var isExistingMode = Model.Wizard?.Mode == "existing";
+    
+    var steps = isExistingMode 
+        ? new[] { "shape", "client-selection", "api-policy", "user-access", "review", "complete" }
+        : new[] { "shape", "ui-client", "api-policy", "user-access", "review", "complete" };
+    
+    var stepLabels = new Dictionary<string, string>
+    {
+        { "shape", "Setup Mode" },
+        { "client-selection", "Select Clients" },
+        { "ui-client", "UI Client" },
+        { "api-policy", "API & Delegation" },
+        { "user-access", "User Access" },
+        { "review", "Review" },
+        { "complete", "Complete" }
+    };
+    
+    var currentStepIndex = Array.IndexOf(steps, Model.CurrentStep);
+}
+
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-person-gear icon-md icon-primary"></i>
+            OBO Setup Wizard
+        </h1>
+        <p class="page-header__subtitle">Configure On-Behalf-Of (token exchange) for your application</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Stepper -->
+    <div class="col-md-3">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header">
+                <h6 class="mb-0">Setup Progress</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach (var step in steps)
+                    {
+                        var stepKey = step;
+                        var isActive = step == Model.CurrentStep;
+                        var isCompleted = Array.IndexOf(steps, step) < currentStepIndex;
+                        var stepNum = Array.IndexOf(steps, step) + 1;
+                        
+                        if (stepLabels.ContainsKey(stepKey))
+                        {
+                            <a href="?step=@step" class="list-group-item list-group-item-action @(isActive ? "active" : "") @(isCompleted ? "opacity-50" : "")">
+                                <div class="d-flex align-items-center gap-2">
+                                    @if (isCompleted)
+                                    {
+                                        <span class="badge bg-success rounded-circle">
+                                            <i class="ph ph-check-bold"></i>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary rounded-circle">@stepNum</span>
+                                    }
+                                    <span>@stepLabels[stepKey]</span>
+                                </div>
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Form -->
+    <div class="col-md-9">
+        <form method="post" id="wizardForm">
+            <input type="hidden" name="step" value="@Model.CurrentStep" />
+            <input type="hidden" asp-for="Wizard.Mode" />
+            
+            @if (!ViewData.ModelState.IsValid && Model.CurrentStep != "complete")
+            {
+                <div class="alert alert-danger" role="alert">
+                    @Html.ValidationSummary(true)
+                </div>
+            }
+
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    @TempData["SuccessMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            }
+
+            <!-- Step 1: Setup Mode -->
+            @if (Model.CurrentStep == "shape")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 1: Choose Your Setup Mode</h5>
+                        <p class="text-muted mb-0">How do you want to configure OBO?</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="Wizard.SolutionName" class="form-label">Solution Name</label>
+                                <input asp-for="Wizard.SolutionName" class="form-control" placeholder="e.g., My Web App" />
+                                <small class="form-text text-muted">A friendly name to identify this OBO setup</small>
+                                <span asp-validation-for="Wizard.SolutionName" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.RealmId" class="form-label">Realm</label>
+                                <select asp-for="Wizard.RealmId" class="form-select" required>
+                                    <option value="">-- Select Realm --</option>
+                                    @foreach (var realm in Model.Realms ?? new List<Realm>())
+                                    {
+                                        <option value="@realm.Id">@realm.Name</option>
+                                    }
+                                </select>
+                                <span asp-validation-for="Wizard.RealmId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Configuration Mode</label>
+                                <input type="hidden" asp-for="Wizard.Mode" />
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check border rounded p-3">
+                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-new" value="new" 
+                                                   @if (Model.Wizard?.Mode != "existing") { <text>checked</text> } />
+                                            <label class="form-check-label" for="mode-new">
+                                                <strong>Create New Clients</strong>
+                                                <small class="d-block text-muted">Create UI app client and API resource client from scratch</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check border rounded p-3">
+                                            <input class="form-check-input" type="radio" name="Wizard.Mode" id="mode-existing" value="existing" 
+                                                   @if (Model.Wizard?.Mode == "existing") { <text>checked</text> } />
+                                            <label class="form-check-label" for="mode-existing">
+                                                <strong>Use Existing Clients</strong>
+                                                <small class="d-block text-muted">Configure OBO on clients you already have</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="ph ph-info me-2"></i>
+                                    <strong>What is OBO?</strong> On-Behalf-Of (token exchange) allows your UI application to safely exchange the user's access token for a new token to call backend APIs. This keeps credentials secure by: (1) User logs into your UI app, (2) UI app acquires a token, (3) UI makes a token exchange call, (4) OIDC server gives a new token for the API audience, (5) UI calls the API with the exchanged token.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 2a: Client Selection (Existing Mode) -->
+            @if (Model.CurrentStep == "client-selection")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 2: Select Your Clients</h5>
+                        <p class="text-muted mb-0">Choose which clients will use OBO token exchange</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields from previous steps -->
+                        <input type="hidden" asp-for="Wizard.SolutionName" />
+                        <input type="hidden" asp-for="Wizard.RealmId" />
+                        <input type="hidden" asp-for="Wizard.Mode" />
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="Wizard.ExistingUiClientId" class="form-label">UI Application Client</label>
+                                <select asp-for="Wizard.ExistingUiClientId" class="form-select">
+                                    <option value="">-- Select UI Client --</option>
+                                    @foreach (var client in Model.AvailableClients)
+                                    {
+                                        <option value="@client.Id">@(client.ClientName) (@client.ClientId) - @client.RealmName</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The client that users log into (interactive/web app)</small>
+                                <span asp-validation-for="Wizard.ExistingUiClientId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="Wizard.ExistingApiClientId" class="form-label">API Resource Client</label>
+                                <select asp-for="Wizard.ExistingApiClientId" class="form-select">
+                                    <option value="">-- Select API Client --</option>
+                                    @foreach (var client in Model.AvailableClients)
+                                    {
+                                        <option value="@client.Id">@(client.ClientName) (@client.ClientId) - @client.RealmName</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">The client that represents your backend API (resource/audience)</small>
+                                <span asp-validation-for="Wizard.ExistingApiClientId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="alert alert-warning">
+                                    <i class="ph ph-warning me-2"></i>
+                                    <strong>Note:</strong> The UI and API clients must be different. Make sure you're selecting two distinct clients.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 2b: UI Client (New Mode) -->
+            @if (Model.CurrentStep == "ui-client")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 2: UI Client Configuration</h5>
+                        <p class="text-muted mb-0">Configure your frontend application client</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields from previous steps -->
+                        <input type="hidden" asp-for="Wizard.SolutionName" />
+                        <input type="hidden" asp-for="Wizard.RealmId" />
+                        <input type="hidden" asp-for="Wizard.Mode" />
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.UiClientName" class="form-label">UI Application Name</label>
+                                <input asp-for="Wizard.UiClientName" class="form-control" placeholder="e.g., Web Portal" />
+                                <span asp-validation-for="Wizard.UiClientName" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.UiClientId" class="form-label">UI Client ID</label>
+                                <input asp-for="Wizard.UiClientId" class="form-control" placeholder="e.g., web-app" />
+                                <small class="form-text text-muted">Unique identifier for your UI app (alphanumeric, hyphens, underscores only)</small>
+                                <span asp-validation-for="Wizard.UiClientId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Redirect URI (Login)</label>
+                                <div id="redirectUrisContainer">
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control redirect-uri" placeholder="https://app.example.com/login/callback" />
+                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRedirectUri()">
+                                    <i class="ph ph-plus"></i> Add Redirect URI
+                                </button>
+                                <span asp-validation-for="Wizard.UiRedirectUris" class="text-danger d-block mt-2"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Post-Logout Redirect URI</label>
+                                <div id="postLogoutUrisContainer">
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control post-logout-uri" placeholder="https://app.example.com" />
+                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addPostLogoutUri()">
+                                    <i class="ph ph-plus"></i> Add Post-Logout URI
+                                </button>
+                                <span asp-validation-for="Wizard.UiPostLogoutRedirectUris" class="text-danger d-block mt-2"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input asp-for="Wizard.UiClientIsPublic" class="form-check-input" />
+                                    <label asp-for="Wizard.UiClientIsPublic" class="form-check-label">
+                                        Public Client (SPA)
+                                    </label>
+                                    <small class="d-block text-muted">Uncheck for confidential clients (web servers with backend)</small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input asp-for="Wizard.UiClientRequirePkce" class="form-check-input" />
+                                    <label asp-for="Wizard.UiClientRequirePkce" class="form-check-label">
+                                        Require PKCE
+                                    </label>
+                                    <small class="d-block text-muted">Recommended security standard</small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input asp-for="Wizard.UiClientRequireConsent" class="form-check-input" />
+                                    <label asp-for="Wizard.UiClientRequireConsent" class="form-check-label">
+                                        Require User Consent
+                                    </label>
+                                    <small class="d-block text-muted">Ask users to approve scope access</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 3: API & Delegation -->
+            @if (Model.CurrentStep == "api-policy")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 3: API Client & OBO Policy</h5>
+                        <p class="text-muted mb-0">Configure the backend API and token exchange rules</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields from previous steps -->
+                        <input type="hidden" asp-for="Wizard.SolutionName" />
+                        <input type="hidden" asp-for="Wizard.RealmId" />
+                        <input type="hidden" asp-for="Wizard.Mode" />
+                        @if (Model.Wizard?.Mode == "existing")
+                        {
+                            <input type="hidden" asp-for="Wizard.ExistingUiClientId" />
+                            <input type="hidden" asp-for="Wizard.ExistingApiClientId" />
+                        }
+                        else
+                        {
+                            <input type="hidden" asp-for="Wizard.UiClientName" />
+                            <input type="hidden" asp-for="Wizard.UiClientId" />
+                            <input type="hidden" asp-for="Wizard.UiClientIsPublic" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequirePkce" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequireConsent" />
+                            <input type="hidden" id="hiddenRedirectUris" name="Wizard.UiRedirectUris" />
+                            <input type="hidden" id="hiddenPostLogoutUris" name="Wizard.UiPostLogoutRedirectUris" />
+                        }
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.ApiClientName" class="form-label">API Name</label>
+                                <input asp-for="Wizard.ApiClientName" class="form-control" placeholder="e.g., Backend API" />
+                                <span asp-validation-for="Wizard.ApiClientName" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.ApiClientId" class="form-label">API Client ID</label>
+                                <input asp-for="Wizard.ApiClientId" class="form-control" placeholder="e.g., api-a or https://api.example.com" />
+                                <small class="form-text text-muted">Usually a URI or identifier that matches @HttpContext.Request tokens</small>
+                                <span asp-validation-for="Wizard.ApiClientId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="Wizard.ApiAudience" class="form-label">API Audience (Resource)</label>
+                                <input asp-for="Wizard.ApiAudience" class="form-control" placeholder="e.g., https://api.example.com or api-resource" />
+                                <small class="form-text text-muted">The 'aud' claim in tokens issued for the API</small>
+                                <span asp-validation-for="Wizard.ApiAudience" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Delegated Scopes</label>
+                                <div id="delegatedScopesContainer">
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control delegated-scope" placeholder="e.g., read" />
+                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addDelegatedScope()">
+                                    <i class="ph ph-plus"></i> Add Scope
+                                </button>
+                                <small class="form-text text-muted d-block mt-2">Scopes the UI app can request when exchanging tokens for the API</small>
+                                <span asp-validation-for="Wizard.ApiDelegatedScopes" class="text-danger d-block mt-2"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.OboMaxDelegationDepth" class="form-label">Max Delegation Depth</label>
+                                <input asp-for="Wizard.OboMaxDelegationDepth" class="form-control" type="number" min="1" max="10" />
+                                <small class="form-text text-muted">How many hops of token exchange are allowed (1 = single-hop only)</small>
+                                <span asp-validation-for="Wizard.OboMaxDelegationDepth" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.OboMaxLifetimeMinutes" class="form-label">Max Token Lifetime (minutes)</label>
+                                <input asp-for="Wizard.OboMaxLifetimeMinutes" class="form-control" type="number" min="5" max="1440" />
+                                <small class="form-text text-muted">Cap on exchanged token lifetime (default 15 min)</small>
+                                <span asp-validation-for="Wizard.OboMaxLifetimeMinutes" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Wizard.OboDpopMode" class="form-label">DPoP Bridging Mode</label>
+                                <select asp-for="Wizard.OboDpopMode" class="form-select">
+                                    <option value="Deny">Deny (no DPoP)</option>
+                                    <option value="RequireSameJkt">RequireSameJkt</option>
+                                    <option value="AllowSameJktOnly">AllowSameJktOnly</option>
+                                </select>
+                                <small class="form-text text-muted">Controls how DPoP-bound tokens are handled. Leave as 'Deny' unless you use DPoP.</small>
+                            </div>
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <i class="ph ph-info me-2"></i>
+                            <strong>Delegation Depth:</strong> In a single-hop setup (depth=1), the UI app exchanges the user's token for an API token directly. For multi-hop (depth>1), APIs can further exchange tokens for other APIs on behalf of the user.
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 4: User Access -->
+            @if (Model.CurrentStep == "user-access")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 4: User Access</h5>
+                        <p class="text-muted mb-0">Assign users to the UI application</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields from previous steps -->
+                        <input type="hidden" asp-for="Wizard.SolutionName" />
+                        <input type="hidden" asp-for="Wizard.RealmId" />
+                        <input type="hidden" asp-for="Wizard.Mode" />
+                        @if (Model.Wizard?.Mode == "existing")
+                        {
+                            <input type="hidden" asp-for="Wizard.ExistingUiClientId" />
+                            <input type="hidden" asp-for="Wizard.ExistingApiClientId" />
+                        }
+                        else
+                        {
+                            <input type="hidden" asp-for="Wizard.UiClientName" />
+                            <input type="hidden" asp-for="Wizard.UiClientId" />
+                            <input type="hidden" asp-for="Wizard.UiClientIsPublic" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequirePkce" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequireConsent" />
+                            <input type="hidden" id="hiddenRedirectUris2" name="Wizard.UiRedirectUris" />
+                            <input type="hidden" id="hiddenPostLogoutUris2" name="Wizard.UiPostLogoutRedirectUris" />
+                        }
+                        <input type="hidden" asp-for="Wizard.ApiClientName" />
+                        <input type="hidden" asp-for="Wizard.ApiClientId" />
+                        <input type="hidden" asp-for="Wizard.ApiAudience" />
+                        <input type="hidden" id="hiddenDelegatedScopes" name="Wizard.ApiDelegatedScopes" />
+                        <input type="hidden" asp-for="Wizard.OboMaxDelegationDepth" />
+                        <input type="hidden" asp-for="Wizard.OboMaxLifetimeMinutes" />
+                        <input type="hidden" asp-for="Wizard.OboDpopMode" />
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Assign Users</label>
+                                <div class="card border-light">
+                                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                                        <div class="list-group">
+                                            @foreach (var user in Model.AvailableUsers)
+                                            {
+                                                <label class="list-group-item">
+                                                    <div class="d-flex gap-2">
+                                                        <input type="checkbox" class="form-check-input user-checkbox" value="@user.Id" />
+                                                        <div>
+                                                            <strong>@user.Email</strong>
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="selectedUserIds" asp-for="Wizard.SelectedUserIds" />
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input asp-for="Wizard.EnableAutoAssignNewUsers" class="form-check-input" />
+                                    <label asp-for="Wizard.EnableAutoAssignNewUsers" class="form-check-label">
+                                        Auto-assign new users to this app in the future
+                                    </label>
+                                    <small class="d-block text-muted">New users registering will automatically gain access to the UI application</small>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <p class="text-muted">
+                                    <i class="ph ph-info me-2"></i>
+                                    Users assigned here can log into the UI application. They will not automatically gain API access until the UI app performs token exchange on their behalf.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 5: Review -->
+            @if (Model.CurrentStep == "review")
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Step 5: Review & Confirm</h5>
+                        <p class="text-muted mb-0">Verify your configuration before provisioning</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields for all wizard data -->
+                        <input type="hidden" asp-for="Wizard.SolutionName" />
+                        <input type="hidden" asp-for="Wizard.RealmId" />
+                        <input type="hidden" asp-for="Wizard.Mode" />
+                        @if (Model.Wizard?.Mode == "existing")
+                        {
+                            <input type="hidden" asp-for="Wizard.ExistingUiClientId" />
+                            <input type="hidden" asp-for="Wizard.ExistingApiClientId" />
+                        }
+                        else
+                        {
+                            <input type="hidden" asp-for="Wizard.UiClientName" />
+                            <input type="hidden" asp-for="Wizard.UiClientId" />
+                            <input type="hidden" asp-for="Wizard.UiClientIsPublic" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequirePkce" />
+                            <input type="hidden" asp-for="Wizard.UiClientRequireConsent" />
+                            <input type="hidden" id="hiddenRedirectUris3" name="Wizard.UiRedirectUris" />
+                            <input type="hidden" id="hiddenPostLogoutUris3" name="Wizard.UiPostLogoutRedirectUris" />
+                        }
+                        <input type="hidden" asp-for="Wizard.ApiClientName" />
+                        <input type="hidden" asp-for="Wizard.ApiClientId" />
+                        <input type="hidden" asp-for="Wizard.ApiAudience" />
+                        <input type="hidden" id="hiddenDelegatedScopes2" name="Wizard.ApiDelegatedScopes" />
+                        <input type="hidden" asp-for="Wizard.OboMaxDelegationDepth" />
+                        <input type="hidden" asp-for="Wizard.OboMaxLifetimeMinutes" />
+                        <input type="hidden" asp-for="Wizard.OboDpopMode" />
+                        <input type="hidden" asp-for="Wizard.SelectedUserIds" />
+                        <input type="hidden" asp-for="Wizard.EnableAutoAssignNewUsers" />
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <h6>Solution</h6>
+                                <dl class="row">
+                                    <dt class="col-4">Name:</dt>
+                                    <dd class="col-8"><strong>@Model.Wizard.SolutionName</strong></dd>
+                                    <dt class="col-4">Realm:</dt>
+                                    <dd class="col-8">
+                                        <strong>@(Model.Realms?.FirstOrDefault(r => r.Id == Model.Wizard.RealmId)?.Name ?? "Unknown")</strong>
+                                    </dd>
+                                </dl>
+                            </div>
+
+                            <div class="col-12">
+                                <h6>UI Application</h6>
+                                <dl class="row">
+                                    <dt class="col-4">Name:</dt>
+                                    <dd class="col-8"><strong>@Model.Wizard.UiClientName</strong></dd>
+                                    <dt class="col-4">Client ID:</dt>
+                                    <dd class="col-8"><code>@Model.Wizard.UiClientId</code></dd>
+                                    <dt class="col-4">Type:</dt>
+                                    <dd class="col-8">@(Model.Wizard.UiClientIsPublic ? "Public (SPA)" : "Confidential (Web)")</dd>
+                                    <dt class="col-4">PKCE:</dt>
+                                    <dd class="col-8">@(Model.Wizard.UiClientRequirePkce ? "Required" : "Not Required")</dd>
+                                </dl>
+                            </div>
+
+                            <div class="col-12">
+                                <h6>API Client & Delegation</h6>
+                                <dl class="row">
+                                    <dt class="col-4">API Name:</dt>
+                                    <dd class="col-8"><strong>@Model.Wizard.ApiClientName</strong></dd>
+                                    <dt class="col-4">API Client ID:</dt>
+                                    <dd class="col-8"><code>@Model.Wizard.ApiClientId</code></dd>
+                                    <dt class="col-4">Audience:</dt>
+                                    <dd class="col-8"><code>@Model.Wizard.ApiAudience</code></dd>
+                                    <dt class="col-4">Allowed Scopes:</dt>
+                                    <dd class="col-8">
+                                        @string.Join(", ", Model.Wizard.ApiDelegatedScopes.Where(s => !string.IsNullOrWhiteSpace(s)))
+                                    </dd>
+                                    <dt class="col-4">Max Depth:</dt>
+                                    <dd class="col-8">@Model.Wizard.OboMaxDelegationDepth</dd>
+                                    <dt class="col-4">Max Lifetime:</dt>
+                                    <dd class="col-8">@Model.Wizard.OboMaxLifetimeMinutes min</dd>
+                                </dl>
+                            </div>
+
+                            <div class="col-12">
+                                <h6>User Access</h6>
+                                <dl class="row">
+                                    <dt class="col-4">Users Assigned:</dt>
+                                    <dd class="col-8">
+                                        @{
+                                            var selectedUserCount = Model.Wizard.SelectedUserIds?
+                                                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                                .Length ?? 0;
+                                        }
+                                        @selectedUserCount user(s)
+                                    </dd>
+                                    <dt class="col-4">Auto-Assign:</dt>
+                                    <dd class="col-8">@(Model.Wizard.EnableAutoAssignNewUsers ? "Enabled" : "Disabled")</dd>
+                                </dl>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="alert alert-warning">
+                                    <i class="ph ph-warning me-2"></i>
+                                    <strong>Heads up:</strong> Clicking "Provision" will create these clients and configure OBO immediately. You can adjust settings later in the Admin UI if needed.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 6: Complete -->
+            @if (Model.CurrentStep == "complete" && Model.ProvisioningResult?.Success == true)
+            {
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="ph ph-check-circle me-2"></i> Setup Complete!</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-success">
+                            <i class="ph ph-check-circle me-2"></i>
+                            Your OBO application setup has been provisioned successfully!
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <h6>Created Clients</h6>
+                                <dl class="row">
+                                    <dt class="col-4">UI App Client ID:</dt>
+                                    <dd class="col-8">
+                                        <code>@Model.ProvisioningResult.UiClientId</code>
+                                        <a href="@(tenantPrefix)/admin/clients/edit/@Model.ProvisioningResult.UiClientRecordId?tab=general" class="btn btn-sm btn-outline-primary ms-2">
+                                            <i class="ph ph-pencil"></i> Edit
+                                        </a>
+                                    </dd>
+                                    <dt class="col-4">API Client ID:</dt>
+                                    <dd class="col-8">
+                                        <code>@Model.ProvisioningResult.ApiClientId</code>
+                                        <a href="@(tenantPrefix)/admin/clients/edit/@Model.ProvisioningResult.ApiClientRecordId?tab=obo" class="btn btn-sm btn-outline-primary ms-2">
+                                            <i class="ph ph-pencil"></i> Edit OBO
+                                        </a>
+                                    </dd>
+                                </dl>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(Model.ProvisioningResult.GeneratedUiClientSecret))
+                            {
+                                <div class="col-12">
+                                    <div class="alert alert-info">
+                                        <i class="ph ph-info me-2"></i>
+                                        <strong>Client Secret Generated</strong> (displayed once—copy it now!)
+                                    </div>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="clientSecret" value="@Model.ProvisioningResult.GeneratedUiClientSecret" readonly />
+                                        <button type="button" class="btn btn-outline-secondary" onclick="toggleSecretVisibility()">Show</button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('#clientSecret')">Copy</button>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="col-12">
+                                <h6>Next Steps</h6>
+                                <ol>
+                                    <li><strong>Store the client secret</strong> in your app's environment variables (if confidential)</li>
+                                    <li><strong>Configure your UI app</strong> to use the UI Client ID for login flow</li>
+                                    <li><strong>Implement token exchange</strong> in your UI app (see docs for RFC 8693 implementation)</li>
+                                    <li><strong>Test the flow:</strong> Log in, exchange a token, call the API</li>
+                                    <li><strong>Fine-tune settings</strong> in the admin UI if needed (OBO tab for advanced configuration)</li>
+                                </ol>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="btn-group">
+                                    <a href="@(tenantPrefix)/admin/clients" class="btn btn-primary">
+                                        <i class="ph ph-arrow-left"></i> Back to Clients
+                                    </a>
+                                    <a href="@(tenantPrefix)/admin/obo-setup?step=shape" class="btn btn-outline-secondary">
+                                        <i class="ph ph-plus-circle"></i> Create Another
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Navigation Buttons -->
+            <div class="mt-4 d-flex gap-2 justify-content-between">
+                @if (Model.CurrentStep != "shape" && Model.CurrentStep != "complete")
+                {
+                    <button type="submit" name="action" value="back" class="btn btn-outline-secondary">
+                        <i class="ph ph-arrow-left"></i> Previous
+                    </button>
+                }
+                else if (Model.CurrentStep == "shape")
+                {
+                    <button type="button" class="btn btn-outline-secondary" disabled>
+                        <i class="ph ph-arrow-left"></i> Previous
+                    </button>
+                }
+                
+                @if (Model.CurrentStep != "complete")
+                {
+                    @if (Model.CurrentStep == "review")
+                    {
+                        <button type="submit" class="btn btn-success" name="action" value="provision">
+                            <i class="ph ph-check-circle"></i> Provision Setup
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="submit" name="action" value="next" class="btn btn-primary">
+                            Next <i class="ph ph-arrow-right"></i>
+                        </button>
+                    }
+                }
+                else
+                {
+                    <a href="@(tenantPrefix)/admin/clients" class="btn btn-primary">
+                        <i class="ph ph-arrow-left"></i> Back to Clients
+                    </a>
+                }
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateMode(mode) {
+    document.querySelector('input[name="Wizard.Mode"]').value = mode;
+}
+
+function addRedirectUri() {
+    const container = document.getElementById('redirectUrisContainer');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control redirect-uri" placeholder="https://app.example.com/callback" />
+        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+    `;
+    container.appendChild(div);
+}
+
+function addPostLogoutUri() {
+    const container = document.getElementById('postLogoutUrisContainer');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control post-logout-uri" placeholder="https://app.example.com" />
+        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+    `;
+    container.appendChild(div);
+}
+
+function addDelegatedScope() {
+    const container = document.getElementById('delegatedScopesContainer');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2';
+    div.innerHTML = `
+        <input type="text" class="form-control delegated-scope" placeholder="e.g., read" />
+        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+    `;
+    container.appendChild(div);
+}
+
+function updateSelectedUsers() {
+    const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+    const ids = Array.from(checkboxes).map(c => c.value).join(',');
+    document.getElementById('selectedUserIds').value = ids;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.user-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedUsers);
+    });
+
+    // Collect URIs and scopes before form submission
+    document.getElementById('wizardForm').addEventListener('submit', (e) => {
+        const redirectUris = Array.from(document.querySelectorAll('.redirect-uri'))
+            .map(input => input.value)
+            .filter(v => v);
+        
+        const postLogoutUris = Array.from(document.querySelectorAll('.post-logout-uri'))
+            .map(input => input.value)
+            .filter(v => v);
+        
+        const delegatedScopes = Array.from(document.querySelectorAll('.delegated-scope'))
+            .map(input => input.value)
+            .filter(v => v);
+
+        // Populate hidden fields with collected values (JSON format for array binding)
+        const hiddenRedirectUris = document.getElementById('hiddenRedirectUris');
+        if (hiddenRedirectUris) {
+            hiddenRedirectUris.value = JSON.stringify(redirectUris);
+        }
+        document.querySelectorAll('[id^="hiddenRedirectUris"]').forEach(field => {
+            field.value = JSON.stringify(redirectUris);
+        });
+
+        const hiddenPostLogoutUris = document.getElementById('hiddenPostLogoutUris');
+        if (hiddenPostLogoutUris) {
+            hiddenPostLogoutUris.value = JSON.stringify(postLogoutUris);
+        }
+        document.querySelectorAll('[id^="hiddenPostLogoutUris"]').forEach(field => {
+            field.value = JSON.stringify(postLogoutUris);
+        });
+
+        const hiddenScopes = document.getElementById('hiddenDelegatedScopes');
+        if (hiddenScopes) {
+            hiddenScopes.value = JSON.stringify(delegatedScopes);
+        }
+        document.querySelectorAll('[id^="hiddenDelegatedScopes"]').forEach(field => {
+            field.value = JSON.stringify(delegatedScopes);
+        });
+    });
+});
+
+function toggleSecretVisibility() {
+    const field = document.getElementById('clientSecret');
+    field.type = field.type === 'password' ? 'text' : 'password';
+}
+
+function copyToClipboard(selector) {
+    const element = document.querySelector(selector);
+    const text = element.value || element.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+    });
+}
+</script>
