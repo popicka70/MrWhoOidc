@@ -4,10 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Settings;
+using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Security.Admin;
 
 namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
@@ -17,6 +19,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin;
 public class SettingsModel : PageModel
 {
     private readonly IPlatformSettingsService _settingsService;
+    private readonly IOptions<AuthOptions> _authOptions;
 
     private readonly IPlatformInitialAccessTokenService _initialAccessTokens;
     private readonly AuthDbContext _db;
@@ -25,12 +28,14 @@ public class SettingsModel : PageModel
 
     public SettingsModel(
         IPlatformSettingsService settingsService,
+        IOptions<AuthOptions> authOptions,
         IPlatformInitialAccessTokenService initialAccessTokens,
         AuthDbContext db,
         ITenantAccessor tenantAccessor,
         IMultiTenancyStateProvider multiTenancy)
     {
         _settingsService = settingsService;
+        _authOptions = authOptions;
         _initialAccessTokens = initialAccessTokens;
         _db = db;
         _tenantAccessor = tenantAccessor;
@@ -42,6 +47,9 @@ public class SettingsModel : PageModel
 
     [BindProperty]
     public bool DynamicClientRegistrationEnabled { get; set; }
+
+    [BindProperty]
+    public bool EnableTokenExchange { get; set; }
 
     [BindProperty]
     public Guid? SingleTenantDynamicClientRegistrationRealmId { get; set; }
@@ -60,6 +68,7 @@ public class SettingsModel : PageModel
         var settings = await _settingsService.GetSettingsAsync();
         QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
         DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
+        EnableTokenExchange = settings.EnableTokenExchange ?? _authOptions.Value.EnableTokenExchange;
 
         ActiveInitialAccessTokens = await _initialAccessTokens.GetActiveAsync();
 
@@ -86,6 +95,7 @@ public class SettingsModel : PageModel
         var settings = await _settingsService.GetSettingsAsync();
         settings.QrLoginAtDiscoveryEnabled = QrLoginAtDiscoveryEnabled;
         settings.DynamicClientRegistrationEnabled = DynamicClientRegistrationEnabled;
+        settings.EnableTokenExchange = EnableTokenExchange;
         await _settingsService.UpdateSettingsAsync(settings, User.Identity?.Name);
 
         if (!IsMultiTenancyEnabled)
