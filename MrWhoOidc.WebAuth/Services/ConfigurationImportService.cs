@@ -1627,10 +1627,42 @@ public sealed class ConfigurationImportService(
     {
         var conflicts = new List<ImportConflict>();
 
-        foreach (var tenantDef in manifest.Data?.Tenants ?? [])
+        var tenantDefs = manifest.Data?.Tenants ?? [];
+        if (!tenantDefs.Any())
         {
-            var existingTenant = await _dbContext.Tenants
-                .FirstOrDefaultAsync(t => t.Slug == tenantDef.Slug, cancellationToken);
+            return conflicts;
+        }
+
+        // Pre-load existing tenants
+        var tenantSlugs = tenantDefs.Select(t => t.Slug).Distinct().ToList();
+        var existingTenants = await _dbContext.Tenants
+            .Where(t => tenantSlugs.Contains(t.Slug))
+            .ToDictionaryAsync(t => t.Slug, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var existingTenantIds = existingTenants.Values.Select(t => t.Id).ToList();
+
+        // Pre-load existing realms for the found tenants
+        var existingRealms = await _dbContext.Realms
+            .Where(r => existingTenantIds.Contains(r.TenantId))
+            .ToListAsync(cancellationToken);
+        var realmsByTenantId = existingRealms.GroupBy(r => r.TenantId).ToDictionary(g => g.Key, g => g.ToList());
+
+        // Pre-load existing clients
+        var clientIds = tenantDefs.SelectMany(t => t.Clients ?? []).Select(c => c.ClientId).Distinct().ToList();
+        var existingClients = await _dbContext.Clients
+            .Where(c => clientIds.Contains(c.ClientId))
+            .ToListAsync(cancellationToken);
+        var clientsByClientId = existingClients.GroupBy(c => c.ClientId).ToDictionary(g => g.Key, g => g.First());
+
+        // Pre-load existing providers for the found tenants
+        var existingProviders = await _dbContext.IdentityProviders
+            .Where(p => existingTenantIds.Contains(p.TenantId))
+            .ToListAsync(cancellationToken);
+        var providersByTenantId = existingProviders.GroupBy(p => p.TenantId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var tenantDef in tenantDefs)
+        {
+            existingTenants.TryGetValue(tenantDef.Slug, out var existingTenant);
 
             if (existingTenant != null)
             {
@@ -1650,8 +1682,8 @@ public sealed class ConfigurationImportService(
             {
                 if (existingTenant != null)
                 {
-                    var existingRealm = await _dbContext.Realms
-                        .FirstOrDefaultAsync(r => r.TenantId == existingTenant.Id && r.Name == realmDef.Name, cancellationToken);
+                    realmsByTenantId.TryGetValue(existingTenant.Id, out var realms);
+                    var existingRealm = realms?.FirstOrDefault(r => r.Name == realmDef.Name);
 
                     if (existingRealm != null)
                     {
@@ -1671,8 +1703,7 @@ public sealed class ConfigurationImportService(
             // Check for client conflicts within tenant
             foreach (var clientDef in tenantDef.Clients ?? [])
             {
-                var existingClient = await _dbContext.Clients
-                    .FirstOrDefaultAsync(c => c.ClientId == clientDef.ClientId, cancellationToken);
+                clientsByClientId.TryGetValue(clientDef.ClientId, out var existingClient);
 
                 if (existingClient != null)
                 {
@@ -1693,8 +1724,8 @@ public sealed class ConfigurationImportService(
             {
                 if (existingTenant != null)
                 {
-                    var existingProvider = await _dbContext.IdentityProviders
-                        .FirstOrDefaultAsync(p => p.TenantId == existingTenant.Id && p.Name == providerDef.Name, cancellationToken);
+                    providersByTenantId.TryGetValue(existingTenant.Id, out var providers);
+                    var existingProvider = providers?.FirstOrDefault(p => p.Name == providerDef.Name);
 
                     if (existingProvider != null)
                     {
