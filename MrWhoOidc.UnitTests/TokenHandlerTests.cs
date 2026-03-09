@@ -74,7 +74,7 @@ public sealed class TokenHandlerTests
         var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
         var authenticator = new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
 
-        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, new NoopAuditSink(), dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(

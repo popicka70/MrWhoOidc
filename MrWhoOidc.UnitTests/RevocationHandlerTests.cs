@@ -40,7 +40,7 @@ public sealed class RevocationHandlerTests
         mtlsThumbprintResolver ??= new MtlsThumbprintResolver();
         options ??= new OidcOptions { Issuer = "https://test.example.com" };
 
-        return new RevocationHandler(revocations, clients, metrics, assertions, Options.Create(authOptions), mtlsThumbprintResolver, options);
+        return new RevocationHandler(revocations, clients, new NoopAuditSink(), metrics, assertions, Options.Create(authOptions), mtlsThumbprintResolver, options);
     }
 
     private static DefaultHttpContext CreateHttpContext(

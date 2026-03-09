@@ -16,6 +16,7 @@ public interface IRevocationHandler
 public sealed class RevocationHandler(
     IRevocationService revocations,
     IClientStore clients,
+    IAuditSink audit,
     OidcEndpointMetrics metrics,
     IClientAssertionValidator assertions,
     IOptions<AuthOptions> authOptions,
@@ -30,7 +31,14 @@ public sealed class RevocationHandler(
         metrics.RevocationRequests.Add(1);
 
         if (!http.Request.HasFormContentType)
+        {
+            audit.Emit("revocation.request.invalid", new
+            {
+                reason = "invalid_content_type",
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             return ErrorResults.InvalidRequest("Content-Type must be application/x-www-form-urlencoded");
+        }
 
         var (clientIdHeader, clientSecretHeader) = ReadClientCredentials(http);
 
@@ -41,7 +49,15 @@ public sealed class RevocationHandler(
         var clientSecret = !string.IsNullOrEmpty(clientSecretHeader) ? clientSecretHeader : form[OAuthConstants.Parameters.ClientSecret].ToString();
 
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(clientId))
+        {
+            audit.Emit("revocation.request.invalid", new
+            {
+                reason = "missing_token_or_client",
+                client_id = clientId,
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             return ErrorResults.InvalidRequest("token and client_id are required");
+        }
 
         // private_key_jwt support
         var clientAssertionType = form[OAuthConstants.Parameters.ClientAssertionType].ToString();
@@ -57,6 +73,13 @@ public sealed class RevocationHandler(
             var cert = http.Connection.ClientCertificate ?? await http.Connection.GetClientCertificateAsync();
             if (cert is null)
             {
+                audit.Emit("revocation.client_auth.failed", new
+                {
+                    client_id = clientId,
+                    method = "mtls",
+                    reason = "certificate_missing",
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
                 return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
             }
 
@@ -71,11 +94,25 @@ public sealed class RevocationHandler(
 
             if (!match)
             {
+                audit.Emit("revocation.client_auth.failed", new
+                {
+                    client_id = clientId,
+                    method = "mtls",
+                    reason = "thumbprint_mismatch",
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
                 return ErrorResults.UnauthorizedClient("Client authentication failed (mtls_required)");
             }
 
             var ipMtls = http.Connection.RemoteIpAddress?.ToString();
             await revocations.RevokeAsync(token, hint, clientId, ipMtls);
+            audit.Emit("revocation.success", new
+            {
+                client_id = clientId,
+                token_type_hint = string.IsNullOrWhiteSpace(hint) ? "none" : hint,
+                method = "mtls",
+                ip_hash = audit.HashValue(ipMtls)
+            });
             return Results.Ok();
         }
 
@@ -90,10 +127,26 @@ public sealed class RevocationHandler(
         }
 
         if (!authenticated)
+        {
+            audit.Emit("revocation.client_auth.failed", new
+            {
+                client_id = clientId,
+                method = string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) ? "private_key_jwt" : "client_secret",
+                reason = "invalid_credentials",
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             return ErrorResults.UnauthorizedClient("Client authentication failed");
+        }
 
         var ip = http.Connection.RemoteIpAddress?.ToString();
         await revocations.RevokeAsync(token, hint, clientId, ip);
+        audit.Emit("revocation.success", new
+        {
+            client_id = clientId,
+            token_type_hint = string.IsNullOrWhiteSpace(hint) ? "none" : hint,
+            method = string.Equals(clientAssertionType, OAuthConstants.ClientAssertionTypes.JwtBearer, StringComparison.Ordinal) ? "private_key_jwt" : "client_secret",
+            ip_hash = audit.HashValue(ip)
+        });
         return Results.Ok();
     }
 

@@ -89,6 +89,7 @@ public sealed class AuthorizeHandlerTests
 
         return new AuthorizeHandler(
             validator,
+            new NoopAuditSink(),
             consentProcessor,
             providerSelection,
             userAssignments,

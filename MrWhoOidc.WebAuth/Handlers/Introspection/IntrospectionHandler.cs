@@ -13,6 +13,7 @@ namespace MrWhoOidc.WebAuth.Handlers.Introspection;
 public sealed class IntrospectionHandler(
     OidcOptions options,
     IClientStore clientStore,
+    IAuditSink audit,
     OidcEndpointMetrics oidcMetrics,
     ClientAuthenticator authenticator,
     JwtTokenIntrospector jwtIntrospector,
@@ -31,6 +32,11 @@ public sealed class IntrospectionHandler(
         var (request, parseError) = await IntrospectionRequestParser.ParseAsync(http).ConfigureAwait(false);
         if (parseError is not null)
         {
+            audit.Emit("introspection.request.invalid", new
+            {
+                reason = "parse_failed",
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             var unknownTags = "unknown".BucketizeClientId().CreateMetricTags();
             metrics.RecordActiveFalse(unknownTags);
             return parseError;
@@ -44,6 +50,12 @@ public sealed class IntrospectionHandler(
         var client = await clientStore.FindByClientIdAsync(request.ClientId).ConfigureAwait(false);
         if (client is null)
         {
+            audit.Emit("introspection.client_auth.failed", new
+            {
+                client_id = request.ClientId,
+                reason = "client_not_found",
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             metrics.RecordActiveFalse(tags);
             return ErrorResults.UnauthorizedClient("Unknown client");
         }
@@ -67,6 +79,12 @@ public sealed class IntrospectionHandler(
         var (authenticated, authError) = await authenticator.AuthenticateAsync(context).ConfigureAwait(false);
         if (!authenticated)
         {
+            audit.Emit("introspection.client_auth.failed", new
+            {
+                client_id = request.ClientId,
+                reason = "authentication_failed",
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             metrics.RecordActiveFalse(tags);
             return authError!;
         }
@@ -83,7 +101,7 @@ public sealed class IntrospectionHandler(
 
             if (refreshResponse is not null)
             {
-                RecordMetricsAndReturn(metrics, tags, refreshResponse, out var result);
+                RecordMetricsAndReturn(metrics, tags, request, http, refreshResponse, out var result);
                 return result;
             }
             // Fall through to try as access token
@@ -99,7 +117,7 @@ public sealed class IntrospectionHandler(
 
         if (jwtResponse is not null)
         {
-            RecordMetricsAndReturn(metrics, tags, jwtResponse, out var result);
+            RecordMetricsAndReturn(metrics, tags, request, http, jwtResponse, out var result);
             return result;
         }
 
@@ -113,7 +131,7 @@ public sealed class IntrospectionHandler(
 
         if (opaqueResponse is not null)
         {
-            RecordMetricsAndReturn(metrics, tags, opaqueResponse, out var result);
+            RecordMetricsAndReturn(metrics, tags, request, http, opaqueResponse, out var result);
             return result;
         }
 
@@ -129,13 +147,20 @@ public sealed class IntrospectionHandler(
 
             if (refreshResponse is not null)
             {
-                RecordMetricsAndReturn(metrics, tags, refreshResponse, out var result);
+                RecordMetricsAndReturn(metrics, tags, request, http, refreshResponse, out var result);
                 return result;
             }
         }
 
         // Token not found or invalid
         metrics.RecordActiveFalse(tags);
+        audit.Emit("introspection.result", new
+        {
+            client_id = request.ClientId,
+            outcome = "inactive",
+            audience = (string?)null,
+            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+        });
         IntrospectionAuditor.LogAudit(
             logger,
             request.ClientId,
@@ -146,14 +171,27 @@ public sealed class IntrospectionHandler(
         return Results.Json(new { active = false });
     }
 
-    private static void RecordMetricsAndReturn(
+    private void RecordMetricsAndReturn(
         IntrospectionMetrics metrics,
         KeyValuePair<string, object?>[] tags,
+        IntrospectionRequest request,
+        HttpContext http,
         Dictionary<string, object?> response,
         out IResult result)
     {
         var isActive = response.TryGetValue("active", out var activeValue) &&
                       activeValue is bool active && active;
+
+        string? audience = null;
+        if (response.TryGetValue("aud", out var audValue))
+        {
+            audience = audValue switch
+            {
+                string s => s,
+                IEnumerable<object?> seq => string.Join(",", seq.Where(v => v is not null).Select(v => v!.ToString())),
+                _ => audValue?.ToString()
+            };
+        }
 
         if (isActive)
         {
@@ -163,6 +201,22 @@ public sealed class IntrospectionHandler(
         {
             metrics.RecordActiveFalse(tags);
         }
+
+        var outcome = isActive ? "active" : "inactive";
+        audit.Emit("introspection.result", new
+        {
+            client_id = request.ClientId,
+            outcome,
+            audience,
+            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+        });
+        IntrospectionAuditor.LogAudit(
+            logger,
+            request.ClientId,
+            http.Connection.RemoteIpAddress?.ToString(),
+            outcome,
+            audience
+        );
 
         result = Results.Json(response);
     }

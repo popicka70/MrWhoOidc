@@ -246,15 +246,15 @@ private string? ValidateLoginHintToken(string token, string clientId)
 
 ### Critical Gaps (Must Fix Before High-Assurance Deployments)
 
-1. **CIBA Token Validation** - Login hint tokens and id_token hints not validated
-2. **Pairwise Subject Missing** - Advertised but not implemented
-3. **Claims Parameter Incomplete** - Essential claims not enforced
+1. **Pairwise Subject Missing** - Advertised but not implemented
+2. **Authorization Details Missing** - RFC 9396 not implemented
+3. **Conformance Automation Gap** - OIDF/FAPI validation not yet automated
 
 ### High Priority Gaps (Production Hardening)
 
 1. **Refresh Token Reuse Detection** - No rotation detection
 2. **DPoP Production Hardening** - In-memory replay cache insufficient
-3. **Audit Logging** - Missing compliance trail
+3. **Audit Coverage Expansion** - Extend event matrix for additional operational/admin scenarios
 
 ### Medium Priority Gaps (Feature Completeness)
 
@@ -353,7 +353,7 @@ oidf-conformance --profile fapi-1.0-advanced --server https://localhost:8443
 - [ ] Enable refresh token rotation
 - [ ] Set up key rotation schedule (90 days)
 - [ ] Configure CORS policies per client
-- [ ] Enable audit logging compliance
+- [x] Enable audit logging compliance (DB-backed audit sink + multi-sink emission)
 
 ### Scaling Recommendations
 
@@ -369,19 +369,19 @@ oidf-conformance --profile fapi-1.0-advanced --server https://localhost:8443
 ## Roadmap Recommendations
 
 ### Phase 1: Security Hardening (Q1 2025)
-- Fix CIBA token validation
+- [x] Fix CIBA token validation (`login_hint_token`, `id_token_hint`, callback token checks)
 - Add refresh token reuse detection
 - Implement DPoP Redis replay cache
 
 ### Phase 2: Protocol Completeness (Q2 2025)
-- Complete claims parameter support
+- [x] Complete claims parameter enforcement ordering for mapped/essential ID token claims
 - Implement pairwise subject IDs
 - Add authorization details (RFC 9396)
 
 ### Phase 3: Certification (Q3 2025)
 - OIDF conformance testing
 - FAPI 1.0 certification
-- SOC2 Type II audit preparation
+- [x] SOC2 Type II audit preparation baseline: centralized DB-backed audit persistence
 
 ### Phase 4: OAuth 2.1 (Q4 2025)
 - Authorization details as primary
@@ -401,16 +401,16 @@ oidf-conformance --profile fapi-1.0-advanced --server https://localhost:8443
 
 **Key risks to address before high-assurance deployments:**
 
-1. CIBA token validation gaps
-2. Pairwise subject implementation missing
-3. Claims parameter incomplete
-4. Refresh token reuse detection absent
+1. Pairwise subject implementation missing
+2. Refresh token reuse detection absent
+3. DPoP production hardening (Redis replay cache)
+4. OIDF conformance execution backlog
 
 **Recommended next steps:**
 
 1. Run OIDF conformance test suite
-2. Prioritize CIBA validation fixes
-3. Add refresh token rotation detection
+2. Add refresh token rotation/reuse detection
+3. Implement pairwise subject identifiers
 4. Plan FAPI 1.0 certification for financial clients
 
 **Overall:** Strong foundation for production OIDC deployments with clear path to full RFC compliance.
@@ -451,6 +451,6 @@ oidf-conformance --profile fapi-1.0-advanced --server https://localhost:8443
 | OIDC Core 1.0 | OpenID Connect Core 1.0 | ✅ Mostly Complete |
 | OIDC Discovery 1.0 | OpenID Connect Discovery 1.0 | ✅ Complete |
 | OIDC Session 1.0 | OpenID Connect Session Management 1.0 | ✅ Complete |
-| OIDC CIBA 1.0 | OpenID Connect CIBA Core 1.0 | ✅ Partial |
+| OIDC CIBA 1.0 | OpenID Connect CIBA Core 1.0 | ✅ Improved (core validation gaps closed) |
 | FAPI 1.0 | Financial Grade API 1.0 | ❌ Not Implemented |
 | FAPI 2.0 | Financial Grade API 2.0 | ❌ Not Implemented |
