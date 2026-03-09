@@ -2053,7 +2053,8 @@ public sealed class ConfigurationImportService(
 
         var clients = await _dbContext.Clients
             .Where(c => c.TenantId == tenantId)
-            .ToDictionaryAsync(c => c.ClientId, c => c.Id, cancellationToken);
+            .Select(c => new { c.ClientId, c.Id, c.RealmId })
+            .ToDictionaryAsync(c => c.ClientId, c => c, cancellationToken);
 
         var roles = await _dbContext.Roles
             .Where(r => r.TenantId == tenantId)
@@ -2173,7 +2174,8 @@ public sealed class ConfigurationImportService(
             // Handle Client Assignments
             foreach (var clientDef in userDef.Clients)
             {
-                if (!clients.TryGetValue(clientDef.ClientId, out var clientId)) continue;
+                if (!clients.TryGetValue(clientDef.ClientId, out var clientInfo)) continue;
+                var clientId = clientInfo.Id;
 
                 // We need the realm ID for the assignment key.
                 // If the user definition specifies a realm, use it.
@@ -2186,9 +2188,7 @@ public sealed class ConfigurationImportService(
                 else
                 {
                     // Look up client realm
-                    var clientEntity = await _dbContext.Clients.FindAsync(new object[] { clientId }, cancellationToken);
-                    if (clientEntity == null) continue;
-                    assignmentRealmId = clientEntity.RealmId;
+                    assignmentRealmId = clientInfo.RealmId;
                 }
 
                 var assignment = await _dbContext.UserClientAssignments
