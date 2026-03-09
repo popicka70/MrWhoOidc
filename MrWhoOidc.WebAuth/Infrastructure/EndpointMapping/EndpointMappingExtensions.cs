@@ -303,6 +303,16 @@ internal static class EndpointMappingExtensions
             .RequireRateLimiting("rl-authorize")
             .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
 
+        routes.MapMethods("/api/webauthn/credentials/{credentialId:guid}", new[] { "PATCH" }, (IWebAuthnHandler h, HttpContext ctx) => h.RenameCredentialAsync(ctx))
+            .RequireAuthorization()
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
+
+        routes.MapDelete("/api/webauthn/credentials/{credentialId:guid}", (IWebAuthnHandler h, HttpContext ctx) => h.RemoveCredentialAsync(ctx))
+            .RequireAuthorization()
+            .RequireRateLimiting("rl-authorize")
+            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.WebAuthn));
+
         // Tenant icon endpoint (public access for display in UI)
         routes.MapGet("/api/icon/{iconId:guid}", async (
             Guid iconId,

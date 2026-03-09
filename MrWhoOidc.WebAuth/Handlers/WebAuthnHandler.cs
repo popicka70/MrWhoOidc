@@ -21,6 +21,8 @@ public interface IWebAuthnHandler
     Task<IResult> AuthenticationChallengeAsync(HttpContext context);
     Task<IResult> AuthenticationCompletionAsync(HttpContext context);
     Task<IResult> GetUserCredentialsAsync(HttpContext context);
+    Task<IResult> RenameCredentialAsync(HttpContext context);
+    Task<IResult> RemoveCredentialAsync(HttpContext context);
 }
 
 public sealed class WebAuthnHandler(
@@ -357,9 +359,98 @@ public sealed class WebAuthnHandler(
         }
     }
 
+    public async Task<IResult> RenameCredentialAsync(HttpContext context)
+    {
+        try
+        {
+            var userId = GetAuthenticatedUserId(context);
+            if (userId == null)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!TryGetCredentialIdFromRoute(context, out var credentialId))
+            {
+                return Results.BadRequest("Invalid credential id");
+            }
+
+            var requestBody = await context.Request.ReadFromJsonAsync<JsonElement>(context.RequestAborted);
+            if (requestBody.ValueKind == JsonValueKind.Undefined)
+            {
+                return Results.BadRequest("Invalid request body");
+            }
+
+            var friendlyName = requestBody.TryGetProperty("friendlyName", out var nameElement)
+                ? nameElement.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(friendlyName))
+            {
+                return Results.BadRequest("friendlyName is required");
+            }
+
+            var updated = await webAuthnService.UpdateCredentialNameAsync(
+                userId.Value,
+                credentialId,
+                friendlyName,
+                context.RequestAborted);
+
+            return updated
+                ? Results.Json(new { success = true })
+                : Results.NotFound("Credential not found");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error renaming WebAuthn credential");
+            return Results.Problem("Failed to rename credential");
+        }
+    }
+
+    public async Task<IResult> RemoveCredentialAsync(HttpContext context)
+    {
+        try
+        {
+            var userId = GetAuthenticatedUserId(context);
+            if (userId == null)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!TryGetCredentialIdFromRoute(context, out var credentialId))
+            {
+                return Results.BadRequest("Invalid credential id");
+            }
+
+            var removed = await webAuthnService.RemoveCredentialAsync(
+                userId.Value,
+                credentialId,
+                context.RequestAborted);
+
+            return removed
+                ? Results.Json(new { success = true })
+                : Results.NotFound("Credential not found");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error removing WebAuthn credential");
+            return Results.Problem("Failed to remove credential");
+        }
+    }
+
     private static Guid? GetAuthenticatedUserId(HttpContext context)
     {
         var userIdClaim = context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
+    }
+
+    private static bool TryGetCredentialIdFromRoute(HttpContext context, out Guid credentialId)
+    {
+        credentialId = Guid.Empty;
+        if (!context.Request.RouteValues.TryGetValue("credentialId", out var value) || value == null)
+        {
+            return false;
+        }
+
+        return Guid.TryParse(value.ToString(), out credentialId);
     }
 }

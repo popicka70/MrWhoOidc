@@ -129,6 +129,14 @@ Once you have a security key registered, you can use it to sign in:
      - Your tenant home page
      - Root dashboard
 
+### When Password Login Redirects To WebAuthn
+
+If your organization enables the WebAuthn policy `RequireWebAuthnForRegisteredUsers`, users who already have active security keys will be redirected from password login to WebAuthn sign-in.
+
+- You can still enter your username on the login page.
+- After password validation, the server redirects you to `/Auth/WebAuthn` to complete passkey authentication.
+- This ensures registered passkey users finish authentication with phishing-resistant credentials.
+
 ### Authentication with MFA
 
 If you have TOTP (Time-based One-Time Password) enabled:
@@ -183,11 +191,21 @@ If you have TOTP (Time-based One-Time Password) enabled:
 2. **Locate the Key to Remove**
    - Find the key in your credentials list
 3. **Delete Action**
-   - Click the delete/remove button (if implemented)
+   - Click the **Remove** button next to the credential
    - Confirm the deletion
 4. **Verification**
    - The key will be removed from your account
    - You can no longer use it to authenticate
+
+### Renaming a Security Key
+
+1. **Navigate to Account → WebAuthn**
+2. **Locate the Key to Rename**
+3. **Rename Action**
+   - Click the **Rename** button
+   - Enter a clearer name (for example, "YubiKey - Office" or "Laptop Touch ID")
+4. **Verification**
+   - The new name appears in your credentials list immediately after refresh
 
 ---
 
