@@ -114,6 +114,46 @@ public class WebAuthnServiceOptionsTests
         fido2.VerifyNoOtherCalls();
     }
 
+    [TestMethod]
+    public void ValidateAaguidPolicy_ReturnsError_WhenValidationRequiredAndMissingAaguid()
+    {
+        var error = WebAuthnService.ValidateAaguidPolicy(
+            credentialAaguidBase64: null,
+            validateAaguid: true,
+            allowedAaguids: Array.Empty<string>());
+
+        Assert.AreEqual("Authenticator AAGUID is required by WebAuthn policy", error);
+    }
+
+    [TestMethod]
+    public void ValidateAaguidPolicy_AcceptsAllowlistedAaguid()
+    {
+        var guid = Guid.NewGuid();
+        var credentialAaguid = Convert.ToBase64String(guid.ToByteArray());
+        var allowlist = new[] { guid.ToString("D") };
+
+        var error = WebAuthnService.ValidateAaguidPolicy(
+            credentialAaguidBase64: credentialAaguid,
+            validateAaguid: false,
+            allowedAaguids: allowlist);
+
+        Assert.IsNull(error);
+    }
+
+    [TestMethod]
+    public void ValidateAaguidPolicy_RejectsNonAllowlistedAaguid()
+    {
+        var credentialAaguid = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        var allowlist = new[] { Guid.NewGuid().ToString("D") };
+
+        var error = WebAuthnService.ValidateAaguidPolicy(
+            credentialAaguidBase64: credentialAaguid,
+            validateAaguid: false,
+            allowedAaguids: allowlist);
+
+        Assert.AreEqual("Authenticator is not permitted by AAGUID policy", error);
+    }
+
     private static AuthDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AuthDbContext>()

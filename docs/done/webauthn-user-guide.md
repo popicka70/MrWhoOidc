@@ -261,6 +261,43 @@ If you have TOTP (Time-based One-Time Password) enabled:
 
 ## 🔐 Security Best Practices
 
+### Authenticator Policy Controls
+
+Organizations can enforce authenticator trust policy during registration using AAGUID validation.
+
+- `ValidateAaguid=true` requires the authenticator to provide an AAGUID in attestation metadata.
+- `AllowedAaguids=[...]` restricts registration to an explicit allowlist.
+- `AllowedAaguids` entries can be GUID strings or Base64-encoded 16-byte GUID values.
+- When policy blocks a device, registration fails with a clear policy error message.
+
+Example `appsettings` configuration:
+
+```json
+{
+   "WebAuthn": {
+      "Enabled": true,
+      "ValidateAaguid": true,
+      "AllowedAaguids": [
+         "77010bd7-212a-4fc9-b236-d2ca5e9d4084",
+         "1T8yN3H0QJ6k6n6g2j5Y3w=="
+      ],
+      "Tenants": {
+         "contoso": {
+            "ValidateAaguid": true,
+            "AllowedAaguids": [
+               "77010bd7-212a-4fc9-b236-d2ca5e9d4084"
+            ]
+         }
+      }
+   }
+}
+```
+
+Notes:
+- Use standard GUID format where possible for readability.
+- Use tenant overrides when different organizations require different approved authenticators.
+- Keep the allowlist small and review it during hardware/security audits.
+
 ### Key Management
 
 1. **Register Multiple Keys**

@@ -158,6 +158,11 @@ internal sealed class WebAuthnService : IWebAuthnService
             }, cancellationToken);
 
             var (attestationType, aaguidBase64) = ExtractAttestationMetadata(credential);
+            var aaguidPolicyError = ValidateAaguidPolicy(aaguidBase64, effectiveOptions.ValidateAaguid, effectiveOptions.AllowedAaguids);
+            if (aaguidPolicyError != null)
+            {
+                return (false, null, aaguidPolicyError);
+            }
 
             // Store the credential in the database
             var webAuthnCredential = new WebAuthnCredential
@@ -525,6 +530,12 @@ internal sealed class WebAuthnService : IWebAuthnService
         var enforceSignatureCounter = hasOverride && tenantOverride!.EnforceSignatureCounter.HasValue
             ? tenantOverride.EnforceSignatureCounter.Value
             : root.EnforceSignatureCounter;
+        var validateAaguid = hasOverride && tenantOverride!.ValidateAaguid.HasValue
+            ? tenantOverride.ValidateAaguid.Value
+            : root.ValidateAaguid;
+        var allowedAaguids = hasOverride && tenantOverride!.AllowedAaguids != null
+            ? tenantOverride.AllowedAaguids
+            : root.AllowedAaguids;
 
         var rpId = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.RelyingPartyId)
             ? tenantOverride.RelyingPartyId!
@@ -553,6 +564,8 @@ internal sealed class WebAuthnService : IWebAuthnService
             ChallengeSessionLifetimeSeconds: challengeLifetime,
             MaxCredentialsPerUser: maxCredentials,
             EnforceSignatureCounter: enforceSignatureCounter,
+            ValidateAaguid: validateAaguid,
+            AllowedAaguids: allowedAaguids,
             RelyingPartyId: rpId!,
             UserVerification: ParseUserVerification(userVerificationRaw),
             ResidentKey: ParseResidentKey(residentKeyRaw),
@@ -660,6 +673,65 @@ internal sealed class WebAuthnService : IWebAuthnService
         return value as string;
     }
 
+    internal static string? ValidateAaguidPolicy(string? credentialAaguidBase64, bool validateAaguid, IReadOnlyList<string>? allowedAaguids)
+    {
+        var hasAllowlist = allowedAaguids is { Count: > 0 };
+        if (!validateAaguid && !hasAllowlist)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(credentialAaguidBase64))
+        {
+            return "Authenticator AAGUID is required by WebAuthn policy";
+        }
+
+        if (!hasAllowlist)
+        {
+            return null;
+        }
+
+        var normalizedCredential = NormalizeAaguidValue(credentialAaguidBase64);
+        foreach (var candidate in allowedAaguids!)
+        {
+            var normalizedCandidate = NormalizeAaguidValue(candidate);
+            if (normalizedCandidate != null && normalizedCandidate == normalizedCredential)
+            {
+                return null;
+            }
+        }
+
+        return "Authenticator is not permitted by AAGUID policy";
+    }
+
+    private static string? NormalizeAaguidValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(value.Trim(), out var guidValue))
+        {
+            return guidValue.ToString("D");
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(value.Trim());
+            if (bytes.Length == 16)
+            {
+                return new Guid(bytes).ToString("D");
+            }
+        }
+        catch
+        {
+            // Ignore parse errors and fall back to null.
+        }
+
+        return null;
+    }
+
     private sealed record EffectiveWebAuthnOptions(
         bool Enabled,
         bool ExcludeExistingCredentials,
@@ -667,6 +739,8 @@ internal sealed class WebAuthnService : IWebAuthnService
         int ChallengeSessionLifetimeSeconds,
         int MaxCredentialsPerUser,
         bool EnforceSignatureCounter,
+        bool ValidateAaguid,
+        IReadOnlyList<string> AllowedAaguids,
         string RelyingPartyId,
         UserVerificationRequirement UserVerification,
         ResidentKeyRequirement ResidentKey,
