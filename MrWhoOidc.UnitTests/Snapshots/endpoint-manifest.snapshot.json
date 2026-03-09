@@ -2048,6 +2048,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "admin/obo-setup",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "admin/provider-mappings",
     "Methods": "",
     "RateLimiters": [],
