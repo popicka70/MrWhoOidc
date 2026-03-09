@@ -35,9 +35,9 @@ public sealed class ClientAuthenticationService(
 
         // 2. mTLS Checks / Authentication (RFC 8705)
         // Notes:
-        // - Token endpoint support is currently scoped to client_credentials (M2M) via client.M2MMtlsThumbprintsJson.
-        // - When configured and presented certificate matches, mTLS can be used as the *client authentication method*
-        //   (i.e., no client_secret required for client_credentials).
+        // - Token endpoint support is driven by client.M2MMtlsThumbprintsJson.
+        // - When configured and the presented certificate matches, mTLS can be used as the
+        //   client authentication method for token endpoint requests.
         bool mtlsConfigured = false;
         bool mtlsMatched = false;
         if (ShouldCheckMtls(input, client))
@@ -64,11 +64,10 @@ public sealed class ClientAuthenticationService(
             }
         }
 
-        // If mTLS is configured & matched for M2M client_credentials, accept it as the authentication method.
+        // If mTLS is configured and matched, accept it as the authentication method.
         // (If the caller also provided a client_assertion, we still validate the assertion below.)
         if (mtlsConfigured && mtlsMatched &&
             input.Usage == ClientAuthenticationUsage.TokenEndpoint &&
-            string.Equals(input.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal) &&
             (string.IsNullOrEmpty(input.ClientAssertionType) || string.IsNullOrEmpty(input.ClientAssertion)))
         {
             return new ClientAuthResult(true, client);
@@ -124,8 +123,7 @@ public sealed class ClientAuthenticationService(
 
     private bool ShouldCheckMtls(ClientCredentialInput input, Client client)
     {
-        if (input.Usage == ClientAuthenticationUsage.TokenEndpoint && 
-            string.Equals(input.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
+        if (input.Usage == ClientAuthenticationUsage.TokenEndpoint)
         {
             return true;
         }

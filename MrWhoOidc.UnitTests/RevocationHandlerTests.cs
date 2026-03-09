@@ -628,5 +628,10 @@ public sealed class RevocationHandlerTests
         {
             return Task.CompletedTask;
         }
+
+        public Task RevokeRefreshTokenFamilyAsync(Guid tokenId, CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

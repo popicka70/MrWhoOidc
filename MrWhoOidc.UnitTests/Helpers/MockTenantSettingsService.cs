@@ -43,6 +43,7 @@ public class MockTenantSettingsService : ITenantSettingsService
                 AccessTokenLifetimeSeconds = 3600,  // 1 hour
                 IdTokenLifetimeSeconds = 3600,      // 1 hour
                 RefreshTokenLifetimeSeconds = 1296000, // 15 days
+                RefreshTokenAbsoluteLifetimeSeconds = 2592000, // 30 days
                 AuthorizationCodeLifetimeSeconds = 300 // 5 minutes
             }
         };
@@ -91,7 +92,8 @@ public class MockTenantSettingsService : ITenantSettingsService
     public static MockTenantSettingsService WithTokenLifetimes(
         int? accessTokenSeconds = null,
         int? idTokenSeconds = null,
-        int? refreshTokenSeconds = null)
+        int? refreshTokenSeconds = null,
+        int? refreshTokenAbsoluteSeconds = null)
     {
         var settings = new TenantSettings
         {
@@ -100,6 +102,7 @@ public class MockTenantSettingsService : ITenantSettingsService
                 AccessTokenLifetimeSeconds = accessTokenSeconds ?? 3600,
                 IdTokenLifetimeSeconds = idTokenSeconds ?? 3600,
                 RefreshTokenLifetimeSeconds = refreshTokenSeconds ?? 1296000,
+                RefreshTokenAbsoluteLifetimeSeconds = refreshTokenAbsoluteSeconds ?? 2592000,
                 AuthorizationCodeLifetimeSeconds = 300
             }
         };

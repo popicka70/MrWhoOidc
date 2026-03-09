@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Settings;
 
 using MrWhoOidc.UnitTests.Helpers;
 
@@ -11,14 +12,14 @@ namespace MrWhoOidc.UnitTests;
 [TestClass]
 public sealed class RefreshTokenServiceTests
 {
-    private static (AuthDbContext db, IRefreshTokenService service) CreateService()
+    private static (AuthDbContext db, IRefreshTokenService service) CreateService(ITenantSettingsService? settingsService = null)
     {
         var dbName = "rt-service-" + Guid.NewGuid().ToString("N");
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
             .UseInMemoryDatabase(dbName)
             .Options;
         var db = new AuthDbContext(opts);
-        var service = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), new MockTenantSettingsService());
+        var service = new RefreshTokenService(db, MockTenantAccessor.CreateWithDefaultTenant(), settingsService ?? new MockTenantSettingsService());
         return (db, service);
     }
 
@@ -173,5 +174,83 @@ public sealed class RefreshTokenServiceTests
         Assert.IsNotNull(savedScopes);
         Assert.HasCount(6, savedScopes);
         CollectionAssert.AreEqual(scopes, savedScopes);
+    }
+
+    [TestMethod]
+    public async Task CreateRefreshToken_Caps_Expiry_By_Absolute_Lifetime()
+    {
+        // Arrange
+        var settings = new MockTenantSettingsService(new TenantSettings
+        {
+            Tokens = new TokenTenantSettings
+            {
+                RefreshTokenLifetimeSeconds = 20 * 24 * 60 * 60,
+                RefreshTokenAbsoluteLifetimeSeconds = 10 * 24 * 60 * 60
+            }
+        });
+        var (db, service) = CreateService(settings);
+
+        // Act
+        var (_, hash) = await service.CreateRefreshTokenAsync(Guid.NewGuid(), "test-client", new[] { "openid" });
+
+        // Assert
+        var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        Assert.IsNotNull(saved);
+        var expectedAbsolute = saved.CreatedAt.AddDays(10);
+        Assert.IsTrue(Math.Abs((saved.ExpiresAt - expectedAbsolute).TotalSeconds) < 1,
+            $"Expected absolute-capped expiry near {expectedAbsolute:o}, got {saved.ExpiresAt:o}");
+    }
+
+    [TestMethod]
+    public async Task CreateRefreshToken_Uses_FamilyOrigin_For_Absolute_Window()
+    {
+        // Arrange
+        var settings = new MockTenantSettingsService(new TenantSettings
+        {
+            Tokens = new TokenTenantSettings
+            {
+                RefreshTokenLifetimeSeconds = 15 * 24 * 60 * 60,
+                RefreshTokenAbsoluteLifetimeSeconds = 30 * 24 * 60 * 60
+            }
+        });
+        var (db, service) = CreateService(settings);
+        var familyOrigin = DateTimeOffset.UtcNow.AddDays(-28);
+
+        // Act
+        var (_, hash) = await service.CreateRefreshTokenAsync(
+            Guid.NewGuid(),
+            "test-client",
+            new[] { "openid" },
+            ct: default,
+            familyCreatedAt: familyOrigin);
+
+        // Assert
+        var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        Assert.IsNotNull(saved);
+        Assert.IsTrue(Math.Abs((saved.CreatedAt - familyOrigin).TotalSeconds) < 1,
+            $"Expected CreatedAt to preserve family origin {familyOrigin:o}, got {saved.CreatedAt:o}");
+
+        var expectedAbsoluteExpiry = familyOrigin.AddDays(30);
+        Assert.IsTrue(Math.Abs((saved.ExpiresAt - expectedAbsoluteExpiry).TotalSeconds) < 1,
+            $"Expected expiry to be capped by family absolute window at {expectedAbsoluteExpiry:o}, got {saved.ExpiresAt:o}");
+    }
+
+    [TestMethod]
+    public async Task CreateRefreshToken_Persists_Dpop_CnfJkt_When_Provided()
+    {
+        // Arrange
+        var (db, service) = CreateService();
+
+        // Act
+        var (_, hash) = await service.CreateRefreshTokenAsync(
+            Guid.NewGuid(),
+            "test-client",
+            new[] { "openid" },
+            cnfJkt: "test-jkt");
+
+        // Assert
+        var saved = await db.Tokens.FirstOrDefaultAsync(t => t.TokenHash == hash);
+        Assert.IsNotNull(saved);
+        Assert.AreEqual("test-jkt", saved.CnfJkt);
     }
 }

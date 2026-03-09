@@ -157,4 +157,124 @@ public sealed class RefreshTokenRevocationTests
         var audit = await db.RevocationAudits.FirstOrDefaultAsync(a => a.TokenHash == hash);
         Assert.IsNotNull(audit);
     }
+
+    [TestMethod]
+    public async Task RevokeRefreshTokenFamilyAsync_Revokes_Entire_Lineage()
+    {
+        // Arrange
+        var (db, service) = CreateService();
+        var userId = Guid.NewGuid();
+        var clientId = "lineage-client";
+
+        var root = new Token
+        {
+            TenantId = new Guid("00000000-0000-0000-0000-000000000001"),
+            Type = "refresh",
+            TokenHash = "h-root",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-3),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10)
+        };
+        var mid = new Token
+        {
+            TenantId = root.TenantId,
+            Type = "refresh",
+            TokenHash = "h-mid",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = root.CreatedAt,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10),
+            ReplacedById = root.Id
+        };
+        var tip = new Token
+        {
+            TenantId = root.TenantId,
+            Type = "refresh",
+            TokenHash = "h-tip",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = root.CreatedAt,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(10),
+            ReplacedById = mid.Id
+        };
+
+        db.Tokens.AddRange(root, mid, tip);
+        await db.SaveChangesAsync();
+
+        // Act
+        await service.RevokeRefreshTokenFamilyAsync(mid.Id);
+
+        // Assert
+        var reloaded = await db.Tokens.Where(t => t.ClientId == clientId).ToListAsync();
+        Assert.AreEqual(3, reloaded.Count);
+        Assert.IsTrue(reloaded.All(t => t.RevokedAt != null), "All tokens in lineage should be revoked");
+    }
+
+    [TestMethod]
+    public async Task RevokeRefreshTokenFamilyAsync_Does_Not_Revoke_Unrelated_Family()
+    {
+        // Arrange
+        var (db, service) = CreateService();
+        var tenantId = new Guid("00000000-0000-0000-0000-000000000001");
+        var userId = Guid.NewGuid();
+        var clientId = "client-a";
+
+        var familyA1 = new Token
+        {
+            TenantId = tenantId,
+            Type = "refresh",
+            TokenHash = "fa1",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-2),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(2)
+        };
+        var familyA2 = new Token
+        {
+            TenantId = tenantId,
+            Type = "refresh",
+            TokenHash = "fa2",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = familyA1.CreatedAt,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(2),
+            ReplacedById = familyA1.Id
+        };
+
+        var familyB1 = new Token
+        {
+            TenantId = tenantId,
+            Type = "refresh",
+            TokenHash = "fb1",
+            UserId = userId,
+            ClientId = clientId,
+            ScopesJson = "[]",
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(2)
+        };
+
+        db.Tokens.AddRange(familyA1, familyA2, familyB1);
+        await db.SaveChangesAsync();
+
+        // Act
+        await service.RevokeRefreshTokenFamilyAsync(familyA2.Id);
+
+        // Assert
+        var tA1 = await db.Tokens.FindAsync(familyA1.Id);
+        var tA2 = await db.Tokens.FindAsync(familyA2.Id);
+        var tB1 = await db.Tokens.FindAsync(familyB1.Id);
+
+        Assert.IsNotNull(tA1);
+        Assert.IsNotNull(tA2);
+        Assert.IsNotNull(tB1);
+        Assert.IsNotNull(tA1.RevokedAt);
+        Assert.IsNotNull(tA2.RevokedAt);
+        Assert.IsNull(tB1.RevokedAt, "Unrelated refresh family must remain active");
+    }
 }

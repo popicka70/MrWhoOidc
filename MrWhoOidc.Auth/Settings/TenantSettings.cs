@@ -160,6 +160,13 @@ public class TokenTenantSettings
     public int? RefreshTokenLifetimeSeconds { get; set; }
 
     /// <summary>
+    /// Absolute refresh token lifetime in seconds across a rotation family.
+    /// Once exceeded from the family origin timestamp, refresh is rejected.
+    /// </summary>
+    [JsonPropertyName("refreshTokenAbsoluteLifetimeSeconds")]
+    public int? RefreshTokenAbsoluteLifetimeSeconds { get; set; }
+
+    /// <summary>
     /// Authorization code lifetime in seconds
     /// </summary>
     [JsonPropertyName("authorizationCodeLifetimeSeconds")]

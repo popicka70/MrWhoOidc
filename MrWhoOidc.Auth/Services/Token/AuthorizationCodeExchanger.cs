@@ -133,20 +133,27 @@ public sealed class AuthorizationCodeExchanger(
 
                 var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
-                // RFC 8707: prefer resource indicator as access token audience when present
+                // RFC 8707: token-endpoint resource parameter can override prior authorize-time resource.
                 string audience;
-                var resourceFromEntity = entity.Resource;
-                if (!string.IsNullOrWhiteSpace(resourceFromEntity))
+                if (!string.IsNullOrWhiteSpace(request.Resource))
                 {
-                    audience = resourceFromEntity;
-                }
-                else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
-                {
-                    audience = resourceFromMeta;
+                    audience = request.Resource;
                 }
                 else
                 {
-                    audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+                    var resourceFromEntity = entity.Resource;
+                    if (!string.IsNullOrWhiteSpace(resourceFromEntity))
+                    {
+                        audience = resourceFromEntity;
+                    }
+                    else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
+                    {
+                        audience = resourceFromMeta;
+                    }
+                    else
+                    {
+                        audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+                    }
                 }
 
                 var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
@@ -163,10 +170,21 @@ public sealed class AuthorizationCodeExchanger(
                 Guid? tenantIdForEntitlements = request.TenantId ?? user?.TenantId;
                 if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
 
-                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
-                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
+                var activeClaimsJson = entity.ClaimsJson;
+                if (!string.IsNullOrWhiteSpace(request.ClaimsJson))
+                {
+                    if (!OidcClaimsRequestParser.TryNormalizeClaimsParameter(request.ClaimsJson, OidcClaimsRequestParser.DefaultMaxBytes, out var normalized, out var errorDescription))
+                    {
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = errorDescription }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                    }
 
-                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
+                    activeClaimsJson = normalized;
+                }
+
+                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
+                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(activeClaimsJson);
+
+                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(activeClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -530,7 +548,14 @@ public sealed class AuthorizationCodeExchanger(
                     ).ConfigureAwait(false);
                 }
 
-                var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, request.ClientId, scopes, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(
+                    entity.UserId,
+                    request.ClientId,
+                    scopes,
+                    request.IpAddress,
+                    request.UserAgent,
+                    ct,
+                    cnfJkt: request.DpopJkt).ConfigureAwait(false);
 
                 entity.Consumed = true;
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);

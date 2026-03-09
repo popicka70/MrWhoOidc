@@ -22,6 +22,7 @@ public static class OAuthConstants
         public const string CodeChallengeMethod = "code_challenge_method";
         public const string ResponseType = "response_type";
         public const string Nonce = "nonce";
+        public const string Claims = "claims";
         public const string Resource = "resource";
         public const string Audience = "audience";
         public const string RefreshToken = "refresh_token";

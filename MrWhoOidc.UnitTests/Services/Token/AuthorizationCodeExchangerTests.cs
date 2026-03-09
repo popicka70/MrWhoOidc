@@ -103,7 +103,9 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync("jwt-at");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -284,7 +286,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -409,7 +413,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -549,7 +555,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -657,7 +665,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -776,7 +786,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -895,7 +907,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1009,7 +1023,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1129,7 +1145,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1241,7 +1259,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1344,7 +1364,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
