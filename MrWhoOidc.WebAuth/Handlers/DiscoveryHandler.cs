@@ -226,7 +226,7 @@ public sealed class DiscoveryHandler(
             // OIDC Discovery recommended metadata
             ["claim_types_supported"] = new[] { "normal" },
             ["claims_parameter_supported"] = true,
-            ["display_values_supported"] = new[] { "page", "popup" },
+            ["display_values_supported"] = new[] { "popup" },
             ["prompt_values_supported"] = new[] { "none", "login", "consent", "select_account" },
             // ui_locales_supported is a best-effort hint (actual locale availability depends on deployed resources)
             ["ui_locales_supported"] = authOptions.Value.UiLocalesSupported,

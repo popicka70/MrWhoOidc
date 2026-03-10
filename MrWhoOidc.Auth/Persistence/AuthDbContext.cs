@@ -1446,6 +1446,15 @@ public class Client
     public bool AllowDeviceAuthorization { get; set; } = true;
     public bool AllowCiba { get; set; } = true;
 
+    // OIDC client metadata defaults (RFC 7591 / OIDC Core)
+    // default_max_age: if set, applied when the authorize request does not supply max_age.
+    public int? DefaultMaxAge { get; set; }
+    // require_auth_time: when true, auth_time MUST be included in the ID token.
+    public bool? RequireAuthTime { get; set; }
+    // default_acr_values: space-separated ACR values used when the authorize request omits acr_values.
+    [MaxLength(1000)]
+    public string? DefaultAcrValuesJson { get; set; }
+
     // Navigation properties
     public List<ClientSecret> ClientSecrets { get; set; } = new();
 }

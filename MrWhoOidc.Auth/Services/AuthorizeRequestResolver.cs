@@ -197,7 +197,15 @@ public sealed class AuthorizeRequestResolver(
             code_challenge: Get(query, OAuthConstants.Parameters.CodeChallenge),
             code_challenge_method: Get(query, OAuthConstants.Parameters.CodeChallengeMethod),
             resource: Get(query, OAuthConstants.Parameters.Resource),
-            response_mode: Get(query, OAuthConstants.Parameters.ResponseMode)
+            response_mode: Get(query, OAuthConstants.Parameters.ResponseMode),
+            prompt: Get(query, OAuthConstants.Parameters.Prompt),
+            max_age: Get(query, OAuthConstants.Parameters.MaxAge),
+            id_token_hint: Get(query, OAuthConstants.Parameters.IdTokenHint),
+            login_hint: Get(query, OAuthConstants.Parameters.LoginHint),
+            acr_values: Get(query, OAuthConstants.Parameters.AcrValues),
+            display: Get(query, OAuthConstants.Parameters.Display),
+            ui_locales: Get(query, OAuthConstants.Parameters.UiLocales),
+            claims: Get(query, OAuthConstants.Parameters.Claims)
         );
     }
 

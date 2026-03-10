@@ -53,6 +53,12 @@ public static class OAuthConstants
         public const string DeviceCode = "device_code";
         public const string UserCode = "user_code";
 
+        // OIDC Core authorize parameters
+        public const string Prompt = "prompt";
+        public const string MaxAge = "max_age";
+        public const string Display = "display";
+        public const string UiLocales = "ui_locales";
+
         // CIBA parameters (OpenID Connect CIBA Core 1.0)
         public const string AuthReqId = "auth_req_id";
         public const string LoginHint = "login_hint";

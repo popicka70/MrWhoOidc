@@ -99,15 +99,6 @@ public sealed class ClientRegistrationResponse
     [JsonPropertyName("userinfo_encrypted_response_enc")]
     public string? UserinfoEncryptedResponseEnc { get; set; }
 
-    [JsonPropertyName("request_object_signing_alg")]
-    public string? RequestObjectSigningAlg { get; set; }
-
-    [JsonPropertyName("request_object_encryption_alg")]
-    public string? RequestObjectEncryptionAlg { get; set; }
-
-    [JsonPropertyName("request_object_encryption_enc")]
-    public string? RequestObjectEncryptionEnc { get; set; }
-
     [JsonPropertyName("default_max_age")]
     public int? DefaultMaxAge { get; set; }
 
@@ -116,12 +107,6 @@ public sealed class ClientRegistrationResponse
 
     [JsonPropertyName("default_acr_values")]
     public List<string>? DefaultAcrValues { get; set; }
-
-    [JsonPropertyName("initiate_login_uri")]
-    public string? InitiateLoginUri { get; set; }
-
-    [JsonPropertyName("request_uris")]
-    public List<string>? RequestUris { get; set; }
 
     [JsonPropertyName("backchannel_logout_uri")]
     public string? BackchannelLogoutUri { get; set; }

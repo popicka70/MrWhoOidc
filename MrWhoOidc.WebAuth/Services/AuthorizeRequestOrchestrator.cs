@@ -100,20 +100,8 @@ public sealed class AuthorizeRequestOrchestrator(
         }
 
         var effectiveReq = resolution.Request!;
-        var domainReq = new AuthorizeRequest(
-            response_type: effectiveReq.response_type,
-            client_id: effectiveReq.client_id,
-            redirect_uri: effectiveReq.redirect_uri,
-            scope: effectiveReq.scope,
-            state: effectiveReq.state,
-            nonce: effectiveReq.nonce,
-            code_challenge: effectiveReq.code_challenge,
-            code_challenge_method: effectiveReq.code_challenge_method,
-            resource: effectiveReq.resource,
-            response_mode: effectiveReq.response_mode
-        );
 
-        return (null, new AuthorizationContext(domainReq, corr, clientBucket, mode, requestUriRaw));
+        return (null, new AuthorizationContext(effectiveReq, corr, clientBucket, mode, requestUriRaw));
     }
 
     private async Task<bool> IsFeatureEnabledAsync(string feature, Guid? tenantId, CancellationToken ct)

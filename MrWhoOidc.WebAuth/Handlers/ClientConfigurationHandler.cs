@@ -113,6 +113,24 @@ public sealed class ClientConfigurationHandler(
         }
 
         // Update client metadata
+        // Reject unsupported metadata fields (same contract as POST /register)
+        if (!string.IsNullOrEmpty(request.SoftwareStatement))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "software_statement is not supported" }, statusCode: 400);
+        if (!string.IsNullOrEmpty(request.RequestObjectSigningAlg))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_signing_alg is not supported" }, statusCode: 400);
+        if (!string.IsNullOrEmpty(request.RequestObjectEncryptionAlg))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_encryption_alg is not supported" }, statusCode: 400);
+        if (!string.IsNullOrEmpty(request.RequestObjectEncryptionEnc))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_object_encryption_enc is not supported" }, statusCode: 400);
+        if (!string.IsNullOrEmpty(request.InitiateLoginUri))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" }, statusCode: 400);
+        if (request.RequestUris != null && request.RequestUris.Count > 0)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "request_uris is not supported" }, statusCode: 400);
+        if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" }, statusCode: 400);
+        if (request.DefaultMaxAge.HasValue && request.DefaultMaxAge.Value < 0)
+            return Results.Json(new { error = "invalid_client_metadata", error_description = "default_max_age must be a non-negative integer" }, statusCode: 400);
+
         client.ClientName = request.ClientName ?? client.ClientName;
         client.SubjectType = request.SubjectType ?? client.SubjectType;
         client.SectorIdentifierUri = request.SectorIdentifierUri;
@@ -128,6 +146,11 @@ public sealed class ClientConfigurationHandler(
         client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? client.BackChannelLogoutSessionRequired;
         client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
         client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? client.FrontChannelLogoutSessionRequired;
+        client.DefaultMaxAge = request.DefaultMaxAge;
+        client.RequireAuthTime = request.RequireAuthTime;
+        client.DefaultAcrValuesJson = request.DefaultAcrValues != null && request.DefaultAcrValues.Count > 0
+            ? JsonSerializer.Serialize(request.DefaultAcrValues)
+            : null;
 
         // Update redirect URIs
         if (request.RedirectUris.Count > 0)
@@ -293,7 +316,12 @@ public sealed class ClientConfigurationHandler(
             BackchannelLogoutSessionRequired = client.BackChannelLogoutSessionRequired,
             FrontchannelLogoutUri = client.FrontChannelLogoutUri,
             FrontchannelLogoutSessionRequired = client.FrontChannelLogoutSessionRequired,
-            PostLogoutRedirectUris = postLogoutUris
+            PostLogoutRedirectUris = postLogoutUris,
+            DefaultMaxAge = client.DefaultMaxAge,
+            RequireAuthTime = client.RequireAuthTime,
+            DefaultAcrValues = !string.IsNullOrWhiteSpace(client.DefaultAcrValuesJson)
+                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(client.DefaultAcrValuesJson)
+                : null
         };
     }
 

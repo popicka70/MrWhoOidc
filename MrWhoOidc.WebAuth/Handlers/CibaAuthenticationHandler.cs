@@ -400,7 +400,8 @@ public sealed class CibaAuthenticationHandler(
         var audiences = jwt.Audiences?.Where(a => !string.IsNullOrWhiteSpace(a)).ToArray() ?? Array.Empty<string>();
         if (audiences.Length == 0)
         {
-            return true;
+            // Require an explicit audience claim targeted at this OP.
+            return false;
         }
 
         return audiences.Contains(expectedAudience, StringComparer.Ordinal);

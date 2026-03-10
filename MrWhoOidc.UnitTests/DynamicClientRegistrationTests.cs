@@ -11,6 +11,7 @@ using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -858,6 +859,270 @@ public sealed class DynamicClientRegistrationTests
         await result.ExecuteAsync(ctx);
 
         Assert.AreEqual(401, ctx.Response.StatusCode);
+    }
+
+    #endregion
+
+    #region Unsupported Metadata Rejection Tests (P1 - DCR Truthfulness)
+
+    [TestMethod]
+    public async Task Register_SoftwareStatement_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            software_statement = "eyJhbGciOiJSUzI1NiJ9.stub.sig"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_RequestObjectSigningAlg_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            request_object_signing_alg = "RS256"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_RequestObjectEncryptionAlg_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            request_object_encryption_alg = "RSA-OAEP"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_RequestUris_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            request_uris = new[] { "https://app/requests/1" }
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_InitiateLoginUri_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            initiate_login_uri = "https://app/initiate-login"
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_JwksAndJwksUri_Together_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            jwks_uri = "https://app/.well-known/jwks.json",
+            jwks = new { keys = new object[] { } }
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    [TestMethod]
+    public async Task Register_DefaultMaxAge_IsPersistedAndEchoed()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            default_max_age = 3600
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var resp = await GetResponseBody<ClientRegistrationResponse>(ctx);
+        Assert.IsNotNull(resp);
+        Assert.AreEqual(3600, resp.DefaultMaxAge);
+
+        // Verify it is also persisted in the DB
+        var client = await db.Clients.FirstOrDefaultAsync();
+        Assert.IsNotNull(client);
+        Assert.AreEqual(3600, client.DefaultMaxAge);
+    }
+
+    [TestMethod]
+    public async Task Register_RequireAuthTime_IsPersistedAndEchoed()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            require_auth_time = true
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+
+        // Verify persisted in DB
+        var client = await db.Clients.FirstOrDefaultAsync();
+        Assert.IsNotNull(client);
+        Assert.AreEqual(true, client.RequireAuthTime);
+    }
+
+    [TestMethod]
+    public async Task Register_DefaultAcrValues_IsPersistedAndEchoed()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            default_acr_values = new[] { "urn:mfa", "urn:sms" }
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(201, ctx.Response.StatusCode);
+        var resp = await GetResponseBody<ClientRegistrationResponse>(ctx);
+        Assert.IsNotNull(resp);
+        CollectionAssert.AreEquivalent(new[] { "urn:mfa", "urn:sms" }, resp.DefaultAcrValues);
+
+        // Verify persisted in DB
+        var client = await db.Clients.FirstOrDefaultAsync();
+        Assert.IsNotNull(client);
+        Assert.IsNotNull(client.DefaultAcrValuesJson);
+        StringAssert.Contains(client.DefaultAcrValuesJson, "urn:mfa");
+    }
+
+    [TestMethod]
+    public async Task Register_NegativeDefaultMaxAge_Returns400_InvalidClientMetadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (handler, tenantAccessor) = CreateRegistrationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = new[] { "https://app/callback" },
+            default_max_age = -1
+        });
+        var ctx = CreateHttpContext(body: body);
+
+        var result = await handler.HandleAsync(ctx);
+        await result.ExecuteAsync(ctx);
+
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+        var resp = await ParseResponseAsDict(ctx);
+        Assert.AreEqual("invalid_client_metadata", resp["error"]);
+    }
+
+    private static async Task<Dictionary<string, string?>> ParseResponseAsDict(HttpContext context)
+    {
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        using var reader = new StreamReader(context.Response.Body);
+        var json = await reader.ReadToEndAsync();
+        var dict = new Dictionary<string, string?>();
+        if (string.IsNullOrEmpty(json)) return dict;
+        using var doc = JsonDocument.Parse(json);
+        foreach (var prop in doc.RootElement.EnumerateObject())
+            dict[prop.Name] = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : prop.Value.ToString();
+        return dict;
     }
 
     #endregion
