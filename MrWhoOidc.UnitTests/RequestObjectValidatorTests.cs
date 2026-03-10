@@ -5,6 +5,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using System.Net;
+using System.Net.Http;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -196,6 +198,30 @@ public sealed class RequestObjectValidatorTests
     }
 
     [TestMethod]
+    public async Task ValidateAsync_Succeeds_WithClientJwksUri()
+    {
+        using var db = CreateDb();
+        var (jwt, _, jwkJson) = CreateSignedRequestWithJwk("c1", "https://as/authorize");
+
+        db.Clients.Add(new ClientEntity { ClientId = "c1", PublicJwksUri = "https://client.example/jwks" });
+        await db.SaveChangesAsync();
+
+        var validator = new RequestObjectValidator(
+            db,
+            new ConfigurationBuilder().Build(),
+            NullLogger<RequestObjectValidator>.Instance,
+            Options(),
+            new InMemoryJarReplayCache(),
+            new NoopRequestObjectDecryptor(),
+            new StubHttpClientFactory($"{{\"keys\":[{jwkJson}]}}"));
+
+        var result = await validator.ValidateAsync(jwt, "https://as/authorize");
+
+        Assert.IsTrue(result.IsValid);
+        Assert.AreEqual("c1", result.ClientId);
+    }
+
+    [TestMethod]
     public async Task ValidateAsync_Succeeds_WithEncryptedNestedRequestObject()
     {
         using var db = CreateDb();
@@ -330,5 +356,19 @@ public sealed class RequestObjectValidatorTests
         );
         var handler = new JwtSecurityTokenHandler();
         return (handler.WriteToken(token), kid);
+    }
+
+    private sealed class StubHttpClientFactory(string responseBody) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(new StubHttpMessageHandler(responseBody));
+    }
+
+    private sealed class StubHttpMessageHandler(string responseBody) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseBody)
+            });
     }
 }

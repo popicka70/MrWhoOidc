@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -63,6 +64,8 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync(new SymmetricSecurityKey(new byte[32]));
         return mock.Object;
     }
+    private static string HashAuthorizationCode(string code)
+        => Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
 
     [TestMethod]
     public async Task ExchangeAsync_Fails_ForInvalidCode()
@@ -137,9 +140,10 @@ public sealed class AuthorizationCodeExchangerTests
         db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
         db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
         
+        var storedCodeHash = HashAuthorizationCode(code);
         db.AuthorizationCodes.Add(new AuthorizationCode 
         { 
-            Code = code, 
+            Code = storedCodeHash, 
             UserId = userId, 
             ClientId = "c1", 
             RedirectUri = "https://cb", 
@@ -236,7 +240,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -334,9 +338,10 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
         db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        var storedCodeHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = storedCodeHash,
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -471,7 +476,7 @@ public sealed class AuthorizationCodeExchangerTests
         db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -526,6 +531,120 @@ public sealed class AuthorizationCodeExchangerTests
 
         var expectedAtHash = CryptoHelper.ComputeLeftHalfHashBase64Url(accessToken!, SecurityConstants.JwtAlgorithms.RS256);
         Assert.AreEqual(expectedAtHash, atHash);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Emits_AuthTime_When_Client_Requires_It()
+    {
+        using var db = CreateDb();
+
+        DateTimeOffset? capturedAuthTime = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((_, _, _, _, _, _, authTime, tokenType, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedAuthTime = authTime;
+                }
+            })
+            .ReturnsAsync((string _, string _, IEnumerable<Claim> _, DateTimeOffset _, string? _, string? _, DateTimeOffset? _, string? tokenType, CancellationToken _) =>
+                string.IsNullOrWhiteSpace(tokenType) ? "jwt-id" : "jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-require-auth-time";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "c1",
+            RealmId = realmId,
+            TenantId = tenantId,
+            RequireAuthTime = true
+        });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsNotNull(capturedAuthTime);
     }
 
     [TestMethod]
@@ -612,7 +731,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -721,7 +840,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -842,7 +961,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -963,7 +1082,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1079,7 +1198,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1198,7 +1317,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1315,7 +1434,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1420,7 +1539,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1534,7 +1653,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -1652,7 +1771,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashAuthorizationCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",

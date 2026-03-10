@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 
 namespace MrWhoOidc.Auth.Services;
 
@@ -24,7 +25,16 @@ public sealed class JwksCache : IJwksCache
 
         try
         {
-            var http = httpFactory.CreateClient();
+            HttpClient http;
+            try
+            {
+                http = httpFactory.CreateClient(SectorIdentifierResolver.SafeHttpClientName);
+            }
+            catch (InvalidOperationException)
+            {
+                http = httpFactory.CreateClient();
+            }
+
             using var resp = await http.GetAsync(jwksUri, ct).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
             var json = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);

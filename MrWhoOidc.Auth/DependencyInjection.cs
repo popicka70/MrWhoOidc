@@ -62,6 +62,7 @@ public static class AuthServiceCollectionExtensions
         // In production, WebAuth will override this with a Redis-backed version, but for unit tests
         // and basic scenarios, this provides a default memory-only hybrid cache implementation.
         services.AddHybridCache();
+        services.TryAddSingleton<IJwksCache, JwksCache>();
 
         services.AddOptions<UserAccountFeatureOptions>();
         if (configuration != null)

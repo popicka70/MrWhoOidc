@@ -112,6 +112,54 @@ public sealed class ClientConfigurationHandler(
             }
         }
 
+        var grantTypes = request.GrantTypes ?? ParseStringList(client.GrantTypesJson) ?? new List<string> { "authorization_code" };
+        foreach (var grantType in grantTypes)
+        {
+            if (!RegistrationHandler.SupportedGrantTypes.Contains(grantType))
+            {
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = $"Unsupported grant_type: {grantType}" },
+                    statusCode: 400);
+            }
+        }
+
+        var responseTypes = request.ResponseTypes ?? ParseStringList(client.ResponseTypesJson) ?? new List<string> { "code" };
+        foreach (var responseType in responseTypes)
+        {
+            if (!RegistrationHandler.SupportedResponseTypes.Contains(responseType))
+            {
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = $"Unsupported response_type: {responseType}" },
+                    statusCode: 400);
+            }
+        }
+
+        var authMethod = request.TokenEndpointAuthMethod ?? client.TokenEndpointAuthMethod ?? "client_secret_basic";
+        if (!RegistrationHandler.SupportedAuthMethods.Contains(authMethod))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = $"Unsupported token_endpoint_auth_method: {authMethod}" },
+                statusCode: 400);
+        }
+
+        var appType = request.ApplicationType ?? client.ApplicationType ?? "web";
+        if (!string.Equals(appType, "web", StringComparison.Ordinal) && !string.Equals(appType, "native", StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "application_type must be 'web' or 'native'" },
+                statusCode: 400);
+        }
+
+        var subjectType = request.SubjectType ?? client.SubjectType;
+        if (!string.IsNullOrEmpty(subjectType)
+            && !string.Equals(subjectType, "public", StringComparison.Ordinal)
+            && !string.Equals(subjectType, "pairwise", StringComparison.Ordinal))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "subject_type must be 'public' or 'pairwise'" },
+                statusCode: 400);
+        }
+
         // Update client metadata
         // Reject unsupported metadata fields (same contract as POST /register)
         if (!string.IsNullOrEmpty(request.SoftwareStatement))
@@ -132,10 +180,33 @@ public sealed class ClientConfigurationHandler(
             return Results.Json(new { error = "invalid_client_metadata", error_description = "default_max_age must be a non-negative integer" }, statusCode: 400);
 
         client.ClientName = request.ClientName ?? client.ClientName;
-        client.SubjectType = request.SubjectType ?? client.SubjectType;
+        client.TokenEndpointAuthMethod = authMethod;
+        client.GrantTypesJson = JsonSerializer.Serialize(grantTypes);
+        client.ResponseTypesJson = JsonSerializer.Serialize(responseTypes);
+        client.ClientUri = request.ClientUri ?? client.ClientUri;
+        client.LogoUri = request.LogoUri ?? client.LogoUri;
+        client.Scope = request.Scope ?? client.Scope;
+        if (request.Contacts != null)
+        {
+            client.ContactsJson = request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null;
+        }
+        client.TosUri = request.TosUri ?? client.TosUri;
+        client.PolicyUri = request.PolicyUri ?? client.PolicyUri;
+        client.SoftwareId = request.SoftwareId ?? client.SoftwareId;
+        client.SoftwareVersion = request.SoftwareVersion ?? client.SoftwareVersion;
+        client.ApplicationType = appType;
+        client.SubjectType = subjectType ?? client.SubjectType;
         client.SectorIdentifierUri = request.SectorIdentifierUri;
-        client.PublicJwksUri = request.JwksUri;
-        client.PublicJwksJson = request.Jwks != null ? JsonSerializer.Serialize(request.Jwks) : client.PublicJwksJson;
+        if (request.Jwks != null)
+        {
+            client.PublicJwksJson = JsonSerializer.Serialize(request.Jwks);
+            client.PublicJwksUri = null;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.JwksUri))
+        {
+            client.PublicJwksUri = request.JwksUri;
+            client.PublicJwksJson = null;
+        }
         client.IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg;
         client.IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg;
         client.IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc;
@@ -146,11 +217,21 @@ public sealed class ClientConfigurationHandler(
         client.BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? client.BackChannelLogoutSessionRequired;
         client.FrontChannelLogoutUri = request.FrontchannelLogoutUri;
         client.FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? client.FrontChannelLogoutSessionRequired;
-        client.DefaultMaxAge = request.DefaultMaxAge;
-        client.RequireAuthTime = request.RequireAuthTime;
-        client.DefaultAcrValuesJson = request.DefaultAcrValues != null && request.DefaultAcrValues.Count > 0
-            ? JsonSerializer.Serialize(request.DefaultAcrValues)
-            : null;
+        if (request.DefaultMaxAge.HasValue)
+        {
+            client.DefaultMaxAge = request.DefaultMaxAge;
+        }
+        if (request.RequireAuthTime.HasValue)
+        {
+            client.RequireAuthTime = request.RequireAuthTime;
+        }
+        if (request.DefaultAcrValues != null)
+        {
+            client.DefaultAcrValuesJson = request.DefaultAcrValues.Count > 0
+                ? JsonSerializer.Serialize(request.DefaultAcrValues)
+                : null;
+        }
+        client.RequirePkce = string.Equals(appType, "native", StringComparison.Ordinal);
 
         // Update redirect URIs
         if (request.RedirectUris.Count > 0)
@@ -159,9 +240,11 @@ public sealed class ClientConfigurationHandler(
         }
 
         // Update post_logout_redirect_uris
-        if (request.PostLogoutRedirectUris != null && request.PostLogoutRedirectUris.Count > 0)
+        if (request.PostLogoutRedirectUris != null)
         {
-            client.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(request.PostLogoutRedirectUris);
+            client.AllowedLogoutRedirectUrisJson = request.PostLogoutRedirectUris.Count > 0
+                ? JsonSerializer.Serialize(request.PostLogoutRedirectUris)
+                : null;
         }
 
         await db.SaveChangesAsync();
@@ -287,9 +370,7 @@ public sealed class ClientConfigurationHandler(
             redirectUris = JsonSerializer.Deserialize<List<string>>(client.AllowedLoginRedirectUrisJson) ?? new List<string>();
         }
 
-        var postLogoutUris = !string.IsNullOrEmpty(client.AllowedLogoutRedirectUrisJson)
-            ? JsonSerializer.Deserialize<List<string>>(client.AllowedLogoutRedirectUrisJson)
-            : null;
+        var postLogoutUris = ParseStringList(client.AllowedLogoutRedirectUrisJson);
 
         return new ClientRegistrationResponse
         {
@@ -299,13 +380,25 @@ public sealed class ClientConfigurationHandler(
             ClientSecretExpiresAt = 0, // 0 = never expires
             RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{client.ClientId}"!,
             RedirectUris = redirectUris,
+            TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
+            GrantTypes = ParseStringList(client.GrantTypesJson),
+            ResponseTypes = ParseStringList(client.ResponseTypesJson),
             ClientName = client.ClientName,
+            ClientUri = client.ClientUri,
+            LogoUri = client.LogoUri,
+            Scope = client.Scope,
+            Contacts = ParseStringList(client.ContactsJson),
+            TosUri = client.TosUri,
+            PolicyUri = client.PolicyUri,
             SubjectType = client.SubjectType,
+            ApplicationType = client.ApplicationType,
             SectorIdentifierUri = client.SectorIdentifierUri,
             JwksUri = client.PublicJwksUri,
             Jwks = !string.IsNullOrEmpty(client.PublicJwksJson)
                 ? JsonSerializer.Deserialize<object>(client.PublicJwksJson)
                 : null,
+            SoftwareId = client.SoftwareId,
+            SoftwareVersion = client.SoftwareVersion,
             IdTokenSignedResponseAlg = client.IdTokenSignedResponseAlg,
             IdTokenEncryptedResponseAlg = client.IdTokenEncryptedResponseAlg,
             IdTokenEncryptedResponseEnc = client.IdTokenEncryptedResponseEnc,
@@ -323,6 +416,16 @@ public sealed class ClientConfigurationHandler(
                 ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(client.DefaultAcrValuesJson)
                 : null
         };
+    }
+
+    internal static List<string>? ParseStringList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<List<string>>(json);
     }
 
     private static string HashRegistrationToken(string token)

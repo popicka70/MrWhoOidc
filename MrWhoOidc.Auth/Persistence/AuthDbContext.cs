@@ -372,6 +372,18 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             // New: per-client public keys (for private_key_jwt and JAR)
             b.Property(x => x.PublicJwksJson).HasMaxLength(8000);
             b.Property(x => x.PublicJwksUri).HasMaxLength(2000);
+            b.Property(x => x.TokenEndpointAuthMethod).HasMaxLength(50);
+            b.Property(x => x.GrantTypesJson).HasMaxLength(1000);
+            b.Property(x => x.ResponseTypesJson).HasMaxLength(1000);
+            b.Property(x => x.ClientUri).HasMaxLength(2000);
+            b.Property(x => x.LogoUri).HasMaxLength(2000);
+            b.Property(x => x.Scope).HasMaxLength(1000);
+            b.Property(x => x.ContactsJson).HasMaxLength(2000);
+            b.Property(x => x.TosUri).HasMaxLength(2000);
+            b.Property(x => x.PolicyUri).HasMaxLength(2000);
+            b.Property(x => x.SoftwareId).HasMaxLength(200);
+            b.Property(x => x.SoftwareVersion).HasMaxLength(100);
+            b.Property(x => x.ApplicationType).HasMaxLength(20);
             // New: per-client PAR requirement and introspection shaping/mTLS
             b.Property(x => x.RequirePar).HasDefaultValue(false);
             b.Property(x => x.IntrospectionResponseFieldsJson).HasMaxLength(2000);
@@ -1320,6 +1332,30 @@ public class Client
     public string? PublicJwksJson { get; set; }
     [MaxLength(2000)]
     public string? PublicJwksUri { get; set; }
+    [MaxLength(50)]
+    public string? TokenEndpointAuthMethod { get; set; }
+    [MaxLength(1000)]
+    public string? GrantTypesJson { get; set; }
+    [MaxLength(1000)]
+    public string? ResponseTypesJson { get; set; }
+    [MaxLength(2000)]
+    public string? ClientUri { get; set; }
+    [MaxLength(2000)]
+    public string? LogoUri { get; set; }
+    [MaxLength(1000)]
+    public string? Scope { get; set; }
+    [MaxLength(2000)]
+    public string? ContactsJson { get; set; }
+    [MaxLength(2000)]
+    public string? TosUri { get; set; }
+    [MaxLength(2000)]
+    public string? PolicyUri { get; set; }
+    [MaxLength(200)]
+    public string? SoftwareId { get; set; }
+    [MaxLength(100)]
+    public string? SoftwareVersion { get; set; }
+    [MaxLength(20)]
+    public string? ApplicationType { get; set; }
 
     // --- OIDC Response Security (Client Metadata) ---
 

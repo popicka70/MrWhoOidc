@@ -2,263 +2,225 @@
 
 Date: 2026-03-10
 
-Scope: current MrWhoOidc OpenID Provider implementation, with emphasis on OpenID Connect Core 1.0, Discovery 1.0, Dynamic Client Registration 1.0 / Management 1.0, Session Management 1.0, RP-Initiated Logout 1.0, and CIBA where advertised.
+Scope: current MrWhoOidc OpenID Provider implementation, with emphasis on OpenID Connect Core 1.0, Discovery 1.0, Dynamic Client Registration 1.0 / Management 1.0, Session Management 1.0, RP-Initiated Logout 1.0, Front-Channel Logout 1.0, Back-Channel Logout 1.0, Device Authorization Grant, PAR, JAR, JARM, DPoP, mTLS, and CIBA where advertised.
 
 ## Executive Summary
 
-The implementation is strong on the core OP surface: discovery, JWKS, authorization code flow, userinfo, logout, pairwise subject identifiers, PAR/JAR/JARM, DPoP, token exchange, and several advanced features are clearly present. The main compliance risks are not missing endpoints; they are mismatches between what the server advertises or accepts and what it actually enforces end to end.
+MrWhoOidc is a capable OpenID Provider with strong coverage of the core OIDC surface and several advanced extensions. The implementation is materially stronger than some older repository documents suggest: the earlier authorize-parameter propagation gap has been fixed, pairwise subject identifiers are implemented, and dynamic client registration is stricter than before.
 
-The most important confirmed weaknesses are:
+The main remaining compliance risks are now concentrated in three areas:
 
-1. The authorize request pipeline drops several OIDC parameters before validation and issuance logic sees them.
-2. Dynamic client registration accepts and echoes a broad set of OIDC client metadata that is not validated, persisted, or enforced consistently.
-3. The CIBA implementation is functional but looser than the spec expects in a few places, especially around hint-token validation and delivery-mode semantics.
+1. Dynamic client registration advertises and accepts metadata that is not round-trippable or enforceable end to end.
+2. `jwks_uri` is accepted and persisted, but several runtime paths still only use inline `jwks` / `PublicJwksJson`.
+3. A small number of advertised behaviors remain partially enforced, especially `require_auth_time` and parts of CIBA validation.
 
-These are fixable. The main recommendation is to tighten truthfulness: if metadata or parameters are advertised as supported, they need to survive the full request path and affect runtime behavior.
+This is no longer a server with missing basic endpoints. It is a server that needs tighter contract fidelity between registration, discovery, and runtime behavior.
 
 ## Confirmed Strengths
 
-- Discovery metadata is broadly implemented and tenant-aware in `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs`.
-- Pairwise subject identifiers are not just advertised; they are implemented in `MrWhoOidc.Auth/Services/SubjectIdentifiers/PairwiseSubjectService.cs` and covered by tests in `MrWhoOidc.UnitTests/Integration/PairwiseSubjectIdentifiersTests.cs`.
-- UserInfo enforces access-token shape (`typ=at+jwt`), validates audience conservatively, and supports DPoP-bound access tokens in `MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs`.
-- Authorization code issuance persists nonce, resource, PKCE, and claims JSON when the validated request contains them in `MrWhoOidc.Auth/Services/AuthorizationCodeService.cs`.
-- RP-initiated logout, front-channel logout, and back-channel logout are implemented with explicit handlers rather than stubs.
+- Core OP endpoints are implemented: authorization, token, userinfo, discovery, JWKS, revocation, and introspection.
+- Authorization code flow is enforced with PKCE S256 where required.
+- PAR, JAR, and JARM are implemented with request validation and replay protection.
+- DPoP support is present, including replay defenses and userinfo enforcement.
+- Device Authorization Grant is implemented.
+- CIBA is implemented with poll and callback-oriented modes.
+- Pairwise subject identifiers are implemented in `MrWhoOidc.Auth/Services/SubjectIdentifiers/PairwiseSubjectService.cs`.
+- RP-initiated logout, front-channel logout, back-channel logout, and `check_session_iframe` are implemented.
+- UserInfo signed and encrypted JWT responses are implemented.
+- Dynamic client registration rejects several unsupported optional metadata fields rather than silently echoing them.
 
-## Findings
+## Current Findings
 
-### 1. High: `/authorize` drops core OIDC parameters before validation
-
-Severity: High
-
-Why this matters:
-
-OpenID Connect support depends on the authorization request carrying parameters such as `claims`, `max_age`, `acr_values`, `display`, `ui_locales`, `login_hint`, and `id_token_hint` all the way through request resolution, validation, login UX, consent, and authorization-code persistence. In the current code, several of those parameters are defined in the request model and validated in the validator, but they are dropped during request mapping.
-
-Evidence:
-
-- `MrWhoOidc.Auth/Services/Authorization/AuthorizeRequest.cs` defines fields for `prompt`, `max_age`, `id_token_hint`, `login_hint`, `acr_values`, `display`, `ui_locales`, and `claims`.
-- `MrWhoOidc.Auth/Services/AuthorizeRequestResolver.cs` maps query input into `AuthorizeRequest`, but `MapQueryToRequest` only populates `response_type`, `client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `code_challenge`, `code_challenge_method`, `resource`, and `response_mode`.
-- `MrWhoOidc.WebAuth/Services/AuthorizeRequestOrchestrator.cs` then rebuilds a new `AuthorizeRequest` and again only copies the reduced field set.
-- `MrWhoOidc.Auth/Services/Authorization/AuthorizeRequestValidator.cs` contains validation logic for `prompt`, `max_age`, `acr_values`, and `claims`, but that logic only works if those values reach the validator.
-
-Practical impact:
-
-- `claims` from `/authorize` will not be normalized and persisted with the authorization code, even though discovery advertises `claims_parameter_supported=true`.
-- `max_age` and `acr_values` support is unreliable because the validator path never receives those parameters from the resolved authorize request.
-- `display=popup` and `ui_locales` do not survive into the login redirect path reliably because `domainReq.display` is populated from the truncated model.
-- `login_hint` and `id_token_hint` do not propagate through the standard authorize request model.
-- This affects direct query requests and also JAR/PAR, because the resolver collapses the resolved request to the reduced shape.
-
-Recommended update:
-
-- Fix the root cause in `AuthorizeRequestResolver.MapQueryToRequest` and `AuthorizeRequestOrchestrator.ResolveAndValidateAsync` so they preserve the full `AuthorizeRequest` shape.
-- Add integration tests that prove these parameters survive across plain authorize requests, JAR, and PAR.
-- Only advertise `display_values_supported`, `ui_locales_supported`, `claims_parameter_supported`, and `acr_values_supported` when the full request path actually enforces them.
-
-Suggested test additions:
-
-- `/authorize` with `claims` persists `ClaimsJson` into the issued authorization code.
-- `/authorize` with `max_age` reaches validator and triggers re-authentication logic.
-- `/authorize` with `acr_values` reaches validator and login enforcement.
-- `/authorize` with `display=popup` propagates into the login redirect.
-- PAR and JAR variants of the same cases.
-
-### 2. High: dynamic client registration accepts metadata that is not implemented end to end
-
-Severity: High
+### 1. High: `jwks_uri` is accepted by registration but ignored by several runtime validation paths
 
 Why this matters:
 
-OIDC dynamic registration is only interoperable when the server either implements client metadata semantics or rejects unsupported metadata with `invalid_client_metadata`. Accepting metadata and echoing it back while ignoring it at runtime is a compliance and interoperability problem.
+OIDC and OAuth clients commonly register `jwks_uri` instead of embedding `jwks`. If the OP accepts `jwks_uri`, stores it, and returns it from registration, clients reasonably expect it to work for key-based features.
 
 Evidence:
 
-- `MrWhoOidc.WebAuth/Models/DynamicRegistration/ClientRegistrationRequest.cs` and `ClientRegistrationResponse.cs` expose a wide metadata surface including:
-  - `software_statement`
-  - `request_object_signing_alg`
-  - `request_object_encryption_alg`
-  - `request_object_encryption_enc`
-  - `default_max_age`
-  - `require_auth_time`
-  - `default_acr_values`
-  - `initiate_login_uri`
-  - `request_uris`
-- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` returns these values in the registration response.
-- `MapRequestToClient` in the same file persists only a subset of the request metadata. The fields above are not stored on the `Client` entity there.
-- `MrWhoOidc.WebAuth/Handlers/ClientConfigurationHandler.cs` updates only a smaller subset again and does not validate or manage that broader metadata set.
-- Grep across the repository shows almost all of the fields above exist only in the request/response models and the registration handler response path, not in runtime enforcement code.
+- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` accepts `jwks_uri` and stores it in `PublicJwksUri`.
+- `MrWhoOidc.WebAuth/Handlers/ClientConfigurationHandler.cs` also persists and returns `JwksUri`.
+- `MrWhoOidc.Auth/Services/ClientAssertionValidator.cs` validates `private_key_jwt` using `client.PublicJwksJson` only and explicitly notes that fetching from `jwks_uri` is not implemented.
+- `MrWhoOidc.Auth/Services/RequestObjectValidator.cs` validates JAR signatures using `client.PublicJwksJson` only.
+- `MrWhoOidc.WebAuth/Handlers/CibaAuthenticationHandler.cs` validates `login_hint_token` using `client.PublicJwksJson` only.
+- `MrWhoOidc.Auth/Services/Token/AuthorizationCodeExchanger.cs` and `MrWhoOidc.WebAuth/Handlers/UserInfoHandler.cs` derive encryption keys from `PublicJwksJson`, not `PublicJwksUri`.
 
 Practical impact:
 
-- A client can register metadata successfully and receive it back in the `201` response, but the OP will silently discard it.
-- `default_max_age`, `require_auth_time`, and `default_acr_values` cannot influence authorization behavior if they are not persisted and consulted.
-- `request_uris` and `initiate_login_uri` are declared but effectively unsupported.
-- `software_statement` is modeled but not validated. Additionally, `software_statement` is accepted in the request but is **not echoed** in the `201` response, unlike the other unsupported fields — making it inconsistent even within the echo-back behavior.
-- `GET /register/{client_id}` does not return any of these fields because they were never persisted — so the metadata is lost immediately after the initial registration response.
-- This will create confusing RP behavior and conformance failures, especially for automated DCR clients.
+- A dynamically registered client that provides only `jwks_uri` can be accepted by the OP but still fail later when using `private_key_jwt`, JAR, CIBA `login_hint_token`, or encrypted response features.
+- This is a contract mismatch between registration and runtime.
 
 Recommended update:
 
-- Decide field by field whether the server truly supports the metadata.
-- For supported metadata: persist it, validate it, and enforce it at runtime.
-- For unsupported metadata: reject it explicitly with `invalid_client_metadata` rather than accepting and echoing it.
-- Apply the same rule to `PUT /register/{client_id}` so update semantics match create semantics.
+- Introduce a shared client-key resolver that supports both inline `jwks` and `jwks_uri`.
+- Use that resolver consistently in `ClientAssertionValidator`, `RequestObjectValidator`, `CibaAuthenticationHandler`, `AuthorizationCodeExchanger`, and `UserInfoHandler`.
+- If `jwks_uri` support is intentionally out of scope, reject `jwks_uri` in registration instead of accepting it.
 
-Priority metadata to fix first:
-
-1. `default_max_age`
-2. `require_auth_time`
-3. `default_acr_values`
-4. `request_uris`
-5. `software_statement`
-6. request object crypto metadata
-
-### 3. Medium: CIBA validation is present but not strict enough for a spec-facing feature
-
-Severity: Medium
+### 2. High: Dynamic client registration management is not round-trippable
 
 Why this matters:
 
-The discovery document can advertise CIBA support. Once advertised, RPs expect stricter behavior around hint-token validation, delivery-mode rules, and client metadata semantics.
+RFC 7592 management operations are expected to expose the current client metadata, not a reduced subset. A client should be able to register metadata, read it back, and update it consistently.
 
 Evidence:
 
-- `MrWhoOidc.WebAuth/Handlers/CibaAuthenticationHandler.cs` supports `login_hint`, `login_hint_token`, and `id_token_hint`, and issues `auth_req_id` responses.
-- `ValidateLoginHintTokenAsync` validates signatures only against `client.PublicJwksJson`; it does not use `jwks_uri` and it sets `ValidateIssuer=false`.
-- `TokenHasExpectedAudience` returns `true` when the token has no audience, which is permissive for a backchannel hint token targeted at the OP.
-- Delivery mode is inferred by `DetermineDeliveryMode` from global configuration plus presence of `client_notification_token`; there is no visible per-client delivery-mode contract.
-- `IsValidClientNotificationToken` is syntax checking only (length ≤ 1024, no control/whitespace characters). Note: syntax-only validation is acceptable per CIBA spec section 7.1 for **poll** mode, but insufficient for **push** and **ping** modes where the notification token has higher trust requirements because the OP uses it to call back to the client.
+- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` returns a broad `ClientRegistrationResponse` on `POST /register`, including `token_endpoint_auth_method`, `grant_types`, `response_types`, `client_uri`, `logo_uri`, `scope`, `contacts`, `tos_uri`, `policy_uri`, `software_id`, and `software_version`.
+- `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` does not persist many of those fields on the `Client` entity.
+- `MrWhoOidc.WebAuth/Handlers/ClientConfigurationHandler.cs` `BuildClientResponse` returns only a narrower subset of metadata.
+- `MrWhoOidc.WebAuth/Handlers/ClientConfigurationHandler.cs` `UpdateClientAsync` updates only that smaller subset and does not manage `token_endpoint_auth_method`, `grant_types`, `response_types`, `client_uri`, `logo_uri`, `scope`, `contacts`, `tos_uri`, `policy_uri`, `software_id`, or `software_version`.
 
 Practical impact:
 
-- `login_hint_token` acceptance is weaker than expected for a high-trust authentication initiation mechanism.
-- Clients using `jwks_uri` without inline `jwks` are not clearly supported for this path.
-- Delivery-mode behavior may diverge from client expectations if the OP effectively chooses the mode at runtime.
-- For push/ping delivery modes, the lack of semantic validation on `client_notification_token` could allow an RP to provide a weak or replayable token that the OP then trusts for callback authentication.
+- `POST /register` may appear successful for metadata that `GET /register/{client_id}` cannot return later.
+- `PUT /register/{client_id}` cannot fully manage metadata previously accepted on create.
+- Interoperability with automated registration clients is weaker than the create response suggests.
 
 Recommended update:
 
-- Tighten `login_hint_token` validation to require explicit audience to this OP and apply stricter issuer/signing constraints.
-- Support client signing keys from `jwks_uri` where that is the registered key source, or reject that registration shape for CIBA clients.
-- Make delivery mode a client-level capability/registration decision rather than a runtime inference from token presence.
-- Add negative integration tests for missing audience, wrong audience, missing signing keys, and unsupported delivery mode combinations.
+- Decide which metadata is truly supported for long-term storage and management.
+- For supported metadata: persist it, return it from `GET`, and allow coherent update behavior via `PUT`.
+- For unsupported metadata: stop echoing it on `POST` and reject it with `invalid_client_metadata`.
+- Add round-trip tests: create, read, update, read again.
 
-### 4. Medium: dynamic registration does not validate metadata consistency strongly enough
-
-Severity: Medium
+### 3. Medium: `require_auth_time` is accepted and persisted but not enforced
 
 Why this matters:
 
-Several OIDC and OAuth client metadata combinations should be rejected when inconsistent rather than accepted leniently.
+If a client registers `require_auth_time=true`, the ID token should reliably include `auth_time` for that client.
 
 Evidence:
 
-- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` validates redirect URIs, grant types, response types, auth method, application type, subject type, and some ID token crypto metadata.
-- It does not clearly reject `jwks` plus `jwks_uri` combinations.
-- It does not validate `sector_identifier_uri` at registration time, despite the codebase having sector identifier validation services under `MrWhoOidc.Auth/Services/SubjectIdentifiers`.
-- It does not validate unsupported OIDC metadata such as `software_statement` and request-object metadata; it effectively accepts them.
+- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` accepts and persists `require_auth_time`.
+- `MrWhoOidc.WebAuth/Handlers/ClientConfigurationHandler.cs` returns `RequireAuthTime` and updates it.
+- `MrWhoOidc.Auth/Persistence/AuthDbContext.cs` stores `RequireAuthTime` on `Client`.
+- `MrWhoOidc.Auth/Services/Token/AuthorizationCodeExchanger.cs` computes `authTimeForIdToken` from the authorization context but does not consult `client.RequireAuthTime` anywhere.
+- Repository tests under `MrWhoOidc.UnitTests/DynamicClientRegistrationTests.cs` verify persistence and echoing of `RequireAuthTime`, but not ID token enforcement.
 
 Practical impact:
 
-- The DCR endpoint is friendlier than the spec should allow, but the cost is post-registration ambiguity and weaker interoperability.
+- A client can successfully negotiate `require_auth_time=true` without a guarantee that issued ID tokens will satisfy that metadata.
 
 Recommended update:
 
-- Enforce mutual exclusivity and completeness rules for `jwks` / `jwks_uri`.
-- Validate pairwise clients with `sector_identifier_uri` using the existing subject-identifier validation services.
-- Reject unknown or unimplemented OIDC client metadata instead of storing or echoing it passively.
+- During ID token issuance, require `auth_time` whenever `client.RequireAuthTime == true`.
+- If the OP cannot determine an authentication time for that authorization, fail the token exchange with a protocol error instead of emitting a non-conformant ID token.
+- Add focused tests for `require_auth_time=true` with and without available `auth_time`.
 
-### 5. Medium: `display` and `ui_locales` are advertised more confidently than they are implemented
-
-Severity: Medium
+### 4. Medium: CIBA hint-token validation is still looser than the advertised feature depth suggests
 
 Why this matters:
 
-Discovery currently advertises `display_values_supported` and optionally `ui_locales_supported`. Those values should reflect effective support at the authorization UX layer.
+CIBA is a high-trust feature. Once advertised in discovery, relying parties expect strict validation of hint tokens and stable delivery-mode semantics.
 
 Evidence:
 
-- `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs` publishes `display_values_supported` and `ui_locales_supported`.
-- `MrWhoOidc.WebAuth/Services/AuthenticationRedirectService.cs` only preserves `popup` as a special case.
-- Because the authorize mapping currently drops `display` and `ui_locales`, support is not end-to-end.
+- `MrWhoOidc.WebAuth/Handlers/CibaAuthenticationHandler.cs` validates `login_hint_token` audience, but sets `ValidateIssuer = false`.
+- The same handler derives signing keys from `client.PublicJwksJson` only, not `PublicJwksUri`.
+- `DetermineDeliveryMode` derives the mode from global configuration plus token presence rather than a clearly persisted per-client contract.
+- `IsValidClientNotificationToken` performs syntax-only validation.
 
 Practical impact:
 
-- RPs may use discovery metadata to drive popup UX or locale behavior that does not actually work.
+- `login_hint_token` acceptance is still more permissive than ideal.
+- Clients using only `jwks_uri` may be accepted at registration but fail on CIBA hint-token validation.
+- Delivery-mode behavior is more implementation-defined than client-negotiated.
 
 Recommended update:
 
-- Fix the authorize request propagation first.
-- After that, either implement locale propagation fully in the login/consent UI or stop advertising it.
-- Keep `display_values_supported` limited to values that materially change UI behavior.
+- Validate `login_hint_token` issuer explicitly when the deployment has a defined trust model.
+- Reuse the same shared client-key resolver described in Finding 1.
+- Persist or derive CIBA delivery mode from client metadata rather than only from global configuration and token presence.
+- Tighten `client_notification_token` checks for push/ping modes.
+
+### 5. Medium: `sector_identifier_uri` is only partially validated at registration time
+
+Why this matters:
+
+For pairwise subject clients, bad `sector_identifier_uri` metadata should ideally be rejected during registration rather than discovered later during live token issuance.
+
+Evidence:
+
+- `MrWhoOidc.WebAuth/Handlers/RegistrationHandler.cs` checks only that `sector_identifier_uri` is HTTPS when supplied for pairwise clients.
+- `MrWhoOidc.Auth/Services/SubjectIdentifiers/SectorIdentifierUriValidator.cs` contains a stronger validator that fetches the document and verifies the registered redirect URIs.
+- That stronger validation is invoked by `MrWhoOidc.Auth/Services/SubjectIdentifiers/SectorIdentifierResolver.cs` at runtime, during pairwise subject resolution.
+
+Practical impact:
+
+- A client can be registered successfully with a syntactically valid but operationally invalid `sector_identifier_uri`.
+- The failure may then surface later during authorization or token issuance rather than at registration time.
+
+Recommended update:
+
+- Reuse `SectorIdentifierUriValidator` during registration and client configuration update flows.
+- Fail early with `invalid_client_metadata` when the fetched `sector_identifier_uri` document does not match the registered redirect URIs.
+
+### 6. Low: repository conformance checks are drifting from actual discovery behavior
+
+Why this matters:
+
+This is not an OP protocol defect by itself, but it makes the repository a weaker source of truth for compliance.
+
+Evidence:
+
+- `MrWhoOidc.WebAuth/Handlers/DiscoveryHandler.cs` sets `tls_client_certificate_bound_access_tokens` to `false`, with an explicit comment that mTLS is optional rather than universal.
+- `MrWhoOidc.UnitTests/Integration/DiscoveryMetadataTests.cs` still expects `tls_client_certificate_bound_access_tokens` to be `true`.
+
+Practical impact:
+
+- The test suite is asserting a stronger discovery contract than the server actually publishes.
+- That makes compliance documentation and regression confidence less reliable.
+
+Recommended update:
+
+- Align the test with the implemented discovery contract, or change the implementation if universal certificate-bound tokens are actually intended.
+
+## Missing Optional Features
+
+These are not current compliance defects because the server rejects or does not advertise them, but they remain feature gaps relative to the broader OIDC ecosystem:
+
+- Third-Party-Initiated Login via `initiate_login_uri` is not supported.
+- Registered `request_uris` metadata is not supported.
+- `software_statement` is not supported.
+- Request object client metadata (`request_object_signing_alg`, `request_object_encryption_alg`, `request_object_encryption_enc`) is not supported for DCR.
+- Implicit and hybrid response types are not supported; the OP is code-flow only.
+- Local UI locale handling for `ui_locales` appears incomplete; the parameter survives request resolution and is forwarded to some external-IdP paths, but there is no clear local login/consent localization pipeline using it.
+
+These are reasonable product choices as long as discovery and registration continue to be truthful.
 
 ## Recommended Remediation Plan
 
-### Priority 0: fix authorize parameter propagation
+### Priority 0: make key source handling truthful
 
-- Update `MrWhoOidc.Auth/Services/AuthorizeRequestResolver.cs` to map all OIDC parameters already present in `AuthorizeRequest`.
-- Update `MrWhoOidc.WebAuth/Services/AuthorizeRequestOrchestrator.cs` to pass through the resolved `AuthorizeRequest` instead of reconstructing a reduced one.
-- Add regression tests for `claims`, `max_age`, `acr_values`, `display`, and `ui_locales`.
+- Implement a shared runtime resolver for client keys that supports both inline `jwks` and `jwks_uri`.
+- Apply it across `private_key_jwt`, JAR, CIBA `login_hint_token`, and encrypted response features.
+- If remote JWKS fetch is not desired, reject `jwks_uri` at registration.
 
-### Priority 1: make DCR truthful
+### Priority 1: repair RFC 7592 round-tripping
 
-- Inventory every field in `ClientRegistrationRequest`.
+- Inventory the metadata returned on `POST /register`.
 - For each field, choose one of two outcomes:
-  - persist + validate + enforce
-  - reject with `invalid_client_metadata`
-- Apply the same decision on create, read, and update paths.
+  - persist + return + update
+  - reject on create/update
+- Add round-trip integration tests covering `POST`, `GET`, and `PUT`.
 
-### Priority 2: harden CIBA
+### Priority 2: enforce negotiated client metadata
 
-- Require stricter `login_hint_token` audience semantics.
-- Support `jwks_uri` for client signing keys or reject that registration mode for CIBA.
-- Make delivery mode client-driven and test each supported mode explicitly.
+- Enforce `require_auth_time` in ID token issuance.
+- Reuse full `sector_identifier_uri` validation during registration, not only at runtime.
 
-### Priority 3: align discovery with actual behavior
+### Priority 3: tighten CIBA semantics
 
-- Re-review every advertised capability in `DiscoveryHandler.cs` after the fixes above.
-- Remove or gate metadata that is only partially implemented.
+- Harden `login_hint_token` issuer validation.
+- Make delivery-mode behavior explicitly client-facing and testable.
+- Add negative tests for unsupported key source combinations and invalid hint tokens.
 
-## Suggested Test Additions
+### Priority 4: align tests and docs with reality
 
-- Authorization integration tests for query, JAR, and PAR carrying `claims`, `max_age`, `acr_values`, `display`, and `ui_locales`.
-- Dynamic registration tests that verify unsupported metadata is rejected rather than echoed.
-- Dynamic registration tests for `sector_identifier_uri`, `jwks`/`jwks_uri`, and request-object metadata validation.
-- CIBA negative tests for invalid `login_hint_token` issuer/audience/key source combinations.
+- Update stale assessment documents that still refer to already-fixed gaps.
+- Fix the discovery integration test around `tls_client_certificate_bound_access_tokens`.
+- Add tests for DCR management round-tripping and `require_auth_time` issuance behavior.
 
 ## Overall Assessment
 
-This is a capable OIDC Provider with substantial feature depth. The main compliance problem is not the absence of protocol code; it is drift between the public contract and the runtime contract. Fixing authorize parameter propagation and making dynamic registration truthful will materially improve spec compliance and interoperability without requiring a redesign of the platform.
-
-## Reviewer Notes (2026-03-10)
-
-All five findings were independently verified against the codebase. Every cited file, method, and behavioral claim was confirmed accurate.
-
-### Verification Summary
-
-| Finding | Claim Verified | Notes |
-|---------|---------------|-------|
-| 1. Authorize param propagation | **Yes** | `MapQueryToRequest` constructs with 10/18 fields; orchestrator rebuilds with same 10. Validator logic for `prompt`, `max_age`, `acr_values`, `claims` is effectively dead code. |
-| 2. DCR metadata enforcement | **Yes** | All 9 fields confirmed present in models, absent from `Client` entity and `MapRequestToClient`. Additional gap: `software_statement` not echoed in response. |
-| 3. CIBA validation strictness | **Yes** | `ValidateIssuer=false`, audience-less tokens accepted, delivery mode is global-only, notification token is syntax-only. |
-| 4. DCR consistency validation | **Yes** | `jwks` + `jwks_uri` both accepted simultaneously. `sector_identifier_uri` stored without validation despite existing services. |
-| 5. display/ui_locales support | **Yes** | Discovery advertises both. `NormalizeDisplay()` discards `"page"` (returns null). `ui_locales` has no implementation in the redirect or login path. |
-
-### Additional Findings Not in Original Assessment
-
-1. **`software_statement` echo gap**: The registration response echoes all other unsupported metadata fields back to the client, but `software_statement` is silently dropped from the response. This is an additional inconsistency within the already-problematic echo behavior.
-
-2. **CIBA `client_notification_token` mode sensitivity**: The syntax-only validation of this token is spec-compliant for poll mode (CIBA section 7.1) but insufficient for push/ping modes. The fix should be mode-aware: tighten validation when the resolved delivery mode is push or ping.
-
-3. **`display="page"` silently ignored**: Discovery advertises `display_values_supported: ["page", "popup"]`, but `NormalizeDisplay()` only returns a value for `"popup"` — `"page"` maps to `null`, making it indistinguishable from no `display` parameter at all. Either remove `"page"` from discovery or implement it as the explicit default.
-
-### Assessment of Remediation Plan
-
-The four-priority ordering is sound:
-
-- **P0 (authorize params)** is correctly identified as the root cause — it blocks multiple OIDC features and makes existing validator code unreachable.
-- **P1 (DCR truthfulness)** is the right second step because it affects interoperability for any automated RP.
-- **P2 (CIBA hardening)** correctly follows DCR since some CIBA fixes interact with client registration metadata (delivery mode, key source).
-- **P3 (discovery alignment)** must be last because it depends on what P0–P2 actually implement.
-
-The proposed fixes are surgical — they do not require architectural changes. The existing validator, entity model, and service infrastructure can absorb all of the recommended changes.
+This OP is broadly compliant on the core OIDC surface and stronger than many custom implementations in feature depth. The main remaining problems are now about truthfulness and lifecycle consistency rather than missing protocol endpoints. Fixing `jwks_uri` handling, RFC 7592 round-tripping, and `require_auth_time` enforcement would materially improve interoperability and reduce the highest remaining compliance risk.

@@ -32,7 +32,15 @@ public interface IJarReplayCache
     bool TryAdd(string key, DateTimeOffset expiresAt);
 }
 
-internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration config, ILogger<RequestObjectValidator> logger, IOptions<AuthOptions> authOptions, IJarReplayCache replayCache, IRequestObjectDecryptor requestObjectDecryptor) : IRequestObjectValidator
+internal sealed class RequestObjectValidator(
+    AuthDbContext db,
+    IConfiguration config,
+    ILogger<RequestObjectValidator> logger,
+    IOptions<AuthOptions> authOptions,
+    IJarReplayCache replayCache,
+    IRequestObjectDecryptor requestObjectDecryptor,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null) : IRequestObjectValidator
 {
     public async Task<RequestObjectValidationResult> ValidateAsync(string requestJwt, string expectedAudience, CancellationToken ct = default)
     {
@@ -131,42 +139,32 @@ internal sealed class RequestObjectValidator(AuthDbContext db, IConfiguration co
             return Invalid("unauthorized_client", "Unknown client_id in request object");
         }
 
-        // Build signing keys from DB-stored JWKS/JWK first, then fall back to configuration.
-        string? jwkOrJwksJson = client.PublicJwksJson;
-        jwkOrJwksJson ??=
-            config[$"Oidc:RequestObjects:{clientId}:jwks"] ??
-            config[$"Oidc:RequestObjects:{clientId}:jwk"] ??
-            config[$"Auth:RequestObjects:{clientId}:jwks"] ??
-            config[$"Auth:RequestObjects:{clientId}:jwk"] ??
-            config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
-            config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
-            config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
-            config[$"Auth:ClientAssertions:{clientId}:jwk"];
+        var signingKeys = await ClientJwksResolver.GetSigningKeysAsync(
+            client,
+            httpClientFactory,
+            jwksCache,
+            authOptions.Value.ClientJwksCacheSeconds,
+            ct).ConfigureAwait(false);
 
-        if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
+        if (signingKeys.Count == 0)
+        {
+            var jwkOrJwksJson =
+                config[$"Oidc:RequestObjects:{clientId}:jwks"] ??
+                config[$"Oidc:RequestObjects:{clientId}:jwk"] ??
+                config[$"Auth:RequestObjects:{clientId}:jwks"] ??
+                config[$"Auth:RequestObjects:{clientId}:jwk"] ??
+                config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
+                config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
+                config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
+                config[$"Auth:ClientAssertions:{clientId}:jwk"];
+
+            signingKeys = ClientJwksResolver.ParseSecurityKeys(jwkOrJwksJson);
+        }
+
+        if (signingKeys.Count == 0)
         {
             logger.LogWarning("JAR: no JWK/JWKS configured for client {ClientId}", clientId);
             return Invalid("invalid_request_object", "No JWK/JWKS configured for client");
-        }
-
-        IReadOnlyCollection<SecurityKey> signingKeys;
-        try
-        {
-            if (jwkOrJwksJson.Contains("\"keys\"", StringComparison.Ordinal))
-            {
-                var set = new JsonWebKeySet(jwkOrJwksJson);
-                signingKeys = set.Keys.Select(k => (SecurityKey)k).ToArray();
-            }
-            else
-            {
-                var jwk = new JsonWebKey(jwkOrJwksJson);
-                signingKeys = new[] { (SecurityKey)jwk };
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "JAR: invalid JWK/JWKS configuration for client {ClientId}", clientId);
-            return Invalid("invalid_request_object", "Invalid JWK/JWKS configuration for client");
         }
 
         // Determine allowed alg set (global allow-list + per-client override)

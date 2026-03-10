@@ -4,12 +4,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Http;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -471,6 +476,121 @@ public sealed class CibaTests
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         Assert.IsTrue(body.Contains("invalid_request"));
         Assert.IsTrue(body.Contains("id_token_hint"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_LoginHintTokenWithWrongIssuer_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+        var (loginHintToken, jwksSetJson) = CreateClientSignedJwt("other-client", "https://test.example.com", "user-1");
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId,
+            PublicJwksUri = "https://client.example/jwks"
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance,
+            new StubHttpClientFactory(jwksSetJson));
+
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["login_hint_token"] = loginHintToken,
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("login_hint_token"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_LoginHintTokenWithWrongAudience_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+        var (loginHintToken, jwksSetJson) = CreateClientSignedJwt("ciba-client", "https://other.example.com", "user-1");
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId,
+            PublicJwksJson = jwksSetJson
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance);
+
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["login_hint_token"] = loginHintToken,
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("login_hint_token"));
     }
 
     #endregion
@@ -972,6 +1092,62 @@ public sealed class CibaTests
             
         public Task SendPingNotificationAsync(CibaAuthenticationRequest request, CancellationToken ct = default)
             => Task.CompletedTask;
+    }
+
+    private static (string token, string jwksSetJson) CreateClientSignedJwt(string issuer, string audience, string subject)
+    {
+        using var rsa = RSA.Create(2048);
+        var parameters = rsa.ExportParameters(true);
+        var kid = Guid.NewGuid().ToString("N");
+
+        var publicJwkJson = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["kty"] = "RSA",
+            ["alg"] = "RS256",
+            ["kid"] = kid,
+            ["n"] = Base64UrlEncoder.Encode(parameters.Modulus),
+            ["e"] = Base64UrlEncoder.Encode(parameters.Exponent)
+        });
+
+        var privateJwkJson = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["kty"] = "RSA",
+            ["alg"] = "RS256",
+            ["kid"] = kid,
+            ["n"] = Base64UrlEncoder.Encode(parameters.Modulus),
+            ["e"] = Base64UrlEncoder.Encode(parameters.Exponent),
+            ["d"] = Base64UrlEncoder.Encode(parameters.D),
+            ["p"] = Base64UrlEncoder.Encode(parameters.P),
+            ["q"] = Base64UrlEncoder.Encode(parameters.Q),
+            ["dp"] = Base64UrlEncoder.Encode(parameters.DP),
+            ["dq"] = Base64UrlEncoder.Encode(parameters.DQ),
+            ["qi"] = Base64UrlEncoder.Encode(parameters.InverseQ)
+        });
+
+        var credentials = new SigningCredentials(new JsonWebKey(privateJwkJson), SecurityAlgorithms.RsaSha256);
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: new[] { new Claim("sub", subject) },
+            notBefore: DateTime.UtcNow.AddMinutes(-1),
+            expires: DateTime.UtcNow.AddMinutes(5),
+            signingCredentials: credentials);
+
+        return (new JwtSecurityTokenHandler().WriteToken(token), $"{{\"keys\":[{publicJwkJson}]}}");
+    }
+
+    private sealed class StubHttpClientFactory(string responseBody) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(new StubHttpMessageHandler(responseBody));
+    }
+
+    private sealed class StubHttpMessageHandler(string responseBody) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseBody)
+            });
     }
 
     #endregion

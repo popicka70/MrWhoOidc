@@ -356,6 +356,76 @@ public sealed class DynamicClientRegistrationTests
     }
 
     [TestMethod]
+    public async Task Register_And_GetClient_RoundTrips_Metadata()
+    {
+        var db = CreateDb();
+        var tenantId = await CreateTestTenant(db);
+        var (registrationHandler, tenantAccessor) = CreateRegistrationHandler(db);
+        var (configurationHandler, configurationTenantAccessor) = CreateConfigurationHandler(db);
+        SetTenant(tenantAccessor, tenantId);
+        SetTenant(configurationTenantAccessor, tenantId);
+
+        var request = new ClientRegistrationRequest
+        {
+            RedirectUris = ["https://client.example.com/callback"],
+            TokenEndpointAuthMethod = "private_key_jwt",
+            GrantTypes = ["authorization_code", "refresh_token"],
+            ResponseTypes = ["code"],
+            ClientName = "Round Trip Client",
+            ClientUri = "https://client.example.com",
+            LogoUri = "https://client.example.com/logo.png",
+            Scope = "openid profile email",
+            Contacts = ["ops@client.example.com"],
+            TosUri = "https://client.example.com/tos",
+            PolicyUri = "https://client.example.com/policy",
+            SoftwareId = "software-id-1",
+            SoftwareVersion = "1.2.3",
+            ApplicationType = "native",
+            DefaultMaxAge = 600,
+            RequireAuthTime = true,
+            DefaultAcrValues = ["urn:mfa"]
+        };
+
+        var registerContext = CreateHttpContext(body: JsonSerializer.Serialize(request));
+        var registerResult = await registrationHandler.HandleAsync(registerContext);
+        await registerResult.ExecuteAsync(registerContext);
+
+        Assert.AreEqual(201, registerContext.Response.StatusCode);
+
+        var registrationResponse = await GetResponseBody<ClientRegistrationResponse>(registerContext);
+        Assert.IsNotNull(registrationResponse);
+        Assert.IsNotNull(registrationResponse.RegistrationAccessToken);
+
+        var getContext = CreateHttpContext(
+            method: "GET",
+            path: $"/register/{registrationResponse.ClientId}",
+            authorizationHeader: $"Bearer {registrationResponse.RegistrationAccessToken}");
+
+        var getResult = await configurationHandler.GetClientAsync(getContext, registrationResponse.ClientId);
+        await getResult.ExecuteAsync(getContext);
+
+        Assert.AreEqual(200, getContext.Response.StatusCode);
+
+        var getResponse = await GetResponseBody<ClientRegistrationResponse>(getContext);
+        Assert.IsNotNull(getResponse);
+        Assert.AreEqual("private_key_jwt", getResponse.TokenEndpointAuthMethod);
+        CollectionAssert.AreEquivalent(new[] { "authorization_code", "refresh_token" }, getResponse.GrantTypes!);
+        CollectionAssert.AreEquivalent(new[] { "code" }, getResponse.ResponseTypes!);
+        Assert.AreEqual("https://client.example.com", getResponse.ClientUri);
+        Assert.AreEqual("https://client.example.com/logo.png", getResponse.LogoUri);
+        Assert.AreEqual("openid profile email", getResponse.Scope);
+        CollectionAssert.AreEquivalent(new[] { "ops@client.example.com" }, getResponse.Contacts!);
+        Assert.AreEqual("https://client.example.com/tos", getResponse.TosUri);
+        Assert.AreEqual("https://client.example.com/policy", getResponse.PolicyUri);
+        Assert.AreEqual("software-id-1", getResponse.SoftwareId);
+        Assert.AreEqual("1.2.3", getResponse.SoftwareVersion);
+        Assert.AreEqual("native", getResponse.ApplicationType);
+        Assert.AreEqual(600, getResponse.DefaultMaxAge);
+        Assert.AreEqual(true, getResponse.RequireAuthTime);
+        CollectionAssert.AreEquivalent(new[] { "urn:mfa" }, getResponse.DefaultAcrValues!);
+    }
+
+    [TestMethod]
     public async Task Register_WithInitialAccessTokenRequired_NoToken_Returns401()
     {
         var (handler, _) = CreateRegistrationHandler();

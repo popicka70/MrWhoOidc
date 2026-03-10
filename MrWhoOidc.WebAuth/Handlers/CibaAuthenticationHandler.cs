@@ -35,7 +35,9 @@ public sealed class CibaAuthenticationHandler(
     ITokenValidator tokenValidator,
     ITenantAccessor tenantAccessor,
     ICibaNotificationService notificationService,
-    ILogger<CibaAuthenticationHandler> logger) : ICibaAuthenticationHandler
+    ILogger<CibaAuthenticationHandler> logger,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null) : ICibaAuthenticationHandler
 {
     public async Task<IResult> HandleAsync(HttpContext http)
     {
@@ -120,7 +122,7 @@ public sealed class CibaAuthenticationHandler(
         else if (!string.IsNullOrWhiteSpace(loginHintToken))
         {
             // login_hint_token would be a signed JWT containing user info - validate and extract subject
-            var subject = await ValidateLoginHintTokenAsync(loginHintToken, client, issuer);
+            var subject = await ValidateLoginHintTokenAsync(loginHintToken, client, issuer, http.RequestAborted);
             if (subject == null)
             {
                 return CibaError(OAuthConstants.ErrorCodes.InvalidRequest, "Invalid login_hint_token", corr);
@@ -366,30 +368,6 @@ public sealed class CibaAuthenticationHandler(
         return true;
     }
 
-    private static IReadOnlyCollection<SecurityKey>? ParseClientSigningKeys(string? jwkOrJwksJson)
-    {
-        if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            if (jwkOrJwksJson.Contains("\"keys\"", StringComparison.Ordinal))
-            {
-                var set = new JsonWebKeySet(jwkOrJwksJson);
-                return set.Keys.Select(k => (SecurityKey)k).ToArray();
-            }
-
-            var jwk = new JsonWebKey(jwkOrJwksJson);
-            return new[] { (SecurityKey)jwk };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static bool TokenHasExpectedAudience(JwtSecurityToken jwt, string expectedAudience)
     {
         if (string.IsNullOrWhiteSpace(expectedAudience))
@@ -407,13 +385,18 @@ public sealed class CibaAuthenticationHandler(
         return audiences.Contains(expectedAudience, StringComparer.Ordinal);
     }
 
-    private async Task<string?> ValidateLoginHintTokenAsync(string token, Client client, string issuer)
+    private async Task<string?> ValidateLoginHintTokenAsync(string token, Client client, string issuer, CancellationToken ct)
     {
         // login_hint_token must be a signed JWT from the client and targeted at this OP.
         try
         {
-            var keys = ParseClientSigningKeys(client.PublicJwksJson);
-            if (keys == null || keys.Count == 0)
+            var keys = await ClientJwksResolver.GetSigningKeysAsync(
+                client,
+                httpClientFactory,
+                jwksCache,
+                authOptions.Value.ClientJwksCacheSeconds,
+                ct).ConfigureAwait(false);
+            if (keys.Count == 0)
             {
                 logger.LogWarning("[CIBA] login_hint_token rejected: client has no signing keys configured client={ClientId}", client.ClientId);
                 return null;
@@ -434,8 +417,10 @@ public sealed class CibaAuthenticationHandler(
 
             var tvp = new TokenValidationParameters
             {
-                ValidateIssuer = false,
-                ValidateAudience = false,
+                ValidateIssuer = true,
+                ValidIssuer = client.ClientId,
+                ValidateAudience = true,
+                ValidAudience = issuer,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromMinutes(1),
                 RequireSignedTokens = true,

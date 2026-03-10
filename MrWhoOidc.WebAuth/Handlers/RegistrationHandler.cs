@@ -28,7 +28,7 @@ public sealed class RegistrationHandler(
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
 
-    private static readonly List<string> SupportedGrantTypes = new()
+    internal static readonly HashSet<string> SupportedGrantTypes = new(StringComparer.Ordinal)
     {
         "authorization_code",
         "refresh_token",
@@ -36,12 +36,12 @@ public sealed class RegistrationHandler(
         "urn:ietf:params:oauth:grant-type:token-exchange"
     };
 
-    private static readonly List<string> SupportedResponseTypes = new()
+    internal static readonly HashSet<string> SupportedResponseTypes = new(StringComparer.Ordinal)
     {
         "code"
     };
 
-    private static readonly List<string> SupportedAuthMethods = new()
+    internal static readonly HashSet<string> SupportedAuthMethods = new(StringComparer.Ordinal)
     {
         "client_secret_basic",
         "client_secret_post",
@@ -408,38 +408,38 @@ public sealed class RegistrationHandler(
             RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{clientId}",
 
             // Echo back all metadata
-            RedirectUris = request.RedirectUris,
-            TokenEndpointAuthMethod = authMethod,
-            GrantTypes = grantTypes,
-            ResponseTypes = responseTypes,
-            ClientName = request.ClientName,
-            ClientUri = request.ClientUri,
-            LogoUri = request.LogoUri,
-            Scope = request.Scope,
-            Contacts = request.Contacts,
-            TosUri = request.TosUri,
-            PolicyUri = request.PolicyUri,
-            JwksUri = request.JwksUri,
-            Jwks = request.Jwks,
-            SoftwareId = request.SoftwareId,
-            SoftwareVersion = request.SoftwareVersion,
-            ApplicationType = appType,
-            SectorIdentifierUri = request.SectorIdentifierUri,
-            SubjectType = request.SubjectType,
-            IdTokenSignedResponseAlg = request.IdTokenSignedResponseAlg,
-            IdTokenEncryptedResponseAlg = request.IdTokenEncryptedResponseAlg,
-            IdTokenEncryptedResponseEnc = request.IdTokenEncryptedResponseEnc,
-            UserinfoSignedResponseAlg = request.UserinfoSignedResponseAlg,
-            UserinfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg,
-            UserinfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc,
-            DefaultMaxAge = request.DefaultMaxAge,
-            RequireAuthTime = request.RequireAuthTime,
-            DefaultAcrValues = request.DefaultAcrValues,
-            BackchannelLogoutUri = request.BackchannelLogoutUri,
-            BackchannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired,
-            FrontchannelLogoutUri = request.FrontchannelLogoutUri,
-            FrontchannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired,
-            PostLogoutRedirectUris = request.PostLogoutRedirectUris
+            RedirectUris = ClientConfigurationHandler.ParseStringList(client.AllowedLoginRedirectUrisJson) ?? new List<string>(),
+            TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
+            GrantTypes = ClientConfigurationHandler.ParseStringList(client.GrantTypesJson),
+            ResponseTypes = ClientConfigurationHandler.ParseStringList(client.ResponseTypesJson),
+            ClientName = client.ClientName,
+            ClientUri = client.ClientUri,
+            LogoUri = client.LogoUri,
+            Scope = client.Scope,
+            Contacts = ClientConfigurationHandler.ParseStringList(client.ContactsJson),
+            TosUri = client.TosUri,
+            PolicyUri = client.PolicyUri,
+            JwksUri = client.PublicJwksUri,
+            Jwks = !string.IsNullOrWhiteSpace(client.PublicJwksJson) ? JsonSerializer.Deserialize<object>(client.PublicJwksJson) : null,
+            SoftwareId = client.SoftwareId,
+            SoftwareVersion = client.SoftwareVersion,
+            ApplicationType = client.ApplicationType,
+            SectorIdentifierUri = client.SectorIdentifierUri,
+            SubjectType = client.SubjectType,
+            IdTokenSignedResponseAlg = client.IdTokenSignedResponseAlg,
+            IdTokenEncryptedResponseAlg = client.IdTokenEncryptedResponseAlg,
+            IdTokenEncryptedResponseEnc = client.IdTokenEncryptedResponseEnc,
+            UserinfoSignedResponseAlg = client.UserInfoSignedResponseAlg,
+            UserinfoEncryptedResponseAlg = client.UserInfoEncryptedResponseAlg,
+            UserinfoEncryptedResponseEnc = client.UserInfoEncryptedResponseEnc,
+            DefaultMaxAge = client.DefaultMaxAge,
+            RequireAuthTime = client.RequireAuthTime,
+            DefaultAcrValues = ClientConfigurationHandler.ParseStringList(client.DefaultAcrValuesJson),
+            BackchannelLogoutUri = client.BackChannelLogoutUri,
+            BackchannelLogoutSessionRequired = client.BackChannelLogoutSessionRequired,
+            FrontchannelLogoutUri = client.FrontChannelLogoutUri,
+            FrontchannelLogoutSessionRequired = client.FrontChannelLogoutSessionRequired,
+            PostLogoutRedirectUris = ClientConfigurationHandler.ParseStringList(client.AllowedLogoutRedirectUrisJson)
         };
 
         return Results.Json(response, statusCode: 201);
@@ -462,6 +462,18 @@ public sealed class RegistrationHandler(
             TenantId = tenantId,
             RealmId = realmId,
             ClientName = request.ClientName ?? $"Dynamic Client {clientId}",
+            TokenEndpointAuthMethod = authMethod,
+            GrantTypesJson = JsonSerializer.Serialize(grantTypes),
+            ResponseTypesJson = JsonSerializer.Serialize(responseTypes),
+            ClientUri = request.ClientUri,
+            LogoUri = request.LogoUri,
+            Scope = request.Scope,
+            ContactsJson = request.Contacts != null && request.Contacts.Count > 0 ? JsonSerializer.Serialize(request.Contacts) : null,
+            TosUri = request.TosUri,
+            PolicyUri = request.PolicyUri,
+            SoftwareId = request.SoftwareId,
+            SoftwareVersion = request.SoftwareVersion,
+            ApplicationType = appType,
             SubjectType = request.SubjectType ?? "public",
             SectorIdentifierUri = request.SectorIdentifierUri,
             RequireConsent = true, // Default to requiring consent for dynamic clients

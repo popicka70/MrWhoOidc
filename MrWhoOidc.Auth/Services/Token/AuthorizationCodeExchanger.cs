@@ -38,15 +38,16 @@ public sealed class AuthorizationCodeExchanger(
     IAccessTokenClaimBuilder claimBuilder,
     ITokenLifetimeResolver lifetimeResolver,
     IOpaqueTokenPolicy opaquePolicy,
-    ILogger<AuthorizationCodeExchanger> logger) : IAuthorizationCodeExchanger
+    ILogger<AuthorizationCodeExchanger> logger,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null) : IAuthorizationCodeExchanger
 {
     private static readonly JsonSerializerOptions EntitlementsJsonOptions = new(JsonSerializerDefaults.Web);
 
-    private static EncryptingCredentials? TryGetIdTokenEncryptingCredentials(MrWhoOidc.Auth.Persistence.Client? client)
+    private async Task<EncryptingCredentials?> TryGetIdTokenEncryptingCredentialsAsync(MrWhoOidc.Auth.Persistence.Client? client, CancellationToken ct)
     {
         if (client is null) return null;
         if (string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.IdTokenEncryptedResponseEnc)) return null;
-        if (string.IsNullOrWhiteSpace(client.PublicJwksJson)) return null;
 
         // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
         if (!string.Equals(client.IdTokenEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
@@ -57,39 +58,14 @@ public sealed class AuthorizationCodeExchanger(
 
         try
         {
-            JsonWebKey? key = null;
+            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+                client,
+                httpClientFactory,
+                jwksCache,
+                authOptions.Value.ClientJwksCacheSeconds,
+                ct).ConfigureAwait(false);
 
-            using (var doc = JsonDocument.Parse(client.PublicJwksJson))
-            {
-                if (doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
-                {
-                    // Prefer keys with use=enc and RSA.
-                    var rsaEnc = keys
-                        .EnumerateArray()
-                        .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase)
-                                          && k.TryGetProperty("use", out var use) && string.Equals(use.GetString(), "enc", StringComparison.OrdinalIgnoreCase));
-
-                    if (rsaEnc.ValueKind != JsonValueKind.Undefined)
-                    {
-                        key = new JsonWebKey(rsaEnc.GetRawText());
-                    }
-                    else
-                    {
-                        var rsaAny = keys
-                            .EnumerateArray()
-                            .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase));
-
-                        if (rsaAny.ValueKind != JsonValueKind.Undefined)
-                        {
-                            key = new JsonWebKey(rsaAny.GetRawText());
-                        }
-                    }
-                }
-            }
-
-            key ??= new JsonWebKey(client.PublicJwksJson);
-
-            if (!string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
+            if (key is null || !string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
 
             return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
         }
@@ -388,6 +364,11 @@ public sealed class AuthorizationCodeExchanger(
                 var atHashForIdToken = atHash;
                 var authTimeForIdToken = authTime;
 
+                if (client?.RequireAuthTime == true && authTimeForIdToken is null)
+                {
+                    authTimeForIdToken = entity.AuthTime ?? DateTimeOffset.UtcNow;
+                }
+
                 if (!string.IsNullOrWhiteSpace(upstreamIdp)) idClaims.Add(new(OidcConstants.Claims.Idp, upstreamIdp!));
                 if (!string.IsNullOrWhiteSpace(upstreamAcr)) idClaims.Add(new(OidcConstants.Claims.Acr, upstreamAcr!));
                 if (authOptions.Value.EmitAmrInIdToken)
@@ -533,7 +514,7 @@ public sealed class AuthorizationCodeExchanger(
                     ct: ct
                 ).ConfigureAwait(false);
 
-                var idTokenEnc = TryGetIdTokenEncryptingCredentials(client);
+                var idTokenEnc = await TryGetIdTokenEncryptingCredentialsAsync(client, ct).ConfigureAwait(false);
                 if (idTokenEnc is not null)
                 {
                     idToken = await jwt.CreateJwtEncryptedAsync(

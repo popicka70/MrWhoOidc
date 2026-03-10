@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Crypto;
 using MrWhoOidc.Auth.Persistence;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -24,7 +25,12 @@ public interface IClientAssertionValidator
     Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default);
 }
 
-public sealed class ClientAssertionValidator(AuthDbContext db, IConfiguration config) : IClientAssertionValidator
+public sealed class ClientAssertionValidator(
+    AuthDbContext db,
+    IConfiguration config,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null,
+    IOptions<AuthOptions>? authOptions = null) : IClientAssertionValidator
 {
     public async Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
     {
@@ -32,38 +38,25 @@ public sealed class ClientAssertionValidator(AuthDbContext db, IConfiguration co
         var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.ClientId == clientId, ct).ConfigureAwait(false);
         if (client == null) return false;
 
-        // Try DB-stored public keys first
-        string? jwkOrJwksJson = client.PublicJwksJson;
-        // Optionally support fetching from a JWKS URI later (not implemented here to avoid HTTP call in core lib)
-        // Fall back to configuration if not present
-        jwkOrJwksJson ??=
-            config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
-            config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
-            config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
-            config[$"Auth:ClientAssertions:{clientId}:jwk"];
+        var signingKeys = await ClientJwksResolver.GetSigningKeysAsync(
+            client,
+            httpClientFactory,
+            jwksCache,
+            authOptions?.Value.ClientJwksCacheSeconds ?? 300,
+            ct).ConfigureAwait(false);
 
-        if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
+        if (signingKeys.Count == 0)
         {
-            // No JWK configured => private_key_jwt not allowed for this client
-            return false;
+            var jwkOrJwksJson =
+                config[$"Oidc:ClientAssertions:{clientId}:jwks"] ??
+                config[$"Oidc:ClientAssertions:{clientId}:jwk"] ??
+                config[$"Auth:ClientAssertions:{clientId}:jwks"] ??
+                config[$"Auth:ClientAssertions:{clientId}:jwk"];
+
+            signingKeys = ClientJwksResolver.ParseSecurityKeys(jwkOrJwksJson);
         }
 
-        // Build signing keys from provided JWK/JWKS JSON
-        IReadOnlyCollection<SecurityKey> signingKeys;
-        try
-        {
-            if (jwkOrJwksJson.Contains("\"keys\"", StringComparison.Ordinal))
-            {
-                var set = new JsonWebKeySet(jwkOrJwksJson);
-                signingKeys = set.Keys.Select(k => (SecurityKey)k).ToArray();
-            }
-            else
-            {
-                var jwk = new JsonWebKey(jwkOrJwksJson);
-                signingKeys = new[] { (SecurityKey)jwk };
-            }
-        }
-        catch
+        if (signingKeys.Count == 0)
         {
             return false;
         }

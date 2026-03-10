@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
@@ -35,7 +36,13 @@ public interface IJarmService
     Task<string> CreateErrorResponseAsync(string clientId, string issuer, string error, string errorDescription, string? state);
 }
 
-public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvider keyProvider) : IJarmService
+public class JarmService(
+    IClientStore clients,
+    IJwtService jwt,
+    ICachedKeyProvider keyProvider,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null,
+    IOptions<AuthOptions>? authOptions = null) : IJarmService
 {
     public async Task<string> CreateSuccessResponseAsync(string clientId, string issuer, string code, string responseMode, string? state)
     {
@@ -121,13 +128,11 @@ public class JarmService(IClientStore clients, IJwtService jwt, ICachedKeyProvid
                 return null;
             }
 
-            var jwks = client.PublicJwksJson;
-            if (string.IsNullOrWhiteSpace(jwks)) return null;
-            
-            var set = new JsonWebKeySet(jwks);
-            // Prefer keys with use=enc and RSA
-            var key = set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase) && string.Equals(k.Use, "enc", StringComparison.OrdinalIgnoreCase))
-                   ?? set.Keys.FirstOrDefault(k => string.Equals(k.Kty, "RSA", StringComparison.OrdinalIgnoreCase));
+            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+                client,
+                httpClientFactory,
+                jwksCache,
+                authOptions?.Value.ClientJwksCacheSeconds ?? 300).ConfigureAwait(false);
             
             if (key is null) return null;
             

@@ -25,7 +25,19 @@ public interface IUserInfoHandler
     Task<IResult> HandleAsync(HttpContext http);
 }
 
-public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> authOptions, ITokenValidator validator, IJwtService jwt, OidcEndpointMetrics metrics, IDPoPValidator dpop, IDPoPReplayCache replayCache, IDPoPNonceStore nonceStore, ILogger<UserInfoHandler> logger, AuthDbContext db) : IUserInfoHandler
+public sealed class UserInfoHandler(
+    OidcOptions options,
+    IOptions<AuthOptions> authOptions,
+    ITokenValidator validator,
+    IJwtService jwt,
+    OidcEndpointMetrics metrics,
+    IDPoPValidator dpop,
+    IDPoPReplayCache replayCache,
+    IDPoPNonceStore nonceStore,
+    ILogger<UserInfoHandler> logger,
+    AuthDbContext db,
+    IHttpClientFactory? httpClientFactory = null,
+    IJwksCache? jwksCache = null) : IUserInfoHandler
 {
     private sealed record ClaimConstraint(bool Essential, string? Value, string[]? Values);
 
@@ -522,7 +534,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 string jwtToken;
                 if (wantsEncryptedUserInfo)
                 {
-                    var enc = TryGetUserInfoEncryptingCredentials(clientForResponse);
+                    var enc = await TryGetUserInfoEncryptingCredentialsAsync(clientForResponse, http.RequestAborted).ConfigureAwait(false);
                     if (enc is null)
                     {
                         outcome = "failure";
@@ -559,11 +571,10 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
     static IResult WithWwwAuthenticate(IResult result)
         => new WwwAuthenticateResult(result, "Bearer error=\"invalid_token\"");
 
-    private static EncryptingCredentials? TryGetUserInfoEncryptingCredentials(Client? client)
+    private async Task<EncryptingCredentials?> TryGetUserInfoEncryptingCredentialsAsync(Client? client, CancellationToken ct)
     {
         if (client is null) return null;
         if (string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseAlg) || string.IsNullOrWhiteSpace(client.UserInfoEncryptedResponseEnc)) return null;
-        if (string.IsNullOrWhiteSpace(client.PublicJwksJson)) return null;
 
         // Minimal initial support: RSA-OAEP + A256CBC-HS512 (supported by JwtSecurityTokenHandler).
         if (!string.Equals(client.UserInfoEncryptedResponseAlg, SecurityAlgorithms.RsaOAEP, StringComparison.Ordinal)
@@ -574,39 +585,14 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
 
         try
         {
-            JsonWebKey? key = null;
+            var key = await ClientJwksResolver.GetEncryptionKeyAsync(
+                client,
+                httpClientFactory,
+                jwksCache,
+                authOptions.Value.ClientJwksCacheSeconds,
+                ct).ConfigureAwait(false);
 
-            using (var doc = JsonDocument.Parse(client.PublicJwksJson))
-            {
-                if (doc.RootElement.TryGetProperty("keys", out var keys) && keys.ValueKind == JsonValueKind.Array)
-                {
-                    // Prefer keys with use=enc and RSA.
-                    var rsaEnc = keys
-                        .EnumerateArray()
-                        .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase)
-                                          && k.TryGetProperty("use", out var use) && string.Equals(use.GetString(), "enc", StringComparison.OrdinalIgnoreCase));
-
-                    if (rsaEnc.ValueKind != JsonValueKind.Undefined)
-                    {
-                        key = new JsonWebKey(rsaEnc.GetRawText());
-                    }
-                    else
-                    {
-                        var rsaAny = keys
-                            .EnumerateArray()
-                            .FirstOrDefault(k => k.TryGetProperty("kty", out var kty) && string.Equals(kty.GetString(), "RSA", StringComparison.OrdinalIgnoreCase));
-
-                        if (rsaAny.ValueKind != JsonValueKind.Undefined)
-                        {
-                            key = new JsonWebKey(rsaAny.GetRawText());
-                        }
-                    }
-                }
-            }
-
-            key ??= new JsonWebKey(client.PublicJwksJson);
-
-            if (!string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
+            if (key is null || !string.Equals(key.Kty, "RSA", StringComparison.OrdinalIgnoreCase)) return null;
 
             return new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
         }
