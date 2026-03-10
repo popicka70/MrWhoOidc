@@ -716,7 +716,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
 function updateMode(mode) {
     document.querySelector('input[name="Wizard.Mode"]').value = mode;
 }

@@ -163,7 +163,7 @@
 
 @section Scripts {
     <script src="~/js/webauthn-utils.js" asp-append-version="true"></script>
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         class WebAuthnManager {
             constructor() {
                 this.registerModal = new bootstrap.Modal(document.getElementById('registerModal'));

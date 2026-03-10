@@ -136,7 +136,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         function selectTenant(tenantSlug) {
             const rememberToggle = document.getElementById('rememberChoice');
             if (rememberToggle && rememberToggle.checked) {

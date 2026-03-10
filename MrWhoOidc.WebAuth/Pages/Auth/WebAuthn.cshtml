@@ -85,7 +85,7 @@
 
 @section Scripts {
     <script src="~/js/webauthn-utils.js" asp-append-version="true"></script>
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         class WebAuthnAuth {
             constructor(returnUrl) {
                 this.returnUrl = returnUrl;

@@ -107,7 +107,8 @@ public sealed class AuthorizationCodeExchanger(
             using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
             try
             {
-                var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == request.Code, ct).ConfigureAwait(false);
+                var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.Code)));
+                var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == codeHash, ct).ConfigureAwait(false);
                 if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
                 {
                     if (entity is not null && entity.Consumed)
@@ -568,7 +569,7 @@ public sealed class AuthorizationCodeExchanger(
                     access_token = accessToken,
                     id_token = idToken,
                     refresh_token = refreshToken,
-                    token_type = OAuthConstants.TokenTypes.Bearer,
+                    token_type = !string.IsNullOrEmpty(request.DpopJkt) ? "DPoP" : OAuthConstants.TokenTypes.Bearer,
                     expires_in = (int)accessTokenLifetime.TotalSeconds,
                     scope = string.Join(' ', scopes)
                 };

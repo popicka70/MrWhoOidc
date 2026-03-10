@@ -256,8 +256,13 @@ public sealed class DiscoveryHandler(
             ["introspection_token_types_supported"] = new[] { OAuthConstants.TokenTypes.AccessToken, OAuthConstants.TokenTypes.RefreshToken },
             // DPoP capability hints (experimental)
             ["dpop_signing_alg_values_supported"] = new[] { SecurityConstants.JwtAlgorithms.RS256, SecurityConstants.JwtAlgorithms.ES256 },
-            ["dpop_bound_access_tokens"] = true,
-            ["tls_client_certificate_bound_access_tokens"] = true
+            // dpop_bound_access_tokens = true means ALL tokens require DPoP (RFC 9449 §5.1).
+            // DPoP is optional per-request here, so we advertise supported algorithms above
+            // and leave this flag false to avoid misleading strictly-conformant clients.
+            ["dpop_bound_access_tokens"] = false,
+            // tls_client_certificate_bound_access_tokens = true means ALL tokens are cert-bound (RFC 8705).
+            // mTLS is optional here, so we set this to false.
+            ["tls_client_certificate_bound_access_tokens"] = false
         };
 
         if (authOptions.Value.EnableRequestObjectEncryption)

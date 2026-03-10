@@ -326,7 +326,7 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Smooth scroll to top when realm/client is selected
         document.querySelectorAll('a[href^="?realm="], a[href^="?client="]').forEach(link => {
             link.addEventListener('click', function() {

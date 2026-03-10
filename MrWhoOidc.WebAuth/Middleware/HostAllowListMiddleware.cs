@@ -48,17 +48,18 @@ public sealed class HostAllowListMiddleware
                 ?? Array.Empty<string>();
         }
 
-        // If still not configured, do not block by default.
+        // If enforcement is explicitly enabled but no hosts are configured, block all requests
+        // rather than failing open. An empty allow-list with enforcement enabled is a
+        // configuration error that should not silently permit all traffic.
         if (allowedHosts.Length == 0)
         {
-            if (!_environment.IsDevelopment())
-            {
-                _logger.LogWarning(
-                    "ForwardedHeaders:EnforceHostAllowList is enabled but no allowed hosts were configured (ForwardedHeaders:AllowedHosts / Oidc:PublicBaseUrl / Oidc:Issuer). " +
-                    "Host allow-list enforcement is skipped.");
-            }
+            _logger.LogError(
+                "ForwardedHeaders:EnforceHostAllowList is enabled but no allowed hosts could be resolved " +
+                "(ForwardedHeaders:AllowedHosts / Oidc:PublicBaseUrl / Oidc:Issuer). " +
+                "Blocking all requests until the configuration is corrected.");
 
-            await _next(context);
+            context.Response.StatusCode = StatusCodes.Status421MisdirectedRequest;
+            await context.Response.WriteAsync("Misdirected Request: host allow-list enforcement is active but no hosts are configured.");
             return;
         }
 

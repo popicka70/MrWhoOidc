@@ -19,12 +19,12 @@ public interface IAuthorizationCodeService
     /// <param name="userId">The ID of the authenticated user.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A result containing the issued code or an error.</returns>
-    Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default);
+    Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default, DateTimeOffset? authTime = null);
 }
 
 internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationCodeMetadataStore _meta, ITenantAccessor tenantAccessor, ITenantSettingsService settingsService) : IAuthorizationCodeService
 {
-    public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
+    public async Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default, DateTimeOffset? authTime = null)
     {
         // Get tenant-specific authorization code lifetime
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
@@ -37,9 +37,12 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             .Replace('+', '-')
             .Replace('/', '_');
 
+        // Store a SHA-256 hash of the code in the DB so a DB breach does not expose active codes.
+        var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
+
         var entity = new AuthorizationCode
         {
-            Code = code,
+            Code = codeHash,
             ClientId = valid.ClientId!,
             UserId = userId,
             RedirectUri = valid.RedirectUri!,
@@ -63,8 +66,8 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             _meta.SetResource(code, valid.Resource);
         }
         var now = DateTimeOffset.UtcNow;
-        entity.AuthTime = now;
-        _meta.SetAuthTime(code, now);
+        entity.AuthTime = authTime ?? now;
+        _meta.SetAuthTime(code, authTime ?? now);
 
         var uri = new UriBuilder(valid.RedirectUri!);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
@@ -76,7 +79,8 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
     static string BuildRedirect(UriBuilder uri, System.Collections.Specialized.NameValueCollection query, AuthorizeValidationResult valid)
     {
         if (!string.IsNullOrEmpty(valid.ErrorDescription)) query["error_description"] = valid.ErrorDescription;
-        if (!string.IsNullOrEmpty(valid.Nonce)) query["nonce"] = valid.Nonce;
+        // OIDC Core §3.1.2.5: the nonce MUST NOT appear in the authorization response query.
+        // It belongs exclusively in the ID Token to prevent leakage via Referer headers and logs.
         if (!string.IsNullOrEmpty(valid.State)) query["state"] = valid.State;
         uri.Query = query.ToString();
         return uri.ToString();

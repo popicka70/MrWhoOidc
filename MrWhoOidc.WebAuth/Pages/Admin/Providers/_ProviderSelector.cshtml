@@ -100,7 +100,7 @@
     }
 </style>
 
-<script>
+<script nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     function selectProviderTemplate(button, templateId) {
         // Update hidden field
         document.getElementById('ProviderTemplate').value = templateId;

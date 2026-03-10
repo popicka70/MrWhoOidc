@@ -423,6 +423,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
+            // Grant type policy
+            b.Property(x => x.AllowClientCredentials).HasDefaultValue(true);
+            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(true);
+            b.Property(x => x.AllowCiba).HasDefaultValue(true);
+
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -1433,6 +1438,13 @@ public class Client
     public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
 
     public bool AutoAssignNewUsersToClient { get; set; } = false;
+
+    // Grant type policy
+    // Defaults are fail-open for backward compatibility with existing clients.
+    // New clients should explicitly set these based on their intended use case.
+    public bool AllowClientCredentials { get; set; } = true;
+    public bool AllowDeviceAuthorization { get; set; } = true;
+    public bool AllowCiba { get; set; } = true;
 
     // Navigation properties
     public List<ClientSecret> ClientSecrets { get; set; } = new();

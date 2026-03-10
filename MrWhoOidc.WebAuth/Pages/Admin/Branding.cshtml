@@ -161,7 +161,7 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Real-time color preview update
         document.querySelectorAll('input[type="color"], input[type="text"][maxlength="50"]').forEach(input => {
             input.addEventListener('input', function() {

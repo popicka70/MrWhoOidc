@@ -63,6 +63,15 @@ public sealed class CibaGrantHandler(
             return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidGrant, "client_id mismatch"));
         }
 
+        // Verify client is authorized for CIBA grant
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ClientId == context.ClientId && c.TenantId == context.TenantId, context.Http.RequestAborted);
+        if (client is null || !client.AllowCiba)
+        {
+            logger.LogWarning("[CIBA] Client {ClientHash} not authorized for CIBA grant", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.UnauthorizedClient, "Client is not authorized for CIBA grant"));
+        }
+
         // Check expiration
         if (entry.ExpiresAt < DateTimeOffset.UtcNow)
         {
@@ -133,6 +142,17 @@ public sealed class CibaGrantHandler(
                 ErrorResult(OAuthConstants.ErrorCodes.ServerError, "Missing user information"));
         }
 
+        // Atomically claim the authorized entry. If another concurrent request already
+        // consumed it, ExecuteDeleteAsync returns 0 rows and we return invalid_grant.
+        int deleted = await db.CibaAuthenticationRequests
+            .Where(dc => dc.Id == entry.Id && dc.Status == CibaRequestStatus.Authorized)
+            .ExecuteDeleteAsync(context.Http.RequestAborted);
+        if (deleted == 0)
+        {
+            logger.LogWarning("[CIBA] Concurrent redemption attempt for client {ClientHash}", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidGrant, "auth_req_id already consumed"));
+        }
+
         var scopes = JsonSerializer.Deserialize<string[]>(entry.ScopesJson) ?? Array.Empty<string>();
         var audience = entry.Resource ?? "api";
         var issuer = context.Http.GetIssuer(context.Options);
@@ -155,9 +175,6 @@ public sealed class CibaGrantHandler(
 
         if (ok)
         {
-            // Remove the CIBA request entry after successful token issuance
-            db.CibaAuthenticationRequests.Remove(entry);
-            await db.SaveChangesAsync(context.Http.RequestAborted);
             logger.LogInformation("[CIBA] Tokens issued for client {ClientHash} user {UserHash}",
                 Bucketization.Bucket(context.ClientId), Bucketization.Bucket(entry.UserId.Value.ToString()));
         }

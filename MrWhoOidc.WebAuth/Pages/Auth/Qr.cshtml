@@ -98,7 +98,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         (function() {
             const sessionToken = '@sessionToken';
             const pollInterval = parseInt('@pollInterval') * 1000;

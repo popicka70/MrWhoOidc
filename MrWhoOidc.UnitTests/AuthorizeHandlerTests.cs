@@ -1164,7 +1164,7 @@ public sealed class AuthorizeHandlerTests
             _redirect = redirect;
         }
 
-        public Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(MrWhoOidc.Auth.Services.Authorization.AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default)
+        public Task<(bool ok, string? error, string? redirect, string? code)> IssueAsync(MrWhoOidc.Auth.Services.Authorization.AuthorizeValidationResult valid, Guid userId, CancellationToken ct = default, DateTimeOffset? authTime = null)
         {
             var redirectUrl = _redirect ?? $"{valid.RedirectUri}?code={_code}";
             if (!string.IsNullOrEmpty(valid.ResponseMode))

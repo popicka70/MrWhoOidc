@@ -154,36 +154,46 @@ public sealed class RefreshTokenExchanger(
             accessToken = await jwt.CreateJwtAsync(request.Issuer, audience, claimsList, DateTimeOffset.UtcNow.Add(accessTokenLifetime), tokenType: SecurityConstants.JwtTokenTypes.AtJwt, ct: ct).ConfigureAwait(false);
         }
 
-        var (newRefresh, _) = await refreshTokens.CreateRefreshTokenAsync(
-            tokenEntity.UserId,
-            request.ClientId,
-            scopes,
-            request.IpAddress,
-            request.UserAgent,
-            ct,
-            familyCreatedAt: tokenEntity.CreatedAt,
-            cnfJkt: request.DpopJkt).ConfigureAwait(false);
-
-        var newRefreshHash = CryptoHelper.ComputeSha256Base64(newRefresh);
-        var newTokenEntity = await db.Tokens
-            .FirstOrDefaultAsync(
-                t => t.TokenHash == newRefreshHash && t.Type == "refresh" && t.ClientId == request.ClientId && t.UserId == tokenEntity.UserId,
-                ct)
-            .ConfigureAwait(false);
-        if (newTokenEntity is not null)
+        var (newRefresh, _) = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // Link the rotated token to its parent to enable targeted family revocation.
-            newTokenEntity.ReplacedById = tokenEntity.Id;
-        }
+            await using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-        tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            var (newRefreshInner, _) = await refreshTokens.CreateRefreshTokenAsync(
+                tokenEntity.UserId,
+                request.ClientId,
+                scopes,
+                request.IpAddress,
+                request.UserAgent,
+                ct,
+                familyCreatedAt: tokenEntity.CreatedAt,
+                cnfJkt: request.DpopJkt).ConfigureAwait(false);
+
+            var newRefreshHash = CryptoHelper.ComputeSha256Base64(newRefreshInner);
+            var newTokenEntity = await db.Tokens
+                .FirstOrDefaultAsync(
+                    t => t.TokenHash == newRefreshHash && t.Type == "refresh" && t.ClientId == request.ClientId && t.UserId == tokenEntity.UserId,
+                    ct)
+                .ConfigureAwait(false);
+            if (newTokenEntity is not null)
+            {
+                // Link the rotated token to its parent to enable targeted family revocation.
+                newTokenEntity.ReplacedById = tokenEntity.Id;
+            }
+
+            tokenEntity.RevokedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+
+            return (newRefreshInner, (object?)null);
+        });
+
+        var newRefreshResult = newRefresh;
 
         var payload = new
         {
             access_token = accessToken,
-            refresh_token = newRefresh,
-            token_type = "Bearer",
+            refresh_token = newRefreshResult,
+            token_type = !string.IsNullOrEmpty(request.DpopJkt) ? "DPoP" : OAuthConstants.TokenTypes.Bearer,
             expires_in = (int)accessTokenLifetime.TotalSeconds,
             scope = string.Join(' ', scopes)
         };

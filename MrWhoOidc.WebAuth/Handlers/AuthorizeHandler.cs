@@ -316,7 +316,8 @@ public sealed class AuthorizeHandler(
             {
                 using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
                 {
-                    var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
+                    TryGetAuthTime(http.User, out var authTimeUtc);
+                    var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId, authTime: authTimeUtc != default ? authTimeUtc : (DateTimeOffset?)null);
                     if (!ok || r is null)
                     {
                         errorResult = ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");

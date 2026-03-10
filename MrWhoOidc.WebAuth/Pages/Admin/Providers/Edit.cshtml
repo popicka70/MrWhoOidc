@@ -324,7 +324,7 @@ else
 </form>
 
 @* JSON Formatting & Tab Coordination Script *@
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     function copyToClipboard(inputId, button) {
         const input = document.getElementById(inputId);
         if (input) {

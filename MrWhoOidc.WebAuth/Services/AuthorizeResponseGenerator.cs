@@ -111,8 +111,21 @@ public sealed class AuthorizeResponseGenerator(IJarmService jarm, IDataProtectio
     public IResult CreateConsentRedirect(HttpContext http, AuthorizeValidationResult validation, string consentUrl)
     {
         var returnUrl = http.Request.Path + http.Request.QueryString.ToUriComponent();
+
+        // Generate a one-time consent challenge ID and store the expected client/scopes in session.
+        // This prevents an attacker from POST-ing arbitrary ClientId/Scopes to the consent endpoint.
+        var consentId = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16))
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        var sessionKey = $"consent:{consentId}";
+        var sessionValue = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            ClientId = validation.ClientId,
+            Scopes = validation.Scopes ?? Array.Empty<string>()
+        });
+        http.Session.SetString(sessionKey, sessionValue);
+
         var scopesQuery = string.Join("&", (validation.Scopes ?? Array.Empty<string>()).Select(s => $"Scopes={Uri.EscapeDataString(s)}"));
-        var finalUrl = $"{consentUrl}?ClientId={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&{scopesQuery}";
+        var finalUrl = $"{consentUrl}?ConsentId={Uri.EscapeDataString(consentId)}&ClientId={Uri.EscapeDataString(validation.ClientId!)}&ReturnUrl={Uri.EscapeDataString(returnUrl)}&{scopesQuery}";
         return Results.Redirect(finalUrl);
     }
 

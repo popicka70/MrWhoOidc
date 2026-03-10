@@ -122,7 +122,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         document.querySelectorAll('input[name="ExportMode"]').forEach(function(radio) {
             radio.addEventListener('change', function() {
                 var secretCount = @Model.Preview.SecretCount;
