@@ -95,6 +95,16 @@ public static class PipelineExtensions
         app.UseRequestLocalization(localizationOptions);
 
         app.UseCors();
+
+        // Rate limiting must run BEFORE authentication so that brute-force requests
+        // do not reach the authentication pipeline. Placing it after UseAuthentication()
+        // would allow attackers to exhaust auth resources before being throttled.
+        if (redisMux is not null)
+        {
+            app.UseMiddleware<DistributedRateLimiterMiddleware>();
+        }
+        app.UseRateLimiter();
+
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseMiddleware<FeatureGatingMiddleware>();
@@ -163,13 +173,6 @@ public static class PipelineExtensions
 
             await context.Next(http);
         });
-
-        if (redisMux is not null)
-        {
-            // Shared Redis sliding-window style limiter (custom middleware) for certain high-volume endpoints
-            app.UseMiddleware<DistributedRateLimiterMiddleware>();
-        }
-        app.UseRateLimiter();
 
         // Conditionally map static assets (skipped in certain test scenarios)
         if (!app.Configuration.GetValue<bool>("Testing:DisableStaticAssets"))

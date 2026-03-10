@@ -9,6 +9,7 @@ using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -33,6 +34,7 @@ public sealed class CibaTests
         AuthDbContext? db = null,
         IClientStore? clients = null,
         IClientAssertionValidator? assertions = null,
+        ITokenValidator? tokenValidator = null,
         IOptions<AuthOptions>? authOptions = null,
         ICibaNotificationService? notificationService = null)
     {
@@ -41,6 +43,7 @@ public sealed class CibaTests
         db ??= CreateDb();
         clients ??= new StubClientStore();
         assertions ??= new StubClientAssertionValidator();
+        tokenValidator ??= new StubTokenValidator();
         authOptions ??= Options.Create(new AuthOptions
         {
             EnableCiba = true,
@@ -60,7 +63,7 @@ public sealed class CibaTests
             IssuerUri = "https://test.example.com"
         });
 
-        return new CibaAuthenticationHandler(oidcOptions, authOptions, db, clients, assertions, tenantAccessor, notificationService, logger);
+        return new CibaAuthenticationHandler(oidcOptions, authOptions, db, clients, assertions, tokenValidator, tenantAccessor, notificationService, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -165,6 +168,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -221,6 +225,7 @@ public sealed class CibaTests
             db,
             failingClientStore,
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -278,6 +283,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -331,6 +337,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -352,6 +359,118 @@ public sealed class CibaTests
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         Assert.IsTrue(body.Contains("invalid_request"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_LoginHintTokenWithoutClientJwks_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId,
+            PublicJwksJson = null
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance);
+
+        var invalidJwt = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyMSJ9.";
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["login_hint_token"] = invalidJwt,
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("login_hint_token"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_InvalidIdTokenHint_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(ok: false),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance);
+
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["id_token_hint"] = "invalid.token.value",
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("id_token_hint"));
     }
 
     #endregion
@@ -389,6 +508,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -453,6 +573,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -515,6 +636,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -579,6 +701,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -633,6 +756,7 @@ public sealed class CibaTests
             db,
             new StubClientStore(),
             new StubClientAssertionValidator(),
+            new StubTokenValidator(),
             tenantAccessor,
             new StubCibaNotificationService(),
             NullLogger<CibaAuthenticationHandler>.Instance);
@@ -654,6 +778,121 @@ public sealed class CibaTests
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         Assert.IsTrue(body.Contains("invalid_binding_message"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_InvalidClientNotificationToken_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions { EnableCiba = true }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance);
+
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["login_hint"] = "user@example.com",
+            ["client_notification_token"] = "bad token with spaces",
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("client_notification_token"));
+    }
+
+    [TestMethod]
+    public async Task HandleAsync_PingOnlyMode_MissingClientNotificationToken_ReturnsInvalidRequest()
+    {
+        var db = CreateDb();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, TenantId = tenantId, Name = "test-realm" });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            ClientId = "ciba-client",
+            RealmId = realmId
+        });
+        await db.SaveChangesAsync();
+
+        var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "test",
+            IssuerUri = "https://test.example.com"
+        });
+
+        var handler = new CibaAuthenticationHandler(
+            new OidcOptions { Issuer = "https://test.example.com" },
+            Options.Create(new AuthOptions
+            {
+                EnableCiba = true,
+                CibaTokenDeliveryModesSupported = ["ping"]
+            }),
+            db,
+            new StubClientStore(),
+            new StubClientAssertionValidator(),
+            new StubTokenValidator(),
+            tenantAccessor,
+            new StubCibaNotificationService(),
+            NullLogger<CibaAuthenticationHandler>.Instance);
+
+        var ctx = CreateHttpContext(new Dictionary<string, string>
+        {
+            ["client_id"] = "ciba-client",
+            ["client_secret"] = "secret",
+            ["login_hint"] = "user@example.com",
+            ["scope"] = "openid"
+        });
+
+        var result = await handler.HandleAsync(ctx);
+
+        await result.ExecuteAsync(ctx);
+        Assert.AreEqual(400, ctx.Response.StatusCode);
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        Assert.IsTrue(body.Contains("invalid_request"));
+        Assert.IsTrue(body.Contains("client_notification_token"));
     }
 
     #endregion
@@ -707,6 +946,23 @@ public sealed class CibaTests
     {
         public Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default) 
             => Task.FromResult(true);
+    }
+
+    private sealed class StubTokenValidator : ITokenValidator
+    {
+        private readonly bool _ok;
+        private readonly ClaimsPrincipal? _principal;
+
+        public StubTokenValidator(bool ok = true, string subject = "test-user")
+        {
+            _ok = ok;
+            _principal = ok
+                ? new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", subject)], "test"))
+                : null;
+        }
+
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
+            => Task.FromResult((_ok, _principal, _ok ? null : "invalid_token"));
     }
 
     private sealed class StubCibaNotificationService : ICibaNotificationService

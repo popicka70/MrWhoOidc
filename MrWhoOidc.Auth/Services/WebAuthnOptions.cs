@@ -125,6 +125,13 @@ public sealed class WebAuthnOptions
     public bool ValidateAaguid { get; set; } = false;
 
     /// <summary>
+    /// Optional AAGUID allowlist for registration policy enforcement.
+    /// Values can be GUID strings or Base64-encoded 16-byte GUID values.
+    /// Empty list means all authenticators are allowed.
+    /// </summary>
+    public string[] AllowedAaguids { get; set; } = Array.Empty<string>();
+
+    /// <summary>
     /// Whether to enforce signature counter validation to detect cloned authenticators.
     /// </summary>
     public bool EnforceSignatureCounter { get; set; } = true;
@@ -160,5 +167,6 @@ public sealed class WebAuthnTenantOverrides
     public bool? AutoEnableForNewUsers { get; set; }
     public int[]? AllowedCredentialAlgorithms { get; set; }
     public bool? ValidateAaguid { get; set; }
+    public string[]? AllowedAaguids { get; set; }
     public bool? EnforceSignatureCounter { get; set; }
 }

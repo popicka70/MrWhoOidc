@@ -32,6 +32,7 @@ public sealed class TokenHandler(
     ITokenService tokens,
     ITokenExchangeService tokenExchange,
     IClientAuthenticator authenticator,
+    IAuditSink audit,
     IDPoPValidator dpop,
     IDPoPReplayCache dpopReplayCache,
     IEnumerable<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler> grantHandlers,
@@ -59,6 +60,11 @@ public sealed class TokenHandler(
             if (!http.Request.HasFormContentType)
             {
                 logger.LogWarning("/token invalid_request: missing form content type from {IP}", http.Connection.RemoteIpAddress?.ToString());
+                audit.Emit("token.request.rejected_invalid_content_type", new
+                {
+                    grant_type = "none",
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
                 _metrics.RecordTokenRequest("none", "failure");
                 _metrics.RecordTokenFailure("none");
                 return ErrorResults.InvalidRequest();
@@ -77,6 +83,11 @@ public sealed class TokenHandler(
             var authResult = await authenticator.AuthenticateAsync(http, authContext);
             if (!authResult.IsSuccess)
             {
+                audit.Emit("token.client_auth.failed", new
+                {
+                    grant_type = string.IsNullOrWhiteSpace(grantType) ? "none" : grantType,
+                    ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                });
                 _metrics.RecordTokenRequest(grantType, "failure");
                 _metrics.RecordTokenFailure(grantType);
                 return authResult.ErrorResult!;
@@ -99,6 +110,12 @@ public sealed class TokenHandler(
                     var (ok, jkt) = await Infrastructure.DpopValidationHelper.ValidateForTokenEndpointAsync(dpop, dpopReplayCache, http, endpointUrl, null, logger);
                     if (!ok)
                     {
+                        audit.Emit("token.dpop.rejected", new
+                        {
+                            client_id = clientId,
+                            grant_type = grantType,
+                            ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                        });
                         http.Response.Headers["WWW-Authenticate"] = "DPoP error=invalid_dpop";
                         return Results.BadRequest(new { error = "invalid_dpop_proof" });
                     }
@@ -116,6 +133,14 @@ public sealed class TokenHandler(
                 if (gr.Handled)
                 {
                     outcome = gr.Success ? "success" : "failure";
+                    audit.Emit(gr.Success ? "token.grant.success" : "token.grant.failure", new
+                    {
+                        client_id = clientId,
+                        grant_type = string.IsNullOrWhiteSpace(grantType) ? "none" : grantType,
+                        used_private_key_jwt = usedPrivateKeyJwt,
+                        used_dpop = !string.IsNullOrWhiteSpace(dpopJkt),
+                        ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+                    });
                     _metrics.RecordTokenRequest(grantType, outcome);
                     if (gr.Success) _metrics.RecordTokenSuccess(grantType); else _metrics.RecordTokenFailure(grantType);
                     return gr.Result ?? Results.StatusCode(500);
@@ -127,6 +152,12 @@ public sealed class TokenHandler(
             // token-exchange now handled by TokenExchangeGrantHandler strategy
 
             logger.LogWarning("/token unsupported_grant: {GrantType}", grantType);
+            audit.Emit("token.grant.unsupported", new
+            {
+                client_id = clientId,
+                grant_type = string.IsNullOrWhiteSpace(grantType) ? "none" : grantType,
+                ip_hash = audit.HashValue(http.Connection.RemoteIpAddress?.ToString())
+            });
             _metrics.RecordTokenRequest(grantType, "failure");
             _metrics.RecordTokenFailure(grantType);
             return ErrorResults.UnsupportedGrantType();

@@ -21,6 +21,7 @@ public interface IAuthorizeHandler
 
 public sealed class AuthorizeHandler(
     IAuthorizeRequestValidator validator,
+    IAuditSink audit,
     IConsentProcessor consentProcessor,
     IProviderSelectionService providerSelection,
     IUserClientAssignmentService userAssignments,
@@ -64,6 +65,12 @@ public sealed class AuthorizeHandler(
             if (!validationResult.IsValid)
             {
                 outcome = "error";
+                audit.Emit("authorize.request.rejected", new
+                {
+                    client_id = validationResult.ClientId,
+                    error = validationResult.Error,
+                    corr
+                });
                 logger.LogWarning("/authorize 400: validation failed corr={Corr} client={Client} error={Error}", corr, clientBucket, validationResult.Error);
                 return responseGenerator.CreateErrorResponse(http, validationResult, corr);
             }
@@ -131,6 +138,12 @@ public sealed class AuthorizeHandler(
 
             if (!isAuthenticated)
             {
+                audit.Emit("authorize.interaction.login_required", new
+                {
+                    client_id = validationResult.ClientId,
+                    reason = "not_authenticated",
+                    corr
+                });
                 return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
             }
 
@@ -138,6 +151,12 @@ public sealed class AuthorizeHandler(
             if (hasPromptLogin || hasPromptSelectAccount)
             {
                 outcome = hasPromptLogin ? "prompt_login" : "prompt_select_account";
+                audit.Emit("authorize.interaction.login_required", new
+                {
+                    client_id = validationResult.ClientId,
+                    reason = outcome,
+                    corr
+                });
                 return await authRedirect.RedirectToLoginAsync(http, selectionResult, validationResult, domainReq.display, http.RequestAborted);
             }
 
@@ -238,6 +257,12 @@ public sealed class AuthorizeHandler(
             if (!assigned)
             {
                 outcome = "not_assigned";
+                audit.Emit("authorize.access_denied", new
+                {
+                    client_id = validationResult.ClientId,
+                    reason = "user_not_assigned",
+                    corr
+                });
                 return responseGenerator.CreateErrorResponse(http, validationResult with { Error = "access_denied", ErrorDescription = assignmentError }, corr);
             }
 
@@ -245,6 +270,12 @@ public sealed class AuthorizeHandler(
             if (hasPromptConsent)
             {
                 outcome = "prompt_consent";
+                audit.Emit("authorize.interaction.consent_required", new
+                {
+                    client_id = validationResult.ClientId,
+                    reason = "prompt_consent",
+                    corr
+                });
                 return responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"));
             }
 
@@ -265,6 +296,12 @@ public sealed class AuthorizeHandler(
                 }
 
                 outcome = "consent";
+                audit.Emit("authorize.interaction.consent_required", new
+                {
+                    client_id = validationResult.ClientId,
+                    reason = "missing_consent",
+                    corr
+                });
                 return responseGenerator.CreateConsentRedirect(http, validationResult, BuildTenantAwareUrl("/consent"));
             }
 
@@ -279,7 +316,8 @@ public sealed class AuthorizeHandler(
             {
                 using (var transaction = await db.Database.BeginTransactionAsync(http.RequestAborted))
                 {
-                    var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId);
+                    TryGetAuthTime(http.User, out var authTimeUtc);
+                    var (ok, _, r, c) = await codes.IssueAsync(validationResult, userId, authTime: authTimeUtc != default ? authTimeUtc : (DateTimeOffset?)null);
                     if (!ok || r is null)
                     {
                         errorResult = ErrorResults.ServerError($"Failed to issue authorization code (corr={corr})");
@@ -302,11 +340,22 @@ public sealed class AuthorizeHandler(
             if (errorResult != null) return errorResult;
 
             outcome = "success";
+            audit.Emit("authorize.code.issued", new
+            {
+                client_id = validationResult.ClientId,
+                corr,
+                has_state = !string.IsNullOrWhiteSpace(validationResult.State)
+            });
             return responseGenerator.CreateSuccessResponse(http, validationResult, code!, redirect);
         }
         catch (Exception ex)
         {
             outcome = "error";
+            audit.Emit("authorize.error", new
+            {
+                path = http.Request.Path.ToString(),
+                error = ex.GetType().Name
+            });
             logger.LogError(ex, "Unhandled error in /authorize");
             return ErrorResults.ServerError("An internal error occurred");
         }

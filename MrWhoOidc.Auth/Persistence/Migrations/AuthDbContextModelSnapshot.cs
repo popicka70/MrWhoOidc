@@ -17,7 +17,7 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.1")
+                .HasAnnotation("ProductVersion", "10.0.3")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -248,6 +248,55 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .HasFilter("\"IsActive\" = true");
 
                     b.ToTable("LicenseLimits");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.AuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("IpHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TraceId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TraceId")
+                        .HasDatabaseName("IX_AuditEvents_TraceId");
+
+                    b.HasIndex("EventType", "OccurredAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_AuditEvents_Type_OccurredAt");
+
+                    b.HasIndex("TenantId", "OccurredAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_AuditEvents_Tenant_OccurredAt");
+
+                    b.ToTable("AuditEvents");
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.AuthorizationCode", b =>
@@ -486,12 +535,27 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowCiba")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("AllowClientCredentials")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("AllowClientSecretBasic")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
                     b.Property<bool>("AllowClientSecretPost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("AllowDeviceAuthorization")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
@@ -574,6 +638,13 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Property<string>("ClientSecretHash")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DefaultAcrValuesJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("DefaultMaxAge")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("FrontChannelLogoutSessionRequired")
                         .ValueGeneratedOnAdd()
@@ -661,6 +732,9 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
 
                     b.Property<Guid>("RealmId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool?>("RequireAuthTime")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("RequireConsent")
                         .HasColumnType("boolean");
@@ -2666,6 +2740,14 @@ namespace MrWhoOidc.Auth.Persistence.Migrations
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("License");
+                });
+
+            modelBuilder.Entity("MrWhoOidc.Auth.Persistence.AuditEvent", b =>
+                {
+                    b.HasOne("MrWhoOidc.Auth.Persistence.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("MrWhoOidc.Auth.Persistence.AuthorizationCode", b =>

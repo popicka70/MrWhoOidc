@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using System.Security.Cryptography;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -13,6 +14,11 @@ public sealed class SecurityHeadersMiddleware
 
     public Task InvokeAsync(HttpContext context)
     {
+        // Generate nonce early so it is available during Razor view rendering.
+        var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16))
+            .Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        context.Items["csp-nonce"] = nonce;
+
         context.Response.OnStarting(() =>
         {
             // Apply to HTML responses only to reduce risk of breaking protocol endpoints.
@@ -34,15 +40,16 @@ public sealed class SecurityHeadersMiddleware
                 {
                     headers.TryAdd("X-Frame-Options", "DENY");
 
-                    // Conservative CSP: keep UI working while still tightening key vectors.
-                    // (We do not attempt nonce-based CSP here.)
+                    // Use per-request nonce for script-src to eliminate 'unsafe-inline'.
+                    var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com";
+
                     headers.TryAdd(
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
                         "img-src 'self' data: https:; " +
                         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; " +
                         "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com; " +
-                        "script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self'");
+                        $"{scriptSrc}; connect-src 'self'");
                 }
             }
 

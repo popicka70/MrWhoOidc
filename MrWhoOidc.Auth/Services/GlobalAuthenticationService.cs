@@ -63,10 +63,6 @@ internal sealed class GlobalAuthenticationService(
         }
 
         // Verify password
-        var hashPrefix = account.PasswordHash?.Length > 20 ? account.PasswordHash[..20] : account.PasswordHash ?? "(none)";
-        logger.LogDebug("🔍 [GlobalAuth] Verifying password for account {AccountId}, stored hash prefix: '{HashPrefix}...'",
-            account.Id, hashPrefix);
-
         if (string.IsNullOrWhiteSpace(account.PasswordHash))
         {
             logger.LogDebug("Authentication failed: no password hash for account {AccountId}", account.Id);
@@ -95,16 +91,19 @@ internal sealed class GlobalAuthenticationService(
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.NoActiveMemberships);
         }
 
-        // Clear failed attempts on successful login
-        await ClearFailedAttemptsAsync(account.Id, ct).ConfigureAwait(false);
-
-        // Check if MFA is required
+        // Check if MFA is required BEFORE clearing the failed-attempt counter.
+        // Clearing the counter only after full authentication (including MFA) prevents
+        // attackers who know the password from resetting the lockout counter indefinitely
+        // by submitting the correct password without completing TOTP.
         if (account.TotpEnabled && !string.IsNullOrEmpty(account.TotpSecret))
         {
             logger.LogDebug("Authentication requires MFA for account {AccountId}", account.Id);
             metrics.GlobalAuthFailure("mfa_required");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.MfaRequired);
         }
+
+        // Clear failed attempts only after the user has fully authenticated.
+        await ClearFailedAttemptsAsync(account.Id, ct).ConfigureAwait(false);
 
         logger.LogInformation("Authentication succeeded for account {AccountId} with {MembershipCount} active memberships",
             account.Id, memberships.Count);
@@ -171,12 +170,12 @@ internal sealed class GlobalAuthenticationService(
 
     /// <summary>
     /// Hashes an identifier for safe logging (PII protection).
+    /// Uses a truncated SHA-256 rather than GetHashCode to avoid 32-bit collisions.
     /// </summary>
     private static string HashForLog(string value)
     {
         if (string.IsNullOrEmpty(value)) return "[empty]";
-        // Simple hash for logging - not cryptographically secure, just for log correlation
-        var hash = value.GetHashCode(StringComparison.OrdinalIgnoreCase);
-        return $"[hash:{hash:X8}]";
+        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        return $"[sha256:{Convert.ToHexString(bytes)[..12]}]";
     }
 }

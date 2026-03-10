@@ -484,6 +484,50 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/rate-limits/client/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/rate-limits/events",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/rate-limits/metrics",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/rate-limits/overview",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/realms/import/",
     "Methods": "POST",
     "RateLimiters": [],
@@ -619,6 +663,28 @@
   {
     "Pattern": "/api/webauthn/credentials",
     "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/credentials/{credentialId:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/api/webauthn/credentials/{credentialId:guid}",
+    "Methods": "PATCH",
     "RateLimiters": [
       "rl-authorize"
     ],
@@ -1033,6 +1099,50 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/rate-limits/client/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/rate-limits/events",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/rate-limits/metrics",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/rate-limits/overview",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/seed-tenant",
     "Methods": "POST",
     "RateLimiters": [
@@ -1375,6 +1485,28 @@
   {
     "Pattern": "/t/{slug}/api/webauthn/credentials",
     "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/credentials/{credentialId:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/api/webauthn/credentials/{credentialId:guid}",
+    "Methods": "PATCH",
     "RateLimiters": [
       "rl-authorize"
     ],
@@ -2178,6 +2310,15 @@
     "Methods": "",
     "RateLimiters": [],
     "Authz": "tenant-admin",
+    "HasAntiforgery": true,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "admin/rate-limits",
+    "Methods": "",
+    "RateLimiters": [],
+    "Authz": "admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false

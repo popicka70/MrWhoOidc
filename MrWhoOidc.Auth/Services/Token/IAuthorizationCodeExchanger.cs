@@ -27,5 +27,7 @@ public record AuthorizationCodeExchangeRequest(
     string? DpopJkt = null,
     string? IpAddress = null,
     string? UserAgent = null,
+    string? Resource = null,
+    string? ClaimsJson = null,
     Guid? TenantId = null
 );

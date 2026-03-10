@@ -43,6 +43,11 @@ public sealed class ClientCredentialsTokenFactory(
             return (false, new { error = "unauthorized_client" }, "unauthorized_client", 400);
         }
 
+        if (!client.AllowClientCredentials)
+        {
+            return (false, new { error = OAuthConstants.ErrorCodes.UnauthorizedClient, error_description = "Client is not authorized for client_credentials grant" }, OAuthConstants.ErrorCodes.UnauthorizedClient, 400);
+        }
+
         string[] perClientAudiences = Array.Empty<string>();
         if (!string.IsNullOrWhiteSpace(client.M2MAllowedAudiencesJson))
         {
@@ -120,7 +125,7 @@ public sealed class ClientCredentialsTokenFactory(
         var payload = new
         {
             access_token = accessToken,
-            token_type = "Bearer",
+            token_type = !string.IsNullOrEmpty(request.DpopJkt) ? "DPoP" : "Bearer",
             expires_in = (int)lifetime.TotalSeconds,
             scope = granted.Count > 0 ? string.Join(' ', granted) : null
         };

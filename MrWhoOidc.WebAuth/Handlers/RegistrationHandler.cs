@@ -197,6 +197,76 @@ public sealed class RegistrationHandler(
                 statusCode: 400);
         }
 
+        // Reject software_statement: accepted in request but not validated or enforced
+        if (!string.IsNullOrEmpty(request.SoftwareStatement))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "software_statement is not supported" },
+                statusCode: 400);
+        }
+
+        // Reject request_object crypto metadata: not enforced by this OP
+        if (!string.IsNullOrEmpty(request.RequestObjectSigningAlg))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "request_object_signing_alg is not supported" },
+                statusCode: 400);
+        }
+        if (!string.IsNullOrEmpty(request.RequestObjectEncryptionAlg))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "request_object_encryption_alg is not supported" },
+                statusCode: 400);
+        }
+        if (!string.IsNullOrEmpty(request.RequestObjectEncryptionEnc))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "request_object_encryption_enc is not supported" },
+                statusCode: 400);
+        }
+
+        // Reject initiate_login_uri and request_uris: not implemented
+        if (!string.IsNullOrEmpty(request.InitiateLoginUri))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "initiate_login_uri is not supported" },
+                statusCode: 400);
+        }
+        if (request.RequestUris != null && request.RequestUris.Count > 0)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "request_uris is not supported" },
+                statusCode: 400);
+        }
+
+        // Enforce mutual exclusivity: jwks and jwks_uri must not both be present
+        if (request.Jwks != null && !string.IsNullOrEmpty(request.JwksUri))
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "jwks and jwks_uri are mutually exclusive" },
+                statusCode: 400);
+        }
+
+        // For pairwise clients, sector_identifier_uri must be HTTPS
+        if (request.SubjectType == "pairwise" && !string.IsNullOrEmpty(request.SectorIdentifierUri))
+        {
+            if (!Uri.TryCreate(request.SectorIdentifierUri, UriKind.Absolute, out var sectorUri) ||
+                !string.Equals(sectorUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = "sector_identifier_uri must be an HTTPS URI" },
+                    statusCode: 400);
+            }
+        }
+
+        // Validate default_max_age (must be a non-negative integer if provided)
+        if (request.DefaultMaxAge.HasValue && request.DefaultMaxAge.Value < 0)
+        {
+            return Results.Json(
+                new { error = "invalid_client_metadata", error_description = "default_max_age must be a non-negative integer" },
+                statusCode: 400);
+        }
+
         // Get tenant's active signing algorithm for crypto validation
         var activeSigningAlg = await db.SigningKeys
             .Where(k => k.TenantId == tenantId)
@@ -362,14 +432,9 @@ public sealed class RegistrationHandler(
             UserinfoSignedResponseAlg = request.UserinfoSignedResponseAlg,
             UserinfoEncryptedResponseAlg = request.UserinfoEncryptedResponseAlg,
             UserinfoEncryptedResponseEnc = request.UserinfoEncryptedResponseEnc,
-            RequestObjectSigningAlg = request.RequestObjectSigningAlg,
-            RequestObjectEncryptionAlg = request.RequestObjectEncryptionAlg,
-            RequestObjectEncryptionEnc = request.RequestObjectEncryptionEnc,
             DefaultMaxAge = request.DefaultMaxAge,
             RequireAuthTime = request.RequireAuthTime,
             DefaultAcrValues = request.DefaultAcrValues,
-            InitiateLoginUri = request.InitiateLoginUri,
-            RequestUris = request.RequestUris,
             BackchannelLogoutUri = request.BackchannelLogoutUri,
             BackchannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired,
             FrontchannelLogoutUri = request.FrontchannelLogoutUri,
@@ -412,7 +477,12 @@ public sealed class RegistrationHandler(
             BackChannelLogoutUri = request.BackchannelLogoutUri,
             BackChannelLogoutSessionRequired = request.BackchannelLogoutSessionRequired ?? false,
             FrontChannelLogoutUri = request.FrontchannelLogoutUri,
-            FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false
+            FrontChannelLogoutSessionRequired = request.FrontchannelLogoutSessionRequired ?? false,
+            DefaultMaxAge = request.DefaultMaxAge,
+            RequireAuthTime = request.RequireAuthTime,
+            DefaultAcrValuesJson = request.DefaultAcrValues != null && request.DefaultAcrValues.Count > 0
+                ? JsonSerializer.Serialize(request.DefaultAcrValues)
+                : null
         };
 
         // Store redirect_uris in AllowedLoginRedirectUrisJson

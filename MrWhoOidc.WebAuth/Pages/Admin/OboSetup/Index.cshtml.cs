@@ -62,7 +62,7 @@ public class IndexModel(
         // Load available users for assignment
         AvailableUsers = await _db.Users
             .Where(u => u.TenantId == tenantId)
-            .Select(u => new UserViewModel { Id = u.Id, Email = u.Email, Name = u.Email })
+            .Select(u => new UserViewModel { Id = u.Id, Email = u.Email ?? string.Empty, Name = u.Email ?? string.Empty })
             .OrderBy(u => u.Email)
             .ToListAsync();
 
@@ -104,7 +104,7 @@ public class IndexModel(
         // Reload users and clients for re-display
         AvailableUsers = await _db.Users
             .Where(u => u.TenantId == tenantId)
-            .Select(u => new UserViewModel { Id = u.Id, Email = u.Email, Name = u.Email })
+            .Select(u => new UserViewModel { Id = u.Id, Email = u.Email ?? string.Empty, Name = u.Email ?? string.Empty })
             .OrderBy(u => u.Email)
             .ToListAsync();
 

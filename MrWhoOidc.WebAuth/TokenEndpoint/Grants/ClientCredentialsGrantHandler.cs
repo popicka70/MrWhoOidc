@@ -31,7 +31,12 @@ public sealed class ClientCredentialsGrantHandler(ILogger<ClientCredentialsGrant
             logger.LogWarning("/token invalid_request: audience/resource conflict for client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
             return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest("audience and resource conflict"));
         }
-        var audience = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(aud) ? aud : "api");
+        var audience = !string.IsNullOrEmpty(resource) ? resource : (!string.IsNullOrEmpty(aud) ? aud : null);
+        if (string.IsNullOrEmpty(audience))
+        {
+            logger.LogWarning("/token invalid_request: missing audience/resource for client_credentials client {ClientIdHash}", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResults.InvalidRequest("audience or resource is required for client_credentials"));
+        }
 
         var scopeParam = form[OAuthConstants.Parameters.Scope].ToString();
         var requestedScopes = string.IsNullOrWhiteSpace(scopeParam) ? System.Array.Empty<string>() : scopeParam.Split(' ', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);

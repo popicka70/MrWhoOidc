@@ -8,10 +8,12 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.WebAuth.Extensions;
 using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Linq;
 
 namespace MrWhoOidc.WebAuth.Handlers;
 
@@ -30,6 +32,7 @@ public sealed class CibaAuthenticationHandler(
     AuthDbContext db,
     IClientStore clients,
     IClientAssertionValidator assertions,
+    ITokenValidator tokenValidator,
     ITenantAccessor tenantAccessor,
     ICibaNotificationService notificationService,
     ILogger<CibaAuthenticationHandler> logger) : ICibaAuthenticationHandler
@@ -53,6 +56,7 @@ public sealed class CibaAuthenticationHandler(
 
         var form = await http.Request.ReadFormAsync(http.RequestAborted);
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? Guid.Empty;
+        var issuer = http.GetIssuer(oidcOptions);
 
         // === Client Authentication (REQUIRED for CIBA per spec) ===
         var (clientId, clientSecretFromHeader) = ReadClientCredentials(http);
@@ -116,7 +120,7 @@ public sealed class CibaAuthenticationHandler(
         else if (!string.IsNullOrWhiteSpace(loginHintToken))
         {
             // login_hint_token would be a signed JWT containing user info - validate and extract subject
-            var subject = ValidateLoginHintToken(loginHintToken, clientId);
+            var subject = await ValidateLoginHintTokenAsync(loginHintToken, client, issuer);
             if (subject == null)
             {
                 return CibaError(OAuthConstants.ErrorCodes.InvalidRequest, "Invalid login_hint_token", corr);
@@ -126,8 +130,8 @@ public sealed class CibaAuthenticationHandler(
         }
         else if (!string.IsNullOrWhiteSpace(idTokenHint))
         {
-            // id_token_hint is a previously issued ID token - extract subject
-            var subject = ExtractSubjectFromIdToken(idTokenHint);
+            // id_token_hint must be a valid OP-issued ID token and include a subject.
+            var subject = await ExtractSubjectFromIdTokenAsync(idTokenHint, issuer, http.RequestAborted);
             if (subject == null)
             {
                 return CibaError(OAuthConstants.ErrorCodes.InvalidRequest, "Invalid id_token_hint", corr);
@@ -169,8 +173,19 @@ public sealed class CibaAuthenticationHandler(
         }
 
         var clientNotificationToken = form[OAuthConstants.Parameters.ClientNotificationToken].ToString();
-        // client_notification_token is REQUIRED for ping and push modes
-        // We'll validate this when determining the mode
+        var deliveryMode = DetermineDeliveryMode(options.CibaTokenDeliveryModesSupported, clientNotificationToken);
+        if ((string.Equals(deliveryMode, "ping", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(deliveryMode, "push", StringComparison.OrdinalIgnoreCase))
+            && string.IsNullOrWhiteSpace(clientNotificationToken))
+        {
+            return CibaError(OAuthConstants.ErrorCodes.InvalidRequest,
+                "client_notification_token is required for selected token delivery mode", corr);
+        }
+
+        if (!string.IsNullOrWhiteSpace(clientNotificationToken) && !IsValidClientNotificationToken(clientNotificationToken))
+        {
+            return CibaError(OAuthConstants.ErrorCodes.InvalidRequest, "Invalid client_notification_token", corr);
+        }
 
         var acrValues = form[OAuthConstants.Parameters.AcrValues].ToString();
         var resource = form[OAuthConstants.Parameters.Resource].ToString();
@@ -307,17 +322,67 @@ public sealed class CibaAuthenticationHandler(
             .TrimEnd('=');
     }
 
-    private string? ValidateLoginHintToken(string token, string clientId)
+    private static string DetermineDeliveryMode(string[]? configuredModes, string? clientNotificationToken)
     {
-        // login_hint_token is a signed JWT - validate signature and extract subject
-        // For now, we just extract the subject without full validation
-        // A production implementation should validate the signature against the client's keys
+        var modes = (configuredModes ?? Array.Empty<string>())
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Select(m => m.Trim().ToLowerInvariant())
+            .ToArray();
+
+        if (modes.Length == 0)
+        {
+            return "poll";
+        }
+
+        if (modes.Length == 1)
+        {
+            return modes[0];
+        }
+
+        if (!string.IsNullOrWhiteSpace(clientNotificationToken))
+        {
+            if (modes.Contains("ping", StringComparer.Ordinal)) return "ping";
+            if (modes.Contains("push", StringComparer.Ordinal)) return "push";
+        }
+
+        return modes.Contains("poll", StringComparer.Ordinal) ? "poll" : modes[0];
+    }
+
+    private static bool IsValidClientNotificationToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 1024)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < token.Length; i++)
+        {
+            if (char.IsControl(token[i]) || char.IsWhiteSpace(token[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static IReadOnlyCollection<SecurityKey>? ParseClientSigningKeys(string? jwkOrJwksJson)
+    {
+        if (string.IsNullOrWhiteSpace(jwkOrJwksJson))
+        {
+            return null;
+        }
+
         try
         {
-            var handler = new JwtSecurityTokenHandler();
-            if (!handler.CanReadToken(token)) return null;
-            var jwt = handler.ReadJwtToken(token);
-            return jwt.Subject;
+            if (jwkOrJwksJson.Contains("\"keys\"", StringComparison.Ordinal))
+            {
+                var set = new JsonWebKeySet(jwkOrJwksJson);
+                return set.Keys.Select(k => (SecurityKey)k).ToArray();
+            }
+
+            var jwk = new JsonWebKey(jwkOrJwksJson);
+            return new[] { (SecurityKey)jwk };
         }
         catch
         {
@@ -325,21 +390,86 @@ public sealed class CibaAuthenticationHandler(
         }
     }
 
-    private string? ExtractSubjectFromIdToken(string idToken)
+    private static bool TokenHasExpectedAudience(JwtSecurityToken jwt, string expectedAudience)
     {
-        // id_token_hint - extract the subject claim
-        // A production implementation should also validate the token was issued by this server
+        if (string.IsNullOrWhiteSpace(expectedAudience))
+        {
+            return true;
+        }
+
+        var audiences = jwt.Audiences?.Where(a => !string.IsNullOrWhiteSpace(a)).ToArray() ?? Array.Empty<string>();
+        if (audiences.Length == 0)
+        {
+            // Require an explicit audience claim targeted at this OP.
+            return false;
+        }
+
+        return audiences.Contains(expectedAudience, StringComparer.Ordinal);
+    }
+
+    private async Task<string?> ValidateLoginHintTokenAsync(string token, Client client, string issuer)
+    {
+        // login_hint_token must be a signed JWT from the client and targeted at this OP.
         try
         {
-            var handler = new JwtSecurityTokenHandler();
-            if (!handler.CanReadToken(idToken)) return null;
-            var jwt = handler.ReadJwtToken(idToken);
-            return jwt.Subject;
+            var keys = ParseClientSigningKeys(client.PublicJwksJson);
+            if (keys == null || keys.Count == 0)
+            {
+                logger.LogWarning("[CIBA] login_hint_token rejected: client has no signing keys configured client={ClientId}", client.ClientId);
+                return null;
+            }
+
+            var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+            if (!handler.CanReadToken(token))
+            {
+                return null;
+            }
+
+            var jwt = handler.ReadJwtToken(token);
+            if (!TokenHasExpectedAudience(jwt, issuer))
+            {
+                logger.LogWarning("[CIBA] login_hint_token rejected: audience mismatch client={ClientId}", client.ClientId);
+                return null;
+            }
+
+            var tvp = new TokenValidationParameters
+            {
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromMinutes(1),
+                RequireSignedTokens = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKeys = keys,
+                NameClaimType = "sub",
+                RoleClaimType = "role"
+            };
+
+            var principal = handler.ValidateToken(token, tvp, out _);
+            var subject = principal.FindFirstValue("sub");
+            return string.IsNullOrWhiteSpace(subject) ? null : subject;
         }
         catch
         {
             return null;
         }
+    }
+
+    private async Task<string?> ExtractSubjectFromIdTokenAsync(string idToken, string issuer, CancellationToken ct)
+    {
+        var (ok, principal, _) = await tokenValidator.ValidateAsync(idToken, issuer, ct).ConfigureAwait(false);
+        if (!ok || principal == null)
+        {
+            return null;
+        }
+
+        var subject = principal.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return null;
+        }
+
+        return subject;
     }
 
     private static IResult CibaError(string error, string description, string correlationId)

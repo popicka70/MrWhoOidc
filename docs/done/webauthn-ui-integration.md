@@ -11,6 +11,22 @@ WebAuthn functionality has been fully integrated into the existing account manag
 
 ## Changes Made
 
+### 0. Credential Management Actions Added
+
+**Files:**
+- `MrWhoOidc.WebAuth/Pages/Account/WebAuthn.cshtml`
+- `MrWhoOidc.WebAuth/Handlers/WebAuthnHandler.cs`
+- `MrWhoOidc.WebAuth/Infrastructure/EndpointMapping/EndpointMappingExtensions.cs`
+
+**What was added:**
+- Per-credential **Rename** action in the account UI
+- Per-credential **Remove** action in the account UI
+- New authenticated API endpoints:
+    - `PATCH /api/webauthn/credentials/{credentialId}`
+    - `DELETE /api/webauthn/credentials/{credentialId}`
+
+This closes the previous gap where credentials could be listed but not managed end-to-end by users.
+
 ### 1. Added "Security Keys" Tab to Account Navigation
 
 **File:** `MrWhoOidc.WebAuth/Pages/Account/_AccountTabs.cshtml`

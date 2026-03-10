@@ -26,6 +26,11 @@ bld/
 *\\[Dd]ebug/
 *\\[Rr]elease/
 
+# Some tooling produced directories with a literal backslash in the name (e.g. `bin\Debug`).
+# Keep these generated artifacts out of source control as well.
+**/[Bb]in\\[Dd]ebug/
+**/[Bb]in\\[Dd]ebug/**
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json

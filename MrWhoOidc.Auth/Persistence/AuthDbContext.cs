@@ -36,6 +36,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<Consent> Consents => Set<Consent>();
     public DbSet<Token> Tokens => Set<Token>();
     public DbSet<RevocationAudit> RevocationAudits => Set<RevocationAudit>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<PushedAuthorizationRequest> PushedAuthorizationRequests => Set<PushedAuthorizationRequest>();
     // New: Device Authorization Grant (RFC 8628)
     public DbSet<DeviceCodeEntry> DeviceCodes => Set<DeviceCodeEntry>();
@@ -422,6 +423,11 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
 
             b.Property(x => x.AutoAssignNewUsersToClient).HasDefaultValue(false);
 
+            // Grant type policy
+            b.Property(x => x.AllowClientCredentials).HasDefaultValue(true);
+            b.Property(x => x.AllowDeviceAuthorization).HasDefaultValue(true);
+            b.Property(x => x.AllowCiba).HasDefaultValue(true);
+
             b.HasOne<Realm>()
                 .WithMany()
                 .HasForeignKey(x => x.RealmId)
@@ -744,6 +750,31 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.TokenType).HasMaxLength(20);
             b.Property(x => x.IpAddress).HasMaxLength(100);
             b.HasIndex(x => new { x.TokenHash, x.ClientId });
+        });
+
+        modelBuilder.Entity<AuditEvent>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.EventType).IsRequired().HasMaxLength(120);
+            b.Property(x => x.PayloadJson).IsRequired();
+            b.Property(x => x.TraceId).HasMaxLength(128);
+            b.Property(x => x.ActorHash).HasMaxLength(128);
+            b.Property(x => x.IpHash).HasMaxLength(128);
+            b.Property(x => x.OccurredAt).IsRequired();
+
+            b.HasIndex(x => new { x.TenantId, x.OccurredAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_AuditEvents_Tenant_OccurredAt");
+            b.HasIndex(x => new { x.EventType, x.OccurredAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("IX_AuditEvents_Type_OccurredAt");
+            b.HasIndex(x => x.TraceId)
+                .HasDatabaseName("IX_AuditEvents_TraceId");
+
+            b.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<PushedAuthorizationRequest>(b =>
@@ -1407,6 +1438,22 @@ public class Client
     public AutoApprovalMode AutoApprovalMode { get; set; } = AutoApprovalMode.No;
 
     public bool AutoAssignNewUsersToClient { get; set; } = false;
+
+    // Grant type policy
+    // Defaults are fail-open for backward compatibility with existing clients.
+    // New clients should explicitly set these based on their intended use case.
+    public bool AllowClientCredentials { get; set; } = true;
+    public bool AllowDeviceAuthorization { get; set; } = true;
+    public bool AllowCiba { get; set; } = true;
+
+    // OIDC client metadata defaults (RFC 7591 / OIDC Core)
+    // default_max_age: if set, applied when the authorize request does not supply max_age.
+    public int? DefaultMaxAge { get; set; }
+    // require_auth_time: when true, auth_time MUST be included in the ID token.
+    public bool? RequireAuthTime { get; set; }
+    // default_acr_values: space-separated ACR values used when the authorize request omits acr_values.
+    [MaxLength(1000)]
+    public string? DefaultAcrValuesJson { get; set; }
 
     // Navigation properties
     public List<ClientSecret> ClientSecrets { get; set; } = new();

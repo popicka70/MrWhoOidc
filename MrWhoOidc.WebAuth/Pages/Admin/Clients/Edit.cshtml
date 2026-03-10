@@ -1267,7 +1267,7 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         (function(){
             // Tab persistence: activate tab from URL parameter or restore from previous selection
             const urlParams = new URLSearchParams(window.location.search);

@@ -170,6 +170,18 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_Claims_And_Resource_Indicator_Support()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("claims_parameter_supported", out var claimsSupported), "claims_parameter_supported missing");
+        Assert.AreEqual(JsonValueKind.True, claimsSupported.ValueKind, "claims_parameter_supported should be true");
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("resource_indicators_supported", out var resourceSupported), "resource_indicators_supported missing");
+        Assert.AreEqual(JsonValueKind.True, resourceSupported.ValueKind, "resource_indicators_supported should be true");
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_CheckSessionIFrame()
     {
         var factory = Factory;

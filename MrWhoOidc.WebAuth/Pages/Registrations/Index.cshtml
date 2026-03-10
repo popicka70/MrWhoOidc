@@ -179,7 +179,7 @@
 
 @section Scripts{
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         document.getElementById('createTenantCheck').addEventListener('change', function() {
             const tenantFields = document.getElementById('tenantFields');
             if (this.checked) {

@@ -25,5 +25,6 @@ public record RefreshTokenExchangeRequest(
     string? DpopJkt = null,
     string? IpAddress = null,
     string? UserAgent = null,
+    string? Resource = null,
     Guid? TenantId = null
 );

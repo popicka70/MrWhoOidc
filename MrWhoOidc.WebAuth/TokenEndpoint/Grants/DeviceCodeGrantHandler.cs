@@ -56,6 +56,15 @@ public sealed class DeviceCodeGrantHandler(
             return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidGrant, "client_id mismatch"));
         }
 
+        // Verify client is authorized for device authorization grant
+        var client = await db.Clients.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ClientId == context.ClientId && c.TenantId == context.TenantId, context.Http.RequestAborted);
+        if (client is null || !client.AllowDeviceAuthorization)
+        {
+            logger.LogWarning("[DeviceCode] Client {ClientHash} not authorized for device authorization grant", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.UnauthorizedClient, "Client is not authorized for device authorization grant"));
+        }
+
         // Check expiration
         if (entry.ExpiresAt < DateTimeOffset.UtcNow)
         {
@@ -126,6 +135,17 @@ public sealed class DeviceCodeGrantHandler(
                 ErrorResult(OAuthConstants.ErrorCodes.ServerError, "Missing user information"));
         }
 
+        // Atomically claim the authorized entry. If another concurrent request already
+        // consumed it, ExecuteDeleteAsync returns 0 rows and we return invalid_grant.
+        int deleted = await db.DeviceCodes
+            .Where(dc => dc.Id == entry.Id && dc.Status == DeviceCodeStatus.Authorized)
+            .ExecuteDeleteAsync(context.Http.RequestAborted);
+        if (deleted == 0)
+        {
+            logger.LogWarning("[DeviceCode] Concurrent redemption attempt for client {ClientHash}", Bucketization.Bucket(context.ClientId));
+            return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidGrant, "device_code already consumed"));
+        }
+
         var scopes = JsonSerializer.Deserialize<string[]>(entry.ScopesJson) ?? Array.Empty<string>();
         var audience = entry.Resource ?? "api";
         var issuer = context.Http.GetIssuer(context.Options);
@@ -147,9 +167,6 @@ public sealed class DeviceCodeGrantHandler(
 
         if (ok)
         {
-            // Remove the device code entry after successful token issuance
-            db.DeviceCodes.Remove(entry);
-            await db.SaveChangesAsync(context.Http.RequestAborted);
             logger.LogInformation("[DeviceCode] Tokens issued for client {ClientHash} user {UserHash}",
                 Bucketization.Bucket(context.ClientId), Bucketization.Bucket(entry.UserId.Value.ToString()));
         }

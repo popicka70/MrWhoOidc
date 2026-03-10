@@ -1,5 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Diagnostics;
+using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
+using System.Security.Claims;
 
 namespace MrWhoOidc.WebAuth.Observability;
 
@@ -13,6 +18,10 @@ public sealed class AuditOptions
     public string Sink { get; set; } = "logger";
     // When using Application Insights, allow overriding the telemetry name prefix
     public string AppInsightsEventName { get; set; } = "audit";
+    // Persist events to the AuthDbContext audit table.
+    public bool PersistToDatabase { get; set; } = true;
+    // Max serialized payload size to store in database.
+    public int MaxStoredPayloadBytes { get; set; } = 16 * 1024;
 }
 
 public interface IAuditSink
@@ -133,6 +142,91 @@ public sealed class CompositeAuditSink(IEnumerable<IAuditSink> sinks) : IAuditSi
         // Use first sink's hashing behavior (they all should be consistent)
         var first = _sinks.FirstOrDefault();
         return first?.HashValue(value);
+    }
+}
+
+public sealed class DbAuditSink(
+    IServiceScopeFactory scopeFactory,
+    ILogger<DbAuditSink> logger,
+    Microsoft.Extensions.Options.IOptions<AuditOptions> options,
+    IHttpContextAccessor httpContextAccessor) : IAuditSink
+{
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
+    private readonly ILogger<DbAuditSink> _logger = logger;
+    private readonly string? _pepper = options.Value.Pepper;
+    private readonly int _maxPayloadBytes = options.Value.MaxStoredPayloadBytes > 0 ? options.Value.MaxStoredPayloadBytes : 16 * 1024;
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+
+    public void Emit(string type, object payload)
+    {
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            return;
+        }
+
+        try
+        {
+            var payloadJson = JsonSerializer.Serialize(payload);
+            if (_maxPayloadBytes > 0 && Encoding.UTF8.GetByteCount(payloadJson) > _maxPayloadBytes)
+            {
+                payloadJson = payloadJson[..Math.Min(payloadJson.Length, 4096)];
+            }
+
+            Guid? tenantId = null;
+            string? traceId = Activity.Current?.Id;
+            string? actorHash = null;
+            string? ipHash = null;
+
+            var http = _httpContextAccessor.HttpContext;
+            if (http != null)
+            {
+                traceId ??= http.TraceIdentifier;
+
+                var tenantAccessor = http.RequestServices.GetService<ITenantAccessor>();
+                tenantId = tenantAccessor?.CurrentTenant?.TenantId;
+
+                var actor = http.User?.FindFirstValue("sub")
+                    ?? http.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? http.User?.Identity?.Name;
+
+                actorHash = HashValue(actor);
+                ipHash = HashValue(http.Connection.RemoteIpAddress?.ToString());
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
+
+            db.AuditEvents.Add(new AuditEvent
+            {
+                TenantId = tenantId,
+                EventType = type,
+                PayloadJson = payloadJson,
+                OccurredAt = DateTimeOffset.UtcNow,
+                TraceId = traceId,
+                ActorHash = actorHash,
+                IpHash = ipHash
+            });
+
+            db.SaveChanges();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to persist audit event '{Type}'", type);
+        }
+    }
+
+    public string? HashValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        try
+        {
+            var input = string.IsNullOrEmpty(_pepper) ? value : ($"{_pepper}:{value}");
+            return MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(input);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 

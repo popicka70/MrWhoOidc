@@ -59,6 +59,20 @@
                                                 {
                                                     <span class="badge bg-secondary">Inactive</span>
                                                 }
+                                                <div class="mt-2 d-flex gap-2 justify-content-end">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary rename-credential-btn"
+                                                            data-credential-id="@credential.Id"
+                                                            data-credential-name="@credential.FriendlyName">
+                                                        Rename
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger remove-credential-btn"
+                                                            data-credential-id="@credential.Id"
+                                                            data-credential-name="@credential.FriendlyName">
+                                                        Remove
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -149,7 +163,7 @@
 
 @section Scripts {
     <script src="~/js/webauthn-utils.js" asp-append-version="true"></script>
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         class WebAuthnManager {
             constructor() {
                 this.registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
@@ -171,6 +185,22 @@
 
                 document.getElementById('confirmRegisterBtn').addEventListener('click', () => {
                     this.registerKey();
+                });
+
+                document.querySelectorAll('.rename-credential-btn').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const credentialId = button.getAttribute('data-credential-id');
+                        const currentName = button.getAttribute('data-credential-name') || '';
+                        this.renameCredential(credentialId, currentName);
+                    });
+                });
+
+                document.querySelectorAll('.remove-credential-btn').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const credentialId = button.getAttribute('data-credential-id');
+                        const credentialName = button.getAttribute('data-credential-name') || 'this credential';
+                        this.removeCredential(credentialId, credentialName);
+                    });
                 });
             }
 
@@ -244,6 +274,63 @@
                 } catch (error) {
                     console.error('WebAuthn registration error:', error);
                     this.showError(WebAuthnUtils.getErrorMessage(error));
+                }
+            }
+
+            async renameCredential(credentialId, currentName) {
+                if (!credentialId) {
+                    return;
+                }
+
+                const newName = window.prompt('Enter a new name for this credential:', currentName);
+                if (!newName || newName.trim() === '' || newName.trim() === currentName.trim()) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/webauthn/credentials/${credentialId}`, {
+                        method: 'PATCH',
+                        headers: WebAuthnUtils.createHeaders(),
+                        body: JSON.stringify({ friendlyName: newName.trim() })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Failed to rename credential');
+                    }
+
+                    window.location.reload();
+                } catch (error) {
+                    console.error('WebAuthn rename error:', error);
+                    this.showGlobalError(WebAuthnUtils.getErrorMessage(error));
+                }
+            }
+
+            async removeCredential(credentialId, credentialName) {
+                if (!credentialId) {
+                    return;
+                }
+
+                const confirmed = window.confirm(`Remove credential "${credentialName}"?`);
+                if (!confirmed) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/webauthn/credentials/${credentialId}`, {
+                        method: 'DELETE',
+                        headers: WebAuthnUtils.createHeaders()
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || 'Failed to remove credential');
+                    }
+
+                    window.location.reload();
+                } catch (error) {
+                    console.error('WebAuthn remove error:', error);
+                    this.showGlobalError(WebAuthnUtils.getErrorMessage(error));
                 }
             }
 

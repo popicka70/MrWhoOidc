@@ -12,7 +12,7 @@
 </head>
 <body>
     <p>Redirecting to application...</p>
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         window.location.replace("@Html.Raw(System.Web.HttpUtility.JavaScriptStringEncode(Model.RedirectUrl))");
     </script>
     <noscript>

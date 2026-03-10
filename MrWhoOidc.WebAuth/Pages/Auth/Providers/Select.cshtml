@@ -149,7 +149,7 @@
     }
 </main>
 
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     (function() {
         // Progressive enhancement: focus recommended provider if present for keyboard users
         try {

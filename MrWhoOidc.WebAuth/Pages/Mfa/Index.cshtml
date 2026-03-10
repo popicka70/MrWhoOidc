@@ -29,7 +29,7 @@
     <div id="qrcode" class="mb-3"></div>
     @* Client-side QR code generation to remove server-side dependencies *@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRspuACwgq1m154hVkPH8UP0AueB/05xStQ1xSogAC3i0052s+gkwFs1SBp7WLvBrSc7J1C8wGeRxYHM36w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         window.addEventListener('load', function() {
             var qrc = new QRCode(document.getElementById("qrcode"), {
                 text: "@Html.Raw(Model.QrCodeUri)",

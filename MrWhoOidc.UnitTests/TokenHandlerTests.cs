@@ -74,7 +74,7 @@ public sealed class TokenHandlerTests
         var domainService = new MrWhoOidc.Auth.Services.Authentication.ClientAuthenticationService(clients, assertions, authOptions, domainLogger);
         var authenticator = new ClientAuthenticator(domainService, new MtlsThumbprintResolver(), authLogger);
 
-        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
+        return new TokenHandler(options.Value, tokens, tokenExchange, authenticator, new NoopAuditSink(), dpop, dpopReplayCache, grantHandlers, tokenMetrics, featureService, tenantAccessor, logger);
     }
 
     private static DefaultHttpContext CreateHttpContext(
@@ -180,6 +180,152 @@ public sealed class TokenHandlerTests
         // Assert
         Assert.IsNotNull(result);
         // Handler returns invalid_client error
+    }
+
+    [TestMethod]
+    public async Task Token_AuthorizationCode_Audience_Resource_Conflict_Returns_InvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var realmId = Guid.NewGuid();
+        db.Realms.Add(new Realm { Id = realmId, Name = "test_realm" });
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = realmId
+        };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var tokens = new CapturingTokenService();
+        var handler = CreateHandler(
+            db,
+            tokens: tokens,
+            clients: new StubClientStore(client, authenticated: true),
+            grantHandlers: new ITokenGrantHandler[]
+            {
+                new AuthorizationCodeGrantHandler(NullLogger<AuthorizationCodeGrantHandler>.Instance)
+            });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = OAuthConstants.GrantTypes.AuthorizationCode,
+            ["code"] = "test_code",
+            ["redirect_uri"] = "https://app/callback",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "secret",
+            ["audience"] = "https://api-a.example.com",
+            ["resource"] = "https://api-b.example.com"
+        };
+        var context = CreateHttpContext(formData);
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(OAuthConstants.ErrorCodes.InvalidRequest, doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task Token_AuthorizationCode_Forwards_Resource_And_Claims_To_TokenService()
+    {
+        using var db = CreateDb();
+
+        var realmId = Guid.NewGuid();
+        db.Realms.Add(new Realm { Id = realmId, Name = "test_realm" });
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = realmId
+        };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var tokens = new CapturingTokenService();
+        var handler = CreateHandler(
+            db,
+            tokens: tokens,
+            clients: new StubClientStore(client, authenticated: true),
+            grantHandlers: new ITokenGrantHandler[]
+            {
+                new AuthorizationCodeGrantHandler(NullLogger<AuthorizationCodeGrantHandler>.Instance)
+            });
+
+        var claims = "{\"id_token\":{\"email\":null}}";
+        var resource = "https://api.example.com";
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = OAuthConstants.GrantTypes.AuthorizationCode,
+            ["code"] = "test_code",
+            ["redirect_uri"] = "https://app/callback",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "secret",
+            ["resource"] = resource,
+            ["claims"] = claims
+        };
+        var context = CreateHttpContext(formData);
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.AreEqual(resource, tokens.LastAuthorizationCodeResource);
+        Assert.AreEqual(claims, tokens.LastAuthorizationCodeClaimsJson);
+    }
+
+    [TestMethod]
+    public async Task Token_RefreshToken_Audience_Resource_Conflict_Returns_InvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var realmId = Guid.NewGuid();
+        db.Realms.Add(new Realm { Id = realmId, Name = "test_realm" });
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            ClientId = "test_client",
+            RealmId = realmId
+        };
+        client.ClientSecrets.Add(new ClientSecret { SecretHash = "hash" });
+        db.Clients.Add(client);
+        await db.SaveChangesAsync();
+
+        var tokens = new CapturingTokenService();
+        var handler = CreateHandler(
+            db,
+            tokens: tokens,
+            clients: new StubClientStore(client, authenticated: true),
+            grantHandlers: new ITokenGrantHandler[]
+            {
+                new RefreshTokenGrantHandler(NullLogger<RefreshTokenGrantHandler>.Instance)
+            });
+
+        var formData = new Dictionary<string, string>
+        {
+            ["grant_type"] = OAuthConstants.GrantTypes.RefreshToken,
+            ["refresh_token"] = "refresh_token_value",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "secret",
+            ["audience"] = "https://api-a.example.com",
+            ["resource"] = "https://api-b.example.com"
+        };
+        var context = CreateHttpContext(formData);
+
+        var result = await handler.HandleAsync(context);
+        await result.ExecuteAsync(context);
+
+        Assert.AreEqual(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(body);
+        Assert.AreEqual(OAuthConstants.ErrorCodes.InvalidRequest, doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -848,17 +994,56 @@ public sealed class TokenHandlerTests
     }
 
     // Stub implementations
+    private sealed class CapturingTokenService : ITokenService
+    {
+        public string? LastAuthorizationCodeResource { get; private set; }
+        public string? LastAuthorizationCodeClaimsJson { get; private set; }
+        public string? LastRefreshResource { get; private set; }
+
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
+            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default)
+        {
+            LastAuthorizationCodeResource = resource;
+            LastAuthorizationCodeClaimsJson = claimsJson;
+            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            return Task.FromResult((true, (object?)payload, (string?)null, 200));
+        }
+
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
+            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default)
+        {
+            LastRefreshResource = resource;
+            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            return Task.FromResult((true, (object?)payload, (string?)null, 200));
+        }
+
+        public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(
+            string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default)
+        {
+            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            return Task.FromResult((true, (object?)payload, (string?)null, 200));
+        }
+
+        public Task<(bool ok, object? payload, string? error, int status)> CreateDeviceCodeTokenAsync(
+            string clientId, Guid userId, string[] scopes, string audience, string issuer,
+            string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+        {
+            var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
+            return Task.FromResult((true, (object?)payload, (string?)null, 200));
+        }
+    }
+
     private sealed class StubTokenService : ITokenService
     {
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(
-            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+            string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));
         }
 
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(
-            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default)
+            string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default)
         {
             var payload = new { access_token = "test_access_token", token_type = "Bearer", expires_in = 3600 };
             return Task.FromResult((true, (object?)payload, (string?)null, 200));

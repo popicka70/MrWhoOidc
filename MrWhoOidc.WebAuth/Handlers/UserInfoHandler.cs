@@ -154,7 +154,7 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
 
                 // Use actual request URL for DPoP validation (what client sees), not PublicBaseUrl
                 var endpointUrl = http.GetEndpointUrl();
-                var validation = dpop.ValidateForEndpointAsync(http, endpointUrl, token).GetAwaiter().GetResult();
+                var validation = await dpop.ValidateForEndpointAsync(http, endpointUrl, token).ConfigureAwait(false);
 
                 var clientIp = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
                 if (!validation.Ok)
@@ -176,10 +176,9 @@ public sealed class UserInfoHandler(OidcOptions options, IOptions<AuthOptions> a
                 }
 
                 // Nonce challenge support (only after proof is valid and matches token binding)
-                (bool nonceOk, string serverNonce) = nonceStore
+                (bool nonceOk, string serverNonce) = await nonceStore
                     .ValidateOrIssueAsync(endpointUrl, clientIp, validation.Jkt, validation.Nonce)
-                    .GetAwaiter()
-                    .GetResult();
+                    .ConfigureAwait(false);
                 if (!nonceOk)
                 {
                     http.Response.Headers["DPoP-Nonce"] = serverNonce;

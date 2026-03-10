@@ -12,7 +12,7 @@ namespace MrWhoOidc.UnitTests.Infrastructure;
 [TestClass]
 public class HealthCheckPerformanceTests
 {
-    private AuthDbContext _db;
+    private AuthDbContext _db = null!;
 
     [TestInitialize]
     public void Setup()

@@ -11,6 +11,17 @@ public class DistributedRateLimiterMiddleware
     private readonly IConnectionMultiplexer? _redis;
     private readonly ILogger<DistributedRateLimiterMiddleware> _logger;
 
+    // Lua script: atomically increments the counter and sets a TTL on first creation.
+    // Avoids a race between INCR and a subsequent EXPIRE call where a server crash
+    // between the two would leave an immortal key (permanent rate-limit block).
+    private static readonly string IncrWithTtlScript = """
+        local current = redis.call('INCR', KEYS[1])
+        if current == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return current
+        """;
+
     public DistributedRateLimiterMiddleware(RequestDelegate next, IConnectionMultiplexer? redis, ILogger<DistributedRateLimiterMiddleware> logger)
     {
         _next = next;
@@ -34,21 +45,20 @@ public class DistributedRateLimiterMiddleware
             return;
         }
 
-        // Only enforce on select endpoints for now
-        if (path == "/token")
+        // Rate-limit the token endpoint (and tenant-prefixed equivalents).
+        if (IsEndpoint(path, "/token"))
         {
-            // Partition by client_id (from auth header basic or form) if available, else by IP
             string clientId = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
             bool isExchange = false;
             if (HttpMethods.IsPost(context.Request.Method) && context.Request.HasFormContentType)
             {
                 try
                 {
-                    var form = await context.Request.ReadFormAsync();
+                    var form = await context.Request.ReadFormAsync(context.RequestAborted);
                     var grantType = form["grant_type"].ToString();
                     isExchange = string.Equals(grantType, "urn:ietf:params:oauth:grant-type:token-exchange", StringComparison.Ordinal);
                 }
-                catch { /* ignore */ }
+                catch { /* treat as non-exchange if form cannot be read */ }
             }
 
             var policy = isExchange ? "token-exchange" : "token";
@@ -61,10 +71,35 @@ public class DistributedRateLimiterMiddleware
                 return;
             }
         }
-        else if (path == "/introspect")
+        else if (IsEndpoint(path, "/introspect"))
         {
-            string key = ExtractIp(context) ?? "unknown";
+            // Partition introspect by client_id too, falling back to IP only when unavailable.
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
             var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("introspect", key, 80, TimeSpan.FromMinutes(1));
+            if (!allowed)
+            {
+                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsync("Too Many Requests");
+                return;
+            }
+        }
+        else if (IsEndpoint(path, "/par"))
+        {
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
+            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("par", key, 60, TimeSpan.FromMinutes(1));
+            if (!allowed)
+            {
+                WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsync("Too Many Requests");
+                return;
+            }
+        }
+        else if (IsEndpoint(path, "/revoke"))
+        {
+            string key = ExtractClientId(context) ?? ExtractIp(context) ?? "unknown";
+            var (allowed, retryAfter, remaining, limit, resetAt) = await TryConsumeAsync("revoke", key, 60, TimeSpan.FromMinutes(1));
             if (!allowed)
             {
                 WriteRateLimitHeaders(context, retryAfter, remaining, limit, resetAt);
@@ -75,6 +110,26 @@ public class DistributedRateLimiterMiddleware
         }
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Returns true if the request path matches the given endpoint, accounting for
+    /// tenant-prefixed paths (e.g. /t/{slug}/token as well as /token).
+    /// </summary>
+    private static bool IsEndpoint(string lowerPath, string endpoint)
+    {
+        if (lowerPath == endpoint) return true;
+        // Tenant-prefixed: /t/{slug}{endpoint}
+        if (lowerPath.StartsWith("/t/", StringComparison.Ordinal))
+        {
+            var afterSlug = lowerPath.IndexOf('/', 3); // skip past /t/
+            if (afterSlug >= 0)
+            {
+                var suffix = lowerPath[afterSlug..];
+                if (suffix == endpoint) return true;
+            }
+        }
+        return false;
     }
 
     private static string? ExtractIp(HttpContext ctx)
@@ -96,15 +151,11 @@ public class DistributedRateLimiterMiddleware
             }
             catch { /* ignore */ }
         }
-        if (ctx.Request.HasFormContentType)
+        // client_id from form body: Only use if the form was already buffered;
+        // avoid synchronous/blocking ReadFormAsync which causes thread-pool starvation.
+        if (ctx.Request.HasFormContentType && ctx.Items.TryGetValue("__form_client_id", out var cached) && cached is string cid)
         {
-            try
-            {
-                var form = ctx.Request.ReadFormAsync().GetAwaiter().GetResult();
-                var cid = form["client_id"].ToString();
-                if (!string.IsNullOrEmpty(cid)) return cid;
-            }
-            catch { /* ignore */ }
+            return cid;
         }
         return null;
     }
@@ -117,15 +168,17 @@ public class DistributedRateLimiterMiddleware
             var now = DateTimeOffset.UtcNow;
             var bucket = now.ToUnixTimeSeconds() / (long)window.TotalSeconds;
             var redisKey = $"rl:{policy}:{keyBase}:{bucket}";
+            var ttlSeconds = (long)window.TotalSeconds;
 
-            var count = await db.StringIncrementAsync(redisKey);
-            if (count == 1)
-            {
-                await db.KeyExpireAsync(redisKey, window);
-            }
+            // Atomic INCR + conditional EXPIRE via Lua to prevent immortal keys.
+            var count = (long)await db.ScriptEvaluateAsync(
+                IncrWithTtlScript,
+                keys: [(RedisKey)redisKey],
+                values: [(RedisValue)ttlSeconds]);
+
             var ttl = await db.KeyTimeToLiveAsync(redisKey) ?? window;
             var allowed = count <= limit;
-            var remaining = Math.Max(0, limit - (long)count);
+            var remaining = Math.Max(0, limit - count);
             var resetAt = now.Add(ttl);
             var retry = allowed ? (TimeSpan?)null : ttl;
             return (allowed, retry, remaining, limit, resetAt);

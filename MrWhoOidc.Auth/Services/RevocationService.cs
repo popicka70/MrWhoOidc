@@ -29,6 +29,13 @@ public interface IRevocationService
     /// <param name="clientId">The client ID.</param>
     /// <param name="ct">Cancellation token.</param>
     Task RevokeAllForUserAsync(Guid userId, string clientId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Revokes all refresh tokens in the same rotation family as the specified token.
+    /// </summary>
+    /// <param name="tokenId">Refresh token ID within the family.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task RevokeRefreshTokenFamilyAsync(Guid tokenId, CancellationToken ct = default);
 }
 
 internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenantAccessor) : IRevocationService
@@ -84,6 +91,75 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
         if (tokens.Count > 0)
         {
             foreach (var t in tokens) t.RevokedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    public async Task RevokeRefreshTokenFamilyAsync(Guid tokenId, CancellationToken ct = default)
+    {
+        var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
+
+        var current = await db.Tokens
+            .FirstOrDefaultAsync(t => t.Id == tokenId && t.TenantId == tenantId && t.Type == "refresh", ct)
+            .ConfigureAwait(false);
+        if (current is null)
+        {
+            return;
+        }
+
+        var lineagePool = await db.Tokens
+            .Where(t => t.TenantId == tenantId && t.Type == "refresh" && t.UserId == current.UserId && t.ClientId == current.ClientId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (lineagePool.Count == 0)
+        {
+            return;
+        }
+
+        var byId = lineagePool.ToDictionary(t => t.Id);
+
+        // ReplacedById stores the previous token ID (parent) for rotation lineage.
+        var root = current;
+        var visitedAncestors = new HashSet<Guid>();
+        while (root.ReplacedById is Guid parentId && visitedAncestors.Add(root.Id) && byId.TryGetValue(parentId, out var parent))
+        {
+            root = parent;
+        }
+
+        var familyIds = new HashSet<Guid>();
+        var queue = new Queue<Guid>();
+        queue.Enqueue(root.Id);
+
+        while (queue.Count > 0)
+        {
+            var next = queue.Dequeue();
+            if (!familyIds.Add(next))
+            {
+                continue;
+            }
+
+            foreach (var child in lineagePool.Where(t => t.ReplacedById == next))
+            {
+                queue.Enqueue(child.Id);
+            }
+        }
+
+        if (familyIds.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var changed = false;
+        foreach (var token in lineagePool.Where(t => familyIds.Contains(t.Id) && t.RevokedAt == null))
+        {
+            token.RevokedAt = now;
+            changed = true;
+        }
+
+        if (changed)
+        {
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
     }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -10,6 +11,7 @@ using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.Auth.Protocols;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
 
 namespace MrWhoOidc.WebAuth.Pages;
 
@@ -22,10 +24,12 @@ public class LoginModel(
     ITenantSettingsService settingsService,
     ITenantBrandingService brandingService,
     ITenantCredentialTicketStore ticketStore,
-    MrWhoOidc.WebAuth.Services.ILoginContinuationStore continuationStore) : PageModel
+    MrWhoOidc.WebAuth.Services.ILoginContinuationStore continuationStore,
+    IWebAuthnService webAuthnService,
+    IOptions<WebAuthnOptions> webAuthnOptions) : PageModel
 {
     // Local IP-based rate limiting (defense in depth - complements global account lockout)
-    private static readonly Dictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
+    private static readonly ConcurrentDictionary<string, (int Attempts, DateTimeOffset First)> _attempts = new();
     private const int MaxAttempts = 5;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
 
@@ -133,6 +137,14 @@ public class LoginModel(
             return Page();
         }
 
+        // Check local IP-based rate limit before attempting authentication
+        if (IsLockedOut(HttpContext, Username))
+        {
+            logger.LogWarning("⚠️ [Login POST] IP-based rate limit triggered for Username={Username}", Username);
+            ModelState.AddModelError(string.Empty, "Too many failed attempts. Please try again later.");
+            return Page();
+        }
+
         // Use global authentication service for credential verification
         var authResult = await globalAuthService.AuthenticateAsync(Username, Password);
 
@@ -163,6 +175,7 @@ public class LoginModel(
             logger.LogWarning("⚠️ [Login POST] Authentication failed: Reason={Reason}",
                 authResult.FailureReason);
 
+            RegisterFailedAttempt(HttpContext, Username);
             ModelState.AddModelError(string.Empty, errorMessage!);
             return Page();
         }
@@ -266,7 +279,7 @@ public class LoginModel(
         {
             if (DateTimeOffset.UtcNow - info.First > Window)
             {
-                _attempts.Remove(key);
+                _attempts.TryRemove(key, out _);
                 return false;
             }
             return info.Attempts >= MaxAttempts;
@@ -277,23 +290,22 @@ public class LoginModel(
     static void RegisterFailedAttempt(HttpContext ctx, string username)
     {
         var key = Key(ctx, username);
-        if (_attempts.TryGetValue(key, out var info))
-        {
-            if (DateTimeOffset.UtcNow - info.First > Window)
-                _attempts[key] = (1, DateTimeOffset.UtcNow);
-            else
-                _attempts[key] = (info.Attempts + 1, info.First);
-        }
-        else
-        {
-            _attempts[key] = (1, DateTimeOffset.UtcNow);
-        }
+        var now = DateTimeOffset.UtcNow;
+        _attempts.AddOrUpdate(
+            key,
+            (_) => (1, now),
+            (_, old) =>
+            {
+                if (now - old.First > Window)
+                    return (1, now);
+                return (old.Attempts + 1, old.First);
+            });
     }
 
     static void ClearAttempts(HttpContext ctx, string username)
     {
         var key = Key(ctx, username);
-        _attempts.Remove(key);
+        _attempts.TryRemove(key, out _);
     }
 
     private async Task<IActionResult?> TryCompleteLoginWithTicketAsync()
@@ -361,6 +373,18 @@ public class LoginModel(
 
     private async Task<IActionResult> CompleteSignInAsync(User user)
     {
+        var effectiveWebAuthnOptions = GetEffectiveWebAuthnOptions();
+        if (effectiveWebAuthnOptions.Enabled && effectiveWebAuthnOptions.RequireWebAuthnForRegisteredUsers)
+        {
+            var hasCredentials = await webAuthnService.HasWebAuthnCredentialsAsync(user.Id, HttpContext.RequestAborted);
+            if (hasCredentials)
+            {
+                logger.LogInformation("WebAuthn is required for user {UserId}; redirecting password login to WebAuthn page", user.Id);
+                var webAuthnUrl = Url.Page("/Auth/WebAuthn", null, new { returnUrl = ReturnUrl, username = user.Username }, protocol: Request.Scheme);
+                return Redirect(webAuthnUrl ?? $"/Auth/WebAuthn?username={Uri.EscapeDataString(user.Username)}");
+            }
+        }
+
         // Check tenant MFA requirement
         var settings = await settingsService.GetCurrentTenantSettingsAsync();
         var mfaRequired = settings.Auth?.RequireMfa ?? false;
@@ -452,6 +476,26 @@ public class LoginModel(
 
         return LocalRedirect(defaultUrl);
     }
+
+    private WebAuthnEffectiveOptions GetEffectiveWebAuthnOptions()
+    {
+        var root = webAuthnOptions.Value;
+        var tenantSlug = tenantAccessor.CurrentTenant?.Slug;
+        WebAuthnTenantOverrides? tenantOverride = null;
+        var hasOverride = !string.IsNullOrWhiteSpace(tenantSlug) &&
+                          root.TenantOverrides.TryGetValue(tenantSlug!, out tenantOverride);
+
+        var enabled = hasOverride && tenantOverride!.Enabled.HasValue
+            ? tenantOverride.Enabled.Value
+            : root.Enabled;
+        var requireWebAuthn = hasOverride && tenantOverride!.RequireWebAuthnForRegisteredUsers.HasValue
+            ? tenantOverride.RequireWebAuthnForRegisteredUsers.Value
+            : root.RequireWebAuthnForRegisteredUsers;
+
+        return new WebAuthnEffectiveOptions(enabled, requireWebAuthn);
+    }
+
+    private readonly record struct WebAuthnEffectiveOptions(bool Enabled, bool RequireWebAuthnForRegisteredUsers);
 
     private static string HashEmail(string email) => string.IsNullOrEmpty(email) ? "empty" : MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Hex(email.ToLowerInvariant())[..8];
 }

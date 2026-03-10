@@ -107,7 +107,8 @@ public sealed class AuthorizationCodeExchanger(
             using var transaction = await db.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
             try
             {
-                var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == request.Code, ct).ConfigureAwait(false);
+                var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(request.Code)));
+                var entity = await db.AuthorizationCodes.FirstOrDefaultAsync(c => c.Code == codeHash, ct).ConfigureAwait(false);
                 if (entity is null || entity.Consumed || entity.ExpiresAt < DateTimeOffset.UtcNow)
                 {
                     if (entity is not null && entity.Consumed)
@@ -133,20 +134,27 @@ public sealed class AuthorizationCodeExchanger(
 
                 var scopes = JsonSerializer.Deserialize<string[]>(entity.ScopesJson) ?? Array.Empty<string>();
 
-                // RFC 8707: prefer resource indicator as access token audience when present
+                // RFC 8707: token-endpoint resource parameter can override prior authorize-time resource.
                 string audience;
-                var resourceFromEntity = entity.Resource;
-                if (!string.IsNullOrWhiteSpace(resourceFromEntity))
+                if (!string.IsNullOrWhiteSpace(request.Resource))
                 {
-                    audience = resourceFromEntity;
-                }
-                else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
-                {
-                    audience = resourceFromMeta;
+                    audience = request.Resource;
                 }
                 else
                 {
-                    audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+                    var resourceFromEntity = entity.Resource;
+                    if (!string.IsNullOrWhiteSpace(resourceFromEntity))
+                    {
+                        audience = resourceFromEntity;
+                    }
+                    else if (meta.TryGetResource(request.Code, out var resourceFromMeta) && !string.IsNullOrWhiteSpace(resourceFromMeta))
+                    {
+                        audience = resourceFromMeta;
+                    }
+                    else
+                    {
+                        audience = (authOptions.Value.ApiAudiences?.FirstOrDefault()) ?? "api";
+                    }
                 }
 
                 var opaqueEnabled = opaquePolicy.ShouldUseOpaqueAccessToken(audience);
@@ -163,10 +171,21 @@ public sealed class AuthorizationCodeExchanger(
                 Guid? tenantIdForEntitlements = request.TenantId ?? user?.TenantId;
                 if (tenantIdForEntitlements == Guid.Empty) tenantIdForEntitlements = null;
 
-                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
-                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(entity.ClaimsJson);
+                var activeClaimsJson = entity.ClaimsJson;
+                if (!string.IsNullOrWhiteSpace(request.ClaimsJson))
+                {
+                    if (!OidcClaimsRequestParser.TryNormalizeClaimsParameter(request.ClaimsJson, OidcClaimsRequestParser.DefaultMaxBytes, out var normalized, out var errorDescription))
+                    {
+                        return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = errorDescription }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
+                    }
 
-                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(entity.ClaimsJson);
+                    activeClaimsJson = normalized;
+                }
+
+                var (requestedIdTokenClaims, requestedUserInfoClaims, essentialIdTokenClaims, essentialUserInfoClaims)
+                    = OidcClaimsRequestParser.ExtractRequestedClaimNames(activeClaimsJson);
+
+                var (idTokenConstraints, userInfoConstraints) = OidcClaimsRequestParser.ExtractClaimConstraints(activeClaimsJson);
 
                 var (scopesFiltered, entitlementsClaimJson, signedLicenseTokens) = await ApplyProductEntitlementsAsync(
                     subjectId: entity.UserId.ToString(),
@@ -376,7 +395,29 @@ public sealed class AuthorizationCodeExchanger(
                     foreach (var amr in combinedAmr) idClaims.Add(new(OidcConstants.Claims.Amr, amr));
                 }
 
-                // Apply best-effort claim constraints to the ID token.
+                var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();
+                if (allowId.Length > 0 && mappedClaims.Count > 0)
+                {
+                    foreach (var name in allowId)
+                    {
+                        if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue;
+                        if (restrictIdTokenClaims && !requestedIdTokenClaims.Contains(name)) continue;
+                        if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
+                        {
+                            idClaims.Add(new(name, val));
+                        }
+                    }
+                }
+
+                if (meta.TryGetSid(request.Code, out var sid) && !string.IsNullOrWhiteSpace(sid))
+                {
+                    if (!restrictIdTokenClaims || requestedIdTokenClaims.Contains(OidcConstants.Claims.Sid))
+                    {
+                        idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
+                    }
+                }
+
+                // Apply claim constraints to the final ID token claim set.
                 // If a constrained claim is essential and cannot be satisfied, fail with invalid_request.
                 if (idTokenConstraints.Count > 0)
                 {
@@ -460,7 +501,7 @@ public sealed class AuthorizationCodeExchanger(
                     }
                 }
 
-                // Best-effort: if essential id_token claims were requested, ensure we can satisfy them.
+                // If essential id_token claims were requested, ensure the final token can satisfy them.
                 // We intentionally keep this conservative (no scope bypass): if the claim isn't emitted by policy,
                 // we treat it as unsatisfied.
                 if (essentialIdTokenClaims.Count > 0)
@@ -478,28 +519,6 @@ public sealed class AuthorizationCodeExchanger(
                         {
                             return (false, new { error = OAuthConstants.ErrorCodes.InvalidRequest, error_description = $"Essential id_token claim '{required}' cannot be satisfied." }, OAuthConstants.ErrorCodes.InvalidRequest, 400);
                         }
-                    }
-                }
-
-                var allowId = authOptions.Value.PropagateMappedClaimsToIdToken ?? Array.Empty<string>();
-                if (allowId.Length > 0 && mappedClaims.Count > 0)
-                {
-                    foreach (var name in allowId)
-                    {
-                        if (string.Equals(name, OidcConstants.Claims.Amr, StringComparison.Ordinal)) continue;
-                        if (restrictIdTokenClaims && !requestedIdTokenClaims.Contains(name)) continue;
-                        if (mappedClaims.TryGetValue(name, out var val) && !string.IsNullOrWhiteSpace(val))
-                        {
-                            idClaims.Add(new(name, val));
-                        }
-                    }
-                }
-
-                if (meta.TryGetSid(request.Code, out var sid) && !string.IsNullOrWhiteSpace(sid))
-                {
-                    if (!restrictIdTokenClaims || requestedIdTokenClaims.Contains(OidcConstants.Claims.Sid))
-                    {
-                        idClaims.Add(new(OidcConstants.Claims.Sid, sid!));
                     }
                 }
 
@@ -530,7 +549,14 @@ public sealed class AuthorizationCodeExchanger(
                     ).ConfigureAwait(false);
                 }
 
-                var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(entity.UserId, request.ClientId, scopes, request.IpAddress, request.UserAgent, ct).ConfigureAwait(false);
+                var (refreshToken, _) = await refreshTokens.CreateRefreshTokenAsync(
+                    entity.UserId,
+                    request.ClientId,
+                    scopes,
+                    request.IpAddress,
+                    request.UserAgent,
+                    ct,
+                    cnfJkt: request.DpopJkt).ConfigureAwait(false);
 
                 entity.Consumed = true;
                 await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -543,7 +569,7 @@ public sealed class AuthorizationCodeExchanger(
                     access_token = accessToken,
                     id_token = idToken,
                     refresh_token = refreshToken,
-                    token_type = OAuthConstants.TokenTypes.Bearer,
+                    token_type = !string.IsNullOrEmpty(request.DpopJkt) ? "DPoP" : OAuthConstants.TokenTypes.Bearer,
                     expires_in = (int)accessTokenLifetime.TotalSeconds,
                     scope = string.Join(' ', scopes)
                 };

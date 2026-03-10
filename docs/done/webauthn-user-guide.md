@@ -129,6 +129,14 @@ Once you have a security key registered, you can use it to sign in:
      - Your tenant home page
      - Root dashboard
 
+### When Password Login Redirects To WebAuthn
+
+If your organization enables the WebAuthn policy `RequireWebAuthnForRegisteredUsers`, users who already have active security keys will be redirected from password login to WebAuthn sign-in.
+
+- You can still enter your username on the login page.
+- After password validation, the server redirects you to `/Auth/WebAuthn` to complete passkey authentication.
+- This ensures registered passkey users finish authentication with phishing-resistant credentials.
+
 ### Authentication with MFA
 
 If you have TOTP (Time-based One-Time Password) enabled:
@@ -183,11 +191,21 @@ If you have TOTP (Time-based One-Time Password) enabled:
 2. **Locate the Key to Remove**
    - Find the key in your credentials list
 3. **Delete Action**
-   - Click the delete/remove button (if implemented)
+   - Click the **Remove** button next to the credential
    - Confirm the deletion
 4. **Verification**
    - The key will be removed from your account
    - You can no longer use it to authenticate
+
+### Renaming a Security Key
+
+1. **Navigate to Account → WebAuthn**
+2. **Locate the Key to Rename**
+3. **Rename Action**
+   - Click the **Rename** button
+   - Enter a clearer name (for example, "YubiKey - Office" or "Laptop Touch ID")
+4. **Verification**
+   - The new name appears in your credentials list immediately after refresh
 
 ---
 
@@ -242,6 +260,43 @@ If you have TOTP (Time-based One-Time Password) enabled:
 ---
 
 ## 🔐 Security Best Practices
+
+### Authenticator Policy Controls
+
+Organizations can enforce authenticator trust policy during registration using AAGUID validation.
+
+- `ValidateAaguid=true` requires the authenticator to provide an AAGUID in attestation metadata.
+- `AllowedAaguids=[...]` restricts registration to an explicit allowlist.
+- `AllowedAaguids` entries can be GUID strings or Base64-encoded 16-byte GUID values.
+- When policy blocks a device, registration fails with a clear policy error message.
+
+Example `appsettings` configuration:
+
+```json
+{
+   "WebAuthn": {
+      "Enabled": true,
+      "ValidateAaguid": true,
+      "AllowedAaguids": [
+         "77010bd7-212a-4fc9-b236-d2ca5e9d4084",
+         "1T8yN3H0QJ6k6n6g2j5Y3w=="
+      ],
+      "Tenants": {
+         "contoso": {
+            "ValidateAaguid": true,
+            "AllowedAaguids": [
+               "77010bd7-212a-4fc9-b236-d2ca5e9d4084"
+            ]
+         }
+      }
+   }
+}
+```
+
+Notes:
+- Use standard GUID format where possible for readability.
+- Use tenant overrides when different organizations require different approved authenticators.
+- Keep the allowlist small and review it during hardware/security audits.
 
 ### Key Management
 

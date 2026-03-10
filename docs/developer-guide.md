@@ -86,7 +86,7 @@ Below is a consolidated matrix of supported request parameters for `/authorize` 
 | request | Optional | RFC9101 | JAR: signed JWT containing some/all params. Merged per RFC precedence rules. |
 | request_uri | Optional | RFC9101 | JAR via PAR or pre-registered URI. When present, server dereferences & merges. |
 | response_mode | Optional | Standard/JARM | Supports `query`, `form_post`, and JARM forms `query.jwt`, `form_post.jwt`. |
-| claims | Future | OIDC | Not yet implemented; reserved for selective claim requests. |
+| claims | Optional | OIDC | Supported for selective claim requests (authorize and `authorization_code` token exchange with validation/normalization). |
 
 Resolution / Precedence (RFC 9101): When `request` or dereferenced `request_uri` contains a claim also present in the outer query, JWT value takes precedence (subject to server validation). Conflicts cause `invalid_request`.
 
@@ -459,6 +459,18 @@ End-to-end example: `docs/obo-dpop-requiresamejkt-e2e.md`
   - `invalid_target` when audience not allowed
   - `insufficient_scope` when scopes are not permitted
   - `dpop_same_key_required` / `dpop_bridging_not_supported` per policy
+
+## 8.1) Token Endpoint Resource/Claims Notes
+
+- For `authorization_code` and `refresh_token` grants, `audience` and `resource` are mutually exclusive unless equal.
+- `resource` values must be absolute URIs; invalid values return `invalid_target`.
+- For `authorization_code`, a token request `claims` parameter is accepted and normalized before claim shaping.
+
+## 8.2) Refresh Token Security Model
+
+- Refresh rotation is lineage-aware (`ReplacedById`) and reuse triggers family revocation.
+- Absolute refresh family lifetime is enforced via tenant setting `tokens.refreshTokenAbsoluteLifetimeSeconds`.
+- Refresh tokens can carry DPoP binding (`cnf.jkt`); refresh exchange enforces key continuity when present.
 
 ## 9) Minimal Client Snippets
 

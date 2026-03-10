@@ -24,19 +24,19 @@ namespace MrWhoOidc.UnitTests.Seeding;
 [TestClass]
 public class SeedManifestApplierPerformanceTests
 {
-    private AuthDbContext _db;
-    private Mock<ITenantAccessor> _tenantAccessor;
-    private Mock<IMultiTenancyOptions> _multiTenancyOptions;
-    private Mock<IIssuerBuilder> _issuerBuilder;
-    private Mock<IOptions<OidcOptions>> _oidcOptions;
-    private Mock<IOptions<SeedManifestOptions>> _seedOptions;
-    private Mock<IConfiguration> _configuration;
-    private Mock<IPasswordHasher> _passwordHasher;
-    private Mock<IClientStore> _clientStore;
-    private Mock<ILicenseService> _licenseService;
-    private Mock<ILogger<SeedManifestApplier>> _logger;
-    private SeedManifestApplier _applier;
-    private string _tempFilePath;
+    private AuthDbContext _db = null!;
+    private Mock<ITenantAccessor> _tenantAccessor = null!;
+    private Mock<IMultiTenancyOptions> _multiTenancyOptions = null!;
+    private Mock<IIssuerBuilder> _issuerBuilder = null!;
+    private Mock<IOptions<OidcOptions>> _oidcOptions = null!;
+    private Mock<IOptions<SeedManifestOptions>> _seedOptions = null!;
+    private Mock<IConfiguration> _configuration = null!;
+    private Mock<IPasswordHasher> _passwordHasher = null!;
+    private Mock<IClientStore> _clientStore = null!;
+    private Mock<ILicenseService> _licenseService = null!;
+    private Mock<ILogger<SeedManifestApplier>> _logger = null!;
+    private SeedManifestApplier _applier = null!;
+    private string _tempFilePath = null!;
 
     [TestInitialize]
     public void Setup()

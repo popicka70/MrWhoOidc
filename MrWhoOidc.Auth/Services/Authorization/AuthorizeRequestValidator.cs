@@ -196,9 +196,23 @@ public sealed class AuthorizeRequestValidator(
             State: request.state,
             ClaimsJson: normalizedClaimsJson,
             PromptValues: promptValues,
-            MaxAgeSeconds: maxAgeSeconds,
-            AcrValues: acrValues
+            MaxAgeSeconds: maxAgeSeconds ?? client.DefaultMaxAge,
+            AcrValues: acrValues ?? DeserializeDefaultAcrValues(client.DefaultAcrValuesJson)
         );
+    }
+
+    private static string[]? DeserializeDefaultAcrValues(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            var values = JsonSerializer.Deserialize<string[]>(json);
+            return values is { Length: > 0 } ? values : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static AuthorizeValidationResult Error(string code, string description) => new(

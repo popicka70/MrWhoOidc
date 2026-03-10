@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Background;
 using Microsoft.Extensions.Logging;
@@ -48,6 +49,7 @@ public static class ObservabilityExtensions
 
         // Audit sink configuration
         services.Configure<AuditOptions>(configuration.GetSection("Audit"));
+        services.AddHttpContextAccessor();
         services.AddSingleton<IAuditSink>(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
@@ -56,6 +58,14 @@ public static class ObservabilityExtensions
                 return new NoopAuditSink();
 
             var sinks = new List<IAuditSink>();
+            if (opts.PersistToDatabase)
+            {
+                sinks.Add(new DbAuditSink(
+                    sp.GetRequiredService<IServiceScopeFactory>(),
+                    sp.GetRequiredService<ILogger<DbAuditSink>>(),
+                    sp.GetRequiredService<IOptions<AuditOptions>>(),
+                    sp.GetRequiredService<IHttpContextAccessor>()));
+            }
             var sink = opts.Sink?.ToLowerInvariant() ?? "logger";
             if (sink is "logger" or "both")
             {

@@ -84,7 +84,7 @@
 </style>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         (function() {
             const sessionToken = '@sessionToken';
             const confirmBtn = document.getElementById('confirmBtn');

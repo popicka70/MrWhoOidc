@@ -530,10 +530,10 @@
                                 <h6>Solution</h6>
                                 <dl class="row">
                                     <dt class="col-4">Name:</dt>
-                                    <dd class="col-8"><strong>@Model.Wizard.SolutionName</strong></dd>
+                                    <dd class="col-8"><strong>@Model.Wizard!.SolutionName</strong></dd>
                                     <dt class="col-4">Realm:</dt>
                                     <dd class="col-8">
-                                        <strong>@(Model.Realms?.FirstOrDefault(r => r.Id == Model.Wizard.RealmId)?.Name ?? "Unknown")</strong>
+                                        <strong>@(Model.Wizard is null ? "Unknown" : (Model.Realms?.FirstOrDefault(r => r.Id == Model.Wizard.RealmId)?.Name ?? "Unknown"))</strong>
                                     </dd>
                                 </dl>
                             </div>
@@ -542,7 +542,7 @@
                                 <h6>UI Application</h6>
                                 <dl class="row">
                                     <dt class="col-4">Name:</dt>
-                                    <dd class="col-8"><strong>@Model.Wizard.UiClientName</strong></dd>
+                                    <dd class="col-8"><strong>@Model.Wizard!.UiClientName</strong></dd>
                                     <dt class="col-4">Client ID:</dt>
                                     <dd class="col-8"><code>@Model.Wizard.UiClientId</code></dd>
                                     <dt class="col-4">Type:</dt>
@@ -563,7 +563,7 @@
                                     <dd class="col-8"><code>@Model.Wizard.ApiAudience</code></dd>
                                     <dt class="col-4">Allowed Scopes:</dt>
                                     <dd class="col-8">
-                                        @string.Join(", ", Model.Wizard.ApiDelegatedScopes.Where(s => !string.IsNullOrWhiteSpace(s)))
+                                        @string.Join(", ", (Model.Wizard.ApiDelegatedScopes ?? new List<string>()).Where(s => !string.IsNullOrWhiteSpace(s)))
                                     </dd>
                                     <dt class="col-4">Max Depth:</dt>
                                     <dd class="col-8">@Model.Wizard.OboMaxDelegationDepth</dd>
@@ -716,7 +716,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
 function updateMode(mode) {
     document.querySelector('input[name="Wizard.Mode"]').value = mode;
 }

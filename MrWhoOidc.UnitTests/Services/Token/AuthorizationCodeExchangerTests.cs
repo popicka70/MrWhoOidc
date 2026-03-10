@@ -103,7 +103,9 @@ public sealed class AuthorizationCodeExchangerTests
             .ReturnsAsync("jwt-at");
 
         var refreshSvc = new Mock<IRefreshTokenService>();
-        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -284,7 +286,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -409,7 +413,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -549,7 +555,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -657,7 +665,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -776,7 +786,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -895,7 +907,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1009,7 +1023,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1129,7 +1145,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1241,7 +1259,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1344,7 +1364,9 @@ public sealed class AuthorizationCodeExchangerTests
                 It.IsAny<string[]>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
             .ReturnsAsync(("rt", "hash"));
 
         var revocationSvc = new Mock<IRevocationService>();
@@ -1419,5 +1441,241 @@ public sealed class AuthorizationCodeExchangerTests
         Assert.AreEqual(400, status);
         Assert.AreEqual("invalid_request", error);
         Assert.IsNotNull(payload);
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Succeeds_When_EssentialMappedIdTokenClaim_Is_Present()
+    {
+        using var db = CreateDb();
+
+        List<Claim>? capturedIdTokenClaims = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((issuer, aud, claims, exp, nonce, atHash, authTime, tokenType, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedIdTokenClaims = claims.ToList();
+                }
+            })
+            .ReturnsAsync("jwt");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(o => o.PropagateMappedClaimsToIdToken = ["employee_id"]),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-essential-mapped-id-claim";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+
+        var claimsJson = "{\"id_token\":{\"employee_id\":{\"essential\":true}}}";
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId,
+            ClaimsJson = claimsJson
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        metaStore.SetMappedClaims(code, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["employee_id"] = "E-123"
+        });
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsNotNull(capturedIdTokenClaims);
+        Assert.IsTrue(capturedIdTokenClaims!.Any(c => c.Type == "employee_id" && c.Value == "E-123"));
+    }
+
+    [TestMethod]
+    public async Task ExchangeAsync_Omits_NonEssentialMappedClaim_When_ValueConstraintMismatch()
+    {
+        using var db = CreateDb();
+
+        List<Claim>? capturedIdTokenClaims = null;
+
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc
+            .Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((issuer, aud, claims, exp, nonce, atHash, authTime, tokenType, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tokenType))
+                {
+                    capturedIdTokenClaims = claims.ToList();
+                }
+            })
+            .ReturnsAsync("jwt");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc
+            .Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
+        claimBuilder
+            .Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Claim>());
+
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(o => o.PropagateMappedClaimsToIdToken = ["employee_id"]),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder.Object,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-nonessential-mapped-id-claim";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = Guid.NewGuid(), Name = "r1", TenantId = tenantId });
+        await db.SaveChangesAsync();
+        var realmId = db.Realms.First().Id;
+
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+
+        var claimsJson = "{\"id_token\":{\"employee_id\":{\"essential\":false,\"value\":\"E-expected\"}}}";
+
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = code,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId,
+            ClaimsJson = claimsJson
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+        metaStore.SetMappedClaims(code, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["employee_id"] = "E-actual"
+        });
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, _, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok);
+        Assert.AreEqual(200, status);
+        Assert.IsNull(error);
+        Assert.IsNotNull(capturedIdTokenClaims);
+        Assert.IsFalse(capturedIdTokenClaims!.Any(c => c.Type == "employee_id"));
     }
 }

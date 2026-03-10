@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.WebUtilities;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
 
 namespace MrWhoOidc.UnitTests;
 
@@ -145,8 +146,8 @@ public sealed class CibaIntegrationTests
         }
 
         // Unused for these tests
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeAuthorizationCodeAsync(string code, string redirectUri, string clientId, string codeVerifier, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, string? claimsJson = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<(bool ok, object? payload, string? error, int status)> ExchangeRefreshTokenAsync(string refreshToken, string clientId, string issuer, string? dpopJkt = null, string? ipAddress = null, string? userAgent = null, string? resource = null, Guid? tenantId = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<(bool ok, object? payload, string? error, int status)> CreateClientCredentialsTokenAsync(string clientId, string audience, string[] requestedScopes, string issuer, string? dpopJkt = null, string? mtlsX5tS256 = null, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<(bool ok, object? payload, string? error, int status)> ExchangeTokenAsync(string subjectToken, string? subjectTokenType, string? requestedTokenType, string? requestedAudience, string[] requestedScopes, string callerClientId, string issuer, string? dpopJkt = null, CancellationToken ct = default) => throw new NotImplementedException();
     }
@@ -177,7 +178,7 @@ public sealed class CibaIntegrationTests
         var authOpt = Options.Create(new AuthOptions { EnableCiba = true, CibaPollingIntervalSeconds = 1, CibaAuthRequestLifetimeSeconds = 600 });
         var clientStore = new StubClientStore(client);
         var notification = new StubNotificationService();
-        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
+        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new StubTokenValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
 
         // Call bc-authorize
         var form = new Dictionary<string, string>
@@ -262,7 +263,7 @@ public sealed class CibaIntegrationTests
         var authOpt = Options.Create(new AuthOptions { EnableCiba = true });
         var clientStore = new StubClientStore(client);
         var notification = new StubNotificationService();
-        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
+        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new StubTokenValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
 
         var form = new Dictionary<string, string>
         {
@@ -310,7 +311,7 @@ public sealed class CibaIntegrationTests
         var authOpt = Options.Create(new AuthOptions { EnableCiba = true });
         var clientStore = new StubClientStore(client);
         var notification = new StubNotificationService();
-        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
+        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new StubTokenValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
 
         var form = new Dictionary<string, string>
         {
@@ -390,7 +391,7 @@ public sealed class CibaIntegrationTests
         var authOpt = Options.Create(new AuthOptions { EnableCiba = true, CibaAuthRequestLifetimeSeconds = 600 });
         var clientStore = new StubClientStore(client);
         var notification = new StubNotificationService();
-        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
+        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new StubTokenValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
 
         var form = new Dictionary<string, string>
         {
@@ -437,7 +438,7 @@ public sealed class CibaIntegrationTests
         var authOpt = Options.Create(new AuthOptions { EnableCiba = true });
         var clientStore = new StubClientStore(client);
         var notification = new ThrowingNotificationService();
-        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
+        var cibaHandler = new CibaAuthenticationHandler(oidcOpt, authOpt, db, clientStore, new StubClientAssertionValidator(), new StubTokenValidator(), new TestTenantAccessor(tenantId), notification, NullLogger<CibaAuthenticationHandler>.Instance);
 
         var form = new Dictionary<string, string>
         {
@@ -482,6 +483,15 @@ public sealed class CibaIntegrationTests
         private readonly bool _valid;
         public StubClientAssertionValidator(bool valid = true) { _valid = valid; }
         public Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default) => Task.FromResult(_valid);
+    }
+
+    private sealed class StubTokenValidator : ITokenValidator
+    {
+        public Task<(bool ok, ClaimsPrincipal? principal, string? error)> ValidateAsync(string token, string issuer, CancellationToken ct = default)
+        {
+            var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "integration-user")], "test"));
+            return Task.FromResult<(bool ok, ClaimsPrincipal? principal, string? error)>((true, principal, null));
+        }
     }
 
     // Minimal tenant accessor for tests

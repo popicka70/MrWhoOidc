@@ -172,6 +172,61 @@ public class ClientAuthenticationServiceTests
         Assert.AreEqual("invalid_client", result.Error);
         Assert.AreEqual("mtls_required", result.ErrorDescription);
     }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_Mtls_TokenEndpoint_NonClientCredentials_Success()
+    {
+        // Arrange
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "client1",
+            M2MMtlsThumbprintsJson = "[\"thumb1\"]"
+        };
+
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("client1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        var input = new ClientCredentialInput(
+            ClientId: "client1",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.AuthorizationCode,
+            MtlsThumbprint: "thumb1");
+
+        // Act
+        var result = await _service.AuthenticateAsync(input);
+
+        // Assert
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(client, result.Client);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_Mtls_TokenEndpoint_NonClientCredentials_Mismatch_Returns_InvalidClient_MtlsRequired()
+    {
+        // Arrange
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "client1",
+            M2MMtlsThumbprintsJson = "[\"thumb1\"]"
+        };
+
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("client1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        var input = new ClientCredentialInput(
+            ClientId: "client1",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.RefreshToken,
+            MtlsThumbprint: "not-thumb1");
+
+        // Act
+        var result = await _service.AuthenticateAsync(input);
+
+        // Assert
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual("invalid_client", result.Error);
+        Assert.AreEqual("mtls_required", result.ErrorDescription);
+    }
 }
 
 
