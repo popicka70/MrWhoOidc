@@ -22,6 +22,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# Stray Windows-path artifacts (e.g. bin\Debug created by EF Core design tools on Linux)
+*\\[Dd]ebug/
+*\\[Rr]elease/
 
 # .NET Core
 project.lock.json
