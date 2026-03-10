@@ -186,7 +186,7 @@
 </div>
 
 @section Scripts {
-    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+    <script>
         // Auto-refresh every 30 seconds
         let refreshInterval = setInterval(() => location.reload(), 30000);
 
