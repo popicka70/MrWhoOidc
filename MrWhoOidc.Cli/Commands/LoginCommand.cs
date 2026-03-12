@@ -11,21 +11,25 @@ public sealed class LoginCommand : Command
 {
     public LoginCommand() : base("login", "Authenticate with the OIDC server")
     {
-        var serverOption = new Option<string>(
-            aliases: new[] { "--server", "-s" },
-            description: "OIDC server URL (e.g., https://auth.example.com)");
-        
-        var clientIdOption = new Option<string>(
-            aliases: new[] { "--client-id", "-c" },
-            description: "Client ID for the CLI");
-
-        AddOption(serverOption);
-        AddOption(clientIdOption);
-
-        this.SetHandler(async (server, clientId) =>
+        var serverOption = new Option<string?>("--server", "-s")
         {
+            Description = "OIDC server URL (e.g., https://auth.example.com)"
+        };
+        
+        var clientIdOption = new Option<string?>("--client-id", "-c")
+        {
+            Description = "Client ID for the CLI"
+        };
+
+        Options.Add(serverOption);
+        Options.Add(clientIdOption);
+
+        this.SetAction(async parseResult =>
+        {
+            var server = parseResult.GetValue(serverOption);
+            var clientId = parseResult.GetValue(clientIdOption);
             await HandleAsync(server, clientId);
-        }, serverOption, clientIdOption);
+        });
     }
 
     private static async Task HandleAsync(string? server, string? clientId)

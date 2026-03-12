@@ -11,7 +11,7 @@ public sealed class LogoutCommand : Command
 {
     public LogoutCommand() : base("logout", "Clear authentication tokens")
     {
-        this.SetHandler(HandleAsync);
+        this.SetAction(_ => HandleAsync());
     }
 
     private static async Task HandleAsync()

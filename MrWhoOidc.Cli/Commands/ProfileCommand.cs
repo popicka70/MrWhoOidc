@@ -12,14 +12,26 @@ public sealed class ProfileCommand : Command
     public ProfileCommand() : base("profile", "Manage configuration profiles")
     {
         var listCommand = new Command("list", "List all profiles");
-        listCommand.SetHandler(ListProfilesAsync);
-        AddCommand(listCommand);
+        listCommand.SetAction(_ => ListProfilesAsync());
+        Subcommands.Add(listCommand);
         
         var switchCommand = new Command("switch", "Switch to a different profile");
-        var nameArgument = new Argument<string>("name", "Profile name to switch to");
-        switchCommand.AddArgument(nameArgument);
-        switchCommand.SetHandler(async (name) => await SwitchProfileAsync(name), nameArgument);
-        AddCommand(switchCommand);
+        var nameArgument = new Argument<string>("name")
+        {
+            Description = "Profile name to switch to"
+        };
+        switchCommand.Arguments.Add(nameArgument);
+        switchCommand.SetAction(async parseResult =>
+        {
+            var name = parseResult.GetValue(nameArgument);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new InvalidOperationException("The profile name argument is required.");
+            }
+
+            await SwitchProfileAsync(name);
+        });
+        Subcommands.Add(switchCommand);
     }
 
     private static async Task ListProfilesAsync()

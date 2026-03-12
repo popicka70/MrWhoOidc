@@ -39,7 +39,7 @@ internal static class Program
     private static async Task<int> RunCliAsync(string[] args)
     {
         var rootCommand = BuildRootCommand();
-        return await rootCommand.InvokeAsync(args);
+        return await rootCommand.Parse(args).InvokeAsync();
     }
 
     private static async Task<int> RunMcpServerAsync()
@@ -55,38 +55,39 @@ internal static class Program
 
     private static RootCommand BuildRootCommand()
     {
-        var rootCommand = new RootCommand("MrWhoOidc CLI - Manage your OIDC server")
-        {
-            Name = "mrwho-cli"
-        };
+        var rootCommand = new RootCommand("MrWhoOidc CLI - Manage your OIDC server");
 
         // Global options
-        var profileOption = new Option<string?>(
-            aliases: new[] { "--profile", "-p" },
-            description: "Configuration profile to use");
+        var profileOption = new Option<string?>("--profile", "-p")
+        {
+            Description = "Configuration profile to use"
+        };
         
-        var serverOption = new Option<string?>(
-            aliases: new[] { "--server", "-s" },
-            description: "Server URL (overrides profile)");
+        var serverOption = new Option<string?>("--server", "-s")
+        {
+            Description = "Server URL (overrides profile)"
+        };
         
-        var formatOption = new Option<OutputFormat>(
-            aliases: new[] { "--format", "-f" },
-            getDefaultValue: () => OutputFormat.Table,
-            description: "Output format (table, json, yaml)");
+        var formatOption = new Option<OutputFormat>("--format", "-f")
+        {
+            Description = "Output format (table, json, yaml)",
+            DefaultValueFactory = _ => OutputFormat.Table
+        };
         
-        var verboseOption = new Option<bool>(
-            aliases: new[] { "--verbose", "-v" },
-            description: "Enable verbose output");
+        var verboseOption = new Option<bool>("--verbose", "-v")
+        {
+            Description = "Enable verbose output"
+        };
 
-        rootCommand.AddGlobalOption(profileOption);
-        rootCommand.AddGlobalOption(serverOption);
-        rootCommand.AddGlobalOption(formatOption);
-        rootCommand.AddGlobalOption(verboseOption);
+        rootCommand.Options.Add(profileOption);
+        rootCommand.Options.Add(serverOption);
+        rootCommand.Options.Add(formatOption);
+        rootCommand.Options.Add(verboseOption);
 
         // Add command groups (will be implemented in phases)
-        rootCommand.AddCommand(new LoginCommand());
-        rootCommand.AddCommand(new LogoutCommand());
-        rootCommand.AddCommand(new ProfileCommand());
+        rootCommand.Subcommands.Add(new LoginCommand());
+        rootCommand.Subcommands.Add(new LogoutCommand());
+        rootCommand.Subcommands.Add(new ProfileCommand());
         
         // Placeholder for upcoming commands
         AnsiConsole.MarkupLine("[dim]Additional commands (client, user, tenant, etc.) will be added in next phases[/]");
