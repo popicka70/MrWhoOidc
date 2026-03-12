@@ -143,9 +143,14 @@ RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContex
 {
     var existing = await db.ClientScopes.Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).ToListAsync();
     var toAdd = scopes.Distinct(StringComparer.Ordinal).Except(existing, StringComparer.Ordinal).ToArray();
+
+    // ⚡ Bolt Optimization: Pre-fetch valid scopes into a HashSet to avoid an N+1 query issue during validation
+    var validScopesQuery = await db.Scopes.Where(s => toAdd.Contains(s.Name)).Select(s => s.Name).ToListAsync();
+    var validScopes = new HashSet<string>(validScopesQuery, StringComparer.Ordinal);
+
     foreach (var s in toAdd)
     {
-        if (!await db.Scopes.AnyAsync(x => x.Name == s)) return Results.BadRequest(new { error = "unknown_scope", scope = s });
+        if (!validScopes.Contains(s)) return Results.BadRequest(new { error = "unknown_scope", scope = s });
         db.ClientScopes.Add(new ClientScope { ClientId = clientId, ScopeName = s });
     }
     await db.SaveChangesAsync();
