@@ -6,6 +6,7 @@ WORKDIR /src
 
 # Copy solution and project files first for better layer caching
 COPY MrWhoOidc.slnx ./
+COPY Directory.Packages.props ./
 COPY MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj MrWhoOidc.WebAuth/
 COPY MrWhoOidc.Auth/MrWhoOidc.Auth.csproj MrWhoOidc.Auth/
 COPY MrWhoOidc.ServiceDefaults/MrWhoOidc.ServiceDefaults.csproj MrWhoOidc.ServiceDefaults/
