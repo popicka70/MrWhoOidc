@@ -123,7 +123,7 @@ public sealed class PairwiseSubjectIdentifiersTests
             NullLogger<AuthorizationCodeExchanger>.Instance);
 
         // Exchange #1
-        var code1 = "code1";
+        var code1 = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("code1")));
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
             Code = code1,
@@ -138,7 +138,7 @@ public sealed class PairwiseSubjectIdentifiersTests
 
         metaStore.SetAuthTime(code1, DateTimeOffset.UtcNow);
 
-        var req1 = new AuthorizationCodeExchangeRequest(code1, "https://cb", "c1", "verifier", "https://issuer");
+        var req1 = new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "verifier", "https://issuer");
         var (ok1, _, _, _) = await exchanger.ExchangeAsync(req1, CancellationToken.None);
         Assert.IsTrue(ok1);
 
@@ -147,7 +147,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         Assert.AreNotEqual(userId.ToString(), sub1, "Pairwise client should not get public sub.");
 
         // Exchange #2 (new auth code)
-        var code2 = "code2";
+        var code2 = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("code2")));
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
             Code = code2,
@@ -162,7 +162,7 @@ public sealed class PairwiseSubjectIdentifiersTests
 
         metaStore.SetAuthTime(code2, DateTimeOffset.UtcNow);
 
-        var req2 = new AuthorizationCodeExchangeRequest(code2, "https://cb", "c1", "verifier", "https://issuer");
+        var req2 = new AuthorizationCodeExchangeRequest("code2", "https://cb", "c1", "verifier", "https://issuer");
         var (ok2, _, _, _) = await exchanger.ExchangeAsync(req2, CancellationToken.None);
         Assert.IsTrue(ok2);
 
@@ -239,7 +239,7 @@ public sealed class PairwiseSubjectIdentifiersTests
             new OpaqueTokenPolicy(Options()),
             NullLogger<AuthorizationCodeExchanger>.Instance);
 
-        var code = "code1";
+        var code = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("code1")));
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
             Code = code,
@@ -254,7 +254,7 @@ public sealed class PairwiseSubjectIdentifiersTests
 
         metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
 
-        var req = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var req = new AuthorizationCodeExchangeRequest("code1", "https://cb", "c1", "verifier", "https://issuer");
         var (ok, _, _, _) = await exchanger.ExchangeAsync(req, CancellationToken.None);
         Assert.IsTrue(ok);
 
@@ -424,7 +424,7 @@ public sealed class PairwiseSubjectIdentifiersTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = "code1",
+            Code = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("code1"))),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -475,9 +475,10 @@ public sealed class PairwiseSubjectIdentifiersTests
 
     private static async Task<string> ExchangeAndCaptureSubAsync(AuthDbContext db, AuthorizationCodeExchanger exchanger, RecordingJwtService jwtSvc, Guid userId, Guid tenantId, string clientId, string code)
     {
+        var codeHash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code)));
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(code))),
             UserId = userId,
             ClientId = clientId,
             RedirectUri = "https://cb",

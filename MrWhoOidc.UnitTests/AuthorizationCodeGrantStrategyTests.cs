@@ -110,7 +110,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     // Seed authorization code manually
                     var code = new AuthorizationCode
                     {
-                        Code = "code-" + Guid.NewGuid().ToString("N"),
+                        Code = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("code-123"))),
                         ClientId = clientId,
                         RedirectUri = "https://cb",
                         CodeChallenge = null,
@@ -138,7 +138,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
         using (var scope2 = host.Services.CreateScope())
         {
             var db2 = scope2.ServiceProvider.GetRequiredService<AuthDbContext>();
-            actualCode = db2.AuthorizationCodes.Single().Code;
+            actualCode = "code-123";
         }
         return (host, actualCode);
     }

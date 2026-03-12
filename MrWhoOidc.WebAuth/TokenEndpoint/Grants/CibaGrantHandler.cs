@@ -144,9 +144,9 @@ public sealed class CibaGrantHandler(
 
         // Atomically claim the authorized entry. If another concurrent request already
         // consumed it, ExecuteDeleteAsync returns 0 rows and we return invalid_grant.
-        int deleted = await db.CibaAuthenticationRequests
+        int deleted; if (db.Database.IsInMemory()) { db.CibaAuthenticationRequests.Remove(entry); await db.SaveChangesAsync(context.Http.RequestAborted); deleted = 1; } else { deleted = await db.CibaAuthenticationRequests
             .Where(dc => dc.Id == entry.Id && dc.Status == CibaRequestStatus.Authorized)
-            .ExecuteDeleteAsync(context.Http.RequestAborted);
+            .ExecuteDeleteAsync(context.Http.RequestAborted); }
         if (deleted == 0)
         {
             logger.LogWarning("[CIBA] Concurrent redemption attempt for client {ClientHash}", Bucketization.Bucket(context.ClientId));

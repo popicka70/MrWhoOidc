@@ -137,9 +137,9 @@ public sealed class DeviceCodeGrantHandler(
 
         // Atomically claim the authorized entry. If another concurrent request already
         // consumed it, ExecuteDeleteAsync returns 0 rows and we return invalid_grant.
-        int deleted = await db.DeviceCodes
+        int deleted; if (db.Database.IsInMemory()) { db.DeviceCodes.Remove(entry); await db.SaveChangesAsync(context.Http.RequestAborted); deleted = 1; } else { deleted = await db.DeviceCodes
             .Where(dc => dc.Id == entry.Id && dc.Status == DeviceCodeStatus.Authorized)
-            .ExecuteDeleteAsync(context.Http.RequestAborted);
+            .ExecuteDeleteAsync(context.Http.RequestAborted); }
         if (deleted == 0)
         {
             logger.LogWarning("[DeviceCode] Concurrent redemption attempt for client {ClientHash}", Bucketization.Bucket(context.ClientId));

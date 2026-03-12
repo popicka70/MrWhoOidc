@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -51,7 +52,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                 webBuilder.ConfigureServices(services =>
                 {
                     services.AddRouting();
-                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
+                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName).ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
                     services.AddMrWhoOidcAuthCore();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
