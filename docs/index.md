@@ -98,6 +98,7 @@ Security assessments, incident response, and compliance?
 ### Protocol Reference
 | Document | Description |
 |----------|-------------|
+| [OIDC IdP Feature Reference](oidc-idp-feature-reference.md) | Spec-based feature catalog for an OpenID Connect Identity Provider |
 | [OBO Client Policy](reference/obo-client-policy.md) | Token exchange configuration |
 | [Token Exchange E2E](reference/obo-dpop-requiresamejkt-e2e.md) | DPoP with RequireSameJkt |
 | [IdP Chaining Configuration](reference/idp-chaining-client-configuration.md) | Multi-level IdP setups |
