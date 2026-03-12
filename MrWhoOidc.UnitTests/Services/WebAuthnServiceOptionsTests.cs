@@ -1,10 +1,8 @@
-using Fido2NetLib;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Moq;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -39,10 +37,8 @@ public class WebAuthnServiceOptionsTests
         });
 
         await using var db = CreateDbContext();
-        var fido2 = new Mock<IFido2>(MockBehavior.Strict);
         var service = new WebAuthnService(
             db,
-            fido2.Object,
             CreateHybridCache(),
             tenantAccessor,
             Options.Create(new WebAuthnOptions
@@ -54,8 +50,6 @@ public class WebAuthnServiceOptionsTests
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => service.CreateAuthenticationChallengeAsync(username: null));
-
-        fido2.VerifyNoOtherCalls();
     }
 
     [TestMethod]
@@ -95,10 +89,8 @@ public class WebAuthnServiceOptionsTests
             Username = "alice"
         };
 
-        var fido2 = new Mock<IFido2>(MockBehavior.Strict);
         var service = new WebAuthnService(
             db,
-            fido2.Object,
             CreateHybridCache(),
             tenantAccessor,
             Options.Create(new WebAuthnOptions
@@ -110,8 +102,6 @@ public class WebAuthnServiceOptionsTests
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => service.CreateRegistrationChallengeAsync(user));
-
-        fido2.VerifyNoOtherCalls();
     }
 
     [TestMethod]

@@ -15,7 +15,6 @@ using MrWhoOidc.Auth.Services.Authentication;
 using MrWhoOidc.Auth.Services.Token;
 using MrWhoOidc.Auth.Services.Authorization;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
-using Fido2NetLib;
 
 namespace MrWhoOidc.Auth;
 
@@ -170,21 +169,8 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<ISectorIdentifierResolver, SectorIdentifierResolver>();
         services.AddScoped<IPairwiseSubjectService, PairwiseSubjectService>();
 
-        // WebAuthn/FIDO2 services
+        // WebAuthn/passkey services (native .NET implementation — no external FIDO2 library)
         services.AddOptions<WebAuthnOptions>();
-        services.AddSingleton<IFido2>(serviceProvider =>
-        {
-            var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<WebAuthnOptions>>().Value;
-            var config = new Fido2Configuration
-            {
-                ServerDomain = options.RelyingPartyId ?? "localhost",
-                ServerName = options.RelyingPartyName ?? "MrWhoOidc",
-                Origins = new HashSet<string>(options.AllowedOrigins.Length > 0 ? options.AllowedOrigins : new[] { "https://localhost" }),
-                Timeout = (uint)(options.RegistrationTimeoutSeconds * 1000), // Convert seconds to milliseconds
-                TimestampDriftTolerance = 5000 // 5 seconds tolerance
-            };
-            return new Fido2(config, null); // Using null for metadata service (can be enhanced later)
-        });
         services.AddScoped<IWebAuthnService, WebAuthnService>();
 
         // Tenant discovery service for email-first login flow
