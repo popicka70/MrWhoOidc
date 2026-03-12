@@ -12,6 +12,7 @@ using MrWhoOidc.UnitTests.TestSupport;
 using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.IO;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -63,8 +64,9 @@ public sealed class DynamicClientRegistrationTests
         var tenantAccessor = new TenantAccessor();
         var logger = NullLogger<RegistrationHandler>.Instance;
         var hasher = new TestPasswordHasher();
+        var httpClientFactory = new NoopHttpClientFactory();
 
-        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, platformSettingsService, initialAccessTokenService, hasher, logger);
+        var handler = new RegistrationHandler(db, tenantAccessor, authOptions, platformSettingsService, initialAccessTokenService, hasher, httpClientFactory, logger);
         return (handler, tenantAccessor);
     }
 
@@ -84,8 +86,9 @@ public sealed class DynamicClientRegistrationTests
 
         var tenantAccessor = new TenantAccessor();
         var logger = NullLogger<ClientConfigurationHandler>.Instance;
+        var httpClientFactory = new NoopHttpClientFactory();
 
-        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, logger);
+        var handler = new ClientConfigurationHandler(db, tenantAccessor, authOptions, platformSettingsService, httpClientFactory, logger);
         return (handler, tenantAccessor);
     }
 
@@ -1193,6 +1196,12 @@ public sealed class DynamicClientRegistrationTests
         foreach (var prop in doc.RootElement.EnumerateObject())
             dict[prop.Name] = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : prop.Value.ToString();
         return dict;
+    }
+
+    /// <summary>Stub IHttpClientFactory that returns a default HttpClient for tests that don't exercise network calls.</summary>
+    private sealed class NoopHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new HttpClient();
     }
 
     #endregion

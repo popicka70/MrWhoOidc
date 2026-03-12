@@ -342,6 +342,10 @@ public sealed class DiscoveryHandler(
 
         body["grant_types_supported"] = grants.ToArray();
 
+        // RFC 9396: Rich Authorization Requests
+        // No specific type restrictions — all authorization_details types are accepted.
+        body["authorization_details_types_supported"] = Array.Empty<string>();
+
         // RFC 8705: mtls_endpoint_aliases (optional)
         var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;
         if (!string.IsNullOrWhiteSpace(mtlsBase) && Uri.TryCreate(mtlsBase.Trim(), UriKind.Absolute, out var mtlsUri))

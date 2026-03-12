@@ -20,5 +20,6 @@ public record AuthorizeRequest(
     string? acr_values = null,
     string? display = null,
     string? ui_locales = null,
-    string? claims = null
+    string? claims = null,
+    string? authorization_details = null
 );

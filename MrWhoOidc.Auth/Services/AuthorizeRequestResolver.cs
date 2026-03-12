@@ -205,7 +205,8 @@ public sealed class AuthorizeRequestResolver(
             acr_values: Get(query, OAuthConstants.Parameters.AcrValues),
             display: Get(query, OAuthConstants.Parameters.Display),
             ui_locales: Get(query, OAuthConstants.Parameters.UiLocales),
-            claims: Get(query, OAuthConstants.Parameters.Claims)
+            claims: Get(query, OAuthConstants.Parameters.Claims),
+            authorization_details: Get(query, OAuthConstants.Parameters.AuthorizationDetails)
         );
     }
 
