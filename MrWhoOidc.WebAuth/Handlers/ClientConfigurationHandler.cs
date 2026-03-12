@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
@@ -38,6 +39,7 @@ public sealed class ClientConfigurationHandler(
     ITenantAccessor tenantAccessor,
     IOptions<AuthOptions> authOptions,
     IPlatformSettingsService platformSettingsService,
+    IHttpClientFactory httpClientFactory,
     ILogger<ClientConfigurationHandler> logger) : IClientConfigurationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -158,6 +160,36 @@ public sealed class ClientConfigurationHandler(
             return Results.Json(
                 new { error = "invalid_client_metadata", error_description = "subject_type must be 'public' or 'pairwise'" },
                 statusCode: 400);
+        }
+
+        // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
+        var effectiveSectorUri = request.SectorIdentifierUri ?? client.SectorIdentifierUri;
+        if (string.Equals(subjectType, "pairwise", StringComparison.Ordinal) && !string.IsNullOrEmpty(effectiveSectorUri))
+        {
+            if (!Uri.TryCreate(effectiveSectorUri, UriKind.Absolute, out var sectorUri) ||
+                !string.Equals(sectorUri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = "sector_identifier_uri must be an HTTPS URI" },
+                    statusCode: 400);
+            }
+
+            try
+            {
+                var httpClient = httpClientFactory.CreateClient("SectorIdentifierValidator");
+                await SectorIdentifierUriValidator.ValidateAsync(
+                    sectorUri,
+                    request.RedirectUris,
+                    httpClient,
+                    http.RequestAborted).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogWarning(ex, "PUT /register/{ClientId} sector_identifier_uri validation failed", clientId);
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = ex.Message },
+                    statusCode: 400);
+            }
         }
 
         // Update client metadata

@@ -1657,6 +1657,8 @@ public class AuthorizationCode
     public string? Resource { get; set; }
     public DateTimeOffset? AuthTime { get; set; }
     public string? ClaimsJson { get; set; }
+    // RFC 9396 Rich Authorization Requests: persisted authorization_details JSON array
+    public string? AuthorizationDetailsJson { get; set; }
     public string? CodeChallenge { get; set; }
     [MaxLength(10)]
     public string? CodeChallengeMethod { get; set; }

@@ -1,23 +1,24 @@
+using System.Security.Cryptography;
 using System.Text;
-using Fido2NetLib;
-using Fido2NetLib.Objects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Webauthn;
 using MrWhoOidc.Auth.Utils;
 
 namespace MrWhoOidc.Auth.Services;
 
 /// <summary>
-/// Service for handling WebAuthn/FIDO2 operations including credential registration and authentication.
+/// WebAuthn/passkey service implemented with .NET built-in APIs only.
+/// No external FIDO2 library required — crypto is handled by
+/// System.Security.Cryptography and System.Formats.Cbor.
 /// </summary>
 internal sealed class WebAuthnService : IWebAuthnService
 {
     private readonly AuthDbContext _db;
-    private readonly IFido2 _fido2;
     private readonly HybridCache _cache;
     private readonly ITenantAccessor _tenantAccessor;
     private readonly IOptions<WebAuthnOptions> _options;
@@ -25,21 +26,19 @@ internal sealed class WebAuthnService : IWebAuthnService
 
     public WebAuthnService(
         AuthDbContext db,
-        IFido2 fido2,
         HybridCache cache,
         ITenantAccessor tenantAccessor,
         IOptions<WebAuthnOptions> options,
         ILogger<WebAuthnService> logger)
     {
         _db = db;
-        _fido2 = fido2;
         _cache = cache;
         _tenantAccessor = tenantAccessor;
         _options = options;
         _logger = logger;
     }
 
-    public async Task<(CredentialCreateOptions options, string sessionId)> CreateRegistrationChallengeAsync(
+    public async Task<(WebAuthnRegistrationOptions options, string sessionId)> CreateRegistrationChallengeAsync(
         User user,
         bool excludeCredentials = true,
         CancellationToken cancellationToken = default)
@@ -54,33 +53,52 @@ internal sealed class WebAuthnService : IWebAuthnService
             .CountAsync(c => c.UserId == user.Id && c.TenantId == user.TenantId && c.IsActive, cancellationToken);
         if (activeCredentialCount >= effectiveOptions.MaxCredentialsPerUser)
             throw new InvalidOperationException($"Maximum of {effectiveOptions.MaxCredentialsPerUser} WebAuthn credentials per user reached");
-        
-        // Get existing credentials to exclude them from new registration
+
+        // Build excludeCredentials list
+        WebAuthnCredentialDescriptor[]? excludeList = null;
         var shouldExcludeExisting = excludeCredentials && effectiveOptions.ExcludeExistingCredentials;
-        var existingCredentials = shouldExcludeExisting
-            ? await GetUserCredentialDescriptorsAsync(user.Id, cancellationToken)
-            : Array.Empty<PublicKeyCredentialDescriptor>();
-
-        var fidoUser = new Fido2User
+        if (shouldExcludeExisting)
         {
-            Name = user.Username,
-            Id = Encoding.UTF8.GetBytes(user.Id.ToString()),
-            DisplayName = user.Name ?? user.Username
-        };
+            var existing = await _db.WebAuthnCredentials
+                .Where(c => c.UserId == user.Id && c.TenantId == user.TenantId && c.IsActive)
+                .Select(c => c.CredentialId)
+                .ToListAsync(cancellationToken);
 
-        var options = _fido2.RequestNewCredential(new RequestNewCredentialParams
+            if (existing.Count > 0)
+                excludeList = existing
+                    .Select(id => new WebAuthnCredentialDescriptor { Id = Convert.FromBase64String(id) })
+                    .ToArray();
+        }
+
+        // Determine supported algorithms
+        var algIds = effectiveOptions.AllowedAlgorithms.Length > 0
+            ? effectiveOptions.AllowedAlgorithms
+            : new[] { -7, -257 }; // ES256 (P-256), RS256 (RSA)
+
+        var challenge = RandomNumberGenerator.GetBytes(32);
+
+        var options = new WebAuthnRegistrationOptions
         {
-            User = fidoUser,
-            AuthenticatorSelection = new AuthenticatorSelection
+            Rp = new WebAuthnRp { Id = effectiveOptions.RelyingPartyId, Name = effectiveOptions.RelyingPartyName },
+            User = new WebAuthnUser
+            {
+                Id = Encoding.UTF8.GetBytes(user.Id.ToString()),
+                Name = user.Username,
+                DisplayName = user.Name ?? user.Username
+            },
+            Challenge = challenge,
+            PubKeyCredParams = algIds.Select(a => new WebAuthnPubKeyParam { Alg = a }).ToArray(),
+            Timeout = (int)(effectiveOptions.RegistrationTimeoutSeconds * 1000L),
+            Attestation = effectiveOptions.AttestationConveyance,
+            AuthenticatorSelection = new WebAuthnAuthenticatorSelection
             {
                 ResidentKey = effectiveOptions.ResidentKey,
+                RequireResidentKey = string.Equals(effectiveOptions.ResidentKey, "required", StringComparison.OrdinalIgnoreCase),
                 UserVerification = effectiveOptions.UserVerification,
                 AuthenticatorAttachment = effectiveOptions.AuthenticatorAttachment
             },
-            AttestationPreference = effectiveOptions.AttestationConveyance,
-            ExcludeCredentials = existingCredentials,
-            Extensions = new AuthenticationExtensionsClientInputs()
-        });
+            ExcludeCredentials = excludeList
+        };
 
         // Cache the challenge session
         var cacheKey = $"webauthn_registration_{sessionId}";
@@ -89,18 +107,17 @@ internal sealed class WebAuthnService : IWebAuthnService
             Expiration = TimeSpan.FromSeconds(effectiveOptions.ChallengeSessionLifetimeSeconds),
             LocalCacheExpiration = TimeSpan.FromSeconds(effectiveOptions.ChallengeSessionLifetimeSeconds)
         };
-        
+
         await _cache.SetAsync(cacheKey, new WebAuthnChallengeSession
         {
-            Challenge = options.Challenge,
-            Options = options,
+            Challenge = challenge,
             UserId = user.Id,
             TenantId = user.TenantId,
             Type = WebAuthnChallengeType.Registration,
             CreatedAt = DateTimeOffset.UtcNow
         }, cacheOptions, cancellationToken: cancellationToken);
 
-        _logger.LogDebug("Created WebAuthn registration challenge for user {UserId} with session {SessionId}", 
+        _logger.LogDebug("Created WebAuthn registration challenge for user {UserId} with session {SessionId}",
             user.Id, sessionId);
 
         return (options, sessionId);
@@ -108,7 +125,7 @@ internal sealed class WebAuthnService : IWebAuthnService
 
     public async Task<(bool success, string? credentialId, string? errorMessage)> CompleteRegistrationAsync(
         User user,
-        AuthenticatorAttestationRawResponse attestationResponse,
+        WebAuthnAttestationResponse attestationResponse,
         string sessionId,
         string? friendlyName = null,
         CancellationToken cancellationToken = default)
@@ -124,45 +141,47 @@ internal sealed class WebAuthnService : IWebAuthnService
             var session = await _cache.GetOrCreateAsync<object?, WebAuthnChallengeSession?>(
                 cacheKey,
                 null,
-                async (_, ct) => (WebAuthnChallengeSession?)null, // Factory returns null if not cached
+                async (_, ct) => (WebAuthnChallengeSession?)null,
                 cancellationToken: cancellationToken);
-            
+
             if (session == null)
-            {
                 return (false, null, "Registration session not found or expired");
-            }
 
             if (session.UserId != user.Id || session.TenantId != user.TenantId)
-            {
                 return (false, null, "Invalid session for user");
-            }
-
-            if (session.Options == null)
-            {
-                return (false, null, "Invalid session options");
-            }
 
             var activeCredentialCount = await _db.WebAuthnCredentials
                 .CountAsync(c => c.UserId == user.Id && c.TenantId == user.TenantId && c.IsActive, cancellationToken);
             if (activeCredentialCount >= effectiveOptions.MaxCredentialsPerUser)
-            {
                 return (false, null, $"Maximum of {effectiveOptions.MaxCredentialsPerUser} WebAuthn credentials per user reached");
-            }
 
-            // Make the new credential using the Fido2 service
-            var credential = await _fido2.MakeNewCredentialAsync(new MakeNewCredentialParams
-            {
-                AttestationResponse = attestationResponse,
-                OriginalOptions = session.Options,
-                IsCredentialIdUniqueToUserCallback = IsCredentialIdUniqueToUserAsync
-            }, cancellationToken);
+            if (attestationResponse.Response?.ClientDataJSON is null)
+                return (false, null, "Missing clientDataJSON in attestation response");
+            if (attestationResponse.Response.AttestationObject is null)
+                return (false, null, "Missing attestationObject in attestation response");
 
-            var (attestationType, aaguidBase64) = ExtractAttestationMetadata(credential);
+            var origins = effectiveOptions.AllowedOrigins.Length > 0
+                ? effectiveOptions.AllowedOrigins
+                : new[] { $"https://{effectiveOptions.RelyingPartyId}" };
+
+            var transports = attestationResponse.Transports ?? attestationResponse.Response.Transports;
+
+            // Cryptographic verification
+            var result = WebAuthnCrypto.VerifyRegistration(
+                clientDataJson: attestationResponse.Response.ClientDataJSON,
+                attestationObject: attestationResponse.Response.AttestationObject,
+                transports: transports,
+                expectedChallenge: session.Challenge,
+                rpId: effectiveOptions.RelyingPartyId,
+                expectedOrigins: origins);
+
+            var aaguidBase64 = result.AaGuid.Length == 16 && result.AaGuid.Any(b => b != 0)
+                ? Convert.ToBase64String(result.AaGuid)
+                : null;
+
             var aaguidPolicyError = ValidateAaguidPolicy(aaguidBase64, effectiveOptions.ValidateAaguid, effectiveOptions.AllowedAaguids);
             if (aaguidPolicyError != null)
-            {
                 return (false, null, aaguidPolicyError);
-            }
 
             // Store the credential in the database
             var webAuthnCredential = new WebAuthnCredential
@@ -170,17 +189,17 @@ internal sealed class WebAuthnService : IWebAuthnService
                 Id = GuidHelper.NewId(),
                 TenantId = user.TenantId,
                 UserId = user.Id,
-                CredentialId = Convert.ToBase64String(credential.Id),
-                PublicKey = Convert.ToBase64String(credential.PublicKey),
-                Type = credential.Type.ToString(),
-                AttestationType = attestationType,
+                CredentialId = Convert.ToBase64String(result.CredentialId),
+                PublicKey = Convert.ToBase64String(result.CosePublicKey),
+                Type = "public-key",
+                AttestationType = result.AttestationFormat,
                 AaguidBase64 = aaguidBase64,
-                SignatureCounter = credential.SignCount,
-                Transport = credential.Transports != null ? string.Join(",", credential.Transports) : null,
+                SignatureCounter = result.SignCount,
+                Transport = result.Transports,
                 FriendlyName = string.IsNullOrWhiteSpace(friendlyName)
                     ? GetDefaultCredentialName(effectiveOptions.DefaultCredentialNamePattern)
                     : friendlyName,
-                DeviceType = GetDeviceTypeFromTransports(credential.Transports),
+                DeviceType = GetDeviceTypeFromTransports(result.Transports),
                 IsActive = true,
                 CreatedAt = DateTimeOffset.UtcNow
             };
@@ -196,9 +215,9 @@ internal sealed class WebAuthnService : IWebAuthnService
 
             return (true, webAuthnCredential.CredentialId, null);
         }
-        catch (Fido2VerificationException ex)
+        catch (WebAuthnVerificationException ex)
         {
-            _logger.LogWarning("WebAuthn registration verification failed for user {UserId}: {Error}", 
+            _logger.LogWarning("WebAuthn registration verification failed for user {UserId}: {Error}",
                 user.Id, ex.Message);
             return (false, null, ex.Message);
         }
@@ -209,7 +228,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         }
     }
 
-    public async Task<(AssertionOptions options, string sessionId)> CreateAuthenticationChallengeAsync(
+    public async Task<(WebAuthnAssertionOptions options, string sessionId)> CreateAuthenticationChallengeAsync(
         string? username = null,
         CancellationToken cancellationToken = default)
     {
@@ -222,17 +241,37 @@ internal sealed class WebAuthnService : IWebAuthnService
         var sessionId = GuidHelper.NewId().ToString();
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("No tenant context");
 
-        // Get allowed credentials for the user (if username provided) or all credentials for usernameless flow
-        var allowedCredentials = username != null
-            ? await GetCredentialsForUserAsync(username, tenantId, cancellationToken)
-            : await GetAllTenantCredentialsAsync(tenantId, cancellationToken);
-
-        var options = _fido2.GetAssertionOptions(new GetAssertionOptionsParams
+        // Build allowCredentials list for the user (if username provided)
+        WebAuthnCredentialDescriptor[]? allowList = null;
+        if (username != null)
         {
-            AllowedCredentials = allowedCredentials,
+            var creds = await _db.WebAuthnCredentials
+                .Include(c => c.User)
+                .Where(c => c.User.Username == username && c.TenantId == tenantId && c.IsActive)
+                .ToListAsync(cancellationToken);
+
+            if (creds.Count > 0)
+                allowList = creds
+                    .Select(c => new WebAuthnCredentialDescriptor
+                    {
+                        Id = Convert.FromBase64String(c.CredentialId),
+                        Transports = string.IsNullOrEmpty(c.Transport)
+                            ? null
+                            : c.Transport.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    })
+                    .ToArray();
+        }
+
+        var challenge = RandomNumberGenerator.GetBytes(32);
+
+        var options = new WebAuthnAssertionOptions
+        {
+            RpId = effectiveOptions.RelyingPartyId,
+            Challenge = challenge,
+            Timeout = (int)(effectiveOptions.AuthenticationTimeoutSeconds * 1000L),
             UserVerification = effectiveOptions.UserVerification,
-            Extensions = new AuthenticationExtensionsClientInputs()
-        });
+            AllowCredentials = allowList
+        };
 
         // Cache the challenge session
         var cacheKey = $"webauthn_authentication_{sessionId}";
@@ -241,10 +280,10 @@ internal sealed class WebAuthnService : IWebAuthnService
             Expiration = TimeSpan.FromSeconds(effectiveOptions.ChallengeSessionLifetimeSeconds),
             LocalCacheExpiration = TimeSpan.FromSeconds(effectiveOptions.ChallengeSessionLifetimeSeconds)
         };
-        
+
         await _cache.SetAsync(cacheKey, new WebAuthnChallengeSession
         {
-            Challenge = options.Challenge,
+            Challenge = challenge,
             Username = username,
             TenantId = tenantId,
             Type = WebAuthnChallengeType.Authentication,
@@ -258,7 +297,7 @@ internal sealed class WebAuthnService : IWebAuthnService
     }
 
     public async Task<(bool success, User? user, string? errorMessage)> CompleteAuthenticationAsync(
-        AuthenticatorAssertionRawResponse assertionResponse,
+        WebAuthnAssertionResponse assertionResponse,
         string sessionId,
         CancellationToken cancellationToken = default)
     {
@@ -273,61 +312,61 @@ internal sealed class WebAuthnService : IWebAuthnService
             var session = await _cache.GetOrCreateAsync<object?, WebAuthnChallengeSession?>(
                 cacheKey,
                 null,
-                async (_, ct) => (WebAuthnChallengeSession?)null, // Factory returns null if not cached
+                async (_, ct) => (WebAuthnChallengeSession?)null,
                 cancellationToken: cancellationToken);
-            
+
             if (session == null)
-            {
                 return (false, null, "Authentication session not found or expired");
-            }
+
+            if (assertionResponse.Response?.ClientDataJSON is null)
+                return (false, null, "Missing clientDataJSON in assertion response");
+            if (assertionResponse.Response.AuthenticatorData is null)
+                return (false, null, "Missing authenticatorData in assertion response");
+            if (assertionResponse.Response.Signature is null)
+                return (false, null, "Missing signature in assertion response");
+            if (assertionResponse.RawId is null)
+                return (false, null, "Missing rawId in assertion response");
 
             // Find the credential used for authentication
-            var credentialId = Convert.ToBase64String(assertionResponse.RawId);
+            var credentialIdBase64 = Convert.ToBase64String(assertionResponse.RawId);
             var credential = await _db.WebAuthnCredentials
                 .Include(c => c.User)
-                .FirstOrDefaultAsync(c => c.CredentialId == credentialId && 
-                                         c.TenantId == session.TenantId && 
+                .FirstOrDefaultAsync(c => c.CredentialId == credentialIdBase64 &&
+                                         c.TenantId == session.TenantId &&
                                          c.IsActive, cancellationToken);
 
             if (credential == null)
-            {
                 return (false, null, "Credential not found");
+
+            var origins = effectiveOptions.AllowedOrigins.Length > 0
+                ? effectiveOptions.AllowedOrigins
+                : new[] { $"https://{effectiveOptions.RelyingPartyId}" };
+
+            var storedCoseKey = Convert.FromBase64String(credential.PublicKey);
+
+            // Cryptographic verification
+            var result = WebAuthnCrypto.VerifyAuthentication(
+                clientDataJson: assertionResponse.Response.ClientDataJSON,
+                authenticatorData: assertionResponse.Response.AuthenticatorData,
+                signature: assertionResponse.Response.Signature,
+                userHandle: assertionResponse.Response.UserHandle,
+                storedCosePublicKey: storedCoseKey,
+                storedSignCount: credential.SignatureCounter,
+                enforceSignatureCounter: effectiveOptions.EnforceSignatureCounter,
+                expectedChallenge: session.Challenge,
+                rpId: effectiveOptions.RelyingPartyId,
+                expectedOrigins: origins);
+
+            // Verify userHandle ownership when present
+            if (result.UserHandle != null)
+            {
+                var userIdFromHandle = Encoding.UTF8.GetString(result.UserHandle);
+                if (userIdFromHandle != credential.UserId.ToString())
+                    return (false, null, "userHandle does not match credential owner");
             }
 
-            // Create assertion options for verification
-            var allowedCredentials = new List<PublicKeyCredentialDescriptor>
-            {
-                new(Convert.FromBase64String(credentialId))
-            };
-
-            var assertionOptions = new AssertionOptions
-            {
-                Challenge = session.Challenge,
-                RpId = effectiveOptions.RelyingPartyId,
-                AllowCredentials = allowedCredentials
-            };
-
-            // Verify the assertion using the Fido2 service
-            var verificationResult = await _fido2.MakeAssertionAsync(new MakeAssertionParams
-            {
-                AssertionResponse = assertionResponse,
-                OriginalOptions = assertionOptions,
-                StoredPublicKey = Convert.FromBase64String(credential.PublicKey),
-                StoredSignatureCounter = effectiveOptions.EnforceSignatureCounter ? credential.SignatureCounter : 0,
-                IsUserHandleOwnerOfCredentialIdCallback = async (args, ct) =>
-                {
-                    // Verify that the user handle matches the credential owner
-                    if (args.UserHandle != null)
-                    {
-                        var userIdFromHandle = Encoding.UTF8.GetString(args.UserHandle);
-                        return userIdFromHandle == credential.UserId.ToString();
-                    }
-                    return true; // Allow null user handle for resident credentials
-                }
-            }, cancellationToken);
-
             // Update signature counter and last used timestamp
-            credential.SignatureCounter = verificationResult.SignCount;
+            credential.SignatureCounter = result.NewSignCount;
             credential.LastUsedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -339,7 +378,7 @@ internal sealed class WebAuthnService : IWebAuthnService
 
             return (true, credential.User, null);
         }
-        catch (Fido2VerificationException ex)
+        catch (WebAuthnVerificationException ex)
         {
             _logger.LogWarning("WebAuthn authentication verification failed: {Error}", ex.Message);
             return (false, null, ex.Message);
@@ -422,70 +461,6 @@ internal sealed class WebAuthnService : IWebAuthnService
 
     // Private helper methods
 
-    private async Task<bool> IsCredentialIdUniqueToUserAsync(
-        IsCredentialIdUniqueToUserParams args,
-        CancellationToken cancellationToken)
-    {
-        var credentialId = Convert.ToBase64String(args.CredentialId);
-        var exists = await _db.WebAuthnCredentials
-            .AnyAsync(c => c.CredentialId == credentialId && c.IsActive, cancellationToken);
-        
-        return !exists; // Return true if credential ID is unique (doesn't exist)
-    }
-
-    private async Task<IReadOnlyList<PublicKeyCredentialDescriptor>> GetUserCredentialDescriptorsAsync(
-        Guid userId,
-        CancellationToken cancellationToken)
-    {
-        var credentials = await GetUserCredentialsAsync(userId, cancellationToken);
-        
-        return credentials
-            .Select(c => new PublicKeyCredentialDescriptor(Convert.FromBase64String(c.CredentialId)))
-            .ToList();
-    }
-
-    private async Task<IReadOnlyList<PublicKeyCredentialDescriptor>> GetCredentialsForUserAsync(
-        string username,
-        Guid tenantId,
-        CancellationToken cancellationToken)
-    {
-        var credentials = await _db.WebAuthnCredentials
-            .Include(c => c.User)
-            .Where(c => c.User.Username == username && 
-                       c.TenantId == tenantId && 
-                       c.IsActive)
-            .ToListAsync(cancellationToken);
-
-        return credentials
-            .Select(c => new PublicKeyCredentialDescriptor(Convert.FromBase64String(c.CredentialId)))
-            .ToList();
-    }
-
-    private async Task<IReadOnlyList<PublicKeyCredentialDescriptor>> GetAllTenantCredentialsAsync(
-        Guid tenantId,
-        CancellationToken cancellationToken)
-    {
-        var credentials = await _db.WebAuthnCredentials
-            .Where(c => c.TenantId == tenantId && c.IsActive)
-            .ToListAsync(cancellationToken);
-
-        return credentials
-            .Select(c => new PublicKeyCredentialDescriptor(Convert.FromBase64String(c.CredentialId)))
-            .ToList();
-    }
-
-    private static AuthenticatorTransport[]? ParseTransports(string? transports)
-    {
-        if (string.IsNullOrEmpty(transports))
-            return null;
-
-        return transports.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Select(t => Enum.TryParse<AuthenticatorTransport>(t.Trim(), true, out var transport) ? transport : (AuthenticatorTransport?)null)
-            .Where(t => t.HasValue)
-            .Select(t => t!.Value)
-            .ToArray();
-    }
-
     private string GetDefaultCredentialName(string pattern)
     {
         if (string.IsNullOrWhiteSpace(pattern))
@@ -497,11 +472,14 @@ internal sealed class WebAuthnService : IWebAuthnService
             .Replace("{transport}", "unknown", StringComparison.Ordinal);
     }
 
-    private static string? GetDeviceTypeFromTransports(AuthenticatorTransport[]? transports)
+    private static string? GetDeviceTypeFromTransports(string? transports)
     {
-        if (transports?.Contains(AuthenticatorTransport.Internal) == true)
-            return "platform";
-        if (transports?.Any(t => t == AuthenticatorTransport.Usb || t == AuthenticatorTransport.Nfc || t == AuthenticatorTransport.Ble) == true)
+        if (string.IsNullOrEmpty(transports)) return null;
+        var parts = transports.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Contains("internal", StringComparer.OrdinalIgnoreCase)) return "platform";
+        if (parts.Any(t => string.Equals(t, "usb", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(t, "nfc", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(t, "ble", StringComparison.OrdinalIgnoreCase)))
             return "cross-platform";
         return null;
     }
@@ -514,164 +492,53 @@ internal sealed class WebAuthnService : IWebAuthnService
         var hasOverride = !string.IsNullOrWhiteSpace(tenantSlug) &&
                           root.TenantOverrides.TryGetValue(tenantSlug!, out tenantOverride);
 
-        var enabled = hasOverride && tenantOverride!.Enabled.HasValue
-            ? tenantOverride.Enabled.Value
-            : root.Enabled;
-        var excludeExisting = hasOverride && tenantOverride!.ExcludeExistingCredentials.HasValue
-            ? tenantOverride.ExcludeExistingCredentials.Value
-            : root.ExcludeExistingCredentials;
-        var allowUsernameless = hasOverride && tenantOverride!.AllowUsernamelessAuthentication.HasValue
-            ? tenantOverride.AllowUsernamelessAuthentication.Value
-            : root.AllowUsernamelessAuthentication;
-        var challengeLifetime = root.ChallengeSessionLifetimeSeconds;
-        var maxCredentials = hasOverride && tenantOverride!.MaxCredentialsPerUser.HasValue
-            ? tenantOverride.MaxCredentialsPerUser.Value
-            : root.MaxCredentialsPerUser;
-        var enforceSignatureCounter = hasOverride && tenantOverride!.EnforceSignatureCounter.HasValue
-            ? tenantOverride.EnforceSignatureCounter.Value
-            : root.EnforceSignatureCounter;
-        var validateAaguid = hasOverride && tenantOverride!.ValidateAaguid.HasValue
-            ? tenantOverride.ValidateAaguid.Value
-            : root.ValidateAaguid;
-        var allowedAaguids = hasOverride && tenantOverride!.AllowedAaguids != null
-            ? tenantOverride.AllowedAaguids
-            : root.AllowedAaguids;
+        T Get<T>(T rootVal, T? ovVal) where T : struct
+            => (hasOverride && ovVal.HasValue) ? ovVal.Value : rootVal;
 
-        var rpId = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.RelyingPartyId)
-            ? tenantOverride.RelyingPartyId!
-            : (string.IsNullOrWhiteSpace(root.RelyingPartyId) ? "localhost" : root.RelyingPartyId);
+        string GetStr(string rootVal, string? ovVal)
+            => (hasOverride && !string.IsNullOrWhiteSpace(ovVal)) ? ovVal! : rootVal;
 
-        var userVerificationRaw = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.UserVerification)
-            ? tenantOverride.UserVerification!
-            : root.UserVerification;
-        var residentKeyRaw = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.ResidentKey)
-            ? tenantOverride.ResidentKey!
-            : root.ResidentKey;
-        var attestationRaw = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.AttestationConveyance)
-            ? tenantOverride.AttestationConveyance!
-            : root.AttestationConveyance;
-        var attachmentRaw = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.AuthenticatorAttachment)
-            ? tenantOverride.AuthenticatorAttachment
-            : root.AuthenticatorAttachment;
-        var namePattern = hasOverride && !string.IsNullOrWhiteSpace(tenantOverride!.DefaultCredentialNamePattern)
-            ? tenantOverride.DefaultCredentialNamePattern!
-            : root.DefaultCredentialNamePattern;
+        string? GetStrNull(string? rootVal, string? ovVal)
+            => (hasOverride && ovVal is not null) ? ovVal : rootVal;
+
+        IReadOnlyList<string> GetList(string[] rootList, string[]? ovList)
+            => (hasOverride && ovList is not null) ? ovList : rootList;
+
+        var rpId = GetStr(root.RelyingPartyId ?? "localhost", tenantOverride?.RelyingPartyId)!;
 
         return new EffectiveWebAuthnOptions(
-            Enabled: enabled,
-            ExcludeExistingCredentials: excludeExisting,
-            AllowUsernamelessAuthentication: allowUsernameless,
-            ChallengeSessionLifetimeSeconds: challengeLifetime,
-            MaxCredentialsPerUser: maxCredentials,
-            EnforceSignatureCounter: enforceSignatureCounter,
-            ValidateAaguid: validateAaguid,
-            AllowedAaguids: allowedAaguids,
+            Enabled: Get(root.Enabled, tenantOverride?.Enabled),
+            ExcludeExistingCredentials: Get(root.ExcludeExistingCredentials, tenantOverride?.ExcludeExistingCredentials),
+            AllowUsernamelessAuthentication: Get(root.AllowUsernamelessAuthentication, tenantOverride?.AllowUsernamelessAuthentication),
+            ChallengeSessionLifetimeSeconds: root.ChallengeSessionLifetimeSeconds,
+            MaxCredentialsPerUser: Get(root.MaxCredentialsPerUser, tenantOverride?.MaxCredentialsPerUser),
+            EnforceSignatureCounter: Get(root.EnforceSignatureCounter, tenantOverride?.EnforceSignatureCounter),
+            ValidateAaguid: Get(root.ValidateAaguid, tenantOverride?.ValidateAaguid),
+            AllowedAaguids: GetList(root.AllowedAaguids, tenantOverride?.AllowedAaguids),
             RelyingPartyId: rpId!,
-            UserVerification: ParseUserVerification(userVerificationRaw),
-            ResidentKey: ParseResidentKey(residentKeyRaw),
-            AttestationConveyance: ParseAttestation(attestationRaw),
-            AuthenticatorAttachment: ParseAttachment(attachmentRaw),
-            DefaultCredentialNamePattern: namePattern);
+            RelyingPartyName: GetStr(root.RelyingPartyName ?? "MrWhoOidc", tenantOverride?.RelyingPartyName),
+            UserVerification: GetStr(root.UserVerification, tenantOverride?.UserVerification),
+            ResidentKey: GetStr(root.ResidentKey, tenantOverride?.ResidentKey),
+            AttestationConveyance: GetStr(root.AttestationConveyance, tenantOverride?.AttestationConveyance),
+            AuthenticatorAttachment: GetStrNull(root.AuthenticatorAttachment, tenantOverride?.AuthenticatorAttachment),
+            DefaultCredentialNamePattern: GetStr(root.DefaultCredentialNamePattern, tenantOverride?.DefaultCredentialNamePattern),
+            AllowedAlgorithms: (hasOverride && tenantOverride?.AllowedCredentialAlgorithms is not null)
+                ? tenantOverride!.AllowedCredentialAlgorithms!
+                : root.AllowedCredentialAlgorithms,
+            AllowedOrigins: GetList(root.AllowedOrigins, tenantOverride?.AllowedOrigins) as string[]
+                            ?? root.AllowedOrigins,
+            RegistrationTimeoutSeconds: hasOverride && tenantOverride?.RegistrationTimeoutSeconds.HasValue == true
+                ? tenantOverride!.RegistrationTimeoutSeconds!.Value
+                : root.RegistrationTimeoutSeconds,
+            AuthenticationTimeoutSeconds: hasOverride && tenantOverride?.AuthenticationTimeoutSeconds.HasValue == true
+                ? tenantOverride!.AuthenticationTimeoutSeconds!.Value
+                : root.AuthenticationTimeoutSeconds);
     }
 
-    private static UserVerificationRequirement ParseUserVerification(string value)
-    {
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "required" => UserVerificationRequirement.Required,
-            "discouraged" => UserVerificationRequirement.Discouraged,
-            _ => UserVerificationRequirement.Preferred
-        };
-    }
-
-    private static ResidentKeyRequirement ParseResidentKey(string value)
-    {
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "required" => ResidentKeyRequirement.Required,
-            "discouraged" => ResidentKeyRequirement.Discouraged,
-            _ => ResidentKeyRequirement.Preferred
-        };
-    }
-
-    private static AttestationConveyancePreference ParseAttestation(string value)
-    {
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "indirect" => AttestationConveyancePreference.Indirect,
-            "direct" => AttestationConveyancePreference.Direct,
-            "enterprise" => AttestationConveyancePreference.Enterprise,
-            _ => AttestationConveyancePreference.None
-        };
-    }
-
-    private static AuthenticatorAttachment? ParseAttachment(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "platform" => AuthenticatorAttachment.Platform,
-            "cross-platform" => AuthenticatorAttachment.CrossPlatform,
-            _ => null
-        };
-    }
-
-    private static (string? attestationType, string? aaguidBase64) ExtractAttestationMetadata(object credential)
-    {
-        var attestationType = GetStringProperty(credential, "AttestationFormat")
-            ?? GetStringProperty(credential, "AttestationType")
-            ?? GetStringProperty(credential, "Fmt");
-
-        var aaguidBase64 = TryGetAaguidBase64(credential);
-
-        // Some Fido2 models expose attestation metadata on a nested result object.
-        var result = GetObjectProperty(credential, "Result");
-        if (result != null)
-        {
-            attestationType ??= GetStringProperty(result, "AttestationFormat")
-                ?? GetStringProperty(result, "AttestationType")
-                ?? GetStringProperty(result, "Fmt");
-
-            aaguidBase64 ??= TryGetAaguidBase64(result);
-        }
-
-        return (attestationType, aaguidBase64);
-    }
-
-    private static string? TryGetAaguidBase64(object source)
-    {
-        var value = GetObjectProperty(source, "AaGuid")
-            ?? GetObjectProperty(source, "Aaguid")
-            ?? GetObjectProperty(source, "AAGUID");
-
-        if (value is null)
-            return null;
-
-        if (value is byte[] bytes && bytes.Length > 0)
-            return Convert.ToBase64String(bytes);
-
-        if (value is Guid guid && guid != Guid.Empty)
-            return Convert.ToBase64String(guid.ToByteArray());
-
-        if (value is string str && Guid.TryParse(str, out var parsedGuid))
-            return Convert.ToBase64String(parsedGuid.ToByteArray());
-
-        return null;
-    }
-
-    private static object? GetObjectProperty(object source, string propertyName)
-    {
-        var prop = source.GetType().GetProperty(propertyName);
-        return prop?.GetValue(source);
-    }
-
-    private static string? GetStringProperty(object source, string propertyName)
-    {
-        var value = GetObjectProperty(source, propertyName);
-        return value as string;
-    }
+    private static string? ParseUserVerification(string value) => value; // kept minimal; plain string passed through
+    private static string? ParseResidentKey(string value) => value;
+    private static string? ParseAttestation(string value) => value;
+    private static string? ParseAttachment(string? value) => value;
 
     internal static string? ValidateAaguidPolicy(string? credentialAaguidBase64, bool validateAaguid, IReadOnlyList<string>? allowedAaguids)
     {
@@ -742,11 +609,16 @@ internal sealed class WebAuthnService : IWebAuthnService
         bool ValidateAaguid,
         IReadOnlyList<string> AllowedAaguids,
         string RelyingPartyId,
-        UserVerificationRequirement UserVerification,
-        ResidentKeyRequirement ResidentKey,
-        AttestationConveyancePreference AttestationConveyance,
-        AuthenticatorAttachment? AuthenticatorAttachment,
-        string DefaultCredentialNamePattern);
+        string RelyingPartyName,
+        string UserVerification,
+        string ResidentKey,
+        string AttestationConveyance,
+        string? AuthenticatorAttachment,
+        string DefaultCredentialNamePattern,
+        int[] AllowedAlgorithms,
+        string[] AllowedOrigins,
+        int RegistrationTimeoutSeconds,
+        int AuthenticationTimeoutSeconds);
 }
 
 /// <summary>
@@ -755,7 +627,6 @@ internal sealed class WebAuthnService : IWebAuthnService
 internal class WebAuthnChallengeSession
 {
     public required byte[] Challenge { get; set; }
-    public CredentialCreateOptions? Options { get; set; }
     public Guid? UserId { get; set; }
     public string? Username { get; set; }
     public required Guid TenantId { get; set; }

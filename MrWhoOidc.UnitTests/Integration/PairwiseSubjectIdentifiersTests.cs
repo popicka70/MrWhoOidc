@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Net;
 using System.Net.Http;
 using System.Security.Claims;
@@ -30,6 +32,9 @@ namespace MrWhoOidc.UnitTests.Integration;
 [TestClass]
 public sealed class PairwiseSubjectIdentifiersTests
 {
+    private static string HashCode(string code) =>
+        Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
     private static AuthDbContext CreateDb(string name)
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
@@ -126,7 +131,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         var code1 = "code1";
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code1,
+            Code = HashCode(code1),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -150,7 +155,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         var code2 = "code2";
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code2,
+            Code = HashCode(code2),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -242,7 +247,7 @@ public sealed class PairwiseSubjectIdentifiersTests
         var code = "code1";
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashCode(code),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -424,7 +429,7 @@ public sealed class PairwiseSubjectIdentifiersTests
 
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = "code1",
+            Code = HashCode("code1"),
             UserId = userId,
             ClientId = "c1",
             RedirectUri = "https://cb",
@@ -477,7 +482,7 @@ public sealed class PairwiseSubjectIdentifiersTests
     {
         db.AuthorizationCodes.Add(new AuthorizationCode
         {
-            Code = code,
+            Code = HashCode(code),
             UserId = userId,
             ClientId = clientId,
             RedirectUri = "https://cb",

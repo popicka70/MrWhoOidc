@@ -260,9 +260,9 @@ public sealed class DiscoveryHandler(
             // DPoP is optional per-request here, so we advertise supported algorithms above
             // and leave this flag false to avoid misleading strictly-conformant clients.
             ["dpop_bound_access_tokens"] = false,
-            // tls_client_certificate_bound_access_tokens = true means ALL tokens are cert-bound (RFC 8705).
-            // mTLS is optional here, so we set this to false.
-            ["tls_client_certificate_bound_access_tokens"] = false
+            // tls_client_certificate_bound_access_tokens = true means per-client cert-bound access tokens
+            // are supported (RFC 8705). Clients opt in via per-client mTLS configuration.
+            ["tls_client_certificate_bound_access_tokens"] = true
         };
 
         if (authOptions.Value.EnableRequestObjectEncryption)
@@ -341,6 +341,10 @@ public sealed class DiscoveryHandler(
         }
 
         body["grant_types_supported"] = grants.ToArray();
+
+        // RFC 9396: Rich Authorization Requests
+        // No specific type restrictions — all authorization_details types are accepted.
+        body["authorization_details_types_supported"] = Array.Empty<string>();
 
         // RFC 8705: mtls_endpoint_aliases (optional)
         var mtlsBase = authOptions.Value.MtlsEndpointAliasesBaseUrl;

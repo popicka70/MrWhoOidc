@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Utils;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
@@ -24,6 +25,7 @@ public sealed class RegistrationHandler(
     IPlatformSettingsService platformSettingsService,
     IPlatformInitialAccessTokenService initialAccessTokenService,
     IPasswordHasher passwordHasher,
+    IHttpClientFactory httpClientFactory,
     ILogger<RegistrationHandler> logger) : IRegistrationHandler
 {
     private readonly AuthOptions _authOptions = authOptions.Value;
@@ -247,7 +249,7 @@ public sealed class RegistrationHandler(
                 statusCode: 400);
         }
 
-        // For pairwise clients, sector_identifier_uri must be HTTPS
+        // For pairwise clients, validate sector_identifier_uri (HTTPS + redirect URI containment check)
         if (request.SubjectType == "pairwise" && !string.IsNullOrEmpty(request.SectorIdentifierUri))
         {
             if (!Uri.TryCreate(request.SectorIdentifierUri, UriKind.Absolute, out var sectorUri) ||
@@ -255,6 +257,23 @@ public sealed class RegistrationHandler(
             {
                 return Results.Json(
                     new { error = "invalid_client_metadata", error_description = "sector_identifier_uri must be an HTTPS URI" },
+                    statusCode: 400);
+            }
+
+            try
+            {
+                var httpClient = httpClientFactory.CreateClient("SectorIdentifierValidator");
+                await SectorIdentifierUriValidator.ValidateAsync(
+                    sectorUri,
+                    request.RedirectUris,
+                    httpClient,
+                    http.RequestAborted).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogWarning(ex, "/register sector_identifier_uri validation failed for pairwise client");
+                return Results.Json(
+                    new { error = "invalid_client_metadata", error_description = ex.Message },
                     statusCode: 400);
             }
         }

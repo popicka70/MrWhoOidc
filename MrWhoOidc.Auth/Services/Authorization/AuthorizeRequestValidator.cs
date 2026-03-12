@@ -182,6 +182,15 @@ public sealed class AuthorizeRequestValidator(
             normalizedClaimsJson = normalized;
         }
 
+        // RFC 9396: authorization_details (optional) — must be a JSON array where each element has a "type" field.
+        string? normalizedAuthorizationDetailsJson = null;
+        if (!string.IsNullOrWhiteSpace(request.authorization_details))
+        {
+            var authDetailsError = ValidateAuthorizationDetails(request.authorization_details, out normalizedAuthorizationDetailsJson);
+            if (authDetailsError is not null)
+                return Error(OAuthConstants.ErrorCodes.InvalidRequest, authDetailsError);
+        }
+
         return new AuthorizeValidationResult(
             IsValid: true,
             ClientId: client.ClientId,
@@ -197,7 +206,8 @@ public sealed class AuthorizeRequestValidator(
             ClaimsJson: normalizedClaimsJson,
             PromptValues: promptValues,
             MaxAgeSeconds: maxAgeSeconds ?? client.DefaultMaxAge,
-            AcrValues: acrValues ?? DeserializeDefaultAcrValues(client.DefaultAcrValuesJson)
+            AcrValues: acrValues ?? DeserializeDefaultAcrValues(client.DefaultAcrValuesJson),
+            AuthorizationDetailsJson: normalizedAuthorizationDetailsJson
         );
     }
 
@@ -212,6 +222,52 @@ public sealed class AuthorizeRequestValidator(
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Validates RFC 9396 authorization_details value: must be a JSON array where each element is an object with a "type" string field.
+    /// Returns null on success, or an error description string on failure. Sets normalizedJson to the compact-serialized form.
+    /// </summary>
+    private static string? ValidateAuthorizationDetails(string raw, out string? normalizedJson)
+    {
+        normalizedJson = null;
+        if (raw.Length > 65536)
+        {
+            return "authorization_details value exceeds maximum allowed size";
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return "authorization_details must be a JSON array";
+
+            int index = 0;
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object)
+                    return $"authorization_details[{index}] must be a JSON object";
+
+                if (!element.TryGetProperty("type", out var typeProp) || typeProp.ValueKind != JsonValueKind.String)
+                    return $"authorization_details[{index}] must contain a 'type' string field";
+
+                var typeValue = typeProp.GetString();
+                if (string.IsNullOrWhiteSpace(typeValue))
+                    return $"authorization_details[{index}].type must not be empty";
+
+                index++;
+            }
+
+            if (index == 0)
+                return "authorization_details must not be an empty array";
+
+            normalizedJson = doc.RootElement.GetRawText();
+            return null;
+        }
+        catch (JsonException)
+        {
+            return "authorization_details must be valid JSON";
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
@@ -43,6 +44,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
     {
         var dbName = "ac-strat-" + Guid.NewGuid().ToString("N");
         var clientId = "c1"; var clientSecret = "secret";
+        string capturedRawCode = string.Empty;
 
         var builder = new HostBuilder()
             .ConfigureWebHost(webBuilder =>
@@ -69,6 +71,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
@@ -107,9 +110,11 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     await db.SaveChangesAsync();
 
                     // Seed authorization code manually
+                    var rawCode = "code-" + Guid.NewGuid().ToString("N");
+                    var codeHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(rawCode)));
                     var code = new AuthorizationCode
                     {
-                        Code = "code-" + Guid.NewGuid().ToString("N"),
+                        Code = codeHash,
                         ClientId = clientId,
                         RedirectUri = "https://cb",
                         CodeChallenge = null,
@@ -121,7 +126,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     };
                     db.AuthorizationCodes.Add(code);
                     await db.SaveChangesAsync();
-                    app.Properties["code"] = code.Code;
+                    capturedRawCode = rawCode;
 
                     app.UseRouting();
                     app.UseEndpoints(endpoints =>
@@ -132,14 +137,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
             });
 
         var host = await builder.StartAsync();
-        // Simpler: open scope and fetch directly from db
-        string actualCode;
-        using (var scope2 = host.Services.CreateScope())
-        {
-            var db2 = scope2.ServiceProvider.GetRequiredService<AuthDbContext>();
-            actualCode = db2.AuthorizationCodes.Single().Code;
-        }
-        return (host, actualCode);
+        return (host, capturedRawCode);
     }
 
     [TestMethod]

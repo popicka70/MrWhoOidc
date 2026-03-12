@@ -138,7 +138,8 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
                 nonce: form[OAuthConstants.Parameters.Nonce],
                 code_challenge: form[OAuthConstants.Parameters.CodeChallenge],
                 code_challenge_method: form[OAuthConstants.Parameters.CodeChallengeMethod],
-                resource: form[OAuthConstants.Parameters.Resource]
+                resource: form[OAuthConstants.Parameters.Resource],
+                authorization_details: form[OAuthConstants.Parameters.AuthorizationDetails].ToString() is { Length: > 0 } ad ? ad : null
             );
         }
 

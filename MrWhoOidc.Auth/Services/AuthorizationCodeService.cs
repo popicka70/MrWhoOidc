@@ -50,6 +50,7 @@ internal sealed class AuthorizationCodeService(AuthDbContext db, IAuthorizationC
             Nonce = valid.Nonce,
             Resource = valid.Resource,
             ClaimsJson = valid.ClaimsJson,
+            AuthorizationDetailsJson = valid.AuthorizationDetailsJson,
             CodeChallenge = valid.CodeChallenge,
             CodeChallengeMethod = valid.CodeChallengeMethod,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(lifetimeSeconds),

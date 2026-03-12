@@ -548,6 +548,177 @@ public sealed class AuthorizeHandlerTests
         Assert.IsTrue(loc.Contains("state=state4", StringComparison.Ordinal), $"Expected state=state4; got Location='{loc}'");
     }
 
+    // RFC 9470 Step-Up Authentication tests
+
+    [TestMethod]
+    public async Task StepUp_PromptNone_AcrMismatch_Returns_InsufficientUserAuthentication()
+    {
+        // prompt=none + session ACR doesn't satisfy acr_values → RFC 9470 §2.1 error
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state5");
+
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
+        var handler = CreateHandler(
+            db,
+            validator: validator,
+            responseGenerator: responseGenerator,
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions
+            {
+                AcrValuesSupported = new[] { "urn:password", "urn:mfa" }
+            });
+
+        // User is authenticated but only has urn:password ACR (weaker than requested urn:mfa)
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new Claim(OidcConstants.Claims.Acr, "urn:password")
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "none",
+            ["acr_values"] = "urn:mfa",
+            ["state"] = "state5"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc), "Expected redirect to callback with error");
+        Assert.IsTrue(loc!.Contains("error=insufficient_user_authentication", StringComparison.Ordinal),
+            $"Expected RFC 9470 insufficient_user_authentication; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=state5", StringComparison.Ordinal), $"Expected state=state5; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task StepUp_PromptNone_SessionAcrSatisfied_Proceeds_Normally()
+    {
+        // prompt=none + session ACR matches acr_values → authorization proceeds
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state6");
+
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
+        var handler = CreateHandler(
+            db,
+            validator: validator,
+            responseGenerator: responseGenerator,
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions
+            {
+                AcrValuesSupported = new[] { "urn:mfa" }
+            });
+
+        // User is authenticated and has the required ACR
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new Claim(OidcConstants.Claims.Acr, "urn:mfa")
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "none",
+            ["acr_values"] = "urn:mfa",
+            ["state"] = "state6"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        // Should redirect with a code, not an error
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc), "Expected redirect to callback");
+        Assert.IsFalse(loc!.Contains("error=", StringComparison.Ordinal),
+            $"Expected no error; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task StepUp_NoPromptNone_AcrMismatch_Redirects_To_Login()
+    {
+        // No prompt restriction + ACR mismatch → redirect to login (not an error response)
+        using var db = CreateDb();
+
+        var validator = new StubAuthorizeRequestValidator(
+            isValid: true,
+            clientId: "test_client",
+            redirectUri: "https://app/callback",
+            scopes: new[] { "openid" },
+            state: "state7");
+
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), dataProtection);
+        var loginRedirects = new TrackingAuthenticationRedirectService();
+        var handler = CreateHandler(
+            db,
+            validator: validator,
+            responseGenerator: responseGenerator,
+            authRedirect: loginRedirects,
+            authOptions: new MrWhoOidc.Auth.Services.AuthOptions
+            {
+                AcrValuesSupported = new[] { "urn:password", "urn:mfa" }
+            });
+
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(OidcConstants.Claims.AuthTime, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
+            new Claim(OidcConstants.Claims.Acr, "urn:password")
+        }, "test"));
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["code_challenge"] = new string('a', 43),
+            ["code_challenge_method"] = "S256",
+            ["acr_values"] = "urn:mfa",
+            ["state"] = "state7"
+        };
+
+        var context = CreateHttpContext(queryParams, user);
+
+        await handler.HandleAsync(context);
+
+        Assert.IsTrue(loginRedirects.WasRedirectedToLogin, "Expected redirect to login for ACR step-up without prompt=none");
+    }
+
     [TestMethod]
     public async Task Authorize_PKCE_Required_When_Public_Client()
     {
@@ -1552,6 +1723,17 @@ public sealed class AuthorizeHandlerTests
     {
         public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
             => Task.FromResult(Results.Redirect("/login") as IResult);
+    }
+
+    private sealed class TrackingAuthenticationRedirectService : IAuthenticationRedirectService
+    {
+        public bool WasRedirectedToLogin { get; private set; }
+
+        public Task<IResult> RedirectToLoginAsync(HttpContext http, ProviderSelectionResult selection, AuthorizeValidationResult validation, string? display = null, CancellationToken ct = default)
+        {
+            WasRedirectedToLogin = true;
+            return Task.FromResult(Results.Redirect("/login") as IResult);
+        }
     }
 
     private sealed class StubAuthorizationMetadataService : IAuthorizationMetadataService

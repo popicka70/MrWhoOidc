@@ -19,5 +19,6 @@ public record AuthorizeValidationResult(
     string? ClaimsJson = null,
     string[]? PromptValues = null,
     int? MaxAgeSeconds = null,
-    string[]? AcrValues = null
+    string[]? AcrValues = null,
+    string? AuthorizationDetailsJson = null
 );

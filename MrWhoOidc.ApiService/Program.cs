@@ -462,6 +462,43 @@ app.MapGet("/test/protected", (System.Security.Claims.ClaimsPrincipal user) =>
     return Results.Ok(new { message = "OK from protected API", sub, client_id = clientId, when = DateTimeOffset.UtcNow });
 }).RequireAuthorization("api");
 
+// --- RFC 9470: Step-Up Authentication Challenge ---
+// This endpoint requires a specific ACR level (e.g. urn:mfa). If the bearer token's
+// acr claim doesn't match, it returns 401 with the WWW-Authenticate step-up challenge
+// so a smart client can re-drive the authorize flow with the correct acr_values/max_age.
+app.MapGet("/test/step-up-required", (System.Security.Claims.ClaimsPrincipal user, HttpContext ctx) =>
+{
+    const string RequiredAcr = "urn:mfa";
+    const int RequiredMaxAgeSec = 900; // 15 min
+
+    // Must be authenticated first (bearer token present and valid)
+    if (!user.Identity?.IsAuthenticated ?? true)
+    {
+        ctx.Response.Headers.WWWAuthenticate = "Bearer realm=\"api\"";
+        return Results.Unauthorized();
+    }
+
+    var acr = user.FindFirst("acr")?.Value;
+    var authTimeRaw = user.FindFirst("auth_time")?.Value;
+    DateTimeOffset? authTime = long.TryParse(authTimeRaw, out var epochSec)
+        ? DateTimeOffset.FromUnixTimeSeconds(epochSec)
+        : null;
+    var ageSec = authTime.HasValue ? (int)(DateTimeOffset.UtcNow - authTime.Value).TotalSeconds : int.MaxValue;
+
+    if (!string.Equals(acr, RequiredAcr, StringComparison.Ordinal) || ageSec > RequiredMaxAgeSec)
+    {
+        // RFC 9470 §3: resource server issues a challenge with the requirements the client must satisfy
+        ctx.Response.Headers.WWWAuthenticate =
+            $"Bearer error=\"insufficient_user_authentication\"," +
+            $" acr_values=\"{RequiredAcr}\"," +
+            $" max_age={RequiredMaxAgeSec}";
+        return Results.Unauthorized();
+    }
+
+    var sub = user.FindFirst("sub")?.Value ?? "(no sub)";
+    return Results.Ok(new { message = "High-assurance resource accessed", sub, acr, auth_time = authTimeRaw, when = DateTimeOffset.UtcNow });
+}).RequireAuthorization("api");
+
 app.Run();
 
 public sealed class AdminAuthOptions

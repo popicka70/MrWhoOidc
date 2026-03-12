@@ -497,8 +497,8 @@ public sealed class TokenHandlerTests
         var formData = new Dictionary<string, string>
         {
             ["grant_type"] = "client_credentials",
-            ["client_id"] = "mtls-e2e-client"
-            // no scope to avoid product-scope rejection
+            ["client_id"] = "mtls-e2e-client",
+            ["audience"] = "api"
         };
 
         var ctx = CreateHttpContext(formData);

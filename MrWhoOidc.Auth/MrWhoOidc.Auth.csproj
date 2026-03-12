@@ -20,7 +20,6 @@
     </PackageReference>
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.3" />
-    <PackageReference Include="Fido2" Version="4.0.0" />
   </ItemGroup>
 
   <ItemGroup>

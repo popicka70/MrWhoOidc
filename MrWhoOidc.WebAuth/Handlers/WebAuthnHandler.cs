@@ -3,11 +3,11 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Protocols;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
+using MrWhoOidc.Auth.Services.Webauthn;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using Fido2NetLib;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Logging;
@@ -109,7 +109,7 @@ public sealed class WebAuthnHandler(
 
             // Extract the attestation response
             var attestationElement = requestBody.GetProperty("attestationResponse");
-            var attestationResponse = JsonSerializer.Deserialize<AuthenticatorAttestationRawResponse>(attestationElement);
+            var attestationResponse = JsonSerializer.Deserialize<WebAuthnAttestationResponse>(attestationElement);
 
             if (attestationResponse == null)
             {
@@ -189,7 +189,7 @@ public sealed class WebAuthnHandler(
 
             // Extract the assertion response
             var assertionElement = requestBody.GetProperty("assertionResponse");
-            var assertionResponse = JsonSerializer.Deserialize<AuthenticatorAssertionRawResponse>(assertionElement);
+            var assertionResponse = JsonSerializer.Deserialize<WebAuthnAssertionResponse>(assertionElement);
 
             if (assertionResponse == null)
             {

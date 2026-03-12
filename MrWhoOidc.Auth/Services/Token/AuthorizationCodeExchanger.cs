@@ -552,7 +552,10 @@ public sealed class AuthorizationCodeExchanger(
                     refresh_token = refreshToken,
                     token_type = !string.IsNullOrEmpty(request.DpopJkt) ? "DPoP" : OAuthConstants.TokenTypes.Bearer,
                     expires_in = (int)accessTokenLifetime.TotalSeconds,
-                    scope = string.Join(' ', scopes)
+                    scope = string.Join(' ', scopes),
+                    authorization_details = string.IsNullOrWhiteSpace(entity.AuthorizationDetailsJson)
+                        ? null
+                        : JsonSerializer.Deserialize<object>(entity.AuthorizationDetailsJson)
                 };
                 return (true, payload, null, 200);
             }

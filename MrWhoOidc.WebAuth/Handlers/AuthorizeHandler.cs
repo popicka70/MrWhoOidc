@@ -230,11 +230,13 @@ public sealed class AuthorizeHandler(
                     if (hasPromptNone)
                     {
                         outcome = "prompt_none_acr";
+                        // RFC 9470 §2.1: use insufficient_user_authentication when ACR requirement cannot
+                        // be satisfied without interaction, rather than the generic interaction_required.
                         return responseGenerator.CreateErrorResponse(
                             http,
                             validationResult with
                             {
-                                Error = "interaction_required",
+                                Error = "insufficient_user_authentication",
                                 ErrorDescription = "Silent authentication requested but the requested ACR cannot be satisfied by the current session"
                             },
                             corr);

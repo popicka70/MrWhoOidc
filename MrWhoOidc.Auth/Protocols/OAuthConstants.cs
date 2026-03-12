@@ -59,6 +59,9 @@ public static class OAuthConstants
         public const string Display = "display";
         public const string UiLocales = "ui_locales";
 
+        // RFC 9396 Rich Authorization Requests
+        public const string AuthorizationDetails = "authorization_details";
+
         // CIBA parameters (OpenID Connect CIBA Core 1.0)
         public const string AuthReqId = "auth_req_id";
         public const string LoginHint = "login_hint";
@@ -130,6 +133,8 @@ public static class OAuthConstants
         public const string InvalidBindingMessage = "invalid_binding_message";
         /// <summary>CIBA: Transaction failed (generic).</summary>
         public const string TransactionFailed = "transaction_failed";
+        /// <summary>RFC 9470: The authentication event associated with the access token does not satisfy the authentication requirements.</summary>
+        public const string InsufficientUserAuthentication = "insufficient_user_authentication";
     }
 
     /// <summary>
