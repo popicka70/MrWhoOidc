@@ -67,6 +67,7 @@ public sealed class ClientCredentialsGrantStrategyTests
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();

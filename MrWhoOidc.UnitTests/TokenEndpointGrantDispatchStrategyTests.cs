@@ -70,6 +70,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     // Only register refresh_token handler in this focused dispatch test host to keep scope narrow

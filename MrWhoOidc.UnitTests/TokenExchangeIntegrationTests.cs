@@ -76,6 +76,7 @@ public sealed class TokenExchangeIntegrationTests
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<MrWhoOidc.WebAuth.Handlers.ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     // Register grant handlers explicitly for strategy dispatch
                     services.AddScoped<MrWhoOidc.WebAuth.TokenEndpoint.Grants.ITokenGrantHandler, MrWhoOidc.WebAuth.TokenEndpoint.Grants.AuthorizationCodeGrantHandler>();
