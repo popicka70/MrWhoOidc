@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;using Microsoft.EntityFrameworkCore.Diagnostics;using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using Microsoft.Extensions.Hosting;
@@ -51,7 +50,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                 webBuilder.ConfigureServices(services =>
                 {
                     services.AddRouting();
-                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName));
+                    services.AddDbContext<AuthDbContext>(opts => opts.UseInMemoryDatabase(dbName).ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
                     services.AddMrWhoOidcAuthCore();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
@@ -69,6 +68,7 @@ public sealed class TokenEndpointGrantDispatchStrategyTests
                     services.AddSingleton<MrWhoOidc.Security.IDPoPValidator, TestCryptoDpopValidator>();
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();

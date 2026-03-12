@@ -260,9 +260,9 @@ public sealed class DiscoveryHandler(
             // DPoP is optional per-request here, so we advertise supported algorithms above
             // and leave this flag false to avoid misleading strictly-conformant clients.
             ["dpop_bound_access_tokens"] = false,
-            // tls_client_certificate_bound_access_tokens = true means ALL tokens are cert-bound (RFC 8705).
-            // mTLS is optional here, so we set this to false.
-            ["tls_client_certificate_bound_access_tokens"] = false
+            // tls_client_certificate_bound_access_tokens = true means per-client cert-bound access tokens
+            // are supported (RFC 8705). Clients opt in via per-client mTLS configuration.
+            ["tls_client_certificate_bound_access_tokens"] = true
         };
 
         if (authOptions.Value.EnableRequestObjectEncryption)

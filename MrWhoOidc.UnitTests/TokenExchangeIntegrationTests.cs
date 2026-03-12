@@ -59,6 +59,7 @@ public sealed class TokenExchangeIntegrationTests
                     // Core auth services (TokenService, JwtService, etc.)
                     services.AddMrWhoOidcAuthCore();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
 
                     // Override ITenantAccessor with test implementation that automatically sets default tenant
                     services.AddScoped<MrWhoOidc.Auth.MultiTenancy.ITenantAccessor>(sp =>
