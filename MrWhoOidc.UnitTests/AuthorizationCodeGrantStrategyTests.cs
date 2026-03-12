@@ -70,6 +70,7 @@ public sealed class AuthorizationCodeGrantStrategyTests
                     services.AddSingleton<MrWhoOidc.Security.IDPoPReplayCache, MrWhoOidc.Security.InMemoryDPoPReplayCache>();
                     services.AddSingleton<IFeatureService, StubFeatureService>();
                     services.AddScoped<IClientAuthenticator, ClientAuthenticator>();
+                    services.AddSingleton<IAuditSink, NoopAuditSink>();
                     services.AddScoped<ITokenHandler, MrWhoOidc.WebAuth.Handlers.TokenHandler>();
                     services.AddScoped<ITokenGrantHandler, RefreshTokenGrantHandler>();
                     services.AddScoped<ITokenGrantHandler, AuthorizationCodeGrantHandler>();
