@@ -2,150 +2,141 @@
 E2E tests for publicly accessible (unauthenticated) pages.
 
 Pages covered:
-  /         – Home / Landing
-  /login    – Login page
-  /Privacy  – Privacy policy
+  /         -- Home / Landing
+  /login    -- Login page
+  /Privacy  -- Privacy policy
+  /Account/ForgotPassword -- Forgot password
+  /select-tenant          -- Tenant selector
+  /.well-known/openid-configuration -- OIDC discovery
+  /jwks                   -- JWKS endpoint
+  /NotFound               -- 404 handler (any unknown path)
 """
 
 from __future__ import annotations
 
 import pytest
-from playwright.async_api import Page, expect
+from playwright.sync_api import Page, expect
 
+
+def _assert_evaluation(result, *, min_score: int = 4) -> None:
+    if result.skipped:
+        return
+    if result.error:
+        pytest.skip(f"LLM evaluation error: {result.error}")
+    assert result.overall_score >= min_score, (
+        f"Page '{result.route}' scored {result.overall_score}/10 -- below {min_score}.\n"
+        f"Summary: {result.summary}"
+    )
 
 
 class TestHomePage:
-    """Tests for the home/landing page."""
-
-    async def test_home_page_loads(self, page: Page, record_evaluation, base_url):
-        await page.goto("/", wait_until="domcontentloaded")
-
-        # Basic DOM assertions
-        await expect(page).to_have_title(lambda t: len(t) > 0)
-        # Check navigation sidebar or header is present
-        assert await page.locator("nav, aside, header").count() > 0, "No navigation element found"
-
-        result = await record_evaluation(page, "/")
+    def test_home_page_loads(self, page: Page, record_evaluation):
+        page.goto("/", wait_until="domcontentloaded")
+        expect(page).to_have_title(lambda t: len(t) > 0)
+        assert page.locator("nav, aside, header").count() > 0, "No navigation element found"
+        result = record_evaluation(page, "/")
         _assert_evaluation(result, min_score=5)
 
-    async def test_home_page_discovery_link(self, page: Page, base_url):
-        """The home page should have a link to OIDC discovery or JWKS."""
-        await page.goto("/", wait_until="domcontentloaded")
-
-        # Look for any link pointing to the OIDC discovery endpoint
-        discovery_links = await page.locator(
+    def test_home_page_discovery_link(self, page: Page):
+        page.goto("/", wait_until="domcontentloaded")
+        links = page.locator(
             "a[href*='openid-configuration'], a[href*='jwks'], a[href*='discovery']"
         ).count()
-        assert discovery_links > 0, "No OIDC discovery or JWKS link found on home page"
+        assert links > 0, "No OIDC discovery or JWKS link on home page"
 
-    async def test_home_page_no_console_errors(self, page: Page, base_url):
-        """No JavaScript console errors on the home page."""
+    def test_home_page_no_console_errors(self, page: Page):
         errors: list[str] = []
         page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
-        await page.goto("/", wait_until="domcontentloaded")
+        page.goto("/", wait_until="domcontentloaded")
         hard_errors = [e for e in errors if "favicon" not in e.lower()]
         assert not hard_errors, f"Console errors on home page: {hard_errors}"
 
 
 class TestLoginPage:
-    """Tests for the /login page."""
-
-    async def test_login_page_loads(self, page: Page, record_evaluation):
-        await page.goto("/login", wait_until="domcontentloaded")
-
-        # Verify key form elements
-        await expect(page.locator("input#Username")).to_be_visible()
-        await expect(page.locator("input#Password")).to_be_visible()
-        await expect(page.locator("button[type='submit']")).to_be_visible()
-
-        result = await record_evaluation(page, "/login")
+    def test_login_page_loads(self, page: Page, record_evaluation):
+        page.goto("/login", wait_until="domcontentloaded")
+        expect(page.locator("input#Username")).to_be_visible()
+        expect(page.locator("input#Password")).to_be_visible()
+        expect(page.locator("button[type='submit']")).to_be_visible()
+        result = record_evaluation(page, "/login")
         _assert_evaluation(result, min_score=5)
 
-    async def test_login_page_invalid_credentials_shows_error(self, page: Page, record_evaluation):
-        await page.goto("/login", wait_until="domcontentloaded")
-
-        await page.locator("input#Username").fill("nonexistent@bad.local")
-        await page.locator("input#Password").fill("WrongPassword999!")
-        await page.locator("button[type='submit']").click()
-
-        # Should stay on login, show error
+    def test_login_page_invalid_credentials_shows_error(self, page: Page, record_evaluation):
+        page.goto("/login", wait_until="domcontentloaded")
+        page.locator("input#Username").fill("nonexistent@bad.local")
+        page.locator("input#Password").fill("WrongPassword999!")
+        page.locator("button[type='submit']").click()
         assert "/login" in page.url, f"Expected to stay on /login, got {page.url}"
         error_element = page.locator(".alert-danger, .text-danger, [role='alert']").first
-        await expect(error_element).to_be_visible()
+        expect(error_element).to_be_visible()
+        record_evaluation(page, "/login", label="error-state")
 
-        result = await record_evaluation(page, "/login", label="error-state")
-        # Error state is still valid UI — just capture and record
-
-    async def test_login_password_field_masked(self, page: Page):
-        """Password input must mask characters."""
-        await page.goto("/login", wait_until="domcontentloaded")
-        pwd_input = page.locator("input#Password")
-        field_type = await pwd_input.get_attribute("type")
+    def test_login_password_field_masked(self, page: Page):
+        page.goto("/login", wait_until="domcontentloaded")
+        field_type = page.locator("input#Password").get_attribute("type")
         assert field_type == "password", "Password field must be type='password'"
 
-    async def test_login_page_title(self, page: Page):
-        await page.goto("/login", wait_until="domcontentloaded")
-        title = await page.title()
-        assert "login" in title.lower() or "sign" in title.lower() or "mrwho" in title.lower(), (
-            f"Unexpected page title: {title}"
-        )
+    def test_login_page_title(self, page: Page):
+        page.goto("/login", wait_until="domcontentloaded")
+        title = page.title()
+        assert (
+            "login" in title.lower() or "sign" in title.lower() or "mrwho" in title.lower()
+        ), f"Unexpected page title: {title}"
 
 
 class TestPrivacyPage:
-    """Tests for the /Privacy page."""
-
-    async def test_privacy_page_loads(self, page: Page, record_evaluation):
-        await page.goto("/Privacy", wait_until="domcontentloaded")
-
-        title = await page.title()
+    def test_privacy_page_loads(self, page: Page, record_evaluation):
+        page.goto("/Privacy", wait_until="domcontentloaded")
+        title = page.title()
         assert len(title) > 0, "Privacy page has no title"
-
-        content = await page.inner_text("body")
+        content = page.inner_text("body")
         assert len(content) > 50, "Privacy page appears to have no content"
-
-        result = await record_evaluation(page, "/Privacy")
+        result = record_evaluation(page, "/Privacy")
         _assert_evaluation(result, min_score=4)
 
 
-class TestDiscoveryEndpoints:
-    """Verify the OIDC discovery and JWKS endpoints are reachable."""
+class TestForgotPasswordPage:
+    def test_forgot_password_page_loads(self, page: Page, record_evaluation):
+        page.goto("/Account/ForgotPassword", wait_until="domcontentloaded")
+        # May redirect to login or show a form -- both are valid
+        if "/login" in page.url:
+            pytest.skip("ForgotPassword redirects to login (auth required in this config)")
+        result = record_evaluation(page, "/Account/ForgotPassword")
+        _assert_evaluation(result, min_score=3)
 
-    async def test_oidc_discovery_returns_json(self, page: Page):
-        response = await page.request.get("/.well-known/openid-configuration")
+
+class TestSelectTenantPage:
+    def test_select_tenant_page_loads(self, page: Page, record_evaluation):
+        page.goto("/select-tenant", wait_until="domcontentloaded")
+        # May redirect if single-tenant
+        if "/login" in page.url or "/" == page.url.rstrip("/").split("://", 1)[-1].split("/", 1)[-1:][0:1]:
+            pytest.skip("select-tenant redirects (single-tenant mode)")
+        result = record_evaluation(page, "/select-tenant")
+        _assert_evaluation(result, min_score=3)
+
+
+class TestNotFoundPage:
+    def test_not_found_page_loads(self, page: Page, record_evaluation):
+        page.goto("/this-page-definitely-does-not-exist-xyz123", wait_until="domcontentloaded")
+        # Should show 404 / NotFound page, not a crash
+        body = page.inner_text("body")
+        assert len(body) > 10, "404 page has no content"
+        result = record_evaluation(page, "/not-found")
+        _assert_evaluation(result, min_score=2)
+
+
+class TestDiscoveryEndpoints:
+    def test_oidc_discovery_returns_json(self, page: Page):
+        response = page.request.get("/.well-known/openid-configuration")
         assert response.status == 200, f"Discovery endpoint returned {response.status}"
-        data = await response.json()
-        assert "issuer" in data, "Discovery JSON missing 'issuer' field"
+        data = response.json()
+        assert "issuer" in data, "Discovery JSON missing 'issuer'"
         assert "authorization_endpoint" in data, "Discovery JSON missing 'authorization_endpoint'"
         assert "jwks_uri" in data, "Discovery JSON missing 'jwks_uri'"
 
-    async def test_jwks_endpoint_returns_keys(self, page: Page):
-        response = await page.request.get("/jwks")
+    def test_jwks_endpoint_returns_keys(self, page: Page):
+        response = page.request.get("/jwks")
         assert response.status == 200, f"JWKS endpoint returned {response.status}"
-        data = await response.json()
+        data = response.json()
         assert "keys" in data, "JWKS response missing 'keys' array"
         assert len(data["keys"]) > 0, "JWKS endpoint returned empty keys array"
-
-
-# ---------------------------------------------------------------------------
-# Assertion helpers
-# ---------------------------------------------------------------------------
-
-
-def _assert_evaluation(result, *, min_score: int = 4) -> None:
-    """For LLM evaluations: log issues but only hard-fail on critical low scores."""
-    if result.skipped:
-        return  # No API key — gracefully skip
-    if result.error:
-        pytest.skip(f"LLM evaluation error (non-blocking): {result.error}")
-
-    high_issues = result.high_issues
-    if high_issues:
-        issues_text = "; ".join(i["description"] for i in high_issues)
-        pytest.fail(  # noqa: PT017
-            f"Page '{result.route}' has HIGH severity UI issues (score={result.overall_score}):\n{issues_text}"
-        ) if result.overall_score < min_score else None
-
-    assert result.overall_score >= min_score, (
-        f"Page '{result.route}' scored {result.overall_score}/10 — below minimum {min_score}.\n"
-        f"Summary: {result.summary}"
-    )

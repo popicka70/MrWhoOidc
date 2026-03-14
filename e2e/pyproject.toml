@@ -3,17 +3,8 @@ testpaths = ["tests"]
 addopts = [
     "-v",
     "--tb=short",
-    "--browser=chromium",
-    "--ignore-glob=**/conftest.py",
 ]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-
-[tool.pytest.playwright]
-base_url = "https://localhost:8443"
-browser = "chromium"
-headed = false
-slow_mo = 0

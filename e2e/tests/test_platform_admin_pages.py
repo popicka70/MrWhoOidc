@@ -1,54 +1,53 @@
 """
-E2E tests for Platform Admin pages (requires platform-admin role on default tenant).
+E2E tests for Platform Admin pages (requires platform-admin role).
 
 Pages covered:
-  /PlatformAdmin                    – Dashboard
-  /PlatformAdmin/Tenants            – Tenant list
-  /PlatformAdmin/Tenants/Create     – Create tenant
-  /PlatformAdmin/Impersonation      – Impersonation control panel
-  /PlatformAdmin/ImpersonationHistory – Impersonation audit log
-  /PlatformAdmin/Settings           – Platform settings
-  /admin/license/platform           – Platform license
-  /admin/license/platform/install   – Install license
-  /admin/license/platform/history   – License history
+  /platform-admin                   -- Dashboard
+  /platform-admin/tenants           -- Tenant list
+  /platform-admin/tenants/create    -- Create tenant
+  /platform-admin/tenants/edit/{id} -- Edit tenant (first found)
+  /platform-admin/tenants/import    -- Import tenants
+  /platform-admin/impersonation     -- Impersonation control panel
+  /platform-admin/impersonation-history -- Impersonation audit log
+  /platform-admin/settings          -- Platform settings
+  /admin/license/platform           -- Platform license
+  /admin/license/platform/install   -- Install license
+  /admin/license/platform/history   -- License history
 """
 
 from __future__ import annotations
 
+import re
+
 import pytest
-from playwright.async_api import Page, expect
-
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
+from playwright.sync_api import Page, expect
 
 
 def _assert_evaluation(result, *, min_score: int = 5) -> None:
     if result.skipped:
         return
     if result.error:
-        pytest.skip(f"LLM evaluation error (non-blocking): {result.error}")
+        pytest.skip(f"LLM evaluation error: {result.error}")
     assert result.overall_score >= min_score, (
-        f"Page '{result.route}' scored {result.overall_score}/10 — below minimum {min_score}.\n"
+        f"Page '{result.route}' scored {result.overall_score}/10 -- below {min_score}.\n"
         f"Summary: {result.summary}"
     )
 
 
-async def _goto_platform(page: Page, path: str) -> bool:
-    """
-    Navigate to a platform admin page.
-    Returns False and skips if the page is gated (e.g., license or access denied).
-    """
-    await page.goto(path, wait_until="domcontentloaded")
-
+def _goto_platform(page: Page, path: str) -> None:
+    page.goto(path, wait_until="domcontentloaded")
     if "/login" in page.url:
-        pytest.skip(f"Redirected to login when accessing {path} — auth expired or role missing")
+        pytest.skip(f"Redirected to login for {path} -- auth expired or role missing")
+    url_lower = page.url.lower()
+    if "accessdenied" in url_lower or "forbidden" in url_lower or "access-denied" in url_lower:
+        pytest.skip(f"Access denied to {path} -- user may lack platform-admin role")
 
-    if "accessdenied" in page.url.lower() or "forbidden" in page.url.lower():
-        pytest.skip(f"Access denied to {path} — user may lack platform-admin role")
 
-    return True
+def _extract_guid_from_url(url: str) -> str | None:
+    m = re.search(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", url, re.IGNORECASE
+    )
+    return m.group(0) if m else None
 
 
 # ---------------------------------------------------------------------------
@@ -57,18 +56,17 @@ async def _goto_platform(page: Page, path: str) -> bool:
 
 
 class TestPlatformAdminDashboard:
-    async def test_dashboard_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin")
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin")
+    def test_dashboard_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin")
+        result = record_evaluation(authenticated_page, "/platform-admin")
         _assert_evaluation(result)
 
-    async def test_dashboard_has_navigation_links(self, authenticated_page: Page):
-        await _goto_platform(authenticated_page, "/PlatformAdmin")
+    def test_dashboard_has_navigation_links(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin")
         nav_links = authenticated_page.locator(
-            "a[href*='Tenants'], a[href*='Impersonation'], a[href*='Settings'], a[href*='license']"
+            "a[href*='tenants'], a[href*='impersonation'], a[href*='settings'], a[href*='license']"
         )
-        count = await nav_links.count()
-        assert count >= 2, f"Expected platform admin nav links, found only {count}"
+        assert nav_links.count() >= 2, "Expected platform admin nav links"
 
 
 # ---------------------------------------------------------------------------
@@ -77,28 +75,45 @@ class TestPlatformAdminDashboard:
 
 
 class TestPlatformAdminTenants:
-    async def test_tenant_list_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Tenants")
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin/Tenants")
+    def test_tenant_list_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/tenants")
+        result = record_evaluation(authenticated_page, "/platform-admin/tenants")
         _assert_evaluation(result)
 
-    async def test_tenant_list_has_default_tenant(self, authenticated_page: Page):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Tenants")
-        body = await authenticated_page.inner_text("body")
-        assert "default" in body.lower(), "Expected 'default' tenant in the tenant list"
+    def test_tenant_list_has_default_tenant(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin/tenants")
+        body = authenticated_page.inner_text("body")
+        assert "default" in body.lower(), "'default' tenant not found in list"
 
-    async def test_create_tenant_page_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Tenants/Create")
-        await expect(authenticated_page.locator("form")).to_be_visible()
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin/Tenants/Create")
+    def test_create_tenant_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/tenants/create")
+        expect(authenticated_page.locator("form")).to_be_visible()
+        result = record_evaluation(authenticated_page, "/platform-admin/tenants/create")
         _assert_evaluation(result)
 
-    async def test_create_tenant_form_has_slug_field(self, authenticated_page: Page):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Tenants/Create")
+    def test_create_tenant_form_has_slug_field(self, authenticated_page: Page):
+        _goto_platform(authenticated_page, "/platform-admin/tenants/create")
         slug_input = authenticated_page.locator(
             "input[id*='Slug'], input[name*='Slug'], input[id*='slug'], input[name*='slug']"
         )
-        await expect(slug_input).to_be_visible()
+        expect(slug_input).to_be_visible()
+
+    def test_tenant_edit_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/tenants")
+        edit_link = authenticated_page.locator("a:has-text('Edit')").first
+        if edit_link.count() == 0 or not edit_link.is_visible():
+            pytest.skip("No tenants available to edit")
+        edit_link.click()
+        authenticated_page.wait_for_load_state("domcontentloaded")
+        if "/login" in authenticated_page.url:
+            pytest.skip("Redirected to login")
+        result = record_evaluation(authenticated_page, "/platform-admin/tenants/edit")
+        _assert_evaluation(result)
+
+    def test_tenant_import_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/PlatformAdmin/Tenants/Import")
+        result = record_evaluation(authenticated_page, "/platform-admin/tenants/import")
+        _assert_evaluation(result, min_score=3)
 
 
 # ---------------------------------------------------------------------------
@@ -107,14 +122,14 @@ class TestPlatformAdminTenants:
 
 
 class TestPlatformAdminImpersonation:
-    async def test_impersonation_page_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Impersonation")
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin/Impersonation")
+    def test_impersonation_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/impersonation")
+        result = record_evaluation(authenticated_page, "/platform-admin/impersonation")
         _assert_evaluation(result)
 
-    async def test_impersonation_history_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/ImpersonationHistory")
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin/ImpersonationHistory")
+    def test_impersonation_history_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/impersonation-history")
+        result = record_evaluation(authenticated_page, "/platform-admin/impersonation-history")
         _assert_evaluation(result)
 
 
@@ -124,9 +139,9 @@ class TestPlatformAdminImpersonation:
 
 
 class TestPlatformAdminSettings:
-    async def test_platform_settings_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/PlatformAdmin/Settings")
-        result = await record_evaluation(authenticated_page, "/PlatformAdmin/Settings")
+    def test_platform_settings_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/platform-admin/settings")
+        result = record_evaluation(authenticated_page, "/platform-admin/settings")
         _assert_evaluation(result)
 
 
@@ -136,17 +151,17 @@ class TestPlatformAdminSettings:
 
 
 class TestPlatformLicense:
-    async def test_platform_license_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/admin/license/platform")
-        result = await record_evaluation(authenticated_page, "/admin/license/platform")
+    def test_platform_license_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/admin/license/platform")
+        result = record_evaluation(authenticated_page, "/admin/license/platform")
         _assert_evaluation(result)
 
-    async def test_license_install_page_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/admin/license/platform/install")
-        result = await record_evaluation(authenticated_page, "/admin/license/platform/install")
+    def test_license_install_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/admin/license/platform/install")
+        result = record_evaluation(authenticated_page, "/admin/license/platform/install")
         _assert_evaluation(result)
 
-    async def test_license_history_page_loads(self, authenticated_page: Page, record_evaluation):
-        await _goto_platform(authenticated_page, "/admin/license/platform/history")
-        result = await record_evaluation(authenticated_page, "/admin/license/platform/history")
+    def test_license_history_page_loads(self, authenticated_page: Page, record_evaluation):
+        _goto_platform(authenticated_page, "/admin/license/platform/history")
+        result = record_evaluation(authenticated_page, "/admin/license/platform/history")
         _assert_evaluation(result)
