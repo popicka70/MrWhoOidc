@@ -238,6 +238,62 @@
       border-left: 3px solid #1a7f37;
     }
 
+    /* ── Plan section ── */
+    .plan-section { margin-bottom: 40px; }
+    .plan-group { margin-bottom: 24px; }
+    .plan-group-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6e7681;
+      margin-bottom: 10px;
+    }
+    .plan-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .plan-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.875rem;
+      padding: 10px 14px;
+      border-radius: 8px;
+    }
+    .plan-item-high { background: #fff1f0; border: 1px solid #ffc9c7; }
+    .plan-item-medium { background: #fff8f0; border: 1px solid #fde68a; }
+    .plan-item-low { background: #f6f8fa; border: 1px solid #e1e4e8; }
+    .plan-item-rec { background: #f0fff4; border: 1px solid #b7e4c7; }
+    .plan-item-attn { background: #fff8f0; border: 1px solid #fde68a; }
+    .plan-item-err { background: #fff1f0; border: 1px solid #ffc9c7; }
+    .plan-item .plan-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .plan-badge-high { background: #cf222e; color: #fff; }
+    .plan-badge-medium { background: #fb923c; color: #fff; }
+    .plan-badge-low { background: #6e7681; color: #fff; }
+    .plan-badge-rec { background: #1a7f37; color: #fff; }
+    .plan-badge-attn { background: #9a3412; color: #fff; }
+    .plan-badge-err { background: #cf222e; color: #fff; }
+    .plan-item .plan-body { flex: 1; }
+    .plan-item .plan-page { font-weight: 600; color: #0969da; text-decoration: none; }
+    .plan-item .plan-page:hover { text-decoration: underline; }
+    .plan-item .plan-routes { font-size: 0.78rem; color: #57606a; margin-top: 3px; }
+    .plan-empty { font-size: 0.9rem; color: #57606a; padding: 12px 0; }
+    .plan-download {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 0.8rem;
+      color: #0969da;
+      text-decoration: none;
+    }
+    .plan-download:hover { text-decoration: underline; }
+
     /* ── TOC ── */
     .toc {
       background: #fff;
@@ -346,6 +402,124 @@
     </tbody>
   </table>
   {% endif %}
+
+  <!-- ── Improvement Plan ── -->
+  {% set total_plan_items = plan.high_issues|length + plan.medium_issues|length + plan.low_issues|length + plan.recommendations|length + plan.pages_needing_attention|length + plan.errored_pages|length %}
+  <div class="plan-section">
+    <h2 class="section-title">
+      Improvement Plan
+      <a class="plan-download" href="plan.md" download>⬇ Download plan.md</a>
+    </h2>
+
+    {% if total_plan_items == 0 %}
+      <p class="plan-empty">No issues or recommendations recorded — run more tests to populate this plan.</p>
+    {% else %}
+
+      {% if plan.pages_needing_attention %}
+      <div class="plan-group">
+        <div class="plan-group-title">Pages Needing Attention (score ≤ 5) — {{ plan.pages_needing_attention|length }} pages</div>
+        <ul class="plan-list">
+          {% for p in plan.pages_needing_attention %}
+          <li class="plan-item plan-item-attn">
+            <span class="plan-badge plan-badge-attn">{{ p.score }}/10</span>
+            <div class="plan-body">
+              <a class="plan-page" href="#{{ p.route | replace('/', '-') | trim('-') }}">{{ p.page_name }}</a>
+              <span style="color:#6e7681;"> — score {{ p.score }}/10</span>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if plan.high_issues %}
+      <div class="plan-group">
+        <div class="plan-group-title">High Priority Issues — {{ plan.high_issues|length }} items</div>
+        <ul class="plan-list">
+          {% for item in plan.high_issues %}
+          <li class="plan-item plan-item-high">
+            <span class="plan-badge plan-badge-high">High</span>
+            <div class="plan-body">
+              <a class="plan-page" href="#{{ item.route | replace('/', '-') | trim('-') }}">{{ item.page_name }}</a>
+              — {{ item.description }}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if plan.medium_issues %}
+      <div class="plan-group">
+        <div class="plan-group-title">Medium Priority Issues — {{ plan.medium_issues|length }} items</div>
+        <ul class="plan-list">
+          {% for item in plan.medium_issues %}
+          <li class="plan-item plan-item-medium">
+            <span class="plan-badge plan-badge-medium">Medium</span>
+            <div class="plan-body">
+              <a class="plan-page" href="#{{ item.route | replace('/', '-') | trim('-') }}">{{ item.page_name }}</a>
+              — {{ item.description }}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if plan.low_issues %}
+      <div class="plan-group">
+        <div class="plan-group-title">Low Priority Issues — {{ plan.low_issues|length }} items</div>
+        <ul class="plan-list">
+          {% for item in plan.low_issues %}
+          <li class="plan-item plan-item-low">
+            <span class="plan-badge plan-badge-low">Low</span>
+            <div class="plan-body">
+              <a class="plan-page" href="#{{ item.route | replace('/', '-') | trim('-') }}">{{ item.page_name }}</a>
+              — {{ item.description }}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if plan.recommendations %}
+      <div class="plan-group">
+        <div class="plan-group-title">Recommendations — {{ plan.recommendations|length }} items</div>
+        <ul class="plan-list">
+          {% for rec in plan.recommendations %}
+          <li class="plan-item plan-item-rec">
+            <span class="plan-badge plan-badge-rec">Rec</span>
+            <div class="plan-body">
+              {{ rec.text }}
+              {% if rec.routes %}
+              <div class="plan-routes">Affects: {% for r in rec.routes %}<a href="#{{ r | replace('/', '-') | trim('-') }}" style="color:#57606a;"><code>{{ r }}</code></a>{% if not loop.last %}, {% endif %}{% endfor %}</div>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if plan.errored_pages %}
+      <div class="plan-group">
+        <div class="plan-group-title">Test Errors — {{ plan.errored_pages|length }} pages</div>
+        <ul class="plan-list">
+          {% for p in plan.errored_pages %}
+          <li class="plan-item plan-item-err">
+            <span class="plan-badge plan-badge-err">Error</span>
+            <div class="plan-body">
+              <code>{{ p.route }}</code> — {{ p.error }}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+    {% endif %}
+  </div>
 
   <!-- ── Table of contents ── -->
   <div class="toc">

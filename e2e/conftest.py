@@ -84,11 +84,12 @@ def report_generator(run_id: str) -> ReportGenerator:
 @pytest.fixture(scope="session", autouse=True)
 def finalize_report(report_generator: ReportGenerator):
     yield
-    json_path, html_path = report_generator.finalize()
+    json_path, html_path, plan_path = report_generator.finalize()
     print(f"\n\n{'='*60}")
     print(f"  E2E Evaluation Report written:")
     print(f"    JSON : {json_path}")
     print(f"    HTML : {html_path}")
+    print(f"    Plan : {plan_path}")
     print(f"{'='*60}\n")
 
 
