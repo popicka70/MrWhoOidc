@@ -380,19 +380,33 @@ body {
 }
 
 .text-bg-success {
-  background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
+  background-color: var(--fluent-color-success, #107C10) !important;
+  color: #fff !important;
 }
 
 .text-bg-primary {
-  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+  background-color: var(--fluent-color-brand-primary, #4F46E5) !important;
+  color: #fff !important;
 }
 
 .text-bg-secondary {
-  background-color: #6c757d !important;
+  background-color: var(--fluent-color-neutral-background-5, #6c757d) !important;
+  color: var(--fluent-color-neutral-foreground-1, #fff) !important;
 }
 
 .text-bg-danger {
-  background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%) !important;
+  background-color: var(--fluent-color-error, #dc3545) !important;
+  color: #fff !important;
+}
+
+.text-bg-info {
+  background-color: var(--fluent-color-info, #00B7C3) !important;
+  color: #fff !important;
+}
+
+.text-bg-warning {
+  background-color: var(--fluent-color-warning, #f0ad00) !important;
+  color: #000 !important;
 }
 
 /* FORMS */

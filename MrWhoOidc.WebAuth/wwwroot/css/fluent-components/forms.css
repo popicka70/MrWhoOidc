@@ -435,9 +435,20 @@ input.is-invalid:focus,
   box-shadow: 0 0 0 1px var(--fluent-color-error);
 }
 
-.invalid-feedback,
-.text-danger {
+.invalid-feedback {
   display: none;
+  margin-top: var(--fluent-space-4);
+  font-size: var(--fluent-font-size-200);
+  color: var(--fluent-color-error-foreground);
+}
+
+/* Hide validation spans that are empty (server-side: populated spans remain visible) */
+.text-danger:empty,
+span.field-validation-valid {
+  display: none;
+}
+
+.text-danger {
   margin-top: var(--fluent-space-4);
   font-size: var(--fluent-font-size-200);
   color: var(--fluent-color-error-foreground);
@@ -448,6 +459,24 @@ input.is-invalid:focus,
 .is-invalid ~ .text-danger,
 .was-validated :invalid ~ .text-danger {
   display: block;
+}
+
+/* ============================================
+   ASP.NET CORE VALIDATION CLASS SUPPORT
+   ============================================ */
+
+/* Inputs marked invalid by jQuery Validate */
+.input-validation-error {
+  border-color: var(--fluent-color-error) !important;
+  box-shadow: 0 0 0 1px var(--fluent-color-error) !important;
+}
+
+/* Validation error spans (server-side + client-side) */
+span.field-validation-error {
+  display: block;
+  margin-top: var(--fluent-space-4);
+  font-size: var(--fluent-font-size-200);
+  color: var(--fluent-color-error-foreground);
 }
 
 /* ============================================

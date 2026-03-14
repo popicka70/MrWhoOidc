@@ -23,7 +23,7 @@
 }
 
 <form method="post">
-    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-3" role="alert"></div>
     <div class="mb-3">
         <label asp-for="Input.Name" class="form-label"></label>
         <input asp-for="Input.Name" class="form-control" />
@@ -44,8 +44,10 @@
         </div>
         <span asp-validation-for="Input.AllowUnconfirmedLogin" class="text-danger"></span>
     </div>
-    <button type="submit" class="btn btn-primary">Save</button>
-    <a href="@realmsIndexPath" class="btn btn-secondary">Back</a>
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="@realmsIndexPath" class="btn btn-secondary">Back</a>
+    </div>
 </form>
 
 @section Scripts{

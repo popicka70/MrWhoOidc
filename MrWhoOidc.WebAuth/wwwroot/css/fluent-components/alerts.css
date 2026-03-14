@@ -69,6 +69,11 @@
   color: var(--fluent-color-error-foreground);
 }
 
+/* Hide validation summary alerts that have no content (no server-side errors) */
+.alert-danger:empty {
+  display: none;
+}
+
 .alert-warning {
   background-color: var(--fluent-color-warning-background);
   border-left-color: var(--fluent-color-warning);
