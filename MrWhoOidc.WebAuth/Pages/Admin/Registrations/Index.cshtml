@@ -33,6 +33,15 @@
                 </tr>
             </thead>
             <tbody>
+            @if (!Model.Items.Any())
+            {
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        <i class="ph ph-clipboard-text icon-2xl d-block mb-2"></i>
+                        No registrations found.
+                    </td>
+                </tr>
+            }
             @foreach (var r in Model.Items)
             {
                 <tr>

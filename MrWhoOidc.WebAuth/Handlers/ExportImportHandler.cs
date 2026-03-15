@@ -272,7 +272,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/realms/import/preview
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> PreviewRealmImport(
         [FromBody] ImportRealmRequest request,
         [FromServices] IConfigurationImportService importService,
@@ -341,7 +341,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/realms/import
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> ImportRealm(
         [FromBody] ImportRealmRequest request,
         [FromServices] IConfigurationImportService importService,
@@ -413,7 +413,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/clients/import/preview
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> PreviewClientImport(
         [FromBody] ImportClientRequest request,
         [FromServices] AuthDbContext dbContext,
@@ -496,7 +496,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/clients/import
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> ImportClient(
         [FromBody] ImportClientRequest request,
         [FromServices] IConfigurationImportService importService,
@@ -590,7 +590,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/providers/import/preview
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> PreviewProviderImport(
         [FromBody] ImportProviderRequest request,
         [FromServices] AuthDbContext dbContext,
@@ -657,7 +657,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/providers/import
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> ImportProvider(
         [FromBody] ImportProviderRequest request,
         [FromServices] IConfigurationImportService importService,
@@ -839,7 +839,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// GET /admin/api/configuration-audit?tenantId={guid}&amp;operation={export|import}&amp;page=1&amp;pageSize=20
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> GetAuditLogs(
         [FromServices] AuthDbContext dbContext,
         HttpContext httpContext,
@@ -919,7 +919,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// GET /admin/api/configuration-audit/{id}
     /// </remarks>
-    [Authorize(Policy = "TenantAdmin")]
+    [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> GetAuditLogDetail(
         [FromRoute] Guid id,
         [FromServices] AuthDbContext dbContext,

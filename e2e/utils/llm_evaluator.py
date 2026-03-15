@@ -4,10 +4,10 @@ Evaluates page screenshots using a vision LLM.
 Supports two backends selected via LLM_BACKEND env var:
   - "openai"  (default) – OpenAI GPT-4o Vision; requires OPENAI_API_KEY
   - "ollama"             – local Ollama instance via native /api/chat endpoint;
-                          set OLLAMA_MODEL (default gemma3:27b-cloud) and
+                          set OLLAMA_MODEL (default qwen3.5:397b-cloud) and
                           OLLAMA_HOST (default http://localhost:11434).
-                          Cloud-proxied models (names ending in :cloud) skip
-                          vision and go straight to text-only evaluation.
+                          Set OLLAMA_VISION=0 to force text-only evaluation
+                          (e.g. for models that don't support image input).
 
 Usage:
     evaluator = LLMEvaluator()
@@ -109,9 +109,9 @@ class LLMEvaluator:
 
         if self.backend == "ollama":
             self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-            self.model = model or os.getenv("OLLAMA_MODEL", "gemma3:27b-cloud")
-            # Cloud-proxied models don't support vision via Ollama
-            self._vision_supported = "-cloud" not in self.model
+            self.model = model or os.getenv("OLLAMA_MODEL", "qwen3.5:397b-cloud")
+            # Vision is on by default; set OLLAMA_VISION=0 to disable for text-only models
+            self._vision_supported = os.getenv("OLLAMA_VISION", "1").strip() not in ("0", "false", "no")
             self.api_key = ""
         else:
             self.backend = "openai"
@@ -194,7 +194,8 @@ class LLMEvaluator:
         if self.backend == "ollama":
             return self._ollama_chat(
                 messages=[
-                    {"role": "user", "content": user_prompt, "images": [image_b64]}
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt, "images": [image_b64]},
                 ]
             )
         # OpenAI
@@ -267,8 +268,11 @@ class LLMEvaluator:
 
     @staticmethod
     def _parse_response(text: str, result: EvaluationResult) -> None:
+        # Strip thinking blocks emitted by reasoning models (e.g. qwen3, deepseek-r1)
+        import re
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
         # Strip accidental markdown fences
-        text = text.strip()
         if text.startswith("```"):
             text = "\n".join(text.split("\n")[1:])
             text = text.rstrip("`").strip()

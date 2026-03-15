@@ -1,10 +1,10 @@
 @page "{id:guid}"
 @model MrWhoOidc.WebAuth.Pages.Admin.Providers.ClaimMappingsModel
 @{
-    ViewData["Title"] = "Claim mappings";
+    ViewData["Title"] = $"Claim mappings – {Model.ProviderName}";
 }
 
-<h2>Claim mappings</h2>
+<h2>Claim mappings – @Model.ProviderName</h2>
 
 <form method="post" asp-page-handler="Add" class="card p-3 mb-3">
     <input type="hidden" asp-for="Id" />

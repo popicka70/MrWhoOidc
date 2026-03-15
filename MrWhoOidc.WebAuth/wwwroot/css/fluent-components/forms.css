@@ -60,16 +60,23 @@ select:focus {
 }
 
 .form-control:disabled,
-.form-control[readonly],
 input:disabled,
-input[readonly],
 textarea:disabled,
-textarea[readonly],
 select:disabled {
   background-color: var(--fluent-color-neutral-background-4);
   color: var(--fluent-color-neutral-foreground-disabled);
   opacity: var(--fluent-opacity-disabled);
   cursor: not-allowed;
+}
+
+.form-control[readonly],
+input[readonly],
+textarea[readonly] {
+  background-color: var(--fluent-color-neutral-background-3);
+  color: var(--fluent-color-neutral-foreground-2);
+  opacity: 1;
+  cursor: default;
+  border-color: var(--fluent-color-neutral-stroke-2);
 }
 
 /* ============================================
@@ -135,7 +142,6 @@ label.required::after {
 .form-floating > .form-control:not(:placeholder-shown) ~ label,
 .form-floating > input:focus ~ label,
 .form-floating > input:not(:placeholder-shown) ~ label {
-  opacity: 0.65;
   transform: scale(0.85) translateY(-0.75rem) translateX(0.15rem);
 }
 
