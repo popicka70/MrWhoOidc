@@ -257,11 +257,12 @@ public class TenantSeedingService : ITenantSeedingService
 
             // Create standard scopes (client-scope associations)
             var scopes = new[] { "openid", "profile", "email", "roles", "offline_access", "mrwhopdf" };
-            var existingScopes = await _db.Scopes
+            var existingScopes = await _db.Scopes.AsNoTracking()
                 .Where(s => scopes.Contains(s.Name))
+                .Select(s => s.Name)
                 .ToListAsync(ct);
 
-            var existingScopeNames = existingScopes.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingScopeNames = existingScopes.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var scopeName in scopes)
             {

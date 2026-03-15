@@ -2268,8 +2268,9 @@ public sealed class ConfigurationImportService(
             .Select(s => s.Name)
             .ToListAsync(cancellationToken);
 
+        var existingSet = existing.ToHashSet(StringComparer.Ordinal);
         var missing = scopeNames
-            .Where(s => !existing.Contains(s, StringComparer.Ordinal))
+            .Where(s => !existingSet.Contains(s))
             .ToList();
 
         if (missing.Count == 0)
@@ -2298,8 +2299,9 @@ public sealed class ConfigurationImportService(
                 .Select(s => s.Name)
                 .ToListAsync(cancellationToken);
 
+            existingSet = existing.ToHashSet(StringComparer.Ordinal);
             missing = scopeNames
-                .Where(s => !existing.Contains(s, StringComparer.Ordinal))
+                .Where(s => !existingSet.Contains(s))
                 .ToList();
         }
 
