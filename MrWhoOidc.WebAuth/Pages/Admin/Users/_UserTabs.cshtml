@@ -19,18 +19,28 @@
 }
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link @(active=="edit"?"active":"")" href="@(tenantPrefix)/admin/users/edit/@userId">Profile</a>
+        <a class="nav-link @(active=="edit"?"active":"")" href="@(tenantPrefix)/admin/users/edit/@userId">
+            <i class="ph ph-person me-1"></i>Profile
+        </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="emails"?"active":"")" href="@(tenantPrefix)/admin/users/emails/@userId">Emails</a>
+        <a class="nav-link @(active=="emails"?"active":"")" href="@(tenantPrefix)/admin/users/emails/@userId">
+            <i class="ph ph-envelope-simple me-1"></i>Emails
+        </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="clients"?"active":"")" href="@(tenantPrefix)/admin/users/clients/@userId">Clients</a>
+        <a class="nav-link @(active=="clients"?"active":"")" href="@(tenantPrefix)/admin/users/clients/@userId">
+            <i class="ph ph-app-window me-1"></i>Clients
+        </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="roles"?"active":"")" href="@(tenantPrefix)/admin/users/roles/@userId">Roles</a>
+        <a class="nav-link @(active=="roles"?"active":"")" href="@(tenantPrefix)/admin/users/roles/@userId">
+            <i class="ph ph-identification-badge me-1"></i>Roles
+        </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(active=="linked"?"active":"")" href="@(tenantPrefix)/admin/users/linked/@userId">Linked accounts</a>
+        <a class="nav-link @(active=="linked"?"active":"")" href="@(tenantPrefix)/admin/users/linked/@userId">
+            <i class="ph ph-link me-1"></i>Linked accounts
+        </a>
     </li>
 </ul>
