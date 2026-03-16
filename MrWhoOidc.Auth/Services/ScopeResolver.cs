@@ -52,8 +52,20 @@ internal sealed class ScopeResolver(AuthDbContext db) : IScopeResolver
         var availableScopes = await GetAvailableScopesAsync(tenantId, ct);
         var availableScopeNames = availableScopes.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         
-        var validScopes = scopeNames.Where(s => availableScopeNames.Contains(s)).ToList();
-        var invalidScopes = scopeNames.Except(validScopes, StringComparer.OrdinalIgnoreCase).ToList();
+        var validScopes = new List<string>(scopeNames.Count);
+        var invalidScopes = new List<string>();
+
+        foreach (var scopeName in scopeNames)
+        {
+            if (availableScopeNames.Contains(scopeName))
+            {
+                validScopes.Add(scopeName);
+            }
+            else
+            {
+                invalidScopes.Add(scopeName);
+            }
+        }
         
         return new ScopeValidationResult
         {

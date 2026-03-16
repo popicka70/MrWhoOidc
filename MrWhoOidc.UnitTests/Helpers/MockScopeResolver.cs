@@ -32,9 +32,22 @@ internal sealed class MockScopeResolver : IScopeResolver
     public Task<ScopeValidationResult> ValidateScopesAsync(IEnumerable<string> scopeNames, Guid? tenantId, CancellationToken ct = default)
     {
         var available = GetAvailableScopesAsync(tenantId, ct).Result;
-        var availableNames = available.Select(s => s.Name).ToHashSet();
-        var validScopes = scopeNames.Where(s => availableNames.Contains(s)).ToList();
-        var invalidScopes = scopeNames.Except(validScopes).ToList();
+        var availableNames = available.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var validScopes = new List<string>();
+        var invalidScopes = new List<string>();
+
+        foreach (var scope in scopeNames)
+        {
+            if (availableNames.Contains(scope))
+            {
+                validScopes.Add(scope);
+            }
+            else
+            {
+                invalidScopes.Add(scope);
+            }
+        }
         
         return Task.FromResult(new ScopeValidationResult
         {
