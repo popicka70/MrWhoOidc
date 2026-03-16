@@ -142,9 +142,11 @@ RequireAdmin(app.MapGet("/admin/clients/{clientId}/scopes", async (AuthDbContext
 RequireAdmin(app.MapPost("/admin/clients/{clientId}/scopes", async (AuthDbContext db, Guid clientId, string[] scopes) =>
 {
     var existing = await db.ClientScopes.Where(cs => cs.ClientId == clientId).Select(cs => cs.ScopeName).ToListAsync();
-    var toAdd = scopes.Distinct(StringComparer.Ordinal).Except(existing, StringComparer.Ordinal).ToArray();
+    var existingSet = new HashSet<string>(existing, StringComparer.Ordinal);
+    var toAdd = scopes.Distinct(StringComparer.Ordinal);
     foreach (var s in toAdd)
     {
+        if (existingSet.Contains(s)) continue;
         if (!await db.Scopes.AnyAsync(x => x.Name == s)) return Results.BadRequest(new { error = "unknown_scope", scope = s });
         db.ClientScopes.Add(new ClientScope { ClientId = clientId, ScopeName = s });
     }
