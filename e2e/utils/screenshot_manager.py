@@ -47,7 +47,20 @@ class ScreenshotManager:
 
     @staticmethod
     def _wait_for_transitions(page: Page, timeout_ms: int = 2000) -> None:
-        """Wait until all CSS transitions and animations have finished."""
+        """Wait until all CSS transitions and animations have finished.
+
+        We first wait for the 'load' event so that animations (e.g. the 0.3s
+        fadeIn on .container) have actually started before we poll getAnimations().
+        Without this, domcontentloaded may fire before the animation begins, so
+        getAnimations() sees nothing running and we snap a dimmed screenshot.
+        """
+        try:
+            # 'load' fires after all resources are fetched; safe for admin pages
+            # (only 'networkidle' hangs on WebSocket/SSE pages).
+            page.wait_for_load_state("load", timeout=8000)
+        except Exception:
+            pass
+
         try:
             page.wait_for_function(
                 """() => {
