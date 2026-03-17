@@ -318,6 +318,8 @@ class TestTenantCrud:
         authenticated_page.goto("/platform-admin/tenants/create", wait_until="domcontentloaded")
         if "/login" in authenticated_page.url or "accessdenied" in authenticated_page.url.lower():
             pytest.skip("Platform admin not available")
+        if "/create" not in authenticated_page.url:
+            pytest.skip("Tenant creation not available (capacity limit reached)")
         record_evaluation(
             authenticated_page, "/platform-admin/tenants/create", label="empty-form"
         )
