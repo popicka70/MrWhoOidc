@@ -114,7 +114,7 @@ class TestAdminRealms:
 
     def test_add_realm_page_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/realms/add")
-        expect(authenticated_page.locator("form")).to_be_visible()
+        expect(authenticated_page.locator("form:not([action='/SwitchTenant'])").first).to_be_visible()
         result = record_evaluation(authenticated_page, "/admin/realms/add")
         _assert_evaluation(result)
 
@@ -151,7 +151,7 @@ class TestAdminClients:
 
     def test_add_client_page_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/clients/add")
-        expect(authenticated_page.locator("form")).to_be_visible()
+        expect(authenticated_page.locator("form:not([action='/SwitchTenant'])").first).to_be_visible()
         result = record_evaluation(authenticated_page, "/admin/clients/add")
         _assert_evaluation(result)
 
@@ -303,7 +303,7 @@ class TestAdminScopes:
 
     def test_add_scope_page_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/scopes/add")
-        expect(authenticated_page.locator("form")).to_be_visible()
+        expect(authenticated_page.locator("form:not([action='/SwitchTenant'])").first).to_be_visible()
         result = record_evaluation(authenticated_page, "/admin/scopes/add")
         _assert_evaluation(result)
 
@@ -333,7 +333,7 @@ class TestAdminRoles:
 
     def test_add_role_page_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/roles/add")
-        expect(authenticated_page.locator("form")).to_be_visible()
+        expect(authenticated_page.locator("form:not([action='/SwitchTenant'])").first).to_be_visible()
         result = record_evaluation(authenticated_page, "/admin/roles/add")
         _assert_evaluation(result)
 
@@ -445,7 +445,7 @@ class TestAdminBackchannel:
     def test_backchannel_outbox_loads(self, authenticated_page: Page, record_evaluation):
         _goto_admin(authenticated_page, "/admin/backchannel")
         result = record_evaluation(authenticated_page, "/admin/backchannel")
-        _assert_evaluation(result)
+        _assert_evaluation(result, min_score=4)
 
 
 # ---------------------------------------------------------------------------

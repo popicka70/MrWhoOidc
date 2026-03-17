@@ -19,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import os
@@ -26,51 +27,17 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
-OLLAMA_TIMEOUT = 60  # seconds; generous for cloud-routed models
+OLLAMA_TIMEOUT = 120  # seconds; generous for local models with complex prompts
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a senior UX/UI quality reviewer evaluating a screenshot of a web application page.
-Your task is to assess the visual quality, usability, and functional correctness of the page shown.
+_SYSTEM_PROMPT = """You are a UX reviewer for an OIDC admin web application.
+Respond ONLY with raw JSON (NO markdown, NO explanation, ONLY the JSON object):
+{"page_name":"<name>","overall_score":<1-10>,"summary":"<one sentence>"}
+Scoring: 10=excellent 8=good 6=ok 4=poor 2=broken. Be concise."""
 
-You MUST respond with a JSON object matching this exact schema (no markdown fences, raw JSON only):
-{
-  "page_name": "<inferred name of the page>",
-  "overall_score": <integer 1-10>,
-  "category_scores": {
-    "layout_alignment": <integer 1-10>,
-    "color_contrast": <integer 1-10>,
-    "typography": <integer 1-10>,
-    "visual_consistency": <integer 1-10>,
-    "information_density": <integer 1-10>,
-    "accessibility_hints": <integer 1-10>,
-    "functional_state": <integer 1-10>
-  },
-  "issues": [
-    {"severity": "high|medium|low", "description": "<issue description>"}
-  ],
-  "recommendations": ["<actionable improvement>"],
-  "summary": "<2-4 sentence plain-language summary of the page's UI quality>"
-}
-
-Scoring guide (overall_score):
-  10 – Exceptional: polished, consistent, fully accessible
-   8 – Good: minor issues only
-   6 – Adequate: noticeable but non-blocking issues
-   4 – Poor: significant visual or usability problems
-   2 – Critical: major layout breakage or accessibility failures
-   1 – Unusable / blank / error page
-"""
-
-_USER_PROMPT_TEMPLATE = """Evaluate the following page screenshot.
-
-Route: {route}
-
-{instructions_section}
-
-Evaluate all visible elements: navigation, form fields, tables, buttons, typography, color palette,
-spacing/alignment, error messages, empty states, and overall polish. Respond with raw JSON only."""
-
+_USER_PROMPT_TEMPLATE = """Rate this page: {route}
+{instructions_section}Consider: navigation, forms, buttons, tables, layout, errors, empty states. Raw JSON only."""
 
 @dataclass
 class EvaluationResult:
@@ -157,7 +124,7 @@ class LLMEvaluator:
 
         # --- Attempt vision evaluation (skipped for cloud Ollama models) ---
         if self._vision_supported:
-            image_b64 = base64.b64encode(screenshot_path.read_bytes()).decode()
+            image_b64 = self._load_image_b64(screenshot_path)
             for attempt in range(self.max_retries + 1):
                 try:
                     text = self._call_vision(image_b64, user_prompt)
@@ -243,9 +210,23 @@ class LLMEvaluator:
         return response.choices[0].message.content or ""
 
     def _ollama_chat(self, messages: list[dict]) -> str:
-        """Call Ollama's native /api/chat endpoint directly (no openai library)."""
+        """Call Ollama's native /api/chat endpoint directly (no openai library).
+
+        Uses think=false (top-level field) to suppress chain-of-thought reasoning
+        in qwen3.x thinking models, preventing VRAM exhaustion on evaluation prompts.
+        """
         payload = json.dumps(
-            {"model": self.model, "messages": messages, "stream": False}
+            {
+                "model": self.model,
+                "messages": messages,
+                "think": False,
+                "stream": False,
+                "options": {
+                    "num_predict": 200,
+                    "num_ctx": 2048,
+                    "temperature": 0.2,
+                },
+            }
         ).encode()
         req = urllib.request.Request(
             f"{self.ollama_host}/api/chat",
@@ -256,6 +237,19 @@ class LLMEvaluator:
         with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
             data = json.loads(resp.read())
         return data["message"]["content"]
+
+    @staticmethod
+    def _load_image_b64(path: Path, max_width: int = 1280) -> str:
+        """Load image, downscale to max_width if larger, return base64 PNG string."""
+        from PIL import Image
+        with Image.open(path) as img:
+            if img.width > max_width:
+                ratio = max_width / img.width
+                new_size = (max_width, int(img.height * ratio))
+                img = img.resize(new_size, Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            return base64.b64encode(buf.getvalue()).decode()
 
     def _get_openai_client(self):
         if self._openai_client is None:
