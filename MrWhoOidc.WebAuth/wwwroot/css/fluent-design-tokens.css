@@ -11,61 +11,61 @@
    ============================================ */
 
 :root {
-  /* Brand Colors - Fluent Blue Palette */
-  --fluent-color-brand-primary: #4F46E5;
-  --fluent-color-brand-primary-hover: #4338CA;
-  --fluent-color-brand-primary-pressed: #3730A3;
+  /* Brand Colors - Refreshed Teal Palette */
+  --fluent-color-brand-primary: #0f766e;
+  --fluent-color-brand-primary-hover: #0b5f59;
+  --fluent-color-brand-primary-pressed: #084c49;
   
   /* Neutral Colors */
-  --fluent-color-neutral-foreground-1: #242424;
-  --fluent-color-neutral-foreground-2: #424242;
-  --fluent-color-neutral-foreground-3: #616161;
-  --fluent-color-neutral-foreground-disabled: #6E6E6E;
+  --fluent-color-neutral-foreground-1: #14222d;
+  --fluent-color-neutral-foreground-2: #314253;
+  --fluent-color-neutral-foreground-3: #5c6f80;
+  --fluent-color-neutral-foreground-disabled: #8091a0;
   
   --fluent-color-neutral-background-1: #FFFFFF;
-  --fluent-color-neutral-background-2: #FAFAFA;
-  --fluent-color-neutral-background-3: #F5F5F5;
-  --fluent-color-neutral-background-4: #F0F0F0;
-  --fluent-color-neutral-background-5: #EBEBEB;
-  --fluent-color-neutral-background-6: #E6E6E6;
+  --fluent-color-neutral-background-2: #FBFCFD;
+  --fluent-color-neutral-background-3: #F4F7FA;
+  --fluent-color-neutral-background-4: #EBF0F5;
+  --fluent-color-neutral-background-5: #E1E8F0;
+  --fluent-color-neutral-background-6: #D8E2EC;
   
-  --fluent-color-neutral-stroke-1: #9E9E9E;
-  --fluent-color-neutral-stroke-2: #D1D1D1;
-  --fluent-color-neutral-stroke-disabled: #E0E0E0;
+  --fluent-color-neutral-stroke-1: #AABACA;
+  --fluent-color-neutral-stroke-2: #D7E2EC;
+  --fluent-color-neutral-stroke-disabled: #E6EDF3;
   /* Form-specific stroke — slightly darker than dividers for clear affordance */
-  --fluent-color-neutral-stroke-form: #9E9E9E;
+  --fluent-color-neutral-stroke-form: #96AABC;
   
   /* Semantic Colors */
-  --fluent-color-success: #107C10;
-  --fluent-color-success-foreground: #0B6A0B;
-  --fluent-color-success-background: #DFF6DD;
+  --fluent-color-success: #1f8f67;
+  --fluent-color-success-foreground: #176b4d;
+  --fluent-color-success-background: #dcf6ea;
   
-  --fluent-color-warning: #F7630C;
-  --fluent-color-warning-foreground: #BC4B09;
-  --fluent-color-warning-background: #FFF4CE;
+  --fluent-color-warning: #d97706;
+  --fluent-color-warning-foreground: #9a5300;
+  --fluent-color-warning-background: #fff1d6;
   
-  --fluent-color-error: #D13438;
-  --fluent-color-error-foreground: #A4262C;
-  --fluent-color-error-background: #FDE7E9;
+  --fluent-color-error: #dc2626;
+  --fluent-color-error-foreground: #a91d1d;
+  --fluent-color-error-background: #fde8e8;
   
-  --fluent-color-info: #00B7C3;
-  --fluent-color-info-foreground: #038387;
-  --fluent-color-info-background: #D1F7F9;
+  --fluent-color-info: #0284c7;
+  --fluent-color-info-foreground: #0369a1;
+  --fluent-color-info-background: #dff2ff;
   
   /* Canvas & Overlay Colors */
-  --fluent-color-canvas: #F3F3F3;
+  --fluent-color-canvas: #edf4f6;
   --fluent-color-card: #FFFFFF;
-  --fluent-color-card-hover: #FAFAFA;
+  --fluent-color-card-hover: #FAFCFD;
   
   /* Acrylic & Glass Materials */
-  --fluent-color-acrylic-background: rgba(255, 255, 255, 0.7);
-  --fluent-color-acrylic-border: rgba(255, 255, 255, 0.5);
+  --fluent-color-acrylic-background: rgba(255, 255, 255, 0.78);
+  --fluent-color-acrylic-border: rgba(255, 255, 255, 0.62);
   --fluent-color-smoke-background: rgba(0, 0, 0, 0.32);
   
   /* Focus & Selection */
-  --fluent-color-focus-stroke: #0078D4;
+  --fluent-color-focus-stroke: #0f766e;
   --fluent-color-focus-stroke-inner: #FFFFFF;
-  --fluent-color-selection-background: #0078D4;
+  --fluent-color-selection-background: #0f766e;
   --fluent-color-selection-foreground: #FFFFFF;
 }
 
@@ -246,8 +246,9 @@
 
 :root {
   /* Font Families */
-  --fluent-font-family-base: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, 
+  --fluent-font-family-base: "Manrope", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
                               Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fluent-font-family-heading: "Space Grotesk", "Manrope", "Segoe UI Variable", "Segoe UI", sans-serif;
   --fluent-font-family-monospace: "Consolas", "Courier New", monospace;
   --fluent-font-family-numeric: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   

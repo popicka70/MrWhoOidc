@@ -60,6 +60,22 @@
   /* Transitions - Mapped to Fluent Tokens */
   --transition-base: var(--fluent-duration-normal) var(--fluent-curve-easy-ease);
   --transition-fast: var(--fluent-duration-fast) var(--fluent-curve-easy-ease);
+
+  /* App-level visual tokens */
+  --dark-color: var(--fluent-color-neutral-foreground-1);
+  --danger-color: var(--fluent-color-error);
+  --shadow-xl: 0 32px 72px -40px rgba(15, 23, 42, 0.45);
+  --radius-2xl: 24px;
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --surface-strong: rgba(255, 255, 255, 0.95);
+  --surface-muted: rgba(248, 251, 252, 0.9);
+  --app-gradient-start: #eef8f7;
+  --app-gradient-mid: #fff8ef;
+  --app-gradient-end: #edf3fb;
+  --app-sidebar-from: #163342;
+  --app-sidebar-to: #102432;
+  --app-sidebar-text: rgba(242, 248, 250, 0.82);
+  --app-sidebar-heading: rgba(154, 230, 233, 0.9);
 }
 
 /* ============================================

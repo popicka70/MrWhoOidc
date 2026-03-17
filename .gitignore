@@ -85,3 +85,5 @@ sbom/
 
 # Local secrets (keys, certificates, env overrides)
 secrets/
+
+.python-packages/
