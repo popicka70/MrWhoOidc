@@ -177,7 +177,7 @@
     "Pattern": "/admin/api/clients/import/",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -186,7 +186,7 @@
     "Pattern": "/admin/api/clients/import/preview",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -195,7 +195,7 @@
     "Pattern": "/admin/api/configuration-audit/",
     "Methods": "GET",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -204,7 +204,7 @@
     "Pattern": "/admin/api/configuration-audit/{id:guid}",
     "Methods": "GET",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -469,7 +469,7 @@
     "Pattern": "/admin/api/providers/import/",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -478,7 +478,7 @@
     "Pattern": "/admin/api/providers/import/preview",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -531,7 +531,7 @@
     "Pattern": "/admin/api/realms/import/",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -540,7 +540,7 @@
     "Pattern": "/admin/api/realms/import/preview",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -2093,7 +2093,7 @@
     "Pattern": "admin/configuration-audit",
     "Methods": "",
     "RateLimiters": [],
-    "Authz": "TenantAdmin",
+    "Authz": "tenant-admin",
     "HasAntiforgery": true,
     "HasCors": false,
     "IsAnonymous": false

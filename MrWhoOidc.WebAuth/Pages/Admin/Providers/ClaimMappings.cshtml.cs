@@ -22,6 +22,7 @@ public class ClaimMappingsModel(
 {
     [BindProperty(SupportsGet = true)] public Guid Id { get; set; }
 
+    public string ProviderName { get; private set; } = string.Empty;
     public List<Item> Mappings { get; private set; } = new();
 
     [BindProperty] public EditorInput? Input { get; set; }
@@ -47,8 +48,12 @@ public class ClaimMappingsModel(
 
     public async Task<IActionResult> OnGetAsync()
     {
-        var exists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == Id);
-        if (!exists) return NotFound();
+        var provider = await db.IdentityProviders.AsNoTracking()
+            .Where(p => p.Id == Id)
+            .Select(p => new { p.DisplayName, p.Name })
+            .FirstOrDefaultAsync();
+        if (provider is null) return NotFound();
+        ProviderName = provider.DisplayName ?? provider.Name;
         Mappings = await db.IdentityProviderClaimMappings.AsNoTracking()
             .Where(m => m.IdentityProviderId == Id)
             .OrderBy(m => m.Order)

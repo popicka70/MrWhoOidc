@@ -60,16 +60,23 @@ select:focus {
 }
 
 .form-control:disabled,
-.form-control[readonly],
 input:disabled,
-input[readonly],
 textarea:disabled,
-textarea[readonly],
 select:disabled {
   background-color: var(--fluent-color-neutral-background-4);
   color: var(--fluent-color-neutral-foreground-disabled);
   opacity: var(--fluent-opacity-disabled);
   cursor: not-allowed;
+}
+
+.form-control[readonly],
+input[readonly],
+textarea[readonly] {
+  background-color: var(--fluent-color-neutral-background-3);
+  color: var(--fluent-color-neutral-foreground-2);
+  opacity: 1;
+  cursor: default;
+  border-color: var(--fluent-color-neutral-stroke-2);
 }
 
 /* ============================================
@@ -135,7 +142,6 @@ label.required::after {
 .form-floating > .form-control:not(:placeholder-shown) ~ label,
 .form-floating > input:focus ~ label,
 .form-floating > input:not(:placeholder-shown) ~ label {
-  opacity: 0.65;
   transform: scale(0.85) translateY(-0.75rem) translateX(0.15rem);
 }
 
@@ -435,9 +441,20 @@ input.is-invalid:focus,
   box-shadow: 0 0 0 1px var(--fluent-color-error);
 }
 
-.invalid-feedback,
-.text-danger {
+.invalid-feedback {
   display: none;
+  margin-top: var(--fluent-space-4);
+  font-size: var(--fluent-font-size-200);
+  color: var(--fluent-color-error-foreground);
+}
+
+/* Hide validation spans that are empty (server-side: populated spans remain visible) */
+.text-danger:empty,
+span.field-validation-valid {
+  display: none;
+}
+
+.text-danger {
   margin-top: var(--fluent-space-4);
   font-size: var(--fluent-font-size-200);
   color: var(--fluent-color-error-foreground);
@@ -448,6 +465,24 @@ input.is-invalid:focus,
 .is-invalid ~ .text-danger,
 .was-validated :invalid ~ .text-danger {
   display: block;
+}
+
+/* ============================================
+   ASP.NET CORE VALIDATION CLASS SUPPORT
+   ============================================ */
+
+/* Inputs marked invalid by jQuery Validate */
+.input-validation-error {
+  border-color: var(--fluent-color-error) !important;
+  box-shadow: 0 0 0 1px var(--fluent-color-error) !important;
+}
+
+/* Validation error spans (server-side + client-side) */
+span.field-validation-error {
+  display: block;
+  margin-top: var(--fluent-space-4);
+  font-size: var(--fluent-font-size-200);
+  color: var(--fluent-color-error-foreground);
 }
 
 /* ============================================

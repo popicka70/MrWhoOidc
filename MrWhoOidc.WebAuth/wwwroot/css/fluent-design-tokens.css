@@ -20,7 +20,7 @@
   --fluent-color-neutral-foreground-1: #242424;
   --fluent-color-neutral-foreground-2: #424242;
   --fluent-color-neutral-foreground-3: #616161;
-  --fluent-color-neutral-foreground-disabled: #A6A6A6;
+  --fluent-color-neutral-foreground-disabled: #6E6E6E;
   
   --fluent-color-neutral-background-1: #FFFFFF;
   --fluent-color-neutral-background-2: #FAFAFA;
@@ -29,9 +29,11 @@
   --fluent-color-neutral-background-5: #EBEBEB;
   --fluent-color-neutral-background-6: #E6E6E6;
   
-  --fluent-color-neutral-stroke-1: #D1D1D1;
-  --fluent-color-neutral-stroke-2: #E0E0E0;
+  --fluent-color-neutral-stroke-1: #9E9E9E;
+  --fluent-color-neutral-stroke-2: #D1D1D1;
   --fluent-color-neutral-stroke-disabled: #E0E0E0;
+  /* Form-specific stroke — slightly darker than dividers for clear affordance */
+  --fluent-color-neutral-stroke-form: #9E9E9E;
   
   /* Semantic Colors */
   --fluent-color-success: #107C10;
@@ -351,7 +353,7 @@
    ============================================ */
 
 :root {
-  --fluent-opacity-disabled: 0.38;
+  --fluent-opacity-disabled: 0.60;
   --fluent-opacity-subtle: 0.5;
   --fluent-opacity-medium: 0.7;
   --fluent-opacity-full: 1.0;

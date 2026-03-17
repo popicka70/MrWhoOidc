@@ -11,7 +11,7 @@ namespace MrWhoOidc.WebAuth.Pages.Admin.ConfigurationAudit;
 /// <summary>
 /// Page model for viewing configuration export/import audit logs.
 /// </summary>
-[Authorize(Policy = "TenantAdmin")]
+[Authorize(Policy = "tenant-admin")]
 public class IndexModel : TenantAwarePageModel
 {
     private readonly AuthDbContext _dbContext;

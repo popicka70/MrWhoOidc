@@ -133,6 +133,12 @@
   background-color: var(--color-light);
 }
 
+.data-table__row:focus-within {
+  background-color: var(--color-light);
+  outline: 2px solid var(--color-primary, #4F46E5);
+  outline-offset: -2px;
+}
+
 /* Auth Card Component */
 .auth-card {
   max-width: 420px;

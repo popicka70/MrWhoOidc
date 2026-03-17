@@ -190,14 +190,14 @@
                     {
                         <!-- Desktop Navigation -->
                         <div class="d-none d-md-flex align-items-center gap-3">
-                            <a class="nav-link" href="@(tenantPrefix)/Registrations">Register</a>
-                            <a class="nav-link" href="@(tenantPrefix)/Password">Change password</a>
-                            <a class="nav-link" href="@(tenantPrefix)/Mfa">Two-factor (TOTP)</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Password"><i class="ph ph-key me-1"></i>Change password</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Mfa"><i class="ph ph-shield me-1"></i>Two-factor (TOTP)</a>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="navbar-text small">@userEmail</span>
                                 <span class="badge @roleBadgeClass">@userRole</span>
                             </div>
-                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=%2F">Log out</a>
+                            <a class="nav-link" href="@(tenantPrefix)/logout?returnUrl=%2F"><i class="ph ph-sign-out me-1"></i>Log out</a>
                         </div>
                         <!-- Mobile Navigation Dropdown -->
                         <div class="dropdown d-md-none">
@@ -219,8 +219,8 @@
                     else
                     {
                         <div class="d-flex align-items-center gap-3">
-                            <a class="nav-link" href="@(tenantPrefix)/Registrations">Register</a>
-                            <a class="nav-link" asp-page="/DiscoverTenant">Log in</a>
+                            <a class="nav-link" href="@(tenantPrefix)/Registrations"><i class="ph ph-user-plus me-1"></i>Register</a>
+                            <a class="nav-link" asp-page="/DiscoverTenant"><i class="ph ph-sign-in me-1"></i>Log in</a>
                         </div>
                     }
                 </div>
@@ -278,14 +278,14 @@
                                 if (tenantAdminResult.Succeeded)
                                 {
                                     <div class="list-group-item fw-semibold text-uppercase small bg-body-tertiary text-body">Admin</div>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/realms", matchPrefix: true)" href="@(tenantPrefix)/admin/realms"><i class="ph ph-tree-structure me-2"></i>Realms</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/clients", matchPrefix: true)" href="@(tenantPrefix)/admin/clients"><i class="ph ph-users me-2"></i>Clients</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/obo-setup", matchPrefix: true)" href="@(tenantPrefix)/admin/obo-setup"><i class="ph ph-person-gear me-2"></i>OBO Setup</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/providers", matchPrefix: true)" href="@(tenantPrefix)/admin/providers"><i class="ph ph-shield me-2"></i>Providers</a>
+                                    <a class="@(IsActiveHref($"{tenantPrefix}/admin/realms", matchPrefix: true) ? "list-group-item list-group-item-action active" : "list-group-item list-group-item-action")" href="@(tenantPrefix)/admin/realms"><i class="ph ph-tree-structure me-2"></i>Realms</a>
+                                    <a class="@((IsActiveHref($"{tenantPrefix}/admin/clients", matchPrefix: true) || IsActiveHref($"{tenantPrefix}/admin/client-keys", matchPrefix: true)) ? "list-group-item list-group-item-action active" : "list-group-item list-group-item-action")" href="@(tenantPrefix)/admin/clients"><i class="ph ph-users me-2"></i>Clients</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/obo-setup", matchPrefix: true)" href="@(tenantPrefix)/admin/obo-setup"><i class="ph ph-user-gear me-2"></i>OBO Setup</a>
+                                    <a class="@((IsActiveHref($"{tenantPrefix}/admin/providers", matchPrefix: true) || IsActiveHref($"{tenantPrefix}/admin/provider-keys", matchPrefix: true)) ? "list-group-item list-group-item-action active" : "list-group-item list-group-item-action")" href="@(tenantPrefix)/admin/providers"><i class="ph ph-shield me-2"></i>Providers</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/provider-mappings", matchPrefix: true)" href="@(tenantPrefix)/admin/provider-mappings"><i class="ph ph-git-merge me-2"></i>Provider mappings</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/scopes", matchPrefix: true)" href="@(tenantPrefix)/admin/scopes"><i class="ph ph-tag me-2"></i>Scopes</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/roles", matchPrefix: true)" href="@(tenantPrefix)/admin/roles"><i class="ph ph-identification-badge me-2"></i>Roles</a>
-                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="ph ph-users-fill me-2"></i>Users</a>
+                                    <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/users", matchPrefix: true)" href="@(tenantPrefix)/admin/users"><i class="ph-fill ph-users me-2"></i>Users</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/registrations", matchPrefix: true)" href="@(tenantPrefix)/admin/registrations"><i class="ph ph-clipboard-text me-2"></i>Registrations</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/backchannel", matchPrefix: true)" href="@(tenantPrefix)/admin/backchannel"><i class="ph ph-plug me-2"></i>BCL outbox</a>
                                     <a class="@LinkClass("list-group-item list-group-item-action", $"{tenantPrefix}/admin/license/tenant", matchPrefix: true)" href="@(tenantPrefix)/admin/license/tenant"><i class="ph ph-medal me-2"></i>Tenant License</a>
