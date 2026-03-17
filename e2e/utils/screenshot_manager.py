@@ -39,9 +39,32 @@ class ScreenshotManager:
         if count > 0:
             slug = f"{slug}-{count}"
 
+        self._wait_for_transitions(page)
+
         file_path = self.run_dir / f"{slug}.png"
         page.screenshot(path=str(file_path), full_page=True)
         return file_path
+
+    @staticmethod
+    def _wait_for_transitions(page: Page, timeout_ms: int = 2000) -> None:
+        """Wait until all CSS transitions and animations have finished."""
+        try:
+            page.wait_for_function(
+                """() => {
+                    const elements = document.querySelectorAll('*');
+                    for (const el of elements) {
+                        const animations = el.getAnimations ? el.getAnimations() : [];
+                        for (const anim of animations) {
+                            if (anim.playState === 'running') return false;
+                        }
+                    }
+                    return true;
+                }""",
+                timeout=timeout_ms,
+            )
+        except Exception:
+            # If check times out or fails, proceed anyway
+            pass
 
     @staticmethod
     def _route_to_slug(route: str) -> str:
