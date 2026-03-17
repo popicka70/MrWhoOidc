@@ -26,6 +26,7 @@ namespace MrWhoOidc.WebAuth.Pages.PlatformAdmin.Tenants;
 public partial class CreateModel(
     AuthDbContext db,
     IMultiTenancyOptions multiTenancyOptions,
+    ITenantService tenantService,
     IHttpContextAccessor httpContextAccessor,
     IOptions<OidcOptions> oidcOptions,
     IUserService userService,
@@ -76,12 +77,18 @@ public partial class CreateModel(
         public string? BillingPlan { get; set; }
     }
 
-    public IActionResult OnGet()
+    public async Task<IActionResult> OnGet()
     {
         // Multi-tenancy must be enabled by license
         if (!multiTenancyOptions.Enabled)
         {
             return RedirectToPage("/PlatformAdmin/Index");
+        }
+
+        if (!await tenantService.CanProvisionTenantAsync(1, HttpContext.RequestAborted))
+        {
+            TempData["ErrorMessage"] = "Tenant capacity limit reached. Your license does not allow creating additional tenants.";
+            return RedirectToPage("Index");
         }
 
         CaptureCurrentUserDisplay();
@@ -104,6 +111,12 @@ public partial class CreateModel(
         CaptureCurrentUserDisplay();
         if (!ModelState.IsValid)
         {
+            return Page();
+        }
+
+        if (!await tenantService.CanProvisionTenantAsync(1, HttpContext.RequestAborted))
+        {
+            ModelState.AddModelError(string.Empty, "Tenant capacity limit reached. Your license does not allow creating additional tenants.");
             return Page();
         }
 
