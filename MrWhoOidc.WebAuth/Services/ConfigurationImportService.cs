@@ -1562,12 +1562,14 @@ public sealed class ConfigurationImportService(
             .Select(s => s.ScopeName)
             .ToListAsync(cancellationToken);
 
+        // ⚡ Bolt Optimization: Pre-calculate HashSet for O(1) lookups instead of O(N) List.Contains inside the loop
+        var existingScopesSet = existingScopes.ToHashSet(StringComparer.Ordinal);
         var desiredScopes = NormalizeScopeNames(clientDef.AllowedScopes);
         await EnsureScopesExistAsync(client.TenantId, desiredScopes, cancellationToken);
 
         foreach (var scopeName in desiredScopes)
         {
-            if (!existingScopes.Contains(scopeName))
+            if (!existingScopesSet.Contains(scopeName))
             {
                 _dbContext.ClientScopes.Add(new ClientScope
                 {
