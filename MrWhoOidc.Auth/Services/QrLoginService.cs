@@ -215,16 +215,13 @@ public sealed class QrLoginService : IQrLoginService
     public async Task<int> CleanupExpiredSessionsAsync(DateTimeOffset olderThan)
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        var expiredSessions = await _db.QrLoginSessions
+
+        // ⚡ Bolt: Bulk delete expired sessions to avoid N+1 query and memory overhead
+        return await _db.QrLoginSessions
             .Where(s => s.TenantId == tenantId && s.ExpiresAt < olderThan &&
                         (s.Status == QrSessionStatus.Expired ||
                          s.Status == QrSessionStatus.Cancelled ||
                          s.Status == QrSessionStatus.Consumed))
-            .ToListAsync();
-
-        _db.QrLoginSessions.RemoveRange(expiredSessions);
-        await _db.SaveChangesAsync();
-
-        return expiredSessions.Count;
+            .ExecuteDeleteAsync();
     }
 }
