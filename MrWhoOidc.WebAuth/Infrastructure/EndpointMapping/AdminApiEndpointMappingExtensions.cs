@@ -1631,7 +1631,21 @@ public static class AdminApiEndpointMappingExtensions
                 })
                 .ToListAsync(ct);
 
-            return Results.Ok(tenants);
+            return Results.Ok(tenants.Select(t => new
+            {
+                t.Id,
+                t.Slug,
+                t.Name,
+                t.Description,
+                t.IssuerUri,
+                Status = t.Status.ToString(),
+                t.MaxUsers,
+                t.MaxClients,
+                t.AdminEmail,
+                t.CreatedAt,
+                t.UserCount,
+                t.ClientCount
+            }));
         }).WithName("PlatformAdminListTenants");
 
         platformAdmin.MapGet("/clients", async (
