@@ -62,6 +62,12 @@ mrwho-cli login --server https://auth.example.com/t/acme
 # Inspect the connected server discovery document
 mrwho-cli discovery --server https://auth.example.com/t/acme
 
+# Export a tenant manifest as a platform admin
+mrwho-cli export tenant acme --output ./exports/
+
+# Export a client manifest from the current tenant profile
+mrwho-cli export client 2d6f0d17-5400-4c5b-a65a-fbb7b360f404 --output ./exports/
+
 # List clients for the current tenant
 mrwho-cli client list
 
@@ -119,6 +125,7 @@ Configure in your MCP client (e.g., VS Code settings.json):
 - Working profile management (`list`, `show`, `switch`, `remove`)
 - Working logout/token clearing
 - Authenticated admin list commands for tenants, clients, and scopes
+- File-first export commands for tenant, realm, client, and provider manifests
 
 **Phase 3+**: CRUD admin commands, provider/admin parity, MCP parity, richer output formatting, and broader server configuration support.
 
@@ -138,12 +145,14 @@ MrWhoOidc.Cli/
 │   ├── LogoutCommand.cs       # Clear tokens for a profile
 │   ├── ProfileCommand.cs      # Profile list/show/switch/remove
 │   ├── DiscoveryCommand.cs    # Inspect OIDC discovery metadata
+│   ├── ExportCommand.cs       # Export manifests to files
 │   ├── TenantCommand.cs       # Platform tenant listing
 │   ├── ClientCommand.cs       # Tenant/platform client listing
 │   └── ScopeCommand.cs        # Tenant/platform scope listing
 ├── Services/
 │   ├── CliServerConnection.cs # Shared server/discovery/auth helpers
 │   └── CliAdminApiClient.cs   # Authenticated admin API requests
+│   └── CliFileOutput.cs       # Secure file-first output helpers
 └── (upcoming: Http/, Output/, admin command groups)
 ```
 

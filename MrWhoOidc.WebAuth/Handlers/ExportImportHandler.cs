@@ -137,6 +137,278 @@ public static class ExportImportHandler
     }
 
     /// <summary>
+    /// Exports a realm configuration.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> ExportRealm(
+        [FromRoute] Guid id,
+        [FromQuery] string? mode,
+        [FromServices] AuthDbContext dbContext,
+        [FromServices] IConfigurationExportService exportService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var realm = await dbContext.Realms
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId.Value, cancellationToken);
+
+        if (realm == null)
+        {
+            return Results.NotFound(new { error = "Realm not found", id });
+        }
+
+        var tenant = await dbContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+
+        var options = CreateExportOptions(httpContext, mode);
+
+        try
+        {
+            var manifest = await exportService.ExportRealmAsync(realm.Id, options, cancellationToken);
+            var json = JsonSerializer.Serialize(manifest, JsonOptions);
+            var fileName = $"{tenant?.Slug ?? "tenant"}-{realm.Name}-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+
+            return Results.File(
+                System.Text.Encoding.UTF8.GetBytes(json),
+                "application/json",
+                fileName);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Gets export preview information for a realm.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> GetRealmExportPreview(
+        [FromRoute] Guid id,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var realm = await dbContext.Realms
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && r.TenantId == tenantId.Value, cancellationToken);
+
+        if (realm == null)
+        {
+            return Results.NotFound(new { error = "Realm not found", id });
+        }
+
+        var clientCount = await dbContext.Clients.CountAsync(c => c.RealmId == realm.Id, cancellationToken);
+        var roleCount = await dbContext.Roles.CountAsync(r => r.RealmId == realm.Id, cancellationToken);
+        var clientIds = await dbContext.Clients
+            .Where(c => c.RealmId == realm.Id)
+            .Select(c => c.Id)
+            .ToListAsync(cancellationToken);
+        var secretCount = await dbContext.ClientSecrets.CountAsync(s => clientIds.Contains(s.ClientId), cancellationToken);
+
+        return Results.Ok(new
+        {
+            realm = new { id = realm.Id, name = realm.Name, displayName = realm.DisplayName },
+            counts = new
+            {
+                clients = clientCount,
+                roles = roleCount,
+                secrets = secretCount
+            }
+        });
+    }
+
+    /// <summary>
+    /// Exports a client configuration.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> ExportClient(
+        [FromRoute] Guid id,
+        [FromQuery] string? mode,
+        [FromServices] AuthDbContext dbContext,
+        [FromServices] IConfigurationExportService exportService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var client = await dbContext.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id && c.TenantId == tenantId.Value, cancellationToken);
+
+        if (client == null)
+        {
+            return Results.NotFound(new { error = "Client not found", id });
+        }
+
+        var realm = await dbContext.Realms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == client.RealmId, cancellationToken);
+        var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        var options = CreateExportOptions(httpContext, mode);
+
+        try
+        {
+            var manifest = await exportService.ExportClientAsync(client.Id, options, cancellationToken);
+            var json = JsonSerializer.Serialize(manifest, JsonOptions);
+            var fileName = $"{tenant?.Slug ?? "tenant"}-{realm?.Name ?? "realm"}-{client.ClientId}-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+
+            return Results.File(
+                System.Text.Encoding.UTF8.GetBytes(json),
+                "application/json",
+                fileName);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Gets export preview information for a client.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> GetClientExportPreview(
+        [FromRoute] Guid id,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var client = await dbContext.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id && c.TenantId == tenantId.Value, cancellationToken);
+
+        if (client == null)
+        {
+            return Results.NotFound(new { error = "Client not found", id });
+        }
+
+        var scopeCount = await dbContext.ClientScopes.CountAsync(cs => cs.ClientId == client.Id, cancellationToken);
+        var secretCount = await dbContext.ClientSecrets.CountAsync(s => s.ClientId == client.Id, cancellationToken);
+        var providerCount = await dbContext.ClientIdentityProviders.CountAsync(cip => cip.ClientId == client.Id, cancellationToken);
+
+        return Results.Ok(new
+        {
+            client = new { id = client.Id, clientId = client.ClientId, clientName = client.ClientName },
+            counts = new
+            {
+                scopes = scopeCount,
+                secrets = secretCount,
+                identityProviders = providerCount
+            }
+        });
+    }
+
+    /// <summary>
+    /// Exports an identity provider configuration.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> ExportProvider(
+        [FromRoute] Guid id,
+        [FromQuery] string? mode,
+        [FromServices] AuthDbContext dbContext,
+        [FromServices] IConfigurationExportService exportService,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var provider = await dbContext.IdentityProviders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId.Value, cancellationToken);
+
+        if (provider == null)
+        {
+            return Results.NotFound(new { error = "Provider not found", id });
+        }
+
+        var tenant = await dbContext.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tenantId.Value, cancellationToken);
+        var options = CreateExportOptions(httpContext, mode);
+
+        try
+        {
+            var manifest = await exportService.ExportIdentityProviderAsync(provider.Id, options, cancellationToken);
+            var json = JsonSerializer.Serialize(manifest, JsonOptions);
+            var fileName = $"{tenant?.Slug ?? "tenant"}-{provider.Name}-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+
+            return Results.File(
+                System.Text.Encoding.UTF8.GetBytes(json),
+                "application/json",
+                fileName);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, title: "Export failed", statusCode: 500);
+        }
+    }
+
+    /// <summary>
+    /// Gets export preview information for a provider.
+    /// </summary>
+    [Authorize(Policy = "tenant-admin")]
+    public static async Task<IResult> GetProviderExportPreview(
+        [FromRoute] Guid id,
+        [FromServices] AuthDbContext dbContext,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        if (!tenantId.HasValue)
+        {
+            return Results.BadRequest(new { error = "Tenant context required" });
+        }
+
+        var provider = await dbContext.IdentityProviders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId.Value, cancellationToken);
+
+        if (provider == null)
+        {
+            return Results.NotFound(new { error = "Provider not found", id });
+        }
+
+        var claimMappingCount = await dbContext.IdentityProviderClaimMappings.CountAsync(m => m.IdentityProviderId == provider.Id, cancellationToken);
+        var keyCount = await dbContext.IdentityProviderKeys.CountAsync(k => k.IdentityProviderId == provider.Id, cancellationToken);
+        var hasClientSecret = !string.IsNullOrEmpty(provider.ConfigJson) && provider.ConfigJson.Contains("client_secret", StringComparison.OrdinalIgnoreCase);
+
+        return Results.Ok(new
+        {
+            provider = new { id = provider.Id, name = provider.Name, displayName = provider.DisplayName, type = provider.Type.ToString() },
+            counts = new
+            {
+                claimMappings = claimMappingCount,
+                keys = keyCount,
+                hasClientSecret
+            }
+        });
+    }
+
+    /// <summary>
     /// Previews an import operation without applying changes.
     /// </summary>
     /// <remarks>
@@ -735,6 +1007,24 @@ public static class ExportImportHandler
         var exportGroup = endpoints.MapGroup("/admin/api/platform/tenants/{slug}")
             .WithTags("Export/Import");
 
+        var tenantRealmExportGroup = endpoints.MapGroup("/t/{slug}/admin/api/realms/{id:guid}")
+            .WithTags("Export/Import");
+
+        var tenantClientExportGroup = endpoints.MapGroup("/t/{slug}/admin/api/clients/{id:guid}")
+            .WithTags("Export/Import");
+
+        var tenantProviderExportGroup = endpoints.MapGroup("/t/{slug}/admin/api/providers/{id:guid}")
+            .WithTags("Export/Import");
+
+        var realmExportGroup = endpoints.MapGroup("/admin/api/realms/{id:guid}")
+            .WithTags("Export/Import");
+
+        var clientExportGroup = endpoints.MapGroup("/admin/api/clients/{id:guid}")
+            .WithTags("Export/Import");
+
+        var providerExportGroup = endpoints.MapGroup("/admin/api/providers/{id:guid}")
+            .WithTags("Export/Import");
+
         exportGroup.MapGet("/export", ExportTenant)
             .WithName("ExportTenant")
             .WithDescription("Export tenant configuration as JSON")
@@ -745,6 +1035,84 @@ public static class ExportImportHandler
         exportGroup.MapGet("/export/preview", GetExportPreview)
             .WithName("GetExportPreview")
             .WithDescription("Get export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        realmExportGroup.MapGet("/export", ExportRealm)
+            .WithName("ExportRealm")
+            .WithDescription("Export realm configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        realmExportGroup.MapGet("/export/preview", GetRealmExportPreview)
+            .WithName("GetRealmExportPreview")
+            .WithDescription("Get realm export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        clientExportGroup.MapGet("/export", ExportClient)
+            .WithName("ExportClient")
+            .WithDescription("Export client configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        clientExportGroup.MapGet("/export/preview", GetClientExportPreview)
+            .WithName("GetClientExportPreview")
+            .WithDescription("Get client export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        providerExportGroup.MapGet("/export", ExportProvider)
+            .WithName("ExportProvider")
+            .WithDescription("Export identity provider configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        providerExportGroup.MapGet("/export/preview", GetProviderExportPreview)
+            .WithName("GetProviderExportPreview")
+            .WithDescription("Get provider export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        tenantRealmExportGroup.MapGet("/export", ExportRealm)
+            .WithName("TenantExportRealm")
+            .WithDescription("Export realm configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        tenantRealmExportGroup.MapGet("/export/preview", GetRealmExportPreview)
+            .WithName("TenantGetRealmExportPreview")
+            .WithDescription("Get realm export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        tenantClientExportGroup.MapGet("/export", ExportClient)
+            .WithName("TenantExportClient")
+            .WithDescription("Export client configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        tenantClientExportGroup.MapGet("/export/preview", GetClientExportPreview)
+            .WithName("TenantGetClientExportPreview")
+            .WithDescription("Get client export preview with entity counts")
+            .Produces<object>(200)
+            .Produces(404);
+
+        tenantProviderExportGroup.MapGet("/export", ExportProvider)
+            .WithName("TenantExportProvider")
+            .WithDescription("Export identity provider configuration as JSON")
+            .Produces(200, contentType: "application/json")
+            .Produces(404)
+            .Produces(500);
+
+        tenantProviderExportGroup.MapGet("/export/preview", GetProviderExportPreview)
+            .WithName("TenantGetProviderExportPreview")
+            .WithDescription("Get provider export preview with entity counts")
             .Produces<object>(200)
             .Produces(404);
 
@@ -964,6 +1332,25 @@ public static class ExportImportHandler
             auditLog.UserAgent,
             auditLog.Timestamp
         });
+    }
+
+    private static ExportOptions CreateExportOptions(HttpContext httpContext, string? mode)
+    {
+        var exportMode = mode?.ToLowerInvariant() switch
+        {
+            "full" => ExportMode.Full,
+            _ => ExportMode.Obfuscated
+        };
+
+        return new ExportOptions
+        {
+            Mode = exportMode,
+            IncludeMetadata = true,
+            IncludeChecksum = true,
+            PrettyPrint = true,
+            ExportedBy = httpContext.User.Identity?.Name ?? "anonymous",
+            SourceSystem = Environment.MachineName
+        };
     }
 }
 

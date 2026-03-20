@@ -74,5 +74,66 @@ public static class CliAdminApiClient
         public string? Detail { get; set; }
     }
 
+    public static async Task<T?> GetAsync<T>(
+        CliConfig config,
+        AuthenticatedConnection connection,
+        string relativePath,
+        CancellationToken ct = default)
+    {
+        var accessToken = await CliServerConnection.GetValidAccessTokenAsync(config, connection).ConfigureAwait(false);
+        using var httpClient = CliServerConnection.CreateAuthenticatedHttpClient(connection, accessToken);
+        using var response = await httpClient.GetAsync(CliServerConnection.CombineRelativePath(connection.ServerUrl, relativePath), ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return default;
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ExtractErrorMessage(response.StatusCode, payload));
+        if (string.IsNullOrWhiteSpace(payload)) return default;
+        return JsonSerializer.Deserialize<T>(payload, JsonOptions);
+    }
+
+    public static async Task<TResponse?> PostAsync<TResponse>(
+        CliConfig config,
+        AuthenticatedConnection connection,
+        string relativePath,
+        object body,
+        CancellationToken ct = default)
+    {
+        var accessToken = await CliServerConnection.GetValidAccessTokenAsync(config, connection).ConfigureAwait(false);
+        using var httpClient = CliServerConnection.CreateAuthenticatedHttpClient(connection, accessToken);
+        using var content = System.Net.Http.Json.JsonContent.Create(body, options: JsonOptions);
+        using var response = await httpClient.PostAsync(CliServerConnection.CombineRelativePath(connection.ServerUrl, relativePath), content, ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ExtractErrorMessage(response.StatusCode, payload));
+        if (string.IsNullOrWhiteSpace(payload)) return default;
+        return JsonSerializer.Deserialize<TResponse>(payload, JsonOptions);
+    }
+
+    public static async Task PutAsync(
+        CliConfig config,
+        AuthenticatedConnection connection,
+        string relativePath,
+        object body,
+        CancellationToken ct = default)
+    {
+        var accessToken = await CliServerConnection.GetValidAccessTokenAsync(config, connection).ConfigureAwait(false);
+        using var httpClient = CliServerConnection.CreateAuthenticatedHttpClient(connection, accessToken);
+        using var content = System.Net.Http.Json.JsonContent.Create(body, options: JsonOptions);
+        using var response = await httpClient.PutAsync(CliServerConnection.CombineRelativePath(connection.ServerUrl, relativePath), content, ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ExtractErrorMessage(response.StatusCode, payload));
+    }
+
+    public static async Task DeleteAsync(
+        CliConfig config,
+        AuthenticatedConnection connection,
+        string relativePath,
+        CancellationToken ct = default)
+    {
+        var accessToken = await CliServerConnection.GetValidAccessTokenAsync(config, connection).ConfigureAwait(false);
+        using var httpClient = CliServerConnection.CreateAuthenticatedHttpClient(connection, accessToken);
+        using var response = await httpClient.DeleteAsync(CliServerConnection.CombineRelativePath(connection.ServerUrl, relativePath), ct).ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode) throw new InvalidOperationException(ExtractErrorMessage(response.StatusCode, payload));
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 }

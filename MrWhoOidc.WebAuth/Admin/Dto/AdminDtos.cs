@@ -4,3 +4,25 @@ public sealed record MappingInput(Guid IdentityProviderId, bool Enabled, bool Is
 public sealed record ClaimMappingInput(string ExternalClaim, string LocalClaim, string? Transform, int Order);
 public sealed record ProviderKeyInput(MrWhoOidc.Auth.Persistence.IdentityProviderKeyPurpose Purpose, string Alg, string? Kid, bool Active, string JwkJson, DateTimeOffset? ExpiresAt);
 public sealed record ClientKeysInput(string? PublicJwksJson, string? PublicJwksUri);
+
+// Realm management
+public sealed record RealmInput(string? Name, string? DisplayName, bool? AllowUnconfirmedLogin);
+
+// Client management
+public sealed record CreateClientInput(
+    string? ClientId,
+    string? ClientName,
+    Guid RealmId,
+    bool? RequirePkce,
+    bool? RequireConsent,
+    string? Scope,
+    List<string>? GrantTypes,
+    List<string>? AllowedLoginRedirectUris,
+    List<string>? AllowedLogoutRedirectUris,
+    bool? CreateInitialSecret);
+
+// Scope management
+public sealed record ScopeInput(string? Name, string? Description, bool? IsExposed);
+
+// User management
+public sealed record CreateUserInput(string? Username, string? Email, string? Name, string? Password);
