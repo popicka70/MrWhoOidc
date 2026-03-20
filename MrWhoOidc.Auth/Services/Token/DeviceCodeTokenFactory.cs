@@ -134,6 +134,33 @@ public sealed class DeviceCodeTokenFactory(
             claims.Add(new("realm", realmName));
         }
 
+        // Add roles if the "roles" scope was granted.
+        // Query across ALL realms in the tenant so that cross-realm roles
+        // (e.g., platform-admin in the platform realm) are included even when
+        // the CLI client belongs to the default realm.
+        if (granted.Contains(OidcConstants.Scopes.Roles, StringComparer.OrdinalIgnoreCase) && client.TenantId != Guid.Empty)
+        {
+            var roleNames = await (
+                from assignment in db.UserRealmRoleAssignments.AsNoTracking()
+                where assignment.UserId == user.Id && assignment.IsActive
+                join role in db.Roles.AsNoTracking() on assignment.RoleId equals role.Id
+                join realm in db.Realms.AsNoTracking() on assignment.RealmId equals realm.Id
+                where role.IsActive && realm.TenantId == client.TenantId
+                select role.Name
+            ).Union(
+                from assignment in db.UserClientRoleAssignments.AsNoTracking()
+                where assignment.UserId == user.Id && assignment.ClientId == client.Id && assignment.IsActive
+                join role in db.Roles.AsNoTracking() on assignment.RoleId equals role.Id
+                where role.IsActive
+                select role.Name
+            ).Distinct().ToArrayAsync(ct).ConfigureAwait(false);
+
+            foreach (var roleName in roleNames)
+            {
+                claims.Add(new(OidcConstants.Claims.Roles, roleName));
+            }
+        }
+
         // Add tenant_id if relevant
         var hasCustomScopes = granted.Any(s => !scopeResolver.IsStandardScope(s));
         if (hasCustomScopes && client.TenantId != Guid.Empty)

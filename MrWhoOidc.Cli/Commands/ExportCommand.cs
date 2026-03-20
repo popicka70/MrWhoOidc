@@ -22,8 +22,8 @@ public sealed class ExportCommand : Command
         public ExportTenantCommand() : base("tenant", "Export a tenant manifest to a file")
         {
             var slugArgument = new Argument<string>("slug") { Description = "Tenant slug to export" };
-            var serverOption = new Option<string?>("--server", "Platform server URL (defaults to the saved profile server)");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Platform server URL (defaults to the saved profile server)" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var modeOption = CreateModeOption();
             var outputOption = CreateOutputOption();
             var overwriteOption = CreateOverwriteOption();
@@ -35,7 +35,7 @@ public sealed class ExportCommand : Command
             Options.Add(outputOption);
             Options.Add(overwriteOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 await HandleTenantAsync(
                     parseResult.GetValue(slugArgument) ?? throw new InvalidOperationException("Tenant slug is required."),
@@ -77,8 +77,8 @@ public sealed class ExportCommand : Command
     private static void ConfigureEntityExport(Command command, EntityExportHandler handler, string idDescription)
     {
         var idArgument = new Argument<Guid>("id") { Description = idDescription };
-        var serverOption = new Option<string?>("--server", "Tenant-aware server URL (defaults to the saved profile server)");
-        var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+        var serverOption = new Option<string?>("--server") { Description = "Tenant-aware server URL (defaults to the saved profile server)" };
+        var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
         var modeOption = CreateModeOption();
         var outputOption = CreateOutputOption();
         var overwriteOption = CreateOverwriteOption();
@@ -90,7 +90,7 @@ public sealed class ExportCommand : Command
         command.Options.Add(outputOption);
         command.Options.Add(overwriteOption);
 
-        command.SetAction(async parseResult =>
+        command.SetSafeAction(async parseResult =>
         {
             await handler(
                 parseResult.GetValue(idArgument),
@@ -113,7 +113,7 @@ public sealed class ExportCommand : Command
 
     private static Option<string?> CreateOutputOption()
     {
-        return new Option<string?>("--output", "Output file path or directory (defaults to ~/.mrwhooidc/exports)");
+        return new Option<string?>("--output") { Description = "Output file path or directory (defaults to ~/.mrwhooidc/exports)" };
     }
 
     private static Option<bool> CreateOverwriteOption()

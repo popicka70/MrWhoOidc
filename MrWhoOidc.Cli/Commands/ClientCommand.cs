@@ -21,9 +21,9 @@ public sealed class ClientCommand : Command
     {
         public ClientListCommand() : base("list", "List clients for the current tenant or across the platform")
         {
-            var serverOption = new Option<string?>("--server", "Server URL (defaults to the saved profile server)");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
-            var tenantOption = new Option<string?>("--tenant", "Tenant slug filter for platform-admin profiles");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL (defaults to the saved profile server)" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var tenantOption = new Option<string?>("--tenant") { Description = "Tenant slug filter for platform-admin profiles" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format (table or json)",
@@ -35,7 +35,7 @@ public sealed class ClientCommand : Command
             Options.Add(tenantOption);
             Options.Add(formatOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
@@ -112,14 +112,14 @@ public sealed class ClientCommand : Command
         public ClientGetCommand() : base("get", "Get details of a specific client by internal ID (GUID)")
         {
             var idArg = new Argument<Guid>("id") { Description = "Client internal ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Arguments.Add(idArg);
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);
@@ -162,15 +162,15 @@ public sealed class ClientCommand : Command
             var realmIdOption = new Option<Guid?>("--realm-id") { Description = "Realm GUID to register the client in" };
             var pkceOption = new Option<bool?>("--require-pkce") { Description = "Require PKCE (default: true)" };
             var consentOption = new Option<bool?>("--require-consent") { Description = "Require user consent (default: true)" };
-            var scopeOption = new Option<string?>("--scope", "Space-separated list of allowed scopes");
-            var grantTypesOption = new Option<string[]?>("--grant-types", "Allowed grant types (e.g. authorization_code, client_credentials)");
-            var redirectsOption = new Option<string[]?>("--redirect-uris", "Allowed login redirect URIs");
-            var logoutRedirectsOption = new Option<string[]?>("--logout-redirect-uris", "Allowed logout redirect URIs");
+            var scopeOption = new Option<string?>("--scope") { Description = "Space-separated list of allowed scopes" };
+            var grantTypesOption = new Option<string[]?>("--grant-types") { Description = "Allowed grant types (e.g. authorization_code, client_credentials)" };
+            var redirectsOption = new Option<string[]?>("--redirect-uris") { Description = "Allowed login redirect URIs" };
+            var logoutRedirectsOption = new Option<string[]?>("--logout-redirect-uris") { Description = "Allowed logout redirect URIs" };
             var createSecretOption = new Option<bool>("--create-initial-secret") { Description = "Generate and activate an initial client secret (written to file)" };
-            var outputOption = new Option<string?>("--output", "File path for the credentials JSON (defaults to exports dir)");
+            var outputOption = new Option<string?>("--output") { Description = "File path for the credentials JSON (defaults to exports dir)" };
             var overwriteOption = new Option<bool>("--overwrite") { Description = "Overwrite output file if it exists" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Options.Add(clientIdOption);
             Options.Add(clientNameOption);
@@ -187,7 +187,7 @@ public sealed class ClientCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var clientId = parseResult.GetValue(clientIdOption)
                     ?? throw new InvalidOperationException("--client-id is required.");
@@ -275,8 +275,8 @@ public sealed class ClientCommand : Command
         public ClientDeleteCommand() : base("delete", "Delete a client (by internal GUID, not client_id string)")
         {
             var idArg = new Argument<Guid>("id") { Description = "Client internal ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
 
             Arguments.Add(idArg);
@@ -284,7 +284,7 @@ public sealed class ClientCommand : Command
             Options.Add(profileOption);
             Options.Add(confirmOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);

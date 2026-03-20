@@ -29,11 +29,11 @@ public sealed class UserCommand : Command
     {
         public UserListCommand() : base("list", "List users in the current tenant")
         {
-            var searchOption = new Option<string?>("--search", "Filter by username, email, or name");
-            var skipOption = new Option<int?>("--skip", "Skip this many results (for pagination)");
-            var takeOption = new Option<int?>("--take", "Return at most this many results (max 500, default 50)");
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var searchOption = new Option<string?>("--search") { Description = "Filter by username, email, or name" };
+            var skipOption = new Option<int?>("--skip") { Description = "Skip this many results (for pagination)" };
+            var takeOption = new Option<int?>("--take") { Description = "Return at most this many results (max 500, default 50)" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format: table or json",
@@ -47,7 +47,7 @@ public sealed class UserCommand : Command
             Options.Add(profileOption);
             Options.Add(formatOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var search = parseResult.GetValue(searchOption);
                 var skip = parseResult.GetValue(skipOption);
@@ -109,14 +109,14 @@ public sealed class UserCommand : Command
         public UserGetCommand() : base("get", "Get details of a specific user by ID")
         {
             var idArg = new Argument<Guid>("id") { Description = "User ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Arguments.Add(idArg);
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);
@@ -153,15 +153,13 @@ public sealed class UserCommand : Command
             "Create a new user. Credentials are written to a file (never printed to the terminal).")
         {
             var usernameOption = new Option<string>("--username") { Description = "Username (required)" };
-            var emailOption = new Option<string?>("--email", "Email address");
-            var nameOption = new Option<string?>("--name", "Display name");
-            var passwordOption = new Option<string?>("--password",
-                "Set a specific password (if omitted, a secure random password is generated)");
-            var outputOption = new Option<string?>("--output",
-                "File path for the credentials JSON output (defaults to ~/.mrwho-cli/exports/user-<username>-credentials.json)");
+            var emailOption = new Option<string?>("--email") { Description = "Email address" };
+            var nameOption = new Option<string?>("--name") { Description = "Display name" };
+            var passwordOption = new Option<string?>("--password") { Description = "Set a specific password (if omitted, a secure random password is generated)" };
+            var outputOption = new Option<string?>("--output") { Description = "File path for the credentials JSON output (defaults to ~/.mrwho-cli/exports/user-<username>-credentials.json)" };
             var overwriteOption = new Option<bool>("--overwrite") { Description = "Overwrite the output file if it already exists" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Options.Add(usernameOption);
             Options.Add(emailOption);
@@ -172,7 +170,7 @@ public sealed class UserCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var username = parseResult.GetValue(usernameOption)
                     ?? throw new InvalidOperationException("--username is required.");
@@ -235,8 +233,8 @@ public sealed class UserCommand : Command
         public UserDeleteCommand() : base("delete", "Delete a user from the current tenant")
         {
             var idArg = new Argument<Guid>("id") { Description = "User ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
 
             Arguments.Add(idArg);
@@ -244,7 +242,7 @@ public sealed class UserCommand : Command
             Options.Add(profileOption);
             Options.Add(confirmOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);

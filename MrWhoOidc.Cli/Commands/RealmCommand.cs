@@ -30,8 +30,8 @@ public sealed class RealmCommand : Command
     {
         public RealmListCommand() : base("list", "List all realms in the current tenant")
         {
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format: table or json",
@@ -42,7 +42,7 @@ public sealed class RealmCommand : Command
             Options.Add(profileOption);
             Options.Add(formatOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
@@ -87,14 +87,14 @@ public sealed class RealmCommand : Command
         public RealmGetCommand() : base("get", "Get details of a specific realm by ID")
         {
             var idArg = new Argument<Guid>("id") { Description = "Realm ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Arguments.Add(idArg);
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);
@@ -128,13 +128,13 @@ public sealed class RealmCommand : Command
         public RealmCreateCommand() : base("create", "Create a new realm in the current tenant")
         {
             var nameOption = new Option<string?>("--name") { Description = "Realm name (slug, e.g. 'customers')" };
-            var displayNameOption = new Option<string?>("--display-name", "Human-readable display name");
+            var displayNameOption = new Option<string?>("--display-name") { Description = "Human-readable display name" };
             var allowUnconfirmedOption = new Option<bool?>("--allow-unconfirmed-login")
             {
                 Description = "Allow users to log in without confirming their email (default: true)"
             };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Options.Add(nameOption);
             Options.Add(displayNameOption);
@@ -142,7 +142,7 @@ public sealed class RealmCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var name = parseResult.GetValue(nameOption)
                     ?? throw new InvalidOperationException("--name is required.");
@@ -172,11 +172,11 @@ public sealed class RealmCommand : Command
         public RealmUpdateCommand() : base("update", "Update properties of an existing realm")
         {
             var idArg = new Argument<Guid>("id") { Description = "Realm ID (GUID)" };
-            var nameOption = new Option<string?>("--name", "New realm name (slug)");
-            var displayNameOption = new Option<string?>("--display-name", "New display name");
-            var allowUnconfirmedOption = new Option<bool?>("--allow-unconfirmed-login", "Allow unconfirmed login (true/false)");
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var nameOption = new Option<string?>("--name") { Description = "New realm name (slug)" };
+            var displayNameOption = new Option<string?>("--display-name") { Description = "New display name" };
+            var allowUnconfirmedOption = new Option<bool?>("--allow-unconfirmed-login") { Description = "Allow unconfirmed login (true/false)" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Arguments.Add(idArg);
             Options.Add(nameOption);
@@ -185,7 +185,7 @@ public sealed class RealmCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var name = parseResult.GetValue(nameOption);
@@ -215,8 +215,8 @@ public sealed class RealmCommand : Command
         public RealmDeleteCommand() : base("delete", "Delete a realm (realm must have no clients)")
         {
             var idArg = new Argument<Guid>("id") { Description = "Realm ID (GUID)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
 
             Arguments.Add(idArg);
@@ -224,7 +224,7 @@ public sealed class RealmCommand : Command
             Options.Add(profileOption);
             Options.Add(confirmOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var id = parseResult.GetValue(idArg);
                 var server = parseResult.GetValue(serverOption);

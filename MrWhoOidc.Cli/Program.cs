@@ -38,7 +38,19 @@ internal static class Program
     private static async Task<int> RunCliAsync(string[] args)
     {
         var rootCommand = BuildRootCommand();
-        return await rootCommand.Parse(args).InvokeAsync();
+        try
+        {
+            return await rootCommand.Parse(args).InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(ex.Message)}");
+            if (args.Contains("--verbose"))
+            {
+                AnsiConsole.WriteException(ex);
+            }
+            return 1;
+        }
     }
 
     private static async Task<int> RunMcpServerAsync()

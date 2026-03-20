@@ -17,7 +17,7 @@ public sealed class LogoutCommand : Command
         };
 
         Options.Add(profileOption);
-        this.SetAction(parseResult => HandleAsync(parseResult.GetValue(profileOption)));
+        this.SetSafeAction(parseResult => HandleAsync(parseResult.GetValue(profileOption)));
     }
 
     private static async Task HandleAsync(string? profileName)

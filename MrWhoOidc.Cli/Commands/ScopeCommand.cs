@@ -21,9 +21,9 @@ public sealed class ScopeCommand : Command
     {
         public ScopeListCommand() : base("list", "List scopes for the current tenant or across the platform")
         {
-            var serverOption = new Option<string?>("--server", "Server URL (defaults to the saved profile server)");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
-            var tenantOption = new Option<string?>("--tenant", "Tenant slug filter for platform-admin profiles");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL (defaults to the saved profile server)" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var tenantOption = new Option<string?>("--tenant") { Description = "Tenant slug filter for platform-admin profiles" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format (table or json)",
@@ -35,7 +35,7 @@ public sealed class ScopeCommand : Command
             Options.Add(tenantOption);
             Options.Add(formatOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
@@ -108,10 +108,10 @@ public sealed class ScopeCommand : Command
         public ScopeCreateCommand() : base("create", "Create a new tenant-scoped OAuth/OIDC scope")
         {
             var nameOption = new Option<string?>("--name") { Description = "Scope name (e.g. api.read)" };
-            var descriptionOption = new Option<string?>("--description", "Human-readable description");
+            var descriptionOption = new Option<string?>("--description") { Description = "Human-readable description" };
             var isExposedOption = new Option<bool?>("--is-exposed") { Description = "Expose scope in discovery (default: true)" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Options.Add(nameOption);
             Options.Add(descriptionOption);
@@ -119,7 +119,7 @@ public sealed class ScopeCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var name = parseResult.GetValue(nameOption)
                     ?? throw new InvalidOperationException("--name is required.");
@@ -149,10 +149,10 @@ public sealed class ScopeCommand : Command
         public ScopeUpdateCommand() : base("update", "Update a tenant-scoped scope's description or exposure flag")
         {
             var nameArg = new Argument<string>("name") { Description = "Scope name to update" };
-            var descriptionOption = new Option<string?>("--description", "Human-readable description");
+            var descriptionOption = new Option<string?>("--description") { Description = "Human-readable description" };
             var isExposedOption = new Option<bool?>("--is-exposed") { Description = "Expose scope in discovery" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
 
             Arguments.Add(nameArg);
             Options.Add(descriptionOption);
@@ -160,7 +160,7 @@ public sealed class ScopeCommand : Command
             Options.Add(serverOption);
             Options.Add(profileOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var name = parseResult.GetValue(nameArg)!;
                 var description = parseResult.GetValue(descriptionOption);
@@ -189,8 +189,8 @@ public sealed class ScopeCommand : Command
         public ScopeDeleteCommand() : base("delete", "Delete a tenant-scoped scope")
         {
             var nameArg = new Argument<string>("name") { Description = "Scope name to delete" };
-            var serverOption = new Option<string?>("--server", "Server URL");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
             var confirmOption = new Option<bool>("--confirm") { Description = "Skip the confirmation prompt" };
 
             Arguments.Add(nameArg);
@@ -198,7 +198,7 @@ public sealed class ScopeCommand : Command
             Options.Add(profileOption);
             Options.Add(confirmOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var name = parseResult.GetValue(nameArg)!;
                 var server = parseResult.GetValue(serverOption);

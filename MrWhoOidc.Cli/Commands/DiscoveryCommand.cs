@@ -28,7 +28,7 @@ public sealed class DiscoveryCommand : Command
         Options.Add(profileOption);
         Options.Add(formatOption);
 
-        this.SetAction(async parseResult =>
+        this.SetSafeAction(async parseResult =>
         {
             var server = parseResult.GetValue(serverOption);
             var profile = parseResult.GetValue(profileOption);

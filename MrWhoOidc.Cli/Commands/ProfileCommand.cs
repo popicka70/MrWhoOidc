@@ -15,7 +15,7 @@ public sealed class ProfileCommand : Command
         var listCommand = new Command("list", "List all profiles");
         var listFormatOption = CreateFormatOption();
         listCommand.Options.Add(listFormatOption);
-        listCommand.SetAction(parseResult => ListProfilesAsync(parseResult.GetValue(listFormatOption)));
+        listCommand.SetSafeAction(parseResult => ListProfilesAsync(parseResult.GetValue(listFormatOption)));
         Subcommands.Add(listCommand);
 
         var showCommand = new Command("show", "Show the current profile or a named profile");
@@ -27,7 +27,7 @@ public sealed class ProfileCommand : Command
         var showFormatOption = CreateFormatOption();
         showCommand.Arguments.Add(showNameArgument);
         showCommand.Options.Add(showFormatOption);
-        showCommand.SetAction(async parseResult =>
+        showCommand.SetSafeAction(async parseResult =>
         {
             var name = parseResult.GetValue(showNameArgument);
             var format = parseResult.GetValue(showFormatOption);
@@ -41,7 +41,7 @@ public sealed class ProfileCommand : Command
             Description = "Profile name to switch to"
         };
         switchCommand.Arguments.Add(nameArgument);
-        switchCommand.SetAction(async parseResult =>
+        switchCommand.SetSafeAction(async parseResult =>
         {
             var name = parseResult.GetValue(nameArgument);
             if (string.IsNullOrWhiteSpace(name))
@@ -59,7 +59,7 @@ public sealed class ProfileCommand : Command
             Description = "Profile name to remove"
         };
         removeCommand.Arguments.Add(removeNameArgument);
-        removeCommand.SetAction(async parseResult =>
+        removeCommand.SetSafeAction(async parseResult =>
         {
             var name = parseResult.GetValue(removeNameArgument);
             if (string.IsNullOrWhiteSpace(name))

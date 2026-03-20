@@ -18,9 +18,9 @@ public sealed class TenantCommand : Command
     {
         public TenantListCommand() : base("list", "List tenants visible to the current platform-admin profile")
         {
-            var serverOption = new Option<string?>("--server", "Platform server URL (defaults to the saved profile server)");
-            var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
-            var searchOption = new Option<string?>("--search", "Filter tenants by slug, name, or description");
+            var serverOption = new Option<string?>("--server") { Description = "Platform server URL (defaults to the saved profile server)" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+            var searchOption = new Option<string?>("--search") { Description = "Filter tenants by slug, name, or description" };
             var formatOption = new Option<OutputFormat>("--format")
             {
                 Description = "Output format (table or json)",
@@ -32,7 +32,7 @@ public sealed class TenantCommand : Command
             Options.Add(searchOption);
             Options.Add(formatOption);
 
-            this.SetAction(async parseResult =>
+            this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);

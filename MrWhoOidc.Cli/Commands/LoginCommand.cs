@@ -28,7 +28,7 @@ public sealed class LoginCommand : Command
         Options.Add(serverOption);
         Options.Add(clientIdOption);
 
-        this.SetAction(async parseResult =>
+        this.SetSafeAction(async parseResult =>
         {
             var server = parseResult.GetValue(serverOption);
             var clientId = parseResult.GetValue(clientIdOption);

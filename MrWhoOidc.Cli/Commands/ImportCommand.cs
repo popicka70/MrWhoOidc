@@ -71,13 +71,10 @@ public sealed class ImportCommand : Command
             Description = "How to handle conflicts: skip, overwrite, or rename. Default: skip",
             DefaultValueFactory = _ => "skip"
         };
-        var serverOption = new Option<string?>("--server",
-            "Server URL to import into (defaults to the current profile server)");
-        var profileOption = new Option<string?>("--profile", "Authenticated profile to use");
-        var realmIdOption = new Option<Guid?>("--realm-id",
-            "Target realm ID (required when importing a client manifest into a specific realm)");
-        var clientSecretOption = new Option<string?>("--client-secret",
-            "Plaintext secret to supply for an obfuscated client or provider credential");
+        var serverOption = new Option<string?>("--server") { Description = "Server URL to import into (defaults to the current profile server)" };
+        var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+        var realmIdOption = new Option<Guid?>("--realm-id") { Description = "Target realm ID (required when importing a client manifest into a specific realm)" };
+        var clientSecretOption = new Option<string?>("--client-secret") { Description = "Plaintext secret to supply for an obfuscated client or provider credential" };
         var dryRunOption = new Option<bool>("--dry-run")
         {
             Description = "Validate and report, but do NOT persist any changes (same as preview)"
@@ -96,7 +93,7 @@ public sealed class ImportCommand : Command
             command.Options.Add(dryRunOption);
         }
 
-        command.SetAction(async parseResult =>
+        command.SetSafeAction(async parseResult =>
         {
             var file = parseResult.GetValue(fileArgument)
                        ?? throw new InvalidOperationException("A manifest file path is required.");
