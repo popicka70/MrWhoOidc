@@ -247,7 +247,11 @@ public static class AdminApiEndpointMappingExtensions
             if (input is null || input.IdentityProviderId == Guid.Empty)
                 return Results.Problem(statusCode: 400, title: "Invalid input");
 
-            var clientExists = await db.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId, ct);
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
+            var clientExists = client is not null;
             var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId, ct);
             if (!clientExists || !providerExists)
                 return Results.Problem(statusCode: 404, title: "Client or Provider not found");
@@ -288,6 +292,10 @@ public static class AdminApiEndpointMappingExtensions
 
         admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
         {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
 
@@ -309,6 +317,10 @@ public static class AdminApiEndpointMappingExtensions
 
         admin.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, CancellationToken ct) =>
         {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             db.ClientIdentityProviders.Remove(entity);
@@ -569,6 +581,7 @@ public static class AdminApiEndpointMappingExtensions
         {
             var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
             if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
+            if (client.IsSystemClient) return Results.Problem(statusCode: 403, title: "System client is read-only");
             if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
             {
                 var status = AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
@@ -1075,6 +1088,10 @@ public static class AdminApiEndpointMappingExtensions
             {
                 return Results.Problem(statusCode: 404, title: "Client not found");
             }
+            if (client.IsSystemClient)
+            {
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+            }
 
             // Get all secrets for this client
             var secrets = await db.ClientSecrets
@@ -1135,6 +1152,10 @@ public static class AdminApiEndpointMappingExtensions
             if (client is null)
             {
                 return Results.Problem(statusCode: 404, title: "Client not found");
+            }
+            if (client.IsSystemClient)
+            {
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
             }
 
             // Check max active secrets limit (3)
@@ -1211,7 +1232,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1243,7 +1264,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1275,7 +1296,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1312,6 +1333,28 @@ public static class AdminApiEndpointMappingExtensions
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+        if (!isPlatformAdmin)
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue) return false;
+            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        return await clientQuery.AnyAsync(ct);
+    }
+
+    private static async Task<bool> VerifyMutableClientAccess(
+        Guid clientId,
+        AuthDbContext db,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId && !c.IsSystemClient);
         if (!isPlatformAdmin)
         {
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;

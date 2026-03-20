@@ -75,6 +75,12 @@ public class AuthTenantSettings
     public bool? RequireMfa { get; set; }
 
     /// <summary>
+    /// Enables the dedicated tenant CLI device-flow client.
+    /// </summary>
+    [JsonPropertyName("cliAccessEnabled")]
+    public bool? CliAccessEnabled { get; set; }
+
+    /// <summary>
     /// Realm that will be assigned to dynamically registered clients (RFC 7591).
     /// Null disables dynamic client registration for this tenant.
     /// </summary>

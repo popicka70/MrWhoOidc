@@ -25,6 +25,7 @@ public sealed class DiscoveryHandler(
     AuthDbContext db,
     IFeatureService featureService,
     ITenantAccessor tenantAccessor,
+    ICliClientService cliClientService,
     IPlatformSettingsService platformSettingsService,
     IMultiTenancyOptions multiTenancyOptions) : IDiscoveryHandler
 {
@@ -320,6 +321,15 @@ public sealed class DiscoveryHandler(
         if (deviceAuthEnabled)
         {
             body["device_authorization_endpoint"] = $"{baseUrl}/device/authorize";
+
+            if (tenantId.HasValue && tenantId.Value != Guid.Empty)
+            {
+                var cliClientId = await cliClientService.GetCliClientIdAsync(tenantId.Value, ctx.RequestAborted).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(cliClientId))
+                {
+                    body["mrwho_cli_client_id"] = cliClientId;
+                }
+            }
         }
 
         // OpenID Connect CIBA Core 1.0

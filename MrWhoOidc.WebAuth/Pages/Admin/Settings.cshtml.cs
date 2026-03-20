@@ -15,6 +15,7 @@ public class SettingsModel : PageModel
 {
     private readonly ITenantSettingsService _settingsService;
     private readonly ITenantAccessor _tenantAccessor;
+    private readonly ICliClientService _cliClientService;
     private readonly IMultiTenancyOptions _multiTenancyOptions;
     private readonly ILogger<SettingsModel> _logger;
     private readonly AuthDbContext _db;
@@ -22,12 +23,14 @@ public class SettingsModel : PageModel
     public SettingsModel(
         ITenantSettingsService settingsService,
         ITenantAccessor tenantAccessor,
+        ICliClientService cliClientService,
         IMultiTenancyOptions multiTenancyOptions,
         ILogger<SettingsModel> logger,
         AuthDbContext db)
     {
         _settingsService = settingsService;
         _tenantAccessor = tenantAccessor;
+        _cliClientService = cliClientService;
         _multiTenancyOptions = multiTenancyOptions;
         _logger = logger;
         _db = db;
@@ -41,6 +44,7 @@ public class SettingsModel : PageModel
 
     public bool IsMultiTenantMode { get; set; }
     public string? SuccessMessage { get; set; }
+    public string? CurrentCliClientId { get; set; }
     public TenantSettings? PlatformDefaults { get; set; }
 
     public List<SelectListItem> DynamicClientRegistrationRealmOptions { get; private set; } = new();
@@ -50,6 +54,7 @@ public class SettingsModel : PageModel
         // Auth settings (nullable backing fields for actual storage)
         private bool? _allowRefreshTokenIntrospection;
         private bool? _requireMfa;
+        private bool? _cliAccessEnabled;
         private bool? _passwordRequireUppercase;
         private bool? _passwordRequireLowercase;
         private bool? _passwordRequireDigit;
@@ -67,6 +72,12 @@ public class SettingsModel : PageModel
         {
             get => _requireMfa ?? false;
             set => _requireMfa = value ? true : null;
+        }
+
+        public bool CliAccessEnabled
+        {
+            get => _cliAccessEnabled ?? false;
+            set => _cliAccessEnabled = value ? true : null;
         }
 
         // Dynamic Client Registration
@@ -117,6 +128,7 @@ public class SettingsModel : PageModel
         // Methods to get nullable values for storage
         public bool? GetAllowRefreshTokenIntrospection() => _allowRefreshTokenIntrospection;
         public bool? GetRequireMfa() => _requireMfa;
+        public bool? GetCliAccessEnabled() => _cliAccessEnabled;
         public bool? GetPasswordRequireUppercase() => _passwordRequireUppercase;
         public bool? GetPasswordRequireLowercase() => _passwordRequireLowercase;
         public bool? GetPasswordRequireDigit() => _passwordRequireDigit;
@@ -126,6 +138,7 @@ public class SettingsModel : PageModel
         // Methods to set nullable values from loaded settings
         public void SetAllowRefreshTokenIntrospection(bool? value) => _allowRefreshTokenIntrospection = value;
         public void SetRequireMfa(bool? value) => _requireMfa = value;
+        public void SetCliAccessEnabled(bool? value) => _cliAccessEnabled = value;
         public void SetPasswordRequireUppercase(bool? value) => _passwordRequireUppercase = value;
         public void SetPasswordRequireLowercase(bool? value) => _passwordRequireLowercase = value;
         public void SetPasswordRequireDigit(bool? value) => _passwordRequireDigit = value;
@@ -146,6 +159,7 @@ public class SettingsModel : PageModel
         }
 
         await LoadRealmOptionsAsync(tenantContext.TenantId);
+        CurrentCliClientId = await _cliClientService.GetCliClientIdAsync(tenantContext.TenantId);
 
         // Load current tenant settings overrides (not merged)
         var settingsOverrides = await GetTenantSettingsOverridesAsync(tenantContext.TenantId);
@@ -180,6 +194,7 @@ public class SettingsModel : PageModel
         }
 
         await LoadRealmOptionsAsync(tenantContext.TenantId);
+        CurrentCliClientId = await _cliClientService.GetCliClientIdAsync(tenantContext.TenantId);
 
         if (Input.DynamicClientRegistrationRealmId != null)
         {
@@ -200,6 +215,7 @@ public class SettingsModel : PageModel
             {
                 AllowRefreshTokenIntrospection = Input.GetAllowRefreshTokenIntrospection(),
                 RequireMfa = Input.GetRequireMfa(),
+                CliAccessEnabled = Input.GetCliAccessEnabled(),
                 DynamicClientRegistrationRealmId = Input.DynamicClientRegistrationRealmId,
                 PasswordPolicy = new PasswordPolicySettings
                 {
@@ -224,6 +240,17 @@ public class SettingsModel : PageModel
             }
         };
 
+        if (Input.CliAccessEnabled)
+        {
+            var client = await _cliClientService.EnableCliAccessAsync(tenantContext.TenantId, tenantContext.Slug);
+            CurrentCliClientId = client.ClientId;
+        }
+        else
+        {
+            await _cliClientService.DisableCliAccessAsync(tenantContext.TenantId, tenantContext.Slug);
+            CurrentCliClientId = null;
+        }
+
         var success = await _settingsService.UpdateTenantSettingsAsync(tenantContext.TenantId, settings);
         if (!success)
         {
@@ -246,6 +273,7 @@ public class SettingsModel : PageModel
 
         Input.SetAllowRefreshTokenIntrospection(settings.Auth?.AllowRefreshTokenIntrospection);
         Input.SetRequireMfa(settings.Auth?.RequireMfa);
+        Input.SetCliAccessEnabled(settings.Auth?.CliAccessEnabled);
         Input.DynamicClientRegistrationRealmId = settings.Auth?.DynamicClientRegistrationRealmId;
         Input.PasswordMinLength = settings.Auth?.PasswordPolicy?.MinLength;
         Input.SetPasswordRequireUppercase(settings.Auth?.PasswordPolicy?.RequireUppercase);

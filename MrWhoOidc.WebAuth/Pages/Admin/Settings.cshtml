@@ -58,6 +58,22 @@
                                 Platform default: <strong>@(Model.PlatformDefaults?.Auth?.RequireMfa?.ToString() ?? "Not set")</strong>
                             </small>
                         </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="Input.CliAccessEnabled" id="cliAccessEnabled">
+                            <label class="form-check-label" for="cliAccessEnabled">
+                                Enable CLI Access
+                            </label>
+                            <small class="form-text text-muted d-block w-100 mt-1">
+                                Creates or enables the tenant's dedicated MrWho CLI device-flow client. The CLI then only needs this tenant URL.
+                            </small>
+                            @if (!string.IsNullOrWhiteSpace(Model.CurrentCliClientId))
+                            {
+                                <small class="form-text text-muted d-block w-100 mt-1">
+                                    Dedicated client ID: <strong>@Model.CurrentCliClientId</strong>
+                                </small>
+                            }
+                        </div>
                     </div>
                 </div>
 

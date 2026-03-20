@@ -19,7 +19,7 @@ public class IndexModel(
     IClientStore clientStore,
     IMultiTenancyOptions multiTenancyOptions) : TenantAwarePageModel(tenantAccessor, multiTenancyOptions)
 {
-    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar);
+    public sealed record ClientRow(Guid Id, string ClientId, string? ClientName, string RealmName, Guid TenantId, string TenantName, bool RequirePkce, bool RequireConsent, bool HasJwks, bool RequirePar, bool IsSystemClient);
 
     public IReadOnlyList<ClientRow> Clients { get; private set; } = Array.Empty<ClientRow>();
 
@@ -67,7 +67,8 @@ public class IndexModel(
                 x.Client.RequirePkce,
                 x.Client.RequireConsent,
                 !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri),
-                x.Client.RequirePar
+                x.Client.RequirePar,
+                x.Client.IsSystemClient
             ))
             .ToListAsync();
     }
@@ -127,6 +128,11 @@ public class IndexModel(
 
         var entity = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value);
         if (entity is null) return TenantAwareRedirectToPage();
+        if (entity.IsSystemClient)
+        {
+            TempData["Error"] = "System clients are managed automatically and cannot be deleted here.";
+            return TenantAwareRedirect("/Admin/Clients");
+        }
 
         // Capture for cache invalidation
         var clientId = entity.ClientId;
