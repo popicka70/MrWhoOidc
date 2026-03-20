@@ -4,7 +4,7 @@ set -euo pipefail
 
 configuration="Release"
 output_dir="nupkg"
-bump_version="false"
+bump_version="true"
 bump_part="patch"
 skip_install="false"
 
@@ -15,7 +15,8 @@ Usage: ./deploy-mrwho-cli.sh [options]
 Options:
   --configuration <Debug|Release>  Build configuration. Default: Release
   --output-dir <path>              Package output directory. Default: nupkg
-  --bump-version                   Increment the package version before packing
+    --bump-version                   Increment the package version before packing (default)
+    --no-bump-version                Keep the current project version when packing
   --bump-part <major|minor|patch>  Version part to increment. Default: patch
   --skip-install                   Only produce the package; do not reinstall the global tool
   --help                           Show this help
@@ -34,6 +35,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --bump-version)
             bump_version="true"
+            shift
+            ;;
+        --no-bump-version)
+            bump_version="false"
             shift
             ;;
         --bump-part)
@@ -75,7 +80,9 @@ esac
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_path="$repo_root/MrWhoOidc.Cli/MrWhoOidc.Cli.csproj"
 output_path="$repo_root/$output_dir"
+nuget_config_path="$repo_root/NuGet.config"
 package_id="MrWhoOidc.Cli"
+local_source_name="MrWhoOidcLocal"
 
 if [[ ! -f "$project_path" ]]; then
     echo "Project file not found: $project_path" >&2
@@ -142,6 +149,10 @@ mkdir -p "$output_path"
 echo "Packing $package_id ($version)..."
 dotnet pack "$project_path" -c "$configuration" -o "$output_path" /p:Version="$version"
 
+if [[ -f "$nuget_config_path" ]]; then
+    echo "Local NuGet source '$local_source_name' is available via $nuget_config_path"
+fi
+
 if [[ "$skip_install" == "true" ]]; then
     echo "Package created in $output_path"
     exit 0
@@ -156,3 +167,4 @@ echo "Installing $package_id $version from $output_path..."
 dotnet tool install --global --add-source "$output_path" --version "$version" "$package_id"
 
 echo "mrwho-cli deployed successfully."
+echo "CLI package source: $output_path"

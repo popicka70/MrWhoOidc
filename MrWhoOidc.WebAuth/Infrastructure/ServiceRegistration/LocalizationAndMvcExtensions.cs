@@ -87,7 +87,7 @@ public static class LocalizationAndMvcExtensions
 
                 // Add tenant-prefixed routes for authentication-related pages
                 // This allows: /t/{slug}/login, /t/{slug}/consent, etc.
-                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index", "/DiscoverTenant", "/SelectTenant" };
+                var authPages = new[] { "/Login", "/LoginTotp", "/Consent", "/Index", "/DiscoverTenant", "/SelectTenant", "/Device" };
                 foreach (var page in authPages)
                 {
                     options.Conventions.AddPageRouteModelConvention(page, model => AddTenantPrefixedRoutes(model));

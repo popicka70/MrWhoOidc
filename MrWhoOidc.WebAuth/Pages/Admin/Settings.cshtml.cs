@@ -45,6 +45,7 @@ public class SettingsModel : PageModel
     public bool IsMultiTenantMode { get; set; }
     public string? SuccessMessage { get; set; }
     public string? CurrentCliClientId { get; set; }
+    public string? CurrentCliServerUrl { get; set; }
     public TenantSettings? PlatformDefaults { get; set; }
 
     public List<SelectListItem> DynamicClientRegistrationRealmOptions { get; private set; } = new();
@@ -160,6 +161,7 @@ public class SettingsModel : PageModel
 
         await LoadRealmOptionsAsync(tenantContext.TenantId);
         CurrentCliClientId = await _cliClientService.GetCliClientIdAsync(tenantContext.TenantId);
+        CurrentCliServerUrl = tenantContext.IssuerUri?.TrimEnd('/');
 
         // Load current tenant settings overrides (not merged)
         var settingsOverrides = await GetTenantSettingsOverridesAsync(tenantContext.TenantId);
@@ -195,6 +197,7 @@ public class SettingsModel : PageModel
 
         await LoadRealmOptionsAsync(tenantContext.TenantId);
         CurrentCliClientId = await _cliClientService.GetCliClientIdAsync(tenantContext.TenantId);
+        CurrentCliServerUrl = tenantContext.IssuerUri?.TrimEnd('/');
 
         if (Input.DynamicClientRegistrationRealmId != null)
         {

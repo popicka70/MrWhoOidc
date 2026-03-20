@@ -72,6 +72,21 @@
                                 <small class="form-text text-muted d-block w-100 mt-1">
                                     Dedicated client ID: <strong>@Model.CurrentCliClientId</strong>
                                 </small>
+                                @if (!string.IsNullOrWhiteSpace(Model.CurrentCliServerUrl))
+                                {
+                                    <div class="mt-3">
+                                        <label for="cli-server-url" class="form-label">CLI Server URL</label>
+                                        <div class="input-group">
+                                            <input id="cli-server-url" type="text" class="form-control" value="@Model.CurrentCliServerUrl" readonly>
+                                            <button type="button" class="btn btn-outline-secondary" onclick="copyCliServerUrl(this)">
+                                                <i class="ph ph-copy me-1"></i>Copy
+                                            </button>
+                                        </div>
+                                        <small class="form-text text-muted d-block mt-1">
+                                            Use this tenant URL when connecting MrWho CLI.
+                                        </small>
+                                    </div>
+                                }
                             }
                         </div>
                     </div>
@@ -234,6 +249,31 @@
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
                 document.querySelectorAll('select').forEach(sel => sel.value = '');
+            }
+        }
+
+        async function copyCliServerUrl(button) {
+            const input = document.getElementById('cli-server-url');
+            if (!input) {
+                return;
+            }
+
+            const value = input.value;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(value);
+                } else {
+                    input.focus();
+                    input.select();
+                    document.execCommand('copy');
+                }
+
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="ph ph-check me-1"></i>Copied';
+                setTimeout(() => button.innerHTML = original, 1500);
+            } catch {
+                input.focus();
+                input.select();
             }
         }
     </script>

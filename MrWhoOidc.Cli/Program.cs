@@ -1,6 +1,5 @@
 using System.CommandLine;
 using MrWhoOidc.Cli.Commands;
-using MrWhoOidc.Cli.Configuration;
 using MrWhoOidc.Cli.Mcp;
 using Spectre.Console;
 
@@ -89,9 +88,6 @@ internal static class Program
         rootCommand.Subcommands.Add(new LogoutCommand());
         rootCommand.Subcommands.Add(new ProfileCommand());
         
-        // Placeholder for upcoming commands
-        AnsiConsole.MarkupLine("[dim]Additional commands (client, user, tenant, etc.) will be added in next phases[/]");
-
         return rootCommand;
     }
 }

@@ -23,17 +23,31 @@ dotnet tool install --global MrWhoOidc.Cli
 ### From Source (Development)
 
 ```bash
-# Build, pack, and reinstall the global tool from the local package source
+# Build, bump the patch version, pack, and reinstall the global tool from the local package source
 ./deploy-mrwho-cli.sh
 
-# Bump the package version first, then deploy
-./deploy-mrwho-cli.sh --bump-version
-
 # Bump the minor version instead of the default patch increment
-./deploy-mrwho-cli.sh --bump-version --bump-part minor
+./deploy-mrwho-cli.sh --bump-part minor
+
+# Pack without bumping the version
+./deploy-mrwho-cli.sh --no-bump-version
 ```
 
-The deploy script packs `MrWhoOidc.Cli`, removes any existing global install, and reinstalls the tool from `./nupkg`. Use `--skip-install` if you only want to produce the `.nupkg` artifact. A PowerShell variant is also available as `deploy-mrwho-cli.ps1` if you prefer `pwsh`.
+The deploy script packs `MrWhoOidc.Cli`, removes any existing global install, and reinstalls the tool from `./nupkg`. The repository now includes a local NuGet source declaration in `NuGet.config` pointing at `./nupkg`, and the deploy scripts auto-bump the package version by default. Use `--skip-install` if you only want to produce the `.nupkg` artifact. A PowerShell variant is also available as `deploy-mrwho-cli.ps1` if you prefer `pwsh`.
+
+### Local NuGet Feed
+
+The repository-local NuGet feed is defined in `NuGet.config`:
+
+```xml
+<add key="MrWhoOidcLocal" value="./nupkg" />
+```
+
+After running the deploy script, you can install the tool directly from the local package feed:
+
+```bash
+dotnet tool install --global --add-source ./nupkg MrWhoOidc.Cli
+```
 
 ## Quick Start
 

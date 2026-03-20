@@ -7,7 +7,7 @@ param(
 
     [string]$OutputDir = "nupkg",
 
-    [switch]$BumpVersion,
+    [switch]$NoBumpVersion,
 
     [ValidateSet("patch", "minor", "major")]
     [string]$BumpPart = "patch",
@@ -20,7 +20,9 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectPath = Join-Path $repoRoot "MrWhoOidc.Cli/MrWhoOidc.Cli.csproj"
 $outputPath = Join-Path $repoRoot $OutputDir
+$nugetConfigPath = Join-Path $repoRoot "NuGet.config"
 $packageId = "MrWhoOidc.Cli"
+$localSourceName = "MrWhoOidcLocal"
 
 function Get-ProjectVersion {
     param(
@@ -105,7 +107,9 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 
 $version = Get-ProjectVersion -ProjectFile $projectPath
 
-if ($BumpVersion) {
+$bumpVersion = -not $NoBumpVersion
+
+if ($bumpVersion) {
     $newVersion = Get-BumpedVersion -Version $version -Part $BumpPart
     Set-ProjectVersion -ProjectFile $projectPath -Version $newVersion
     $version = $newVersion
@@ -124,6 +128,10 @@ dotnet pack $projectPath -c $Configuration -o $outputPath /p:Version=$version
 
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet pack failed"
+}
+
+if (Test-Path -Path $nugetConfigPath) {
+    Write-Host "Local NuGet source '$localSourceName' is available via $nugetConfigPath" -ForegroundColor DarkGray
 }
 
 if ($SkipInstall) {
@@ -154,3 +162,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "mrwho-cli deployed successfully." -ForegroundColor Green
+Write-Host "CLI package source: $outputPath" -ForegroundColor DarkGray

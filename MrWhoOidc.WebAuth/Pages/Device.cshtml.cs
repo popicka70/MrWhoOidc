@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -22,7 +21,7 @@ public class DeviceModel(
     IAuthorizationService authorizationService,
     ILogger<DeviceModel> logger) : PageModel
 {
-    [BindProperty(SupportsGet = true)]
+    [BindProperty(SupportsGet = true, Name = "user_code")]
     public string? UserCode { get; set; }
 
     public string? ErrorMessage { get; set; }

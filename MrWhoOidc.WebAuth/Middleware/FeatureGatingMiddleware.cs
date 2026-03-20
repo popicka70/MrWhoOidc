@@ -3,8 +3,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using MrWhoOidc.Auth.Licensing.Models;
 using MrWhoOidc.Auth.Licensing.Services;
 using MrWhoOidc.Auth.MultiTenancy;
+using MrWhoOidc.Auth.Persistence;
 
 namespace MrWhoOidc.WebAuth.Middleware;
 
@@ -49,6 +52,12 @@ public sealed class FeatureGatingMiddleware
                 continue;
             }
 
+            if (requirement.FeatureName == FeatureFlags.DeviceAuthorizationGrant &&
+                await ShouldAllowTenantCliDeviceAuthorizationAsync(context, tenantId).ConfigureAwait(false))
+            {
+                continue;
+            }
+
             _logger.LogWarning(
                 "Feature gating denied request. Feature={Feature} Path={Path} Tenant={Tenant}",
                 requirement.FeatureName,
@@ -62,5 +71,33 @@ public sealed class FeatureGatingMiddleware
         }
 
         await _next(context).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> ShouldAllowTenantCliDeviceAuthorizationAsync(HttpContext context, Guid? tenantId)
+    {
+        if (!tenantId.HasValue || !HttpMethods.IsPost(context.Request.Method) || !context.Request.Path.Value?.EndsWith("/device/authorize", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return false;
+        }
+
+        if (!context.Request.HasFormContentType)
+        {
+            return false;
+        }
+
+        var form = await context.Request.ReadFormAsync(context.RequestAborted).ConfigureAwait(false);
+        var clientId = form["client_id"].ToString();
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return false;
+        }
+
+        var db = context.RequestServices.GetRequiredService<AuthDbContext>();
+        var client = await db.Clients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId.Value && c.ClientId == clientId, context.RequestAborted)
+            .ConfigureAwait(false);
+
+        return client?.IsSystemClient == true && client.AllowDeviceAuthorization;
     }
 }
