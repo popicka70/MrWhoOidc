@@ -54,16 +54,34 @@ dotnet tool install --global --add-source ./nupkg MrWhoOidc.Cli
 ### CLI Mode
 
 ```bash
-# Login to your OIDC server
-mrwho-cli login --server https://auth.example.com --client-id cli-admin
+# Login to your tenant-aware OIDC server
+mrwho-cli login --server https://auth.example.com/t/acme
 
 # Follow the device code flow instructions in your browser
 
-# List clients (once authenticated)
+# Inspect the connected server discovery document
+mrwho-cli discovery --server https://auth.example.com/t/acme
+
+# List clients for the current tenant
 mrwho-cli client list
 
+# List scopes for the current tenant
+mrwho-cli scope list
+
+# List all tenants as a platform admin
+mrwho-cli tenant list
+
+# List saved profiles
+mrwho-cli profile list
+
+# Show the active profile
+mrwho-cli profile show
+
+# Clear tokens for the current profile
+mrwho-cli logout
+
 # Get help for any command
-mrwho-cli client --help
+mrwho-cli discovery --help
 ```
 
 ### MCP Mode (for LLMs)
@@ -95,12 +113,14 @@ Configure in your MCP client (e.g., VS Code settings.json):
 - Basic command framework with System.CommandLine
 - Spectre.Console integration for rich terminal UI
 
-**Phase 2: Authentication** 🚧 **IN PROGRESS**
-- Device code flow implementation
-- Token manager with automatic refresh
-- Auth middleware for HTTP requests
+**Phase 2: Authentication and Discovery** 🚧 **IN PROGRESS**
+- Device code flow login
+- Server discovery inspection
+- Working profile management (`list`, `show`, `switch`, `remove`)
+- Working logout/token clearing
+- Authenticated admin list commands for tenants, clients, and scopes
 
-**Phase 3+**: Admin API client, CLI commands, multi-tenancy validation, output formatting, etc.
+**Phase 3+**: CRUD admin commands, provider/admin parity, MCP parity, richer output formatting, and broader server configuration support.
 
 ## Architecture
 
@@ -115,10 +135,16 @@ MrWhoOidc.Cli/
 │   └── McpToolRegistry.cs     # Tool definitions & handlers
 ├── Commands/
 │   ├── LoginCommand.cs        # Device code flow auth
-│   ├── LogoutCommand.cs       # Clear tokens
-│   ├── ProfileCommand.cs      # Profile management
-│   └── (more commands in phases 4-8)
-└── (upcoming: Auth/, Http/, Output/, Services/)
+│   ├── LogoutCommand.cs       # Clear tokens for a profile
+│   ├── ProfileCommand.cs      # Profile list/show/switch/remove
+│   ├── DiscoveryCommand.cs    # Inspect OIDC discovery metadata
+│   ├── TenantCommand.cs       # Platform tenant listing
+│   ├── ClientCommand.cs       # Tenant/platform client listing
+│   └── ScopeCommand.cs        # Tenant/platform scope listing
+├── Services/
+│   ├── CliServerConnection.cs # Shared server/discovery/auth helpers
+│   └── CliAdminApiClient.cs   # Authenticated admin API requests
+└── (upcoming: Http/, Output/, admin command groups)
 ```
 
 ## Configuration
@@ -131,7 +157,7 @@ Configuration stored at `~/.mrwhooidc/config.json`:
   "profiles": {
     "default": {
       "serverUrl": "https://auth.example.com",
-      "clientId": "cli-admin",
+      "clientId": "mrwho-cli-acme",
       "accessToken": "...",
       "refreshToken": "...",
       "tokenExpiry": "2026-03-08T12:00:00Z",
@@ -176,17 +202,13 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ## Roadmap
 
-See [/memories/session/plan.md](/memories/session/plan.md) for detailed implementation plan covering:
+See [/memories/session/plan.md](/memories/session/plan.md) for the current phased implementation plan covering:
 
-- Phase 2: Device code flow authentication
-- Phase 3: Admin API HTTP client
-- Phase 4: Full CLI command structure (client, user, tenant, role, realm, scope, idp, keys, bcl, settings)
-- Phase 5: MCP tool implementations
-- Phase 6: Multi-tenancy authorization
-- Phase 7: Output formatters (JSON, YAML, CSV)
-- Phase 8: Profile management
-- Phase 9: Testing
-- Phase 10: Documentation & packaging
+- shared CLI infrastructure and token/session improvements
+- immediate command groups against existing endpoints
+- follow-on WebAuth API work for clients/realms/scopes/users
+- CLI and MCP testing strategy
+- documentation and rollout work
 
 ## Contributing
 

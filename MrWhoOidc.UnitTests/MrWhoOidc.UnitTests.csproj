@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MrWhoOidc.Auth\MrWhoOidc.Auth.csproj" />
+    <ProjectReference Include="..\MrWhoOidc.Cli\MrWhoOidc.Cli.csproj" />
     <ProjectReference Include="..\MrWhoOidc.Web\MrWhoOidc.Web.csproj" Aliases="rpweb" />
     <ProjectReference Include="..\MrWhoOidc.WebAuth\MrWhoOidc.WebAuth.csproj" />
   </ItemGroup>

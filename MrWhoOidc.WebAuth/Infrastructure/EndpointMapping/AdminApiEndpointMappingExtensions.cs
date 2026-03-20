@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -41,6 +42,10 @@ public static class AdminApiEndpointMappingExtensions
         // Tenant Icon Endpoints (mapped to both admin groups)
         MapTenantIconEndpoints(admin);
         MapTenantIconEndpoints(tenantAdmin);
+
+        // Resource listing endpoints (tenant-scoped and platform-wide)
+        MapTenantResourceListEndpoints(admin);
+        MapTenantResourceListEndpoints(tenantAdmin);
 
         // Providers CRUD (tenant-aware)
         admin.MapGet("/providers", async (
@@ -906,6 +911,8 @@ public static class AdminApiEndpointMappingExtensions
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
+        MapPlatformResourceListEndpoints(platformAdmin);
+
         LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
         RateLimitingEndpoints.MapRateLimitingEndpoints(admin, platformAdmin);
 
@@ -1022,6 +1029,263 @@ public static class AdminApiEndpointMappingExtensions
             });
         }).WithName("MigrateSingleAccount");
 #pragma warning restore CS0618
+    }
+
+    private static void MapTenantResourceListEndpoints(RouteGroupBuilder group)
+    {
+        group.MapGet("/clients", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            }
+
+            var rows = await db.Clients.AsNoTracking()
+                .Where(c => c.TenantId == currentTenantId.Value)
+                .Join(db.Tenants.AsNoTracking(), c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
+                .Join(db.Realms.AsNoTracking(), x => x.Client.RealmId, r => r.Id, (x, r) => new
+                {
+                    x.Client.Id,
+                    x.Client.ClientId,
+                    x.Client.ClientName,
+                    x.Client.RequirePkce,
+                    x.Client.RequireConsent,
+                    x.Client.RequirePar,
+                    x.Client.IsSystemClient,
+                    x.Client.GrantTypesJson,
+                    x.Client.Scope,
+                    x.Client.TenantId,
+                    TenantSlug = x.Tenant.Slug,
+                    TenantName = x.Tenant.Name,
+                    RealmId = r.Id,
+                    RealmName = r.Name,
+                    HasJwks = !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri)
+                })
+                .OrderBy(x => x.ClientId)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows.Select(row => new
+            {
+                row.Id,
+                row.ClientId,
+                row.ClientName,
+                row.TenantId,
+                row.TenantSlug,
+                row.TenantName,
+                row.RealmId,
+                row.RealmName,
+                row.RequirePkce,
+                row.RequireConsent,
+                row.RequirePar,
+                row.HasJwks,
+                row.IsSystemClient,
+                GrantTypes = ParseJsonArray(row.GrantTypesJson),
+                Scopes = ParseScopeList(row.Scope)
+            }));
+        });
+
+        group.MapGet("/scopes", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            }
+
+            var rows = await db.Scopes.AsNoTracking()
+                .Where(scope => scope.IsGlobal || scope.TenantId == currentTenantId.Value)
+                .OrderBy(scope => scope.IsGlobal ? 0 : 1)
+                .ThenBy(scope => scope.Name)
+                .GroupJoin(
+                    db.Tenants.AsNoTracking(),
+                    scope => scope.TenantId,
+                    tenant => (Guid?)tenant.Id,
+                    (scope, tenants) => new
+                    {
+                        scope.Name,
+                        scope.Description,
+                        scope.IsExposed,
+                        scope.IsGlobal,
+                        scope.TenantId,
+                        TenantSlug = tenants.Select(t => t.Slug).FirstOrDefault(),
+                        TenantName = tenants.Select(t => t.Name).FirstOrDefault()
+                    })
+                .ToListAsync(ct);
+
+            return Results.Ok(rows);
+        });
+    }
+
+    private static void MapPlatformResourceListEndpoints(RouteGroupBuilder platformAdmin)
+    {
+        platformAdmin.MapGet("/tenants", async (
+            AuthDbContext db,
+            string? search,
+            CancellationToken ct) =>
+        {
+            var query = db.Tenants.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(t =>
+                    t.Slug.Contains(term) ||
+                    t.Name.Contains(term) ||
+                    (t.Description != null && t.Description.Contains(term)));
+            }
+
+            var tenants = await query
+                .OrderBy(t => t.CreatedAt)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Slug,
+                    t.Name,
+                    t.Description,
+                    t.IssuerUri,
+                    t.Status,
+                    t.MaxUsers,
+                    t.MaxClients,
+                    t.AdminEmail,
+                    t.CreatedAt,
+                    UserCount = db.Users.Count(u => u.TenantId == t.Id),
+                    ClientCount = db.Clients.Count(c => c.TenantId == t.Id)
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(tenants);
+        }).WithName("PlatformAdminListTenants");
+
+        platformAdmin.MapGet("/clients", async (
+            AuthDbContext db,
+            string? tenant,
+            CancellationToken ct) =>
+        {
+            var query = db.Clients.AsNoTracking()
+                .Join(db.Tenants.AsNoTracking(), c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
+                .Join(db.Realms.AsNoTracking(), x => x.Client.RealmId, r => r.Id, (x, r) => new
+                {
+                    x.Client.Id,
+                    x.Client.ClientId,
+                    x.Client.ClientName,
+                    x.Client.RequirePkce,
+                    x.Client.RequireConsent,
+                    x.Client.RequirePar,
+                    x.Client.IsSystemClient,
+                    x.Client.GrantTypesJson,
+                    x.Client.Scope,
+                    x.Client.TenantId,
+                    TenantSlug = x.Tenant.Slug,
+                    TenantName = x.Tenant.Name,
+                    RealmId = r.Id,
+                    RealmName = r.Name,
+                    HasJwks = !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri)
+                })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(tenant))
+            {
+                var tenantSlug = tenant.Trim();
+                query = query.Where(row => row.TenantSlug == tenantSlug);
+            }
+
+            var rows = await query
+                .OrderBy(row => row.TenantSlug)
+                .ThenBy(row => row.ClientId)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows.Select(row => new
+            {
+                row.Id,
+                row.ClientId,
+                row.ClientName,
+                row.TenantId,
+                row.TenantSlug,
+                row.TenantName,
+                row.RealmId,
+                row.RealmName,
+                row.RequirePkce,
+                row.RequireConsent,
+                row.RequirePar,
+                row.HasJwks,
+                row.IsSystemClient,
+                GrantTypes = ParseJsonArray(row.GrantTypesJson),
+                Scopes = ParseScopeList(row.Scope)
+            }));
+        }).WithName("PlatformAdminListClients");
+
+        platformAdmin.MapGet("/scopes", async (
+            AuthDbContext db,
+            string? tenant,
+            CancellationToken ct) =>
+        {
+            var query = db.Scopes.AsNoTracking()
+                .GroupJoin(
+                    db.Tenants.AsNoTracking(),
+                    scope => scope.TenantId,
+                    tenantEntity => (Guid?)tenantEntity.Id,
+                    (scope, tenants) => new
+                    {
+                        scope.Name,
+                        scope.Description,
+                        scope.IsExposed,
+                        scope.IsGlobal,
+                        scope.TenantId,
+                        TenantSlug = tenants.Select(t => t.Slug).FirstOrDefault(),
+                        TenantName = tenants.Select(t => t.Name).FirstOrDefault()
+                    })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(tenant))
+            {
+                var tenantSlug = tenant.Trim();
+                query = query.Where(scope => scope.IsGlobal || scope.TenantSlug == tenantSlug);
+            }
+
+            var rows = await query
+                .OrderBy(scope => scope.IsGlobal ? 0 : 1)
+                .ThenBy(scope => scope.TenantSlug)
+                .ThenBy(scope => scope.Name)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows);
+        }).WithName("PlatformAdminListScopes");
+    }
+
+    private static string[] ParseJsonArray(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string[] ParseScopeList(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return Array.Empty<string>();
+        }
+
+        return scope
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     /// <summary>

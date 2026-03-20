@@ -87,6 +87,10 @@ internal static class Program
         rootCommand.Subcommands.Add(new LoginCommand());
         rootCommand.Subcommands.Add(new LogoutCommand());
         rootCommand.Subcommands.Add(new ProfileCommand());
+        rootCommand.Subcommands.Add(new DiscoveryCommand());
+        rootCommand.Subcommands.Add(new TenantCommand());
+        rootCommand.Subcommands.Add(new ClientCommand());
+        rootCommand.Subcommands.Add(new ScopeCommand());
         
         return rootCommand;
     }
