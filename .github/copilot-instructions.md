@@ -97,6 +97,14 @@ When adding features
 - Add unit tests beside similar existing tests in MrWhoOidc.UnitTests.
 - When adding new Razor Pages to MrWhoOidc.WebAuth, add a corresponding test in the appropriate e2e test file.
 
+CLI administration (mrwho-cli)
+- `mrwho-cli` is a globally-installed .NET tool for managing the IdP from the command line.
+- Source: `MrWhoOidc.Cli/`; install via `bash deploy-mrwho-cli.sh` from the repo root.
+- Full command reference and usage patterns: `skills/mrwho-cli.md` — **always read this file before generating or describing any `mrwho-cli` command.**
+- Typical operations: `mrwho-cli login`, `tenant list`, `realm create`, `client create --create-initial-secret`, `export tenant`, `import apply`.
+- Authentication: device-code flow (`mrwho-cli login --server https://host/t/<slug>`); tokens saved in named profiles.
+- Output formats: `--format Table|Json|Yaml`; pipe JSON to `jq` for scripting.
+
 File breadcrumbs worth reading first
 - `MrWhoOidc.WebAuth/Program.cs` – routing, admin groups, health endpoints.
 - `MrWhoOidc.WebAuth/Handlers/*` – discovery, logout token creation.
