@@ -1,6 +1,5 @@
 using System.CommandLine;
 using MrWhoOidc.Cli.Commands;
-using MrWhoOidc.Cli.Configuration;
 using MrWhoOidc.Cli.Mcp;
 using Spectre.Console;
 
@@ -39,7 +38,19 @@ internal static class Program
     private static async Task<int> RunCliAsync(string[] args)
     {
         var rootCommand = BuildRootCommand();
-        return await rootCommand.Parse(args).InvokeAsync();
+        try
+        {
+            return await rootCommand.Parse(args).InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(ex.Message)}");
+            if (args.Contains("--verbose"))
+            {
+                AnsiConsole.WriteException(ex);
+            }
+            return 1;
+        }
     }
 
     private static async Task<int> RunMcpServerAsync()
@@ -88,10 +99,15 @@ internal static class Program
         rootCommand.Subcommands.Add(new LoginCommand());
         rootCommand.Subcommands.Add(new LogoutCommand());
         rootCommand.Subcommands.Add(new ProfileCommand());
+        rootCommand.Subcommands.Add(new DiscoveryCommand());
+        rootCommand.Subcommands.Add(new ExportCommand());
+        rootCommand.Subcommands.Add(new ImportCommand());
+        rootCommand.Subcommands.Add(new TenantCommand());
+        rootCommand.Subcommands.Add(new RealmCommand());
+        rootCommand.Subcommands.Add(new ClientCommand());
+        rootCommand.Subcommands.Add(new ScopeCommand());
+        rootCommand.Subcommands.Add(new UserCommand());
         
-        // Placeholder for upcoming commands
-        AnsiConsole.MarkupLine("[dim]Additional commands (client, user, tenant, etc.) will be added in next phases[/]");
-
         return rootCommand;
     }
 }

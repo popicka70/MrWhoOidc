@@ -91,6 +91,7 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IIssuerBuilder, IssuerBuilder>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
+        services.AddScoped<ICliClientService, CliClientService>();
         services.AddScoped<ITenantBrandingService, TenantBrandingService>();
         services.AddScoped<ITenantIconService, TenantIconService>();
 

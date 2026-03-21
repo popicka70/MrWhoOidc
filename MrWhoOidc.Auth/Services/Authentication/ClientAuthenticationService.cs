@@ -93,17 +93,27 @@ public sealed class ClientAuthenticationService(
         else
         {
             // Client Secret
-            // Check policies if Client Credentials Grant
+            // Check policies if Client Credentials Grant — a client_secret must be provided
+            // because public clients are not allowed to use client_credentials (RFC 6749 §4.4).
             if (input.Usage == ClientAuthenticationUsage.TokenEndpoint && 
                 string.Equals(input.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
             {
-#pragma warning disable CS0618
-                if (string.IsNullOrEmpty(client.ClientSecretHash))
+                if (string.IsNullOrEmpty(input.ClientSecret))
                 {
-                    logger.LogWarning("Client authentication failed: public client not allowed for client_credentials {ClientIdHash}", Bucketization.Bucket(input.ClientId));
+                    logger.LogWarning("Client authentication failed: client_secret required for client_credentials {ClientIdHash}", Bucketization.Bucket(input.ClientId));
                     return new ClientAuthResult(false, client, "unauthorized_client");
                 }
-#pragma warning restore CS0618
+            }
+
+            // Token exchange requires a confidential client (RFC 8693 §2.1).
+            if (input.Usage == ClientAuthenticationUsage.TokenEndpoint &&
+                string.Equals(input.GrantType, OAuthConstants.GrantTypes.TokenExchange, StringComparison.Ordinal))
+            {
+                if (string.IsNullOrEmpty(input.ClientSecret))
+                {
+                    logger.LogWarning("Client authentication failed: client_secret required for token-exchange {ClientIdHash}", Bucketization.Bucket(input.ClientId));
+                    return new ClientAuthResult(false, client, "unauthorized_client");
+                }
             }
 
             authenticated = await clientStore.ValidateClientSecretAsync(input.ClientId, input.ClientSecret, ct).ConfigureAwait(false);

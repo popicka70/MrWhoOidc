@@ -139,6 +139,11 @@ public class EditModel(
             .Where(c => c.Id == Id && c.TenantId == currentTenantId.Value)
             .FirstOrDefaultAsync();
         if (client is null) return NotFound();
+        if (client.IsSystemClient)
+        {
+            TempData["Error"] = "System clients are managed automatically from tenant settings.";
+            return TenantAwareRedirect("/Admin/Clients");
+        }
 
         // Manual TempData handling for SecretNewSecretIdentifier to avoid Guid-to-String cast issues
         if (TempData.ContainsKey("SecretNewSecretIdentifier"))

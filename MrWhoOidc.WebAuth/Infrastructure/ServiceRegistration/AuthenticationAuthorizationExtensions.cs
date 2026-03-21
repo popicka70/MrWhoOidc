@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using MrWhoOidc.WebAuth.Security.Admin;
+using MrWhoOidc.WebAuth.Security.ApiBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -23,8 +24,25 @@ public static class AuthenticationAuthorizationExtensions
 {
     public static IServiceCollection AddMrWhoOidcAuthAndAdmin(this IServiceCollection services, IConfiguration _)
     {
-        // Cookie auth schemes (mirrors original Program.cs configuration for parity)
-        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        // Authentication schemes:
+        // - "auto" policy scheme: auto-routes to "api-bearer" when Authorization: Bearer is present,
+        //   otherwise falls back to cookies. This lets CLI/API clients use Bearer tokens while
+        //   all existing browser/cookie flows continue unchanged.
+        // - "api-bearer": validates JWTs issued by this server using ITokenValidator.
+        // - "Cookies" / "preauth": existing session cookie schemes.
+        services.AddAuthentication("auto")
+            .AddPolicyScheme("auto", "auto", policyOptions =>
+            {
+                static string PickScheme(HttpContext context)
+                {
+                    var auth = context.Request.Headers.Authorization.ToString();
+                    return auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                        ? ApiTokenAuthHandler.SchemeName
+                        : CookieAuthenticationDefaults.AuthenticationScheme;
+                }
+                policyOptions.ForwardDefaultSelector = PickScheme;
+            })
+            .AddScheme<ApiTokenAuthOptions, ApiTokenAuthHandler>(ApiTokenAuthHandler.SchemeName, _ => { })
             .AddCookie(options =>
             {
                 options.Cookie.Name = ".mrwhooidc.auth";

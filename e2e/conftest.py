@@ -28,8 +28,10 @@ if not _ENV_PATH.exists():
     _ENV_PATH = Path(__file__).parent.parent / ".env"
 load_dotenv(_ENV_PATH, override=False)
 
+from utils.cli_helper import CliHelper
 from utils.instruction_loader import InstructionLoader
 from utils.llm_evaluator import EvaluationResult, LLMEvaluator
+from utils.oidc_client import OidcClient
 from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
 
@@ -253,3 +255,120 @@ def record_evaluation(
         return result
 
     return _impl
+
+
+# ---------------------------------------------------------------------------
+# CLI fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def cli_helper() -> CliHelper:
+    """Session-scoped CliHelper pointing at the running WebAuth instance."""
+    return CliHelper(server_url=f"{BASE_URL}/t/default")
+
+
+@pytest.fixture(scope="session")
+def cli_logged_in(
+    cli_helper: CliHelper,
+    authenticated_context: BrowserContext,
+    auth_state_file: Path,
+) -> CliHelper:
+    """
+    Enable CLI access for the default tenant, perform device-code login via
+    browser approval, and return the ready-to-use CliHelper.
+
+    This fixture is session-scoped so the login happens only once.
+    """
+    import logging
+
+    log = logging.getLogger("cli_login")
+
+    # Step 1: Enable CLI access via the admin settings page
+    page = authenticated_context.new_page()
+    try:
+        page.goto(f"{BASE_URL}/admin/settings", wait_until="domcontentloaded")
+        cli_checkbox = page.locator("#cliAccessEnabled")
+        if cli_checkbox.count() > 0 and cli_checkbox.is_visible():
+            if not cli_checkbox.is_checked():
+                cli_checkbox.check()
+                # Submit the settings form
+                btn = page.locator("button.btn-primary[type='submit']").first
+                if btn.count() > 0 and btn.is_visible():
+                    btn.click()
+                    page.wait_for_load_state("domcontentloaded")
+                    log.info("CLI access enabled via admin settings")
+            else:
+                log.info("CLI access already enabled")
+        else:
+            log.warning("CLI access checkbox not found on settings page")
+    finally:
+        page.close()
+
+    # Step 2: Start the CLI login process (device-code flow)
+    proc = cli_helper.start_login()
+    verification_url, user_code = CliHelper.parse_device_login_output(proc, read_timeout=30)
+
+    if not verification_url:
+        # Dump what we got for debugging
+        remaining = proc.stdout.read() if proc.stdout else ""
+        proc.kill()
+        raise RuntimeError(
+            f"Failed to parse device login output. "
+            f"URL={verification_url}, code={user_code}, remaining={remaining}"
+        )
+
+    log.info("Device code flow: URL=%s, code=%s", verification_url, user_code)
+
+    # Step 3: Approve the device in the browser
+    approval_page = authenticated_context.new_page()
+    try:
+        approval_page.goto(verification_url, wait_until="domcontentloaded")
+
+        # If we landed on the confirmation page, click Authorize
+        approve_btn = approval_page.locator("button[value='approve']").first
+        if approve_btn.count() > 0 and approve_btn.is_visible():
+            approve_btn.click()
+            approval_page.wait_for_load_state("domcontentloaded")
+            log.info("Device authorization approved")
+        else:
+            # Maybe user_code input is shown — enter it manually
+            code_input = approval_page.locator("#user_code").first
+            if code_input.count() > 0 and code_input.is_visible():
+                code_input.fill(user_code or "")
+                approval_page.locator("button[type='submit']").first.click()
+                approval_page.wait_for_load_state("domcontentloaded")
+                # Now the confirmation page should appear
+                approve_btn = approval_page.locator("button[value='approve']").first
+                if approve_btn.count() > 0 and approve_btn.is_visible():
+                    approve_btn.click()
+                    approval_page.wait_for_load_state("domcontentloaded")
+                    log.info("Device authorization approved (after code entry)")
+    finally:
+        approval_page.close()
+
+    # Step 4: Wait for the CLI login to complete
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise RuntimeError("CLI login did not complete within 30 s after approval")
+
+    if proc.returncode != 0:
+        raise RuntimeError(f"CLI login failed with exit code {proc.returncode}")
+
+    # Verify login succeeded
+    result = cli_helper.run("profile", "show")
+    if not result.ok:
+        raise RuntimeError(f"CLI profile show failed after login: {result.stderr}")
+
+    log.info("CLI login successful")
+    return cli_helper
+
+
+@pytest.fixture(scope="session")
+def oidc_client(reset_database: None) -> OidcClient:
+    """Session-scoped OidcClient pointing at the default tenant, with discovery cached."""
+    client = OidcClient(f"{BASE_URL}/t/default")
+    client.discover()
+    return client

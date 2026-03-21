@@ -71,12 +71,14 @@ E2E browser tests (e2e/)
   - `utils/llm_evaluator.py` — calls Ollama `/api/chat` (model configured via `OLLAMA_MODEL`). Cloud-proxied models (name ends in `-cloud`) use text-only evaluation; local Ollama models support vision.
   - `utils/report_generator.py` — accumulates `EvaluationResult` objects; writes `reports/{run_id}/report.{json,html}` at session end.
   - `utils/instruction_loader.py` — loads per-route evaluation hints from `instructions/` directory.
+  - `utils/cli_helper.py` — `CliHelper` class wrapping `mrwho-cli` subprocess calls. Provides `run()`, `run_json()`, and device-code login helpers (`start_login()`, `parse_device_login_output()`). Session fixture `cli_logged_in` handles enable → login → approve flow.
 - Test files and coverage:
   - `tests/test_public_pages.py` — unauthenticated pages: `/`, `/login`, `/Privacy`, `/Account/ForgotPassword`, `/select-tenant`, 404, OIDC discovery, JWKS.
   - `tests/test_account_pages.py` — self-service account pages: `/account`, `/account/profile`, `/account/emails`, `/account/web-authn`, `/account/sessions`, `/account/consents`, `/account/linked-accounts`, `/account/create-tenant`, `/account/access-denied`, `/password`, `/mfa`.
   - `tests/test_admin_pages.py` — all tenant-admin pages including list, add, import, and edit variants for realms, clients, providers, scopes, roles, users (+ user sub-tabs: clients, emails, roles, linked), plus registrations, configuration-audit, backchannel, obo-setup, all license pages, branding, settings, rate-limits.
   - `tests/test_platform_admin_pages.py` — platform-admin pages: dashboard, tenant list/create/edit/import, impersonation, impersonation history, platform settings, platform license.
   - `tests/test_crud_operations.py` — create→edit flows for realm, client, scope, role, user, account profile, and tenant. Records use `e2e-crud` prefix for easy cleanup. Test order within each class is significant (01_create before 02_edit).
+  - `tests/test_cli_operations.py` — CLI (mrwho-cli) E2E tests. Exercises every read-only command (discovery, profile, tenant/realm/client/scope/user list), full CRUD lifecycle for realms/scopes/users/clients, M2M client_credentials setup, OBO token-exchange provisioning, and a complete multi-resource workflow with export and teardown. Uses `e2e-cli` prefix. Depends on `cli_logged_in` fixture which enables CLI access and performs device-code login with browser approval.
 - Running:
   - Requires the app running at `https://localhost:8443` (e.g., via `docker-compose.dev.yml`).
   - Copy `.env.example` to `.env`, set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `OLLAMA_MODEL`, `HEADED`.
@@ -96,6 +98,14 @@ When adding features
 - Update docs under /docs when changing protocols/endpoints (e.g., backchannel backlog, OBO policy).
 - Add unit tests beside similar existing tests in MrWhoOidc.UnitTests.
 - When adding new Razor Pages to MrWhoOidc.WebAuth, add a corresponding test in the appropriate e2e test file.
+
+CLI administration (mrwho-cli)
+- `mrwho-cli` is a globally-installed .NET tool for managing the IdP from the command line.
+- Source: `MrWhoOidc.Cli/`; install via `bash deploy-mrwho-cli.sh` from the repo root.
+- Full command reference and usage patterns: `skills/mrwho-cli.md` — **always read this file before generating or describing any `mrwho-cli` command.**
+- Typical operations: `mrwho-cli login`, `tenant list`, `realm create`, `client create --create-initial-secret`, `export tenant`, `import apply`.
+- Authentication: device-code flow (`mrwho-cli login --server https://host/t/<slug>`); tokens saved in named profiles.
+- Output formats: `--format Table|Json|Yaml`; pipe JSON to `jq` for scripting.
 
 File breadcrumbs worth reading first
 - `MrWhoOidc.WebAuth/Program.cs` – routing, admin groups, health endpoints.

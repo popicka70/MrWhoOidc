@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -19,9 +18,10 @@ namespace MrWhoOidc.WebAuth.Pages;
 public class DeviceModel(
     AuthDbContext db,
     ITenantAccessor tenantAccessor,
+    IAuthorizationService authorizationService,
     ILogger<DeviceModel> logger) : PageModel
 {
-    [BindProperty(SupportsGet = true)]
+    [BindProperty(SupportsGet = true, Name = "user_code")]
     public string? UserCode { get; set; }
 
     public string? ErrorMessage { get; set; }
@@ -147,6 +147,23 @@ public class DeviceModel(
 
         if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
         {
+            var client = await db.Clients
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ClientId == _deviceCodeEntry.ClientId && c.TenantId == tenantId);
+
+            if (client?.IsSystemClient == true)
+            {
+                var tenantAdminResult = await authorizationService.AuthorizeAsync(User, "tenant-admin");
+                var platformAdminResult = await authorizationService.AuthorizeAsync(User, "platform-admin");
+                if (!tenantAdminResult.Succeeded && !platformAdminResult.Succeeded)
+                {
+                    ErrorMessage = "CLI access requires administrator privileges for this tenant.";
+                    ShowUserCodeInput = true;
+                    ShowConfirmation = false;
+                    return Page();
+                }
+            }
+
             // Authorize the device
             _deviceCodeEntry.Status = DeviceCodeStatus.Authorized;
             _deviceCodeEntry.UserId = userId;

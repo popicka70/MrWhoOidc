@@ -146,6 +146,11 @@ public sealed class DeviceCodeGrantHandler(
             return new GrantExecutionResult(true, false, ErrorResult(OAuthConstants.ErrorCodes.InvalidGrant, "device_code already consumed"));
         }
 
+        // ExecuteDeleteAsync bypasses the change tracker. Detach the previously loaded
+        // entry so later SaveChanges calls during token issuance don't try to update a row
+        // that was already deleted as part of the redemption step.
+        db.Entry(entry).State = EntityState.Detached;
+
         var scopes = JsonSerializer.Deserialize<string[]>(entry.ScopesJson) ?? Array.Empty<string>();
         var audience = entry.Resource ?? "api";
         var issuer = context.Http.GetIssuer(context.Options);

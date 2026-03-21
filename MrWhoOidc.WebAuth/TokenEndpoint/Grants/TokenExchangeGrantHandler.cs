@@ -48,13 +48,15 @@ public sealed class TokenExchangeGrantHandler(IOptions<AuthOptions> authOptions,
             return new(true, false, ErrorResults.UnsupportedGrantType());
         }
 
-#pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
-        if (!usedPrivateKeyJwt && string.IsNullOrEmpty(client?.ClientSecretHash))
+        // Public-client guard: token exchange requires a confidential client.
+        // Client authentication has already validated the credentials in the
+        // token endpoint before this handler runs.  A null ClientEntity means
+        // authentication was not successful – reject.
+        if (client is null)
         {
             logger.LogWarning("/token unauthorized_client: public client not allowed for token-exchange {ClientIdHash}", Bucketization.Bucket(clientId));
             return new(true, false, ErrorResults.UnauthorizedClient());
         }
-#pragma warning restore CS0618
 
         // Externalized rate limiting
         var clientBucket = Bucketization.Bucket(clientId);

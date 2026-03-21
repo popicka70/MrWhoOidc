@@ -1319,6 +1319,7 @@ public class Client
     [MaxLength(200)]
     public string ClientId { get; set; } = string.Empty;
     public string? ClientName { get; set; }
+    public bool IsSystemClient { get; set; }
     public bool RequirePkce { get; set; } = true;
     public bool RequireConsent { get; set; } = true;
     [MaxLength(500)]

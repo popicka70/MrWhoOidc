@@ -111,12 +111,32 @@
                                 <i class="ph ph-lock"></i> PAR
                             </span>
                         }
+                        @if (c.IsSystemClient)
+                        {
+                            <span class="badge text-bg-dark ms-1">
+                                <i class="ph ph-terminal-window"></i> System
+                            </span>
+                        }
                     </td>
                     <td data-label="Actions" class="text-end">
                         <div class="btn-group btn-group-sm" role="group" aria-label="Actions for @c.ClientName">
-                            <a href="@(tenantPrefix)/admin/clients/edit/@c.Id" class="btn btn-outline-secondary" title="Edit @c.ClientName" aria-label="Edit @c.ClientName">Edit</a>
+                            @if (c.IsSystemClient)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" disabled title="System clients are managed from tenant settings">Edit</button>
+                            }
+                            else
+                            {
+                                <a href="@(tenantPrefix)/admin/clients/edit/@c.Id" class="btn btn-outline-secondary" title="Edit @c.ClientName" aria-label="Edit @c.ClientName">Edit</a>
+                            }
                             <a href="@(tenantPrefix)/admin/clients/export/@c.Id" class="btn btn-outline-secondary" title="Export @c.ClientName configuration" aria-label="Export @c.ClientName configuration">Export</a>
-                            <a asp-page="Delete" asp-route-id="@c.Id" class="btn btn-outline-danger" title="Delete @c.ClientName" aria-label="Delete @c.ClientName">Delete</a>
+                            @if (c.IsSystemClient)
+                            {
+                                <button type="button" class="btn btn-outline-danger" disabled title="System clients are managed from tenant settings">Delete</button>
+                            }
+                            else
+                            {
+                                <a asp-page="Delete" asp-route-id="@c.Id" class="btn btn-outline-danger" title="Delete @c.ClientName" aria-label="Delete @c.ClientName">Delete</a>
+                            }
                         </div>
                     </td>
                 </tr>

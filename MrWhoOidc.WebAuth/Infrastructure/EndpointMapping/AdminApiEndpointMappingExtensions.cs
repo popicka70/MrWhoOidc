@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MrWhoOidc.Auth.MultiTenancy;
@@ -41,6 +42,26 @@ public static class AdminApiEndpointMappingExtensions
         // Tenant Icon Endpoints (mapped to both admin groups)
         MapTenantIconEndpoints(admin);
         MapTenantIconEndpoints(tenantAdmin);
+
+        // Resource listing endpoints (tenant-scoped and platform-wide)
+        MapTenantResourceListEndpoints(admin);
+        MapTenantResourceListEndpoints(tenantAdmin);
+
+        // Realm CRUD
+        MapRealmEndpoints(admin);
+        MapRealmEndpoints(tenantAdmin);
+
+        // Client single-get, create, delete
+        MapClientMutationEndpoints(admin);
+        MapClientMutationEndpoints(tenantAdmin);
+
+        // Scope create, update, delete
+        MapScopeMutationEndpoints(admin);
+        MapScopeMutationEndpoints(tenantAdmin);
+
+        // User admin: list, get, create, delete
+        MapUserAdminEndpoints(admin);
+        MapUserAdminEndpoints(tenantAdmin);
 
         // Providers CRUD (tenant-aware)
         admin.MapGet("/providers", async (
@@ -247,7 +268,11 @@ public static class AdminApiEndpointMappingExtensions
             if (input is null || input.IdentityProviderId == Guid.Empty)
                 return Results.Problem(statusCode: 400, title: "Invalid input");
 
-            var clientExists = await db.Clients.AsNoTracking().AnyAsync(c => c.Id == clientId, ct);
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
+            var clientExists = client is not null;
             var providerExists = await db.IdentityProviders.AsNoTracking().AnyAsync(p => p.Id == input.IdentityProviderId, ct);
             if (!clientExists || !providerExists)
                 return Results.Problem(statusCode: 404, title: "Client or Provider not found");
@@ -288,6 +313,10 @@ public static class AdminApiEndpointMappingExtensions
 
         admin.MapPut("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, MappingInput input, CancellationToken ct) =>
         {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
 
@@ -309,6 +338,10 @@ public static class AdminApiEndpointMappingExtensions
 
         admin.MapDelete("/clients/{clientId:guid}/providers/{identityProviderId:guid}", async (Guid clientId, Guid identityProviderId, AuthDbContext db, CancellationToken ct) =>
         {
+            var client = await db.Clients.AsNoTracking().FirstOrDefaultAsync(c => c.Id == clientId, ct);
+            if (client?.IsSystemClient == true)
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+
             var entity = await db.ClientIdentityProviders.FindAsync(new object[] { clientId, identityProviderId }, ct);
             if (entity is null) return Results.Problem(statusCode: 404, title: "Not Found");
             db.ClientIdentityProviders.Remove(entity);
@@ -569,6 +602,7 @@ public static class AdminApiEndpointMappingExtensions
         {
             var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == clientId, ct);
             if (client is null) return Results.Problem(statusCode: 404, title: "Client not found");
+            if (client.IsSystemClient) return Results.Problem(statusCode: 403, title: "System client is read-only");
             if (!string.IsNullOrWhiteSpace(input.PublicJwksJson))
             {
                 var status = AdminApiHelpers.ComputeJwksStatus(input.PublicJwksJson);
@@ -893,6 +927,8 @@ public static class AdminApiEndpointMappingExtensions
         // Platform Admin: On-demand tenant seeding (platform-admin only)
         var platformAdmin = app.MapGroup("/platform-admin/api").RequireAuthorization("platform-admin").RequireRateLimiting("rl-admin");
 
+        MapPlatformResourceListEndpoints(platformAdmin);
+
         LicenseEndpoints.MapLicenseEndpoints(admin, tenantAdmin, platformAdmin);
         RateLimitingEndpoints.MapRateLimitingEndpoints(admin, platformAdmin);
 
@@ -1011,6 +1047,733 @@ public static class AdminApiEndpointMappingExtensions
 #pragma warning restore CS0618
     }
 
+    private static void MapTenantResourceListEndpoints(RouteGroupBuilder group)
+    {
+        group.MapGet("/clients", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            }
+
+            var rows = await db.Clients.AsNoTracking()
+                .Where(c => c.TenantId == currentTenantId.Value)
+                .Join(db.Tenants.AsNoTracking(), c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
+                .Join(db.Realms.AsNoTracking(), x => x.Client.RealmId, r => r.Id, (x, r) => new
+                {
+                    x.Client.Id,
+                    x.Client.ClientId,
+                    x.Client.ClientName,
+                    x.Client.RequirePkce,
+                    x.Client.RequireConsent,
+                    x.Client.RequirePar,
+                    x.Client.IsSystemClient,
+                    x.Client.GrantTypesJson,
+                    x.Client.Scope,
+                    x.Client.TenantId,
+                    TenantSlug = x.Tenant.Slug,
+                    TenantName = x.Tenant.Name,
+                    RealmId = r.Id,
+                    RealmName = r.Name,
+                    HasJwks = !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri)
+                })
+                .OrderBy(x => x.ClientId)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows.Select(row => new
+            {
+                row.Id,
+                row.ClientId,
+                row.ClientName,
+                row.TenantId,
+                row.TenantSlug,
+                row.TenantName,
+                row.RealmId,
+                row.RealmName,
+                row.RequirePkce,
+                row.RequireConsent,
+                row.RequirePar,
+                row.HasJwks,
+                row.IsSystemClient,
+                GrantTypes = ParseJsonArray(row.GrantTypesJson),
+                Scopes = ParseScopeList(row.Scope)
+            }));
+        });
+
+        group.MapGet("/scopes", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+            {
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            }
+
+            var rows = await db.Scopes.AsNoTracking()
+                .Where(scope => scope.IsGlobal || scope.TenantId == currentTenantId.Value)
+                .OrderBy(scope => scope.IsGlobal ? 0 : 1)
+                .ThenBy(scope => scope.Name)
+                .GroupJoin(
+                    db.Tenants.AsNoTracking(),
+                    scope => scope.TenantId,
+                    tenant => (Guid?)tenant.Id,
+                    (scope, tenants) => new
+                    {
+                        scope.Name,
+                        scope.Description,
+                        scope.IsExposed,
+                        scope.IsGlobal,
+                        scope.TenantId,
+                        TenantSlug = tenants.Select(t => t.Slug).FirstOrDefault(),
+                        TenantName = tenants.Select(t => t.Name).FirstOrDefault()
+                    })
+                .ToListAsync(ct);
+
+            return Results.Ok(rows);
+        });
+    }
+
+    // ── Realm CRUD ──────────────────────────────────────────────────────────
+
+    private static void MapRealmEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/realms", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var list = await db.Realms.AsNoTracking()
+                .Where(r => r.TenantId == currentTenantId.Value)
+                .OrderBy(r => r.Name)
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.AllowUnconfirmedLogin, r.CreatedAt })
+                .ToListAsync(ct);
+            return Results.Ok(list);
+        });
+
+        admin.MapGet("/realms/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var realm = await db.Realms.AsNoTracking()
+                .Where(r => r.Id == id && r.TenantId == currentTenantId.Value)
+                .Select(r => new { r.Id, r.Name, r.DisplayName, r.AllowUnconfirmedLogin, r.CreatedAt })
+                .FirstOrDefaultAsync(ct);
+            return realm is null
+                ? Results.Problem(statusCode: 404, title: "Not Found")
+                : Results.Ok(realm);
+        });
+
+        admin.MapPost("/realms", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            RealmInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            if (string.IsNullOrWhiteSpace(input.Name))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "name is required");
+            var nameVal = input.Name.Trim();
+            var exists = await db.Realms.AnyAsync(r => r.TenantId == currentTenantId.Value && r.Name == nameVal, ct);
+            if (exists)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "A realm with that name already exists");
+            var realm = new Realm
+            {
+                TenantId = currentTenantId.Value,
+                Name = nameVal,
+                DisplayName = input.DisplayName?.Trim(),
+                AllowUnconfirmedLogin = input.AllowUnconfirmedLogin ?? true,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            db.Realms.Add(realm);
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/admin/api/realms/{realm.Id}", new { realm.Id, realm.Name, realm.DisplayName, realm.AllowUnconfirmedLogin });
+        });
+
+        admin.MapPut("/realms/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            RealmInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
+            if (realm is null)
+                return Results.Problem(statusCode: 404, title: "Not Found");
+            if (!string.IsNullOrWhiteSpace(input.Name))
+            {
+                var nameVal = input.Name.Trim();
+                var conflict = await db.Realms.AnyAsync(r => r.TenantId == currentTenantId.Value && r.Name == nameVal && r.Id != id, ct);
+                if (conflict)
+                    return Results.Problem(statusCode: 409, title: "Conflict", detail: "A realm with that name already exists");
+                realm.Name = nameVal;
+            }
+            if (input.DisplayName is not null) realm.DisplayName = input.DisplayName.Trim();
+            if (input.AllowUnconfirmedLogin.HasValue) realm.AllowUnconfirmedLogin = input.AllowUnconfirmedLogin.Value;
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+
+        admin.MapDelete("/realms/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var realm = await db.Realms.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
+            if (realm is null)
+                return Results.Problem(statusCode: 404, title: "Not Found");
+            var hasClients = await db.Clients.AnyAsync(c => c.RealmId == id, ct);
+            if (hasClients)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "Realm has associated clients. Delete all clients in this realm first.");
+            db.Realms.Remove(realm);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+    }
+
+    // ── Client single-GET, create, delete ────────────────────────────────────
+
+    private static void MapClientMutationEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/clients/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var client = await db.Clients.AsNoTracking()
+                .Where(c => c.Id == id && c.TenantId == currentTenantId.Value)
+                .Join(db.Realms.AsNoTracking(), c => c.RealmId, r => r.Id, (c, r) => new
+                {
+                    c.Id,
+                    c.ClientId,
+                    c.ClientName,
+                    c.RealmId,
+                    RealmName = r.Name,
+                    c.RequirePkce,
+                    c.RequireConsent,
+                    c.RequirePar,
+                    c.IsSystemClient,
+                    c.Scope,
+                    c.GrantTypesJson,
+                    c.AllowedLoginRedirectUrisJson,
+                    c.AllowedLogoutRedirectUrisJson,
+                    c.TokenEndpointAuthMethod
+                })
+                .FirstOrDefaultAsync(ct);
+            return client is null
+                ? Results.Problem(statusCode: 404, title: "Not Found")
+                : Results.Ok(client);
+        });
+
+        admin.MapPost("/clients", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IClientStore clientStore,
+            CreateClientInput input,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            if (string.IsNullOrWhiteSpace(input.ClientId))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "clientId is required");
+            if (string.IsNullOrWhiteSpace(input.ClientName))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "clientName is required");
+            if (input.RealmId == Guid.Empty)
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "realmId is required");
+            var realm = await db.Realms.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == input.RealmId && r.TenantId == currentTenantId.Value, ct);
+            if (realm is null)
+                return Results.Problem(statusCode: 404, title: "Realm not found or does not belong to this tenant");
+            var clientIdVal = input.ClientId.Trim();
+            var exists = await db.Clients.AnyAsync(c => c.ClientId == clientIdVal, ct);
+            if (exists)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "A client with that clientId already exists");
+            var client = new Client
+            {
+                TenantId = currentTenantId.Value,
+                ClientId = clientIdVal,
+                ClientName = input.ClientName.Trim(),
+                RealmId = input.RealmId,
+                RequirePkce = input.RequirePkce ?? true,
+                RequireConsent = input.RequireConsent ?? true,
+                Scope = input.Scope,
+                GrantTypesJson = input.GrantTypes is { Count: > 0 }
+                    ? JsonSerializer.Serialize(input.GrantTypes)
+                    : null,
+                AllowedLoginRedirectUrisJson = input.AllowedLoginRedirectUris is { Count: > 0 }
+                    ? JsonSerializer.Serialize(input.AllowedLoginRedirectUris)
+                    : null,
+                AllowedLogoutRedirectUrisJson = input.AllowedLogoutRedirectUris is { Count: > 0 }
+                    ? JsonSerializer.Serialize(input.AllowedLogoutRedirectUris)
+                    : null
+            };
+            db.Clients.Add(client);
+            await db.SaveChangesAsync(ct);
+
+            string? generatedSecret = null;
+            if (input.CreateInitialSecret == true)
+            {
+                generatedSecret = Convert.ToBase64String(
+                    System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                var username = httpContext.User.Identity?.Name ?? "system";
+                var secret = await clientStore.CreateSecretAsync(
+                    client.Id, generatedSecret, "Initial secret", username, null, ct);
+                await clientStore.ActivateSecretAsync(secret.Id, username, ct);
+            }
+
+            return Results.Created($"/admin/api/clients/{client.Id}", new
+            {
+                client.Id,
+                client.ClientId,
+                client.ClientName,
+                client.RealmId,
+                InitialSecret = generatedSecret,
+                Warning = generatedSecret != null ? "Save this secret now. It will not be shown again." : (string?)null
+            });
+        });
+
+        admin.MapDelete("/clients/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var client = await db.Clients.FirstOrDefaultAsync(c => c.Id == id && c.TenantId == currentTenantId.Value, ct);
+            if (client is null)
+                return Results.Problem(statusCode: 404, title: "Not Found");
+            if (client.IsSystemClient)
+                return Results.Problem(statusCode: 403, title: "System clients cannot be deleted");
+            db.Clients.Remove(client);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+    }
+
+    // ── Scope create, update, delete ─────────────────────────────────────────
+
+    private static void MapScopeMutationEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapPost("/scopes", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            ScopeInput input,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(input.Name))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "name is required");
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var nameVal = input.Name.Trim();
+            var exists = await db.Scopes.AnyAsync(s => s.Name == nameVal && s.TenantId == currentTenantId.Value, ct);
+            if (exists)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "A scope with that name already exists in this tenant");
+            var scope = new Scope
+            {
+                Name = nameVal,
+                TenantId = currentTenantId.Value,
+                Description = input.Description?.Trim(),
+                IsExposed = input.IsExposed ?? true,
+                IsGlobal = false
+            };
+            db.Scopes.Add(scope);
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/admin/api/scopes/{Uri.EscapeDataString(scope.Name)}", new { scope.Name });
+        });
+
+        admin.MapPut("/scopes/{name}", async (
+            string name,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            ScopeInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var scope = await db.Scopes.FirstOrDefaultAsync(
+                s => s.Name == name && s.TenantId == currentTenantId.Value && !s.IsGlobal, ct);
+            if (scope is null)
+                return Results.Problem(statusCode: 404, title: "Not Found or scope is global (not modifiable via this endpoint)");
+            if (input.Description is not null) scope.Description = input.Description.Trim();
+            if (input.IsExposed.HasValue) scope.IsExposed = input.IsExposed.Value;
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+
+        admin.MapDelete("/scopes/{name}", async (
+            string name,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var scope = await db.Scopes.FirstOrDefaultAsync(
+                s => s.Name == name && s.TenantId == currentTenantId.Value && !s.IsGlobal, ct);
+            if (scope is null)
+                return Results.Problem(statusCode: 404, title: "Not Found or scope is global (not deletable via this endpoint)");
+            db.Scopes.Remove(scope);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+    }
+
+    // ── User admin: list, get, create, delete ────────────────────────────────
+
+    private static void MapUserAdminEndpoints(RouteGroupBuilder admin)
+    {
+        admin.MapGet("/users", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            [FromQuery] string? search,
+            [FromQuery] int? skip,
+            [FromQuery] int? take,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var query = db.Users.AsNoTracking().Where(u => u.TenantId == currentTenantId.Value);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(u => u.Username.Contains(term)
+                    || (u.Email != null && u.Email.Contains(term))
+                    || (u.Name != null && u.Name.Contains(term)));
+            }
+            var total = await query.CountAsync(ct);
+            var users = await query
+                .OrderBy(u => u.Username)
+                .Skip(skip ?? 0)
+                .Take(Math.Clamp(take ?? 50, 1, 500))
+                .Select(u => new { u.Id, u.Username, u.Email, u.EmailVerified, u.Name, u.TotpEnabled, u.CreatedAt })
+                .ToListAsync(ct);
+            return Results.Ok(new { total, items = users });
+        });
+
+        admin.MapGet("/users/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var user = await db.Users.AsNoTracking()
+                .Where(u => u.Id == id && u.TenantId == currentTenantId.Value)
+                .Select(u => new { u.Id, u.Username, u.Email, u.EmailVerified, u.Name, u.TotpEnabled, u.CreatedAt })
+                .FirstOrDefaultAsync(ct);
+            return user is null
+                ? Results.Problem(statusCode: 404, title: "Not Found")
+                : Results.Ok(user);
+        });
+
+        admin.MapPost("/users", async (
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IPasswordHasher hasher,
+            IUserAccountProvisioner accountProvisioner,
+            CreateUserInput input,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            if (string.IsNullOrWhiteSpace(input.Username))
+                return Results.Problem(statusCode: 400, title: "Validation failed", detail: "username is required");
+            var usernameVal = input.Username.Trim();
+            var usernameExists = await db.Users.AnyAsync(
+                u => u.TenantId == currentTenantId.Value && u.Username == usernameVal, ct);
+            if (usernameExists)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "A user with that username already exists in this tenant");
+
+            var password = string.IsNullOrWhiteSpace(input.Password)
+                ? GenerateSecurePassword()
+                : input.Password;
+
+            var user = new User
+            {
+                TenantId = currentTenantId.Value,
+                Username = usernameVal,
+                Email = input.Email?.Trim(),
+                NormalizedEmail = input.Email?.Trim().ToLowerInvariant(),
+                Name = input.Name?.Trim(),
+                EmailVerified = false,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync(ct);
+
+            await accountProvisioner.EnsureAsync(user, currentTenantId.Value, null, false, ct, autoSave: false);
+
+            var account = await db.UserAccounts.FirstOrDefaultAsync(a => a.Id == user.Id, ct);
+            if (account is not null)
+            {
+                account.PasswordHash = hasher.Hash(password);
+                account.PasswordUpdatedAt = DateTimeOffset.UtcNow;
+            }
+            await db.SaveChangesAsync(ct);
+
+            return Results.Created($"/admin/api/users/{user.Id}", new
+            {
+                user.Id,
+                user.Username,
+                user.Email,
+                user.Name,
+                Password = password,
+                Warning = "Save this password now. It will not be shown again."
+            });
+        });
+
+        admin.MapDelete("/users/{id:guid}", async (
+            Guid id,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            CancellationToken ct) =>
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue)
+                return Results.Problem(statusCode: 403, title: "No tenant context");
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "Not Found");
+            db.Users.Remove(user);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+    }
+
+    private static string GenerateSecurePassword()
+    {
+        const string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const string lower = "abcdefghijklmnopqrstuvwxyz";
+        const string digits = "0123456789";
+        const string special = "!@#$%^&*";
+        var all = upper + lower + digits + special;
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(16);
+        var chars = new char[16];
+        for (int i = 0; i < chars.Length; i++) chars[i] = all[bytes[i] % all.Length];
+        // Ensure one of each character class
+        chars[0] = upper[bytes[0] % upper.Length];
+        chars[1] = lower[bytes[1] % lower.Length];
+        chars[2] = digits[bytes[2] % digits.Length];
+        chars[3] = special[bytes[3] % special.Length];
+        return new string(chars);
+    }
+
+    private static void MapPlatformResourceListEndpoints(RouteGroupBuilder platformAdmin)
+    {
+        platformAdmin.MapGet("/tenants", async (
+            AuthDbContext db,
+            string? search,
+            CancellationToken ct) =>
+        {
+            var query = db.Tenants.AsNoTracking().AsQueryable();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                query = query.Where(t =>
+                    t.Slug.Contains(term) ||
+                    t.Name.Contains(term) ||
+                    (t.Description != null && t.Description.Contains(term)));
+            }
+
+            var tenants = await query
+                .OrderBy(t => t.CreatedAt)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Slug,
+                    t.Name,
+                    t.Description,
+                    t.IssuerUri,
+                    t.Status,
+                    t.MaxUsers,
+                    t.MaxClients,
+                    t.AdminEmail,
+                    t.CreatedAt,
+                    UserCount = db.Users.Count(u => u.TenantId == t.Id),
+                    ClientCount = db.Clients.Count(c => c.TenantId == t.Id)
+                })
+                .ToListAsync(ct);
+
+            return Results.Ok(tenants.Select(t => new
+            {
+                t.Id,
+                t.Slug,
+                t.Name,
+                t.Description,
+                t.IssuerUri,
+                Status = t.Status.ToString(),
+                t.MaxUsers,
+                t.MaxClients,
+                t.AdminEmail,
+                t.CreatedAt,
+                t.UserCount,
+                t.ClientCount
+            }));
+        }).WithName("PlatformAdminListTenants");
+
+        platformAdmin.MapGet("/clients", async (
+            AuthDbContext db,
+            string? tenant,
+            CancellationToken ct) =>
+        {
+            var query = db.Clients.AsNoTracking()
+                .Join(db.Tenants.AsNoTracking(), c => c.TenantId, t => t.Id, (c, t) => new { Client = c, Tenant = t })
+                .Join(db.Realms.AsNoTracking(), x => x.Client.RealmId, r => r.Id, (x, r) => new
+                {
+                    x.Client.Id,
+                    x.Client.ClientId,
+                    x.Client.ClientName,
+                    x.Client.RequirePkce,
+                    x.Client.RequireConsent,
+                    x.Client.RequirePar,
+                    x.Client.IsSystemClient,
+                    x.Client.GrantTypesJson,
+                    x.Client.Scope,
+                    x.Client.TenantId,
+                    TenantSlug = x.Tenant.Slug,
+                    TenantName = x.Tenant.Name,
+                    RealmId = r.Id,
+                    RealmName = r.Name,
+                    HasJwks = !string.IsNullOrEmpty(x.Client.PublicJwksJson) || !string.IsNullOrEmpty(x.Client.PublicJwksUri)
+                })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(tenant))
+            {
+                var tenantSlug = tenant.Trim();
+                query = query.Where(row => row.TenantSlug == tenantSlug);
+            }
+
+            var rows = await query
+                .OrderBy(row => row.TenantSlug)
+                .ThenBy(row => row.ClientId)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows.Select(row => new
+            {
+                row.Id,
+                row.ClientId,
+                row.ClientName,
+                row.TenantId,
+                row.TenantSlug,
+                row.TenantName,
+                row.RealmId,
+                row.RealmName,
+                row.RequirePkce,
+                row.RequireConsent,
+                row.RequirePar,
+                row.HasJwks,
+                row.IsSystemClient,
+                GrantTypes = ParseJsonArray(row.GrantTypesJson),
+                Scopes = ParseScopeList(row.Scope)
+            }));
+        }).WithName("PlatformAdminListClients");
+
+        platformAdmin.MapGet("/scopes", async (
+            AuthDbContext db,
+            string? tenant,
+            CancellationToken ct) =>
+        {
+            var query = db.Scopes.AsNoTracking()
+                .GroupJoin(
+                    db.Tenants.AsNoTracking(),
+                    scope => scope.TenantId,
+                    tenantEntity => (Guid?)tenantEntity.Id,
+                    (scope, tenants) => new
+                    {
+                        scope.Name,
+                        scope.Description,
+                        scope.IsExposed,
+                        scope.IsGlobal,
+                        scope.TenantId,
+                        TenantSlug = tenants.Select(t => t.Slug).FirstOrDefault(),
+                        TenantName = tenants.Select(t => t.Name).FirstOrDefault()
+                    })
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(tenant))
+            {
+                var tenantSlug = tenant.Trim();
+                query = query.Where(scope => scope.IsGlobal || scope.TenantSlug == tenantSlug);
+            }
+
+            var rows = await query
+                .OrderBy(scope => scope.IsGlobal ? 0 : 1)
+                .ThenBy(scope => scope.TenantSlug)
+                .ThenBy(scope => scope.Name)
+                .ToListAsync(ct);
+
+            return Results.Ok(rows);
+        }).WithName("PlatformAdminListScopes");
+    }
+
+    private static string[] ParseJsonArray(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string[] ParseScopeList(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return Array.Empty<string>();
+        }
+
+        return scope
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     /// <summary>
     /// Helper method to validate that the current user has access to a provider based on tenant filtering.
     /// Platform admins can access all providers; tenant admins can only access providers in their tenant.
@@ -1075,6 +1838,10 @@ public static class AdminApiEndpointMappingExtensions
             {
                 return Results.Problem(statusCode: 404, title: "Client not found");
             }
+            if (client.IsSystemClient)
+            {
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
+            }
 
             // Get all secrets for this client
             var secrets = await db.ClientSecrets
@@ -1135,6 +1902,10 @@ public static class AdminApiEndpointMappingExtensions
             if (client is null)
             {
                 return Results.Problem(statusCode: 404, title: "Client not found");
+            }
+            if (client.IsSystemClient)
+            {
+                return Results.Problem(statusCode: 403, title: "System client is read-only");
             }
 
             // Check max active secrets limit (3)
@@ -1211,7 +1982,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1243,7 +2014,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1275,7 +2046,7 @@ public static class AdminApiEndpointMappingExtensions
             HttpContext httpContext,
             CancellationToken ct) =>
         {
-            if (!await VerifyClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
+            if (!await VerifyMutableClientAccess(clientId, db, tenantAccessor, authorizationService, httpContext, ct))
             {
                 return Results.Problem(statusCode: 404, title: "Client not found or access denied");
             }
@@ -1312,6 +2083,28 @@ public static class AdminApiEndpointMappingExtensions
         var isPlatformAdmin = platformAdminResult.Succeeded;
 
         var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId);
+        if (!isPlatformAdmin)
+        {
+            var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
+            if (!currentTenantId.HasValue) return false;
+            clientQuery = clientQuery.Where(c => c.TenantId == currentTenantId.Value);
+        }
+
+        return await clientQuery.AnyAsync(ct);
+    }
+
+    private static async Task<bool> VerifyMutableClientAccess(
+        Guid clientId,
+        AuthDbContext db,
+        ITenantAccessor tenantAccessor,
+        IAuthorizationService authorizationService,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        var platformAdminResult = await authorizationService.AuthorizeAsync(httpContext.User, "platform-admin");
+        var isPlatformAdmin = platformAdminResult.Succeeded;
+
+        var clientQuery = db.Clients.AsNoTracking().Where(c => c.Id == clientId && !c.IsSystemClient);
         if (!isPlatformAdmin)
         {
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;

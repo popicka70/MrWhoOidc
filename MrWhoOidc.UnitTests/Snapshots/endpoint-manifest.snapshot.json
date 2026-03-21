@@ -53,6 +53,28 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/clients",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/clients/{clientId:guid}/keys",
     "Methods": "GET",
     "RateLimiters": [
@@ -168,6 +190,46 @@
     "RateLimiters": [
       "rl-admin"
     ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/clients/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
@@ -378,6 +440,24 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/providers/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/providers/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/providers/{providerId:guid}/claim-mappings",
     "Methods": "GET",
     "RateLimiters": [
@@ -528,6 +608,79 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin/api/realms",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/realms/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/realms/import/",
     "Methods": "POST",
     "RateLimiters": [],
@@ -540,6 +693,50 @@
     "Pattern": "/admin/api/realms/import/preview",
     "Methods": "POST",
     "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/scopes",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/scopes",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/scopes/{name}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/scopes/{name}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
@@ -570,6 +767,50 @@
   {
     "Pattern": "/admin/api/tenants/{tenantId:guid}/icon",
     "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/users",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/users",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/users/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/admin/api/users/{id:guid}",
+    "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
     ],
@@ -989,6 +1230,17 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/clients",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/license",
     "Methods": "GET",
     "RateLimiters": [
@@ -1143,8 +1395,30 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/platform-admin/api/scopes",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/platform-admin/api/seed-tenant",
     "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "platform-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/platform-admin/api/tenants",
+    "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
     ],
@@ -1245,6 +1519,28 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/admin/api/clients",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/secrets",
     "Methods": "GET",
     "RateLimiters": [
@@ -1294,6 +1590,46 @@
     "RateLimiters": [
       "rl-admin"
     ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
@@ -1377,6 +1713,141 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/admin/api/providers/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms/{id:guid}/export",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/realms/{id:guid}/export/preview",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/scopes",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/scopes",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/scopes/{name}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/scopes/{name}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/admin/api/tenants/{tenantId:guid}/icon",
     "Methods": "DELETE",
     "RateLimiters": [
@@ -1401,6 +1872,50 @@
   {
     "Pattern": "/t/{slug}/admin/api/tenants/{tenantId:guid}/icon",
     "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/users",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/users",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/users/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/users/{id:guid}",
+    "Methods": "GET",
     "RateLimiters": [
       "rl-admin"
     ],

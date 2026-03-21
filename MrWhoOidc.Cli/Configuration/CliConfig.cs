@@ -17,6 +17,12 @@ public sealed class CliConfig
 
     public static string GetConfigDirectory()
     {
+        var overrideDir = Environment.GetEnvironmentVariable("MRWHOOIDC_CONFIG_DIR");
+        if (!string.IsNullOrWhiteSpace(overrideDir))
+        {
+            return overrideDir;
+        }
+
         var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return Path.Combine(homeDir, ".mrwhooidc");
     }

@@ -690,6 +690,9 @@ body.auth-shell::after {
 
 .app-main {
   padding-inline: clamp(0.4rem, 0.8vw, 1rem);
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
 }
 
 .app-main__content {
@@ -697,6 +700,7 @@ body.auth-shell::after {
   max-width: 1520px;
   margin: 0 auto;
   padding: 1.2rem 0 2.4rem;
+  min-height: min-content;
 }
 
 .app-public-shell {
@@ -720,12 +724,12 @@ body.auth-shell::after {
   grid-template-rows: auto 1fr auto;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .scroll-container {
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   scroll-padding-bottom: 4rem;
 }
 

@@ -25,6 +25,7 @@ public sealed class DiscoveryHandler(
     AuthDbContext db,
     IFeatureService featureService,
     ITenantAccessor tenantAccessor,
+    ICliClientService cliClientService,
     IPlatformSettingsService platformSettingsService,
     IMultiTenancyOptions multiTenancyOptions) : IDiscoveryHandler
 {
@@ -84,9 +85,15 @@ public sealed class DiscoveryHandler(
             grants.Add(OAuthConstants.GrantTypes.TokenExchange);
         }
 
+        var cliClientId = tenantId.HasValue && tenantId.Value != Guid.Empty
+            ? await cliClientService.GetCliClientIdAsync(tenantId.Value, ctx.RequestAborted).ConfigureAwait(false)
+            : null;
+
         // RFC 8628: Device Authorization Grant
-        var deviceAuthEnabled = authOptions.Value.EnableDeviceAuthorizationGrant &&
-            await featureService.IsFeatureEnabledAsync(FeatureFlags.DeviceAuthorizationGrant, tenantId, ctx.RequestAborted);
+        var deviceAuthEnabled =
+            (authOptions.Value.EnableDeviceAuthorizationGrant &&
+             await featureService.IsFeatureEnabledAsync(FeatureFlags.DeviceAuthorizationGrant, tenantId, ctx.RequestAborted)) ||
+            !string.IsNullOrWhiteSpace(cliClientId);
         if (deviceAuthEnabled)
         {
             grants.Add(OAuthConstants.GrantTypes.DeviceCode);
@@ -320,6 +327,11 @@ public sealed class DiscoveryHandler(
         if (deviceAuthEnabled)
         {
             body["device_authorization_endpoint"] = $"{baseUrl}/device/authorize";
+
+            if (!string.IsNullOrWhiteSpace(cliClientId))
+            {
+                body["mrwho_cli_client_id"] = cliClientId;
+            }
         }
 
         // OpenID Connect CIBA Core 1.0

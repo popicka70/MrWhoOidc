@@ -153,21 +153,20 @@ class TestClientCrud:
 
 
 class TestScopeCrud:
-    _scope_name = f"{E2E_PREFIX}:read:{_RUN_SUFFIX}"
-    _scope_display = "E2E Read Access"
+    _scope_name = f"default.{E2E_PREFIX}.read.{_RUN_SUFFIX}"
+    _scope_desc = "E2E Read Access"
 
     def test_01_create_scope(self, authenticated_page: Page, record_evaluation):
         authenticated_page.goto("/admin/scopes/add", wait_until="domcontentloaded")
         record_evaluation(authenticated_page, "/admin/scopes/add", label="empty-form")
         _fill_if_visible(authenticated_page, "input#Input_Name, input[name='Input.Name']", self._scope_name)
         _fill_if_visible(
-            authenticated_page, "input#Input_DisplayName, input[name='Input.DisplayName']", self._scope_display
+            authenticated_page, "input#Input_Description, input[name='Input.Description']", self._scope_desc
         )
         record_evaluation(authenticated_page, "/admin/scopes/add", label="filled-form")
         _click_submit(authenticated_page)
         url = authenticated_page.url
-        html = authenticated_page.content()
-        assert "/add" not in url or self._scope_name in html or "success" in html.lower(), f"Scope creation not confirmed (url={url})"
+        assert "/add" not in url, f"Scope creation failed — still on add page (url={url})"
         record_evaluation(authenticated_page, "/admin/scopes", label="after-create")
 
     def test_02_edit_scope(self, authenticated_page: Page, record_evaluation):
@@ -181,7 +180,7 @@ class TestScopeCrud:
         authenticated_page.wait_for_load_state("domcontentloaded")
         record_evaluation(authenticated_page, "/admin/scopes/edit", label="before-edit")
         _fill_if_visible(
-            authenticated_page, "input#Input_DisplayName, input[name='Input.DisplayName']",
+            authenticated_page, "input#Input_Description, input[name='Input.Description']",
             "E2E Read Access (Updated)",
         )
         _click_submit(authenticated_page)
