@@ -31,6 +31,7 @@ load_dotenv(_ENV_PATH, override=False)
 from utils.cli_helper import CliHelper
 from utils.instruction_loader import InstructionLoader
 from utils.llm_evaluator import EvaluationResult, LLMEvaluator
+from utils.oidc_client import OidcClient
 from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
 
@@ -363,3 +364,11 @@ def cli_logged_in(
 
     log.info("CLI login successful")
     return cli_helper
+
+
+@pytest.fixture(scope="session")
+def oidc_client(reset_database: None) -> OidcClient:
+    """Session-scoped OidcClient pointing at the default tenant, with discovery cached."""
+    client = OidcClient(f"{BASE_URL}/t/default")
+    client.discover()
+    return client
