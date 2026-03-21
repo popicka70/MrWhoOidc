@@ -227,6 +227,72 @@ public class ClientAuthenticationServiceTests
         Assert.AreEqual("invalid_client", result.Error);
         Assert.AreEqual("mtls_required", result.ErrorDescription);
     }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_PublicClient_TokenExchange_NoSecret_ReturnsUnauthorized()
+    {
+        // Arrange — public client (no secrets, no legacy hash)
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "public-app" };
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("public-app", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        var input = new ClientCredentialInput(
+            ClientId: "public-app",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.TokenExchange);
+
+        // Act
+        var result = await _service.AuthenticateAsync(input);
+
+        // Assert — public clients must not use token-exchange (RFC 8693 §2.1)
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual("unauthorized_client", result.Error);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_ConfidentialClient_TokenExchange_WithSecret_Succeeds()
+    {
+        // Arrange — confidential client with valid secret
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "backend-svc" };
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("backend-svc", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+        _clientStoreMock.Setup(s => s.ValidateClientSecretAsync("backend-svc", "good-secret", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var input = new ClientCredentialInput(
+            ClientId: "backend-svc",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.TokenExchange,
+            ClientSecret: "good-secret");
+
+        // Act
+        var result = await _service.AuthenticateAsync(input);
+
+        // Assert
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(client, result.Client);
+    }
+
+    [TestMethod]
+    public async Task AuthenticateAsync_PublicClient_ClientCredentials_NoSecret_ReturnsUnauthorized()
+    {
+        // Arrange — public client attempting client_credentials without a secret
+        var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "public-app" };
+        _clientStoreMock.Setup(s => s.FindByClientIdAsync("public-app", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(client);
+
+        var input = new ClientCredentialInput(
+            ClientId: "public-app",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.ClientCredentials);
+
+        // Act
+        var result = await _service.AuthenticateAsync(input);
+
+        // Assert — public clients must not use client_credentials (RFC 6749 §4.4)
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual("unauthorized_client", result.Error);
+    }
 }
 
 

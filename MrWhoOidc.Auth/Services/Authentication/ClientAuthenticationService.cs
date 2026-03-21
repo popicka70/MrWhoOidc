@@ -105,6 +105,17 @@ public sealed class ClientAuthenticationService(
                 }
             }
 
+            // Token exchange requires a confidential client (RFC 8693 §2.1).
+            if (input.Usage == ClientAuthenticationUsage.TokenEndpoint &&
+                string.Equals(input.GrantType, OAuthConstants.GrantTypes.TokenExchange, StringComparison.Ordinal))
+            {
+                if (string.IsNullOrEmpty(input.ClientSecret))
+                {
+                    logger.LogWarning("Client authentication failed: client_secret required for token-exchange {ClientIdHash}", Bucketization.Bucket(input.ClientId));
+                    return new ClientAuthResult(false, client, "unauthorized_client");
+                }
+            }
+
             authenticated = await clientStore.ValidateClientSecretAsync(input.ClientId, input.ClientSecret, ct).ConfigureAwait(false);
             if (!authenticated)
             {
