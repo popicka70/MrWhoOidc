@@ -50,7 +50,7 @@ public sealed class ConsentServiceTransactionTests
         var service = new ConsentService(db, tenantAccessor);
         var userId = Guid.NewGuid();
         var clientId = "test-client";
-        
+
         db.Consents.Add(new Consent
         {
             UserId = userId,

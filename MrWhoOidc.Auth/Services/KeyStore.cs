@@ -26,7 +26,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
     public async Task<JsonWebKey> GetActiveSigningKeyAsync(CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        
+
         var cacheKey = $"signing:key:active:{tenantId}";
         var options = new HybridCacheEntryOptions
         {
@@ -44,7 +44,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
                     .OrderByDescending(k => k.CreatedAt)
                     .FirstOrDefaultAsync(cancel)
                     .ConfigureAwait(false);
-                    
+
                 if (current is null)
                 {
                     var (jwkJson, kid, alg) = GeneratePrivateSigningJwkJson(keyRotationOptions.Value.SigningAlgorithm);
@@ -143,7 +143,7 @@ internal sealed class KeyStore(AuthDbContext db, ITenantAccessor tenantAccessor,
     public async Task<IReadOnlyList<JsonWebKey>> GetPublicJwksAsync(bool includeEncryptionKeys = false, CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        
+
         var cacheKey = $"signing:jwks:public:{tenantId}:enc:{includeEncryptionKeys.ToString().ToLowerInvariant()}";
         var options = new HybridCacheEntryOptions
         {

@@ -155,7 +155,7 @@ public sealed class GlobalAuthenticationServiceTests
         // Arrange
         using var db = CreateDb();
         var hasher = new DummyHasher();
-        
+
         // Create user without any memberships
         var account = new UserAccount
         {
@@ -187,7 +187,7 @@ public sealed class GlobalAuthenticationServiceTests
         // Arrange
         using var db = CreateDb();
         var account = await SeedUserAccountWithMembership(db);
-        
+
         // Lock the account
         account.LockedOutUntil = DateTimeOffset.UtcNow.AddMinutes(10);
         account.FailedLoginAttempts = 5;

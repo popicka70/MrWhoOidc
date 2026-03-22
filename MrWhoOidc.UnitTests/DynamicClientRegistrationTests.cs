@@ -144,7 +144,7 @@ public sealed class DynamicClientRegistrationTests
     private static async Task<Guid> CreateTestTenant(AuthDbContext db, string slug = "default")
     {
         var tenantId = GuidHelper.NewId();
-        
+
         var tenant = new Tenant
         {
             Id = tenantId,
@@ -208,7 +208,7 @@ public sealed class DynamicClientRegistrationTests
     {
         // Use shared RSA key instead of generating a new one
         var parameters = SharedTestKeys.GetRsaParameters(includePrivate: true);
-        
+
         return JsonSerializer.Serialize(new
         {
             kty = "RSA",

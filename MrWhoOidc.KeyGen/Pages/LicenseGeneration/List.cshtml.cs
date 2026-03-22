@@ -52,7 +52,7 @@ public class ListModel : PageModel
             if (!string.IsNullOrWhiteSpace(StatusFilter))
             {
                 var now = DateTimeOffset.UtcNow;
-                
+
                 if (StatusFilter.Equals("valid", StringComparison.OrdinalIgnoreCase))
                 {
                     query = query.Where(l => l.ValidUntil > now);

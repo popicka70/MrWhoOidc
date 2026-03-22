@@ -35,7 +35,7 @@ public sealed class ExternalOidcAutoApprovalAssignmentTests
                 // Register real domain services needed for auto-approval
                 services.AddScoped<MrWhoOidc.Auth.Services.Users.IRegistrationService, MrWhoOidc.Auth.Services.Users.RegistrationService>();
                 services.AddScoped<IIssuerBuilder, MrWhoOidc.Auth.MultiTenancy.IssuerBuilder>();
-                
+
                 // IssuerBuilder depends on IMultiTenancyOptions
                 var mtProvider = new MultiTenancyStateProvider("default", initialEnabled: false);
                 services.AddSingleton<IMultiTenancyOptions>(mtProvider);

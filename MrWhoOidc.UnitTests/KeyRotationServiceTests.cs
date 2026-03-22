@@ -16,7 +16,7 @@ public sealed class KeyRotationServiceTests
     {
         using var db = TestDataSeeder.CreateInMemoryDb();
         var testTenantId = Guid.NewGuid();
-        
+
         // Seed a first key created sufficiently in the past to trigger rotation
         db.SigningKeys.Add(new SigningKey
         {
@@ -34,22 +34,22 @@ public sealed class KeyRotationServiceTests
             RotationInterval = TimeSpan.FromDays(7),
             Overlap = TimeSpan.FromDays(2)
         });
-        
+
         var mockKeyStore = new Mock<IKeyStore>();
         mockKeyStore.Setup(x => x.InvalidateActiveSigningKeyCacheAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         mockKeyStore.Setup(x => x.InvalidatePublicJwksCacheAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-            
+
         var mockTenantAccessor = new Mock<ITenantAccessor>();
-        mockTenantAccessor.Setup(x => x.CurrentTenant).Returns(new TenantContext 
-        { 
-            TenantId = testTenantId, 
+        mockTenantAccessor.Setup(x => x.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = testTenantId,
             Slug = "test-tenant",
             Name = "Test Tenant",
             IssuerUri = "https://test.example.com"
         });
-        
+
         var svc = new KeyRotationService(db, options, mockKeyStore.Object, mockTenantAccessor.Object, NullLogger<KeyRotationService>.Instance);
         await svc.EnsureInitializedAsync();
 
@@ -63,7 +63,7 @@ public sealed class KeyRotationServiceTests
 
         await svc.EnsureInitializedAsync();
         Assert.IsTrue(db.SigningKeys.Any(k => k.RetiredAt != null));
-        
+
         // Verify cache invalidation was called
         mockKeyStore.Verify(x => x.InvalidateActiveSigningKeyCacheAsync(testTenantId, It.IsAny<CancellationToken>()), Times.Once);
         mockKeyStore.Verify(x => x.InvalidatePublicJwksCacheAsync(testTenantId, It.IsAny<CancellationToken>()), Times.AtLeastOnce);

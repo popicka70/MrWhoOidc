@@ -58,17 +58,17 @@ public sealed class AuthorizeRequestResolver(
         CancellationToken ct = default)
     {
         var query = queryParams.ToDictionary(x => x.Key, x => x.Value);
-        
+
         // Compute initial client bucket from query
         string? rawClientId = query.TryGetValue(OAuthConstants.Parameters.ClientId, out var cid) ? cid : null;
         string clientBucket = string.IsNullOrEmpty(rawClientId) ? "unknown" : Bucketization.BucketizeClientId(rawClientId);
         string mode = "query";
-        
+
         // Calculate request size (approx)
         int requestSize = 0;
-        foreach(var kvp in query)
+        foreach (var kvp in query)
         {
-             requestSize += Encoding.UTF8.GetByteCount(kvp.Key) + Encoding.UTF8.GetByteCount(kvp.Value) + 1; // +1 for = or &
+            requestSize += Encoding.UTF8.GetByteCount(kvp.Key) + Encoding.UTF8.GetByteCount(kvp.Value) + 1; // +1 for = or &
         }
 
         // JAR size check
@@ -130,7 +130,7 @@ public sealed class AuthorizeRequestResolver(
             }
             if (!string.IsNullOrEmpty(entry.ClientId)) clientBucket = Bucketization.BucketizeClientId(entry.ClientId);
             effectiveReq = entry.Request;
-            
+
             // State override from query
             if (query.TryGetValue(OAuthConstants.Parameters.State, out var stateFromQuery) && !string.IsNullOrEmpty(stateFromQuery))
             {

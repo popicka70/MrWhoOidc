@@ -13,7 +13,7 @@ public class LogoutModel : PageModel
         // Sign out of the cookie and OIDC authentication schemes
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme);
-        
+
         return RedirectToPage("/Index");
     }
 

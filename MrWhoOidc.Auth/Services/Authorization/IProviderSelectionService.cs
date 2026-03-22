@@ -19,9 +19,9 @@ public interface IProviderSelectionService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A result indicating the selected IDP or if a selection UI is required.</returns>
     Task<ProviderSelectionResult> EvaluateAsync(
-        string clientId, 
-        string? idpParam = null, 
-        string? idpHint = null, 
+        string clientId,
+        string? idpParam = null,
+        string? idpHint = null,
         string? lastUsedIdp = null,
         bool forceAccountSelection = false,
         CancellationToken ct = default);

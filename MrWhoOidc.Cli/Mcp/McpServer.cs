@@ -21,7 +21,7 @@ public sealed class McpServer
         while (!ct.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(ct);
-            
+
             if (line == null)
             {
                 break; // EOF
@@ -101,7 +101,7 @@ public sealed class McpServer
 
         var tools = _toolRegistry.GetAllTools();
         var result = new ToolsListResult { Tools = tools };
-        
+
         return CreateSuccessResponse(request.Id, result);
     }
 

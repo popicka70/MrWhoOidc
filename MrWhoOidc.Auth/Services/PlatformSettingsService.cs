@@ -43,7 +43,7 @@ public class PlatformSettingsService : IPlatformSettingsService
                 return await strategy.ExecuteAsync(async ct =>
                 {
                     var settings = await _db.PlatformSettings.FirstOrDefaultAsync(ct);
-                    
+
                     if (settings == null)
                     {
                         // Create default settings on first access
@@ -54,7 +54,7 @@ public class PlatformSettingsService : IPlatformSettingsService
                         _db.PlatformSettings.Add(settings);
                         await _db.SaveChangesAsync(ct);
                     }
-                    
+
                     return settings;
                 }, cancel);
             },
@@ -69,11 +69,11 @@ public class PlatformSettingsService : IPlatformSettingsService
     {
         settings.UpdatedAt = DateTimeOffset.UtcNow;
         settings.UpdatedBy = updatedBy;
-        
+
         // Check if this entity or another entity with same key is already being tracked
         var trackedEntity = _db.ChangeTracker.Entries<PlatformSettings>()
             .FirstOrDefault(e => e.Entity.Id == settings.Id);
-        
+
         if (trackedEntity != null)
         {
             // If different instance with same key is tracked, detach it first
@@ -82,7 +82,7 @@ public class PlatformSettingsService : IPlatformSettingsService
                 trackedEntity.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
             }
         }
-        
+
         // Now attach/update the settings entity
         var entry = _db.Entry(settings);
         if (entry.State == Microsoft.EntityFrameworkCore.EntityState.Detached)
@@ -93,9 +93,9 @@ public class PlatformSettingsService : IPlatformSettingsService
         {
             entry.State = Microsoft.EntityFrameworkCore.EntityState.Modified;
         }
-        
+
         await _db.SaveChangesAsync();
-        
+
         // Invalidate cache so changes take effect immediately
         await _cache.RemoveAsync(CacheKey).ConfigureAwait(false);
     }

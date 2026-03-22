@@ -25,8 +25,8 @@ public class TenantBrandingService : ITenantBrandingService
             .Select(t => new TenantBranding
             {
                 // Prefer uploaded icon over LogoUrl
-                LogoUrl = t.TenantIconId.HasValue 
-                    ? $"/api/icon/{t.TenantIconId.Value}" 
+                LogoUrl = t.TenantIconId.HasValue
+                    ? $"/api/icon/{t.TenantIconId.Value}"
                     : t.LogoUrl,
                 PrimaryColor = t.PrimaryColor,
                 AccentColor = t.AccentColor,

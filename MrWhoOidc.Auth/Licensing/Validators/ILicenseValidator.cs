@@ -42,7 +42,7 @@ public interface ILicenseValidator
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Validation result indicating success or describing the constraint violation.</returns>
     Task<LicenseValidationResult> ValidateSublicenseAsync(
-        LicenseInfo sublicense, 
-        LicenseInfo platformLicense, 
+        LicenseInfo sublicense,
+        LicenseInfo platformLicense,
         CancellationToken cancellationToken = default);
 }

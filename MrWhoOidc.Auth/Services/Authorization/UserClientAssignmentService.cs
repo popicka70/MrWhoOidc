@@ -48,7 +48,7 @@ public sealed class UserClientAssignmentService(
 
             if (userTenantId != Guid.Empty && userTenantId == client.TenantId)
             {
-                logger.LogInformation("📝 Auto-assigning user {UserId} to client {ClientId} (Mode={Mode}, External={IsExternal})", 
+                logger.LogInformation("📝 Auto-assigning user {UserId} to client {ClientId} (Mode={Mode}, External={IsExternal})",
                     userId, clientId, client.AutoApprovalMode, isExternalSession);
 
                 var assignment = new UserClientAssignment

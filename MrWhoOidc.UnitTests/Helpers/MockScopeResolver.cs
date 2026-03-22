@@ -19,13 +19,13 @@ internal sealed class MockScopeResolver : IScopeResolver
             new Scope { Name = "offline_access", Description = "Offline access", IsGlobal = true },
             new Scope { Name = "roles", Description = "Roles scope", IsGlobal = true }
         };
-        
+
         if (tenantId.HasValue)
         {
             scopes.Add(new Scope { Name = "custom.read", Description = "Custom read", TenantId = tenantId, IsGlobal = false });
             scopes.Add(new Scope { Name = "custom.write", Description = "Custom write", TenantId = tenantId, IsGlobal = false });
         }
-        
+
         return Task.FromResult<IReadOnlyList<Scope>>(scopes);
     }
 
@@ -48,7 +48,7 @@ internal sealed class MockScopeResolver : IScopeResolver
                 invalidScopes.Add(scope);
             }
         }
-        
+
         return Task.FromResult(new ScopeValidationResult
         {
             ValidScopes = validScopes,

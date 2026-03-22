@@ -38,16 +38,16 @@ public class ExternalOidcHandlerTests
         var (handler, ctx, scope) = CreateHandler();
         using (scope)
         {
-        ctx.Request.QueryString = new QueryString("?returnUrl=%2Fauthorize&clientId=web");
+            ctx.Request.QueryString = new QueryString("?returnUrl=%2Fauthorize&clientId=web");
 
-        // Act
-        var result = await handler.StartAsync(ctx);
+            // Act
+            var result = await handler.StartAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
-        var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
+            // Assert
+            Assert.IsNotNull(result);
+            var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
+            var url = urlProp?.GetValue(result)?.ToString();
+            Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
         }
     }
 
@@ -58,16 +58,16 @@ public class ExternalOidcHandlerTests
         var (handler, ctx, scope) = CreateHandler();
         using (scope)
         {
-        ctx.Request.QueryString = new QueryString("?provider=google&clientId=web");
+            ctx.Request.QueryString = new QueryString("?provider=google&clientId=web");
 
-        // Act
-        var result = await handler.StartAsync(ctx);
+            // Act
+            var result = await handler.StartAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
-        var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
+            // Assert
+            Assert.IsNotNull(result);
+            var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
+            var url = urlProp?.GetValue(result)?.ToString();
+            Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page");
         }
     }
 
@@ -78,16 +78,16 @@ public class ExternalOidcHandlerTests
         var (handler, ctx, scope) = CreateHandler();
         using (scope)
         {
-        ctx.Request.QueryString = new QueryString("?provider=nonexistent&returnUrl=%2Fauthorize&clientId=web");
+            ctx.Request.QueryString = new QueryString("?provider=nonexistent&returnUrl=%2Fauthorize&clientId=web");
 
-        // Act
-        var result = await handler.StartAsync(ctx);
+            // Act
+            var result = await handler.StartAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
-        var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for unknown provider");
+            // Assert
+            Assert.IsNotNull(result);
+            var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
+            var url = urlProp?.GetValue(result)?.ToString();
+            Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for unknown provider");
         }
     }
 
@@ -98,31 +98,31 @@ public class ExternalOidcHandlerTests
         var (handler, ctx, scope) = CreateHandler();
         using (scope)
         {
-        var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
+            var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
 
-        // Add a disabled provider
-        db.IdentityProviders.Add(new IdentityProvider
-        {
-            Name = "disabled-provider",
-            Enabled = false,
-            ConfigJson = JsonSerializer.Serialize(new
+            // Add a disabled provider
+            db.IdentityProviders.Add(new IdentityProvider
             {
-                Authority = "https://provider.example.com",
-                ClientId = "client123"
-            })
-        });
-        await db.SaveChangesAsync();
+                Name = "disabled-provider",
+                Enabled = false,
+                ConfigJson = JsonSerializer.Serialize(new
+                {
+                    Authority = "https://provider.example.com",
+                    ClientId = "client123"
+                })
+            });
+            await db.SaveChangesAsync();
 
-        ctx.Request.QueryString = new QueryString("?provider=disabled-provider&returnUrl=%2Fauthorize&clientId=web");
+            ctx.Request.QueryString = new QueryString("?provider=disabled-provider&returnUrl=%2Fauthorize&clientId=web");
 
-        // Act
-        var result = await handler.StartAsync(ctx);
+            // Act
+            var result = await handler.StartAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
-        var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for disabled provider");
+            // Assert
+            Assert.IsNotNull(result);
+            var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
+            var url = urlProp?.GetValue(result)?.ToString();
+            Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for disabled provider");
         }
     }
 
@@ -133,27 +133,27 @@ public class ExternalOidcHandlerTests
         var (handler, ctx, scope) = CreateHandler();
         using (scope)
         {
-        var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
+            var db = ctx.RequestServices.GetRequiredService<AuthDbContext>();
 
-        // Add a provider with invalid JSON config
-        db.IdentityProviders.Add(new IdentityProvider
-        {
-            Name = "invalid-config",
-            Enabled = true,
-            ConfigJson = "{invalid json"
-        });
-        await db.SaveChangesAsync();
+            // Add a provider with invalid JSON config
+            db.IdentityProviders.Add(new IdentityProvider
+            {
+                Name = "invalid-config",
+                Enabled = true,
+                ConfigJson = "{invalid json"
+            });
+            await db.SaveChangesAsync();
 
-        ctx.Request.QueryString = new QueryString("?provider=invalid-config&returnUrl=%2Fauthorize&clientId=web");
+            ctx.Request.QueryString = new QueryString("?provider=invalid-config&returnUrl=%2Fauthorize&clientId=web");
 
-        // Act
-        var result = await handler.StartAsync(ctx);
+            // Act
+            var result = await handler.StartAsync(ctx);
 
-        // Assert
-        Assert.IsNotNull(result);
-        var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
-        var url = urlProp?.GetValue(result)?.ToString();
-        Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for invalid config");
+            // Assert
+            Assert.IsNotNull(result);
+            var urlProp = result.GetType().GetProperty("Url") ?? result.GetType().GetProperty("Location");
+            var url = urlProp?.GetValue(result)?.ToString();
+            Assert.IsTrue(url?.Contains("/auth/external/error") ?? false, "Expected redirect to error page for invalid config");
         }
     }
 

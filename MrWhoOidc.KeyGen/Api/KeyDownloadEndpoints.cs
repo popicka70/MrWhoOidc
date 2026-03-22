@@ -43,7 +43,7 @@ public static class KeyDownloadEndpoints
         // SECURITY: Private keys are not stored and cannot be retrieved after generation.
         // This endpoint exists for the immediate post-generation download only.
         // In a production system, you would use a short-lived token or session-based approach.
-        
+
         return Task.FromResult<IResult>(Results.Problem(
             detail: "Private keys are not stored and cannot be retrieved after generation. Please generate a new key pair if you need a private key.",
             statusCode: StatusCodes.Status410Gone,

@@ -28,9 +28,9 @@ internal sealed class TokenValidator(ICachedKeyProvider keyProvider) : ITokenVal
         {
             MapInboundClaims = false
         };
-        
+
         var keys = await keyProvider.GetPublicJwksAsync(ct).ConfigureAwait(false);
-        
+
         var parameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,

@@ -36,7 +36,7 @@ internal sealed class Pbkdf2PasswordHasher : IPasswordHasher
         if (parts.Length != 4 || parts[0] != "v1") return false;
 
         if (!int.TryParse(parts[1], out var iterations)) return false;
-        
+
         try
         {
             var salt = Convert.FromBase64String(parts[2]);

@@ -229,7 +229,7 @@ public class JwksMultiTenancyTests
         // Arrange - Create initial keys for both tenants
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
-        
+
         var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
@@ -309,7 +309,7 @@ public class JwksMultiTenancyTests
 
         // Assert - Both keys should be present (grace period)
         Assert.IsGreaterThanOrEqualTo(jwks.Count, 2, "JWKS should contain at least 2 keys after rotation (old + new)");
-        
+
         var kids = jwks.Select(k => k.Kid).ToList();
         Assert.Contains(oldKey.Kid, kids, "JWKS should still contain old key (grace period)");
     }
@@ -355,7 +355,7 @@ public class JwksMultiTenancyTests
         // Arrange - Create multiple keys for each tenant
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
-        
+
         var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
@@ -410,7 +410,7 @@ public class JwksMultiTenancyTests
         // Arrange - Create keys and get JWKS for both tenants
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b");
-        
+
         var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
@@ -453,7 +453,7 @@ public class JwksMultiTenancyTests
         // Arrange - Create keys for both tenants
         var tenantAccessorA = MockTenantAccessor.CreateWithTenant(_tenantAId, "tenant-a", issuerUri: "https://auth.example.com/t/tenant-a");
         var tenantAccessorB = MockTenantAccessor.CreateWithTenant(_tenantBId, "tenant-b", issuerUri: "https://auth.example.com/t/tenant-b");
-        
+
         var keyStoreA = new KeyStore(_db, tenantAccessorA, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
         var keyStoreB = new KeyStore(_db, tenantAccessorB, new TestHybridCache(), Microsoft.Extensions.Options.Options.Create(new KeyRotationOptions()));
 
@@ -574,7 +574,7 @@ public class JwksMultiTenancyTests
         var keysInDb = await _db.SigningKeys
             .Where(k => k.TenantId == _tenantAId && k.RetiredAt == null)
             .ToListAsync();
-        
+
         Assert.HasCount(keysInDb.Count, jwks, "JWKS count should match non-retired keys in DB");
     }
 

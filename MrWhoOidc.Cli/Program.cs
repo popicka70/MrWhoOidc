@@ -57,10 +57,10 @@ internal static class Program
     {
         AnsiConsole.MarkupLine("[cyan]Starting MCP server (stdio mode)...[/]");
         AnsiConsole.MarkupLine("[dim]Listening for JSON-RPC requests on stdin[/]");
-        
+
         var server = new McpServer();
         await server.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput());
-        
+
         return 0;
     }
 
@@ -73,18 +73,18 @@ internal static class Program
         {
             Description = "Configuration profile to use"
         };
-        
+
         var serverOption = new Option<string?>("--server", "-s")
         {
             Description = "Server URL (overrides profile)"
         };
-        
+
         var formatOption = new Option<OutputFormat>("--format", "-f")
         {
             Description = "Output format (table, json, yaml)",
             DefaultValueFactory = _ => OutputFormat.Table
         };
-        
+
         var verboseOption = new Option<bool>("--verbose", "-v")
         {
             Description = "Enable verbose output"
@@ -107,7 +107,7 @@ internal static class Program
         rootCommand.Subcommands.Add(new ClientCommand());
         rootCommand.Subcommands.Add(new ScopeCommand());
         rootCommand.Subcommands.Add(new UserCommand());
-        
+
         return rootCommand;
     }
 }

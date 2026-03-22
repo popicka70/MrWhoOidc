@@ -92,7 +92,7 @@ public class TenantLicenseModel : PageModel
     /// <summary>
     /// Features available for tenant licenses (excludes platform-only features).
     /// </summary>
-    public IReadOnlyList<FeatureDefinition> FeatureOptions 
+    public IReadOnlyList<FeatureDefinition> FeatureOptions
         => _featureCatalog.Where(f => !f.IsPlatformOnly).ToList();
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> TierFeatureMap => _tierFeatureMap;
@@ -126,7 +126,7 @@ public class TenantLicenseModel : PageModel
 
             if (string.IsNullOrWhiteSpace(ParentLicenseId))
             {
-                ModelState.AddModelError(nameof(ParentLicenseId), 
+                ModelState.AddModelError(nameof(ParentLicenseId),
                     "Parent Platform License ID is required. Copy the JTI from the platform license.");
                 return Page();
             }
@@ -136,7 +136,7 @@ public class TenantLicenseModel : PageModel
             var invalidFeatures = SelectedFeatures.Where(f => platformOnlyKeys.Contains(f)).ToList();
             if (invalidFeatures.Count > 0)
             {
-                ModelState.AddModelError(nameof(SelectedFeatures), 
+                ModelState.AddModelError(nameof(SelectedFeatures),
                     $"Tenant sublicenses cannot include platform-only features: {string.Join(", ", invalidFeatures)}");
                 return Page();
             }
@@ -154,7 +154,7 @@ public class TenantLicenseModel : PageModel
             {
                 if (string.IsNullOrWhiteSpace(AllowedIssuers))
                 {
-                    ModelState.AddModelError(nameof(AllowedIssuers), 
+                    ModelState.AddModelError(nameof(AllowedIssuers),
                         "Allowed Issuers are mandatory for non-community licenses.");
                     return Page();
                 }
@@ -234,7 +234,7 @@ public class TenantLicenseModel : PageModel
     private void NormalizeFeatureSelections()
     {
         var platformOnlyKeys = new HashSet<string>(_platformOnlyFeatures.Select(f => f.Key), StringComparer.OrdinalIgnoreCase);
-        
+
         if (SelectedFeatures.Count > 0)
         {
             SelectedFeatures = SelectedFeatures
@@ -275,7 +275,7 @@ public class TenantLicenseModel : PageModel
         SelectedFeatures = featureSet.OrderBy(f => f, comparer).ToList();
     }
 
-    private bool IsKnownFeature(string feature) 
+    private bool IsKnownFeature(string feature)
         => _featureCatalog.Any(def => def.Key.Equals(feature, StringComparison.OrdinalIgnoreCase));
 
     private static string? SerializeFeaturesPayload(IEnumerable<string> features)

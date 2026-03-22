@@ -14,7 +14,7 @@ public interface IScopeResolver
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of available scopes.</returns>
     Task<IReadOnlyList<Scope>> GetAvailableScopesAsync(Guid? tenantId, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Validate that requested scopes exist and are accessible to the given tenant.
     /// </summary>
@@ -23,10 +23,10 @@ public interface IScopeResolver
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Validation result with valid and invalid scopes.</returns>
     Task<ScopeValidationResult> ValidateScopesAsync(
-        IEnumerable<string> requestedScopes, 
+        IEnumerable<string> requestedScopes,
         Guid? tenantId,
         CancellationToken ct = default);
-    
+
     /// <summary>
     /// Check if a scope name is available for creation.
     /// </summary>
@@ -35,7 +35,7 @@ public interface IScopeResolver
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if the name is available, false if already taken.</returns>
     Task<bool> IsScopeNameAvailableAsync(string scopeName, Guid? tenantId, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Check if a scope is a standard OAuth2/OIDC scope.
     /// </summary>

@@ -28,12 +28,17 @@ public sealed class ParCleanupHostedService(IServiceProvider services, ILogger<P
 
                 var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
                 var now = DateTimeOffset.UtcNow;
-                var expired = await db.PushedAuthorizationRequests.Where(p => p.ExpiresAt < now || p.Consumed).ToListAsync(stoppingToken);
-                if (expired.Count > 0)
+
+                // ⚡ Bolt Performance Optimization:
+                // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync()
+                // Impact: Eliminates memory allocation overhead for tracking expired PAR requests and saves database round-trips.
+                var expiredCount = await db.PushedAuthorizationRequests
+                    .Where(p => p.ExpiresAt < now || p.Consumed)
+                    .ExecuteDeleteAsync(stoppingToken);
+
+                if (expiredCount > 0)
                 {
-                    db.PushedAuthorizationRequests.RemoveRange(expired);
-                    await db.SaveChangesAsync(stoppingToken);
-                    logger.LogInformation("PAR cleanup removed {Count} entries", expired.Count);
+                    logger.LogInformation("PAR cleanup removed {Count} entries", expiredCount);
                 }
             }
             catch (Exception ex)

@@ -11,9 +11,9 @@ namespace MrWhoOidc.Auth.Services.Authorization;
 public sealed class ProviderSelectionService(AuthDbContext db, IClientStore clients) : IProviderSelectionService
 {
     public async Task<ProviderSelectionResult> EvaluateAsync(
-        string clientId, 
-        string? idpParam = null, 
-        string? idpHint = null, 
+        string clientId,
+        string? idpParam = null,
+        string? idpHint = null,
         string? lastUsedIdp = null,
         bool forceAccountSelection = false,
         CancellationToken ct = default)
@@ -40,7 +40,8 @@ public sealed class ProviderSelectionService(AuthDbContext db, IClientStore clie
         {
             providerOptions = await db.ClientIdentityProviders.AsNoTracking()
                 .Where(m => m.ClientId == client.Id && m.Enabled)
-                .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new {
+                .Join(db.IdentityProviders.AsNoTracking().Where(p => p.Enabled), m => m.IdentityProviderId, p => p.Id, (m, p) => new
+                {
                     Name = p.Name,
                     DisplayName = p.DisplayName ?? p.Name,
                     IsDefault = m.IsDefaultForClient,

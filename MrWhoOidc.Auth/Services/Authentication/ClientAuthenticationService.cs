@@ -83,7 +83,7 @@ public sealed class ClientAuthenticationService(
                 logger.LogWarning("Client authentication failed: private_key_jwt disabled for client {ClientIdHash}", Bucketization.Bucket(input.ClientId));
                 return new ClientAuthResult(false, client, "unauthorized_client", "private_key_jwt disabled");
             }
-            
+
             authenticated = await assertionValidator.ValidateAsync(client.ClientId, input.ClientAssertion, input.EndpointUrl ?? string.Empty).ConfigureAwait(false);
             if (!authenticated)
             {
@@ -95,7 +95,7 @@ public sealed class ClientAuthenticationService(
             // Client Secret
             // Check policies if Client Credentials Grant — a client_secret must be provided
             // because public clients are not allowed to use client_credentials (RFC 6749 §4.4).
-            if (input.Usage == ClientAuthenticationUsage.TokenEndpoint && 
+            if (input.Usage == ClientAuthenticationUsage.TokenEndpoint &&
                 string.Equals(input.GrantType, OAuthConstants.GrantTypes.ClientCredentials, StringComparison.Ordinal))
             {
                 if (string.IsNullOrEmpty(input.ClientSecret))
@@ -160,7 +160,7 @@ public sealed class ClientAuthenticationService(
         }
         else if (input.Usage == ClientAuthenticationUsage.Introspection)
         {
-             // Check client-specific
+            // Check client-specific
             if (!string.IsNullOrEmpty(client.IntrospectionMtlsThumbprintsJson))
             {
                 try { return JsonSerializer.Deserialize<string[]>(client.IntrospectionMtlsThumbprintsJson); }

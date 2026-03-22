@@ -11,12 +11,12 @@ public static class TestJwtServiceFactory
     {
         var mockProvider = new Mock<ICachedKeyProvider>();
         mockProvider.Setup(p => p.GetActiveSigningKeyAsync(It.IsAny<CancellationToken>()))
-            .Returns<CancellationToken>(async (ct) => 
+            .Returns<CancellationToken>(async (ct) =>
             {
                 var jwk = await keyStore.GetActiveSigningKeyAsync(ct);
                 return jwk;
             });
-        
+
         return new JwtService(mockProvider.Object);
     }
 }

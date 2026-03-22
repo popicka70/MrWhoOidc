@@ -181,7 +181,7 @@ public sealed class TokenExchangeTests
         var userId = Guid.NewGuid();
         var tokenValue = "opaque-token-123";
         var hash = MrWhoOidc.Auth.Utils.CryptoHelper.ComputeSha256Base64(tokenValue);
-        
+
         db.Tokens.Add(new MrWhoOidc.Auth.Persistence.Token
         {
             Type = "access",

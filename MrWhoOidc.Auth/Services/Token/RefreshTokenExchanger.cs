@@ -44,7 +44,7 @@ public sealed class RefreshTokenExchanger(
         var absoluteLifetimeSeconds = settings?.Tokens?.RefreshTokenAbsoluteLifetimeSeconds ?? 2592000; // Default: 30 days
         var absoluteLifetime = TimeSpan.FromSeconds(absoluteLifetimeSeconds);
         var absoluteExpired = tokenEntity is not null && tokenEntity.CreatedAt.Add(absoluteLifetime) < DateTimeOffset.UtcNow;
-        
+
         if (tokenEntity is null || tokenEntity.ExpiresAt < DateTimeOffset.UtcNow || absoluteExpired || !string.Equals(tokenEntity.ClientId, request.ClientId, StringComparison.Ordinal))
         {
             return (false, new { error = "invalid_grant" }, "invalid_grant", 400);
@@ -247,9 +247,9 @@ public sealed class RefreshTokenExchanger(
         }
 
         var json = JsonSerializer.Serialize(claimObj, EntitlementsJsonOptions);
-        
+
         var signedTokens = await RequestSignedLicenseTokensAsync(subjectId, tenantIdStr, grantedProducts, issuer, ct).ConfigureAwait(false);
-        
+
         return (filteredScopes, json, signedTokens);
     }
 
@@ -266,7 +266,7 @@ public sealed class RefreshTokenExchanger(
         }
 
         var signedTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        
+
         foreach (var productKey in grantedProducts)
         {
             try

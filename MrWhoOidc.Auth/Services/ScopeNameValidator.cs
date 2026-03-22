@@ -26,7 +26,7 @@ public sealed class ScopeNameValidationResult
 {
     public bool IsValid { get; init; }
     public string? ErrorMessage { get; init; }
-    
+
     public static ScopeNameValidationResult Success() => new() { IsValid = true };
     public static ScopeNameValidationResult Error(string message) => new() { IsValid = false, ErrorMessage = message };
 }
@@ -44,10 +44,10 @@ internal sealed class ScopeNameValidator : IScopeNameValidator
         "offline_access",
         "roles"
     };
-    
+
     // Pattern for valid scope names (lowercase alphanumeric with dots, hyphens, underscores)
     private static readonly Regex ValidScopePattern = new(@"^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$", RegexOptions.Compiled);
-    
+
     // Pattern for tenant scope suffix (after the tenant prefix)
     private static readonly Regex TenantSuffixPattern = new(@"^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$", RegexOptions.Compiled);
 
@@ -87,7 +87,7 @@ internal sealed class ScopeNameValidator : IScopeNameValidator
         // Global scopes should be standard OAuth2/OIDC scopes
         // Platform admins are trusted, so we allow them to create custom global scopes
         // but we warn if they use dot notation (which is reserved for tenant scopes)
-        
+
         if (scopeName.Contains('.'))
         {
             return ScopeNameValidationResult.Error(

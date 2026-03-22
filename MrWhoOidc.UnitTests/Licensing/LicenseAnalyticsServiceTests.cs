@@ -61,14 +61,14 @@ public sealed class LicenseAnalyticsServiceTests
 
         Assert.AreEqual(from, report.FromDate);
         Assert.AreEqual(to, report.ToDate);
-    Assert.AreEqual("daily", report.AggregationPeriod);
-    Assert.HasCount(2, report.Metrics);
+        Assert.AreEqual("daily", report.AggregationPeriod);
+        Assert.HasCount(2, report.Metrics);
 
         var top = report.Metrics[0];
         Assert.AreEqual(FeatureFlags.DPoP, top.FeatureName);
         Assert.AreEqual(5, top.UsageCount);
-    Assert.AreEqual(metrics[1].FirstUsed, top.FirstUsed);
-    Assert.AreEqual(metrics[1].LastUsed, top.LastUsed);
+        Assert.AreEqual(metrics[1].FirstUsed, top.FirstUsed);
+        Assert.AreEqual(metrics[1].LastUsed, top.LastUsed);
 
         var second = report.Metrics[1];
         Assert.AreEqual(FeatureFlags.AdvancedSecurity, second.FeatureName);
@@ -126,7 +126,7 @@ public sealed class LicenseAnalyticsServiceTests
             {
                 TenantId = tenantId,
                 Username = $"user{i}",
-                });
+            });
         }
 
         await db.SaveChangesAsync();
@@ -167,8 +167,8 @@ public sealed class LicenseAnalyticsServiceTests
 
         var report = await service.GetUsageLimitsAsync();
 
-    Assert.AreSame(license, report.License);
-    Assert.HasCount(4, report.Limits);
+        Assert.AreSame(license, report.License);
+        Assert.HasCount(4, report.Limits);
 
         var clients = report.Limits.Single(l => string.Equals(l.LimitType, LicenseLimitTypes.Clients, StringComparison.OrdinalIgnoreCase));
         Assert.AreEqual(2, clients.CurrentUsage);

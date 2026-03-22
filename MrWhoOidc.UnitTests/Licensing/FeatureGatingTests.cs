@@ -31,9 +31,9 @@ public sealed class FeatureGatingTests
 
         var features = await service.GetEnabledFeaturesAsync();
 
-    Assert.Contains(FeatureFlags.BasicOidc, features);
-    Assert.Contains(FeatureFlags.BasicAdminUi, features);
-    Assert.DoesNotContain(FeatureFlags.MultiTenancy, features);
+        Assert.Contains(FeatureFlags.BasicOidc, features);
+        Assert.Contains(FeatureFlags.BasicAdminUi, features);
+        Assert.DoesNotContain(FeatureFlags.MultiTenancy, features);
     }
 
     [TestMethod]
@@ -67,9 +67,9 @@ public sealed class FeatureGatingTests
 
         var features = await service.GetEnabledFeaturesAsync();
 
-    Assert.Contains("custom_feature", features);
-    Assert.Contains(FeatureFlags.MultiTenancy, features);
-    Assert.Contains(FeatureFlags.AdvancedSecurity, features);
+        Assert.Contains("custom_feature", features);
+        Assert.Contains(FeatureFlags.MultiTenancy, features);
+        Assert.Contains(FeatureFlags.AdvancedSecurity, features);
     }
 
     [TestMethod]

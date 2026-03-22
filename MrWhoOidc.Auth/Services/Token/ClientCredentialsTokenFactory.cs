@@ -94,7 +94,7 @@ public sealed class ClientCredentialsTokenFactory(
         if (granted.Count > 0)
         {
             claims.Add(new("scope", string.Join(' ', granted)));
-            
+
             var hasCustomScopes = granted.Any(s => !scopeResolver.IsStandardScope(s));
             if (hasCustomScopes && client.TenantId != Guid.Empty)
             {

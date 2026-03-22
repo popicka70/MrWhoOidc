@@ -139,14 +139,14 @@ public sealed class AuthorizationCodeExchangerTests
 
         db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
         db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
-        
+
         var storedCodeHash = HashAuthorizationCode(code);
-        db.AuthorizationCodes.Add(new AuthorizationCode 
-        { 
-            Code = storedCodeHash, 
-            UserId = userId, 
-            ClientId = "c1", 
-            RedirectUri = "https://cb", 
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = storedCodeHash,
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
             ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access" }),
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
             TenantId = tenantId
@@ -160,7 +160,7 @@ public sealed class AuthorizationCodeExchangerTests
 
         Assert.IsTrue(ok);
         Assert.AreEqual(200, status);
-        
+
         var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
         Assert.AreEqual("jwt-at", dict["access_token"]);
         Assert.AreEqual("rt", dict["refresh_token"]);

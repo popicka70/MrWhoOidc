@@ -21,7 +21,7 @@ public interface IIdentityProviderValidator
 }
 
 public sealed class IdentityProviderValidator(
-    AuthDbContext db, 
+    AuthDbContext db,
     ILogger<IdentityProviderValidator> logger) : IIdentityProviderValidator
 {
     public async Task<(bool ok, string? error)> ValidateAsync(IdentityProvider provider, CancellationToken ct = default)
@@ -58,8 +58,8 @@ public sealed class IdentityProviderValidator(
                 {
                     logger.LogWarning(
                         "Provider '{ProviderName}' discovery check failed: HTTP {StatusCode} from {Url}. Provider saved anyway.",
-                        provider.Name, 
-                        (int)resp.StatusCode, 
+                        provider.Name,
+                        (int)resp.StatusCode,
                         metadataUrl);
                 }
                 else

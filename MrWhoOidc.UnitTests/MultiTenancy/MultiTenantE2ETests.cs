@@ -326,7 +326,7 @@ public class MultiTenantE2ETests
         _db.Users.Add(user1);
 
         var client1 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant1Id);
-        
+
         // Add scope assignments
         var openidScope = new Scope { Name = "openid", Description = "OpenID Connect" };
         var profileScope = new Scope { Name = "profile", Description = "Profile" };
@@ -391,7 +391,7 @@ public class MultiTenantE2ETests
         _db.Users.Add(user2);
 
         var client2 = await _db.Clients.FirstAsync(c => c.TenantId == _tenant2Id);
-        
+
         // Add scope assignments
         var openidScope = await _db.Scopes.FirstOrDefaultAsync(s => s.Name == "openid");
         if (openidScope == null)

@@ -290,13 +290,13 @@ public sealed class AdminPasswordResetTests
             }
         }
 
-        public Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default) 
+        public Task EnableMfaAsync(Guid accountId, string totpSecret, CancellationToken ct = default)
             => Task.CompletedTask;
-        public Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default) 
+        public Task ConfirmMfaAsync(Guid accountId, CancellationToken ct = default)
             => Task.CompletedTask;
-        public Task DisableMfaAsync(Guid accountId, CancellationToken ct = default) 
+        public Task DisableMfaAsync(Guid accountId, CancellationToken ct = default)
             => Task.CompletedTask;
-        public Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default) 
+        public Task<(bool Enabled, string? Secret)> GetMfaStatusAsync(Guid accountId, CancellationToken ct = default)
             => Task.FromResult((false, (string?)null));
     }
 

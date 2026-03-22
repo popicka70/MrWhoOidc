@@ -43,23 +43,24 @@ internal sealed class ExpiredTokenCleanupService(IServiceProvider services, ILog
 
                 var now = DateTimeOffset.UtcNow;
 
+                // ⚡ Bolt Performance Optimization:
+                // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync()
+                // Impact: Eliminates N+1 memory allocations for tracking expired tokens and saves database round-trips.
+
                 // Delete expired access tokens
-                var expiredAccess = await db.Tokens
+                var expiredAccessCount = await db.Tokens
                     .Where(t => t.Type == "access" && t.ExpiresAt < now)
-                    .ToListAsync(stoppingToken);
+                    .ExecuteDeleteAsync(stoppingToken);
 
                 // Delete expired refresh tokens
-                var expiredRefresh = await db.Tokens
+                var expiredRefreshCount = await db.Tokens
                     .Where(t => t.Type == "refresh" && t.ExpiresAt < now)
-                    .ToListAsync(stoppingToken);
+                    .ExecuteDeleteAsync(stoppingToken);
 
-                var total = expiredAccess.Count + expiredRefresh.Count;
+                var total = expiredAccessCount + expiredRefreshCount;
                 if (total > 0)
                 {
-                    db.Tokens.RemoveRange(expiredAccess);
-                    db.Tokens.RemoveRange(expiredRefresh);
-                    await db.SaveChangesAsync(stoppingToken);
-                    logger.LogInformation("Expired token cleanup removed {Total} tokens (access={Access}, refresh={Refresh})", total, expiredAccess.Count, expiredRefresh.Count);
+                    logger.LogInformation("Expired token cleanup removed {Total} tokens (access={Access}, refresh={Refresh})", total, expiredAccessCount, expiredRefreshCount);
                 }
             }
             catch (OperationCanceledException)

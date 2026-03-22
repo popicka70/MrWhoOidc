@@ -11,7 +11,7 @@ public interface IUserService
     // New: find by username OR primary/alternative email (case-insensitive for email)
     Task<User?> FindByUsernameOrEmailAsync(string usernameOrEmail, CancellationToken ct = default);
     Task<User?> FindByIdAcrossTenantsAsync(Guid userId, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Invalidates cached user data for the specified user.
     /// Call this after user updates (profile, password, email, MFA, etc.).

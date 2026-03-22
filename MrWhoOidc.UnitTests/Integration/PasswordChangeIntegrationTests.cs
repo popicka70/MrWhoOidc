@@ -44,7 +44,7 @@ public class PasswordChangeIntegrationTests
         var tenant1 = new Tenant { Id = Guid.NewGuid(), Name = "Tenant One", Slug = "tenant1" };
         var tenant2 = new Tenant { Id = Guid.NewGuid(), Name = "Tenant Two", Slug = "tenant2" };
         var tenant3 = new Tenant { Id = Guid.NewGuid(), Name = "Tenant Three", Slug = "tenant3" };
-        
+
         _db.Tenants.AddRange(tenant1, tenant2, tenant3);
 
         var originalPassword = "OriginalPassword123!";
@@ -109,12 +109,12 @@ public class PasswordChangeIntegrationTests
             LockedOutUntil = DateTimeOffset.UtcNow.AddMinutes(5) // Locked for 5 more minutes
         };
         _db.UserAccounts.Add(account);
-        _db.UserTenantMemberships.Add(new UserTenantMembership 
-        { 
-            Id = Guid.NewGuid(), 
-            UserAccountId = account.Id, 
-            TenantId = tenant.Id, 
-            Status = TenantMembershipStatus.Active 
+        _db.UserTenantMemberships.Add(new UserTenantMembership
+        {
+            Id = Guid.NewGuid(),
+            UserAccountId = account.Id,
+            TenantId = tenant.Id,
+            Status = TenantMembershipStatus.Active
         });
         await _db.SaveChangesAsync();
 
@@ -151,12 +151,12 @@ public class PasswordChangeIntegrationTests
             PasswordUpdatedAt = null // Never updated before
         };
         _db.UserAccounts.Add(account);
-        _db.UserTenantMemberships.Add(new UserTenantMembership 
-        { 
-            Id = Guid.NewGuid(), 
-            UserAccountId = account.Id, 
-            TenantId = tenant.Id, 
-            Status = TenantMembershipStatus.Active 
+        _db.UserTenantMemberships.Add(new UserTenantMembership
+        {
+            Id = Guid.NewGuid(),
+            UserAccountId = account.Id,
+            TenantId = tenant.Id,
+            Status = TenantMembershipStatus.Active
         });
         await _db.SaveChangesAsync();
 

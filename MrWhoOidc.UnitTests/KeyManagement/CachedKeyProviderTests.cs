@@ -38,9 +38,9 @@ public sealed class CachedKeyProviderTests
         _scopeMock.Setup(s => s.ServiceProvider).Returns(_serviceProviderMock.Object);
         _serviceProviderMock.Setup(p => p.GetService(typeof(ITenantAccessor))).Returns(_tenantAccessorMock.Object);
         _serviceProviderMock.Setup(p => p.GetService(typeof(IKeyStore))).Returns(_keyStoreMock.Object);
-        
+
         _tenantAccessorMock.Setup(a => a.CurrentTenant).Returns(new TenantContext { TenantId = _tenantId, Slug = "test" });
-        
+
         _provider = new CachedKeyProvider(_scopeFactoryMock.Object, _httpContextAccessorMock.Object);
     }
 

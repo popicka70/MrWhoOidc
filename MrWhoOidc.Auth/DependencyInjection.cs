@@ -31,18 +31,19 @@ public static class AuthServiceCollectionExtensions
         if (configuration != null)
         {
             services.Configure<MultiTenancyOptions>(configuration.GetSection("MultiTenancy"));
-            
+
             // Register state provider as singleton, always starting with Enabled=false.
             // The MultiTenancyStateInitializer will update this from the license at startup.
-            services.AddSingleton<MultiTenancyStateProvider>(sp => {
+            services.AddSingleton<MultiTenancyStateProvider>(sp =>
+            {
                 var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MultiTenancyOptions>>().Value;
                 // Always start with Enabled=false; license will set the real value
                 return new MultiTenancyStateProvider(options.DefaultTenantSlug, initialEnabled: false);
             });
-            
+
             services.AddSingleton<IMultiTenancyStateProvider>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
             services.AddSingleton<IMultiTenancyOptions>(sp => sp.GetRequiredService<MultiTenancyStateProvider>());
-            
+
             // Initialize state from license at startup
             services.AddHostedService<MultiTenancyStateInitializer>();
         }
@@ -115,22 +116,22 @@ public static class AuthServiceCollectionExtensions
         services.AddScoped<IScopeResolver, ScopeResolver>();
         services.AddScoped<IScopeNameValidator, ScopeNameValidator>();
         services.AddScoped<ITenantsClaimService, TenantsClaimService>();
-        
+
         // Metrics (singleton for lifetime of app)
         services.AddSingleton<IClientSecretMetrics, ClientSecretMetrics>();
         services.AddSingleton<GlobalAuthMetrics>();
-        
+
         // Global authentication service
         services.AddScoped<IGlobalAuthenticationService, GlobalAuthenticationService>();
-        
+
         // Password reset service
         services.AddScoped<IPasswordResetService, PasswordResetService>();
-        
+
         // Password migration service (for migrating per-tenant to global credentials)
-    #pragma warning disable CS0618
+#pragma warning disable CS0618
         services.AddScoped<IPasswordMigrationService, PasswordMigrationService>();
-    #pragma warning restore CS0618
-        
+#pragma warning restore CS0618
+
         services.AddScoped<IAuthorizeService, AuthorizeService>();
         services.AddScoped<IAuthorizeRequestValidator, AuthorizeRequestValidator>();
         services.AddScoped<IConsentProcessor, ConsentProcessor>();
@@ -191,7 +192,7 @@ public static class AuthServiceCollectionExtensions
         services.AddOptions<KeyRotationOptions>();
         services.AddScoped<IKeyRotationService, KeyRotationService>();
         services.AddHostedService<KeyRotationHostedService>();
-        
+
         // Client secret expiry monitoring
         services.AddOptions<ClientSecretExpiryMonitorOptions>();
         services.AddHostedService<ClientSecretExpiryMonitor>();

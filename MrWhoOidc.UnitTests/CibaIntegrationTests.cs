@@ -119,7 +119,7 @@ public sealed class CibaIntegrationTests
 
     private sealed class StubNotificationService : ICibaNotificationService
     {
-        public bool WasCalled; 
+        public bool WasCalled;
         public string? LastAuthReqId;
         public Task NotifyUserAsync(CibaAuthenticationRequest request, CancellationToken ct = default)
         {

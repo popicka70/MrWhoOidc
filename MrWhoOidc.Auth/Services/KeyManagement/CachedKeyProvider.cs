@@ -77,7 +77,7 @@ internal sealed class CachedKeyProvider(IServiceScopeFactory scopeFactory, IHttp
                 return cached.Keys;
             }
 
-                var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
+            var jwks = await keyStore.GetPublicJwksAsync(ct: ct).ConfigureAwait(false);
             var result = jwks.ToList().AsReadOnly();
 
             _jwksCache[tenantId] = (result, DateTime.UtcNow.Add(CacheDuration));

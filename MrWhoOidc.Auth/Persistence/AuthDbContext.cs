@@ -336,25 +336,25 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.HasKey(x => x.Name);
             b.Property(x => x.Name).HasMaxLength(100);
             b.Property(x => x.Description).HasMaxLength(200);
-            
+
             // Multi-tenancy support
             // Composite unique index for tenant-scoped scopes: (TenantId, Name)
             b.HasIndex(x => new { x.TenantId, x.Name })
                 .IsUnique()
                 .HasFilter("\"TenantId\" IS NOT NULL");
-            
+
             // Unique index for global scopes: Name must be unique among global scopes
             b.HasIndex(x => x.Name)
                 .IsUnique()
                 .HasFilter("\"TenantId\" IS NULL AND \"IsGlobal\" = true");
-            
+
             // FK to Tenant for tenant-scoped scopes
             b.HasOne<Tenant>()
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired(false); // Nullable for global scopes
-            
+
             b.HasIndex(x => x.TenantId);
         });
 
@@ -520,17 +520,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
             b.Property(x => x.CreatedBy).HasMaxLength(200);
             b.Property(x => x.ActivatedBy).HasMaxLength(200);
             b.Property(x => x.RevokedBy).HasMaxLength(200);
-            
+
             // Performance index for validation queries (active secrets)
             b.HasIndex(x => new { x.ClientId, x.ActivatedAtUtc, x.RevokedAtUtc, x.ExpiresAtUtc })
                 .HasDatabaseName("IX_ClientSecrets_Active");
-            
+
             // Uniqueness: Only one primary secret per client (if not revoked)
             b.HasIndex(x => new { x.ClientId, x.IsPrimary })
                 .IsUnique()
                 .HasFilter("\"IsPrimary\" = TRUE AND \"RevokedAtUtc\" IS NULL")
                 .HasDatabaseName("IX_ClientSecrets_PrimaryPerClient");
-            
+
             b.HasOne(x => x.Client)
                 .WithMany(x => x.ClientSecrets)
                 .HasForeignKey(x => x.ClientId)
@@ -687,7 +687,7 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<SigningKey>(b =>
         {
             b.HasKey(x => x.Id);
-            b.Property(x => x.Kid).IsRequired(); 
+            b.Property(x => x.Kid).IsRequired();
             // JWK "use". Typically: "sig" (signing) or "enc" (encryption)
             b.Property(x => x.Use).IsRequired().HasMaxLength(10).HasDefaultValue("sig");
             b.HasIndex(x => x.Kid).IsUnique();
@@ -999,17 +999,17 @@ public class AuthDbContext : DbContext, IDataProtectionKeyContext
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-            ConfigureLicenseEntities(modelBuilder);
-        }
+        ConfigureLicenseEntities(modelBuilder);
+    }
 
-        static void ConfigureLicenseEntities(ModelBuilder modelBuilder)
-        {
-            ArgumentNullException.ThrowIfNull(modelBuilder);
-            modelBuilder.ApplyConfiguration(new LicenseConfiguration());
-            modelBuilder.ApplyConfiguration(new LicenseHistoryEntryConfiguration());
-            modelBuilder.ApplyConfiguration(new FeatureUsageMetricConfiguration());
-            modelBuilder.ApplyConfiguration(new LicenseLimitConfiguration());
-        }
+    static void ConfigureLicenseEntities(ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+        modelBuilder.ApplyConfiguration(new LicenseConfiguration());
+        modelBuilder.ApplyConfiguration(new LicenseHistoryEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new FeatureUsageMetricConfiguration());
+        modelBuilder.ApplyConfiguration(new LicenseLimitConfiguration());
+    }
 
     void NormalizeEmailFields()
     {
@@ -1202,10 +1202,10 @@ public class User
 
     [MaxLength(200)]
     public string Username { get; set; } = string.Empty;
-    
+
     // Password fields REMOVED - use UserAccount.PasswordHash for authentication
     // These columns will be dropped in the next migration
-    
+
     [MaxLength(256)]
     public string? Email { get; set; }
     [MaxLength(256)]
@@ -1221,7 +1221,7 @@ public class User
     [MaxLength(200)]
     public string? TotpSecret { get; set; }
     public bool TotpEnabled { get; set; }
-    
+
     // WebAuthn credentials
     public ICollection<WebAuthnCredential> WebAuthnCredentials { get; set; } = new List<WebAuthnCredential>();
 }
@@ -1229,14 +1229,14 @@ public class User
 public class WebAuthnCredential
 {
     public Guid Id { get; set; } = GuidHelper.NewId();
-    
+
     // Multi-tenancy
     public Guid TenantId { get; set; }
-    
+
     // User association
     public Guid UserId { get; set; }
     public User User { get; set; } = null!;
-    
+
     // WebAuthn credential data
     [MaxLength(256)]
     public string CredentialId { get; set; } = string.Empty; // Base64URL encoded credential ID
@@ -1251,13 +1251,13 @@ public class WebAuthnCredential
     public uint SignatureCounter { get; set; } // Signature counter for replay protection
     [MaxLength(500)]
     public string? Transport { get; set; } // JSON array of transports (usb, nfc, ble, internal)
-    
+
     // User-friendly metadata
     [MaxLength(200)]
     public string? FriendlyName { get; set; } // User-assigned name for the credential
     [MaxLength(100)]
     public string? DeviceType { get; set; } // Device type hint (security-key, platform, cross-platform)
-    
+
     // Management
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastUsedAt { get; set; }
@@ -1297,13 +1297,13 @@ public class Scope
     [Key]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty; // e.g., openid, profile, email, offline_access, roles
-    
+
     // Multi-tenancy support: NULL for global scopes (e.g., openid, profile)
     public Guid? TenantId { get; set; }
-    
+
     // IsGlobal = true for standard OAuth2/OIDC scopes that are shared across all tenants
     public bool IsGlobal { get; set; } = false;
-    
+
     [MaxLength(200)]
     public string? Description { get; set; }
     public bool IsExposed { get; set; } = true;
@@ -1519,20 +1519,20 @@ public class ClientSecret
     public Guid Id { get; set; } = GuidHelper.NewId();
     public Guid ClientId { get; set; }          // FK to Client.Id
     public Client Client { get; set; } = null!; // Navigation property
-    
+
     [MaxLength(500)]
     public string SecretHash { get; set; } = string.Empty; // PBKDF2 hash
-    
+
     [MaxLength(100)]
     public string? Description { get; set; }    // User-friendly label ("Production secret Q4 2025")
-    
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? ActivatedAtUtc { get; set; }  // null => not yet active
     public DateTime? ExpiresAtUtc { get; set; }    // null => no expiry
     public DateTime? RevokedAtUtc { get; set; }    // null => not revoked
-    
+
     public bool IsPrimary { get; set; } = false;   // Only one primary per client (recommended for new usage)
-    
+
     // Audit fields
     [MaxLength(200)]
     public string? CreatedBy { get; set; }         // Username/subject who created
@@ -1540,7 +1540,7 @@ public class ClientSecret
     public string? ActivatedBy { get; set; }
     [MaxLength(200)]
     public string? RevokedBy { get; set; }
-    
+
     // Usage tracking (optional)
     public DateTime? LastUsedAtUtc { get; set; }
     public long UsageCount { get; set; } = 0;
@@ -1883,12 +1883,12 @@ public class IdentityProvider
     [MaxLength(200)]
     public string? DisplayName { get; set; }
     public IdentityProviderType Type { get; set; } = IdentityProviderType.Oidc;
-    
+
     /// <summary>
     /// The well-known provider template used to create this IdP, or null for custom configuration.
     /// </summary>
     public IdentityProviders.WellKnownProviderTemplate? ProviderTemplate { get; set; }
-    
+
     public bool Enabled { get; set; } = true;
     public bool IsDefault { get; set; } = false;
     /// <summary>
@@ -1901,12 +1901,12 @@ public class IdentityProvider
 
     [MaxLength(2000)]
     public string? LogoUrl { get; set; }
-    
+
     /// <summary>
     /// Logo image data stored in database (alternative to LogoUrl).
     /// </summary>
     public byte[]? LogoData { get; set; }
-    
+
     /// <summary>
     /// Content type of the logo image (e.g., "image/png", "image/svg+xml").
     /// </summary>
@@ -1922,29 +1922,29 @@ public class IdentityProvider
         IdentityProviderLogoStorageType.ExternalUrl => !string.IsNullOrEmpty(LogoUrl),
         _ => false
     };
-    
+
     public int SortOrder { get; set; } = 0;
     [MaxLength(8000)]
     public string? ConfigJson { get; set; } // provider-specific config (OIDC now)
-    
+
     /// <summary>
     /// Provider-specific configuration as JSON (for well-known providers like Apple, GitHub, etc.).
     /// </summary>
     [MaxLength(8000)]
     public string? ProviderSpecificConfigJson { get; set; }
-    
+
     /// <summary>
     /// Optional background color for the login button (e.g., "#0078d4").
     /// </summary>
     [MaxLength(20)]
     public string? ButtonBackgroundColor { get; set; }
-    
+
     /// <summary>
     /// Optional text color for the login button (e.g., "#ffffff").
     /// </summary>
     [MaxLength(20)]
     public string? ButtonTextColor { get; set; }
-    
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

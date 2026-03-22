@@ -255,8 +255,8 @@ public static class SharedTestKeys
     /// Common pattern for JAR (JWT-Secured Authorization Request) tests.
     /// </summary>
     public static (string jwt, string kid, string jwkJson) CreateSignedRequestObject(
-        string clientId, 
-        string audience, 
+        string clientId,
+        string audience,
         string keyId = "test-jar-key",
         string? redirectUri = "https://cb",
         string responseType = "code")
@@ -266,11 +266,11 @@ public static class SharedTestKeys
         var token = new JwtSecurityToken(
             issuer: clientId,
             audience: audience,
-            claims: new[] 
-            { 
-                new System.Security.Claims.Claim("client_id", clientId), 
-                new System.Security.Claims.Claim("response_type", responseType), 
-                new System.Security.Claims.Claim("redirect_uri", redirectUri ?? "") 
+            claims: new[]
+            {
+                new System.Security.Claims.Claim("client_id", clientId),
+                new System.Security.Claims.Claim("response_type", responseType),
+                new System.Security.Claims.Claim("redirect_uri", redirectUri ?? "")
             },
             notBefore: DateTime.UtcNow.AddMinutes(-1),
             expires: DateTime.UtcNow.AddMinutes(5),

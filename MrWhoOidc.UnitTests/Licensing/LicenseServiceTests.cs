@@ -126,8 +126,8 @@ public sealed class LicenseServiceTests
         var result = await service.InstallLicenseAsync("same-key", installedBy: Guid.NewGuid(), notes: "refresh");
 
         Assert.IsTrue(result.IsValid);
-    Assert.IsEmpty(repository.CreatedLicenses, "New license should not be created when key is unchanged.");
-    Assert.HasCount(1, repository.UpdatedLicenses, "Existing license should be updated in-place.");
+        Assert.IsEmpty(repository.CreatedLicenses, "New license should not be created when key is unchanged.");
+        Assert.HasCount(1, repository.UpdatedLicenses, "Existing license should be updated in-place.");
         Assert.AreEqual("professional", existing.Tier);
         Assert.AreEqual("Updated Org", existing.OrganizationName);
         Assert.AreEqual("updated", repository.HistoryEntries.Single().Action);
@@ -159,7 +159,7 @@ public sealed class LicenseServiceTests
         Assert.IsTrue(revoked);
         Assert.IsFalse(existing.IsActive);
         Assert.AreEqual("maintenance", existing.RevocationReason);
-    Assert.HasCount(1, repository.UpdatedLicenses);
+        Assert.HasCount(1, repository.UpdatedLicenses);
         Assert.AreEqual("revoked", repository.HistoryEntries.Single().Action);
         Assert.IsFalse(cache.TryGetValue("license:platform", out _));
     }
@@ -174,8 +174,8 @@ public sealed class LicenseServiceTests
         var revoked = await service.RevokeLicenseAsync("maintenance");
 
         Assert.IsFalse(revoked);
-    Assert.IsEmpty(repository.UpdatedLicenses);
-    Assert.IsEmpty(repository.HistoryEntries);
+        Assert.IsEmpty(repository.UpdatedLicenses);
+        Assert.IsEmpty(repository.HistoryEntries);
     }
 
     [TestMethod]

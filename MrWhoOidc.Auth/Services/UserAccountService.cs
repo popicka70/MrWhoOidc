@@ -121,7 +121,7 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         CancellationToken ct = default)
     {
         logger.LogInformation("🔄 [UpdatePasswordAsync] Starting for account {AccountId}", accountId);
-        
+
         var account = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == accountId, ct).ConfigureAwait(false);
         if (account is null)
         {
@@ -143,7 +143,7 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
 
         var newHashPrefix = newPasswordHash.Length > 20 ? newPasswordHash[..20] : newPasswordHash;
         logger.LogInformation("🔄 [UpdatePasswordAsync] About to SaveChanges - new hash prefix: '{NewHash}...'", newHashPrefix);
-        
+
         var changes = await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         logger.LogInformation("✅ [UpdatePasswordAsync] SaveChangesAsync returned {Changes} changes", changes);
     }
@@ -230,7 +230,7 @@ internal sealed class UserAccountService(AuthDbContext dbContext, ILogger<UserAc
         var account = await dbContext.UserAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == accountId, ct)
             .ConfigureAwait(false);
-        
+
         if (account is null)
         {
             throw new InvalidOperationException($"UserAccount {accountId} not found.");

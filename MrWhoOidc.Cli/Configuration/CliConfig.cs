@@ -35,7 +35,7 @@ public sealed class CliConfig
     public static async Task<CliConfig> LoadAsync(CancellationToken ct = default)
     {
         var filePath = GetConfigFilePath();
-        
+
         if (!File.Exists(filePath))
         {
             return new CliConfig();
@@ -90,13 +90,13 @@ public sealed class CliConfig
     public bool RemoveProfile(string name)
     {
         var removed = Profiles.Remove(name);
-        
+
         // Switch to another profile if current was removed
         if (removed && CurrentProfile == name)
         {
             CurrentProfile = Profiles.Keys.FirstOrDefault() ?? "default";
         }
-        
+
         return removed;
     }
 

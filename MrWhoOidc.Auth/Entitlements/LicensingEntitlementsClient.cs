@@ -97,7 +97,7 @@ public sealed class LicensingEntitlementsClient(
             msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
 
             using var resp = await http.SendAsync(msg, cancellationToken).ConfigureAwait(false);
-            
+
             if (resp.IsSuccessStatusCode)
             {
                 var tokenResponse = await resp.Content.ReadFromJsonAsync<SignedLicenseTokenResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);

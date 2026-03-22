@@ -206,7 +206,7 @@ public class MfaIntegrationTests
 
         // Arrange
         await using var db = CreateInMemoryDbContext();
-        
+
         // Set up the password hasher and authentication service
         var passwordHasher = new TestPasswordHasher();
         var password = "TestPassword123!";
@@ -252,8 +252,8 @@ public class MfaIntegrationTests
         var metrics = new GlobalAuthMetrics();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<GlobalAuthenticationService>.Instance;
         var authService = new GlobalAuthenticationService(
-            userAccountService, 
-            passwordHasher, 
+            userAccountService,
+            passwordHasher,
             metrics,
             logger);
 
@@ -422,7 +422,7 @@ public class MfaIntegrationTests
         public Task RecordFailedAttemptAsync(Guid accountId, CancellationToken ct = default) => Task.CompletedTask;
         public Task ClearFailedAttemptsAsync(Guid accountId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<bool> IsLockedOutAsync(Guid accountId, CancellationToken ct = default) => Task.FromResult(false);
-        public Task<UserAccount?> FindAccountByEmailAsync(string email, CancellationToken ct = default) 
+        public Task<UserAccount?> FindAccountByEmailAsync(string email, CancellationToken ct = default)
             => _userAccountService.FindByEmailAsync(email, ct);
     }
 }
