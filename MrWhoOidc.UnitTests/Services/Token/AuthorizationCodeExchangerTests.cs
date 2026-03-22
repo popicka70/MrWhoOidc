@@ -167,6 +167,109 @@ public sealed class AuthorizationCodeExchangerTests
     }
 
     [TestMethod]
+    public async Task ExchangeAsync_Preserves_NonProduct_CustomScopes()
+    {
+        using var db = CreateDb();
+        var capturedClaims = new List<Claim>();
+        var jwtSvc = new Mock<IJwtService>();
+        jwtSvc.Setup(x => x.CreateJwtAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<IEnumerable<Claim>>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, string, IEnumerable<Claim>, DateTimeOffset, string?, string?, DateTimeOffset?, string?, CancellationToken>((_, _, claims, _, _, _, _, tokenType, _) =>
+            {
+                if (string.Equals(tokenType, SecurityConstants.JwtTokenTypes.AtJwt, StringComparison.Ordinal))
+                {
+                    capturedClaims.Clear();
+                    capturedClaims.AddRange(claims);
+                }
+            })
+            .ReturnsAsync("jwt-at");
+
+        var refreshSvc = new Mock<IRefreshTokenService>();
+        refreshSvc.Setup(x => x.CreateRefreshTokenAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<string>(),
+                It.IsAny<string[]>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>(),
+                It.IsAny<DateTimeOffset?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(("rt", "hash"));
+
+        var revocationSvc = new Mock<IRevocationService>();
+        var metaStore = new InMemoryAuthorizationCodeMetadataStore();
+        var settingsSvc = new MockTenantSettingsService();
+        var entitlementsProvider = new NoopEntitlementsProvider();
+        var tenantsClaimService = new NoopTenantsClaimService();
+        var pairwiseSubjectService = new Mock<IPairwiseSubjectService>();
+        pairwiseSubjectService
+            .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
+
+        var claimBuilder = new AccessTokenClaimBuilder(new ScopeResolver(db), Mock.Of<IRoleClaimBuilder>(), Options());
+        var logger = new Mock<ILogger<AuthorizationCodeExchanger>>();
+
+        var exchanger = new AuthorizationCodeExchanger(
+            db,
+            jwtSvc.Object,
+            CreateKeyProvider(),
+            refreshSvc.Object,
+            revocationSvc.Object,
+            Options(),
+            metaStore,
+            settingsSvc,
+            entitlementsProvider,
+            tenantsClaimService,
+            pairwiseSubjectService.Object,
+            claimBuilder,
+            new TokenLifetimeResolver(),
+            new OpaqueTokenPolicy(Options()),
+            logger.Object);
+
+        var code = "code-custom-scope";
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var realmId = Guid.NewGuid();
+
+        db.Realms.Add(new Realm { Id = realmId, Name = "r1", TenantId = tenantId });
+        db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", RealmId = realmId, TenantId = tenantId });
+        db.Users.Add(new User { Id = userId, Username = "u1", TenantId = tenantId });
+        db.AuthorizationCodes.Add(new AuthorizationCode
+        {
+            Code = HashAuthorizationCode(code),
+            UserId = userId,
+            ClientId = "c1",
+            RedirectUri = "https://cb",
+            ScopesJson = JsonSerializer.Serialize(new[] { "openid", "offline_access", "api.read" }),
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+
+        metaStore.SetAuthTime(code, DateTimeOffset.UtcNow);
+
+        var request = new AuthorizationCodeExchangeRequest(code, "https://cb", "c1", "verifier", "https://issuer");
+        var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(ok, error);
+        Assert.AreEqual(200, status);
+
+        var dict = (IDictionary<string, object?>)payload!.GetType().GetProperties().ToDictionary(p => p.Name, p => p.GetValue(payload));
+        Assert.AreEqual("openid offline_access api.read", dict["scope"]);
+
+        var scopeClaim = capturedClaims.Single(c => c.Type == OAuthConstants.Parameters.Scope);
+        Assert.AreEqual("openid offline_access api.read", scopeClaim.Value);
+    }
+
+    [TestMethod]
     public async Task ExchangeAsync_Fails_When_IdTokenSignedResponseAlg_DoesNotMatch_ActiveTenantAlg()
     {
         using var db = CreateDb();

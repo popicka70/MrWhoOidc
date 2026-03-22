@@ -13,8 +13,10 @@ Architecture:
 from __future__ import annotations
 
 import os
+import ssl
 import subprocess
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Generator
@@ -36,6 +38,8 @@ from utils.report_generator import ReportGenerator
 from utils.screenshot_manager import ScreenshotManager
 
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
+EXAMPLE_RAZORCLIENT_URL: str = os.getenv("EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003")
+EXAMPLE_TESTAPI_URL: str = os.getenv("EXAMPLE_TESTAPI_URL", "https://localhost:7149")
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
 ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
 _AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / "state.json"
@@ -48,6 +52,19 @@ def _is_headed() -> bool:
 
 def _slow_mo() -> int:
     return int(os.getenv("SLOW_MO", "0"))
+
+
+def _wait_for_url(url: str, *, timeout_seconds: int, insecure: bool = False) -> None:
+    for _ in range(timeout_seconds):
+        context = ssl._create_unverified_context() if insecure else None
+        try:
+            with urllib.request.urlopen(url, timeout=5, context=context) as response:
+                if response.status < 500:
+                    return
+        except Exception:
+            pass
+        time.sleep(1)
+    raise RuntimeError(f"Endpoint did not become ready within {timeout_seconds} s: {url}")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +80,16 @@ def run_id() -> str:
 @pytest.fixture(scope="session")
 def base_url() -> str:
     return BASE_URL
+
+
+@pytest.fixture(scope="session")
+def example_razorclient_url() -> str:
+    return EXAMPLE_RAZORCLIENT_URL
+
+
+@pytest.fixture(scope="session")
+def example_testapi_url() -> str:
+    return EXAMPLE_TESTAPI_URL
 
 
 @pytest.fixture(scope="session")
@@ -104,8 +131,8 @@ def reset_database() -> None:
     project = "mrwhooidc"
     base_cmd = ["docker", "compose", "-f", compose_file, "-p", project]
 
-    # Stop and remove webauth and postgres (leave redis/mailhog running)
-    subprocess.run([*base_cmd, "rm", "-sf", "webauth", "postgres"], check=False)
+    # Stop and remove app containers that depend on the seeded database.
+    subprocess.run([*base_cmd, "rm", "-sf", "razorclient", "testapi", "webauth", "postgres"], check=False)
 
     # Remove the postgres data volume so the DB is fresh
     subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
@@ -130,21 +157,13 @@ def reset_database() -> None:
     # Start webauth — it runs EF migrations on startup
     subprocess.run([*base_cmd, "up", "-d", "webauth"], check=True)
 
-    # Wait up to 120 s for webauth to respond (migrations on a fresh DB can take a while).
-    # We use curl -k so any HTTP response (including 4xx/redirects) counts as "up".
-    # urllib.urlopen raises on non-2xx and would loop the full timeout on a 404.
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
-    for _ in range(60):
-        result = subprocess.run(
-            ["curl", "-k", "-s", "-o", "/dev/null", "-w", "%{http_code}",
-             "--connect-timeout", "3", "--max-time", "5", ready_url],
-            capture_output=True, text=True,
-        )
-        if result.returncode == 0 and result.stdout.strip() != "":
-            break
-        time.sleep(2)
-    else:
-        raise RuntimeError("WebAuth did not become ready within 120 s")
+    _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
+
+    # Start the example applications that are now part of the E2E suite.
+    subprocess.run([*base_cmd, "up", "-d", "testapi", "razorclient"], check=True)
+    _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
+    _wait_for_url(f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True)
 
     # Clear any stale auth state so login is performed against the fresh DB
     if _AUTH_STATE_FILE.exists():

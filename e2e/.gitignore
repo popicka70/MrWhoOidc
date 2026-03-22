@@ -12,6 +12,11 @@ test-results/
 # Environment secrets
 .env
 
+# Canonical local Python environment for E2E plus stray/generated variants
+.venv/
+.venv-copilot/
+.python-packages/
+
 # Editor
 .idea/
 .vscode/

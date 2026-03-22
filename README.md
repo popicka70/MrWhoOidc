@@ -194,3 +194,9 @@ For production deployments, see:
 - `.NET` sample API: `Examples/MrWhoOidc.TestApi`
 - `Go` web client: `Examples/MrWhoOidc.GoWebClient`
 - `Go` sample API: `Examples/MrWhoOidc.GoApi`
+
+### E2E Python Environment
+- The only supported Python virtualenv for browser E2E work is `e2e/.venv`.
+- Bootstrap it with `sh ./e2e/setup-venv.sh`.
+- Usage and troubleshooting notes live in `e2e/README.md`.
+- The dockerized example-app E2E flow currently exposes RazorClient on `https://localhost:5003` and TestApi on `https://localhost:7149`.

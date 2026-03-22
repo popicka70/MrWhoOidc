@@ -192,7 +192,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     "https://localhost:7181/signin-oidc",
                     "http://localhost:7181/signin-oidc",
                     "https://localhost:5001/signin-oidc",
-                    "http://localhost:5001/signin-oidc"
+                    "http://localhost:5001/signin-oidc",
+                    "https://localhost:5003/Auth/Callback",
+                    "http://localhost:5002/Auth/Callback"
                 }),
                 AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[] {
                     "https://localhost:7181/signout-callback-oidc",
@@ -202,7 +204,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     "https://localhost:5001/signout-callback-oidc",
                     "https://localhost:5001/",
                     "http://localhost:5001/signout-callback-oidc",
-                    "http://localhost:5001/"
+                    "http://localhost:5001/",
+                    "https://localhost:5003/",
+                    "http://localhost:5002/"
                 }),
                 OboEnabled = true,
                 OboAllowedTargetAudiencesJson = JsonSerializer.Serialize(new[] { "api" }),
@@ -234,7 +238,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     "https://localhost:7181/signin-oidc",
                     "http://localhost:7181/signin-oidc",
                     "https://localhost:5001/signin-oidc",
-                    "http://localhost:5001/signin-oidc"
+                    "http://localhost:5001/signin-oidc",
+                    "https://localhost:5003/Auth/Callback",
+                    "http://localhost:5002/Auth/Callback"
                 });
             }
             if (string.IsNullOrEmpty(blazorWebClient.AllowedLogoutRedirectUrisJson))
@@ -247,7 +253,9 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
                     "https://localhost:5001/signout-callback-oidc",
                     "https://localhost:5001/",
                     "http://localhost:5001/signout-callback-oidc",
-                    "http://localhost:5001/"
+                    "http://localhost:5001/",
+                    "https://localhost:5003/",
+                    "http://localhost:5002/"
                 });
             }
 

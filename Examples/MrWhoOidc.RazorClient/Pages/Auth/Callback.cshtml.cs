@@ -13,6 +13,7 @@ namespace MrWhoOidc.RazorClient.Pages.Auth;
 
 public class CallbackModel : PageModel
 {
+    private const string ReturnUrlCookiePrefix = "mrwho-razorclient-return-url-";
     private readonly IMrWhoAuthorizationManager _authorizationManager;
     private readonly IMrWhoTokenClient _tokenClient;
     private readonly ILogger<CallbackModel> _logger;
@@ -29,14 +30,14 @@ public class CallbackModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(string state, string? code = null, string? error = null, string? error_description = null, string? response = null, string? returnUrl = null)
     {
-        returnUrl ??= Url.Content("~/");
-
         if (string.IsNullOrWhiteSpace(state))
         {
             Error = "invalid_state";
             ErrorDescription = "Missing state parameter.";
             return Page();
         }
+
+        returnUrl = ResolveReturnUrl(state, returnUrl);
 
         var validation = await _authorizationManager.ValidateCallbackAsync(state, code, error, response, HttpContext.RequestAborted).ConfigureAwait(false);
         if (validation.IsError)
@@ -66,7 +67,7 @@ public class CallbackModel : PageModel
             return Page();
         }
 
-        var callbackUrl = Url.Page("/Auth/Callback", pageHandler: null, values: new { returnUrl }, protocol: Request.Scheme, host: Request.Host.ToString());
+        var callbackUrl = Url.Page("/Auth/Callback", pageHandler: null, values: null, protocol: Request.Scheme, host: Request.Host.ToString());
         if (string.IsNullOrEmpty(callbackUrl))
         {
             Error = "callback_error";
@@ -152,5 +153,52 @@ public class CallbackModel : PageModel
 
         _logger.LogInformation("Successfully signed in {DisplayName}", displayName);
         return Redirect(returnUrl);
+    }
+
+    private string ResolveReturnUrl(string state, string? returnUrl)
+    {
+        var normalized = NormalizeReturnUrl(returnUrl);
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        var cookieName = ReturnUrlCookiePrefix + state;
+        if (Request.Cookies.TryGetValue(cookieName, out var cookieReturnUrl))
+        {
+            Response.Cookies.Delete(cookieName);
+            normalized = NormalizeReturnUrl(cookieReturnUrl);
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                return normalized;
+            }
+        }
+
+        return Url.Content("~/");
+    }
+
+    private string? NormalizeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return null;
+        }
+
+        if (returnUrl.StartsWith("//", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (returnUrl.StartsWith("~/", StringComparison.Ordinal))
+        {
+            return Url.Content(returnUrl);
+        }
+
+        if (Uri.TryCreate(returnUrl, UriKind.Relative, out _))
+        {
+            return returnUrl.StartsWith("/", StringComparison.Ordinal) ? returnUrl : "/" + returnUrl.TrimStart('/');
+        }
+
+        return null;
     }
 }

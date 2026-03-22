@@ -12,6 +12,11 @@ public static class ProductScopeClassifier
         "tenants",
     };
 
+    private static readonly HashSet<string> ExplicitProductScopes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mrwhopdf",
+    };
+
     public static bool IsProductScope(string? scope)
     {
         if (string.IsNullOrWhiteSpace(scope))
@@ -19,8 +24,16 @@ public static class ProductScopeClassifier
             return false;
         }
 
-        // Treat any non-standard scope as a product scope.
-        // This aligns with the convention that platform/product permissions are expressed as custom scopes.
-        return !StandardScopes.Contains(scope);
+        if (StandardScopes.Contains(scope))
+        {
+            return false;
+        }
+
+        if (ExplicitProductScopes.Contains(scope))
+        {
+            return true;
+        }
+
+        return scope.StartsWith("licensing.", StringComparison.OrdinalIgnoreCase);
     }
 }

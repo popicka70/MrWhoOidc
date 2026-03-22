@@ -7,6 +7,7 @@ namespace MrWhoOidc.RazorClient.Pages.Auth;
 
 public class LoginModel : PageModel
 {
+    private const string ReturnUrlCookiePrefix = "mrwho-razorclient-return-url-";
     private readonly IMrWhoAuthorizationManager _authorizationManager;
     private readonly ILogger<LoginModel> _logger;
 
@@ -18,8 +19,8 @@ public class LoginModel : PageModel
 
     public async Task<IActionResult> OnGetAsync(string? returnUrl = null, string? mode = null)
     {
-        returnUrl ??= Url.Content("~/");
-        var callbackUrl = Url.Page("/Auth/Callback", pageHandler: null, values: new { returnUrl }, protocol: Request.Scheme, host: Request.Host.ToString());
+        returnUrl = NormalizeReturnUrl(returnUrl);
+        var callbackUrl = Url.Page("/Auth/Callback", pageHandler: null, values: null, protocol: Request.Scheme, host: Request.Host.ToString());
         if (string.IsNullOrEmpty(callbackUrl))
         {
             _logger.LogWarning("Unable to determine callback URL for login.");
@@ -44,7 +45,44 @@ public class LoginModel : PageModel
             },
             HttpContext.RequestAborted).ConfigureAwait(false);
 
+        Response.Cookies.Append(
+            ReturnUrlCookiePrefix + context.State,
+            returnUrl,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = Request.IsHttps,
+                MaxAge = TimeSpan.FromMinutes(10)
+            });
+
         _logger.LogInformation("Redirecting to authorization server for state {State}", context.State);
         return Redirect(context.RequestUri.ToString());
+    }
+
+    private string NormalizeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return Url.Content("~/");
+        }
+
+        if (returnUrl.StartsWith("//", StringComparison.Ordinal))
+        {
+            return Url.Content("~/");
+        }
+
+        if (returnUrl.StartsWith("~/", StringComparison.Ordinal))
+        {
+            return Url.Content(returnUrl);
+        }
+
+        if (Uri.TryCreate(returnUrl, UriKind.Relative, out _))
+        {
+            return returnUrl.StartsWith("/", StringComparison.Ordinal) ? returnUrl : "/" + returnUrl.TrimStart('/');
+        }
+
+        return Url.Content("~/");
     }
 }

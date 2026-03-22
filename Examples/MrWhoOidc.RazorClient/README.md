@@ -29,4 +29,6 @@ This Razor Pages sample shows how to authenticate an interactive web application
 - The home page reads cached discovery metadata and displays the stored tokens/claims to prove the flow succeeded.
 - The secure page injects `TestApiClient`, which relies on the `IMrWhoOnBehalfOfManager` helper to exchange the signed-in user's access token for one targeted at the downstream API. The resulting access token is attached automatically to the outgoing HTTP request.
 
+In the current multi-tenant development setup, keep `Issuer` tenant-scoped and set `DiscoveryUri` explicitly to the tenant discovery document, for example `https://localhost:7208/t/default/.well-known/openid-configuration`.
+
 Adjust the configuration in `appsettings.json` if you register a different client or change the issuer URL.

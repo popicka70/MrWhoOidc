@@ -33,6 +33,86 @@ services:
       - internal
       - edge
 
+  testapi:
+    build:
+      context: .
+      dockerfile: Examples/MrWhoOidc.TestApi/Dockerfile
+    depends_on:
+      webauth:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: https://+:7149;http://+:5149
+      ASPNETCORE_HTTPS_PORTS: 7149
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      MrWhoOidc__Issuer: "https://localhost:8443/t/default"
+      MrWhoOidc__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
+      MrWhoOidc__ClientId: test-api
+      MrWhoOidc__ClientSecret: T3stApiSecret!
+      MrWhoOidc__Audience: api
+      MrWhoOidc__RequireHttpsMetadata: "true"
+      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
+      DEV_PFX_TRUST_PASSWORD: changeit
+    extra_hosts:
+      - "localhost:host-gateway"
+    ports:
+      - "7149:7149"
+      - "5149:5149"
+    volumes:
+      - ./certs:/https:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5149/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - edge
+
+  razorclient:
+    build:
+      context: .
+      dockerfile: Examples/MrWhoOidc.RazorClient/Dockerfile
+    depends_on:
+      webauth:
+        condition: service_started
+      testapi:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: https://+:5003;http://+:5002
+      ASPNETCORE_HTTPS_PORTS: 5003
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      MrWhoOidc__Issuer: "https://localhost:8443/t/default"
+      MrWhoOidc__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
+      MrWhoOidc__ClientId: blazor-web
+      MrWhoOidc__ClientSecret: z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG
+      MrWhoOidc__RequireHttpsMetadata: "true"
+      TestApi__BaseAddress: https://localhost:7149
+      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
+      DEV_PFX_TRUST_PASSWORD: changeit
+    extra_hosts:
+      - "localhost:host-gateway"
+    ports:
+      - "5003:5003"
+      - "5002:5002"
+    volumes:
+      - ./certs:/https:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5002/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - edge
+
   postgres:
     image: postgres:16-alpine
     environment:

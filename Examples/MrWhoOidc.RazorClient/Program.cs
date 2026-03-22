@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHealthChecks();
 builder.Services.AddMrWhoOidcClient(builder.Configuration, "MrWhoOidc");
 
 builder.Services.AddHttpClient<TestApiClient>((sp, client) =>
@@ -43,6 +44,8 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.MapHealthChecks("/health");
 
 if (!app.Environment.IsDevelopment())
 {

@@ -87,3 +87,11 @@ sbom/
 secrets/
 
 .python-packages/
+
+# Python virtual environments
+.venv/
+.venv-*/
+venv/
+**/.venv/
+**/.venv-*/
+**/venv/
