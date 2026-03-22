@@ -33,6 +33,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
 
     // Admin client (used to model server management policies)
     private const string AdminClientId = "mrwho-admin";
+    private const string ReactDemoClientId = "react-demo";
 
     private readonly IUserAccountProvisioner _accountProvisioner = accountProvisioner;
 
@@ -294,6 +295,51 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.Clients.Add(adminClient);
         }
 
+        var reactDemoClient = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == ReactDemoClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
+        if (reactDemoClient is null)
+        {
+            reactDemoClient = new Client
+            {
+                ClientId = ReactDemoClientId,
+                ClientName = "React OIDC Demo",
+                RequirePkce = true,
+                RequireConsent = false,
+                ClientSecretHash = null,
+                RealmId = adminRealm.Id,
+                TenantId = tenantId,
+                ApplicationType = "spa",
+                AllowLocalLogin = true,
+                AllowExternalIdp = true,
+                AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "http://localhost:5173/callback"
+                }),
+                AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+                {
+                    "http://localhost:5173/"
+                })
+            };
+            db.Clients.Add(reactDemoClient);
+        }
+        else
+        {
+            reactDemoClient.RequirePkce = true;
+            reactDemoClient.RequireConsent = false;
+            reactDemoClient.ClientSecretHash = null;
+            reactDemoClient.RequirePar = false;
+            reactDemoClient.ApplicationType = "spa";
+            reactDemoClient.AllowLocalLogin = true;
+            reactDemoClient.AllowExternalIdp = true;
+            reactDemoClient.AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[]
+            {
+                "http://localhost:5173/callback"
+            });
+            reactDemoClient.AllowedLogoutRedirectUrisJson = JsonSerializer.Serialize(new[]
+            {
+                "http://localhost:5173/"
+            });
+        }
+
         // Seed a simple M2M confidential client (client_credentials)
         var m2m = await db.Clients.FirstOrDefaultAsync(c => c.ClientId == M2MClientId && c.TenantId == tenantId, ct).ConfigureAwait(false);
         if (m2m is null)
@@ -366,6 +412,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             db.ClientScopes.Add(new ClientScope { ClientId = adminClient.Id, ScopeName = scope });
         }
 
+        var reactClientScopes = await db.ClientScopes.Where(cs => cs.ClientId == reactDemoClient.Id).Select(cs => cs.ScopeName).ToListAsync(ct).ConfigureAwait(false);
+        foreach (var scope in defaultScopes.Except(reactClientScopes, StringComparer.Ordinal))
+        {
+            db.ClientScopes.Add(new ClientScope { ClientId = reactDemoClient.Id, ScopeName = scope });
+        }
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
         // Optionally assign alice to blazor-web client in admin realm
@@ -378,6 +430,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             if (!hasAssignment)
             {
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = alice.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
+            }
+
+            var hasReactAssignment = await db.UserClientAssignments.AnyAsync(a => a.UserId == alice.Id && a.ClientId == reactDemoClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            if (!hasReactAssignment)
+            {
+                db.UserClientAssignments.Add(new UserClientAssignment { UserId = alice.Id, ClientId = reactDemoClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
             // Assign admin role to alice in admin realm (realm-scoped)
@@ -405,6 +463,12 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             if (!adminAssignedToBlazor)
             {
                 db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = blazorWebClient.Id, RealmId = adminRealm.Id, IsActive = true });
+            }
+
+            var adminAssignedToReact = await db.UserClientAssignments.AnyAsync(a => a.UserId == adminUser.Id && a.ClientId == reactDemoClient.Id && a.RealmId == adminRealm.Id, ct).ConfigureAwait(false);
+            if (!adminAssignedToReact)
+            {
+                db.UserClientAssignments.Add(new UserClientAssignment { UserId = adminUser.Id, ClientId = reactDemoClient.Id, RealmId = adminRealm.Id, IsActive = true });
             }
 
             // Admin role assignment in admin realm (realm-scoped)

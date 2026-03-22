@@ -8,7 +8,7 @@ export function Logout() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Signing you out…</h1>
+      <h1 className="text-2xl font-bold">Signing you out...</h1>
     </div>
   )
 }

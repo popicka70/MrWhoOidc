@@ -63,3 +63,60 @@ class TestExampleRazorClient:
         expect(scopes_row).to_contain_text("api.read")
 
         record_evaluation(page, "example-razorclient-secure")
+
+
+class TestExampleOidcDemo:
+    def test_home_page_loads(self, page: Page, example_oidcdemo_url: str, record_evaluation) -> None:
+        page.goto(example_oidcdemo_url, wait_until="domcontentloaded")
+
+        expect(page.get_by_role("heading", name="MrWhoOidc OIDC Demo")).to_be_visible()
+        expect(page.get_by_role("link", name="Sign In with MrWhoOidc")).to_be_visible()
+        expect(page.locator("dt", has_text="Identity Provider")).to_be_visible()
+
+        record_evaluation(page, "example-oidcdemo-home")
+
+    def test_login_flow_reaches_secure_page(self, page: Page, example_oidcdemo_url: str, record_evaluation) -> None:
+        page.goto(example_oidcdemo_url, wait_until="domcontentloaded")
+        page.get_by_role("link", name="Sign In with MrWhoOidc").click()
+
+        _continue_to_local_login(page)
+        _login_through_webauth(page)
+
+        page.wait_for_url(lambda url: url.startswith(example_oidcdemo_url), timeout=30_000)
+        expect(page.get_by_text("You are authenticated")).to_be_visible()
+
+        page.get_by_role("link", name="View Secure Page").click()
+        page.wait_for_url(lambda url: url.startswith(f"{example_oidcdemo_url}/Secure"), timeout=30_000)
+
+        expect(page.get_by_role("heading", name="Secure Page")).to_be_visible()
+        expect(page.get_by_text("Authenticated User Details")).to_be_visible()
+        expect(page.get_by_text("Authentication Type")).to_be_visible()
+        expect(page.get_by_text("Tokens")).to_be_visible()
+
+        record_evaluation(page, "example-oidcdemo-secure")
+
+
+class TestExampleReactOidcClient:
+    def test_home_page_loads(self, page: Page, example_reactclient_url: str, record_evaluation) -> None:
+        page.goto(example_reactclient_url, wait_until="domcontentloaded")
+        main_login = page.locator("main").get_by_role("button", name="Login")
+
+        expect(page.get_by_role("heading", name="React + OIDC Demo")).to_be_visible()
+        expect(main_login).to_be_visible()
+        expect(page.get_by_text("Configure via .env:")).to_be_visible()
+
+        record_evaluation(page, "example-reactclient-home")
+
+    def test_login_flow_returns_authenticated_home(self, page: Page, example_reactclient_url: str, record_evaluation) -> None:
+        page.goto(example_reactclient_url, wait_until="domcontentloaded")
+        page.locator("main").get_by_role("button", name="Login").click()
+
+        _continue_to_local_login(page)
+        _login_through_webauth(page)
+
+        page.wait_for_url(lambda url: url.startswith(example_reactclient_url), timeout=30_000)
+        expect(page.get_by_text("Welcome,")).to_be_visible()
+        expect(page.get_by_text("User Claims")).to_be_visible()
+        expect(page.get_by_text("Tokens")).to_be_visible()
+
+        record_evaluation(page, "example-reactclient-authenticated")

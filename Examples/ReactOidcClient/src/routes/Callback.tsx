@@ -21,7 +21,7 @@ export function Callback() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Signing you in…</h1>
+      <h1 className="text-2xl font-bold">Signing you in...</h1>
       {error && <div className="text-red-400">{error}</div>}
     </div>
   )

@@ -9,6 +9,10 @@ builder.Services.AddRazorPages();
 
 // Configure OIDC authentication
 var oidcSettings = builder.Configuration.GetSection("OidcSettings");
+var authority = oidcSettings["Authority"];
+var discoveryUri = oidcSettings["DiscoveryUri"];
+var clientId = oidcSettings["ClientId"];
+var clientSecret = oidcSettings["ClientSecret"];
 
 builder.Services.AddAuthentication(options =>
 {
@@ -25,9 +29,10 @@ builder.Services.AddAuthentication(options =>
 })
 .AddOpenIdConnect(options =>
 {
-    options.Authority = oidcSettings["Authority"];
-    options.ClientId = oidcSettings["ClientId"];
-    options.ClientSecret = oidcSettings["ClientSecret"];
+    options.Authority = authority;
+    options.MetadataAddress = string.IsNullOrWhiteSpace(discoveryUri) ? null : discoveryUri;
+    options.ClientId = clientId;
+    options.ClientSecret = clientSecret;
     options.ResponseType = OpenIdConnectResponseType.Code;
     options.SaveTokens = true;
     options.GetClaimsFromUserInfoEndpoint = true;
@@ -80,6 +85,7 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapRazorPages();
 
 app.Run();

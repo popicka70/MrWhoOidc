@@ -9,7 +9,7 @@ export function Home() {
       <div className="grid md:grid-cols-2 gap-8 items-center">
         <div className="space-y-4">
           <h1 className="text-3xl font-bold">React + OIDC Demo</h1>
-          <p className="text-slate-300">This demo uses Pushed Authorization Requests (PAR) and front-channel logout with the MrWho OIDC server.</p>
+          <p className="text-slate-300">This demo uses PAR when the server advertises it, plus front-channel logout with the MrWho OIDC server.</p>
           <button onClick={startLogin} className="px-4 py-2 rounded-md bg-primary text-slate-900 font-medium hover:brightness-110">Login</button>
         </div>
         <div className="rounded-xl border border-slate-800 p-6 bg-gradient-to-br from-slate-800/40 to-slate-800/10">

@@ -3,6 +3,20 @@ import { OIDC } from './config'
 
 let as: oauth.AuthorizationServer
 let client: oauth.Client
+const clientAuth = oauth.None()
+
+type StoredTokens = {
+  id_token?: string
+  access_token?: string
+  token_type?: string
+  expires_in?: number
+}
+
+function clearTransientState() {
+  sessionStorage.removeItem('pkce_code_verifier')
+  sessionStorage.removeItem('oidc_state')
+  sessionStorage.removeItem('oidc_nonce')
+}
 
 export async function getAsAndClient() {
   if (!as) {
@@ -22,27 +36,37 @@ export async function getAsAndClient() {
 export async function startLogin() {
   const { as, client } = await getAsAndClient()
 
-  // Pushed Authorization Request (PAR) with PKCE + state + nonce
   const codeVerifier = oauth.generateRandomCodeVerifier()
   const codeChallenge = await oauth.calculatePKCECodeChallenge(codeVerifier)
   const state = oauth.generateRandomState()
   const nonce = oauth.generateRandomNonce()
 
-  const par = await oauth.pushedAuthorizationRequest(as, client, new URLSearchParams({
-    client_id: client.client_id,
-    response_type: 'code',
-    redirect_uri: OIDC.redirectUri,
-    scope: OIDC.scope,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
-    state,
-    nonce,
-  }))
-  const parResponse = await oauth.processPushedAuthorizationResponse(as, client, par)
-
   const authUrl = new URL(as.authorization_endpoint!)
-  authUrl.searchParams.set('client_id', client.client_id)
-  authUrl.searchParams.set('request_uri', parResponse.request_uri)
+  if (as.pushed_authorization_request_endpoint) {
+    const par = await oauth.pushedAuthorizationRequest(as, client, clientAuth, new URLSearchParams({
+      client_id: client.client_id,
+      response_type: 'code',
+      redirect_uri: OIDC.redirectUri,
+      scope: OIDC.scope,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      state,
+      nonce,
+    }))
+    const parResponse = await oauth.processPushedAuthorizationResponse(as, client, par)
+
+    authUrl.searchParams.set('client_id', client.client_id)
+    authUrl.searchParams.set('request_uri', parResponse.request_uri)
+  } else {
+    authUrl.searchParams.set('client_id', client.client_id)
+    authUrl.searchParams.set('response_type', 'code')
+    authUrl.searchParams.set('redirect_uri', OIDC.redirectUri)
+    authUrl.searchParams.set('scope', OIDC.scope)
+    authUrl.searchParams.set('code_challenge', codeChallenge)
+    authUrl.searchParams.set('code_challenge_method', 'S256')
+    authUrl.searchParams.set('state', state)
+    authUrl.searchParams.set('nonce', nonce)
+  }
 
   sessionStorage.setItem('pkce_code_verifier', codeVerifier)
   sessionStorage.setItem('oidc_state', state)
@@ -61,34 +85,36 @@ export async function handleRedirectCallback(search: string) {
   if (!codeVerifier) throw new Error('Missing PKCE verifier')
 
   const authRes = oauth.validateAuthResponse(as, client, params, expectedState)
-  if (oauth.isOAuth2Error(authRes)) {
-    throw new Error(`${authRes.error}: ${authRes.error_description}`)
-  }
 
   const result = await oauth.authorizationCodeGrantRequest(
     as,
     client,
+    clientAuth,
     authRes,
     OIDC.redirectUri,
     codeVerifier
   )
 
-  const response = await oauth.processAuthorizationCodeOpenIDResponse(as, client, result, expectedNonce)
+  const response = await oauth.processAuthorizationCodeResponse(as, client, result, {
+    expectedNonce,
+    requireIdToken: true,
+  })
   let claims = oauth.getValidatedIdTokenClaims(response)
+  if (!claims) {
+    throw new Error('Missing validated ID token claims')
+  }
 
-  // Optionally call UserInfo if available and we have an access token
   if (response.access_token && as.userinfo_endpoint) {
     try {
       const userInfoRes = await oauth.userInfoRequest(as, client, response.access_token)
       const userInfo = await oauth.processUserInfoResponse(as, client, claims.sub, userInfoRes)
       claims = { ...claims, ...userInfo }
     } catch {
-      // ignore userinfo errors for demo
+      // Ignore userinfo failures in the sample app.
     }
   }
 
-  // Store tokens and claims
-  const tokens = {
+  const tokens: StoredTokens = {
     id_token: response.id_token!,
     access_token: response.access_token,
     token_type: response.token_type,
@@ -97,10 +123,7 @@ export async function handleRedirectCallback(search: string) {
   sessionStorage.setItem('oidc_tokens', JSON.stringify(tokens))
   sessionStorage.setItem('oidc_claims', JSON.stringify(claims))
 
-  // Clear transient state
-  sessionStorage.removeItem('pkce_code_verifier')
-  sessionStorage.removeItem('oidc_state')
-  sessionStorage.removeItem('oidc_nonce')
+  clearTransientState()
 }
 
 export function getUser() {
@@ -109,13 +132,14 @@ export function getUser() {
   try { return JSON.parse(claimsRaw) } catch { return null }
 }
 
-export function getTokens() {
+export function getTokens(): StoredTokens | null {
   const raw = sessionStorage.getItem('oidc_tokens')
   if (!raw) return null
   try { return JSON.parse(raw) } catch { return null }
 }
 
 export function logoutFrontend() {
+  clearTransientState()
   sessionStorage.removeItem('oidc_tokens')
   sessionStorage.removeItem('oidc_claims')
 }

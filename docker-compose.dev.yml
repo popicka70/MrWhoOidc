@@ -113,6 +113,67 @@ services:
     networks:
       - edge
 
+  oidcdemo:
+    build:
+      context: .
+      dockerfile: Examples/MrWhoOidc.OidcDemo/Dockerfile
+    depends_on:
+      webauth:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: https://+:5001;http://+:5000
+      ASPNETCORE_HTTPS_PORTS: 5001
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
+      ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
+      OidcSettings__Authority: "https://localhost:8443/t/default"
+      OidcSettings__DiscoveryUri: "https://localhost:8443/t/default/.well-known/openid-configuration"
+      OidcSettings__ClientId: blazor-web
+      OidcSettings__ClientSecret: z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG
+      MRWHO_LOCALHOST_TO_HOST_GATEWAY: "true"
+      DEV_PFX_TRUST_SOURCE: /https/aspnetapp.pfx
+      DEV_PFX_TRUST_PASSWORD: changeit
+    extra_hosts:
+      - "localhost:host-gateway"
+    ports:
+      - "5001:5001"
+      - "5000:5000"
+    volumes:
+      - ./certs:/https:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - edge
+
+  reactclient:
+    build:
+      context: ./Examples/ReactOidcClient
+      dockerfile: Dockerfile
+      args:
+        VITE_OIDC_AUTHORITY: "https://localhost:8443/t/default"
+        VITE_OIDC_CLIENT_ID: react-demo
+        VITE_REDIRECT_URI: "http://localhost:5173/callback"
+        VITE_POST_LOGOUT_REDIRECT_URI: "http://localhost:5173/"
+    depends_on:
+      webauth:
+        condition: service_started
+    ports:
+      - "5173:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - edge
+
   postgres:
     image: postgres:16-alpine
     environment:

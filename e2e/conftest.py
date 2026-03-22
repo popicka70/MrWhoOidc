@@ -40,6 +40,8 @@ from utils.screenshot_manager import ScreenshotManager
 BASE_URL: str = os.getenv("BASE_URL", "https://localhost:8443")
 EXAMPLE_RAZORCLIENT_URL: str = os.getenv("EXAMPLE_RAZORCLIENT_URL", "https://localhost:5003")
 EXAMPLE_TESTAPI_URL: str = os.getenv("EXAMPLE_TESTAPI_URL", "https://localhost:7149")
+EXAMPLE_OIDCDEMO_URL: str = os.getenv("EXAMPLE_OIDCDEMO_URL", "https://localhost:5001")
+EXAMPLE_REACTCLIENT_URL: str = os.getenv("EXAMPLE_REACTCLIENT_URL", "http://localhost:5173")
 ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin@mrwho.local")
 ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Admin123!")
 _AUTH_STATE_FILE: Path = Path(__file__).parent / ".auth" / "state.json"
@@ -93,6 +95,16 @@ def example_testapi_url() -> str:
 
 
 @pytest.fixture(scope="session")
+def example_oidcdemo_url() -> str:
+    return EXAMPLE_OIDCDEMO_URL
+
+
+@pytest.fixture(scope="session")
+def example_reactclient_url() -> str:
+    return EXAMPLE_REACTCLIENT_URL
+
+
+@pytest.fixture(scope="session")
 def screenshot_mgr(run_id: str) -> ScreenshotManager:
     return ScreenshotManager(run_id=run_id)
 
@@ -132,7 +144,7 @@ def reset_database() -> None:
     base_cmd = ["docker", "compose", "-f", compose_file, "-p", project]
 
     # Stop and remove app containers that depend on the seeded database.
-    subprocess.run([*base_cmd, "rm", "-sf", "razorclient", "testapi", "webauth", "postgres"], check=False)
+    subprocess.run([*base_cmd, "rm", "-sf", "reactclient", "oidcdemo", "razorclient", "testapi", "webauth", "postgres"], check=False)
 
     # Remove the postgres data volume so the DB is fresh
     subprocess.run(["docker", "volume", "rm", f"{project}_postgres-data"], check=False)
@@ -154,16 +166,18 @@ def reset_database() -> None:
     else:
         raise RuntimeError("Postgres did not become healthy within 60 s")
 
-    # Start webauth — it runs EF migrations on startup
-    subprocess.run([*base_cmd, "up", "-d", "webauth"], check=True)
+    # Start webauth from the current source — it runs EF migrations on startup.
+    subprocess.run([*base_cmd, "up", "-d", "--build", "webauth"], check=True)
 
     ready_url = f"{BASE_URL}/t/default/.well-known/openid-configuration"
     _wait_for_url(ready_url, timeout_seconds=120, insecure=True)
 
-    # Start the example applications that are now part of the E2E suite.
-    subprocess.run([*base_cmd, "up", "-d", "testapi", "razorclient"], check=True)
+    # Start the example applications from the current source.
+    subprocess.run([*base_cmd, "up", "-d", "--build", "testapi", "razorclient", "oidcdemo", "reactclient"], check=True)
     _wait_for_url(f"{EXAMPLE_TESTAPI_URL}/health", timeout_seconds=90, insecure=True)
     _wait_for_url(f"{EXAMPLE_RAZORCLIENT_URL}/health", timeout_seconds=90, insecure=True)
+    _wait_for_url(f"{EXAMPLE_OIDCDEMO_URL}/health", timeout_seconds=90, insecure=True)
+    _wait_for_url(f"{EXAMPLE_REACTCLIENT_URL}/health", timeout_seconds=90, insecure=True)
 
     # Clear any stale auth state so login is performed against the fresh DB
     if _AUTH_STATE_FILE.exists():
