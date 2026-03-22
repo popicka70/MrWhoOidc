@@ -110,8 +110,8 @@ public class SecretObfuscationTests
         var mode = ExportMode.Obfuscated;
 
         // Act
-        var exportedValue = mode == ExportMode.Obfuscated 
-            ? ExportManifest.ObfuscateSecret(originalHash) 
+        var exportedValue = mode == ExportMode.Obfuscated
+            ? ExportManifest.ObfuscateSecret(originalHash)
             : originalHash;
 
         // Assert
@@ -127,8 +127,8 @@ public class SecretObfuscationTests
         var mode = ExportMode.Full;
 
         // Act
-        var exportedValue = mode == ExportMode.Full 
-            ? originalHash 
+        var exportedValue = mode == ExportMode.Full
+            ? originalHash
             : ExportManifest.ObfuscateSecret(originalHash);
 
         // Assert

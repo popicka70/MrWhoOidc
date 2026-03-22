@@ -20,7 +20,7 @@ public class ProviderKeysPageTests
     private static readonly Lazy<string> s_rsaPem = new(
         () => GeneratePem(SharedTestKeys.Rsa2048.ExportPkcs8PrivateKey()),
         LazyThreadSafetyMode.ExecutionAndPublication);
-    
+
     private static readonly Lazy<string> s_ecPem = new(
         () => GeneratePem(SharedTestKeys.EcdsaP256.ExportPkcs8PrivateKey()),
         LazyThreadSafetyMode.ExecutionAndPublication);

@@ -63,9 +63,9 @@ public static class PersistenceServiceCollectionExtensions
                 npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
                 npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(2), errorCodesToAdd: null);
             });
-            
+
             // Suppress pending model changes warning - model is in sync but EF Core 9 is overly strict
-            options.ConfigureWarnings(warnings => 
+            options.ConfigureWarnings(warnings =>
                 warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         }, contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
 

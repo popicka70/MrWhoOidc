@@ -70,10 +70,10 @@ internal sealed class GlobalAuthenticationService(
             metrics.GlobalAuthFailure("missing_password_hash");
             return GlobalAuthenticationResult.Failure(AuthenticationFailureReason.InvalidPassword);
         }
-        
+
         var isValid = passwordHasher.Verify(password, account.PasswordHash);
         logger.LogDebug("🔍 [GlobalAuth] Password verification result: {IsValid}", isValid);
-        
+
         if (!isValid)
         {
             logger.LogDebug("Authentication failed: invalid password for account {AccountId}", account.Id);

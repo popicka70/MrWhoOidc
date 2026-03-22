@@ -137,7 +137,7 @@ public sealed record AuthorityPlaceholder
     /// Default value if any.
     /// </summary>
     public string? DefaultValue { get; init; }
-    
+
     /// <summary>
     /// Placeholder text for the input field (example value).
     /// </summary>

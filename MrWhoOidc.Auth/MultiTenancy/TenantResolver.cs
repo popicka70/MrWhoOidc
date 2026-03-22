@@ -55,7 +55,7 @@ public class ModeAwareTenantResolver : ITenantResolver
     public async Task<TenantContext?> ResolveTenantAsync(string path, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("🏢 [TenantResolver] Resolving tenant for path={Path}, MultiTenantEnabled={Enabled}", path, _options.Enabled);
-        
+
         if (string.IsNullOrEmpty(path))
         {
             path = "/";
@@ -71,7 +71,7 @@ public class ModeAwareTenantResolver : ITenantResolver
         // Multi-tenant mode: parse path for /t/{slug}
         var slug = ExtractTenantSlugFromPath(path);
         _logger.LogDebug("🏢 [TenantResolver] Extracted slug from path: {Slug}", slug ?? "(none)");
-        
+
         if (string.IsNullOrEmpty(slug))
         {
             // No tenant slug in path - fall back to default tenant for backward compatibility

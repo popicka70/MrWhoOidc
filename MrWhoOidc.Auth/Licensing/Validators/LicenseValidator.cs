@@ -30,7 +30,7 @@ internal sealed class LicenseValidator : ILicenseValidator
     private const string DeploymentModeClaim = "deployment_mode";
     private const string ParentLicenseIdClaim = "parent_license_jti";
     private const string LicenseIdClaim = "jti";
-    
+
     private static readonly string[] AllowedIssuers = new[] { KeyGenIssuer, LegacyIssuer, LicensingServiceIssuer };
 
     internal static IReadOnlyCollection<string> SupportedIssuers => AllowedIssuers;

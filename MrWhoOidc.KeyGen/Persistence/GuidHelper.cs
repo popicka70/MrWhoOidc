@@ -57,7 +57,7 @@ public static class GuidHelper
     public static DateTimeOffset? ExtractTimestamp(Guid uuid)
     {
         var bytes = uuid.ToByteArray();
-        
+
         // Check version (should be 7 for UUIDv7)
         // Version is in bits 48-51 (byte 7, high nibble after converting from network order)
         var version = GetVersion(bytes);
@@ -70,7 +70,7 @@ public static class GuidHelper
         // UUIDs are stored in mixed-endian format in .NET (RFC 4122 variant)
         // The timestamp is in bytes 0-5 but we need to account for endianness
         var timestamp = ExtractTimestampMilliseconds(bytes);
-        
+
         return DateTimeOffset.FromUnixTimeMilliseconds(timestamp);
     }
 
@@ -88,24 +88,24 @@ public static class GuidHelper
         // - Next 2 bytes (Data2): little-endian 16-bit integer  
         // - Next 2 bytes (Data3): little-endian 16-bit integer
         // - Last 8 bytes (Data4): big-endian
-        
+
         // For UUIDv7, the timestamp is stored as:
         // - Bytes 0-3 (Data1): Most significant 32 bits of timestamp
         // - Bytes 4-5 (Data2): Next 16 bits of timestamp
         // But we need to account for little-endian storage
-        
+
         long timestamp = 0;
-        
+
         // Extract Data1 (first 32 bits of timestamp, stored little-endian)
         timestamp |= ((long)bytes[3]) << 40;
         timestamp |= ((long)bytes[2]) << 32;
         timestamp |= ((long)bytes[1]) << 24;
         timestamp |= ((long)bytes[0]) << 16;
-        
+
         // Extract Data2 (next 16 bits of timestamp, stored little-endian)
         timestamp |= ((long)bytes[5]) << 8;
         timestamp |= ((long)bytes[4]);
-        
+
         return timestamp;
     }
 

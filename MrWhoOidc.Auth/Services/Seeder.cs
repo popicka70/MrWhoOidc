@@ -133,7 +133,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
             };
             db.Users.Add(seededAlice);
             await _accountProvisioner.EnsureAsync(seededAlice, tenantId, adminRealm.Id, isTenantAdmin: false, ct).ConfigureAwait(false);
-            
+
             // Set password on the UserAccount (global credentials)
             var aliceAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == "alice", ct).ConfigureAwait(false);
             if (aliceAccount != null)
@@ -163,7 +163,7 @@ public sealed class Seeder(AuthDbContext db, IPasswordHasher hasher, ITenantAcce
         if (adminUser is not null)
         {
             await _accountProvisioner.EnsureAsync(adminUser, tenantId, adminRealm.Id, isTenantAdmin: true, ct).ConfigureAwait(false);
-            
+
             // Set password on the UserAccount (global credentials)
             var adminAccount = await db.UserAccounts.FirstOrDefaultAsync(a => a.Username == AdminUsername, ct).ConfigureAwait(false);
             if (adminAccount != null && string.IsNullOrEmpty(adminAccount.PasswordHash))

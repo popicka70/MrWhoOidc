@@ -470,8 +470,8 @@ public sealed class EffectiveLicenseResolutionTests
         public Dictionary<string, LicenseInfo> LicenseParseMap { get; } = new();
 
         public Task<LicenseValidationResult> ValidateSignatureAsync(string licenseKey, CancellationToken cancellationToken = default)
-            => Task.FromResult(ParsedLicense is not null 
-                ? LicenseValidationResult.Success(ParsedLicense) 
+            => Task.FromResult(ParsedLicense is not null
+                ? LicenseValidationResult.Success(ParsedLicense)
                 : LicenseValidationResult.InvalidFormat());
 
         public Task<LicenseInfo?> ParseLicenseAsync(string licenseKey, CancellationToken cancellationToken = default)

@@ -76,9 +76,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Step 1: Create client (no secrets yet)
-        var client = new ClientEntity 
-        { 
-            ClientId = "rotation-test-client", 
+        var client = new ClientEntity
+        {
+            ClientId = "rotation-test-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>()
         };
@@ -87,9 +87,9 @@ public sealed class ClientStoreTests
 
         // Step 2: Generate first secret (inactive)
         var secret1 = await store.CreateSecretAsync(
-            client.Id, 
-            "secret-v1", 
-            "First production secret", 
+            client.Id,
+            "secret-v1",
+            "First production secret",
             "admin@test.com",
             expiresAtUtc: DateTime.UtcNow.AddDays(90));
 
@@ -111,9 +111,9 @@ public sealed class ClientStoreTests
 
         // Step 4: Generate second secret (for rotation overlap)
         var secret2 = await store.CreateSecretAsync(
-            client.Id, 
-            "secret-v2", 
-            "Second production secret (rotation)", 
+            client.Id,
+            "secret-v2",
+            "Second production secret (rotation)",
             "admin@test.com",
             expiresAtUtc: DateTime.UtcNow.AddDays(90));
 
@@ -125,7 +125,7 @@ public sealed class ClientStoreTests
         // Step 5: Authenticate with BOTH secrets (overlap period)
         var authWithOldSecret = await store.ValidateClientSecretAsync("rotation-test-client", "secret-v1");
         var authWithNewSecret = await store.ValidateClientSecretAsync("rotation-test-client", "secret-v2");
-        
+
         Assert.IsTrue(authWithOldSecret, "Old secret should still work during overlap");
         Assert.IsTrue(authWithNewSecret, "New secret should work during overlap");
 
@@ -145,7 +145,7 @@ public sealed class ClientStoreTests
         // Step 8: Authenticate only with new secret
         var authWithRevokedSecret = await store.ValidateClientSecretAsync("rotation-test-client", "secret-v1");
         var authWithActiveSecret = await store.ValidateClientSecretAsync("rotation-test-client", "secret-v2");
-        
+
         Assert.IsFalse(authWithRevokedSecret, "Revoked secret should not authenticate");
         Assert.IsTrue(authWithActiveSecret, "Active secret should still authenticate");
     }
@@ -163,9 +163,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Create client with expired secret
-        var client = new ClientEntity 
-        { 
-            ClientId = "expiry-test-client", 
+        var client = new ClientEntity
+        {
+            ClientId = "expiry-test-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>
             {
@@ -185,7 +185,7 @@ public sealed class ClientStoreTests
 
         // Try to authenticate with expired secret
         var authResult = await store.ValidateClientSecretAsync("expiry-test-client", "expired-secret");
-        
+
         Assert.IsFalse(authResult, "Expired secret should not authenticate");
     }
 
@@ -202,9 +202,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Create client with legacy ClientSecretHash (no ClientSecrets collection)
-        var legacyClient = new ClientEntity 
-        { 
-            ClientId = "legacy-client", 
+        var legacyClient = new ClientEntity
+        {
+            ClientId = "legacy-client",
             TenantId = DefaultTenantId,
             ClientSecretHash = hasher.Hash("legacy-secret"), // Old-style single secret
             ClientSecrets = new List<ClientSecret>() // Empty collection
@@ -214,7 +214,7 @@ public sealed class ClientStoreTests
 
         // Authenticate with legacy secret
         var authResult = await store.ValidateClientSecretAsync("legacy-client", "legacy-secret");
-        
+
         Assert.IsTrue(authResult, "Legacy ClientSecretHash should still authenticate");
 
         // Verify wrong secret fails
@@ -234,9 +234,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Create client with one active secret
-        var client = new ClientEntity 
-        { 
-            ClientId = "lockout-test-client", 
+        var client = new ClientEntity
+        {
+            ClientId = "lockout-test-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>
             {
@@ -258,12 +258,12 @@ public sealed class ClientStoreTests
 
         // Try to revoke the only secret (should fail or return false)
         var revokeResult = await store.RevokeSecretAsync(onlySecretId, "admin@test.com");
-        
+
         // Implementation should prevent this (check actual behavior)
         // If implementation allows it, we should fix it to return false
         // For now, verify the secret can still authenticate after attempted revoke
         var authAfterAttemptedRevoke = await store.ValidateClientSecretAsync("lockout-test-client", "only-secret");
-        Assert.IsTrue(authAfterAttemptedRevoke || !revokeResult, 
+        Assert.IsTrue(authAfterAttemptedRevoke || !revokeResult,
             "Should either prevent revoke (return false) or secret should still work");
     }
 
@@ -279,9 +279,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Create client with 3 active secrets
-        var client = new ClientEntity 
-        { 
-            ClientId = "multi-secret-client", 
+        var client = new ClientEntity
+        {
+            ClientId = "multi-secret-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>
             {
@@ -324,7 +324,7 @@ public sealed class ClientStoreTests
         var auth1 = await store.ValidateClientSecretAsync("multi-secret-client", "secret-1");
         var auth2 = await store.ValidateClientSecretAsync("multi-secret-client", "secret-2");
         var auth3 = await store.ValidateClientSecretAsync("multi-secret-client", "secret-3");
-        
+
         Assert.IsTrue(auth1, "Secret 1 should authenticate");
         Assert.IsTrue(auth2, "Secret 2 should authenticate");
         Assert.IsTrue(auth3, "Secret 3 should authenticate");
@@ -350,9 +350,9 @@ public sealed class ClientStoreTests
         var store = new ClientStore(db, hasher, tenantAccessor, new TestHybridCache(), NullLogger<ClientStore>.Instance);
 
         // Create client with secret that has no expiry
-        var client = new ClientEntity 
-        { 
-            ClientId = "no-expiry-client", 
+        var client = new ClientEntity
+        {
+            ClientId = "no-expiry-client",
             TenantId = DefaultTenantId,
             ClientSecrets = new List<ClientSecret>
             {
@@ -372,7 +372,7 @@ public sealed class ClientStoreTests
 
         // Authenticate (should work even after long time)
         var authResult = await store.ValidateClientSecretAsync("no-expiry-client", "eternal-secret");
-        
+
         Assert.IsTrue(authResult, "Secret with no expiry should authenticate indefinitely");
     }
 

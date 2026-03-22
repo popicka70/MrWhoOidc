@@ -18,10 +18,10 @@ public class LoginModel : PageModel
         // Challenge triggers the OIDC middleware to redirect to the IdP
         var redirectUri = returnUrl ?? Url.Content("~/");
         return Challenge(
-            new AuthenticationProperties 
-            { 
-                RedirectUri = redirectUri 
-            }, 
+            new AuthenticationProperties
+            {
+                RedirectUri = redirectUri
+            },
             OpenIdConnectDefaults.AuthenticationScheme);
     }
 }

@@ -34,7 +34,7 @@ public sealed class ProfileCommand : Command
             await ShowProfileAsync(name, format);
         });
         Subcommands.Add(showCommand);
-        
+
         var switchCommand = new Command("switch", "Switch to a different profile");
         var nameArgument = new Argument<string>("name")
         {

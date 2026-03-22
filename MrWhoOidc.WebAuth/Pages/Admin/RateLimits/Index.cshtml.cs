@@ -31,12 +31,12 @@ public sealed class IndexModel : PageModel
         try
         {
             var overview = await _metricsService.GetOverviewAsync(cancellationToken);
-            
+
             PolicyStatuses = overview.ActivePolicies;
             TotalAllowedRequests = overview.TotalAllowedRequests24H;
             TotalBlockedRequests = overview.TotalBlockedRequests24H;
-            BlockRatePercent = (TotalAllowedRequests + TotalBlockedRequests) > 0 
-                ? (double)TotalBlockedRequests / (TotalAllowedRequests + TotalBlockedRequests) * 100.0 
+            BlockRatePercent = (TotalAllowedRequests + TotalBlockedRequests) > 0
+                ? (double)TotalBlockedRequests / (TotalAllowedRequests + TotalBlockedRequests) * 100.0
                 : 0.0;
 
             // Simulate recent events from metrics

@@ -116,7 +116,7 @@ public sealed class AuthorizeRequestValidator(
             };
             if (!validModes.Contains(responseMode, StringComparer.Ordinal))
             {
-                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode, 
+                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
                     $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
         }

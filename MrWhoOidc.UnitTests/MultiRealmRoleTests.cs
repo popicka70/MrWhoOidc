@@ -35,7 +35,7 @@ public sealed class MultiRealmRoleTests
         var lifetimeResolver = new TokenLifetimeResolver();
         var opaquePolicy = new OpaqueTokenPolicy(options);
         var roleBuilder = new RoleClaimBuilder();
-        
+
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
         var keyStore = new KeyStore(
@@ -50,16 +50,16 @@ public sealed class MultiRealmRoleTests
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
-        
+
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
-            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
@@ -78,17 +78,17 @@ public sealed class MultiRealmRoleTests
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         using var db = new AuthDbContext(opts);
-        
+
         var tenant1 = new Tenant { Name = "T1" };
         var tenant2 = new Tenant { Name = "T2" };
         db.Tenants.AddRange(tenant1, tenant2);
-        
+
         var user = new User { Username = "u" };
         db.Users.Add(user);
 
-    #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete; tests keep legacy behavior for client_credentials guard.
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete; tests keep legacy behavior for client_credentials guard.
         var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", ClientSecretHash = "h" };
-    #pragma warning restore CS0618
+#pragma warning restore CS0618
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -99,7 +99,7 @@ public sealed class MultiRealmRoleTests
             .ReturnsAsync("jwt");
 
         var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
-        
+
         // Setup entitlements provider to return roles for both tenants
         var entitlementsMock = new Mock<IEntitlementsProvider>();
         // Note: GetEffectiveEntitlementsAsync is the method in IEntitlementsProvider
@@ -111,14 +111,14 @@ public sealed class MultiRealmRoleTests
         var tenantsClaimService = new NoopTenantsClaimService();
         var loggerFactory = new LoggerFactory();
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
-        
+
         var factory = new ClientCredentialsTokenFactory(
             db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory, new Mock<IDeviceCodeTokenFactory>().Object);
 
         var (ok, _, _, _) = await tokenSvc.CreateClientCredentialsTokenAsync("c1", "api", new[] { "openid" }, "https://issuer");
-        
+
         Assert.IsTrue(ok);
     }
 }

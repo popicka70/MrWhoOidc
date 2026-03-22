@@ -246,34 +246,34 @@ internal static class WebAuthnCrypto
         switch (alg)
         {
             case AlgES256:
-            {
-                if (x is null || y is null)
-                    throw new WebAuthnVerificationException("EC2 COSE key is missing x or y coordinates");
-
-                var ecParams = new ECParameters
                 {
-                    Curve = ECCurve.NamedCurves.nistP256,
-                    Q = new ECPoint { X = x, Y = y }
-                };
-                using var ecdsa = ECDsa.Create(ecParams);
-                // WebAuthn ES256 signatures are DER-encoded (Rfc3279DerSequence)
-                if (!ecdsa.VerifyData(message, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence))
-                    throw new WebAuthnVerificationException("ES256 signature verification failed");
-                break;
-            }
+                    if (x is null || y is null)
+                        throw new WebAuthnVerificationException("EC2 COSE key is missing x or y coordinates");
+
+                    var ecParams = new ECParameters
+                    {
+                        Curve = ECCurve.NamedCurves.nistP256,
+                        Q = new ECPoint { X = x, Y = y }
+                    };
+                    using var ecdsa = ECDsa.Create(ecParams);
+                    // WebAuthn ES256 signatures are DER-encoded (Rfc3279DerSequence)
+                    if (!ecdsa.VerifyData(message, signature, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence))
+                        throw new WebAuthnVerificationException("ES256 signature verification failed");
+                    break;
+                }
 
             case AlgRS256:
-            {
-                if (n is null || e is null)
-                    throw new WebAuthnVerificationException("RSA COSE key is missing modulus (n) or exponent (e)");
+                {
+                    if (n is null || e is null)
+                        throw new WebAuthnVerificationException("RSA COSE key is missing modulus (n) or exponent (e)");
 
-                var rsaParams = new RSAParameters { Modulus = n, Exponent = e };
-                using var rsa = RSA.Create();
-                rsa.ImportParameters(rsaParams);
-                if (!rsa.VerifyData(message, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
-                    throw new WebAuthnVerificationException("RS256 signature verification failed");
-                break;
-            }
+                    var rsaParams = new RSAParameters { Modulus = n, Exponent = e };
+                    using var rsa = RSA.Create();
+                    rsa.ImportParameters(rsaParams);
+                    if (!rsa.VerifyData(message, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+                        throw new WebAuthnVerificationException("RS256 signature verification failed");
+                    break;
+                }
 
             default:
                 throw new WebAuthnVerificationException(

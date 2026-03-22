@@ -15,7 +15,7 @@ public interface ITenantService
     Task InvalidateTenantCacheAsync(Guid tenantId, string slug, CancellationToken ct = default);
     Task<bool> CanProvisionTenantAsync(int additionalCount = 1, CancellationToken ct = default);
     Task<Tenant> CreateTenantAsync(string name, Guid creatorUserAccountId, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Checks if the system is running in multi-tenant mode (based on license).
     /// </summary>
@@ -23,8 +23,8 @@ public interface ITenantService
 }
 
 internal sealed class TenantService(
-    AuthDbContext db, 
-    HybridCache cache, 
+    AuthDbContext db,
+    HybridCache cache,
     ILimitService limitService,
     IMultiTenancyOptions multiTenancyOptions) : ITenantService
 {
@@ -93,7 +93,7 @@ internal sealed class TenantService(
     {
         var slugCacheKey = $"tenant:slug:{slug}";
         var idCacheKey = $"tenant:id:{tenantId}";
-        
+
         await _cache.RemoveAsync(slugCacheKey, ct).ConfigureAwait(false);
         await _cache.RemoveAsync(idCacheKey, ct).ConfigureAwait(false);
     }
@@ -147,7 +147,7 @@ internal sealed class TenantService(
         {
             attempts++;
             if (attempts > 10) throw new InvalidOperationException("Failed to generate unique tenant slug.");
-            
+
             // Generate 8 bytes -> ~11 chars in Base64Url
             var bytes = new byte[8];
             using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())

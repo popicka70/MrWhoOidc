@@ -16,7 +16,7 @@ public class MultiTenancyStateInitializer : IHostedService
     private readonly ILogger<MultiTenancyStateInitializer> _logger;
 
     public MultiTenancyStateInitializer(
-        IServiceProvider serviceProvider, 
+        IServiceProvider serviceProvider,
         IMultiTenancyStateProvider stateProvider,
         ILogger<MultiTenancyStateInitializer> logger)
     {
@@ -27,11 +27,11 @@ public class MultiTenancyStateInitializer : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        try 
+        try
         {
             using var scope = _serviceProvider.CreateScope();
             var licenseService = scope.ServiceProvider.GetRequiredService<ILicenseService>();
-            
+
             var license = await licenseService.GetCurrentLicenseAsync(null, cancellationToken);
             if (license != null)
             {

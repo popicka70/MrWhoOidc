@@ -35,7 +35,7 @@ public sealed class SeedUsageExamples
         var lifetimeResolver = new TokenLifetimeResolver();
         var opaquePolicy = new OpaqueTokenPolicy(options);
         var roleBuilder = new RoleClaimBuilder();
-        
+
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
         var keyStore = new KeyStore(
@@ -50,16 +50,16 @@ public sealed class SeedUsageExamples
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
-        
+
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
-            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, meta, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
@@ -84,7 +84,7 @@ public sealed class SeedUsageExamples
         var meta = new InMemoryAuthorizationCodeMetadataStore();
         var settingsSvc = new MockTenantSettingsService();
         var acSvc = new AuthorizationCodeService(db, meta, MockTenantAccessor.CreateWithDefaultTenant(), settingsSvc);
-        
+
         var authorizeResult = new AuthorizeValidationResult(
             IsValid: true,
             ClientId: seed.Clients["spa"].ClientId,

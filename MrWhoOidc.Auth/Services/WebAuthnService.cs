@@ -395,7 +395,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         CancellationToken cancellationToken = default)
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("No tenant context");
-        
+
         return await _db.WebAuthnCredentials
             .Where(c => c.UserId == userId && c.TenantId == tenantId && c.IsActive)
             .OrderByDescending(c => c.LastUsedAt ?? c.CreatedAt)
@@ -408,10 +408,10 @@ internal sealed class WebAuthnService : IWebAuthnService
         CancellationToken cancellationToken = default)
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("No tenant context");
-        
+
         var credential = await _db.WebAuthnCredentials
-            .FirstOrDefaultAsync(c => c.Id == credentialId && 
-                                     c.UserId == userId && 
+            .FirstOrDefaultAsync(c => c.Id == credentialId &&
+                                     c.UserId == userId &&
                                      c.TenantId == tenantId, cancellationToken);
 
         if (credential == null)
@@ -420,7 +420,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         credential.IsActive = false;
         await _db.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Removed WebAuthn credential {CredentialId} for user {UserId}", 
+        _logger.LogInformation("Removed WebAuthn credential {CredentialId} for user {UserId}",
             credentialId, userId);
 
         return true;
@@ -433,11 +433,11 @@ internal sealed class WebAuthnService : IWebAuthnService
         CancellationToken cancellationToken = default)
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("No tenant context");
-        
+
         var credential = await _db.WebAuthnCredentials
-            .FirstOrDefaultAsync(c => c.Id == credentialId && 
-                                     c.UserId == userId && 
-                                     c.TenantId == tenantId && 
+            .FirstOrDefaultAsync(c => c.Id == credentialId &&
+                                     c.UserId == userId &&
+                                     c.TenantId == tenantId &&
                                      c.IsActive, cancellationToken);
 
         if (credential == null)
@@ -454,7 +454,7 @@ internal sealed class WebAuthnService : IWebAuthnService
         CancellationToken cancellationToken = default)
     {
         var tenantId = _tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("No tenant context");
-        
+
         return await _db.WebAuthnCredentials
             .AnyAsync(c => c.UserId == userId && c.TenantId == tenantId && c.IsActive, cancellationToken);
     }

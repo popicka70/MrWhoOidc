@@ -60,7 +60,7 @@ public sealed class PlatformSettingsServiceTests
         // Arrange
         using var db = CreateDb();
         var cache = CreateCache();
-        
+
         // Seed existing settings
         var existingSettings = new PlatformSettings
         {
@@ -91,7 +91,7 @@ public sealed class PlatformSettingsServiceTests
             new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(dbName).Options);
         var cache = CreateCache();
         var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
-        
+
         var settings = await service.GetSettingsAsync();
         Assert.IsFalse(settings.QrLoginAtDiscoveryEnabled);
 
@@ -105,7 +105,7 @@ public sealed class PlatformSettingsServiceTests
             new DbContextOptionsBuilder<AuthDbContext>()
                 .UseInMemoryDatabase(dbName)
                 .Options);
-        
+
         var verifySettings = await verifyDb.PlatformSettings.FirstOrDefaultAsync();
 
         // Assert
@@ -136,7 +136,7 @@ public sealed class PlatformSettingsServiceTests
         // Arrange
         using var db = CreateDb();
         var cache = CreateCache();
-        
+
         // Seed settings with QR enabled
         var settings = new PlatformSettings
         {
@@ -162,7 +162,7 @@ public sealed class PlatformSettingsServiceTests
         using var db = CreateDb();
         var cache = CreateCache();
         var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
-        
+
         var settings = await service.GetSettingsAsync();
         var originalUpdatedAt = settings.UpdatedAt;
 

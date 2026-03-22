@@ -103,13 +103,13 @@ public sealed class RefreshTokenExchangerTests
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
-        
+
         var claimBuilder = new Mock<IAccessTokenClaimBuilder>();
         claimBuilder.Setup(x => x.BuildClaimsAsync(It.IsAny<AccessTokenClaimRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<System.Security.Claims.Claim>());
 
         var logger = new Mock<ILogger<RefreshTokenExchanger>>();
-    var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
+        var exchanger = new RefreshTokenExchanger(db, jwtSvc.Object, refreshSvc.Object, revocationSvc.Object, Options(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder.Object, new TokenLifetimeResolver(), new OpaqueTokenPolicy(Options()));
 
         var request = new RefreshTokenExchangeRequest("rt", "c1", "https://issuer");
         var (ok, payload, error, status) = await exchanger.ExchangeAsync(request, CancellationToken.None);

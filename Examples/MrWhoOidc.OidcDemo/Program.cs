@@ -33,10 +33,10 @@ builder.Services.AddAuthentication(options =>
     options.GetClaimsFromUserInfoEndpoint = true;
     options.RequireHttpsMetadata = true;
     options.UsePkce = true;
-    
+
     // Disable Pushed Authorization Requests (PAR) - the IdP requires AdvancedSecurity license for PAR
     options.PushedAuthorizationBehavior = PushedAuthorizationBehavior.Disable;
-    
+
     // Clear default scopes and add configured ones
     options.Scope.Clear();
     var scopes = oidcSettings.GetSection("Scopes").Get<string[]>() ?? ["openid", "profile", "email"];
@@ -44,14 +44,14 @@ builder.Services.AddAuthentication(options =>
     {
         options.Scope.Add(scope);
     }
-    
+
     // Map claims for display
     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
         NameClaimType = "name",
         RoleClaimType = "role"
     };
-    
+
     options.Events = new OpenIdConnectEvents
     {
         OnRemoteFailure = context =>

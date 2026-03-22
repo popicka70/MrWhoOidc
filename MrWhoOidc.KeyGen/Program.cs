@@ -69,7 +69,7 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
-    
+
     // Content Security Policy - restrictive policy for this admin app
     context.Response.Headers.Append("Content-Security-Policy",
         "default-src 'self'; " +
@@ -79,7 +79,7 @@ app.Use(async (context, next) =>
         "font-src 'self'; " +
         "connect-src 'self'; " +
         "frame-ancestors 'none'");
-    
+
     await next();
 });
 

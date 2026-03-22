@@ -35,7 +35,7 @@ public sealed class TokenRoleEmissionTests
         var lifetimeResolver = new TokenLifetimeResolver();
         var opaquePolicy = new OpaqueTokenPolicy(options);
         var roleBuilder = new RoleClaimBuilder();
-        
+
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, roleBuilder, options);
 
         var keyStore = new KeyStore(
@@ -50,16 +50,16 @@ public sealed class TokenRoleEmissionTests
         pairwiseSubjectService
             .Setup(x => x.GetSubjectAsync(It.IsAny<MrWhoOidc.Auth.Persistence.Client>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((MrWhoOidc.Auth.Persistence.Client _, Guid userId, CancellationToken __) => userId.ToString());
-        
+
         var authCodeExchanger = new AuthorizationCodeExchanger(
-            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object, 
-            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            db, jwtSvc, keyProvider, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
+            options, new InMemoryAuthorizationCodeMetadataStore(), settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy,
             loggerFactory.CreateLogger<AuthorizationCodeExchanger>());
 
         var refreshTokenExchanger = new RefreshTokenExchanger(
             db, jwtSvc, new Mock<IRefreshTokenService>().Object, new Mock<IRevocationService>().Object,
-            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder, 
+            options, settingsSvc, entitlementsProvider, tenantsClaimService, pairwiseSubjectService.Object, claimBuilder,
             lifetimeResolver, opaquePolicy);
 
         var clientCredentialsFactory = new ClientCredentialsTokenFactory(
@@ -79,9 +79,9 @@ public sealed class TokenRoleEmissionTests
             .Options;
         using var db = new AuthDbContext(opts);
 
-    #pragma warning disable CS0618 // Client.ClientSecretHash is obsolete; test keeps legacy guard behavior.
+#pragma warning disable CS0618 // Client.ClientSecretHash is obsolete; test keeps legacy guard behavior.
         var client = new MrWhoOidc.Auth.Persistence.Client { ClientId = "c1", ClientSecretHash = "h" };
-    #pragma warning restore CS0618
+#pragma warning restore CS0618
         db.Clients.Add(client);
         await db.SaveChangesAsync();
 
@@ -92,7 +92,7 @@ public sealed class TokenRoleEmissionTests
             .ReturnsAsync("jwt");
 
         var options = Microsoft.Extensions.Options.Options.Create(new AuthOptions());
-        
+
         // Setup entitlements provider to return roles
         var entitlementsMock = new Mock<IEntitlementsProvider>();
         entitlementsMock.Setup(x => x.GetEffectiveEntitlementsAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -103,14 +103,14 @@ public sealed class TokenRoleEmissionTests
         var tenantsClaimService = new NoopTenantsClaimService();
         var loggerFactory = new LoggerFactory();
         var claimBuilder = new AccessTokenClaimBuilder(scopeResolver, new RoleClaimBuilder(), options);
-        
+
         var factory = new ClientCredentialsTokenFactory(
             db, jwtSvc.Object, options, settingsSvc, scopeResolver, new TokenLifetimeResolver(), NullLogger<ClientCredentialsTokenFactory>.Instance);
 
         var tokenSvc = new TokenService(new Mock<IAuthorizationCodeExchanger>().Object, new Mock<IRefreshTokenExchanger>().Object, factory, new Mock<IDeviceCodeTokenFactory>().Object);
 
         var (ok, _, _, _) = await tokenSvc.CreateClientCredentialsTokenAsync("c1", "api", new[] { "openid" }, "https://issuer");
-        
+
         Assert.IsTrue(ok);
     }
 }

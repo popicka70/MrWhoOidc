@@ -335,7 +335,7 @@ public sealed class CorrelationPipelineTests
         // Empty handle should be ignored without cache lookup
         Assert.AreEqual(0, metrics.GetCounterTotal("oidc.correlation.cache.misses"), "Empty handles should skip cache lookup");
         Assert.AreEqual(1, metrics.GetCounterTotal("oidc.correlation.cache.writes"), "New handle should be stored");
-        
+
         var accessor = host.ServiceProvider.GetRequiredService<ICorrelationContextAccessor>();
         Assert.IsFalse(string.IsNullOrWhiteSpace(accessor.CorrelationId), "New CID should be generated");
     }

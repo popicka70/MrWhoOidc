@@ -105,7 +105,7 @@ internal sealed class PasswordResetService(
         var existingTokens = await dbContext.PasswordResetTokens
             .Where(t => t.UserAccountId == account.Id && !t.IsUsed)
             .ToListAsync(ct).ConfigureAwait(false);
-        
+
         foreach (var existing in existingTokens)
         {
             existing.IsUsed = true;
@@ -210,15 +210,17 @@ internal sealed class PasswordResetService(
     public async Task CleanupExpiredTokensAsync(CancellationToken ct = default)
     {
         var cutoff = DateTimeOffset.UtcNow.AddDays(-7); // Keep for 7 days for audit
-        var expiredTokens = await dbContext.PasswordResetTokens
-            .Where(t => t.ExpiresAt < cutoff || (t.IsUsed && t.UsedAt < cutoff))
-            .ToListAsync(ct).ConfigureAwait(false);
 
-        if (expiredTokens.Count > 0)
+        // ⚡ Bolt Performance Optimization:
+        // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync()
+        // Impact: Eliminates N+1 memory allocation for expired entities during background task execution.
+        var expiredCount = await dbContext.PasswordResetTokens
+            .Where(t => t.ExpiresAt < cutoff || (t.IsUsed && t.UsedAt < cutoff))
+            .ExecuteDeleteAsync(ct).ConfigureAwait(false);
+
+        if (expiredCount > 0)
         {
-            dbContext.PasswordResetTokens.RemoveRange(expiredTokens);
-            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
-            logger.LogInformation("Cleaned up {Count} expired password reset tokens", expiredTokens.Count);
+            logger.LogInformation("Cleaned up {Count} expired password reset tokens", expiredCount);
         }
     }
 

@@ -53,7 +53,7 @@ builder.Services.AddHttpClient("OidcBackchannel")
             SslOptions =
             {
                 EnabledSslProtocols = SslProtocols.Tls12,
-                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => 
+                RemoteCertificateValidationCallback = (sender, certificate, chain, errors) =>
                     builder.Environment.IsDevelopment() // Only bypass cert validation in development
             }
         };
@@ -152,19 +152,19 @@ builder.Services.AddAuthentication(options =>
                 // The OP returns a JWT containing the authorization code, state, etc.
                 var request = ctx.HttpContext.Request;
                 var response = request.HasFormContentType ? request.Form["response"].ToString() : request.Query["response"].ToString();
-                
+
                 if (!string.IsNullOrWhiteSpace(response))
                 {
                     try
                     {
                         var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
                         var jwt = handler.ReadJwtToken(response);
-                        
+
                         // Extract claims from JWT and populate ProtocolMessage
                         ctx.ProtocolMessage.Code = jwt.Claims.FirstOrDefault(c => c.Type == "code")?.Value;
                         ctx.ProtocolMessage.State = jwt.Claims.FirstOrDefault(c => c.Type == "state")?.Value;
                         ctx.ProtocolMessage.Iss = jwt.Claims.FirstOrDefault(c => c.Type == "iss")?.Value;
-                        
+
                         // Handle any error in the JWT
                         var error = jwt.Claims.FirstOrDefault(c => c.Type == "error")?.Value;
                         if (!string.IsNullOrWhiteSpace(error))
@@ -180,7 +180,7 @@ builder.Services.AddAuthentication(options =>
                             .CreateLogger("OIDC").LogError(ex, "Failed to decode JARM response");
                     }
                 }
-                
+
                 return Task.CompletedTask;
             },
             OnRedirectToIdentityProvider = async ctx =>
@@ -190,7 +190,7 @@ builder.Services.AddAuthentication(options =>
                     var config = ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
                     var privateJwk = config["Oidc:PrivateJwk"] ?? config["OIDC:PrivateJwk"];
                     var usePar = bool.TryParse(config["Oidc:UsePar"] ?? config["OIDC:UsePar"], out var parFlag) && parFlag;
-                    
+
                     if (!string.IsNullOrWhiteSpace(privateJwk) && usePar)
                     {
                         var jar = ctx.HttpContext.RequestServices.GetRequiredService<JarParService>();

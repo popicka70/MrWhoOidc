@@ -108,7 +108,7 @@ public sealed class DeviceAuthorizationTests
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         var json = JsonDocument.Parse(body);
-        
+
         Assert.AreEqual("invalid_request", json.RootElement.GetProperty("error").GetString());
     }
 
@@ -131,7 +131,7 @@ public sealed class DeviceAuthorizationTests
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var body = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
         var json = JsonDocument.Parse(body);
-        
+
         Assert.AreEqual("invalid_client", json.RootElement.GetProperty("error").GetString());
     }
 
@@ -165,7 +165,7 @@ public sealed class DeviceAuthorizationTests
         // Create handler with matching tenant accessor
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
         tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext { TenantId = tenantId, Slug = "test" });
-        
+
         var authOptions = Options.Create(new AuthOptions
         {
             EnableDeviceAuthorizationGrant = true,
@@ -269,11 +269,11 @@ public sealed class DeviceAuthorizationTests
         var json = JsonDocument.Parse(body);
 
         var userCode = json.RootElement.GetProperty("user_code").GetString()!;
-        
+
         // Should be formatted as XXXX-XXXX
         Assert.AreEqual(9, userCode.Length); // 8 chars + 1 hyphen
         Assert.IsTrue(userCode.Contains('-'));
-        
+
         // Characters should be uppercase consonants only
         var codeWithoutHyphen = userCode.Replace("-", "");
         foreach (var c in codeWithoutHyphen)

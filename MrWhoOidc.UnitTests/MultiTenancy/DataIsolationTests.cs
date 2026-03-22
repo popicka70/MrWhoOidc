@@ -27,22 +27,22 @@ public class DataIsolationTests
         services.AddDbContext<AuthDbContext>(opts => opts
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
-        
+
         // Register test hybrid cache
         services.AddSingleton<HybridCache, TestHybridCache>();
-        
+
         // Register mock tenant accessor
         var mockAccessor = new MockTenantAccessor();
         services.AddSingleton<ITenantAccessor>(mockAccessor);
         _tenantAccessor = mockAccessor;
-        
+
         // Register mock configuration
         var inMemorySettings = new Dictionary<string, string?>();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(inMemorySettings!)
             .Build();
         services.AddSingleton<IConfiguration>(configuration);
-        
+
         // Register required services
         services.AddScoped<IConsentService, ConsentService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
@@ -51,10 +51,10 @@ public class DataIsolationTests
         services.AddScoped<IKeyStore, KeyStore>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IAuthorizationCodeMetadataStore, InMemoryAuthorizationCodeMetadataStore>();
-        
+
         _serviceProvider = services.BuildServiceProvider();
         _db = _serviceProvider.GetRequiredService<AuthDbContext>();
-        
+
         // Seed tenants
         var tenant1 = new Tenant
         {
@@ -101,23 +101,23 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
-        
+
         var consent1 = new Consent
         {
             TenantId = tenant1.Id,
@@ -139,7 +139,7 @@ public class DataIsolationTests
         var tenant1Consents = await _db.Consents
             .Where(c => c.TenantId == tenant1.Id)
             .ToListAsync();
-        
+
         // Act: Query consents for Tenant 2
         var tenant2Consents = await _db.Consents
             .Where(c => c.TenantId == tenant2.Id)
@@ -149,7 +149,7 @@ public class DataIsolationTests
         Assert.HasCount(1, tenant1Consents);
         Assert.AreEqual(user1.Id, tenant1Consents[0].UserId);
         Assert.AreEqual("""["openid", "profile"]""", tenant1Consents[0].ScopesJson);
-        
+
         Assert.HasCount(1, tenant2Consents);
         Assert.AreEqual(user2.Id, tenant2Consents[0].UserId);
         Assert.AreEqual("""["openid", "email"]""", tenant2Consents[0].ScopesJson);
@@ -161,42 +161,42 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
         var consentService = _serviceProvider!.GetRequiredService<IConsentService>();
 
         // Act: Grant consent in Tenant 1 context
-        _tenantAccessor!.SetTenant(new TenantContext 
-        { 
-            TenantId = tenant1.Id, 
-            Slug = tenant1.Slug, 
+        _tenantAccessor!.SetTenant(new TenantContext
+        {
+            TenantId = tenant1.Id,
+            Slug = tenant1.Slug,
             Name = tenant1.Name,
             IssuerUri = tenant1.IssuerUri,
             IsMultiTenantMode = true
         });
         await consentService.GrantConsentAsync(user1.Id, "client1", ["openid", "profile"]);
-        
+
         // Act: Grant consent in Tenant 2 context
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = tenant2.Id, 
-            Slug = tenant2.Slug, 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = tenant2.Id,
+            Slug = tenant2.Slug,
             Name = tenant2.Name,
             IssuerUri = tenant2.IssuerUri,
             IsMultiTenantMode = true
@@ -206,11 +206,11 @@ public class DataIsolationTests
         // Assert: Verify tenant isolation in database
         var tenant1Consents = await _db.Consents.Where(c => c.TenantId == tenant1.Id).ToListAsync();
         var tenant2Consents = await _db.Consents.Where(c => c.TenantId == tenant2.Id).ToListAsync();
-        
+
         Assert.HasCount(1, tenant1Consents);
         Assert.AreEqual(tenant1.Id, tenant1Consents[0].TenantId);
         Assert.AreEqual(user1.Id, tenant1Consents[0].UserId);
-        
+
         Assert.HasCount(1, tenant2Consents);
         Assert.AreEqual(tenant2.Id, tenant2Consents[0].TenantId);
         Assert.AreEqual(user2.Id, tenant2Consents[0].UserId);
@@ -222,16 +222,16 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
+        };
         _db.Users.Add(user1);
-        
+
         // Grant consent ONLY in Tenant 1
         var consent = new Consent
         {
@@ -248,7 +248,7 @@ public class DataIsolationTests
         // Act: Check consent in Tenant 1 context (should exist)
         SetTenantContext(tenant1);
         var hasConsentInTenant1 = await consentService.HasConsentAsync(user1.Id, "client1", ["openid", "profile"]);
-        
+
         // Act: Check consent in Tenant 2 context (should NOT exist)
         SetTenantContext(tenant2);
         var hasConsentInTenant2 = await consentService.HasConsentAsync(user1.Id, "client1", ["openid", "profile"]);
@@ -268,23 +268,23 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
-        
+
         var token1 = new Token
         {
             TenantId = tenant1.Id,
@@ -320,7 +320,7 @@ public class DataIsolationTests
         Assert.HasCount(1, tenant1Tokens);
         Assert.AreEqual(user1.Id, tenant1Tokens[0].UserId);
         Assert.AreEqual("hash1", tenant1Tokens[0].TokenHash);
-        
+
         Assert.HasCount(1, tenant2Tokens);
         Assert.AreEqual(user2.Id, tenant2Tokens[0].UserId);
         Assert.AreEqual("hash2", tenant2Tokens[0].TokenHash);
@@ -332,21 +332,21 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
@@ -356,7 +356,7 @@ public class DataIsolationTests
         SetTenantContext(tenant1);
         var (token1, hash1) = await tokenService.CreateRefreshTokenAsync(
             user1.Id, "client1", ["openid", "profile"]);
-        
+
         // Act: Create token in Tenant 2
         SetTenantContext(tenant2);
         var (token2, hash2) = await tokenService.CreateRefreshTokenAsync(
@@ -365,12 +365,12 @@ public class DataIsolationTests
         // Assert: Verify tokens are stored with correct tenant IDs
         var tenant1Tokens = await _db.Tokens.Where(t => t.TenantId == tenant1.Id).ToListAsync();
         var tenant2Tokens = await _db.Tokens.Where(t => t.TenantId == tenant2.Id).ToListAsync();
-        
+
         Assert.HasCount(1, tenant1Tokens);
         Assert.AreEqual(tenant1.Id, tenant1Tokens[0].TenantId);
         Assert.AreEqual(hash1, tenant1Tokens[0].TokenHash);
         Assert.AreEqual(user1.Id, tenant1Tokens[0].UserId);
-        
+
         Assert.HasCount(1, tenant2Tokens);
         Assert.AreEqual(tenant2.Id, tenant2Tokens[0].TenantId);
         Assert.AreEqual(hash2, tenant2Tokens[0].TokenHash);
@@ -383,16 +383,16 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
+        };
         _db.Users.Add(user1);
-        
+
         var token = new Token
         {
             TenantId = tenant1.Id,
@@ -410,7 +410,7 @@ public class DataIsolationTests
         var tenant1Token = await _db.Tokens
             .Where(t => t.TenantId == tenant1.Id && t.TokenHash == "tenant1-token-hash")
             .FirstOrDefaultAsync();
-        
+
         var tenant2Token = await _db.Tokens
             .Where(t => t.TenantId == tenant2.Id && t.TokenHash == "tenant1-token-hash")
             .FirstOrDefaultAsync();
@@ -430,23 +430,23 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
-        
+
         var code1 = new AuthorizationCode
         {
             TenantId = tenant1.Id,
@@ -482,7 +482,7 @@ public class DataIsolationTests
         Assert.HasCount(1, tenant1Codes);
         Assert.AreEqual("code1", tenant1Codes[0].Code);
         Assert.AreEqual(user1.Id, tenant1Codes[0].UserId);
-        
+
         Assert.HasCount(1, tenant2Codes);
         Assert.AreEqual("code2", tenant2Codes[0].Code);
         Assert.AreEqual(user2.Id, tenant2Codes[0].UserId);
@@ -494,21 +494,21 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
 
@@ -539,11 +539,11 @@ public class DataIsolationTests
         // Assert: Verify codes are stored with correct tenant IDs
         var tenant1Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant1.Id).ToListAsync();
         var tenant2Codes = await _db.AuthorizationCodes.Where(c => c.TenantId == tenant2.Id).ToListAsync();
-        
+
         Assert.HasCount(1, tenant1Codes);
         Assert.AreEqual(tenant1.Id, tenant1Codes[0].TenantId);
         Assert.AreEqual("code-tenant1", tenant1Codes[0].Code);
-        
+
         Assert.HasCount(1, tenant2Codes);
         Assert.AreEqual(tenant2.Id, tenant2Codes[0].TenantId);
         Assert.AreEqual("code-tenant2", tenant2Codes[0].Code);
@@ -555,16 +555,16 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
+        };
         _db.Users.Add(user1);
-        
+
         var code = new AuthorizationCode
         {
             TenantId = tenant1.Id,
@@ -582,7 +582,7 @@ public class DataIsolationTests
         var validCode = await _db.AuthorizationCodes
             .Where(c => c.TenantId == tenant1.Id && c.Code == "tenant1-auth-code")
             .FirstOrDefaultAsync();
-        
+
         // Act: Try to lookup code with wrong tenant ID
         var invalidCode = await _db.AuthorizationCodes
             .Where(c => c.TenantId == tenant2.Id && c.Code == "tenant1-auth-code")
@@ -603,28 +603,28 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1A = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "alice@tenant1.com", 
+
+        var user1A = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "alice@tenant1.com",
             NormalizedEmail = "ALICE@TENANT1.COM",
             Username = "alice",
-            };
-        var user1B = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "bob@tenant1.com", 
+        };
+        var user1B = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "bob@tenant1.com",
             NormalizedEmail = "BOB@TENANT1.COM",
             Username = "bob",
-            };
-        var user2A = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "alice@tenant2.com", 
+        };
+        var user2A = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "alice@tenant2.com",
             NormalizedEmail = "ALICE@TENANT2.COM",
             Username = "alice", // Same username, different tenant
-            };
+        };
         _db.Users.AddRange(user1A, user1B, user2A);
         await _db.SaveChangesAsync();
 
@@ -635,7 +635,7 @@ public class DataIsolationTests
         // Assert
         Assert.HasCount(2, tenant1Users);
         Assert.IsTrue(tenant1Users.All(u => u.TenantId == tenant1.Id));
-        
+
         Assert.HasCount(1, tenant2Users);
         Assert.AreEqual("alice", tenant2Users[0].Username);
         Assert.AreEqual(tenant2.Id, tenant2Users[0].TenantId);
@@ -647,29 +647,29 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "admin@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "admin@tenant1.com",
             NormalizedEmail = "ADMIN@TENANT1.COM",
             Username = "admin",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "admin@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "admin@tenant2.com",
             NormalizedEmail = "ADMIN@TENANT2.COM",
             Username = "admin", // Same username
-            };
+        };
         _db.Users.AddRange(user1, user2);
-        
+
         // Act & Assert: Should not throw (unique constraint is (TenantId, Username))
         await _db.SaveChangesAsync();
-        
+
         var tenant1Admin = await _db.Users.FirstAsync(u => u.TenantId == tenant1.Id && u.Username == "admin");
         var tenant2Admin = await _db.Users.FirstAsync(u => u.TenantId == tenant2.Id && u.Username == "admin");
-        
+
         Assert.AreEqual(tenant1.Id, tenant1Admin.TenantId);
         Assert.AreEqual(tenant2.Id, tenant2Admin.TenantId);
         Assert.AreEqual("admin@tenant1.com", tenant1Admin.Email);
@@ -686,16 +686,16 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
+        };
         _db.Users.Add(user1);
-        
+
         // Add consent, token, and auth code for Tenant 1
         var consent = new Consent
         {
@@ -752,23 +752,23 @@ public class DataIsolationTests
         // Arrange
         var tenant1 = await _db!.Tenants.FirstAsync(t => t.Slug == "tenant1");
         var tenant2 = await _db.Tenants.FirstAsync(t => t.Slug == "tenant2");
-        
-        var user1 = new User 
-        { 
-            TenantId = tenant1.Id, 
-            Email = "user1@tenant1.com", 
+
+        var user1 = new User
+        {
+            TenantId = tenant1.Id,
+            Email = "user1@tenant1.com",
             NormalizedEmail = "USER1@TENANT1.COM",
             Username = "user1",
-            };
-        var user2 = new User 
-        { 
-            TenantId = tenant2.Id, 
-            Email = "user2@tenant2.com", 
+        };
+        var user2 = new User
+        {
+            TenantId = tenant2.Id,
+            Email = "user2@tenant2.com",
             NormalizedEmail = "USER2@TENANT2.COM",
             Username = "user2",
-            };
+        };
         _db.Users.AddRange(user1, user2);
-        
+
         var consent1 = new Consent { TenantId = tenant1.Id, UserId = user1.Id, ClientId = "client1", ScopesJson = """["openid"]""" };
         var consent2 = new Consent { TenantId = tenant2.Id, UserId = user2.Id, ClientId = "client1", ScopesJson = """["openid"]""" };
         _db.Consents.AddRange(consent1, consent2);

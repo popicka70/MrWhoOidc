@@ -56,7 +56,7 @@ public sealed class ExternalOidcIntegrationTests
     private static RsaBundle CreateCachedRsaBundle(string kidPrefix)
     {
         // Use shared keys instead of generating new ones
-        var key = kidPrefix == "up1" 
+        var key = kidPrefix == "up1"
             ? SharedTestKeys.GetRsaSecurityKey(kidPrefix + "-kid")
             : SharedTestKeys.GetRsaSecurityKeyAlt(kidPrefix + "-kid");
         return new RsaBundle(key, key.KeyId!);
@@ -98,8 +98,8 @@ public sealed class ExternalOidcIntegrationTests
         services.AddSingleton<ITokenMetricsRecorder, DefaultTokenMetricsRecorder>();
         services.AddScoped<IClientAssertionValidator, ClientAssertionValidator>();
 
-    	services.AddExternalOidcTestDefaults();
-    services.AddExternalOidcHandler(); // Use DI registration
+        services.AddExternalOidcTestDefaults();
+        services.AddExternalOidcHandler(); // Use DI registration
         services.AddScoped<IDiscoveryHandler, DiscoveryHandler>();
         services.AddSingleton<IJwksCache, JwksCache>();
         services.AddScoped<IClaimMappingService, ClaimMappingService>();
@@ -569,52 +569,52 @@ public sealed class ExternalOidcIntegrationTests
         var env = await CreateAsync();
         using var _ = env.Host;
         var client = env.Client;
-        
+
         // Step 1: /auth/external/start - verify X-Correlation-Id header is present in response
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
         var providedCid = "test-correlation-e2e-123";
         var startRequest = new HttpRequestMessage(HttpMethod.Get, $"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         startRequest.Headers.Add("X-Correlation-Id", providedCid);
-        
+
         var start = await client.SendAsync(startRequest);
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start should redirect to upstream");
-        
+
         // Verify X-Correlation-Id response header exists (value may differ due to middleware behavior)
         Assert.IsTrue(start.Headers.Contains("X-Correlation-Id"), "Start response must include X-Correlation-Id header");
         var startCid = start.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
         Assert.IsFalse(string.IsNullOrWhiteSpace(startCid), "Start correlation ID must not be empty");
-        
+
         // Step 2: Follow upstream authorize redirect (simulates user interaction at upstream)
         var upstreamLocation = start.Headers.Location;
         Assert.IsNotNull(upstreamLocation, "Start redirect location missing");
         var uri = upstreamLocation!.IsAbsoluteUri ? upstreamLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), upstreamLocation);
-        
+
         // Extract state parameter (contains correlation handle)
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         var state = qs["state"]!;
         Assert.IsFalse(string.IsNullOrWhiteSpace(state), "State parameter must be present");
-        
+
         // Simulate upstream authorize->callback redirect
         var upstreamAuth = await client.GetAsync(uri);
         Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize must redirect to callback");
-        
+
         // Step 3: Callback with state containing correlation handle
         var callbackLocation = upstreamAuth.Headers.Location;
         Assert.IsNotNull(callbackLocation, "Callback location missing");
         var baseUri = client.BaseAddress ?? new Uri("http://localhost");
         var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
-        
+
         var cb = await client.GetAsync(callbackUri);
         Assert.AreEqual(HttpStatusCode.Redirect, cb.StatusCode, "Callback should redirect to returnUrl");
-        
+
         // Verify X-Correlation-Id propagated through callback
         Assert.IsTrue(cb.Headers.Contains("X-Correlation-Id"), "Callback response must include X-Correlation-Id header");
         var callbackCid = cb.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
         Assert.IsFalse(string.IsNullOrWhiteSpace(callbackCid), "Callback correlation ID must not be empty");
-        
+
         // Verify consistency: callback CID should match start CID (proves round-trip recovery)
         Assert.AreEqual(startCid, callbackCid, "Callback must recover same correlation ID from cache that was set in Start");
-        
+
         // Step 4: Verify final redirect includes cid_ref parameter
         var finalLocation = cb.Headers.Location;
         Assert.IsNotNull(finalLocation, "Final redirect location missing");
@@ -629,18 +629,18 @@ public sealed class ExternalOidcIntegrationTests
         var env = await CreateAsync();
         using var _ = env.Host;
         var client = env.Client;
-        
+
         // Step 1: Call /auth/external/start WITHOUT X-Correlation-Id header
         var returnUrl = "/authorize?client_id=" + ClientPublicId;
         var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
-        
+
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start should redirect to upstream");
-        
+
         // Verify middleware generated new CID and returned it
         Assert.IsTrue(start.Headers.Contains("X-Correlation-Id"), "Start response must include generated X-Correlation-Id");
         var generatedCid = start.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
         Assert.IsFalse(string.IsNullOrWhiteSpace(generatedCid), "Generated correlation ID must not be empty");
-        
+
         // Step 2: Follow through callback to verify CID is consistent
         var upstreamLocation = start.Headers.Location;
         var uri = upstreamLocation!.IsAbsoluteUri ? upstreamLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), upstreamLocation);
@@ -648,9 +648,9 @@ public sealed class ExternalOidcIntegrationTests
         var callbackLocation = upstreamAuth.Headers.Location;
         var baseUri = client.BaseAddress ?? new Uri("http://localhost");
         var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
-        
+
         var cb = await client.GetAsync(callbackUri);
-        
+
         // Verify same CID returned in callback
         Assert.IsTrue(cb.Headers.Contains("X-Correlation-Id"), "Callback must include X-Correlation-Id");
         var callbackCid = cb.Headers.GetValues("X-Correlation-Id").FirstOrDefault();
@@ -674,7 +674,7 @@ public sealed class ExternalOidcIntegrationTests
         // Step 1: External Start - should return 302 with upstream authorization URL
         var start = await client.GetAsync($"/auth/external/start?provider=up1&returnUrl={Uri.EscapeDataString(returnUrl)}&clientId={ClientPublicId}");
         Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, "Start must return 302 redirect");
-        
+
         var startLocation = start.Headers.Location;
         Assert.IsNotNull(startLocation, "Start response must include Location header");
         Assert.Contains("/up1/authorize", startLocation!.ToString(), "Start must redirect to upstream authorize endpoint");
@@ -683,14 +683,14 @@ public sealed class ExternalOidcIntegrationTests
         var upstreamUri = startLocation.IsAbsoluteUri ? startLocation : new Uri(client.BaseAddress ?? new Uri("http://localhost"), startLocation);
         var upstreamAuth = await client.GetAsync(upstreamUri);
         Assert.AreEqual(HttpStatusCode.Redirect, upstreamAuth.StatusCode, "Upstream authorize must return 302 redirect");
-        
+
         var callbackLocation = upstreamAuth.Headers.Location;
         Assert.IsNotNull(callbackLocation, "Upstream authorize must include Location header with callback URL");
-        
+
         var baseUri = client.BaseAddress ?? new Uri("http://localhost");
         var callbackUri = callbackLocation!.IsAbsoluteUri ? callbackLocation : new Uri(baseUri, callbackLocation);
         Assert.AreEqual("/auth/external/callback", callbackUri.AbsolutePath, "Must redirect to callback endpoint");
-        
+
         var callbackQuery = System.Web.HttpUtility.ParseQueryString(callbackUri.Query);
         Assert.IsFalse(string.IsNullOrEmpty(callbackQuery["code"]), "Callback URL must include code parameter");
         Assert.IsFalse(string.IsNullOrEmpty(callbackQuery["state"]), "Callback URL must include state parameter");
@@ -698,13 +698,13 @@ public sealed class ExternalOidcIntegrationTests
         // Step 3: Callback - should return 302 with final return URL
         var callback = await client.GetAsync(callbackUri);
         Assert.AreEqual(HttpStatusCode.Redirect, callback.StatusCode, "Callback must return 302 redirect to return URL");
-        
+
         var finalLocation = callback.Headers.Location;
         Assert.IsNotNull(finalLocation, "Callback must include Location header with return URL");
-        
+
         var finalUri = finalLocation!.IsAbsoluteUri ? finalLocation : new Uri(baseUri, finalLocation);
         Assert.AreEqual("/authorize", finalUri.AbsolutePath, "Must redirect to original authorize endpoint");
-        
+
         var finalQuery = System.Web.HttpUtility.ParseQueryString(finalUri.Query);
         Assert.AreEqual(ClientPublicId, finalQuery["client_id"], "client_id must be preserved in return URL");
         Assert.IsFalse(string.IsNullOrEmpty(finalQuery["cid_ref"]), "cid_ref must be present for correlation tracking");

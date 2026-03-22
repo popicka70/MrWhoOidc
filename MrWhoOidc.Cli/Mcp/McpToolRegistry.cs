@@ -39,7 +39,7 @@ public sealed class McpToolRegistry
     {
         // Phase 4+ will add actual tool implementations
         // For now, register placeholder tools to demonstrate MCP structure
-        
+
         RegisterTool(new McpToolDefinition
         {
             Name = "health_check",
@@ -48,8 +48,8 @@ public sealed class McpToolRegistry
             Handler = async (args, ct) =>
             {
                 await Task.CompletedTask;
-                return new object[] 
-                { 
+                return new object[]
+                {
                     new { type = "text", text = "MCP server is operational. Authentication and admin tools will be available after login." }
                 };
             }

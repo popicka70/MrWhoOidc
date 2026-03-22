@@ -98,8 +98,8 @@ public sealed class LicenseAdminApiTests
         Assert.AreEqual("Test Org", dto.OrganizationName);
         Assert.AreEqual(now.AddDays(-3), dto.ValidFrom);
         Assert.AreEqual(now.AddDays(30), dto.ValidUntil);
-    Assert.IsFalse(dto.IsExpired);
-    Assert.IsTrue(dto.IsValid);
+        Assert.IsFalse(dto.IsExpired);
+        Assert.IsTrue(dto.IsValid);
         Assert.AreEqual(30, dto.DaysUntilExpiry);
         CollectionAssert.AreEquivalent(new[] { "feature-one" }, dto.EnabledFeatures.ToArray());
         Assert.IsTrue(dto.Limits.TryGetValue("seats", out var limit) && limit == 1000);
@@ -241,7 +241,7 @@ public sealed class LicenseAdminApiTests
 
         var dto = await response.Content.ReadFromJsonAsync<LicenseValidationResponseDto>(JsonOptions);
         Assert.IsNotNull(dto);
-    Assert.IsTrue(dto!.IsValid);
+        Assert.IsTrue(dto!.IsValid);
         Assert.IsNull(dto.ErrorCode);
         Assert.IsNull(dto.ErrorMessage);
         Assert.IsNotNull(dto.License);
@@ -304,7 +304,7 @@ public sealed class LicenseAdminApiTests
         Assert.AreEqual(2, dto.Page);
         Assert.AreEqual(5, dto.PageSize);
         Assert.AreEqual(2, dto.TotalPages);
-    Assert.HasCount(1, dto.Entries);
+        Assert.HasCount(1, dto.Entries);
         var entry = dto.Entries.Single();
         Assert.AreEqual(historyEntry.Id, entry.Id);
         Assert.AreEqual("installed", entry.Action);
@@ -347,7 +347,7 @@ public sealed class LicenseAdminApiTests
         {
             AllowAutoRedirect = false
         });
-    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthHandler.SchemeName);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(TestAuthHandler.SchemeName);
         return client;
     }
 
@@ -369,7 +369,7 @@ public sealed class LicenseAdminApiTests
 
     private sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
-    public const string SchemeName = "Test";
+        public const string SchemeName = "Test";
         public static Guid CurrentUserId;
 
         public TestAuthHandler(

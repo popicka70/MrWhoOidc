@@ -50,30 +50,30 @@ public class JarmService(
 
         var activeKey = await keyProvider.GetActiveSigningKeyAsync().ConfigureAwait(false);
         var signingAlg = activeKey is JsonWebKey jwk && !string.IsNullOrWhiteSpace(jwk.Alg) ? jwk.Alg : SecurityConstants.JwtAlgorithms.RS256;
-        
+
         var claims = new List<Claim>
         {
             new(OAuthConstants.Parameters.Code, code)
         };
-        
+
         // c_hash per JARM
         var cHash = CryptoHelper.ComputeLeftHalfHashBase64Url(code, signingAlg);
         claims.Add(new(OidcConstants.Claims.CHash, cHash));
-        
+
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
             var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
-        
+
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
-        
+
         if (enc is not null)
         {
             return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
-        
+
         return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
@@ -89,21 +89,21 @@ public class JarmService(
             new(OAuthConstants.Parameters.Error, error),
             new(OAuthConstants.Parameters.ErrorDescription, errorDescription)
         };
-        
+
         if (!string.IsNullOrEmpty(state))
         {
             claims.Add(new(OAuthConstants.Parameters.State, state));
             var sHash = CryptoHelper.ComputeLeftHalfHashBase64Url(state, signingAlg);
             claims.Add(new(OidcConstants.Claims.SHash, sHash));
         }
-        
+
         var exp = DateTimeOffset.UtcNow.AddMinutes(5);
-        
+
         if (enc is not null)
         {
             return await jwt.CreateJwtEncryptedAsync(issuer, clientId, claims, exp, enc).ConfigureAwait(false);
         }
-        
+
         return await jwt.CreateJwtAsync(issuer, clientId, claims, exp).ConfigureAwait(false);
     }
 
@@ -133,9 +133,9 @@ public class JarmService(
                 httpClientFactory,
                 jwksCache,
                 authOptions?.Value.ClientJwksCacheSeconds ?? 300).ConfigureAwait(false);
-            
+
             if (key is null) return null;
-            
+
             var encCreds = new EncryptingCredentials(key, SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512);
             return encCreds;
         }

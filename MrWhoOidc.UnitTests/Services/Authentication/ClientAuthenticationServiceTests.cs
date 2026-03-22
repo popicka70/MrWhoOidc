@@ -124,20 +124,20 @@ public class ClientAuthenticationServiceTests
     public async Task AuthenticateAsync_Mtls_Success()
     {
         // Arrange
-        var client = new MrWhoOidc.Auth.Persistence.Client 
-        { 
-            ClientId = "client1", 
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            ClientId = "client1",
             M2MMtlsThumbprintsJson = "[\"thumb1\"]"
         };
         _clientStoreMock.Setup(s => s.FindByClientIdAsync("client1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
 
         var input = new ClientCredentialInput(
-            ClientId: "client1", 
-            Usage: ClientAuthenticationUsage.TokenEndpoint, 
-            GrantType: OAuthConstants.GrantTypes.ClientCredentials, 
+            ClientId: "client1",
+            Usage: ClientAuthenticationUsage.TokenEndpoint,
+            GrantType: OAuthConstants.GrantTypes.ClientCredentials,
             MtlsThumbprint: "thumb1");
-        
+
         var result = await _service.AuthenticateAsync(input);
 
         // Assert

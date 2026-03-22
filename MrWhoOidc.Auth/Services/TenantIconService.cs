@@ -24,7 +24,7 @@ public class TenantIconService : ITenantIconService
             // Simple validation
             if (fileData == null || fileData.Length == 0)
                 throw new ArgumentException("File data cannot be empty");
-            
+
             if (fileData.Length > 2 * 1024 * 1024) // 2MB limit
                 throw new ArgumentException("File too large");
 
@@ -133,7 +133,7 @@ public class TenantIconService : ITenantIconService
 
                 _db.TenantIcons.Remove(icon);
                 tenant.TenantIconId = null;
-                
+
                 await _db.SaveChangesAsync(cancellationToken);
                 return true;
             });

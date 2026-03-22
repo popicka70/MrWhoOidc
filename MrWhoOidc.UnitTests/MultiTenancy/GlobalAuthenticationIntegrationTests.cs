@@ -151,7 +151,7 @@ public class GlobalAuthenticationIntegrationTests
 
         // Assert
         Assert.IsTrue(result.Succeeded);
-        
+
         // Should have memberships for tenant1 and tenant2
         var tenantIds = result.Memberships.Select(m => m.TenantId).ToList();
         Assert.IsTrue(tenantIds.Contains(_tenant1.Id), "Should have membership for tenant1");

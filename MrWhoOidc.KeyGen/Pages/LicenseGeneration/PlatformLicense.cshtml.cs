@@ -131,7 +131,7 @@ public class PlatformLicenseModel : PageModel
                     .ToList();
                 if (missing.Count > 0)
                 {
-                    ModelState.AddModelError(nameof(SelectedDefaultTenantFeatures), 
+                    ModelState.AddModelError(nameof(SelectedDefaultTenantFeatures),
                         "Default tenant features must also be enabled on the platform license.");
                 }
             }
@@ -146,7 +146,7 @@ public class PlatformLicenseModel : PageModel
             {
                 if (string.IsNullOrWhiteSpace(AllowedIssuers))
                 {
-                    ModelState.AddModelError(nameof(AllowedIssuers), 
+                    ModelState.AddModelError(nameof(AllowedIssuers),
                         "Allowed Issuers are mandatory for non-community licenses.");
                     return Page();
                 }
@@ -276,7 +276,7 @@ public class PlatformLicenseModel : PageModel
         SelectedFeatures = featureSet.OrderBy(f => f, comparer).ToList();
     }
 
-    private bool IsKnownFeature(string feature) 
+    private bool IsKnownFeature(string feature)
         => _featureCatalog.Any(def => def.Key.Equals(feature, StringComparison.OrdinalIgnoreCase));
 
     private static string? SerializeFeaturesPayload(IEnumerable<string> features)

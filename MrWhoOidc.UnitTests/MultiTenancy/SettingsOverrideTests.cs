@@ -244,10 +244,10 @@ public class SettingsOverrideTests
         // Assert
         Assert.IsNotNull(settingsA?.Auth?.PasswordPolicy, "Tenant A password policy should not be null");
         Assert.IsNotNull(settingsB?.Auth?.PasswordPolicy, "Tenant B password policy should not be null");
-        
+
         Assert.AreEqual(8, settingsA.Auth.PasswordPolicy.MinLength, "Tenant A requires 8 chars");
         Assert.AreEqual(12, settingsB.Auth.PasswordPolicy.MinLength, "Tenant B requires 12 chars");
-        
+
         Assert.IsFalse(settingsA.Auth.PasswordPolicy.RequireSpecialChar ?? false, "Tenant A doesn't require special char");
         Assert.IsTrue(settingsB.Auth.PasswordPolicy.RequireSpecialChar ?? false, "Tenant B requires special char");
     }
@@ -355,10 +355,10 @@ public class SettingsOverrideTests
         // Assert
         Assert.IsNotNull(settingsA?.Oidc?.CorsOrigins, "Tenant A CORS origins should not be null");
         Assert.IsNotNull(settingsB?.Oidc?.CorsOrigins, "Tenant B CORS origins should not be null");
-        
+
         Assert.HasCount(2, settingsA.Oidc.CorsOrigins, "Tenant A should have 2 CORS origins");
         Assert.HasCount(1, settingsB.Oidc.CorsOrigins, "Tenant B should have 1 CORS origin");
-        
+
         Assert.Contains("https://tenant-a-app.com", settingsA.Oidc.CorsOrigins, "Tenant A should have first origin");
         Assert.Contains("https://tenant-b-portal.com", settingsB.Oidc.CorsOrigins, "Tenant B should have its origin");
         Assert.DoesNotContain("https://tenant-a-app.com", settingsB.Oidc.CorsOrigins, "Tenant B should not have Tenant A's origins");
@@ -435,7 +435,7 @@ public class SettingsOverrideTests
             settingsBBefore?.Tokens?.AccessTokenLifetimeSeconds,
             settingsBAfter?.Tokens?.AccessTokenLifetimeSeconds,
             "Tenant B settings should not be affected by Tenant A changes");
-        
+
         Assert.AreEqual(7200, settingsBAfter?.Tokens?.AccessTokenLifetimeSeconds, "Tenant B should still have 2-hour tokens");
 
         // Verify Tenant A has different settings

@@ -155,7 +155,7 @@ public class PasswordResetServiceTests
         await _db.SaveChangesAsync();
 
         var createResult = await _resetService.CreateResetTokenAsync("test@example.com");
-        
+
         // Use the token
         await _resetService.RedeemTokenAsync(createResult.Token!, "NewPassword456!");
 
@@ -289,7 +289,7 @@ public class PasswordResetServiceTests
         await _db.SaveChangesAsync();
 
         var createResult = await _resetService.CreateResetTokenAsync("test@example.com");
-        
+
         // Use the token once
         await _resetService.RedeemTokenAsync(createResult.Token!, "NewPassword1!");
 

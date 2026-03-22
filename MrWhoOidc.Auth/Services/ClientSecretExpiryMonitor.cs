@@ -49,34 +49,34 @@ internal sealed class ClientSecretExpiryMonitor(
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
-            
+
             var now = DateTime.UtcNow;
             var warningThreshold = now.AddDays(7); // Warn for secrets expiring within 7 days
-            
+
             // Query secrets expiring soon
             var expiringSecrets = await db.ClientSecrets
                 .Include(s => s.Client)
-                .Where(s => s.ActivatedAtUtc != null 
-                         && s.RevokedAtUtc == null 
-                         && s.ExpiresAtUtc != null 
-                         && s.ExpiresAtUtc > now 
+                .Where(s => s.ActivatedAtUtc != null
+                         && s.RevokedAtUtc == null
+                         && s.ExpiresAtUtc != null
+                         && s.ExpiresAtUtc > now
                          && s.ExpiresAtUtc <= warningThreshold)
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
-            
+
             if (expiringSecrets.Count > 0)
             {
                 logger.LogWarning(
                     "Found {Count} client secrets expiring within 7 days. Review and rotate these secrets.",
                     expiringSecrets.Count);
-                
+
                 var minDays = double.MaxValue;
                 foreach (var secret in expiringSecrets)
                 {
                     var daysUntilExpiry = (secret.ExpiresAtUtc!.Value - now).TotalDays;
                     if (daysUntilExpiry < minDays)
                         minDays = daysUntilExpiry;
-                    
+
                     logger.LogWarning(
                         "Client secret expiring soon: ClientId={ClientId}, SecretId={SecretId}, Description={Description}, ExpiresAt={ExpiresAt}, DaysRemaining={DaysRemaining:F1}",
                         secret.Client.ClientId,
@@ -85,36 +85,36 @@ internal sealed class ClientSecretExpiryMonitor(
                         secret.ExpiresAtUtc,
                         daysUntilExpiry);
                 }
-                
+
                 // Update metrics with minimum days until expiry
                 metrics?.SetDaysUntilExpiry(minDays);
             }
-            
+
             // Count total active secrets across all clients
             var totalActiveSecrets = await db.ClientSecrets
                 .AsNoTracking()
-                .Where(s => s.ActivatedAtUtc != null 
-                         && s.RevokedAtUtc == null 
+                .Where(s => s.ActivatedAtUtc != null
+                         && s.RevokedAtUtc == null
                          && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now))
                 .CountAsync(ct)
                 .ConfigureAwait(false);
-            
+
             metrics?.SetActiveSecretsCount(totalActiveSecrets);
-            
+
             // Check for fully expired clients (all secrets expired or revoked)
             var clientsWithSecrets = await db.Clients
                 .Include(c => c.ClientSecrets)
                 .Where(c => c.ClientSecrets.Any())
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
-            
+
             foreach (var client in clientsWithSecrets)
             {
-                var hasAnyActiveSecret = client.ClientSecrets.Any(s => 
-                    s.ActivatedAtUtc != null 
-                    && s.RevokedAtUtc == null 
+                var hasAnyActiveSecret = client.ClientSecrets.Any(s =>
+                    s.ActivatedAtUtc != null
+                    && s.RevokedAtUtc == null
                     && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now));
-                
+
                 if (!hasAnyActiveSecret)
                 {
                     logger.LogError(
@@ -123,7 +123,7 @@ internal sealed class ClientSecretExpiryMonitor(
                         client.TenantId);
                 }
             }
-            
+
             logger.LogDebug("Client secret expiry check completed successfully.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -146,7 +146,7 @@ public sealed class ClientSecretExpiryMonitorOptions
     /// Whether the expiry monitor is enabled. Default is true.
     /// </summary>
     public bool Enabled { get; set; } = true;
-    
+
     /// <summary>
     /// How often to check for expiring secrets. Default is 24 hours.
     /// </summary>

@@ -25,7 +25,7 @@ public sealed class RateLimitingMetricsService : IRateLimitingMetricsService
         // Note: Counter<long> from System.Diagnostics.Metrics doesn't expose GetValue() directly.
         // In production, these would be read via OpenTelemetry exporters or Prometheus client.
         // For now, we return 0 as placeholder until proper metric aggregation is implemented.
-        
+
         var policies = new List<RateLimitStatusDto>
         {
             new(

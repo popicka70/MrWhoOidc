@@ -63,7 +63,7 @@ public class ServiceAuditTests
         // Create two tenants
         var tenant1 = new Tenant { Id = Guid.NewGuid(), Name = "Acme Corp", Slug = "acme", Status = TenantStatus.Active };
         var tenant2 = new Tenant { Id = Guid.NewGuid(), Name = "Contoso Ltd", Slug = "contoso", Status = TenantStatus.Active };
-        
+
         _tenant1Id = tenant1.Id;
         _tenant2Id = tenant2.Id;
 
@@ -80,7 +80,8 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "alice",
-            Email = "alice@acme.com",            TenantId = _tenant1Id
+            Email = "alice@acme.com",
+            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
         await _db.SaveChangesAsync();
@@ -88,10 +89,10 @@ public class ServiceAuditTests
         var userService = _serviceProvider.GetRequiredService<IUserService>();
 
         // Act & Assert: Set context to Tenant 1 - should find user
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant1Id, 
-            Slug = "acme", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant1Id,
+            Slug = "acme",
             Name = "Acme Corp",
             IsMultiTenantMode = true
         });
@@ -100,10 +101,10 @@ public class ServiceAuditTests
         Assert.AreEqual(user1.Id, foundInTenant1.Id);
 
         // Act & Assert: Switch to Tenant 2 - should NOT find user
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant2Id, 
-            Slug = "contoso", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant2Id,
+            Slug = "contoso",
             Name = "Contoso Ltd",
             IsMultiTenantMode = true
         });
@@ -118,12 +119,14 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "bob",
-            Email = "bob@acme.com",            TenantId = _tenant1Id
+            Email = "bob@acme.com",
+            TenantId = _tenant1Id
         };
         var user2 = new User
         {
             Username = "bob",
-            Email = "bob@contoso.com",            TenantId = _tenant2Id
+            Email = "bob@contoso.com",
+            TenantId = _tenant2Id
         };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
@@ -131,10 +134,10 @@ public class ServiceAuditTests
         var userService = _serviceProvider.GetRequiredService<IUserService>();
 
         // Act & Assert: Tenant 1 context
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant1Id, 
-            Slug = "acme", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant1Id,
+            Slug = "acme",
             Name = "Acme Corp",
             IsMultiTenantMode = true
         });
@@ -143,10 +146,10 @@ public class ServiceAuditTests
         Assert.AreEqual(_tenant1Id, bobInTenant1.TenantId);
 
         // Act & Assert: Tenant 2 context
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant2Id, 
-            Slug = "contoso", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant2Id,
+            Slug = "contoso",
             Name = "Contoso Ltd",
             IsMultiTenantMode = true
         });
@@ -166,13 +169,15 @@ public class ServiceAuditTests
         {
             Username = "admin",
             Email = "admin@example.com",
-            NormalizedEmail = "ADMIN@EXAMPLE.COM",            TenantId = _tenant1Id
+            NormalizedEmail = "ADMIN@EXAMPLE.COM",
+            TenantId = _tenant1Id
         };
         var user2 = new User
         {
             Username = "admin",
             Email = "admin@example.com",
-            NormalizedEmail = "ADMIN@EXAMPLE.COM",            TenantId = _tenant2Id
+            NormalizedEmail = "ADMIN@EXAMPLE.COM",
+            TenantId = _tenant2Id
         };
         _db.Users.AddRange(user1, user2);
         await _db.SaveChangesAsync();
@@ -180,10 +185,10 @@ public class ServiceAuditTests
         var userService = _serviceProvider.GetRequiredService<IUserService>();
 
         // Act & Assert: Search by email in Tenant 1
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant1Id, 
-            Slug = "acme", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant1Id,
+            Slug = "acme",
             Name = "Acme Corp",
             IsMultiTenantMode = true
         });
@@ -192,10 +197,10 @@ public class ServiceAuditTests
         Assert.AreEqual(_tenant1Id, found1.TenantId);
 
         // Act & Assert: Search by email in Tenant 2
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant2Id, 
-            Slug = "contoso", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant2Id,
+            Slug = "contoso",
             Name = "Contoso Ltd",
             IsMultiTenantMode = true
         });
@@ -218,7 +223,8 @@ public class ServiceAuditTests
         var user1 = new User
         {
             Username = "charlie",
-            Email = "charlie@acme.com",            TenantId = _tenant1Id
+            Email = "charlie@acme.com",
+            TenantId = _tenant1Id
         };
         _db.Users.Add(user1);
         await _db.SaveChangesAsync();
@@ -226,10 +232,10 @@ public class ServiceAuditTests
         var refreshTokenService = _serviceProvider.GetRequiredService<IRefreshTokenService>();
 
         // Act: Create refresh token in Tenant 1 context
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant1Id, 
-            Slug = "acme", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant1Id,
+            Slug = "acme",
             Name = "Acme Corp",
             IsMultiTenantMode = true
         });
@@ -260,10 +266,10 @@ public class ServiceAuditTests
         var refreshTokenService = _serviceProvider.GetRequiredService<IRefreshTokenService>();
 
         // Act: Create token in Tenant 1
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant1Id, 
-            Slug = "acme", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant1Id,
+            Slug = "acme",
             Name = "Acme Corp",
             IsMultiTenantMode = true
         });
@@ -271,10 +277,10 @@ public class ServiceAuditTests
             user1.Id, "client1", ["openid"]);
 
         // Act: Create token in Tenant 2
-        _tenantAccessor.SetTenant(new TenantContext 
-        { 
-            TenantId = _tenant2Id, 
-            Slug = "contoso", 
+        _tenantAccessor.SetTenant(new TenantContext
+        {
+            TenantId = _tenant2Id,
+            Slug = "contoso",
             Name = "Contoso Ltd",
             IsMultiTenantMode = true
         });

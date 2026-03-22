@@ -350,7 +350,7 @@ public sealed class ImportCommand : Command
             }
 
             // Counts
-            static void TryPrintCount(JsonElement root, string field, string label, string colour= "green")
+            static void TryPrintCount(JsonElement root, string field, string label, string colour = "green")
             {
                 if (root.TryGetProperty(field, out var val) && val.TryGetInt32(out var n) && n > 0)
                 {

@@ -24,7 +24,7 @@ internal static class TestWebAppFactory
     {
         // Use a unique database name per factory instance to avoid conflicts when tests run in parallel
         var uniqueDbName = $"TestDb_{Guid.NewGuid():N}";
-        
+
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b =>
             {
@@ -134,7 +134,7 @@ internal sealed class DefaultTenantSeedingService : IHostedService
         var db = scope.ServiceProvider.GetRequiredService<AuthDbContext>();
 
         var defaultTenantId = new Guid("00000000-0000-0000-0000-000000000001");
-        
+
         // Check if tenant already exists (handles shared in-memory database across tests)
         var existingTenant = await db.Tenants.FindAsync([defaultTenantId], cancellationToken);
         if (existingTenant == null)

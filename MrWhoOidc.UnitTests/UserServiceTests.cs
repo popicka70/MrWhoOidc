@@ -62,5 +62,5 @@ public sealed class UserServiceTests
         Assert.IsNull(missing);
     }
 
-    
+
 }

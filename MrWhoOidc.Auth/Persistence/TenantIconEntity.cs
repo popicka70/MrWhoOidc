@@ -14,7 +14,7 @@ public class TenantIcon
     /// The tenant this icon belongs to
     /// </summary>
     public Guid TenantId { get; set; }
-    
+
     /// <summary>
     /// Navigation property to the tenant
     /// </summary>

@@ -152,7 +152,7 @@ public class TransactionalRollbackTests
         // Arrange
         var startTime = DateTime.UtcNow;
         var endTime = startTime.AddSeconds(5);
-        
+
         var result = new ImportResult
         {
             Success = true,

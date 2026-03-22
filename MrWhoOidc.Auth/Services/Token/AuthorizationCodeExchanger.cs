@@ -252,7 +252,7 @@ public sealed class AuthorizationCodeExchanger(
                     );
 
                     var accessClaims = await claimBuilder.BuildClaimsAsync(claimRequest, ct).ConfigureAwait(false);
-                    
+
                     // Add signed license tokens if present
                     var claimsList = accessClaims.ToList();
 
@@ -614,9 +614,9 @@ public sealed class AuthorizationCodeExchanger(
         }
 
         var json = JsonSerializer.Serialize(claimObj, EntitlementsJsonOptions);
-        
+
         var signedTokens = await RequestSignedLicenseTokensAsync(subjectId, tenantIdStr, grantedProducts, issuer, ct).ConfigureAwait(false);
-        
+
         return (filteredScopes, json, signedTokens);
     }
 

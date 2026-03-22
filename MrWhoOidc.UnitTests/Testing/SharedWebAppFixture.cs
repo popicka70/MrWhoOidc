@@ -69,7 +69,7 @@ public sealed class SharedWebAppFixture : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         if (_factory.IsValueCreated)
         {
             _factory.Value.Dispose();

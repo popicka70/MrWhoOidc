@@ -19,7 +19,7 @@ public sealed class LoginCommand : Command
         {
             Description = "OIDC server URL (e.g., https://auth.example.com or https://host/t/tenant)"
         };
-        
+
         var clientIdOption = new Option<string?>("--client-id", "-c")
         {
             Description = "Client ID override. If omitted, the CLI client ID is discovered automatically."

@@ -45,7 +45,7 @@ public interface IClientStore
     /// <param name="tenantId">The tenant ID.</param>
     /// <param name="ct">Cancellation token.</param>
     Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Gets the primary (most recently created) secret for a client.
     /// </summary>
@@ -62,9 +62,9 @@ public interface IClientStore
 }
 
 internal sealed class ClientStore(
-    AuthDbContext db, 
-    IPasswordHasher hasher, 
-    ITenantAccessor tenantAccessor, 
+    AuthDbContext db,
+    IPasswordHasher hasher,
+    ITenantAccessor tenantAccessor,
     HybridCache cache,
     ILogger<ClientStore> logger,
     IClientSecretMetrics? metrics = null) : IClientStore
@@ -122,16 +122,16 @@ internal sealed class ClientStore(
 
         var client = await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         if (client is null) return false;
-        
+
         var now = DateTime.UtcNow;
-        
+
         // Check new ClientSecrets collection first
         var activeSecrets = client.ClientSecrets
-            .Where(s => s.ActivatedAtUtc != null 
-                     && s.RevokedAtUtc == null 
+            .Where(s => s.ActivatedAtUtc != null
+                     && s.RevokedAtUtc == null
                      && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now))
             .ToList();
-        
+
         if (activeSecrets.Any())
         {
             // Multi-secret validation: check all active secrets
@@ -141,29 +141,29 @@ internal sealed class ClientStore(
                 {
                     // Record success metric
                     metrics?.AuthenticationSuccess.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("is_primary", secret.IsPrimary));
-                    
+
                     // TODO: Fire-and-forget usage tracking causes DbContext concurrency issues.
                     // Should use separate DbContext scope or queue-based approach.
                     // _ = Task.Run(() => RecordSecretUsageAsync(secret.Id, ct), ct);
                     return true;
                 }
             }
-            
+
             // Check if secret matched but was expired/revoked
             var expiredSecrets = client.ClientSecrets
-                .Where(s => s.ActivatedAtUtc != null 
-                         && s.RevokedAtUtc == null 
-                         && s.ExpiresAtUtc != null 
+                .Where(s => s.ActivatedAtUtc != null
+                         && s.RevokedAtUtc == null
+                         && s.ExpiresAtUtc != null
                          && s.ExpiresAtUtc <= now)
                 .ToList();
-            
+
             foreach (var expiredSecret in expiredSecrets)
             {
                 if (!string.IsNullOrEmpty(clientSecret) && hasher.Verify(clientSecret, expiredSecret.SecretHash))
                 {
                     // Record failure metric for expired secret
                     metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "expired"));
-                    
+
                     logger.LogWarning(
                         "Client secret expired: ClientId={ClientId}, SecretId={SecretId}, ExpiredAt={ExpiredAt}, Description={Description}",
                         clientId,
@@ -173,12 +173,12 @@ internal sealed class ClientStore(
                     return false;
                 }
             }
-            
+
             // No matching secret found
             metrics?.AuthenticationFailure.Add(1, new KeyValuePair<string, object?>("client_id", clientId), new KeyValuePair<string, object?>("reason", "invalid"));
             return false;
         }
-        
+
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility
         // Fall back to legacy single secret for backward compatibility
         if (string.IsNullOrEmpty(client.ClientSecretHash))
@@ -187,24 +187,24 @@ internal sealed class ClientStore(
             return string.IsNullOrEmpty(clientSecret);
         }
         if (string.IsNullOrEmpty(clientSecret)) return false;
-        
+
         var isValid = hasher.Verify(clientSecret, client.ClientSecretHash);
         if (isValid)
         {
             // Record success metric for legacy secret
-            metrics?.AuthenticationSuccess.Add(1, 
-                new KeyValuePair<string, object?>("client_id", clientId), 
+            metrics?.AuthenticationSuccess.Add(1,
+                new KeyValuePair<string, object?>("client_id", clientId),
                 new KeyValuePair<string, object?>("is_primary", true),
                 new KeyValuePair<string, object?>("legacy", true));
         }
         else
         {
             // Record failure metric
-            metrics?.AuthenticationFailure.Add(1, 
-                new KeyValuePair<string, object?>("client_id", clientId), 
+            metrics?.AuthenticationFailure.Add(1,
+                new KeyValuePair<string, object?>("client_id", clientId),
                 new KeyValuePair<string, object?>("reason", "invalid_legacy"));
         }
-        
+
         return isValid;
 #pragma warning restore CS0618 // Type or member is obsolete
     }
@@ -243,8 +243,8 @@ internal sealed class ClientStore(
     {
         return await db.ClientSecrets
             .AsNoTracking()
-            .Where(s => s.ClientId == clientRecordId 
-                     && s.ActivatedAtUtc != null 
+            .Where(s => s.ClientId == clientRecordId
+                     && s.ActivatedAtUtc != null
                      && s.RevokedAtUtc == null
                      && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > DateTime.UtcNow))
             .OrderByDescending(s => s.IsPrimary)
@@ -254,15 +254,15 @@ internal sealed class ClientStore(
     }
 
     public async Task<ClientSecret> CreateSecretAsync(
-        Guid clientRecordId, 
-        string secretValue, 
-        string? description, 
-        string? createdBy, 
-        DateTime? expiresAtUtc = null, 
+        Guid clientRecordId,
+        string secretValue,
+        string? description,
+        string? createdBy,
+        DateTime? expiresAtUtc = null,
         CancellationToken ct = default)
     {
         var secretHash = hasher.Hash(secretValue);
-        
+
         var secret = new ClientSecret
         {
             Id = GuidHelper.NewId(),
@@ -276,7 +276,7 @@ internal sealed class ClientStore(
 
         db.ClientSecrets.Add(secret);
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
-        
+
         return secret;
     }
 
@@ -285,12 +285,12 @@ internal sealed class ClientStore(
         var secret = await db.ClientSecrets
             .FirstOrDefaultAsync(s => s.Id == secretId, ct)
             .ConfigureAwait(false);
-        
+
         if (secret == null) return false;
-        
+
         secret.ActivatedAtUtc = DateTime.UtcNow;
         secret.ActivatedBy = activatedBy;
-        
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
     }
@@ -358,28 +358,28 @@ internal sealed class ClientStore(
         var secret = await db.ClientSecrets
             .FirstOrDefaultAsync(s => s.Id == secretId, ct)
             .ConfigureAwait(false);
-        
+
         if (secret == null) return false;
-        
+
         // Check that this is not the last active secret
         var activeCount = await db.ClientSecrets
-            .Where(s => s.ClientId == secret.ClientId 
-                     && s.ActivatedAtUtc != null 
+            .Where(s => s.ClientId == secret.ClientId
+                     && s.ActivatedAtUtc != null
                      && s.RevokedAtUtc == null
                      && s.Id != secretId)
             .CountAsync(ct)
             .ConfigureAwait(false);
-        
+
         if (activeCount == 0)
         {
             // Don't revoke the last active secret (would lock out client)
             return false;
         }
-        
+
         secret.RevokedAtUtc = DateTime.UtcNow;
         secret.RevokedBy = revokedBy;
         secret.IsPrimary = false; // Clear primary flag when revoking
-        
+
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
         return true;
     }
@@ -391,12 +391,12 @@ internal sealed class ClientStore(
             var secret = await db.ClientSecrets
                 .FirstOrDefaultAsync(s => s.Id == secretId, ct)
                 .ConfigureAwait(false);
-            
+
             if (secret == null) return false;
-            
+
             secret.LastUsedAtUtc = DateTime.UtcNow;
             secret.UsageCount++;
-            
+
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
             return true;
         }

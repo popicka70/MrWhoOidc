@@ -89,10 +89,10 @@ public class IndexModel(
         if (action == "next" || action == "back")
         {
             string nextStep = GetNextStep(CurrentStep, Wizard.Mode, action == "back");
-            
+
             // Save wizard model to TempData for next request
             TempData["OboWizardModel"] = System.Text.Json.JsonSerializer.Serialize(Wizard);
-            
+
             return RedirectToPage(new { step = nextStep });
         }
 
@@ -247,14 +247,14 @@ public class IndexModel(
     private string GetNextStep(string currentStep, string? mode, bool goBack = false)
     {
         bool isExistingMode = mode == "existing";
-        
+
         var steps = isExistingMode
             ? new[] { "shape", "client-selection", "api-policy", "user-access", "review", "complete" }
             : new[] { "shape", "ui-client", "api-policy", "user-access", "review", "complete" };
-        
+
         int currentIndex = Array.IndexOf(steps, currentStep);
         if (currentIndex == -1) return "shape"; // Invalid step, return to start
-        
+
         if (goBack)
         {
             return currentIndex > 0 ? steps[currentIndex - 1] : steps[0];

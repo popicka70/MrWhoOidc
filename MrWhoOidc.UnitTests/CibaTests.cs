@@ -61,9 +61,9 @@ public sealed class CibaTests
 
         var oidcOptions = new OidcOptions { Issuer = "https://test.example.com" };
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = Guid.NewGuid(), 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = Guid.NewGuid(),
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -160,9 +160,9 @@ public sealed class CibaTests
         var tenantId = Guid.NewGuid();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -214,9 +214,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -275,9 +275,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -329,9 +329,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -615,9 +615,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -673,9 +673,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -743,9 +743,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -808,9 +808,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -863,9 +863,9 @@ public sealed class CibaTests
         await db.SaveChangesAsync();
 
         var tenantAccessor = new MrWhoOidc.Auth.MultiTenancy.TenantAccessor();
-        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext 
-        { 
-            TenantId = tenantId, 
+        tenantAccessor.SetTenant(new MrWhoOidc.Auth.MultiTenancy.TenantContext
+        {
+            TenantId = tenantId,
             Slug = "test",
             IssuerUri = "https://test.example.com"
         });
@@ -1022,49 +1022,49 @@ public sealed class CibaTests
     private sealed class StubClientStore : IClientStore
     {
         private readonly bool _authenticates;
-        
+
         public StubClientStore(bool authenticates = true)
         {
             _authenticates = authenticates;
         }
 
-        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default) 
+        public Task<MrWhoOidc.Auth.Persistence.Client?> FindByClientIdAsync(string clientId, CancellationToken ct = default)
             => Task.FromResult<MrWhoOidc.Auth.Persistence.Client?>(null);
-        
-        public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default) 
+
+        public Task<bool> ValidateClientSecretAsync(string clientId, string? secret, CancellationToken ct = default)
             => Task.FromResult(_authenticates);
-        
-        public IQueryable<MrWhoOidc.Auth.Persistence.Client> QueryClients(CancellationToken ct = default) 
+
+        public IQueryable<MrWhoOidc.Auth.Persistence.Client> QueryClients(CancellationToken ct = default)
             => Enumerable.Empty<MrWhoOidc.Auth.Persistence.Client>().AsQueryable();
-        
-        public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default) 
+
+        public Task InvalidateClientCacheAsync(string clientId, Guid tenantId, CancellationToken ct = default)
             => Task.CompletedTask;
-        
-        public Task<ClientSecret?> GetPrimarySecretAsync(Guid clientRecordId, CancellationToken ct = default) 
+
+        public Task<ClientSecret?> GetPrimarySecretAsync(Guid clientRecordId, CancellationToken ct = default)
             => Task.FromResult<ClientSecret?>(null);
-        
-        public Task<List<ClientSecret>> GetActiveSecretsAsync(Guid clientRecordId, CancellationToken ct = default) 
+
+        public Task<List<ClientSecret>> GetActiveSecretsAsync(Guid clientRecordId, CancellationToken ct = default)
             => Task.FromResult(new List<ClientSecret>());
-        
-        public Task<ClientSecret> CreateSecretAsync(Guid clientRecordId, string secretValue, string? description, string? createdBy, DateTime? expiresAtUtc = null, CancellationToken ct = default) 
+
+        public Task<ClientSecret> CreateSecretAsync(Guid clientRecordId, string secretValue, string? description, string? createdBy, DateTime? expiresAtUtc = null, CancellationToken ct = default)
             => Task.FromResult(new ClientSecret());
-        
-        public Task<bool> ActivateSecretAsync(Guid secretId, string activatedBy, CancellationToken ct = default) 
+
+        public Task<bool> ActivateSecretAsync(Guid secretId, string activatedBy, CancellationToken ct = default)
             => Task.FromResult(true);
-        
-        public Task<bool> SetPrimarySecretAsync(Guid secretId, string updatedBy, CancellationToken ct = default) 
+
+        public Task<bool> SetPrimarySecretAsync(Guid secretId, string updatedBy, CancellationToken ct = default)
             => Task.FromResult(true);
-        
-        public Task<bool> RevokeSecretAsync(Guid secretId, string revokedBy, CancellationToken ct = default) 
+
+        public Task<bool> RevokeSecretAsync(Guid secretId, string revokedBy, CancellationToken ct = default)
             => Task.FromResult(true);
-        
-        public Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default) 
+
+        public Task<bool> RecordSecretUsageAsync(Guid secretId, CancellationToken ct = default)
             => Task.FromResult(true);
     }
 
     private sealed class StubClientAssertionValidator : IClientAssertionValidator
     {
-        public Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default) 
+        public Task<bool> ValidateAsync(string clientId, string assertion, string tokenEndpoint, CancellationToken ct = default)
             => Task.FromResult(true);
     }
 
@@ -1087,9 +1087,9 @@ public sealed class CibaTests
 
     private sealed class StubCibaNotificationService : ICibaNotificationService
     {
-        public Task NotifyUserAsync(CibaAuthenticationRequest request, CancellationToken ct = default) 
+        public Task NotifyUserAsync(CibaAuthenticationRequest request, CancellationToken ct = default)
             => Task.CompletedTask;
-            
+
         public Task SendPingNotificationAsync(CibaAuthenticationRequest request, CancellationToken ct = default)
             => Task.CompletedTask;
     }

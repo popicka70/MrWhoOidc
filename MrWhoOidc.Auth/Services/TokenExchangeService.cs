@@ -320,7 +320,7 @@ public class TokenExchangeService(
                 new("scope", string.Join(' ', resultScopes)),
                 new("act", System.Text.Json.JsonSerializer.Serialize(new { sub = callerClientId }))
             };
-            
+
             // Add tenant_id claim if any custom (non-standard) scopes are granted and tenant_id was in subject token
             var hasCustomScopes = resultScopes.Any(s => !scopeResolver.IsStandardScope(s));
             if (hasCustomScopes && !string.IsNullOrEmpty(subjectTenantId))
@@ -333,7 +333,7 @@ public class TokenExchangeService(
             {
                 claims.Add(new System.Security.Claims.Claim(OidcConstants.Scopes.Tenants, subjectTenantsJson));
             }
-            
+
             if (!string.IsNullOrEmpty(outCnfJkt))
             {
                 var cnf = System.Text.Json.JsonSerializer.Serialize(new { jkt = outCnfJkt });

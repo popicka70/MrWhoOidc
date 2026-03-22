@@ -58,7 +58,7 @@ public sealed class DeviceCodeTokenFactory(
         foreach (var scope in request.Scopes)
         {
             if (string.IsNullOrWhiteSpace(scope)) continue;
-            
+
             if (string.Equals(scope, OidcConstants.Scopes.OfflineAccess, StringComparison.Ordinal))
             {
                 includeRefreshToken = true;

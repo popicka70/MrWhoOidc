@@ -48,7 +48,7 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
         // Support both refresh and access (opaque) tokens. 
         // If hint is provided, we use it to narrow down, otherwise we check both.
         var query = db.Tokens.Where(t => t.TokenHash == hash && t.TenantId == tenantId && t.ClientId == clientId);
-        
+
         if (tokenTypeHint == "refresh_token") query = query.Where(t => t.Type == "refresh");
         else if (tokenTypeHint == "access_token") query = query.Where(t => t.Type == "access");
 
@@ -83,7 +83,7 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
     public async Task RevokeAllForUserAsync(Guid userId, string clientId, CancellationToken ct = default)
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
-        
+
         var tokens = await db.Tokens
             .Where(t => t.UserId == userId && t.ClientId == clientId && t.TenantId == tenantId && t.RevokedAt == null)
             .ToListAsync(ct).ConfigureAwait(false);

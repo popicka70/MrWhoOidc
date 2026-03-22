@@ -81,11 +81,11 @@ internal sealed class KeyRotationService(
             });
 
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            
+
             // Invalidate the cached signing key
             await keyStore.InvalidateActiveSigningKeyCacheAsync(tenantId, ct).ConfigureAwait(false);
             await keyStore.InvalidatePublicJwksCacheAsync(tenantId, ct).ConfigureAwait(false);
-            
+
             logger.LogInformation("Rotated signing key. New kid={Kid}, TenantId={TenantId}", kid, tenantId);
         }
 
@@ -102,10 +102,10 @@ internal sealed class KeyRotationService(
                 k.RetiredAt = DateTimeOffset.UtcNow;
             }
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            
+
             // Invalidate JWKS cache since retired keys are no longer served
             await keyStore.InvalidatePublicJwksCacheAsync(tenantId, ct).ConfigureAwait(false);
-            
+
             logger.LogInformation("Retired {Count} old signing keys for TenantId={TenantId}", oldKeys.Count, tenantId);
         }
     }
