@@ -4,3 +4,7 @@
 ## 2026-03-16 - Avoid LINQ .Except for memory optimization
 **Learning:** Chaining LINQ methods like `.Where().ToList()` and `.Except().ToList()` causes multiple passes over collections and excessive allocations. However, when optimizing to a single `foreach` loop, do not attempt to pre-allocate `new List<T>(IEnumerable.Count())` as it invokes a full enumeration just to get the count, negating the benefit.
 **Action:** When replacing LINQ with `foreach` for performance on an `IEnumerable`, do not pre-allocate using `.Count()`. Use simple `new List<T>()` and rely on standard dynamic resizing, or check if the source implements `ICollection`.
+
+## 2025-06-15 - Optimize EF Core bulk deletes with ExecuteDeleteAsync
+**Learning:** Found an opportunity to replace the Entity Framework Core pattern of `.ToListAsync()` followed by `.RemoveRange()` with `.ExecuteDeleteAsync()`. The older pattern requires loading all entities into memory before deleting them, causing unnecessary memory allocation and network round-trips.
+**Action:** Always replace `.ToListAsync()` + `RemoveRange()` with `.ExecuteDeleteAsync()` for bulk deletion operations in EF Core to improve memory usage and reduce database latency.

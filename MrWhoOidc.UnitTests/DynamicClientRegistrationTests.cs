@@ -31,6 +31,7 @@ public sealed class DynamicClientRegistrationTests
     {
         var opts = new DbContextOptionsBuilder<AuthDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(x => x.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new AuthDbContext(opts);
     }
