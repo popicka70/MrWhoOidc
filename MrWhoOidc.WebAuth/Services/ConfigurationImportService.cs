@@ -988,15 +988,24 @@ public sealed class ConfigurationImportService(
         provider.ConfigJson = providerDef.Config != null ? JsonSerializer.Serialize(providerDef.Config) : null;
 
         // Remove existing claim mappings and keys
-        var existingMappings = await _dbContext.IdentityProviderClaimMappings
-            .Where(m => m.IdentityProviderId == provider.Id)
-            .ToListAsync(cancellationToken);
-        _dbContext.IdentityProviderClaimMappings.RemoveRange(existingMappings);
+        if (_dbContext.Database.IsInMemory())
+        {
+            var existingMappings = await _dbContext.IdentityProviderClaimMappings.Where(m => m.IdentityProviderId == provider.Id).ToListAsync(cancellationToken);
+            _dbContext.IdentityProviderClaimMappings.RemoveRange(existingMappings);
+            var existingKeys = await _dbContext.IdentityProviderKeys.Where(k => k.IdentityProviderId == provider.Id).ToListAsync(cancellationToken);
+            _dbContext.IdentityProviderKeys.RemoveRange(existingKeys);
+        }
+        else
+        {
+            // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync() for performance
+            await _dbContext.IdentityProviderClaimMappings
+                .Where(m => m.IdentityProviderId == provider.Id)
+                .ExecuteDeleteAsync(cancellationToken);
 
-        var existingKeys = await _dbContext.IdentityProviderKeys
-            .Where(k => k.IdentityProviderId == provider.Id)
-            .ToListAsync(cancellationToken);
-        _dbContext.IdentityProviderKeys.RemoveRange(existingKeys);
+            await _dbContext.IdentityProviderKeys
+                .Where(k => k.IdentityProviderId == provider.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1494,10 +1503,18 @@ public sealed class ConfigurationImportService(
         await EnsureScopesExistAsync(client.TenantId, allowedScopes, cancellationToken);
 
         // Replace scopes
-        var existingScopes = await _dbContext.ClientScopes
-            .Where(s => s.ClientId == client.Id)
-            .ToListAsync(cancellationToken);
-        _dbContext.ClientScopes.RemoveRange(existingScopes);
+        if (_dbContext.Database.IsInMemory())
+        {
+            var existingScopes = await _dbContext.ClientScopes.Where(s => s.ClientId == client.Id).ToListAsync(cancellationToken);
+            _dbContext.ClientScopes.RemoveRange(existingScopes);
+        }
+        else
+        {
+            // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync() for performance
+            await _dbContext.ClientScopes
+                .Where(s => s.ClientId == client.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
 
         foreach (var scopeName in allowedScopes)
         {

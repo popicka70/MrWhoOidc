@@ -299,22 +299,32 @@ public sealed class ClientConfigurationHandler(
         if (client == null) return Results.NotFound();
 
         // Delete associated registration tokens
-        var tokens = await db.DynamicRegistrationTokens
-            .Where(t => t.ClientId == clientId)
-            .ToListAsync();
-        db.DynamicRegistrationTokens.RemoveRange(tokens);
+        if (db.Database.IsInMemory())
+        {
+            var tokens = await db.DynamicRegistrationTokens.Where(t => t.ClientId == clientId).ToListAsync();
+            db.DynamicRegistrationTokens.RemoveRange(tokens);
+            var secrets = await db.ClientSecrets.Where(s => s.ClientId == client.Id).ToListAsync();
+            db.ClientSecrets.RemoveRange(secrets);
+            var scopes = await db.ClientScopes.Where(s => s.ClientId == client.Id).ToListAsync();
+            db.ClientScopes.RemoveRange(scopes);
+        }
+        else
+        {
+            // Replaced .ToListAsync() + .RemoveRange() with .ExecuteDeleteAsync() for performance
+            await db.DynamicRegistrationTokens
+                .Where(t => t.ClientId == clientId)
+                .ExecuteDeleteAsync();
 
-        // Delete associated client secrets
-        var secrets = await db.ClientSecrets
-            .Where(s => s.ClientId == client.Id)
-            .ToListAsync();
-        db.ClientSecrets.RemoveRange(secrets);
+            // Delete associated client secrets
+            await db.ClientSecrets
+                .Where(s => s.ClientId == client.Id)
+                .ExecuteDeleteAsync();
 
-        // Delete associated client scopes
-        var scopes = await db.ClientScopes
-            .Where(s => s.ClientId == client.Id)
-            .ToListAsync();
-        db.ClientScopes.RemoveRange(scopes);
+            // Delete associated client scopes
+            await db.ClientScopes
+                .Where(s => s.ClientId == client.Id)
+                .ExecuteDeleteAsync();
+        }
 
         // Delete the client
         db.Clients.Remove(client);
