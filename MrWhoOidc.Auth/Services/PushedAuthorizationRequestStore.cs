@@ -80,12 +80,21 @@ internal sealed class EfPushedAuthorizationRequestStore(AuthDbContext db, IOptio
                 // ⚡ Bolt Performance Optimization:
                 // Replaced .ToList() + .RemoveRange() with .ExecuteDelete()
                 // Impact: Stops opportunist DB cleanup from silently killing app memory with massive entity loading.
-                var expired = db.PushedAuthorizationRequests
-                    .Where(e => e.TenantId == tenantId && e.ExpiresAt < now).ToList();
-                if (expired.Count > 0)
+                if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
                 {
-                    db.PushedAuthorizationRequests.RemoveRange(expired);
-                    db.SaveChanges();
+                    var expired = db.PushedAuthorizationRequests
+                        .Where(e => e.TenantId == tenantId && e.ExpiresAt < now).ToList();
+                    if (expired.Count > 0)
+                    {
+                        db.PushedAuthorizationRequests.RemoveRange(expired);
+                        db.SaveChanges();
+                    }
+                }
+                else
+                {
+                    db.PushedAuthorizationRequests
+                        .Where(e => e.TenantId == tenantId && e.ExpiresAt < now)
+                        .ExecuteDelete();
                 }
             }
             return null;
