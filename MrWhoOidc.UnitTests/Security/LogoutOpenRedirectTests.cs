@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
+using MrWhoOidc.WebAuth.Handlers;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Pages.Logout.Prompt;
 using Microsoft.EntityFrameworkCore;
