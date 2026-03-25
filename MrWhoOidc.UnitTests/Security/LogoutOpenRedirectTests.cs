@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -14,6 +16,7 @@ using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.WebAuth.Pages.Logout.Prompt;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Routing;
+using System.Security.Claims;
 
 namespace MrWhoOidc.UnitTests.Security;
 
@@ -29,14 +32,17 @@ public class LogoutOpenRedirectTests
 
         var upstreamMock = new Mock<IUpstreamLogoutService>();
         var keyStoreMock = new Mock<IKeyStore>();
-        var metricsMock = new Mock<IOidcMetrics>();
+        var metrics = new OidcEndpointMetrics();
         var auditMock = new Mock<IAuditSink>();
         var logger = NullLogger<IndexModel>.Instance;
         var fedOpts = Options.Create(new FederatedLogoutOptions());
 
-        var model = new IndexModel(upstreamMock.Object, db, keyStoreMock.Object, metricsMock.Object, auditMock.Object, logger, fedOpts);
+        var model = new IndexModel(upstreamMock.Object, db, keyStoreMock.Object, metrics, auditMock.Object, logger, fedOpts);
 
         var httpContext = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAuthenticationService, NoopAuthenticationService>();
+        httpContext.RequestServices = services.BuildServiceProvider();
         var modelState = new ModelStateDictionary();
         var actionContext = new ActionContext(httpContext, new RouteData(), new PageActionDescriptor(), modelState);
         var modelMetadataProvider = new EmptyModelMetadataProvider();
@@ -53,6 +59,19 @@ public class LogoutOpenRedirectTests
         var urlHelperMock = Mock.Get(model.Url);
 
         return (model, urlHelperMock);
+    }
+
+    private sealed class NoopAuthenticationService : IAuthenticationService
+    {
+        public Task<AuthenticateResult> AuthenticateAsync(HttpContext context, string? scheme) => Task.FromResult(AuthenticateResult.NoResult());
+
+        public Task ChallengeAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
+
+        public Task ForbidAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
+
+        public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal, AuthenticationProperties? properties) => Task.CompletedTask;
+
+        public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => Task.CompletedTask;
     }
 
     [TestMethod]
