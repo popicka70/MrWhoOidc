@@ -1,5 +1,7 @@
 # Migration to .NET 9 Native UUIDv7 Implementation
 
+> Historical note: This migration note describes a point-in-time change and intentionally references `.NET 9` because that was the active runtime during the migration. The repository now targets `.NET 10`; use [README](../../README.md) and [docs/developer-guide.md](../developer-guide.md) for current setup guidance.
+
 **Date**: October 20, 2025  
 **Status**: ✅ Complete
 

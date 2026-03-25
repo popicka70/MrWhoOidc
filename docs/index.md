@@ -1,236 +1,77 @@
 ﻿# MrWhoOidc Documentation Hub
 
-Welcome to the MrWhoOidc documentation. This index provides audience-based entry points to help you find the right documentation for your needs.
+This hub points to the active documentation path for the current codebase. Use it to choose the right starting point by role or workflow.
 
-## 🎯 Find Your Path
+## Start Here
 
-### 👨‍💻 For Developers
+### Developers
+- [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [developer-guide.md](developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
+- [example-applications-guide.md](example-applications-guide.md) - Demo applications, sample architecture, and which example to use
+- [../e2e/README.md](../e2e/README.md) - Browser E2E test suite
 
-Building applications with MrWhoOidc or extending the platform?
+### Operators
+- [production-setup-guide.md](production-setup-guide.md) - Production bootstrap and cloud deployment basics
+- [deployment-guide.md](deployment-guide.md) - Container deployment, environment variables, certificates, and operations
+- [docker-compose-examples.md](docker-compose-examples.md) - Deployment variants and configuration patterns
+- [upgrade-guide.md](upgrade-guide.md) - Upgrade and rollback procedures
 
-**Start Here:**
-- **[15-Minute Quickstart](for-developers/quickstart-15-min.md)** - Get running locally in 15 minutes
-- **[Developer Guide](developer-guide.md)** - Comprehensive development documentation
-- **[API Reference](../MrWhoOidc.Auth/)** - Source code API documentation
+### Administrators
+- [admin-guide.md](admin-guide.md) - Admin UI, tenant configuration, user management, and provider workflows
+- [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) - CLI administration and scripting
+- [reference/obo-client-policy.md](reference/obo-client-policy.md) - OBO and token exchange policy guidance
 
-**Common Tasks:**
-- [Client Integration Examples](../Examples/)
-- [Token Exchange Guide](reference/obo-client-policy.md)
-- [IdP Chaining Configuration](reference/idp-chaining-client-configuration.md)
+### Security Teams
+- [docker-security-best-practices.md](docker-security-best-practices.md) - Hardening guidance for containerized deployments
+- [for-security-teams/incident-response.md](for-security-teams/incident-response.md) - Incident response procedures
+- [oidc-conformance-checklist.md](oidc-conformance-checklist.md) - Protocol compliance checklist
 
----
+## Common Workflows
 
-### 🔧 For Operators
+### Local Development
+1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md).
+2. Use `docker-compose.dev.yml` for the seeded local stack.
+3. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
+4. Use [../e2e/README.md](../e2e/README.md) for browser tests.
 
-Running MrWhoOidc in production?
+### Production Deployment
+1. Read [production-setup-guide.md](production-setup-guide.md) for first-run bootstrap requirements.
+2. Use [deployment-guide.md](deployment-guide.md) for container deployment and operations.
+3. Use [docker-compose-examples.md](docker-compose-examples.md) and [docker-security-best-practices.md](docker-security-best-practices.md) for environment-specific hardening.
 
-**Start Here:**
-- **[Production Setup Guide](production-setup-guide.md)** - Deploy to production
-- **[Deployment Guide](deployment-guide.md)** - Complete deployment lifecycle
-- **[Monitoring & Alerting](for-operators/monitoring/alerting-rules.md)** - Prometheus rules and alerts
+### Examples and Demos
+- [example-applications-guide.md](example-applications-guide.md) summarizes all example applications.
+- [../Examples/MrWhoOidc.RazorClient/README.md](../Examples/MrWhoOidc.RazorClient/README.md) and [../Examples/MrWhoOidc.TestApi/README.md](../Examples/MrWhoOidc.TestApi/README.md) describe the primary .NET demo pair.
+- [../Examples/ReactOidcClient/README.md](../Examples/ReactOidcClient/README.md) covers the SPA example.
+- [../Examples/MrWhoOidc.GoWebClient/README.md](../Examples/MrWhoOidc.GoWebClient/README.md) and [../Examples/MrWhoOidc.GoApi/README.md](../Examples/MrWhoOidc.GoApi/README.md) cover the Go samples.
 
-**Common Tasks:**
-- [Backup & Restore Procedures](for-operators/backup-restore/verification-testing.md)
-- [Upgrade Guide](upgrade-guide.md)
-- [Docker Security Best Practices](docker-security-best-practices.md)
-- [Configuration Examples](docker-compose-examples.md)
+### CLI and Automation
+- [../MrWhoOidc.Cli/README.md](../MrWhoOidc.Cli/README.md) covers CLI installation, authentication, and automation.
+- [../e2e/README.md](../e2e/README.md) covers browser E2E and CLI-driven E2E flows.
 
----
-
-### 👔 For Administrators
-
-Managing tenants, users, and configurations?
-
-**Start Here:**
-- **[Admin Guide](admin-guide.md)** - Complete administrative reference
-- **[Production Setup Guide](production-setup-guide.md)** - Initial bootstrap process
-
-**Common Tasks:**
-- [Tenant Management](admin-guide.md#tenant-management)
-- [User Management](admin-guide.md#user-management)
-- [Client Configuration](admin-guide.md#client-configuration)
-- [Identity Provider Setup](admin-guide.md#identity-providers)
-- [Audit Log Access](admin-guide.md#audit-logging)
-
----
-
-### 🔒 For Security Teams
-
-Security assessments, incident response, and compliance?
-
-**Start Here:**
-- **[Incident Response Plan](for-security-teams/incident-response.md)** - Security incident procedures
-- **[Security Best Practices](docker-security-best-practices.md)** - Hardening guide
-
-**Common Tasks:**
-- [Security Assessment Checklist](security/)
-- [Key Rotation Procedures](for-security-teams/incident-response.md#key-compromise-response)
-- [Audit Trail Access](for-security-teams/incident-response.md#audit-trail-access-procedures)
-- [OIDC Conformance Checklist](oidc-conformance-checklist.md)
-
----
-
-## 📚 Documentation Categories
-
-### Getting Started
-| Document | Description |
-|----------|-------------|
-| [README](../README.md) | Project overview and quick start |
-| [15-Minute Quickstart](for-developers/quickstart-15-min.md) | Local development setup |
-| [Production Setup](production-setup-guide.md) | Production deployment guide |
-
-### Deployment & Operations
-| Document | Description |
-|----------|-------------|
-| [Deployment Guide](deployment-guide.md) | Complete deployment lifecycle |
-| [Docker Compose Examples](docker-compose-examples.md) | Production deployment scenarios |
-| [Upgrade Guide](upgrade-guide.md) | Upgrade procedures and rollback |
-| [Monitoring & Alerting](for-operators/monitoring/alerting-rules.md) | Prometheus alerting rules |
-| [Backup & Restore](for-operators/backup-restore/verification-testing.md) | Backup verification procedures |
-
-### Security
-| Document | Description |
-|----------|-------------|
-| [Incident Response Plan](for-security-teams/incident-response.md) | Security incident procedures |
-| [Docker Security Best Practices](docker-security-best-practices.md) | Container hardening guide |
-| [OIDC Conformance Checklist](oidc-conformance-checklist.md) | Protocol compliance checklist |
+## Reference and Deep Dives
 
 ### Protocol Reference
-| Document | Description |
-|----------|-------------|
-| [OIDC IdP Feature Reference](oidc-idp-feature-reference.md) | Spec-based feature catalog for an OpenID Connect Identity Provider |
-| [OBO Client Policy](reference/obo-client-policy.md) | Token exchange configuration |
-| [Token Exchange E2E](reference/obo-dpop-requiresamejkt-e2e.md) | DPoP with RequireSameJkt |
-| [IdP Chaining Configuration](reference/idp-chaining-client-configuration.md) | Multi-level IdP setups |
-| [JAR Replay Cache](reference/jar-replay-cache.md) | JWT-secured request caching |
+- [oidc-idp-feature-reference.md](oidc-idp-feature-reference.md)
+- [reference/obo-client-policy.md](reference/obo-client-policy.md)
+- [reference/obo-dpop-requiresamejkt-e2e.md](reference/obo-dpop-requiresamejkt-e2e.md)
+- [reference/idp-chaining-client-configuration.md](reference/idp-chaining-client-configuration.md)
+- [reference/jar-replay-cache.md](reference/jar-replay-cache.md)
 
-### Administration
-| Document | Description |
-|----------|-------------|
-| [Admin Guide](admin-guide.md) | Complete administrative reference |
-| [Dynamic Client Registration](dynamic-client-autoregistration-spec.md) | Client auto-registration spec |
+### Architecture and Design
+- [adr/](adr/)
+- [oidc-feature-gap-analysis.md](oidc-feature-gap-analysis.md)
+- [well-known-idp-providers-plan.md](well-known-idp-providers-plan.md)
 
-### Architecture & Design
-| Document | Description |
-|----------|-------------|
-| [ADR Index](adr/) | Architecture Decision Records |
-| [Feature Gap Analysis](oidc-feature-gap-analysis.md) | OIDC feature coverage |
-| [Well-Known IdP Providers Plan](well-known-idp-providers-plan.md) | IdP discovery planning |
+### Operations and Security
+- [for-operators/monitoring/alerting-rules.md](for-operators/monitoring/alerting-rules.md)
+- [for-operators/backup-restore/verification-testing.md](for-operators/backup-restore/verification-testing.md)
+- [for-security-teams/incident-response.md](for-security-teams/incident-response.md)
 
----
+## Notes on Scope
 
-## 🔍 Search Guidance
+- The most accurate source of truth for runtime behavior remains the code and compose files.
+- Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
+- Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-### Finding Information
-
-1. **By Task:** Look in the audience section above for your role
-2. **By Topic:** Use the category tables to find specific topics
-3. **By Document Type:** 
-   - Guides: Step-by-step instructions
-   - Reference: Technical specifications
-   - Examples: Code samples and configurations
-   - ADRs: Architecture decisions
-
-### Using GitHub Search
-
-For advanced searches, use GitHub's search:
-```bash
-# Search for specific topics in docs
-path:docs/ "token exchange"
-
-# Find configuration examples
-path:docs/ "docker-compose" language:yaml
-
-# Search ADRs
-path:docs/adr/ "database"
-```
-
----
-
-## 📖 Contribution Guidelines
-
-Want to improve the documentation? We welcome contributions!
-
-### How to Contribute
-
-1. **Fork the repository**
-2. **Create a branch** for your changes
-3. **Make your changes** following our style guide
-4. **Test locally** - ensure links work and examples are valid
-5. **Submit a pull request**
-
-### Documentation Standards
-
-- **Clarity:** Write for the intended audience
-- **Completeness:** Include all necessary steps and context
-- **Accuracy:** Test all commands and code examples
-- **Consistency:** Follow existing formatting and style
-- **Links:** Use relative paths for internal links
-
-### File Organization
-
-```
-docs/
-├── index.md                    # This file - documentation hub
-├── for-developers/             # Developer-focused docs
-├── for-operators/              # Operations and monitoring
-├── for-administrators/         # Administrative tasks
-├── for-security-teams/         # Security documentation
-├── troubleshooting/            # Common issues and solutions
-├── reference/                  # Protocol and API reference
-├── adr/                        # Architecture Decision Records
-├── security/                   # Security assessments
-└── _archive/                   # Historical/internal documents
-```
-
-### Review Process
-
-1. **Automated checks:** Links, spelling, formatting
-2. **Technical review:** Subject matter expert review
-3. **Editorial review:** Clarity and completeness
-4. **Merge:** After approval from maintainers
-
----
-
-## 📞 Getting Help
-
-### Support Channels
-
-- **GitHub Issues:** Bug reports and feature requests
-- **GitHub Discussions:** Questions and community support
-- **Security Issues:** Report via [security policy](../.github/SECURITY.md)
-
-### Documentation Feedback
-
-Found an issue or have suggestions?
-- **Fix it:** Submit a pull request
-- **Report it:** Open a GitHub issue with the "documentation" label
-
----
-
-## 📋 Quick Reference
-
-### Essential Links
-
-| Resource | URL |
-|----------|-----|
-| GitHub Repository | https://github.com/popicka70/MrWhoOidc |
-| Docker Images | https://ghcr.io/popicka70/mrwhooidc |
-| Issue Tracker | https://github.com/popicka70/MrWhoOidc/issues |
-| Security Policy | https://github.com/popicka70/MrWhoOidc/blob/main/.github/SECURITY.md |
-
-### Key Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `/.well-known/openid-configuration` | OIDC discovery document |
-| `/health` | Health check endpoint |
-| `/ready` | Readiness check endpoint |
-| `/metrics` | Prometheus metrics |
-| `/admin` | Administrative UI |
-
----
-
-**Documentation Version:** 1.0  
-**Last Updated:** 2025-01-XX  
-**Maintained By:** MrWhoOidc Team
+**Last Updated:** 2026-03-25

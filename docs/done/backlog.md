@@ -1,5 +1,7 @@
 # MrWhoOidc � User Management and OIDC Enhancements Backlog
 
+> Historical note: This backlog is retained as an implementation snapshot. Status, runtime targets, and setup details in this file reflect the repository state when it was written. For current setup and supported versions, use [README](../../README.md), [docs/index.md](../index.md), and [docs/developer-guide.md](../developer-guide.md).
+
 Status legend
 - [ ] Not started
 - [~] In progress

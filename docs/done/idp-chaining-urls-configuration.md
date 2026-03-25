@@ -1,5 +1,7 @@
 # IdP Chaining URLs - Configuration Guide
 
+> Historical note: This configuration guide documents earlier issuer-resolution behavior and may reference older local URLs. For current issuer configuration and environment setup, use [README](../../README.md), [docs/deployment-guide.md](../deployment-guide.md), and [docs/production-setup-guide.md](../production-setup-guide.md).
+
 ## How URLs Are Determined
 
 The IdP chaining URLs displayed in the admin interface are built using this logic:

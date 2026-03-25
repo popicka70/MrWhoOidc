@@ -1,6 +1,6 @@
 {
   "listen_addr": ":5190",
-  "issuer": "https://localhost:7208",
+  "issuer": "https://localhost:8443/t/default",
   "audience": "api",
   "jwks_refresh": "2m",
   "trusted_act_clients": [

@@ -5,45 +5,46 @@
 [![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-informational)](https://ghcr.io/popicka70/mrwhooidc)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A production-ready OpenID Connect (OIDC) Provider with OAuth 2.0 support, built on .NET 9.0 with PostgreSQL and optional Redis caching.
+A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10 with PostgreSQL, optional Redis caching, a tenant-aware admin UI, sample applications, and browser E2E coverage.
 
-## Quick Start with Docker
+## Local Development Quick Start
 
-Deploy MrWhoOidc in under 10 minutes using Docker Compose:
+Start the full development stack, including seeded sample applications:
 
 ```bash
-# 1. Clone repository
 git clone https://github.com/popicka70/MrWhoOidc.git
 cd MrWhoOidc
 
-# 2. Create environment configuration
+# Local development uses the dev compose file.
 cp .env.example .env
-# Edit .env and set POSTGRES_PASSWORD and OIDC_PUBLIC_BASE_URL
+# Edit .env if you want to override defaults.
 
-# 3. Start services
-docker compose up -d
+docker compose -f docker-compose.dev.yml up -d --build
 
-# 4. Verify deployment
+# Verify the auth server is up.
 curl -k https://localhost:8443/.well-known/openid-configuration
 ```
 
-**What you get:**
-- ✅ Production-optimized Docker image (multi-arch: x64/ARM64)
-- ✅ PostgreSQL 16 database with automatic schema migrations
-- ✅ Optional Redis caching for high performance (30-50% faster)
-- ✅ TLS/HTTPS support with certificate management
-- ✅ Multi-tenancy support (optional)
-- ✅ Health checks and graceful degradation
-- ✅ Comprehensive admin UI at `/admin`
+The development stack starts:
+- MrWhoOidc WebAuth at `https://localhost:8443`
+- PostgreSQL and Redis
+- MailHog at `http://localhost:8025`
+- OidcDemo at `https://localhost:5001`
+- RazorClient at `https://localhost:5003`
+- ReactOidcClient at `http://localhost:5173`
+- TestApi at `https://localhost:7149`
 
-**📖 Complete Documentation:**
-- **[Production Setup Guide](docs/production-setup-guide.md)** - Cloud deployment & bootstrap process
-- **[Deployment Guide](docs/deployment-guide.md)** - Full deployment lifecycle (1200+ lines)
-- **[Configuration Examples](docs/docker-compose-examples.md)** - Production scenarios
-- **[Upgrade Guide](docs/upgrade-guide.md)** - Upgrade procedures and rollback
-- **[Security Best Practices](docs/docker-security-best-practices.md)** - Hardening guide
+Development mode auto-seeds the default tenant and admin account. Sign in with `admin@mrwho.local` / `Admin123!`.
 
-## Features
+For an IDE-first workflow, you can also run the Aspire host:
+
+```bash
+dotnet run --project MrWhoOidc.AppHost
+```
+
+Use `docker-compose.yml` for production-oriented container deployment. Fresh production environments require an explicit `/bootstrap` call guarded by `BOOTSTRAP_TOKEN`; see the production guides below.
+
+## Highlights
 
 ### Core OIDC/OAuth 2.0
 - OpenID Connect Provider (OP) with full discovery support
@@ -66,137 +67,57 @@ curl -k https://localhost:8443/.well-known/openid-configuration
 - Multi-level IdP configuration support
 - Token exchange for delegated access
 
-## Docker Deployment
+## Run Modes
 
-### Pull from GitHub Container Registry
+- `docker-compose.dev.yml`: primary local development path with seeded data, example applications, MailHog, and source builds.
+- `MrWhoOidc.AppHost`: optional Aspire workflow for local .NET debugging and orchestration.
+- `docker-compose.yml`: production-oriented container deployment from the published image, with explicit bootstrap and externalized configuration.
 
-```bash
-# Pull latest version
-docker pull ghcr.io/popicka70/mrwhooidc:latest
+## Sample Applications
 
-# Pull specific version (recommended for production)
-docker pull ghcr.io/popicka70/mrwhooidc:v1.0.0
-```
+| Sample | Purpose | Local URL | Notes |
+|--------|---------|-----------|-------|
+| `Examples/MrWhoOidc.OidcDemo` | Minimal Razor Pages OIDC client | `https://localhost:5001` | Included in `docker-compose.dev.yml` |
+| `Examples/MrWhoOidc.RazorClient` | Interactive .NET client with OBO flow to TestApi | `https://localhost:5003` | Included in `docker-compose.dev.yml` and AppHost |
+| `Examples/MrWhoOidc.TestApi` | Protected downstream API used by the demos | `https://localhost:7149` | Included in `docker-compose.dev.yml` and AppHost |
+| `Examples/ReactOidcClient` | SPA example using PAR and PKCE | `http://localhost:5173` | Included in `docker-compose.dev.yml` |
+| `Examples/MrWhoOidc.GoWebClient` | Go web app with auth code + PKCE and optional OBO | Manual run | Uses JSON config |
+| `Examples/MrWhoOidc.GoApi` | Go API validating access tokens | Manual run | Uses JSON config |
 
-### Docker Compose (Recommended)
-
-**Basic deployment with PostgreSQL:**
-
-```yaml
-services:
-  webauth:
-    image: ghcr.io/popicka70/mrwhooidc:latest
-    ports:
-      - "8443:8443"
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      OIDC_PUBLIC_BASE_URL: ${OIDC_PUBLIC_BASE_URL:-https://localhost:8443}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - internal
-      - edge
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: oidc
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: authdb
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - internal
-
-volumes:
-  postgres-data:
-
-networks:
-  internal:
-  edge:
-```
-
-**With Redis for high performance:**
-
-```yaml
-services:
-  webauth:
-    # ... (as above)
-    environment:
-      REDIS_ENABLED: true
-      REDIS_CONNECTION_STRING: redis:6379
-    depends_on:
-      redis:
-        condition: service_healthy
-        required: false  # Graceful degradation
-
-  redis:
-    image: redis:7.2-alpine
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis-data:/data
-    networks:
-      - internal
-```
-
-### Environment Configuration
-
-Required variables:
-- `POSTGRES_PASSWORD`: PostgreSQL database password
-- `OIDC_PUBLIC_BASE_URL`: Public URL for OIDC issuer
-
-Optional features:
-- Multi-tenancy is controlled by the installed platform license (`deployment_mode`), not by configuration.
-- `REDIS_ENABLED`: Enable Redis caching (true/false)
-- `MAIL_ENABLED`: Enable email/SMTP (true/false)
-
-See [`.env.example`](.env.example) for complete configuration options.
-
-### Production Deployment
-
-For production deployments, see:
-- **[Production Setup Guide](docs/production-setup-guide.md)** - Bootstrap process, environment variables, cloud platforms
-- **[Production Configuration Guide](docs/deployment-guide.md#production-configuration-checklist)** - 40-item checklist
-- **[Production Examples](docs/docker-compose-examples.md)** - Multi-tenancy, custom certs, SMTP, Redis
-- **[Security Hardening](docs/docker-security-best-practices.md)** - Network isolation, secrets, TLS
-- **[Upgrade Procedures](docs/upgrade-guide.md)** - Zero-downtime upgrades and rollback
-
-> ⚠️ **Important**: In production, the database starts empty. You must call the `/bootstrap` endpoint to create the initial tenant and admin user. See [Production Setup Guide](docs/production-setup-guide.md) for details.
+See [docs/example-applications-guide.md](docs/example-applications-guide.md) for setup details, when to use each example, and how they map to the dev stack.
 
 ## Documentation
 
-### Quick Links
-- **[Production Setup Guide](docs/production-setup-guide.md)** - Cloud deployment & bootstrap
-- **[Deployment Guide](docs/deployment-guide.md)** - Complete deployment documentation
-- **[Configuration Examples](docs/docker-compose-examples.md)** - Common deployment scenarios
-- **[Upgrade Guide](docs/upgrade-guide.md)** - Upgrade and rollback procedures
-- **[Security Best Practices](docs/docker-security-best-practices.md)** - Production hardening
-- **[Admin Guide](docs/admin-guide.md)** - Administrative operations
-- **[Developer Guide](docs/developer-guide.md)** - Development setup
-- **[Documentation Index](docs/index.md)** - Complete documentation hub
+### Start Here
+- [docs/for-developers/quickstart-15-min.md](docs/for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [docs/index.md](docs/index.md) - Documentation hub by audience and workflow
+- [docs/production-setup-guide.md](docs/production-setup-guide.md) - Production bootstrap, environment variables, and cloud deployment notes
+- [docs/deployment-guide.md](docs/deployment-guide.md) - Full deployment lifecycle and container operations
 
-### Operations & Security
-- **[Monitoring & Alerting](docs/for-operators/monitoring/alerting-rules.md)** - Prometheus alerting rules
-- **[Backup & Restore](docs/for-operators/backup-restore/verification-testing.md)** - Backup verification procedures
-- **[Incident Response](docs/for-security-teams/incident-response.md)** - Security incident response plan
+### Development and Integration
+- [docs/developer-guide.md](docs/developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
+- [docs/example-applications-guide.md](docs/example-applications-guide.md) - Demo applications and sample architecture map
+- [e2e/README.md](e2e/README.md) - Python + Playwright browser E2E suite
+- [MrWhoOidc.Cli/README.md](MrWhoOidc.Cli/README.md) - CLI installation and usage
 
-### Protocol Documentation
-- **[OBO Client Policy](docs/reference/obo-client-policy.md)** - On-Behalf-Of token exchange
-- **[Token Exchange E2E (DPoP)](docs/reference/obo-dpop-requiresamejkt-e2e.md)** - DPoP with RequireSameJkt
-- **[IdP Chaining Configuration](docs/reference/idp-chaining-client-configuration.md)** ⚠️ **Important for multi-level IdP setups**
-- **[JAR Replay Cache](docs/reference/jar-replay-cache.md)** - JWT-secured authorization request caching
+### Operations and Security
+- [docs/admin-guide.md](docs/admin-guide.md) - Admin UI and operational workflows
+- [docs/docker-compose-examples.md](docs/docker-compose-examples.md) - Deployment variants
+- [docs/upgrade-guide.md](docs/upgrade-guide.md) - Upgrade and rollback procedures
+- [docs/docker-security-best-practices.md](docs/docker-security-best-practices.md) - Container and runtime hardening
 
-## Examples
+## Testing
 
-### Client Examples
-- `.NET` Razor web client: `Examples/MrWhoOidc.RazorClient`
-- `.NET` sample API: `Examples/MrWhoOidc.TestApi`
-- `Go` web client: `Examples/MrWhoOidc.GoWebClient`
-- `Go` sample API: `Examples/MrWhoOidc.GoApi`
+- Unit and integration tests: `dotnet test`
+- Browser E2E tests: `cd e2e && sh ./setup-venv.sh && .venv/bin/pytest -v`
+- Example application health paths are covered by the dev stack and E2E suite
 
-### E2E Python Environment
-- The only supported Python virtualenv for browser E2E work is `e2e/.venv`.
-- Bootstrap it with `sh ./e2e/setup-venv.sh`.
-- Usage and troubleshooting notes live in `e2e/README.md`.
-- The dockerized example-app E2E flow currently exposes RazorClient on `https://localhost:5003` and TestApi on `https://localhost:7149`.
+## Container Images
+
+Published images are available at `ghcr.io/popicka70/mrwhooidc`.
+
+```bash
+docker pull ghcr.io/popicka70/mrwhooidc:latest
+
+docker pull ghcr.io/popicka70/mrwhooidc:v1.0.0
+```

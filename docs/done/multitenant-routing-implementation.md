@@ -1,5 +1,7 @@
 # Multi-Tenant Routing Implementation
 
+> Historical note: This implementation summary is retained for architectural history. Routing examples and compatibility notes reflect the repository state when this work landed. For current multi-tenant behavior and deployment guidance, use [README](../../README.md), [docs/developer-guide.md](../developer-guide.md), and [docs/production-setup-guide.md](../production-setup-guide.md).
+
 **Date:** October 4, 2025  
 **Status:** ✅ Completed  
 **Branch:** MultiTenant

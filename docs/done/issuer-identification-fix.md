@@ -1,5 +1,7 @@
 # Issuer Identification (RFC 9207) Fix
 
+> Historical note: This fix summary is preserved for debugging history. Example callback URLs and environment details may refer to older local development values. For current local endpoints and example app setup, use [README](../../README.md) and [docs/example-applications-guide.md](../example-applications-guide.md).
+
 **Issue**: React OIDC client using `oauth4webapi` library failed during callback processing with error:
 ```
 response parameter "iss" (issuer) missing

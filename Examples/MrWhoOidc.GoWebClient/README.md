@@ -5,11 +5,13 @@ Go HTTP sample that completes the authorization-code + PKCE flow against your lo
 ## Prerequisites
 
 - Go 1.22 or newer
-- A running `MrWhoOidc.WebAuth` instance (the Aspire host `MrWhoOidc.AppHost` starts one on `https://localhost:7208`)
+- A running `MrWhoOidc.WebAuth` instance
 - A public client registration (e.g. `mrwho-go-web`) with redirect URI `http://localhost:5080/callback`
 - Optional: a confidential client allowed to perform OBO token exchange (e.g. `mrwho-go-obo`) with access to the sample API audience (`api`)
 
 > Tip: Trust the .NET development certificate (`dotnet dev-certs https --trust`) so the Go HTTP client accepts the issuer's TLS certificate.
+
+The easiest local target is the seeded dev compose stack at `https://localhost:8443/t/default`.
 
 ## Setup
 
@@ -33,6 +35,10 @@ Then navigate to `http://localhost:5080/` and choose **Sign in**. After authenti
 
 Environment variables:
 - `MRWHO_GO_WEB_CONFIG`: absolute or relative path to the JSON configuration file.
+
+## Local Development Tip
+
+If you are using `docker-compose.dev.yml`, start the stack first and set `issuer` to `https://localhost:8443/t/default`.
 
 ## How it works
 

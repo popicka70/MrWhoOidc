@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-**MrWhoOidc** is a production-ready OIDC Provider built on .NET 9/10 with PostgreSQL and optional Redis caching. It demonstrates **strong RFC compliance** across core OIDC/OAuth 2.0 protocols with several advanced features. The implementation quality is **high** with proper security controls, observability, and multi-tenancy support.
+**MrWhoOidc** is a production-ready OIDC Provider built on .NET 10 with PostgreSQL and optional Redis caching. It demonstrates **strong RFC compliance** across core OIDC/OAuth 2.0 protocols with several advanced features. The implementation quality is **high** with proper security controls, observability, and multi-tenancy support.
 
 ### Overall Rating
 

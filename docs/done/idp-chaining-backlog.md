@@ -1,5 +1,7 @@
 # MrWhoOidc.WebAuth – IdP Chaining and JAR Support Backlog
 
+> Historical note: This backlog is preserved for implementation history. Runtime targets, priorities, and configuration examples may reflect an older repository state. For current behavior and environment guidance, use [README](../../README.md), [docs/index.md](../index.md), and [docs/developer-guide.md](../developer-guide.md).
+
 Updated: 2025-10-14 (Q4 status and prioritization refresh)
 
 Status legend

@@ -1,5 +1,7 @@
 # OAuth Callback Debug Logging
 
+> Historical note: This debugging write-up may contain older callback URLs and port numbers from the environment in use at the time. For the current local development endpoint and example configuration, use [README](../../README.md) and [docs/example-applications-guide.md](../example-applications-guide.md).
+
 ## Summary
 
 Added comprehensive debug logging to track OAuth/OIDC external authentication flows, specifically to diagnose redirect URI issues and parameter mismatches.

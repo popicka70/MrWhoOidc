@@ -112,22 +112,16 @@ Configure in your MCP client (e.g., VS Code settings.json):
 
 ## Project Status
 
-**Phase 1: Core Infrastructure** ✅ **COMPLETE**
-- Project structure with PackAsTool configuration
-- Configuration model with profile support (`~/.mrwhooidc/config.json`)
-- MCP JSON-RPC 2.0 protocol implementation
-- Basic command framework with System.CommandLine
-- Spectre.Console integration for rich terminal UI
+Current command coverage includes:
 
-**Phase 2: Authentication and Discovery** 🚧 **IN PROGRESS**
-- Device code flow login
-- Server discovery inspection
-- Working profile management (`list`, `show`, `switch`, `remove`)
-- Working logout/token clearing
-- Authenticated admin list commands for tenants, clients, and scopes
-- File-first export commands for tenant, realm, client, and provider manifests
+- Device-code login and logout
+- Discovery inspection
+- Profile management (`list`, `show`, `switch`, `remove`)
+- Authenticated listing commands for tenants, clients, scopes, users, and related admin entities as implemented by the current command surface
+- Export and import workflows for tenant and configuration manifests
+- MCP stdio mode for tool-based integrations
 
-**Phase 3+**: CRUD admin commands, provider/admin parity, MCP parity, richer output formatting, and broader server configuration support.
+Check `mrwho-cli --help` for the currently available command groups in your build.
 
 ## Architecture
 
@@ -211,13 +205,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 
 ## Roadmap
 
-See [/memories/session/plan.md](/memories/session/plan.md) for the current phased implementation plan covering:
+The CLI continues to track the WebAuth admin surface. For the authoritative command set in your checkout, prefer:
 
-- shared CLI infrastructure and token/session improvements
-- immediate command groups against existing endpoints
-- follow-on WebAuth API work for clients/realms/scopes/users
-- CLI and MCP testing strategy
-- documentation and rollout work
+- `mrwho-cli --help`
+- `mrwho-cli <command> --help`
+- the E2E coverage in `e2e/tests/test_cli_operations.py`
 
 ## Contributing
 

@@ -1,5 +1,7 @@
 # Single-Tenant Login Redirect Fix
 
+> Historical note: This fix summary is kept for implementation history. Route examples and tenant behavior notes should be read as point-in-time context; use [README](../../README.md), [docs/developer-guide.md](../developer-guide.md), and [docs/production-setup-guide.md](../production-setup-guide.md) for current behavior and setup.
+
 **Issue:** When logging in to a single-tenant instance (MultiTenancy.Enabled = false), the Login page redirects to `/t/default/` which returns 404 Not Found because routes are registered at root level in single-tenant mode.
 
 **Date Fixed:** October 6, 2025  

@@ -4,13 +4,35 @@ This Razor Pages sample shows how to authenticate an interactive web application
 
 ## Prerequisites
 
-- .NET 9 SDK (preview)
-- A running instance of `MrWhoOidc.WebAuth` exposed at `https://localhost:7208`. The Aspire host (`MrWhoOidc.AppHost`) starts one for local development.
-- The `mrwho-admin` client registration seeded by `MrWhoOidc.Auth` with redirect URI `https://localhost:5003/signin-oidc`.
+- .NET 10 SDK
+- A running `MrWhoOidc.WebAuth` instance.
+- The seeded `blazor-web` client registration with redirect URI `https://localhost:5003/signin-oidc`.
+
+## Recommended Local Workflows
+
+### Seeded Docker Stack
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+This starts the sample at `https://localhost:5003` and points it at the seeded default tenant:
+
+- issuer: `https://localhost:8443/t/default`
+- discovery: `https://localhost:8443/t/default/.well-known/openid-configuration`
+- downstream API: `https://localhost:7149`
+
+### Aspire AppHost
+
+```bash
+dotnet run --project MrWhoOidc.AppHost
+```
+
+This starts the auth server, this Razor client, and `MrWhoOidc.TestApi` together for a .NET-first debugging workflow.
 
 ## Running the sample
 
-1. Start the platform locally (for example via `dotnet run --project MrWhoOidc.AppHost`).
+1. Start the platform locally with either `docker-compose.dev.yml` or `MrWhoOidc.AppHost`.
 2. Launch the Razor client:
 
     ```powershell
@@ -29,6 +51,6 @@ This Razor Pages sample shows how to authenticate an interactive web application
 - The home page reads cached discovery metadata and displays the stored tokens/claims to prove the flow succeeded.
 - The secure page injects `TestApiClient`, which relies on the `IMrWhoOnBehalfOfManager` helper to exchange the signed-in user's access token for one targeted at the downstream API. The resulting access token is attached automatically to the outgoing HTTP request.
 
-In the current multi-tenant development setup, keep `Issuer` tenant-scoped and set `DiscoveryUri` explicitly to the tenant discovery document, for example `https://localhost:7208/t/default/.well-known/openid-configuration`.
+In the current multi-tenant development setup, keep `Issuer` tenant-scoped and set `DiscoveryUri` explicitly to the tenant discovery document, for example `https://localhost:8443/t/default/.well-known/openid-configuration`.
 
-Adjust the configuration in `appsettings.json` if you register a different client or change the issuer URL.
+If you run against a different tenant or issuer, update the `MrWhoOidc` section in `appsettings.json` accordingly.

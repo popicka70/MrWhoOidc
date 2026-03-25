@@ -7,6 +7,17 @@ Updated: 2025-11-01 (URL convention migration to kebab-case)
 
 This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flows, request parameters, JAR/JARM, token exchange (OBO), DPoP, and discovery.
 
+## 0) Local development, examples, and testing
+
+Before wiring a client or API to MrWhoOidc, choose the local workflow that matches what you are building:
+
+- **Seeded Docker stack:** [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) starts `docker-compose.dev.yml`, including the auth server, database, Redis, MailHog, and sample apps.
+- **Aspire AppHost:** `dotnet run --project MrWhoOidc.AppHost` is the optional IDE-first workflow for debugging the .NET projects locally.
+- **Example applications:** [example-applications-guide.md](example-applications-guide.md) explains which sample app demonstrates which scenario.
+- **Browser E2E tests:** [../e2e/README.md](../e2e/README.md) covers the Playwright suite that exercises the UI, sample apps, and CLI flows.
+
+For the seeded local development stack, the example applications use the tenant-scoped issuer `https://localhost:8443/t/default` and explicitly target `https://localhost:8443/t/default/.well-known/openid-configuration`.
+
 ## 1) Discovery and base endpoints
 
 - OIDC discovery: `/.well-known/openid-configuration`
@@ -16,6 +27,12 @@ This guide shows how to integrate your app and APIs with MrWhoOidc: sign-in flow
 - Introspection endpoint: `/introspect` (if enabled)
 
 Cache `.well-known` and JWKS using ETag/Cache-Control.
+
+If you are integrating against the seeded local examples, prefer the tenant-scoped discovery document:
+
+- `https://localhost:8443/t/default/.well-known/openid-configuration`
+
+That matches the development compose stack and the current demo applications.
 
 ### 1.1 Optional JWKS Endpoints (Feature-Flagged)
 
@@ -498,7 +515,7 @@ var json = await res.Content.ReadAsStringAsync();
 
 - Use the provided `.http` files under `docs/http` for quick endpoint testing
 - In CI, spin up Redis to exercise replay cache and rate-limit paths
-- Lock SDK/toolchain to a known-good version until .NET 9 GA
+- Lock SDK/toolchain to a known-good .NET 10 version for repeatable local and CI behavior
 
 ---
 

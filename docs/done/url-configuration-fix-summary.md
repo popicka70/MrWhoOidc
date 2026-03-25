@@ -1,5 +1,7 @@
 # URL Configuration Fix - Summary
 
+> Historical note: This summary reflects a past configuration fix and may reference older local URLs or deployment assumptions. For current issuer, local Docker, and production guidance, use [README](../../README.md), [docs/deployment-guide.md](../deployment-guide.md), and [docs/production-setup-guide.md](../production-setup-guide.md).
+
 ## Problem Identified
 
 The IdP chaining URLs were showing `https://localhost:7208` instead of the correct Docker port `8443` because:

@@ -8,7 +8,7 @@
 - Search/filter input visible
 
 ## Actions
-- Verify at least one user exists (admin@default.local seeded at startup)
+- Verify at least one user exists (admin@mrwho.local seeded at startup)
 - Click "Add User" — verify the add user form appears
 - Navigate back
 - Click "Edit" on the first user — verify the edit form opens
@@ -22,7 +22,7 @@
 4. Verify the new user appears in the list
 
 ### Edit User
-1. Find "e2e-test-user" (or admin@default.local)
+1. Find "e2e-test-user" (or admin@mrwho.local)
 2. Click "Edit"
 3. Update display name or another safe field
 4. Submit and verify changes saved

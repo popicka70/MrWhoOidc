@@ -2,7 +2,7 @@
 
 ## Overview
 
-HybridCache is a .NET 9 feature that provides a unified caching API combining:
+HybridCache is a modern .NET caching feature that provides a unified caching API combining:
 - **L1 (Local/Memory) Cache**: Fast in-memory caching for single-instance scenarios
 - **L2 (Distributed) Cache**: Optional Redis-backed distributed cache for multi-instance scenarios
 - **Stampede Protection**: Automatic coordination to prevent cache stampedes

@@ -10,20 +10,20 @@
 
 ### Prerequisites
 - ✅ Node.js 18+ installed (see NODE-UPGRADE-GUIDE.md)
-- ✅ .NET 9 SDK installed
-- ✅ PostgreSQL running (via Docker/Aspire)
+- ✅ Docker and Docker Compose installed
+- ✅ Optional: .NET 10 SDK if you want to run or debug the backend projects outside Docker
 
 ### Step 1: Start the OIDC Server
 
 ```powershell
-# Terminal 1: From MrWhoOidc root directory
-dotnet run --project MrWhoOidc.AppHost
+# From MrWhoOidc root directory
+docker compose -f docker-compose.dev.yml up -d --build webauth reactclient postgres redis
 ```
 
-Wait for output:
+Wait for the services to become healthy, then verify:
+
 ```
-✔ Resources started successfully.
-  - webauth: https://localhost:7208
+curl -k https://localhost:8443/.well-known/openid-configuration
 ```
 
 ### Step 2: Start the React App
@@ -46,10 +46,10 @@ Expected output:
 
 1. **Open browser**: http://localhost:5173
 2. **Click "Login"** button
-3. **Accept certificate** warning for https://localhost:7208 (self-signed cert)
+3. **Accept certificate** warning for https://localhost:8443 (self-signed cert)
 4. **Enter credentials**:
-   - Username: `admin` (or any seeded user)
-   - Password: `Password123!`
+  - Username: `admin@mrwho.local`
+  - Password: `Admin123!`
 5. **Observe redirect** back to http://localhost:5173/callback
 6. **View tokens and user info** displayed on the page
 
@@ -83,7 +83,7 @@ app.MapGet("/jwks", GetServerJwks)
 ```json
 {
   "Oidc": {
-    "Issuer": "https://localhost:7208",
+    "Issuer": "https://localhost:8443",
     "AllowedCorsOrigins": [
       "http://localhost:5173",   // React (Vite default)
       "http://localhost:3000",   // React (CRA default)
@@ -99,7 +99,7 @@ app.MapGet("/jwks", GetServerJwks)
 **File**: `.env.local` (created)
 
 ```bash
-VITE_OIDC_AUTHORITY=https://localhost:7208
+VITE_OIDC_AUTHORITY=https://localhost:8443/t/default
 VITE_OIDC_CLIENT_ID=react-demo
 VITE_REDIRECT_URI=http://localhost:5173/callback
 VITE_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/
@@ -112,7 +112,7 @@ VITE_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/
 **Terminal 3**:
 ```powershell
 # Test CORS preflight (OPTIONS)
-curl -X OPTIONS https://localhost:7208/.well-known/openid-configuration `
+curl -X OPTIONS https://localhost:8443/.well-known/openid-configuration `
   -H "Origin: http://localhost:5173" `
   -H "Access-Control-Request-Method: GET" `
   --insecure
@@ -146,7 +146,7 @@ dotnet run --project MrWhoOidc.AppHost
 ### "net::ERR_CERT_AUTHORITY_INVALID"
 
 **Solution**: This is normal for self-signed certificates.
-1. Navigate directly to https://localhost:7208
+1. Navigate directly to https://localhost:8443
 2. Click "Advanced" → "Proceed to localhost (unsafe)"
 3. Return to React app and try login again
 
@@ -172,7 +172,7 @@ npm run dev  # Restart
 ```
 ┌─────────────────┐     1. Click Login      ┌──────────────────┐
 │  React App      │ ───────────────────────> │  OIDC Server     │
-│  localhost:5173 │                          │  localhost:7208  │
+│  localhost:5173 │                          │  localhost:8443  │
 └─────────────────┘                          └──────────────────┘
         ↑                                              │
         │                                              │ 2. Show login form
@@ -214,7 +214,7 @@ npm run dev  # Restart
 
 Once working locally:
 
-1. **Register Additional Clients**: Use admin UI at https://localhost:7208/Admin/Clients
+1. **Register Additional Clients**: Use admin UI at https://localhost:8443/admin/clients
 2. **Test Different Grant Types**: Authorization Code, Refresh Token, etc.
 3. **Add DPoP Support**: See oauth4webapi examples
 4. **Deploy to Production**: Follow CORS-SETUP-GUIDE.md for production config
@@ -226,9 +226,9 @@ Before asking for help, verify:
 - [ ] Node.js 18+ installed (`node --version`)
 - [ ] Both servers running (AppHost + React)
 - [ ] `.env.local` exists in ReactOidcClient folder
-- [ ] Accepted self-signed cert at https://localhost:7208
+- [ ] Accepted self-signed cert at https://localhost:8443
 - [ ] Browser DevTools Network tab shows CORS headers
-- [ ] No other service running on port 5173 or 7208
+- [ ] No other service running on port 5173 or 8443
 
 ## 🆘 Still Having Issues?
 

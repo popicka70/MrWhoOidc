@@ -32,6 +32,8 @@ MrWhoOidc is designed with a **secure-by-default** approach for production deplo
 | Default credentials | Created automatically | Must be specified |
 | Multi-tenancy state | From config | From license |
 
+For the seeded local stack, use [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md). This guide is for empty-database, production-style environments.
+
 ---
 
 ## Environment Variables Reference
@@ -56,12 +58,12 @@ MrWhoOidc is designed with a **secure-by-default** approach for production deplo
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MultiTenancy__Enabled` | Enable multi-tenant mode | `false` |
-| `MultiTenancy__DefaultTenantSlug` | Default tenant identifier | `default` |
 | `Redis__Enabled` | Enable Redis caching | `false` |
 | `Redis__ConnectionString` | Redis connection | `redis:6379` |
-| `Seeder__AutoSeedEnabled` | Auto-seed database (dev only) | `false` |
+| `Seeder__AutoSeedEnabled` | Auto-seed database (development/testing only) | `false` |
 | `ForwardedHeaders__UnsafeTrustAll` | Trust proxy headers | `false` |
+
+> Multi-tenancy mode is controlled by the installed platform license, not by a deployment toggle.
 
 ### Security Variables
 

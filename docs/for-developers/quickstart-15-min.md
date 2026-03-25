@@ -7,7 +7,7 @@ Get MrWhoOidc running locally in 15 minutes for development and testing.
 Ensure you have the following installed:
 
 - **Docker Desktop** (v24+) or **Podman** with Docker Compose
-- **.NET 9.0 SDK** (for running tests or building)
+- **.NET 10 SDK** (for running tests, AppHost, or building locally)
 - **Git** (for cloning the repository)
 
 **Optional:**
@@ -55,66 +55,46 @@ MAIL_ENABLED=false
 
 ---
 
-## Step 3: Start Services (3 minutes)
+## Step 3: Start the Development Stack (3 minutes)
 
-Start the entire stack with Docker Compose:
+Start the development stack from `docker-compose.dev.yml`:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 This starts:
-- **MrWhoOidc** web application (port 8443)
+- **MrWhoOidc WebAuth** (port 8443)
 - **PostgreSQL** database (port 5432)
-- **Redis** cache (port 6379, if enabled)
+- **Redis** cache (port 6379)
+- **MailHog** (SMTP/UI on ports 1025 and 8025)
+- **OidcDemo** (port 5001)
+- **RazorClient** (port 5003)
+- **ReactOidcClient** (port 5173)
+- **TestApi** (port 7149)
 
 **Verify services are running:**
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.dev.yml ps
 ```
 
-You should see:
-```
-NAME                    STATUS          PORTS
-mrwhooidc-webauth-1     Up (healthy)    0.0.0.0:8443->8443/tcp
-mrwhooidc-postgres-1    Up (healthy)    0.0.0.0:5432->5432/tcp
-mrwhooidc-redis-1       Up (healthy)    0.0.0.0:6379->6379/tcp
-```
+Wait for `webauth`, `postgres`, and the example apps to become healthy.
+
+## Step 4: Sign In to the Seeded Development Tenant (2 minutes)
+
+The development stack auto-seeds the default tenant on first request. Use these development-only credentials:
+
+- **Username:** `admin@mrwho.local`
+- **Password:** `Admin123!`
+
+Open `https://localhost:8443/login` or go directly to `https://localhost:8443/admin`.
+
+> The `/bootstrap` endpoint is for fresh production deployments. It is not required for the development compose stack.
 
 ---
 
-## Step 4: Bootstrap Initial Tenant (2 minutes)
-
-In production mode, the database starts empty. Call the bootstrap endpoint to create the initial tenant and admin user:
-
-```bash
-curl -k -X POST https://localhost:8443/bootstrap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenantName": "default",
-    "tenantDisplayName": "Default Tenant",
-    "adminUsername": "admin",
-    "adminEmail": "admin@example.com",
-    "adminPassword": "AdminPassword123!"
-  }'
-```
-
-**Expected response:**
-```json
-{
-  "success": true,
-  "tenantId": "01hxyz...",
-  "adminUserId": "01hxyz...",
-  "message": "Bootstrap completed successfully"
-}
-```
-
-> **Security Note:** Change the default admin password immediately after first login!
-
----
-
-## Step 5: Verify Deployment (2 minutes)
+## Step 5: Verify the Auth Server (2 minutes)
 
 ### Check OIDC Discovery Endpoint
 
@@ -143,7 +123,15 @@ curl -k https://localhost:8443/metrics
 
 **Expected:** All should return HTTP 200 with status information.
 
-### Access Admin UI
+### Check the Tenant Discovery Document Used by the Sample Apps
+
+```bash
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration | jq
+```
+
+The example applications in `docker-compose.dev.yml` use the tenant-scoped issuer at `https://localhost:8443/t/default`.
+
+### Access the Admin UI
 
 Open your browser and navigate to:
 
@@ -152,20 +140,35 @@ https://localhost:8443/admin
 ```
 
 Log in with:
-- **Username:** `admin`
-- **Password:** `AdminPassword123!`
+- **Username:** `admin@mrwho.local`
+- **Password:** `Admin123!`
 
 You should see the admin dashboard with tenant management, client configuration, and user management options.
 
 ---
 
-## Step 6: Test Authentication Flow (3 minutes)
+## Step 6: Explore the Sample Applications (3 minutes)
+
+The development stack exposes several sample applications that already point at the seeded default tenant:
+
+- `https://localhost:5001` - `MrWhoOidc.OidcDemo`
+- `https://localhost:5003` - `MrWhoOidc.RazorClient`
+- `http://localhost:5173` - `ReactOidcClient`
+- `https://localhost:7149/health` - `MrWhoOidc.TestApi`
+
+The primary demo pair is `RazorClient` plus `TestApi`. Sign in to `https://localhost:5003`, then open the secure page to trigger an on-behalf-of token exchange against the sample API.
+
+See [../example-applications-guide.md](../example-applications-guide.md) for the full example matrix.
+
+---
+
+## Step 7: Test an Authentication Flow (3 minutes)
 
 ### Option A: Using the Example Client
 
-1. Navigate to the example client (if deployed):
+1. Navigate to the Razor Pages sample:
    ```
-   https://localhost:7000
+  https://localhost:5003
    ```
 
 2. Click "Login" - you'll be redirected to MrWhoOidc
@@ -253,10 +256,28 @@ dotnet dev-certs https --trust
 **Solution:** Check if containers are running:
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.dev.yml ps
 ```
 
 If not running, check logs:
+
+```bash
+docker compose -f docker-compose.dev.yml logs webauth
+```
+
+### Issue: Need a Production-Like Empty Database
+
+The development stack intentionally auto-seeds data. For a fresh production-style environment, use `docker-compose.yml` and the bootstrap flow documented in [../production-setup-guide.md](../production-setup-guide.md).
+
+### Optional: Aspire AppHost for Local Debugging
+
+If you want to debug the .NET projects without running the full dev compose stack, start the Aspire host instead:
+
+```bash
+dotnet run --project MrWhoOidc.AppHost
+```
+
+This launches the core auth server and the primary .NET demo applications in an IDE-friendly workflow.
 
 ```bash
 docker compose logs webauth

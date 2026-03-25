@@ -1,7 +1,7 @@
 # MrWhoOidc E2E Tests
 
-End-to-end test suite for the MrWhoOidc OIDC Identity Provider using **Python + Playwright**.  
-Tests navigate all pages of the admin UI as a real user would, capture full-page screenshots, and use **GPT-4o Vision** to evaluate UI quality and functional correctness. The suite also validates the dockerized RazorClient and TestApi example applications so the sample apps stay healthy with the identity provider. A comprehensive HTML report is produced after each run.
+End-to-end test suite for the MrWhoOidc OIDC Identity Provider using **Python + Playwright**.
+Tests navigate the admin UI as a real user would, capture full-page screenshots, and optionally send them to either OpenAI or Ollama for evaluation. The suite also validates the dockerized RazorClient and TestApi example applications so the sample apps stay healthy with the identity provider. A comprehensive HTML report is produced after each run.
 
 The example applications set `MrWhoOidc:DiscoveryUri` explicitly because the current `MrWhoOidc.Client` package requires an exact tenant discovery URL in multi-tenant deployments.
 
@@ -14,7 +14,7 @@ The example applications set `MrWhoOidc:DiscoveryUri` explicitly because the cur
 | Python | 3.11+ |
 | pip | latest |
 | Docker + Docker Compose | for the running WebAuth instance |
-| OpenAI API key | for LLM screenshot evaluation (optional) |
+| OpenAI API key or local Ollama | optional for LLM screenshot evaluation |
 
 ---
 
@@ -56,7 +56,7 @@ e2e/.venv/bin/playwright install chromium
 
 ```bash
 cp .env.example .env
-# Then edit .env and fill in your OPENAI_API_KEY
+# Then edit .env and choose either the OpenAI or Ollama backend
 ```
 
 | Variable | Default | Description |
@@ -64,12 +64,15 @@ cp .env.example .env
 | `BASE_URL` | `https://localhost:8443` | URL of the running WebAuth instance |
 | `EXAMPLE_RAZORCLIENT_URL` | `https://localhost:5003` | URL of the dockerized Razor Pages example client |
 | `EXAMPLE_TESTAPI_URL` | `https://localhost:7149` | URL of the dockerized downstream example API |
-| `OPENAI_API_KEY` | _(empty)_ | GPT-4o API key. If absent, visual eval is skipped. |
+| `LLM_BACKEND` | `openai` | `openai` or `ollama` |
+| `OPENAI_API_KEY` | _(empty)_ | OpenAI API key. If absent and `LLM_BACKEND=openai`, visual eval is skipped. |
+| `OLLAMA_HOST` | `http://localhost:11434` | Base URL of the local Ollama server |
+| `OLLAMA_MODEL` | `qwen3.5:397b-cloud` or custom | Model used when `LLM_BACKEND=ollama` |
 | `ADMIN_USERNAME` | `admin@mrwho.local` | Admin login (seeded automatically on first start) |
 | `ADMIN_PASSWORD` | `Admin123!` | Admin password |
 | `HEADED` | `false` | Set `true` to watch the browser |
 | `SLOW_MO` | `0` | Milliseconds between actions (for visual debugging) |
-| `OPENAI_MODEL` | `gpt-4o` | Override the model used for evaluation |
+| `OPENAI_MODEL` | `gpt-4o` | Model used when `LLM_BACKEND=openai` |
 
 ### 4. Run the tests
 
@@ -200,7 +203,7 @@ e2e/
 
 ## Authentication
 
-The test suite logs in as `admin@default.local` / `Admin123!` (seeded automatically by `TenantSeedingService` on first application start).
+The test suite logs in as `admin@mrwho.local` / `Admin123!` (seeded automatically by `TenantSeedingService` on first application start).
 
 Browser session state is saved to `.auth/state.json` after the first login and reused for all subsequent authenticated tests in the same run. This significantly speeds up the suite. The `.auth/` directory is git-ignored.
 

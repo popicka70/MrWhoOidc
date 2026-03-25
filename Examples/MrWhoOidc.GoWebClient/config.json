@@ -1,5 +1,5 @@
 {
-  "issuer": "https://localhost:7208",
+  "issuer": "https://localhost:8443/t/default",
   "client_id": "blazor-web",
   "client_secret": "z1bvxwNcBXeOP03EMUdawfHnBhx6KAXuYArRSY6a1ZPyme7JMJ_A50bQY75FW6TG",
   "redirect_url": "http://localhost:5080/callback",
