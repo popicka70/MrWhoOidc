@@ -45,7 +45,7 @@ public class IndexModel : PageModel
             ProviderDisplay = NormalizeProviderName(provider);
             ProviderIconClass = ResolveIcon(provider);
         }
-        if (!string.IsNullOrEmpty(ret) && Uri.TryCreate(ret, UriKind.Relative, out _)) ReturnUrl = ret;
+        if (!string.IsNullOrEmpty(ret) && Url.IsLocalUrl(ret)) ReturnUrl = ret;
         if (!string.IsNullOrWhiteSpace(style)) Style = style;
         if (!string.IsNullOrWhiteSpace(client_id)) ClientId = client_id;
         if (!string.IsNullOrWhiteSpace(post_logout_redirect_uri)) PostLogoutRedirectUri = post_logout_redirect_uri;
@@ -59,7 +59,7 @@ public class IndexModel : PageModel
         var sw = System.Diagnostics.Stopwatch.StartNew();
         if (string.IsNullOrEmpty(mode)) mode = "local";
         if (!string.IsNullOrEmpty(style)) Style = style;
-        if (string.IsNullOrEmpty(returnUrl) || !Uri.TryCreate(returnUrl, UriKind.Relative, out _)) returnUrl = "/";
+        if (string.IsNullOrEmpty(returnUrl) || !Url.IsLocalUrl(returnUrl)) returnUrl = "/";
 
         // Capture potential external redirect inputs (optional) - now from form fields
         var clientId = client_id ?? string.Empty;
@@ -71,7 +71,7 @@ public class IndexModel : PageModel
             _audit.Emit("logout.federated.choice.local", new { return_hash = _audit.HashValue(returnUrl) });
             await HttpContext.SignOutAsync();
             _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "local"));
-            return Redirect(returnUrl);
+            return LocalRedirect(returnUrl);
         }
         if (mode == "federated")
         {
@@ -84,7 +84,7 @@ public class IndexModel : PageModel
                 _audit.Emit("logout.federated.choice.federated.capability_missing", new { });
                 await HttpContext.SignOutAsync();
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
-                return Redirect(returnUrl);
+                return LocalRedirect(returnUrl);
             }
 
             string? encIdToken = null; string? upstreamSid = null;
@@ -103,7 +103,7 @@ public class IndexModel : PageModel
                 _audit.Emit("logout.federated.redirect.fail", new { reason = redirectModel.FailureReason });
                 await HttpContext.SignOutAsync();
                 _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "fallback_local"));
-                return Redirect(returnUrl);
+                return LocalRedirect(returnUrl);
             }
 
             await HttpContext.SignOutAsync();
@@ -115,7 +115,7 @@ public class IndexModel : PageModel
         _audit.Emit("logout.federated.choice.unknown", new { mode });
         await HttpContext.SignOutAsync();
         _metrics.LogoutDuration.Record(sw.ElapsedMilliseconds, new KeyValuePair<string, object?>("mode", "unknown_local"));
-        return Redirect(returnUrl);
+        return LocalRedirect(returnUrl);
     }
 
     private static string NormalizeProviderName(string raw)
