@@ -1,5 +1,7 @@
 # MrWhoOidc.Client NuGet Backlog
 
+> Historical note: This backlog documents package planning at the time it was written. Target frameworks, packaging scope, and milestones here should not be treated as current release guidance. Use [README](../../README.md) and [docs/developer-guide.md](../developer-guide.md) for the current repository baseline.
+
 Status legend
 - [ ] Not started
 - [~] In progress

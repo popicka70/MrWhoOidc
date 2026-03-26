@@ -1,5 +1,5 @@
 {
-  "issuer": "https://localhost:7208",
+  "issuer": "https://localhost:8443/t/default",
   "client_id": "mrwho-go-web",
   "client_secret": "",
   "redirect_url": "http://localhost:5080/callback",

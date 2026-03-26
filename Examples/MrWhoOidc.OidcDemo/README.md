@@ -13,24 +13,23 @@ This sample application shows how to:
 
 ## Configuration
 
-The application is configured to use the deployed MrWhoOidc IdP at `https://mrwho.onrender.com`.
+The checked-in configuration targets the local development issuer and is also used by `docker-compose.dev.yml`.
 
 ### Settings (appsettings.json)
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| Authority | `https://mrwho.onrender.com/default` | OIDC discovery endpoint (includes tenant) |
-| ClientId | `e_LrLUqFsLaTizJh7ERARvfT` | Client identifier |
-| ClientSecret | `YOUR_CLIENT_SECRET_HERE` | Client secret (replace with actual value) |
+| Authority | `https://localhost:8443/t/default` | Tenant-scoped issuer |
+| DiscoveryUri | `https://localhost:8443/t/default/.well-known/openid-configuration` | Discovery document used by the sample |
+| ClientId | `blazor-web` | Seeded demo client identifier |
+| ClientSecret | configured in `appsettings.json` | Seeded demo client secret |
 | Scopes | `openid`, `profile`, `email` | Requested OIDC scopes |
 
 ### Before Running
 
-1. **Set the Client Secret**: Replace `YOUR_CLIENT_SECRET_HERE` in `appsettings.json` with your actual client secret.
-
-2. **Configure Redirect URI**: Ensure the IdP has `https://localhost:5001/signin-oidc` registered as a valid redirect URI for the client.
-
-3. **Configure Post-Logout Redirect URI**: Ensure `https://localhost:5001/signout-callback-oidc` is registered for logout.
+1. Start the local auth server with either `docker-compose.dev.yml` or `MrWhoOidc.AppHost`.
+2. If you are using the seeded local stack, no additional client setup is required.
+3. If you point the app at a different issuer, make sure that issuer allows `https://localhost:5001/signin-oidc` and `https://localhost:5001/signout-callback-oidc`.
 
 ## Running the Application
 
@@ -41,10 +40,12 @@ dotnet run
 
 Then open `https://localhost:5001` in your browser.
 
+The sample is also included in `docker-compose.dev.yml`.
+
 ## Authentication Flow
 
 1. User clicks "Sign In with MrWhoOidc"
-2. Application redirects to MrWhoOidc IdP (`/default/authorize`)
+2. Application redirects to the tenant-scoped MrWhoOidc issuer
 3. User authenticates at the IdP
 4. IdP redirects back to `/signin-oidc` with authorization code
 5. Application exchanges code for tokens

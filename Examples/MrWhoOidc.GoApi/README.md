@@ -5,8 +5,10 @@ Go minimal API that validates access tokens issued by `MrWhoOidc.WebAuth` and ex
 ## Prerequisites
 
 - Go 1.22+
-- A running MrWhoOidc issuer (local Aspire host serves one at `https://localhost:7208`)
+- A running MrWhoOidc issuer
 - Access tokens targeted at the configured audience (default `api`)
+
+The easiest local target is the seeded dev compose stack at `https://localhost:8443/t/default`.
 
 ## Setup
 
@@ -28,6 +30,8 @@ go run .
 You can now call:
 - `GET http://localhost:5190/health` – liveness probe.
 - `GET http://localhost:5190/me` – requires a Bearer token. Returns subject metadata, granted scopes, and the delegated client from the `act` claim when present.
+
+If you are using `docker-compose.dev.yml`, set `issuer` to `https://localhost:8443/t/default` so the sample points at the seeded local tenant.
 
 ## Implementation details
 

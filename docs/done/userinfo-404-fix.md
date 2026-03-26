@@ -1,5 +1,7 @@
 # UserInfo 404 Error Fix
 
+> Historical note: This incident write-up captures a historical failure mode. The URLs and middleware state described here are useful for debugging context, but current setup and runtime guidance lives in [README](../../README.md) and [docs/developer-guide.md](../developer-guide.md).
+
 **Date:** October 8, 2025  
 **Issue:** OIDC authentication failing with 404 when calling `/userinfo` endpoint  
 **Root Cause:** `UseStatusCodePagesWithReExecute` middleware intercepting 401 DPoP nonce challenges

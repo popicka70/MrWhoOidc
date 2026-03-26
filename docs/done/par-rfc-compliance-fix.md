@@ -1,5 +1,7 @@
 # PAR RFC 9126 Compliance Fix
 
+> Historical note: This fix note is preserved as protocol debugging history. Client examples and local environment details may reflect older setups. For current integration guidance, use [README](../../README.md), [docs/developer-guide.md](../developer-guide.md), and [docs/example-applications-guide.md](../example-applications-guide.md).
+
 **Issue**: React OIDC client using `oauth4webapi` library failed with error:
 ```
 OperationProcessingError: response is not a conformant Pushed Authorization Request Endpoint response

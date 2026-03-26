@@ -51,7 +51,9 @@ docker ps
 
 ## Quick Start
 
-For a rapid deployment to test MrWhoOidc:
+For a rapid production-style container deployment to test MrWhoOidc:
+
+> For local development with seeded data and example applications, use [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) instead of this guide.
 
 1. **Create deployment directory**:
 
@@ -79,6 +81,7 @@ cp .env.example .env
 # - POSTGRES_PASSWORD (use a strong password)
 # - OIDC_PUBLIC_BASE_URL (your deployment URL)
 # - CERT_PASSWORD (certificate password)
+# - BOOTSTRAP_TOKEN (for the first-time bootstrap only)
 ```
 
 5. **Download development certificate** (for testing only):
@@ -94,21 +97,42 @@ curl -o certs/aspnetapp.pfx https://raw.githubusercontent.com/popicka70/MrWhoOid
 docker compose up -d
 ```
 
-7. **Verify deployment**:
+7. **Verify startup**:
 
 ```bash
 # Wait 30 seconds for startup
 sleep 30
 
-# Check discovery endpoint
-curl -k https://localhost:8443/.well-known/openid-configuration
+# Check health endpoint
+curl -k https://localhost:8443/health
 
-# Expected: JSON response with OIDC metadata
+# Expected: HTTP 200
 ```
 
-8. **Access admin UI**:
+8. **Bootstrap the initial tenant**:
+
+```bash
+curl -k -X POST https://localhost:8443/bootstrap \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+  -d '{
+    "tenantSlug": "default",
+    "tenantName": "Default Tenant",
+    "adminEmail": "admin@example.com",
+    "adminPassword": "ChangeMeNow123!",
+    "adminName": "Administrator"
+  }'
+```
+
+9. **Verify discovery and sign in**:
+
+```bash
+curl -k https://localhost:8443/.well-known/openid-configuration
+```
 
 Open browser to `https://localhost:8443/admin`
+
+After the bootstrap succeeds, remove `BOOTSTRAP_TOKEN` from the environment or set it back to an empty value.
 
 ---
 

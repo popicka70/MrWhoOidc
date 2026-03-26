@@ -17,17 +17,17 @@ No 'Access-Control-Allow-Origin' header is present on the requested resource.
 **Step 1**: I've already created `.env.local` for you with local server configuration:
 
 ```bash
-VITE_OIDC_AUTHORITY=https://localhost:7208
+VITE_OIDC_AUTHORITY=https://localhost:8443/t/default
 VITE_OIDC_CLIENT_ID=react-demo
 VITE_REDIRECT_URI=http://localhost:5173/callback
 VITE_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/
 ```
 
-**Step 2**: Ensure MrWhoOidc.AppHost is running:
+**Step 2**: Ensure the local development stack is running:
 
 ```powershell
 # In MrWhoOidc root directory
-dotnet run --project MrWhoOidc.AppHost
+docker compose -f docker-compose.dev.yml up -d --build webauth reactclient postgres redis
 ```
 
 **Step 3**: Restart your React dev server:
@@ -40,8 +40,8 @@ npm run dev
 **Step 4**: Navigate to http://localhost:5173 and test login.
 
 ✅ **This will work immediately** because:
-- Both apps run on localhost (same-origin)
-- Local dev bypasses production CORS restrictions
+- The local dev stack already exposes the authority and seed data expected by the React sample
+- The server can be configured to allow the React origin for discovery and token flows
 - Faster development cycle
 
 ---
@@ -71,7 +71,7 @@ If you need to connect to `mrwho.onrender.com`, you must add CORS configuration.
 ```json
 {
   "Oidc": {
-    "Issuer": "https://localhost:7208",
+    "Issuer": "https://localhost:8443",
     "AllowedCorsOrigins": [
       "http://localhost:5173",
       "http://localhost:3000",
@@ -113,9 +113,9 @@ Vite loads environment files in this order (later overrides earlier):
 ### Local Development (Recommended):
 ```
 React App         OIDC Server
-localhost:5173 ←→ localhost:7208
+localhost:5173 ←→ localhost:8443
     ↓
-[No CORS needed - same domain]
+[CORS still applies because the ports differ]
 ```
 
 ### Production:
@@ -132,8 +132,7 @@ localhost:5173 ←→ mrwho.onrender.com
 
 ```powershell
 # Terminal 1: Start OIDC Server
-cd C:\Users\rum2c\source\repos\MrWhoOidc
-dotnet run --project MrWhoOidc.AppHost
+docker compose -f docker-compose.dev.yml up -d --build webauth reactclient postgres redis
 
 # Terminal 2: Start React App (after Node.js upgrade)
 cd Examples\ReactOidcClient
@@ -144,7 +143,7 @@ http://localhost:5173
 ```
 
 Expected flow:
-1. Click "Login" → Redirects to https://localhost:7208/authorize
+1. Click "Login" → Redirects to https://localhost:8443/t/default/authorize
 2. Enter credentials → Login
 3. Redirects back to http://localhost:5173/callback
 4. App shows user info and tokens
@@ -165,12 +164,12 @@ Expected flow:
 4. Hard refresh (Ctrl+Shift+R)
 ```
 
-### Certificate warnings with localhost:7208?
+### Certificate warnings with localhost:8443?
 
 **Issue**: Self-signed certificate for local HTTPS.
 
 **Fix**: Accept the certificate warning in browser:
-1. Navigate to https://localhost:7208
+1. Navigate to https://localhost:8443
 2. Click "Advanced"
 3. Click "Proceed to localhost (unsafe)"
 

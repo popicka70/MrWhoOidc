@@ -36,7 +36,7 @@ This service addresses a critical security flaw: authorization servers should **
 
 ### Prerequisites
 
-- .NET 9.0 SDK
+- .NET 10 SDK
 - Docker (for containerized deployment)
 - ECDSA P-256 private key for license signing
 
@@ -46,7 +46,6 @@ This service addresses a critical security flaw: authorization servers should **
    ```bash
    git clone https://github.com/your-org/MrWhoOidc.git
    cd MrWhoOidc
-   git checkout 001-key-license-generator
    ```
 
 2. **Generate licensing key**

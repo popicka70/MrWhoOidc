@@ -12,7 +12,7 @@
 - Verify the Username field accepts text input (placeholder: `alice or alice@example.com`)
 - Verify the Password field is of type password (characters are masked)
 - Submit the form with invalid credentials and verify an error alert appears
-- Submit the form with valid credentials (`admin@default.local` / `Admin123!`) and verify redirect to home/dashboard
+- Submit the form with valid credentials (`admin@mrwho.local` / `Admin123!`) and verify redirect to home/dashboard
 
 ## CRUD Operations
 - N/A — login is not a CRUD form, but we verify authentication outcome
