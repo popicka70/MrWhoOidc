@@ -8,3 +8,6 @@
 ## 2025-06-15 - Optimize EF Core bulk deletes with ExecuteDeleteAsync
 **Learning:** Found an opportunity to replace the Entity Framework Core pattern of `.ToListAsync()` followed by `.RemoveRange()` with `.ExecuteDeleteAsync()`. The older pattern requires loading all entities into memory before deleting them, causing unnecessary memory allocation and network round-trips.
 **Action:** Always replace `.ToListAsync()` + `RemoveRange()` with `.ExecuteDeleteAsync()` for bulk deletion operations in EF Core to improve memory usage and reduce database latency.
+## 2025-10-24 - Optimize client expiration logic with IQueryable
+**Learning:** Found an opportunity to replace the memory-intensive pattern of fetching all entities and their relationships (like `Client` and `ClientSecrets`) using `.Include()` and `.ToListAsync()`, just to verify expiration states in a loop.
+**Action:** Always project boolean or condition states natively to the database engine using `IQueryable.Select()` or `IQueryable.Any()` rather than evaluating conditions in application memory after a full object fetch.
