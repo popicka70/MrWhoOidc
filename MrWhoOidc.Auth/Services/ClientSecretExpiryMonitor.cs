@@ -101,27 +101,24 @@ internal sealed class ClientSecretExpiryMonitor(
 
             metrics?.SetActiveSecretsCount(totalActiveSecrets);
 
-            // Check for fully expired clients (all secrets expired or revoked)
-            var clientsWithSecrets = await db.Clients
-                .Include(c => c.ClientSecrets)
-                .Where(c => c.ClientSecrets.Any())
+            // ⚡ Bolt Optimization: Use IQueryable to check for fully expired clients natively
+            // in the database. This prevents fetching all client secrets into memory just to
+            // verify their expiration state, reducing memory allocation and DB latency.
+            var fullyExpiredClients = await db.Clients
+                .Where(c => c.ClientSecrets.Any() && !c.ClientSecrets.Any(s =>
+                    s.ActivatedAtUtc != null
+                    && s.RevokedAtUtc == null
+                    && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now)))
+                .Select(c => new { c.ClientId, c.TenantId })
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
 
-            foreach (var client in clientsWithSecrets)
+            foreach (var client in fullyExpiredClients)
             {
-                var hasAnyActiveSecret = client.ClientSecrets.Any(s =>
-                    s.ActivatedAtUtc != null
-                    && s.RevokedAtUtc == null
-                    && (s.ExpiresAtUtc == null || s.ExpiresAtUtc > now));
-
-                if (!hasAnyActiveSecret)
-                {
-                    logger.LogError(
-                        "CRITICAL: Client has NO active secrets - authentication will fail: ClientId={ClientId}, TenantId={TenantId}",
-                        client.ClientId,
-                        client.TenantId);
-                }
+                logger.LogError(
+                    "CRITICAL: Client has NO active secrets - authentication will fail: ClientId={ClientId}, TenantId={TenantId}",
+                    client.ClientId,
+                    client.TenantId);
             }
 
             logger.LogDebug("Client secret expiry check completed successfully.");

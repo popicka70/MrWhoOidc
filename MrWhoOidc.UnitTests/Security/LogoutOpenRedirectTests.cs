@@ -107,7 +107,7 @@ public class LogoutOpenRedirectTests
         }
         else if (result is RedirectToPageResult redirectToPageResult)
         {
-             // also fine if it redirects to root page
+            // also fine if it redirects to root page
         }
     }
 }
