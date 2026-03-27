@@ -14,7 +14,13 @@ public sealed class ClientCommand : Command
         Subcommands.Add(new ClientListCommand());
         Subcommands.Add(new ClientGetCommand());
         Subcommands.Add(new ClientCreateCommand());
+        Subcommands.Add(new ClientUpdateCommand());
         Subcommands.Add(new ClientDeleteCommand());
+        Subcommands.Add(new ClientSecretCommand());
+        Subcommands.Add(new ClientProviderCommand());
+        Subcommands.Add(new ClientScopeCommand());
+        Subcommands.Add(new ClientValidateCommand());
+        Subcommands.Add(new ClientRotateSecretCommand());
     }
 
     private sealed class ClientListCommand : Command
@@ -304,6 +310,82 @@ public sealed class ClientCommand : Command
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
                 await CliAdminApiClient.DeleteAsync(config, connection, $"admin/api/clients/{id}").ConfigureAwait(false);
                 AnsiConsole.MarkupLine($"[green]Client {id} deleted.[/]");
+            });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // client update <id>
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private sealed class ClientUpdateCommand : Command
+    {
+        public ClientUpdateCommand() : base("update", "Update properties of an existing client (only non-null fields are applied)")
+        {
+            var idArg = new Argument<Guid>("id") { Description = "Client internal ID (GUID)" };
+            var clientNameOption = new Option<string?>("--client-name") { Description = "New display name" };
+            var pkceOption = new Option<bool?>("--require-pkce") { Description = "Require PKCE" };
+            var consentOption = new Option<bool?>("--require-consent") { Description = "Require consent" };
+            var parOption = new Option<bool?>("--require-par") { Description = "Require PAR" };
+            var scopeOption = new Option<string?>("--scope") { Description = "Space-separated allowed scopes" };
+            var grantTypesOption = new Option<string[]?>("--grant-types") { Description = "Allowed grant types" };
+            var redirectsOption = new Option<string[]?>("--redirect-uris") { Description = "Allowed login redirect URIs" };
+            var logoutRedirectsOption = new Option<string[]?>("--logout-redirect-uris") { Description = "Allowed logout redirect URIs" };
+            var bclUriOption = new Option<string?>("--backchannel-logout-uri") { Description = "Back-channel logout URI" };
+            var fclUriOption = new Option<string?>("--frontchannel-logout-uri") { Description = "Front-channel logout URI" };
+            var authMethodOption = new Option<string?>("--token-auth-method") { Description = "Token endpoint auth method" };
+            var oboOption = new Option<bool?>("--obo-enabled") { Description = "Enable OBO/Token Exchange" };
+            var localLoginOption = new Option<bool?>("--allow-local-login") { Description = "Allow local login" };
+            var externalIdpOption = new Option<bool?>("--allow-external-idp") { Description = "Allow external IdP login" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+
+            Arguments.Add(idArg);
+            Options.Add(clientNameOption);
+            Options.Add(pkceOption);
+            Options.Add(consentOption);
+            Options.Add(parOption);
+            Options.Add(scopeOption);
+            Options.Add(grantTypesOption);
+            Options.Add(redirectsOption);
+            Options.Add(logoutRedirectsOption);
+            Options.Add(bclUriOption);
+            Options.Add(fclUriOption);
+            Options.Add(authMethodOption);
+            Options.Add(oboOption);
+            Options.Add(localLoginOption);
+            Options.Add(externalIdpOption);
+            Options.Add(serverOption);
+            Options.Add(profileOption);
+
+            this.SetSafeAction(async parseResult =>
+            {
+                var id = parseResult.GetValue(idArg);
+                var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(
+                    config, parseResult.GetValue(serverOption), parseResult.GetValue(profileOption));
+
+                await CliAdminApiClient.PutAsync(
+                    config, connection, $"admin/api/clients/{id}",
+                    new
+                    {
+                        clientName = parseResult.GetValue(clientNameOption),
+                        requirePkce = parseResult.GetValue(pkceOption),
+                        requireConsent = parseResult.GetValue(consentOption),
+                        requirePar = parseResult.GetValue(parOption),
+                        scope = parseResult.GetValue(scopeOption),
+                        grantTypes = parseResult.GetValue(grantTypesOption)?.ToList(),
+                        allowedLoginRedirectUris = parseResult.GetValue(redirectsOption)?.ToList(),
+                        allowedLogoutRedirectUris = parseResult.GetValue(logoutRedirectsOption)?.ToList(),
+                        backChannelLogoutUri = parseResult.GetValue(bclUriOption),
+                        frontChannelLogoutUri = parseResult.GetValue(fclUriOption),
+                        tokenEndpointAuthMethod = parseResult.GetValue(authMethodOption),
+                        oboEnabled = parseResult.GetValue(oboOption),
+                        allowLocalLogin = parseResult.GetValue(localLoginOption),
+                        allowExternalIdp = parseResult.GetValue(externalIdpOption)
+                    }).ConfigureAwait(false);
+
+                AnsiConsole.MarkupLine($"[green]Client {id} updated successfully.[/]");
             });
         }
     }

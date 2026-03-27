@@ -18,7 +18,9 @@ public sealed class UserCommand : Command
         Subcommands.Add(new UserListCommand());
         Subcommands.Add(new UserGetCommand());
         Subcommands.Add(new UserCreateCommand());
+        Subcommands.Add(new UserUpdateCommand());
         Subcommands.Add(new UserDeleteCommand());
+        Subcommands.Add(new UserRoleCommand());
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -220,6 +222,46 @@ public sealed class UserCommand : Command
                 AnsiConsole.MarkupLine($"");
                 AnsiConsole.MarkupLine($"[yellow]Credentials written to:[/] {Markup.Escape(resolvedPath)}");
                 AnsiConsole.MarkupLine($"[grey]The credential file has owner-only permissions (600). Keep it safe.[/]");
+            });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // user update <id>
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private sealed class UserUpdateCommand : Command
+    {
+        public UserUpdateCommand() : base("update", "Update properties of an existing user")
+        {
+            var idArg = new Argument<Guid>("id") { Description = "User ID (GUID)" };
+            var nameOption = new Option<string?>("--name") { Description = "New display name" };
+            var emailOption = new Option<string?>("--email") { Description = "New email address" };
+            var serverOption = new Option<string?>("--server") { Description = "Server URL" };
+            var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
+
+            Arguments.Add(idArg);
+            Options.Add(nameOption);
+            Options.Add(emailOption);
+            Options.Add(serverOption);
+            Options.Add(profileOption);
+
+            this.SetSafeAction(async parseResult =>
+            {
+                var id = parseResult.GetValue(idArg);
+                var name = parseResult.GetValue(nameOption);
+                var email = parseResult.GetValue(emailOption);
+                var server = parseResult.GetValue(serverOption);
+                var profile = parseResult.GetValue(profileOption);
+
+                var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+                var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
+
+                await CliAdminApiClient.PutAsync(
+                    config, connection, $"admin/api/users/{id}",
+                    new { name, email }).ConfigureAwait(false);
+
+                AnsiConsole.MarkupLine($"[green]User {id} updated successfully.[/]");
             });
         }
     }

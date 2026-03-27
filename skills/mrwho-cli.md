@@ -53,6 +53,7 @@ These options are available on every command:
 | `--server <url>` | `-s` | Override the server URL for this invocation |
 | `--format <Table\|Json\|Yaml>` | `-f` | Output format (default: `Table`) |
 | `--verbose` | `-v` | Show full exception traces on error |
+| `--dry-run` | | Preview what write operations would do without applying changes |
 | `--help` | `-h` | Show help for any command |
 
 ---
@@ -60,11 +61,36 @@ These options are available on every command:
 ## Tenants  *(platform-admin only)*
 
 ```bash
+# List tenants
 mrwho-cli tenant list [--search <text>] [--format Table|Json|Yaml]
+
+# Get tenant details
+mrwho-cli tenant get <slug-or-guid>
+
+# Create a new tenant (seeds admin user + default realm + system clients)
+mrwho-cli tenant create \
+  --slug acme \
+  --name "Acme Corp" \
+  --admin-email admin@acme.com \
+  --admin-password "s3cure!" \
+  [--output ./acme-credentials.json] \
+  [--overwrite]
+
+# Update a tenant
+mrwho-cli tenant update <slug-or-guid> \
+  [--name "New Name"] \
+  [--description "Updated desc"] \
+  [--admin-email new@acme.com] \
+  [--status Active|Suspended] \
+  [--max-users 500] \
+  [--max-clients 50]
+
+# Soft-delete a tenant (sets status=Deleted; data preserved)
+mrwho-cli tenant delete <slug-or-guid> --confirm
 ```
 
-Lists all tenants. Requires a profile where `isPlatformAdmin: true`.
-Use `--search` to filter by slug, name, or description.
+Requires a profile where `isPlatformAdmin: true`.
+Use `--search` on `list` to filter by slug, name, or description.
 
 ---
 
@@ -117,6 +143,23 @@ mrwho-cli client create \
   [--output ./my-app-credentials.json] \
   [--overwrite]
 
+# Update a client (only provided fields are changed)
+mrwho-cli client update <internal-guid> \
+  [--client-name "New Name"] \
+  [--require-pkce <true|false>] \
+  [--require-consent <true|false>] \
+  [--require-par <true|false>] \
+  [--scope "openid profile"] \
+  [--grant-types "authorization_code" "refresh_token"] \
+  [--redirect-uris "https://new.example.com/callback"] \
+  [--logout-redirect-uris "https://new.example.com/"] \
+  [--backchannel-logout-uri "https://..."] \
+  [--frontchannel-logout-uri "https://..."] \
+  [--token-auth-method client_secret_post] \
+  [--obo-enabled <true|false>] \
+  [--allow-local-login <true|false>] \
+  [--allow-external-idp <true|false>]
+
 # Delete a client
 mrwho-cli client delete <internal-guid>
 ```
@@ -164,8 +207,47 @@ mrwho-cli user create \
   [--output ./alice-credentials.json] \
   [--overwrite]
 
+# Update a user (only provided fields are changed)
+mrwho-cli user update <guid> [--name "New Name"] [--email new@example.com]
+
 # Delete a user
 mrwho-cli user delete <guid>
+```
+
+### User role assignments
+
+```bash
+# List roles assigned to a user (shows both realm and client roles)
+mrwho-cli user role list <user-guid> [--format Table|Json|Yaml]
+
+# Assign a role to a user
+mrwho-cli user role assign <user-guid> --role-id <role-guid>
+
+# Unassign a role from a user
+mrwho-cli user role unassign <user-guid> --role-id <role-guid> --confirm
+```
+
+---
+
+## Roles
+
+Roles are scoped to a realm within the current tenant.
+
+```bash
+# List roles (optionally filter by realm)
+mrwho-cli role list [--realm-id <guid>] [--format Table|Json|Yaml]
+
+# Get one role
+mrwho-cli role get <guid>
+
+# Create a role
+mrwho-cli role create --name editor --realm-id <realm-guid>
+
+# Update a role
+mrwho-cli role update <guid> --name "new-name"
+
+# Delete a role
+mrwho-cli role delete <guid> --confirm
 ```
 
 ---
@@ -218,6 +300,253 @@ mrwho-cli discovery [--server https://host/t/<slug>] [--format Table|Json|Yaml]
 
 ---
 
+## Identity Providers
+
+Manage upstream OIDC/SAML identity providers.
+
+```bash
+# List providers
+mrwho-cli provider list [--format Table|Json|Yaml]
+
+# Get one provider
+mrwho-cli provider get <guid>
+
+# Create a provider
+mrwho-cli provider create \
+  --name "Corporate SSO" \
+  --type Oidc \
+  [--authority https://accounts.google.com] \
+  [--client-id xxx] \
+  [--client-secret yyy] \
+  [--enabled] \
+  [--is-default] \
+  [--allow-registration]
+
+# Update a provider
+mrwho-cli provider update <guid> [--name "…"] [--enabled <true|false>] [--authority "…"]
+
+# Delete a provider
+mrwho-cli provider delete <guid>
+```
+
+### Provider claim mappings
+
+```bash
+# List claim mappings for a provider
+mrwho-cli provider claim-mapping list <provider-guid>
+
+# Create a mapping
+mrwho-cli provider claim-mapping create <provider-guid> \
+  --external-claim groups --local-claim roles [--transform "…"]
+
+# Update a mapping
+mrwho-cli provider claim-mapping update <provider-guid> <mapping-guid> \
+  [--local-claim roles] [--transform "…"]
+
+# Delete a mapping
+mrwho-cli provider claim-mapping delete <provider-guid> <mapping-guid>
+```
+
+### Provider keys
+
+```bash
+# List keys for a provider
+mrwho-cli provider key list <provider-guid>
+
+# Add a key from a JWK file
+mrwho-cli provider key add <provider-guid> --jwk-file ./key.json [--active]
+
+# Update key properties
+mrwho-cli provider key update <provider-guid> <key-guid> [--active <true|false>] [--publishable <true|false>]
+
+# Delete a key
+mrwho-cli provider key delete <provider-guid> <key-guid>
+```
+
+---
+
+## Client Secrets
+
+Manage client secret lifecycle (up to 3 active secrets per client for zero-downtime rotation).
+
+```bash
+# List all secrets for a client (masked — only metadata)
+mrwho-cli client secret list <client-guid> [--format Table|Json|Yaml]
+
+# Create a new secret (written to file, never echoed)
+mrwho-cli client secret create <client-guid> \
+  [--expires-in-days 90] \
+  [--activate] \
+  [--description "production-v2"] \
+  [--output ./secret.json] \
+  [--overwrite]
+
+# Activate a secret
+mrwho-cli client secret activate <client-guid> <secret-guid>
+
+# Set a secret as primary
+mrwho-cli client secret set-primary <client-guid> <secret-guid>
+
+# Revoke a secret
+mrwho-cli client secret revoke <client-guid> <secret-guid>
+```
+
+> **Note:** Secret values are **never** printed to the terminal. The `create` command writes them to a file with owner-only (600) permissions.
+
+---
+
+## Client ↔ Provider Links
+
+Control which identity providers appear on a client's login page.
+
+```bash
+# List providers linked to a client
+mrwho-cli client provider list <client-guid> [--format Table|Json|Yaml]
+
+# Link a provider to a client
+mrwho-cli client provider link <client-guid> \
+  --provider-id <provider-guid> \
+  [--enabled] [--auto-redirect] [--order 1]
+
+# Update a client-provider link
+mrwho-cli client provider update <client-guid> <provider-guid> \
+  [--enabled <true|false>] [--order 2]
+
+# Unlink a provider from a client
+mrwho-cli client provider unlink <client-guid> <provider-guid>
+```
+
+---
+
+## Client Scopes (post-creation)
+
+Add or remove scope assignments from an existing client.
+
+```bash
+# List scopes assigned to a client
+mrwho-cli client scope list <client-guid> [--format Table|Json|Yaml]
+
+# Add a scope
+mrwho-cli client scope add <client-guid> --scope api.read
+
+# Remove a scope
+mrwho-cli client scope remove <client-guid> --scope api.read --confirm
+```
+
+---
+
+## Client Validation
+
+Read-only diagnostic that checks a client's configuration for common issues.
+
+```bash
+mrwho-cli client validate <client-guid> [--format Table|Json|Yaml]
+```
+
+Checks include:
+- Expired or expiring secrets
+- Missing redirect URIs for authorization_code flows
+- PKCE disabled on public clients
+- No scopes assigned
+- Token auth method mismatch (e.g. `client_secret_post` with no secrets)
+- Missing post-logout redirect URIs
+
+---
+
+## Client Secret Rotation
+
+Compound operation: create new secret → activate → optionally revoke oldest. Performs
+zero-downtime rotation in a single command.
+
+```bash
+mrwho-cli client rotate-secret <client-guid> \
+  [--expires-in-days 90] \
+  [--revoke-oldest] \
+  [--description "rotated 2026-01"] \
+  [--output ./new-secret.json] \
+  [--overwrite] \
+  [--confirm]
+```
+
+- `--revoke-oldest` only revokes a secret if >2 remain after creation (safe minimum).
+- The new secret value is written to file, never echoed.
+
+---
+
+## Diagnostics & Troubleshooting
+
+### Health
+
+Consolidated status across all server subsystems.
+
+```bash
+mrwho-cli health [--format Table|Json|Yaml]
+```
+
+Reports status for: Backchannel Logout, Client Secrets, Global Auth, Issuer Config, Forwarded Headers.
+
+### Who Am I
+
+Show current profile identity, roles, tenant, and token expiry.
+
+```bash
+mrwho-cli whoami [--profile <name>]
+```
+
+Useful for debugging "permission denied" or "why can't I do X?" situations.
+
+### Audit Logs
+
+Inspect configuration change history.
+
+```bash
+mrwho-cli audit list [--skip 0] [--take 50] [--format Table|Json|Yaml]
+mrwho-cli audit get <audit-entry-guid>
+```
+
+### Back-Channel Logout
+
+Monitor and manage the BCL notification queue.
+
+```bash
+# List outbox entries (filter by status)
+mrwho-cli bcl outbox [--status pending|failed|succeeded|dead_letter] [--format Table|Json|Yaml]
+
+# Retry a failed notification
+mrwho-cli bcl retry <notification-guid>
+
+# Show alert snapshot (pending/failed/dead-letter counts)
+mrwho-cli bcl alerts [--format Table|Json|Yaml]
+```
+
+### Rate Limits
+
+Inspect rate-limiting policies and events.
+
+```bash
+# Overview of all rate-limit policies
+mrwho-cli rate-limits overview
+
+# Recent rate-limit events
+mrwho-cli rate-limits events [--format Table|Json|Yaml]
+
+# Per-client rate-limit usage
+mrwho-cli rate-limits client <client-guid>
+```
+
+### License
+
+Inspect license information and usage.
+
+```bash
+mrwho-cli license show [--format Table|Json|Yaml]
+mrwho-cli license history [--format Table|Json|Yaml]
+mrwho-cli license usage
+mrwho-cli license limits
+```
+
+---
+
 ## Common workflows
 
 ### 1. First-time setup
@@ -264,6 +593,73 @@ for user in alice bob carol; do
 done
 ```
 
+### 5. Rotate a client secret with zero downtime
+
+```bash
+# Quick rotation: create, activate, and revoke oldest in one command
+mrwho-cli client rotate-secret <client-guid> --expires-in-days 90 --revoke-oldest --output ./new-secret.json --confirm
+
+# Or do it step-by-step:
+mrwho-cli client secret list <client-guid>
+mrwho-cli client secret create <client-guid> --expires-in-days 90 --activate --output ./new-secret.json
+# Deploy the new secret to your app, then revoke the old one
+mrwho-cli client secret revoke <client-guid> <old-secret-guid> --confirm
+```
+
+### 6. Validate a client before going live
+
+```bash
+mrwho-cli client validate <client-guid>
+# Shows errors/warnings: expired secrets, missing redirect URIs, PKCE issues, etc.
+```
+
+### 6. Validate a client before going live
+
+```bash
+mrwho-cli client validate <client-guid>
+# Shows errors/warnings: expired secrets, missing redirect URIs, PKCE issues, etc.
+```
+
+### 7. Connect an external IdP to a client
+
+```bash
+# Create the provider
+mrwho-cli provider create --name "Google" --type Oidc --authority https://accounts.google.com \
+  --client-id xxx --client-secret yyy
+
+# Link it to a client
+mrwho-cli client provider link <client-guid> --provider-id <provider-guid> --enabled
+
+# Map external claims to local ones
+mrwho-cli provider claim-mapping create <provider-guid> --external-claim hd --local-claim tenant
+```
+
+### 8. Troubleshoot a failing back-channel logout
+
+```bash
+# Check overall health
+mrwho-cli health
+
+# Inspect the BCL queue for failures
+mrwho-cli bcl outbox --status failed
+
+# Retry a specific notification
+mrwho-cli bcl retry <notification-guid>
+
+# Check alert counts
+mrwho-cli bcl alerts
+```
+
+### 9. Preview changes with --dry-run
+
+```bash
+# See what a client update would send without applying
+mrwho-cli client update <guid> --client-name "Test" --require-pkce true --dry-run
+
+# Preview a role deletion
+mrwho-cli role delete <guid> --confirm --dry-run
+```
+
 ---
 
 ## Output formats
@@ -294,6 +690,13 @@ mrwho-cli client list --format Json | jq '.[].clientId'
 
 ## Error handling
 
-- On error, the CLI prints `Error: <message>` and exits with code 1.
+- On error, the CLI prints `Error: <message>` with an actionable hint and exits with code 1.
+- Common HTTP errors are mapped to suggestions:
+  - **401** → "Are you logged in? Try: mrwho-cli login"
+  - **403** → "Insufficient permissions. Check your role. Try: mrwho-cli whoami"
+  - **404** → "Resource not found. Verify the ID and tenant."
+  - **409** → "Conflicting resource exists. Check for duplicate names."
+  - **429** → "Rate-limited. Try: mrwho-cli rate-limits overview"
 - Add `--verbose` to any command to also print the full exception and stack trace.
+- Add `--dry-run` to preview write operations (POST/PUT/DELETE) without applying changes.
 - If the access token is expired, the CLI automatically uses the refresh token and re-saves the profile — no manual re-login needed unless the refresh token has also expired.

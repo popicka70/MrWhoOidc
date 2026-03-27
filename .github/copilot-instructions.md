@@ -103,6 +103,7 @@ CLI administration (mrwho-cli)
 - `mrwho-cli` is a globally-installed .NET tool for managing the IdP from the command line.
 - Source: `MrWhoOidc.Cli/`; install via `bash deploy-mrwho-cli.sh` from the repo root.
 - Full command reference and usage patterns: `skills/mrwho-cli.md` — **always read this file before generating or describing any `mrwho-cli` command.**
+- Tool help is comprehensive; use `mrwho-cli <command> --help` for details on any command, its parameters, and examples. Or use `mrwho-cli --help` for a full list of commands and global options.
 - Typical operations: `mrwho-cli login`, `tenant list`, `realm create`, `client create --create-initial-secret`, `export tenant`, `import apply`.
 - Authentication: device-code flow (`mrwho-cli login --server https://host/t/<slug>`); tokens saved in named profiles.
 - Output formats: `--format Table|Json|Yaml`; pipe JSON to `jq` for scripting.

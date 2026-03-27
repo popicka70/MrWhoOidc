@@ -90,10 +90,16 @@ internal static class Program
             Description = "Enable verbose output"
         };
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Show what would be changed without making any modifications"
+        };
+
         rootCommand.Options.Add(profileOption);
         rootCommand.Options.Add(serverOption);
         rootCommand.Options.Add(formatOption);
         rootCommand.Options.Add(verboseOption);
+        rootCommand.Options.Add(dryRunOption);
 
         // Add command groups (will be implemented in phases)
         rootCommand.Subcommands.Add(new LoginCommand());
@@ -107,6 +113,14 @@ internal static class Program
         rootCommand.Subcommands.Add(new ClientCommand());
         rootCommand.Subcommands.Add(new ScopeCommand());
         rootCommand.Subcommands.Add(new UserCommand());
+        rootCommand.Subcommands.Add(new ProviderCommand());
+        rootCommand.Subcommands.Add(new RoleCommand());
+        rootCommand.Subcommands.Add(new HealthCommand());
+        rootCommand.Subcommands.Add(new WhoAmICommand());
+        rootCommand.Subcommands.Add(new AuditCommand());
+        rootCommand.Subcommands.Add(new BclCommand());
+        rootCommand.Subcommands.Add(new RateLimitsCommand());
+        rootCommand.Subcommands.Add(new LicenseCommand());
 
         return rootCommand;
     }
