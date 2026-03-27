@@ -63,34 +63,76 @@ Project-specific patterns
 
 E2E browser tests (e2e/)
 - Location: `e2e/` directory at repo root — separate Python project, not part of the .NET solution.
-- Stack: Python 3, pytest, Playwright (sync API), Ollama LLM for screenshot evaluation.
-- Purpose: visual regression + functional smoke coverage of the entire MrWhoOidc.WebAuth UI — every Razor Page that can be reached with a logged-in admin is exercised. Tests capture full-page screenshots, send them to an LLM, and generate a scored HTML report.
-- Architecture:
-  - `conftest.py` — all fixtures. One browser + one authenticated BrowserContext shared for the whole session (fast). Login done once at session start, auth state saved to `.auth/state.json`. Each test gets a new Page (tab) via `authenticated_page` fixture; unauthenticated tests get a fresh context via `page` fixture.
-  - `utils/screenshot_manager.py` — sync `capture(page, route)` saves PNGs to `screenshots/{run_id}/`.
-  - `utils/llm_evaluator.py` — calls Ollama `/api/chat` (model configured via `OLLAMA_MODEL`). Cloud-proxied models (name ends in `-cloud`) use text-only evaluation; local Ollama models support vision.
-  - `utils/report_generator.py` — accumulates `EvaluationResult` objects; writes `reports/{run_id}/report.{json,html}` at session end.
-  - `utils/instruction_loader.py` — loads per-route evaluation hints from `instructions/` directory.
-  - `utils/cli_helper.py` — `CliHelper` class wrapping `mrwho-cli` subprocess calls. Provides `run()`, `run_json()`, and device-code login helpers (`start_login()`, `parse_device_login_output()`). Session fixture `cli_logged_in` handles enable → login → approve flow.
-- Test files and coverage:
-  - `tests/test_public_pages.py` — unauthenticated pages: `/`, `/login`, `/Privacy`, `/Account/ForgotPassword`, `/select-tenant`, 404, OIDC discovery, JWKS.
-  - `tests/test_account_pages.py` — self-service account pages: `/account`, `/account/profile`, `/account/emails`, `/account/web-authn`, `/account/sessions`, `/account/consents`, `/account/linked-accounts`, `/account/create-tenant`, `/account/access-denied`, `/password`, `/mfa`.
-  - `tests/test_admin_pages.py` — all tenant-admin pages including list, add, import, and edit variants for realms, clients, providers, scopes, roles, users (+ user sub-tabs: clients, emails, roles, linked), plus registrations, configuration-audit, backchannel, obo-setup, all license pages, branding, settings, rate-limits.
-  - `tests/test_platform_admin_pages.py` — platform-admin pages: dashboard, tenant list/create/edit/import, impersonation, impersonation history, platform settings, platform license.
-  - `tests/test_crud_operations.py` — create→edit flows for realm, client, scope, role, user, account profile, and tenant. Records use `e2e-crud` prefix for easy cleanup. Test order within each class is significant (01_create before 02_edit).
-  - `tests/test_cli_operations.py` — CLI (mrwho-cli) E2E tests. Exercises every read-only command (discovery, profile, tenant/realm/client/scope/user list), full CRUD lifecycle for realms/scopes/users/clients, M2M client_credentials setup, OBO token-exchange provisioning, and a complete multi-resource workflow with export and teardown. Uses `e2e-cli` prefix. Depends on `cli_logged_in` fixture which enables CLI access and performs device-code login with browser approval.
-- Running:
-  - Requires the app running at `https://localhost:8443` (e.g., via `docker-compose.dev.yml`).
-  - Copy `.env.example` to `.env`, set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `OLLAMA_MODEL`, `HEADED`.
-  - `cd e2e && python3 -m pytest -v` — runs all ~109 tests; report written to `e2e/reports/{timestamp}/report.html`.
-  - Single test: `python3 -m pytest tests/test_admin_pages.py::TestAdminClients::test_client_list_loads -v`.
-- Conventions when adding new e2e tests:
+- Stack: Python 3.13+, pytest, Playwright (sync API), LLM for screenshot evaluation (OpenAI or Ollama).
+- Purpose: visual regression + functional smoke coverage of the entire MrWhoOidc.WebAuth UI — every Razor Page reachable by a logged-in admin is exercised. Tests capture full-page screenshots, send them to an LLM, and produce a scored HTML report.
+
+E2E environment setup (canonical — do NOT deviate)
+- Virtual environment: always `e2e/.venv`. Do NOT create venvs anywhere else (not repo root `.venv`, not `.venv-1`, etc.).
+- One-time setup:
+  ```bash
+  cd e2e
+  sh ./setup-venv.sh                         # creates .venv, installs requirements.txt + pip
+  .venv/bin/python -m pip install cryptography PyJWT   # extra deps for OIDC-flow tests
+  .venv/bin/playwright install chromium       # install browser binary
+  cp .env.example .env                        # then edit .env (see below)
+  ```
+- The correct interpreter is always `e2e/.venv/bin/python`. Activate with `source e2e/.venv/bin/activate` or call directly.
+- Installing packages: use `.venv/bin/python -m pip install <pkg>` (the venv may not have a standalone `pip` binary).
+- Pinned packages in `requirements.txt` (pytest, playwright, openai, requests, jinja2, pillow, etc.) plus additional unlisted runtime deps: `cryptography>=46`, `PyJWT>=2.12`.
+- Python version: 3.13+ (system python3 on the dev machine).
+
+E2E configuration (.env)
+- Copy `.env.example` → `.env` and set at minimum:
+  | Variable | Required | Default | Notes |
+  |---|---|---|---|
+  | `BASE_URL` | yes | `https://localhost:8443` | Running WebAuth instance |
+  | `ADMIN_USERNAME` | yes | `admin@mrwho.local` | Seeded admin. Use `admin` if default tenant changed |
+  | `ADMIN_PASSWORD` | yes | `Admin123!` | Seeded admin password |
+  | `LLM_BACKEND` | no | `openai` | `openai` or `ollama` |
+  | `OPENAI_API_KEY` | if openai | — | Skip LLM eval if absent |
+  | `OPENAI_MODEL` | no | `gpt-4o` | OpenAI model for vision eval |
+  | `OLLAMA_HOST` | if ollama | `http://localhost:11434` | Local Ollama server |
+  | `OLLAMA_MODEL` | if ollama | `qwen3.5:397b-cloud` | Model name |
+  | `HEADED` | no | `false` | `true` to watch browser |
+  | `SLOW_MO` | no | `0` | ms delay between actions |
+  | `EXAMPLE_RAZORCLIENT_URL` | no | `https://localhost:5003` | Example app |
+  | `EXAMPLE_TESTAPI_URL` | no | `https://localhost:7149` | Example API |
+
+Running E2E tests
+- Prerequisites: app running at `BASE_URL` (via `docker-compose -f docker-compose.dev.yml up -d`), `mrwho-cli` installed (for CLI and OIDC-flow tests).
+- Run all: `cd e2e && .venv/bin/python -m pytest -v`
+- Run subset: `.venv/bin/python -m pytest tests/test_admin_pages.py -v`
+- Single test: `.venv/bin/python -m pytest tests/test_admin_pages.py::TestAdminClients::test_client_list_loads -v`
+- Reports written to `e2e/reports/{timestamp}/report.html`; screenshots to `e2e/screenshots/{timestamp}/`.
+- Current test count: ~210 tests across 8 test files.
+
+E2E architecture
+  - `conftest.py` — all fixtures. One browser + one authenticated BrowserContext shared for session. Login once at start, auth state saved to `.auth/state.json`. `authenticated_page` fixture gives a new tab; `page` gives an unauthenticated context.
+  - `utils/screenshot_manager.py` — sync `capture(page, route)` saves PNGs per run. Waits for CSS transitions/animations to finish via `getAnimations()` before capturing.
+  - `utils/llm_evaluator.py` — calls OpenAI or Ollama for screenshot scoring. Cloud models use text-only eval; local Ollama models support vision.
+  - `utils/report_generator.py` — accumulates `EvaluationResult` objects; writes JSON + HTML reports.
+  - `utils/instruction_loader.py` — per-route evaluation hints from `instructions/` directory.
+  - `utils/cli_helper.py` — `CliHelper` wrapping `mrwho-cli` subprocess calls. Session fixture `cli_logged_in` handles enable → login → approve flow.
+  - `utils/oidc_client.py` — HTTP-level OIDC client for protocol-flow tests (auth code, client_credentials, token exchange, DPoP).
+  - `utils/dpop.py` — DPoP proof builder using `cryptography` + `PyJWT`.
+
+E2E test files
+  - `test_public_pages.py` — unauthenticated: `/`, `/login`, `/Privacy`, `/Account/ForgotPassword`, `/select-tenant`, 404, discovery, JWKS.
+  - `test_account_pages.py` — self-service: `/account`, profile, emails, webauthn, sessions, consents, linked-accounts, create-tenant, access-denied, password, mfa.
+  - `test_admin_pages.py` — tenant-admin: realms, clients, providers (+claim-mappings, keys), scopes, roles, users (+sub-tabs), registrations, config-audit, backchannel, obo-setup, license (all variants), branding, settings, rate-limits.
+  - `test_platform_admin_pages.py` — platform-admin: dashboard, tenants CRUD/import, impersonation (+history), settings, license.
+  - `test_crud_operations.py` — create→edit UI flows (realm, client, scope, role, user, profile, tenant). `e2e-crud` prefix; ordered tests.
+  - `test_cli_operations.py` — CLI E2E: read-only commands, CRUD lifecycle, M2M, OBO provisioning, full workflow + export. `e2e-cli` prefix.
+  - `test_oidc_flows.py` — protocol-level: auth-code+PKCE, client_credentials, token exchange, DPoP binding, negative cases. `e2e-oidc` prefix.
+  - `test_example_apps.py` — exercises dockerized example apps (RazorClient, OidcDemo, ReactClient).
+
+E2E conventions for new tests
   - Use `authenticated_page` fixture for any page requiring login; `page` for public pages.
-  - Always `goto(path, wait_until="domcontentloaded")` — never `networkidle` (admin pages have WebSocket/SSE connections that never idle).
-  - Wrap navigation in `_goto_admin()` / `_goto_platform()` helpers so tests skip gracefully on redirects or download-triggering endpoints rather than hard-failing.
-  - Call `record_evaluation(page, route)` after navigating to capture the screenshot and LLM score.
-  - LLM scores are informational (7/10 is typical for a functional but plain admin UI); only scores below `min_score` (default 5) cause test failure.
-  - New page instruction hints can be added to `e2e/instructions/` as `<route-slug>.md` files.
+  - Always `goto(path, wait_until="domcontentloaded")` — never `networkidle` (admin pages have WebSocket/SSE that never idle).
+  - Wrap navigation in `_goto_admin()` / `_goto_platform()` helpers so tests skip gracefully on redirects/downloads.
+  - Call `record_evaluation(page, route)` after navigating to capture screenshot + LLM score.
+  - LLM scores: only scores below `min_score` (default 5) cause test failure. Target 7+ for well-designed pages.
+  - Per-route instruction hints: add `e2e/instructions/<route-slug>.md` files.
 
 When adding features
 - Keep core protocol/business logic in MrWhoOidc.Auth; expose via WebAuth minimal APIs.
