@@ -72,7 +72,7 @@ public sealed class HealthCommand : Command
 
             if (format == OutputFormat.Json)
             {
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(results, SharedJsonOptions.IndentedOptions));
                 return;
             }
 

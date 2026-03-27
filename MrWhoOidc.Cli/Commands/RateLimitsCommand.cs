@@ -21,25 +21,18 @@ public sealed class RateLimitsCommand : Command
 
     private sealed class OverviewCommand : Command
     {
-        public OverviewCommand() : base("overview", "Show rate-limiting policies overview")
+        public OverviewCommand() : base("overview", "Show rate-limiting policies overview (JSON)")
         {
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
             var profileOption = new Option<string?>("--profile") { Description = "Authenticated profile to use" };
-            var formatOption = new Option<OutputFormat>("--format")
-            {
-                Description = "Output format: table or json",
-                DefaultValueFactory = _ => OutputFormat.Table
-            };
 
             Options.Add(serverOption);
             Options.Add(profileOption);
-            Options.Add(formatOption);
 
             this.SetSafeAction(async parseResult =>
             {
                 var server = parseResult.GetValue(serverOption);
                 var profile = parseResult.GetValue(profileOption);
-                var format = parseResult.GetValue(formatOption);
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
@@ -47,7 +40,7 @@ public sealed class RateLimitsCommand : Command
                 var overview = await CliAdminApiClient.GetAsync<JsonElement>(
                     config, connection, "admin/api/rate-limits/overview").ConfigureAwait(false);
 
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(overview, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(overview, SharedJsonOptions.IndentedOptions));
             });
         }
     }
@@ -82,7 +75,7 @@ public sealed class RateLimitsCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(events, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(events, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -110,7 +103,7 @@ public sealed class RateLimitsCommand : Command
 
     private sealed class ClientRateLimitCommand : Command
     {
-        public ClientRateLimitCommand() : base("client", "Show rate-limit usage for a specific client")
+        public ClientRateLimitCommand() : base("client", "Show rate-limit usage for a specific client (JSON)")
         {
             var clientIdArg = new Argument<Guid>("client-id") { Description = "Client internal ID (GUID)" };
             var serverOption = new Option<string?>("--server") { Description = "Server URL" };
@@ -132,7 +125,7 @@ public sealed class RateLimitsCommand : Command
                 var result = await CliAdminApiClient.GetAsync<JsonElement>(
                     config, connection, $"admin/api/rate-limits/client/{clientId}").ConfigureAwait(false);
 
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(result, SharedJsonOptions.IndentedOptions));
             });
         }
     }

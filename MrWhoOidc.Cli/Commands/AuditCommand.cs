@@ -59,7 +59,7 @@ public sealed class AuditCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

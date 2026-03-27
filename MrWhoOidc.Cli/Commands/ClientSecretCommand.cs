@@ -58,7 +58,7 @@ public sealed class ClientSecretCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(secrets, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(secrets, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -146,7 +146,7 @@ public sealed class ClientSecretCommand : Command
                     warning = "Store this secret securely. It cannot be retrieved again."
                 };
 
-                var credJson = JsonSerializer.Serialize(credentials, new JsonSerializerOptions { WriteIndented = true });
+                var credJson = JsonSerializer.Serialize(credentials, SharedJsonOptions.IndentedOptions);
                 var suggestedFileName = $"client-{clientId}-secret-{result.Id}.json";
                 await CliFileOutput.WriteTextAsync(credJson, suggestedFileName, output, overwrite).ConfigureAwait(false);
                 var resolvedPath = CliFileOutput.ResolveOutputPath(suggestedFileName, output);

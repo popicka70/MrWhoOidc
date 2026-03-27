@@ -89,7 +89,7 @@ public sealed class ClientValidateCommand : Command
                 internalId = id,
                 findings = findings.Select(f => new { f.Severity, f.Category, f.Message })
             };
-            AnsiConsole.WriteLine(JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(report, SharedJsonOptions.IndentedOptions));
             return;
         }
 

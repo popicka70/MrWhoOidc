@@ -1682,8 +1682,11 @@ public static class AdminApiEndpointMappingExtensions
             if (input.Name is not null) user.Name = input.Name.Trim();
             if (input.Email is not null)
             {
-                user.Email = input.Email.Trim();
-                user.NormalizedEmail = input.Email.Trim().ToLowerInvariant();
+                var trimmedEmail = input.Email.Trim();
+                if (!trimmedEmail.Contains('@') || trimmedEmail.Length < 3)
+                    return Results.Problem(statusCode: 400, title: "Validation failed", detail: "Invalid email format");
+                user.Email = trimmedEmail;
+                user.NormalizedEmail = trimmedEmail.ToLowerInvariant();
             }
 
             await db.SaveChangesAsync(ct);
@@ -1794,6 +1797,10 @@ public static class AdminApiEndpointMappingExtensions
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == id && r.TenantId == currentTenantId.Value, ct);
             if (role is null)
                 return Results.Problem(statusCode: 404, title: "Not Found");
+            var hasAssignments = await db.UserRealmRoleAssignments.AnyAsync(a => a.RoleId == id, ct)
+                || await db.UserClientRoleAssignments.AnyAsync(a => a.RoleId == id, ct);
+            if (hasAssignments)
+                return Results.Problem(statusCode: 409, title: "Conflict", detail: "Cannot delete role: it is still assigned to one or more users. Remove assignments first.");
             db.Roles.Remove(role);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
@@ -1890,6 +1897,10 @@ public static class AdminApiEndpointMappingExtensions
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
                 return Results.Problem(statusCode: 403, title: "No tenant context");
+            var user = await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, ct);
+            if (user is null)
+                return Results.Problem(statusCode: 404, title: "User not found");
             var assignment = await db.UserRealmRoleAssignments
                 .FirstOrDefaultAsync(a => a.UserId == userId && a.RoleId == roleId, ct);
             if (assignment is null)
@@ -1959,6 +1970,10 @@ public static class AdminApiEndpointMappingExtensions
             var currentTenantId = tenantAccessor.CurrentTenant?.TenantId;
             if (!currentTenantId.HasValue)
                 return Results.Problem(statusCode: 403, title: "No tenant context");
+            var client = await db.Clients.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == clientId && c.TenantId == currentTenantId.Value, ct);
+            if (client is null)
+                return Results.Problem(statusCode: 404, title: "Client not found");
             var assignment = await db.ClientScopes
                 .FirstOrDefaultAsync(cs => cs.ClientId == clientId && cs.ScopeName == scopeName, ct);
             if (assignment is null)
@@ -2015,8 +2030,12 @@ public static class AdminApiEndpointMappingExtensions
             if (input.AdminEmail is not null) tenant.AdminEmail = input.AdminEmail.Trim();
             if (input.MaxUsers.HasValue) tenant.MaxUsers = input.MaxUsers.Value;
             if (input.MaxClients.HasValue) tenant.MaxClients = input.MaxClients.Value;
-            if (input.Status is not null && Enum.TryParse<TenantStatus>(input.Status, true, out var status))
+            if (input.Status is not null)
+            {
+                if (!Enum.TryParse<TenantStatus>(input.Status, true, out var status))
+                    return Results.Problem(statusCode: 400, title: "Validation failed", detail: $"Invalid status '{input.Status}'. Valid values: {string.Join(", ", Enum.GetNames<TenantStatus>())}");
                 tenant.Status = status;
+            }
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });

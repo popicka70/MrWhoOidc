@@ -56,7 +56,7 @@ public sealed class ClientScopeCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(scopes, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(scopes, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

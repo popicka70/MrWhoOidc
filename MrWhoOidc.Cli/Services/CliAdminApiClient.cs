@@ -8,8 +8,10 @@ namespace MrWhoOidc.Cli.Services;
 
 public static class CliAdminApiClient
 {
-    private static bool IsDryRun =>
-        Environment.GetCommandLineArgs().Contains("--dry-run");
+    /// <summary>
+    /// Set by the root command middleware when --dry-run is passed.
+    /// </summary>
+    internal static bool IsDryRun { get; set; }
 
     public static async Task<IReadOnlyList<T>> GetListAsync<T>(
         CliConfig config,
@@ -182,7 +184,7 @@ public static class CliAdminApiClient
         AnsiConsole.MarkupLine($"  [bold]URL:[/]     {Markup.Escape(url)}");
         if (body is not null)
         {
-            var json = JsonSerializer.Serialize(body, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            var json = JsonSerializer.Serialize(body, SharedJsonOptions.IndentedSkipNullOptions);
             AnsiConsole.MarkupLine($"  [bold]Body:[/]");
             AnsiConsole.WriteLine(json);
         }

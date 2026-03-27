@@ -54,7 +54,7 @@ public sealed class RealmCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(realms, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(realms, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

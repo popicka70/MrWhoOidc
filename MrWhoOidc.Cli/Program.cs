@@ -1,6 +1,7 @@
 using System.CommandLine;
 using MrWhoOidc.Cli.Commands;
 using MrWhoOidc.Cli.Mcp;
+using MrWhoOidc.Cli.Services;
 using Spectre.Console;
 
 namespace MrWhoOidc.Cli;
@@ -40,7 +41,12 @@ internal static class Program
         var rootCommand = BuildRootCommand();
         try
         {
-            return await rootCommand.Parse(args).InvokeAsync();
+            var parseResult = rootCommand.Parse(args);
+            // Propagate --dry-run to the API client before invoking subcommands
+            var dryRunOpt = rootCommand.Options.OfType<Option<bool>>().FirstOrDefault(o => o.Name == "--dry-run");
+            if (dryRunOpt is not null)
+                CliAdminApiClient.IsDryRun = parseResult.GetValue(dryRunOpt);
+            return await parseResult.InvokeAsync();
         }
         catch (Exception ex)
         {

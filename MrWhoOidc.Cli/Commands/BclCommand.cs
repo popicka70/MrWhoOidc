@@ -60,7 +60,7 @@ public sealed class BclCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -160,7 +160,7 @@ public sealed class BclCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(snapshot, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

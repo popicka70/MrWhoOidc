@@ -56,7 +56,7 @@ public sealed class UserRoleCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(result, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

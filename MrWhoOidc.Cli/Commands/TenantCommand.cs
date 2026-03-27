@@ -65,7 +65,7 @@ public sealed class TenantCommand : Command
 
             if (format == OutputFormat.Json)
             {
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(tenants, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(tenants, SharedJsonOptions.IndentedOptions));
                 return;
             }
 
@@ -217,7 +217,7 @@ public sealed class TenantCommand : Command
                     createdAt = DateTimeOffset.UtcNow.ToString("O"),
                     server = connection.ServerUrl
                 };
-                var credJson = JsonSerializer.Serialize(credentials, new JsonSerializerOptions { WriteIndented = true });
+                var credJson = JsonSerializer.Serialize(credentials, SharedJsonOptions.IndentedOptions);
                 var suggestedFileName = $"tenant-{slug}-credentials.json";
                 await CliFileOutput.WriteTextAsync(credJson, suggestedFileName, output, overwrite).ConfigureAwait(false);
                 var resolvedPath = CliFileOutput.ResolveOutputPath(suggestedFileName, output);

@@ -57,7 +57,7 @@ public sealed class ClientProviderCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(links, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(links, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

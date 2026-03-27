@@ -55,7 +55,7 @@ public sealed class ProviderCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(providers, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(providers, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -283,7 +283,7 @@ public sealed class ProviderCommand : Command
 
 // ── Provider claim-mapping subcommands ───────────────────────────────────────
 
-public sealed class ProviderClaimMappingCommand : Command
+internal sealed class ProviderClaimMappingCommand : Command
 {
     public ProviderClaimMappingCommand() : base("claim-mapping", "Manage provider claim mappings")
     {
@@ -325,7 +325,7 @@ public sealed class ProviderClaimMappingCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(mappings, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(mappings, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -476,7 +476,7 @@ public sealed class ProviderClaimMappingCommand : Command
 
 // ── Provider key subcommands ─────────────────────────────────────────────────
 
-public sealed class ProviderKeyCommand : Command
+internal sealed class ProviderKeyCommand : Command
 {
     public ProviderKeyCommand() : base("key", "Manage provider signing keys")
     {
@@ -518,7 +518,7 @@ public sealed class ProviderKeyCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(keys, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(keys, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 

@@ -72,7 +72,7 @@ public sealed class UserCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(page, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(page, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -209,7 +209,7 @@ public sealed class UserCommand : Command
                     server = connection.ServerUrl,
                     warning = result.Warning
                 };
-                var credJson = JsonSerializer.Serialize(credentials, new JsonSerializerOptions { WriteIndented = true });
+                var credJson = JsonSerializer.Serialize(credentials, SharedJsonOptions.IndentedOptions);
 
                 var suggestedFileName = $"user-{username}-credentials.json";
                 await CliFileOutput.WriteTextAsync(credJson, suggestedFileName, output, overwrite).ConfigureAwait(false);

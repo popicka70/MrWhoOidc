@@ -55,7 +55,7 @@ public sealed class LicenseCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(license, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(license, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -97,7 +97,7 @@ public sealed class LicenseCommand : Command
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(history, new JsonSerializerOptions { WriteIndented = true }));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(history, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -141,7 +141,7 @@ public sealed class LicenseCommand : Command
                 var usage = await CliAdminApiClient.GetAsync<JsonElement>(
                     config, connection, "admin/api/license/usage").ConfigureAwait(false);
 
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(usage, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(usage, SharedJsonOptions.IndentedOptions));
             });
         }
     }
@@ -166,7 +166,7 @@ public sealed class LicenseCommand : Command
                 var limits = await CliAdminApiClient.GetAsync<JsonElement>(
                     config, connection, "admin/api/license/limits").ConfigureAwait(false);
 
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(limits, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(limits, SharedJsonOptions.IndentedOptions));
             });
         }
     }

@@ -61,7 +61,7 @@ public sealed class ClientCommand : Command
 
             if (format == OutputFormat.Json)
             {
-                AnsiConsole.WriteLine(JsonSerializer.Serialize(clients, new JsonSerializerOptions { WriteIndented = true }));
+                AnsiConsole.WriteLine(JsonSerializer.Serialize(clients, SharedJsonOptions.IndentedOptions));
                 return;
             }
 
@@ -257,7 +257,7 @@ public sealed class ClientCommand : Command
                         server = connection.ServerUrl,
                         warning = result.Warning
                     };
-                    var credJson = JsonSerializer.Serialize(credentials, new JsonSerializerOptions { WriteIndented = true });
+                    var credJson = JsonSerializer.Serialize(credentials, SharedJsonOptions.IndentedOptions);
                     var safeClientId = string.Concat((result.ClientId ?? (string)clientId)
                         .Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'));
                     var suggestedFileName = $"client-{safeClientId}-credentials.json";
