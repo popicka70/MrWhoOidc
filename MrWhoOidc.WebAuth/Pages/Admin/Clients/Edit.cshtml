@@ -298,7 +298,7 @@
                                 </label>
                                 <div class="input-group">
                                     <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingIssuerUrl" id="idp-issuer-url" />
-                                    <button type="button" class="btn btn-outline-secondary" data-copy-text="@Model.IdpChainingIssuerUrl" onclick="copyIdpUrl(this)" title="Copy to clipboard">
+                                    <button type="button" id="idp-copy-btn" class="btn btn-outline-secondary" data-copy-text="@Model.IdpChainingIssuerUrl" title="Copy to clipboard">
                                         <i class="ph ph-clipboard"></i> Copy
                                     </button>
                                 </div>
@@ -1432,27 +1432,34 @@
             });
         })();
 
-        // IdP Chaining copy function — reads URL from data attribute to avoid getElementById issues
-        window.copyIdpUrl = async function(button) {
-            const text = button.getAttribute('data-copy-text');
-            if (!text) return;
-            const originalHtml = button.innerHTML;
-            try {
-                await navigator.clipboard.writeText(text);
-                button.innerHTML = '<i class="ph ph-check"></i> Copied!';
-                button.classList.replace('btn-outline-secondary', 'btn-success');
-            } catch {
-                // Fallback for insecure contexts (e.g., self-signed certs in dev)
-                const el = document.getElementById('idp-issuer-url');
-                if (el) { el.select(); document.execCommand('copy'); window.getSelection()?.removeAllRanges(); }
-                button.innerHTML = '<i class="ph ph-check"></i> Copied!';
-                button.classList.replace('btn-outline-secondary', 'btn-success');
-            }
-            setTimeout(() => {
-                button.innerHTML = originalHtml;
-                button.classList.replace('btn-success', 'btn-outline-secondary');
-                button.classList.replace('btn-danger', 'btn-outline-secondary');
-            }, 1500);
-        };
+        // IdP Chaining copy button — wired here (not via onclick) to satisfy CSP nonce requirement
+        const idpCopyBtn = document.getElementById('idp-copy-btn');
+        if (idpCopyBtn) {
+            idpCopyBtn.addEventListener('click', function() {
+                const text = idpCopyBtn.getAttribute('data-copy-text');
+                if (!text) return;
+
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).catch(() => {});
+                }
+
+                const originalHtml = idpCopyBtn.innerHTML;
+                idpCopyBtn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+                idpCopyBtn.classList.replace('btn-outline-secondary', 'btn-success');
+                setTimeout(() => {
+                    idpCopyBtn.innerHTML = originalHtml;
+                    idpCopyBtn.classList.replace('btn-success', 'btn-outline-secondary');
+                }, 1500);
+            });
+        }
     </script>
 }
