@@ -6,7 +6,15 @@
     var currentTenant = TenantAccessor.CurrentTenant;
 }
 
-<h1>Registrations</h1>
+<div class="page-header">
+    <div class="page-header__content">
+        <h1 class="page-header__title">
+            <i class="ph ph-clipboard-text icon-md icon-primary"></i>
+            Registrations
+        </h1>
+        <p class="page-header__subtitle">Manage self-service user registration requests</p>
+    </div>
+</div>
 
 @if (currentTenant is not null)
 {

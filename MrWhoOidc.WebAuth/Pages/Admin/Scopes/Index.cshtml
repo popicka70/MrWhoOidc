@@ -29,6 +29,24 @@
     }
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-10">
+                <label class="form-label">
+                    <i class="ph ph-search me-1"></i>Search
+                </label>
+                <input class="form-control" type="text" name="search" value="@Model.Search" placeholder="Search scopes by name or description..." />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" type="submit">
+                    <i class="ph ph-funnel"></i> Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="table-responsive table-responsive-cards">
         <table class="data-table align-middle mb-0">
