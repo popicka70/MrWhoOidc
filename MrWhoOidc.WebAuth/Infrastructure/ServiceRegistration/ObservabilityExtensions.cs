@@ -43,9 +43,10 @@ public static class ObservabilityExtensions
 
         // Backchannel alert sampler (threshold evaluation)
         services.Configure<BackchannelAlertOptions>(configuration.GetSection("Backchannel:Alerts"));
-        services.AddHostedService<BackchannelAlertSampler>();
+        services.AddSingleton<BackchannelAlertSampler>();
+        services.AddHostedService(sp => sp.GetRequiredService<BackchannelAlertSampler>());
         // Expose diagnostics interface for sampler
-        services.AddSingleton<IBackchannelAlertDiagnostics>(sp => (IBackchannelAlertDiagnostics)sp.GetRequiredService<BackchannelAlertSampler>());
+        services.AddSingleton<IBackchannelAlertDiagnostics>(sp => sp.GetRequiredService<BackchannelAlertSampler>());
 
         // Audit sink configuration
         services.Configure<AuditOptions>(configuration.GetSection("Audit"));

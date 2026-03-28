@@ -70,29 +70,28 @@ public sealed class RateLimitsCommand : Command
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
 
-                var events = await CliAdminApiClient.GetListAsync<RateLimitEvent>(
+                var resp = await CliAdminApiClient.GetAsync<RateLimitEventsResponse>(
                     config, connection, "admin/api/rate-limits/events").ConfigureAwait(false);
+                var events = resp?.Events ?? [];
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(events, SharedJsonOptions.IndentedOptions));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(resp, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
                 var table = new Table().Border(TableBorder.Rounded)
-                    .AddColumn("Endpoint")
+                    .AddColumn("Policy")
                     .AddColumn("Client")
-                    .AddColumn("Limit")
-                    .AddColumn("Remaining")
+                    .AddColumn("Blocked")
                     .AddColumn("Timestamp");
 
                 foreach (var e in events)
                 {
                     table.AddRow(
-                        Markup.Escape(e.Endpoint ?? "-"),
+                        Markup.Escape(e.PolicyName ?? "-"),
                         Markup.Escape(e.ClientId ?? "-"),
-                        e.Limit.ToString(),
-                        e.Remaining.ToString(),
+                        e.WasBlocked ? "[red]yes[/]" : "[green]no[/]",
                         Markup.Escape(e.Timestamp.ToString("u")));
                 }
 
@@ -133,20 +132,26 @@ public sealed class RateLimitsCommand : Command
 
 // ── Response DTOs ────────────────────────────────────────────────────────────
 
+public sealed class RateLimitEventsResponse
+{
+    [JsonPropertyName("events")]
+    public IReadOnlyList<RateLimitEvent>? Events { get; set; }
+
+    [JsonPropertyName("totalCount")]
+    public int TotalCount { get; set; }
+}
+
 public sealed class RateLimitEvent
 {
-    [JsonPropertyName("endpoint")]
-    public string? Endpoint { get; set; }
+    [JsonPropertyName("timestamp")]
+    public DateTimeOffset Timestamp { get; set; }
+
+    [JsonPropertyName("policyName")]
+    public string? PolicyName { get; set; }
 
     [JsonPropertyName("clientId")]
     public string? ClientId { get; set; }
 
-    [JsonPropertyName("limit")]
-    public int Limit { get; set; }
-
-    [JsonPropertyName("remaining")]
-    public int Remaining { get; set; }
-
-    [JsonPropertyName("timestamp")]
-    public DateTimeOffset Timestamp { get; set; }
+    [JsonPropertyName("wasBlocked")]
+    public bool WasBlocked { get; set; }
 }

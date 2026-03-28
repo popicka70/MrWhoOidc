@@ -92,28 +92,29 @@ public sealed class LicenseCommand : Command
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
-                var history = await CliAdminApiClient.GetListAsync<LicenseHistoryItem>(
-                    config, connection, "admin/api/license/history").ConfigureAwait(false);
+                var resp = await CliAdminApiClient.GetAsync<LicenseHistoryResponse>(
+                    config, connection, "admin/api/license/history?page=1&pageSize=50").ConfigureAwait(false);
+                var history = resp?.Entries ?? [];
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(history, SharedJsonOptions.IndentedOptions));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(resp, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
                 var table = new Table().Border(TableBorder.Rounded)
-                    .AddColumn("Tier")
                     .AddColumn("Action")
-                    .AddColumn("Changed By")
+                    .AddColumn("Old Tier")
+                    .AddColumn("New Tier")
                     .AddColumn("Timestamp");
 
                 foreach (var h in history)
                 {
                     table.AddRow(
-                        Markup.Escape(h.Tier ?? "-"),
                         Markup.Escape(h.Action ?? "-"),
-                        Markup.Escape(h.ChangedBy ?? "-"),
-                        Markup.Escape(h.Timestamp.ToString("u")));
+                        Markup.Escape(h.OldTier ?? "-"),
+                        Markup.Escape(h.NewTier ?? "-"),
+                        Markup.Escape(h.CreatedAt.ToString("u")));
                 }
 
                 AnsiConsole.Write(table);
@@ -192,17 +193,26 @@ public sealed class LicenseInfo
     public string? Status { get; set; }
 }
 
-public sealed class LicenseHistoryItem
+public sealed class LicenseHistoryResponse
 {
-    [JsonPropertyName("tier")]
-    public string? Tier { get; set; }
+    [JsonPropertyName("entries")]
+    public IReadOnlyList<LicenseHistoryEntryItem>? Entries { get; set; }
 
+    [JsonPropertyName("totalCount")]
+    public int TotalCount { get; set; }
+}
+
+public sealed class LicenseHistoryEntryItem
+{
     [JsonPropertyName("action")]
     public string? Action { get; set; }
 
-    [JsonPropertyName("changedBy")]
-    public string? ChangedBy { get; set; }
+    [JsonPropertyName("oldTier")]
+    public string? OldTier { get; set; }
 
-    [JsonPropertyName("timestamp")]
-    public DateTimeOffset Timestamp { get; set; }
+    [JsonPropertyName("newTier")]
+    public string? NewTier { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public DateTimeOffset CreatedAt { get; set; }
 }

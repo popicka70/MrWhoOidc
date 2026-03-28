@@ -55,12 +55,13 @@ public sealed class BclCommand : Command
                     ? $"?status={Uri.EscapeDataString(status)}"
                     : "";
 
-                var entries = await CliAdminApiClient.GetListAsync<BclOutboxEntry>(
+                var resp = await CliAdminApiClient.GetAsync<BclOutboxResponse>(
                     config, connection, $"admin/api/bcl/outbox{query}").ConfigureAwait(false);
+                var entries = resp?.Items ?? [];
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, SharedJsonOptions.IndentedOptions));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(resp, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
@@ -77,7 +78,7 @@ public sealed class BclCommand : Command
                         Markup.Escape(e.Id.ToString()),
                         Markup.Escape(e.ClientId ?? "-"),
                         Markup.Escape(e.Status ?? "-"),
-                        e.RetryCount.ToString(),
+                        e.AttemptCount.ToString(),
                         Markup.Escape(e.CreatedAt.ToString("u")));
                 }
 
@@ -175,6 +176,15 @@ public sealed class BclCommand : Command
 
 // ── Response DTOs ────────────────────────────────────────────────────────────
 
+public sealed class BclOutboxResponse
+{
+    [JsonPropertyName("backlog")]
+    public int Backlog { get; set; }
+
+    [JsonPropertyName("items")]
+    public IReadOnlyList<BclOutboxEntry>? Items { get; set; }
+}
+
 public sealed class BclOutboxEntry
 {
     [JsonPropertyName("id")]
@@ -186,8 +196,8 @@ public sealed class BclOutboxEntry
     [JsonPropertyName("status")]
     public string? Status { get; set; }
 
-    [JsonPropertyName("retryCount")]
-    public int RetryCount { get; set; }
+    [JsonPropertyName("attemptCount")]
+    public int AttemptCount { get; set; }
 
     [JsonPropertyName("createdAt")]
     public DateTimeOffset CreatedAt { get; set; }

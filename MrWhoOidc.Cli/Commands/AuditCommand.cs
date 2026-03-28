@@ -54,19 +54,20 @@ public sealed class AuditCommand : Command
                 if (take.HasValue) queryParams.Add($"take={take.Value}");
                 var query = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
 
-                var entries = await CliAdminApiClient.GetListAsync<AuditEntry>(
+                var resp = await CliAdminApiClient.GetAsync<AuditListResponse>(
                     config, connection, $"admin/api/configuration-audit{query}").ConfigureAwait(false);
+                var entries = resp?.Items ?? [];
 
                 if (format == OutputFormat.Json)
                 {
-                    AnsiConsole.WriteLine(JsonSerializer.Serialize(entries, SharedJsonOptions.IndentedOptions));
+                    AnsiConsole.WriteLine(JsonSerializer.Serialize(resp, SharedJsonOptions.IndentedOptions));
                     return;
                 }
 
                 var table = new Table().Border(TableBorder.Rounded)
                     .AddColumn("ID")
-                    .AddColumn("Action")
-                    .AddColumn("Resource")
+                    .AddColumn("Operation")
+                    .AddColumn("Entity")
                     .AddColumn("User")
                     .AddColumn("Timestamp");
 
@@ -74,9 +75,9 @@ public sealed class AuditCommand : Command
                 {
                     table.AddRow(
                         Markup.Escape(e.Id.ToString()),
-                        Markup.Escape(e.Action ?? "-"),
-                        Markup.Escape(e.Resource ?? "-"),
-                        Markup.Escape(e.UserName ?? "-"),
+                        Markup.Escape(e.Operation ?? "-"),
+                        Markup.Escape(e.EntityIdentifier ?? e.EntityType ?? "-"),
+                        Markup.Escape(e.PerformedBy ?? "-"),
                         Markup.Escape(e.Timestamp.ToString("u")));
                 }
 
@@ -115,11 +116,11 @@ public sealed class AuditCommand : Command
                 }
 
                 AnsiConsole.MarkupLine($"[bold]ID:[/]        {Markup.Escape(entry.Id.ToString())}");
-                AnsiConsole.MarkupLine($"[bold]Action:[/]    {Markup.Escape(entry.Action ?? "-")}");
-                AnsiConsole.MarkupLine($"[bold]Resource:[/]  {Markup.Escape(entry.Resource ?? "-")}");
-                AnsiConsole.MarkupLine($"[bold]User:[/]      {Markup.Escape(entry.UserName ?? "-")}");
+                AnsiConsole.MarkupLine($"[bold]Operation:[/] {Markup.Escape(entry.Operation ?? "-")}");
+                AnsiConsole.MarkupLine($"[bold]Entity:[/]    {Markup.Escape(entry.EntityIdentifier ?? entry.EntityType ?? "-")}");
+                AnsiConsole.MarkupLine($"[bold]User:[/]      {Markup.Escape(entry.PerformedBy ?? "-")}");
                 AnsiConsole.MarkupLine($"[bold]Timestamp:[/] {Markup.Escape(entry.Timestamp.ToString("u"))}");
-                AnsiConsole.MarkupLine($"[bold]Details:[/]   {Markup.Escape(entry.Details ?? "-")}");
+                AnsiConsole.MarkupLine($"[bold]Result:[/]    {Markup.Escape(entry.Result ?? "-")}");
             });
         }
     }
@@ -127,22 +128,34 @@ public sealed class AuditCommand : Command
 
 // ── Response DTOs ────────────────────────────────────────────────────────────
 
+public sealed class AuditListResponse
+{
+    [JsonPropertyName("items")]
+    public IReadOnlyList<AuditEntry> Items { get; set; } = [];
+
+    [JsonPropertyName("pagination")]
+    public JsonElement? Pagination { get; set; }
+}
+
 public sealed class AuditEntry
 {
     [JsonPropertyName("id")]
     public Guid Id { get; set; }
 
-    [JsonPropertyName("action")]
-    public string? Action { get; set; }
+    [JsonPropertyName("operation")]
+    public string? Operation { get; set; }
 
-    [JsonPropertyName("resource")]
-    public string? Resource { get; set; }
+    [JsonPropertyName("entityType")]
+    public string? EntityType { get; set; }
 
-    [JsonPropertyName("userName")]
-    public string? UserName { get; set; }
+    [JsonPropertyName("entityIdentifier")]
+    public string? EntityIdentifier { get; set; }
 
-    [JsonPropertyName("details")]
-    public string? Details { get; set; }
+    [JsonPropertyName("result")]
+    public string? Result { get; set; }
+
+    [JsonPropertyName("performedBy")]
+    public string? PerformedBy { get; set; }
 
     [JsonPropertyName("timestamp")]
     public DateTimeOffset Timestamp { get; set; }

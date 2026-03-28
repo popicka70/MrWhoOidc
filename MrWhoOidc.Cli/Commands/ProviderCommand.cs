@@ -174,7 +174,10 @@ public sealed class ProviderCommand : Command
 
                 var result = await CliAdminApiClient.PostAsync<ProviderCreatedResult>(
                     config, connection, "admin/api/providers",
-                    new { name, type, authority, clientId, clientSecret, enabled, isDefault, allowRegistration }).ConfigureAwait(false);
+                    new { name, type, authority, clientId, clientSecret,
+                          enabled = enabled ?? true,
+                          isDefault = isDefault ?? false,
+                          allowRegistration = allowRegistration ?? false }).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine("[green]Provider created successfully.[/]");
                 AnsiConsole.MarkupLine($"  [bold]ID:[/]   {Markup.Escape(result?.Id.ToString() ?? "-")}");

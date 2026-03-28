@@ -11,7 +11,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>mrwho-cli</ToolCommandName>
     <PackageId>MrWhoOidc.Cli</PackageId>
-    <Version>1.0.8</Version>
+    <Version>1.0.11</Version>
     <Authors>MrWhoOidc Project</Authors>
     <Description>CLI tool for managing MrWhoOidc OIDC server with MCP (Model Context Protocol) support for LLM integration</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

@@ -614,7 +614,6 @@ class TestCliFullProvisioningWorkflow:
 
     # -- Phase 3: Export realm -----------------------------------------------
 
-    @pytest.mark.xfail(reason="Server export handler uses httpContext.Items['TenantId'] instead of ITenantAccessor")
     def test_11_export_realm(self, cli_logged_in: CliHelper, tmp_path: Path):
         if not self._realm_id:
             pytest.skip("Realm ID not captured")
@@ -1213,17 +1212,14 @@ class TestCliDiagnostics:
 
     # -- audit --
 
-    @pytest.mark.xfail(reason="audit endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_audit_list(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("audit", "list")
         assert r.ok, f"audit list failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="audit endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_audit_list_json(self, cli_logged_in: CliHelper):
         data = cli_logged_in.run_json("audit", "list")
         assert isinstance(data, (list, dict))
 
-    @pytest.mark.xfail(reason="audit endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_audit_get_first_entry(self, cli_logged_in: CliHelper):
         """If any audit entries exist, verify that ``audit get <id>`` works."""
         data = cli_logged_in.run_json("audit", "list")
@@ -1238,12 +1234,10 @@ class TestCliDiagnostics:
 
     # -- backchannel logout --
 
-    @pytest.mark.xfail(reason="bcl outbox endpoint only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_bcl_outbox(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("bcl", "outbox")
         assert r.ok, f"bcl outbox failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="bcl outbox endpoint only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_bcl_outbox_json(self, cli_logged_in: CliHelper):
         data = cli_logged_in.run_json("bcl", "outbox")
         assert isinstance(data, (list, dict))
@@ -1260,12 +1254,10 @@ class TestCliDiagnostics:
 
     # -- rate limits --
 
-    @pytest.mark.xfail(reason="rate-limits overview crashes server (ObjectDisposedException in rate-limiter)")
     def test_rate_limits_overview(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("rate-limits", "overview")
         assert r.ok, f"rate-limits overview failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="rate-limits events endpoint only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_rate_limits_events(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("rate-limits", "events")
         assert r.ok, f"rate-limits events failed: {r.stderr or r.stdout}"
@@ -1276,7 +1268,6 @@ class TestCliDiagnostics:
         r = cli_logged_in.run("license", "show")
         assert r.ok, f"license show failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="license history CLI command does not send required 'page' query parameter (HTTP 400)")
     def test_license_history(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("license", "history")
         assert r.ok, f"license history failed: {r.stderr or r.stdout}"
@@ -1331,7 +1322,6 @@ class TestCliExportImport:
         assert len(match) == 1
         TestCliExportImport._internal_id = str(match[0]["id"])
 
-    @pytest.mark.xfail(reason="export tenant HTTP 500: AuthorizationPolicy 'PlatformAdmin' not registered in dev container")
     def test_03_export_tenant(self, cli_logged_in: CliHelper, tmp_path: Path):
         export_dir = tmp_path / "tenant-export"
         export_dir.mkdir()
@@ -1345,7 +1335,6 @@ class TestCliExportImport:
         assert r.ok, f"export tenant failed: {r.stderr or r.stdout}"
         assert list(export_dir.glob("*.json")), "No manifest file written by export tenant"
 
-    @pytest.mark.xfail(reason="export client HTTP 400: tenant context required; endpoint only at /admin/api, not /t/{slug}/admin/api")
     def test_04_export_client(self, cli_logged_in: CliHelper, tmp_path: Path):
         if not self._internal_id:
             pytest.skip("Client ID not captured")
@@ -1389,7 +1378,6 @@ class TestCliExportImport:
         assert r.exit_code in (0, 1), \
             f"import preview unexpected exit {r.exit_code}: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="Export realm uses httpContext.Items['TenantId'] instead of ITenantAccessor")
     def test_07_export_realm(self, cli_logged_in: CliHelper, tmp_path: Path):
         if not self._realm_id:
             pytest.skip("Realm ID not captured")
@@ -1418,12 +1406,10 @@ class TestCliProviderCrud:
     _provider_id: str | None = None
     _mapping_id: str | None = None
 
-    @pytest.mark.xfail(reason="provider endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_01_provider_list_initial(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run("provider", "list")
         assert r.ok, f"provider list failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="provider endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_02_create_provider(self, cli_logged_in: CliHelper):
         r = cli_logged_in.run(
             "provider", "create",
@@ -1436,7 +1422,6 @@ class TestCliProviderCrud:
         assert r.ok, f"provider create failed: {r.stderr or r.stdout}"
         assert "created" in r.stdout.lower() or self._name in r.stdout
 
-    @pytest.mark.xfail(reason="provider endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_03_capture_provider_id(self, cli_logged_in: CliHelper):
         data = cli_logged_in.run_json("provider", "list")
         assert isinstance(data, list)
@@ -1505,7 +1490,6 @@ class TestCliProviderCrud:
         r = cli_logged_in.run("provider", "delete", self._provider_id, "--confirm")
         assert r.ok, f"provider delete failed: {r.stderr or r.stdout}"
 
-    @pytest.mark.xfail(reason="provider endpoints only at /admin/api, not /t/{slug}/admin/api (server routing gap)")
     def test_11_provider_gone(self, cli_logged_in: CliHelper):
         data = cli_logged_in.run_json("provider", "list")
         names = [p.get("name", "") for p in data]
