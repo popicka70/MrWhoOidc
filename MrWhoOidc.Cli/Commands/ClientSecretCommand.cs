@@ -53,8 +53,9 @@ public sealed class ClientSecretCommand : Command
 
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
-                var secrets = await CliAdminApiClient.GetListAsync<ClientSecretItem>(
+                var response = await CliAdminApiClient.GetAsync<ClientSecretsListResponse>(
                     config, connection, $"admin/api/clients/{clientId}/secrets").ConfigureAwait(false);
+                var secrets = response?.Secrets ?? [];
 
                 if (format == OutputFormat.Json)
                 {
@@ -62,21 +63,47 @@ public sealed class ClientSecretCommand : Command
                     return;
                 }
 
+                if (!string.IsNullOrWhiteSpace(response?.ClientName))
+                    AnsiConsole.MarkupLine($"Client: [bold]{Markup.Escape(response.ClientName)}[/] ({Markup.Escape(clientId.ToString())})");
+
                 var table = new Table().Border(TableBorder.Rounded)
                     .AddColumn("ID")
                     .AddColumn("Description")
                     .AddColumn("Status")
+                    .AddColumn("Primary")
                     .AddColumn("Expires At")
+                    .AddColumn("Last Used")
+                    .AddColumn("Uses")
                     .AddColumn("Created At");
 
                 foreach (var s in secrets)
                 {
+                    var expiryText = s.ExpiresAtUtc is not null
+                        ? s.ExpiresAtUtc < DateTimeOffset.UtcNow
+                            ? $"[red]{Markup.Escape(s.ExpiresAtUtc.Value.ToString("u"))}[/]"
+                            : s.ExpiresAtUtc.Value < DateTimeOffset.UtcNow.AddDays(30)
+                                ? $"[yellow]{Markup.Escape(s.ExpiresAtUtc.Value.ToString("u"))}[/]"
+                                : Markup.Escape(s.ExpiresAtUtc.Value.ToString("u"))
+                        : "never";
+
+                    var statusText = s.Status switch
+                    {
+                        "primary" => "[green]primary[/]",
+                        "active"  => "[green]active[/]",
+                        "expired" => "[red]expired[/]",
+                        "revoked" => "[grey]revoked[/]",
+                        _         => Markup.Escape(s.Status ?? "-")
+                    };
+
                     table.AddRow(
                         Markup.Escape(s.Id.ToString()),
                         Markup.Escape(s.Description ?? "-"),
-                        Markup.Escape(s.Status ?? "-"),
-                        Markup.Escape(s.ExpiresAt?.ToString("u") ?? "never"),
-                        Markup.Escape(s.CreatedAt.ToString("u")));
+                        statusText,
+                        s.IsPrimary ? "[green]✓[/]" : "-",
+                        expiryText,
+                        Markup.Escape(s.LastUsedAtUtc?.ToString("u") ?? "-"),
+                        s.UsageCount.ToString(),
+                        Markup.Escape(s.CreatedAtUtc.ToString("u")));
                 }
 
                 AnsiConsole.Write(table);
@@ -285,6 +312,21 @@ public sealed class ClientSecretCommand : Command
 
 // ── Response DTOs ────────────────────────────────────────────────────────────
 
+/// <summary>
+/// Wrapper response returned by GET /admin/api/clients/{clientId}/secrets.
+/// </summary>
+public sealed class ClientSecretsListResponse
+{
+    [JsonPropertyName("clientId")]
+    public Guid ClientId { get; set; }
+
+    [JsonPropertyName("clientName")]
+    public string? ClientName { get; set; }
+
+    [JsonPropertyName("secrets")]
+    public IReadOnlyList<ClientSecretItem> Secrets { get; set; } = [];
+}
+
 public sealed class ClientSecretItem
 {
     [JsonPropertyName("id")]
@@ -296,11 +338,29 @@ public sealed class ClientSecretItem
     [JsonPropertyName("status")]
     public string? Status { get; set; }
 
-    [JsonPropertyName("expiresAt")]
-    public DateTimeOffset? ExpiresAt { get; set; }
+    [JsonPropertyName("isPrimary")]
+    public bool IsPrimary { get; set; }
 
-    [JsonPropertyName("createdAt")]
-    public DateTimeOffset CreatedAt { get; set; }
+    [JsonPropertyName("expiresAtUtc")]
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
+
+    [JsonPropertyName("createdAtUtc")]
+    public DateTimeOffset CreatedAtUtc { get; set; }
+
+    [JsonPropertyName("activatedAtUtc")]
+    public DateTimeOffset? ActivatedAtUtc { get; set; }
+
+    [JsonPropertyName("revokedAtUtc")]
+    public DateTimeOffset? RevokedAtUtc { get; set; }
+
+    [JsonPropertyName("lastUsedAtUtc")]
+    public DateTimeOffset? LastUsedAtUtc { get; set; }
+
+    [JsonPropertyName("usageCount")]
+    public int UsageCount { get; set; }
+
+    [JsonPropertyName("createdBy")]
+    public string? CreatedBy { get; set; }
 }
 
 public sealed class SecretCreatedResult

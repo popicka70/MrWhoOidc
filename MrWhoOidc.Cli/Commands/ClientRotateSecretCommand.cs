@@ -69,8 +69,9 @@ public sealed class ClientRotateSecretCommand : Command
 
         // Step 1: Show current secret state
         AnsiConsole.MarkupLine("[bold]Step 1:[/] Checking current secrets...");
-        var existingSecrets = await CliAdminApiClient.GetListAsync<ClientSecretItem>(
+        var existingResponse = await CliAdminApiClient.GetAsync<ClientSecretsListResponse>(
             config, connection, $"admin/api/clients/{clientId}/secrets").ConfigureAwait(false);
+        var existingSecrets = existingResponse?.Secrets ?? [];
 
         var activeCount = existingSecrets.Count(s =>
             string.Equals(s.Status, "active", StringComparison.OrdinalIgnoreCase) ||
@@ -131,19 +132,20 @@ public sealed class ClientRotateSecretCommand : Command
         if (revokeOldest)
         {
             // Refresh secret list
-            var refreshedSecrets = await CliAdminApiClient.GetListAsync<ClientSecretItem>(
+            var refreshedResponse = await CliAdminApiClient.GetAsync<ClientSecretsListResponse>(
                 config, connection, $"admin/api/clients/{clientId}/secrets").ConfigureAwait(false);
+            var refreshedSecrets = refreshedResponse?.Secrets ?? [];
 
             // Only revoke if we'd leave at least 2 secrets (the new one + one backup)
             if (refreshedSecrets.Count > 2)
             {
                 var oldest = refreshedSecrets
                     .Where(s => s.Id != result.Id)
-                    .OrderBy(s => s.CreatedAt)
+                    .OrderBy(s => s.CreatedAtUtc)
                     .First();
 
                 AnsiConsole.MarkupLine($"\n[bold]Step 3:[/] Revoking oldest secret {Markup.Escape(oldest.Id.ToString())} " +
-                    $"(created {oldest.CreatedAt:yyyy-MM-dd})...");
+                    $"(created {oldest.CreatedAtUtc:yyyy-MM-dd})...");
 
                 await CliAdminApiClient.DeleteAsync(
                     config, connection, $"admin/api/clients/{clientId}/secrets/{oldest.Id}").ConfigureAwait(false);

@@ -56,8 +56,9 @@ public sealed class ClientValidateCommand : Command
         }
 
         // Fetch secrets
-        var secrets = await CliAdminApiClient.GetListAsync<ClientSecretItem>(
+        var secretsResponse = await CliAdminApiClient.GetAsync<ClientSecretsListResponse>(
             config, connection, $"admin/api/clients/{id}/secrets").ConfigureAwait(false);
+        var secrets = secretsResponse?.Secrets ?? [];
 
         // Fetch scopes
         var scopes = await CliAdminApiClient.GetListAsync<ClientScopeItem>(
@@ -147,7 +148,7 @@ public sealed class ClientValidateCommand : Command
         }
 
         var now = DateTimeOffset.UtcNow;
-        var expiredActive = activeSecrets.Where(s => s.ExpiresAt.HasValue && s.ExpiresAt.Value < now).ToList();
+        var expiredActive = activeSecrets.Where(s => s.ExpiresAtUtc.HasValue && s.ExpiresAtUtc.Value < now).ToList();
         if (expiredActive.Count == activeSecrets.Count)
         {
             findings.Add(new ValidationFinding("error", "Secrets",
@@ -160,7 +161,7 @@ public sealed class ClientValidateCommand : Command
         }
 
         var expiringWithin30 = activeSecrets
-            .Where(s => s.ExpiresAt.HasValue && s.ExpiresAt.Value > now && s.ExpiresAt.Value < now.AddDays(30))
+            .Where(s => s.ExpiresAtUtc.HasValue && s.ExpiresAtUtc.Value > now && s.ExpiresAtUtc.Value < now.AddDays(30))
             .ToList();
         if (expiringWithin30.Count > 0)
         {
