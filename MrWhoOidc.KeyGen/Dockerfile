@@ -2,6 +2,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Copy NuGet config and central package management props first
+COPY ["NuGet.config", "."]
+COPY ["Directory.Packages.props", "."]
+
 # Copy project file and restore dependencies
 COPY ["MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj", "MrWhoOidc.KeyGen/"]
 RUN dotnet restore "MrWhoOidc.KeyGen/MrWhoOidc.KeyGen.csproj"
