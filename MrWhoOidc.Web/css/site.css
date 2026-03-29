@@ -1,0 +1,29 @@
+:root {
+    --mrwho-primary: #0d6efd;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main, section:last-of-type {
+    flex: 1;
+}
+
+footer {
+    margin-top: auto;
+}
+
+pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+}
+
+.navbar-brand {
+    font-size: 1.25rem;
+}
