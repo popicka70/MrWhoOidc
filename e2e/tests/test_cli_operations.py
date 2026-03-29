@@ -1481,6 +1481,7 @@ class TestCliProviderCrud:
         r = cli_logged_in.run(
             "provider", "claim-mapping", "delete",
             self._provider_id, self._mapping_id,
+            "--confirm",
         )
         assert r.ok, f"provider claim-mapping delete failed: {r.stderr or r.stdout}"
 

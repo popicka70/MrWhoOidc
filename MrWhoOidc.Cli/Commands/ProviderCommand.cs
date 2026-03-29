@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using MrWhoOidc.Cli.Configuration;
 using MrWhoOidc.Cli.Services;
@@ -232,9 +233,23 @@ public sealed class ProviderCommand : Command
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
 
+                // GET current state so we can merge only user-supplied values
+                // (the PUT endpoint expects the full entity including non-nullable bools).
+                var current = await CliAdminApiClient.GetAsync<JsonObject>(
+                    config, connection, $"admin/api/providers/{id}").ConfigureAwait(false);
+                if (current is null)
+                    throw new InvalidOperationException($"Provider {id} not found.");
+
+                if (name is not null) current["name"] = name;
+                if (enabled.HasValue) current["enabled"] = enabled.Value;
+                if (isDefault.HasValue) current["isDefault"] = isDefault.Value;
+                if (authority is not null) current["authority"] = authority;
+                if (clientId is not null) current["clientId"] = clientId;
+                if (clientSecret is not null) current["clientSecret"] = clientSecret;
+                if (allowRegistration.HasValue) current["allowRegistration"] = allowRegistration.Value;
+
                 await CliAdminApiClient.PutAsync(
-                    config, connection, $"admin/api/providers/{id}",
-                    new { name, enabled, isDefault, authority, clientId, clientSecret, allowRegistration }).ConfigureAwait(false);
+                    config, connection, $"admin/api/providers/{id}", current).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Provider {id} updated successfully.[/]");
             });
@@ -424,9 +439,21 @@ internal sealed class ProviderClaimMappingCommand : Command
                 var config = await CliConfig.LoadAsync().ConfigureAwait(false);
                 var connection = CliServerConnection.ResolveAuthenticatedConnectionOrThrow(config, server, profile);
 
+                // GET current mapping so we can merge — the PUT endpoint requires
+                // both externalClaim and localClaim to be non-empty.
+                var mappings = await CliAdminApiClient.GetListAsync<JsonObject>(
+                    config, connection, $"admin/api/providers/{providerId}/claim-mappings").ConfigureAwait(false);
+                var current = mappings.FirstOrDefault(m =>
+                    m["id"]?.ToString().Equals(mappingId.ToString(), StringComparison.OrdinalIgnoreCase) == true);
+                if (current is null)
+                    throw new InvalidOperationException($"Claim mapping {mappingId} not found.");
+
+                if (localClaim is not null) current["localClaim"] = localClaim;
+                if (transform is not null) current["transform"] = transform;
+
                 await CliAdminApiClient.PutAsync(
                     config, connection, $"admin/api/providers/{providerId}/claim-mappings/{mappingId}",
-                    new { localClaim, transform }).ConfigureAwait(false);
+                    current).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Claim mapping {mappingId} updated.[/]");
             });
