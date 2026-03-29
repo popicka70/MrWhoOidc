@@ -24,6 +24,12 @@ services:
       Mail__SmtpPort: "1025"
       Mail__FromAddress: "no-reply@mrwho.local"
       Mail__FromName: "MrWhoOidc"
+      # Test licensing public key for E2E license generation (matches e2e/fixtures/licensing-test-public-key.pem)
+      Licensing__AdditionalPublicKeyPem: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEM/Sc9iNCCXaGirJhKGX+/CNP8Ell
+        8/rQgKHevAOYALTb2fltWRzX9S1vjaC8jwgxzy3s6Pzuai6O6c6rqyAhOw==
+        -----END PUBLIC KEY-----
     ports:
       - "8443:8443"
     volumes:

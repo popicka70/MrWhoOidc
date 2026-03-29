@@ -20,6 +20,13 @@ public sealed record LicensingOptions
     public string DefaultTier { get; init; } = "community";
 
     public string? PlatformIssuer { get; set; }
+
+    /// <summary>
+    /// Optional additional ECDSA P-256 public key in PEM format for license validation.
+    /// When set, the license validator trusts this key in addition to the embedded production key.
+    /// Intended for test/E2E environments that generate licenses with a dedicated test keypair.
+    /// </summary>
+    public string? AdditionalPublicKeyPem { get; init; }
 }
 
 public static class LicensingOptionsExtensions

@@ -405,3 +405,47 @@ def oidc_client(reset_database: None) -> OidcClient:
     client = OidcClient(f"{BASE_URL}/t/default")
     client.discover()
     return client
+
+
+@pytest.fixture(scope="session")
+def install_enterprise_license(
+    authenticated_context: BrowserContext,
+) -> str:
+    """
+    Generate an Enterprise+ platform license and install it via the admin API.
+
+    Returns the signed JWT string.  Opt-in fixture — only tests that need
+    license-gated features should request it.
+    """
+    import logging
+
+    from utils.license_generator import LicenseGenerator
+
+    log = logging.getLogger("license_install")
+
+    generator = LicenseGenerator()
+    license_jwt = generator.generate(
+        tier="enterprise+",
+        organization="E2E Test Organization",
+        scope="platform",
+        deployment_mode="multi_tenant",
+        valid_seconds=86400,  # 24h
+    )
+    log.info("Generated Enterprise+ test license")
+
+    # Use Playwright's API request context which shares the authenticated cookies
+    api = authenticated_context.request
+    response = api.post(
+        f"{BASE_URL}/admin/api/license",
+        data={"licenseKey": license_jwt, "notes": "E2E test license"},
+        headers={"Content-Type": "application/json"},
+    )
+
+    if response.status != 200:
+        body = response.text()
+        raise RuntimeError(
+            f"License install failed ({response.status}): {body}"
+        )
+
+    log.info("Enterprise+ license installed successfully")
+    return license_jwt

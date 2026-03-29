@@ -260,7 +260,18 @@ internal sealed class LicenseValidator : ILicenseValidator
         {
             var ecdsa = CreateEcdsaFromPem(_options.PublicKeyPem);
             return new ECDsaSecurityKey(ecdsa) { KeyId = kid };
-        }).ToArray();
+        }).ToList();
+
+        // When an additional public key is configured (e.g. test/E2E environments),
+        // add signing keys for it as well so licenses signed by the test keypair are accepted.
+        if (!string.IsNullOrWhiteSpace(_options.AdditionalPublicKeyPem))
+        {
+            foreach (var kid in KnownKeyIds)
+            {
+                var ecdsa = CreateEcdsaFromPem(_options.AdditionalPublicKeyPem);
+                keys.Add(new ECDsaSecurityKey(ecdsa) { KeyId = kid });
+            }
+        }
 
         return new TokenValidationParameters
         {
