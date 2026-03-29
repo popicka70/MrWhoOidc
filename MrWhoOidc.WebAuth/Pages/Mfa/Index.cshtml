@@ -53,7 +53,7 @@
     @if (!Model.Enabled)
     {
         <div class="mb-3">
-            <button type="submit" class="btn btn-primary" onclick="document.getElementById('Action').value='enable'">Enable TOTP</button>
+            <button type="submit" class="btn btn-primary btn-set-action" data-action-value="enable">Enable TOTP</button>
         </div>
     }
     else
@@ -64,8 +64,18 @@
             <span asp-validation-for="VerificationCode" class="text-danger"></span>
         </div>
         <div class="mb-3">
-            <button type="submit" class="btn btn-success" onclick="document.getElementById('Action').value='confirm'">Confirm</button>
-            <button type="submit" class="btn btn-danger" onclick="document.getElementById('Action').value='disable'">Disable TOTP</button>
+            <button type="submit" class="btn btn-success btn-set-action" data-action-value="confirm">Confirm</button>
+            <button type="submit" class="btn btn-danger btn-set-action" data-action-value="disable">Disable TOTP</button>
         </div>
     }
 </form>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        document.querySelectorAll('.btn-set-action').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.getElementById('Action').value = this.getAttribute('data-action-value');
+            });
+        });
+    </script>
+}

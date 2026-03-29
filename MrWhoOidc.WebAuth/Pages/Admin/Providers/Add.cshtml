@@ -234,7 +234,7 @@
     </div>
 </form>
 
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     document.addEventListener('providerTemplateChanged', function(e) {
         const templateId = e.detail.templateId;
         

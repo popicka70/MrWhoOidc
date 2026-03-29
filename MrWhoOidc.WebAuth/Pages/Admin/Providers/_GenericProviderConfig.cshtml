@@ -347,7 +347,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
     (function() {
         const authorityPattern = '@template.AuthorityPattern';
         const placeholders = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(

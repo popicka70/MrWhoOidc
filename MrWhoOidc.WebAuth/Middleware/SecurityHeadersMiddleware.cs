@@ -41,14 +41,14 @@ public sealed class SecurityHeadersMiddleware
                     headers.TryAdd("X-Frame-Options", "DENY");
 
                     // Use per-request nonce for script-src to eliminate 'unsafe-inline'.
-                    var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com";
+                    var scriptSrc = $"script-src 'self' 'nonce-{nonce}' https://unpkg.com https://cdnjs.cloudflare.com";
 
                     headers.TryAdd(
                         "Content-Security-Policy",
                         "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; " +
                         "img-src 'self' data: https:; " +
-                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; " +
-                        "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com; " +
+                        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; " +
+                        "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com https://fonts.gstatic.com; " +
                         $"{scriptSrc}; connect-src 'self'");
                 }
             }

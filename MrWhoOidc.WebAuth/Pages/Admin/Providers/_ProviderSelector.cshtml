@@ -21,8 +21,7 @@
         <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-3">
             <div class="col">
                 <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center active"
-                        data-template="0"
-                        onclick="selectProviderTemplate(this, 0)">
+                        data-template="0">
                     <div class="provider-icon mb-2" style="width:40px;height:40px;">
                         @Html.Raw(ProviderIcons.Custom)
                     </div>
@@ -34,7 +33,6 @@
                 <div class="col">
                     <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center"
                             data-template="@((int)template.Template)"
-                            onclick="selectProviderTemplate(this, @((int)template.Template))"
                             title="@template.Description">
                         <div class="provider-icon mb-2" style="width:40px;height:40px;">
                             @Html.Raw(template.IconSvg)
@@ -57,7 +55,6 @@
                     <div class="col">
                         <button type="button" class="provider-card btn btn-outline-secondary w-100 h-100 p-3 d-flex flex-column align-items-center justify-content-center"
                                 data-template="@((int)template.Template)"
-                                onclick="selectProviderTemplate(this, @((int)template.Template))"
                                 title="@template.Description">
                             <div class="provider-icon mb-2" style="width:40px;height:40px;">
                                 @Html.Raw(template.IconSvg)
@@ -122,4 +119,10 @@
         });
         document.dispatchEvent(event);
     }
+
+    document.querySelectorAll('.provider-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+            selectProviderTemplate(this, parseInt(this.getAttribute('data-template')));
+        });
+    });
 </script>

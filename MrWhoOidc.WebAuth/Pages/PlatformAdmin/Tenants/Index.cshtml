@@ -117,7 +117,7 @@ else
                                 <input type="hidden" name="tenantId" value="@t.Id" />
                             </form>
                             <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-secondary" title="View as Tenant Admin" onclick="document.getElementById('impersonate-form-@t.Id').submit()">Impersonate</button>
+                                <button type="button" class="btn btn-outline-secondary btn-impersonate" title="View as Tenant Admin" data-form-id="impersonate-form-@t.Id">Impersonate</button>
                                 <a class="btn btn-outline-secondary" asp-page="Edit" asp-route-id="@t.Id" title="Edit">Edit</a>
                                 <a class="btn btn-outline-secondary" asp-page="Export" asp-route-id="@t.Id" title="Export Configuration">Export</a>
                             </div>
@@ -171,3 +171,16 @@ else
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.btn-impersonate').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var form = document.getElementById(this.getAttribute('data-form-id'));
+                    if (form) form.submit();
+                });
+            });
+        });
+    </script>
+}

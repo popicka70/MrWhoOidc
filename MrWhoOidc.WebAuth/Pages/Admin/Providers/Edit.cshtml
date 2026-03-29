@@ -106,9 +106,9 @@ else
                                            value="@uri"
                                            readonly
                                            id="wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)" />
-                                    <button class="btn btn-outline-secondary"
+                                    <button class="btn btn-outline-secondary btn-copy-uri"
                                             type="button"
-                                            onclick="navigator.clipboard.writeText(document.getElementById('wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)').value)">
+                                            data-copy-input-id="wellknown-uri-@Model.WellKnownUrls.IndexOf(uri)">
                                         <i class="ph ph-clipboard"></i>
                                     </button>
                                 </div>
@@ -129,9 +129,9 @@ else
                                            value="@uri" 
                                            readonly 
                                            id="redirect-uri-@Model.RedirectUris.IndexOf(uri)" />
-                                    <button class="btn btn-outline-secondary" 
+                                    <button class="btn btn-outline-secondary btn-copy-uri" 
                                             type="button" 
-                                            onclick="copyToClipboard('redirect-uri-@Model.RedirectUris.IndexOf(uri)', this)"
+                                            data-copy-input-id="redirect-uri-@Model.RedirectUris.IndexOf(uri)"
                                             title="Copy to clipboard">
                                         <i class="ph ph-clipboard"></i>
                                     </button>
@@ -153,9 +153,9 @@ else
                                            value="@uri" 
                                            readonly 
                                            id="logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)" />
-                                    <button class="btn btn-outline-secondary" 
+                                    <button class="btn btn-outline-secondary btn-copy-uri" 
                                             type="button" 
-                                            onclick="copyToClipboard('logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)', this)"
+                                            data-copy-input-id="logout-uri-@Model.LogoutCallbackUris.IndexOf(uri)"
                                             title="Copy to clipboard">
                                         <i class="ph ph-clipboard"></i>
                                     </button>
@@ -351,6 +351,13 @@ else
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        // Copy URI buttons
+        document.querySelectorAll('.btn-copy-uri').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                copyToClipboard(this.getAttribute('data-copy-input-id'), this);
+            });
+        });
+
         const formatBtn = document.getElementById('formatJsonBtn');
         const textarea = document.getElementById('configJsonTextarea');
         

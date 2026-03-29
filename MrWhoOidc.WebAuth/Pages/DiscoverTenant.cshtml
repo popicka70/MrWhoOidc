@@ -146,7 +146,7 @@
                 <p class="text-muted small mt-3">
                     <i class="ph ph-info me-1"></i>
                     Already know your organization? 
-                    <a href="#" onclick="showTenantUrlHelp(); return false;" class="text-decoration-none">
+                    <a href="#" id="direct-login-link" class="text-decoration-none">
                         Sign in directly
                     </a>
                 </p>
@@ -157,9 +157,16 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         function showTenantUrlHelp() {
             alert('To sign in directly to your organization, use:\nhttps://yourserver.com/t/your-org/login\n\nReplace "your-org" with your organization\'s name.');
+        }
+        var directLoginLink = document.getElementById('direct-login-link');
+        if (directLoginLink) {
+            directLoginLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showTenantUrlHelp();
+            });
         }
     </script>
 }

@@ -17,7 +17,7 @@
             <p class="page-header__subtitle">Real-time monitoring of rate limiting across all OIDC endpoints.</p>
         </div>
         <div class="page-header__actions">
-            <button id="refreshBtn" class="btn btn-primary" onclick="location.reload()">
+            <button id="refreshBtn" class="btn btn-primary">
                 <i class="ph ph-arrow-clockwise"></i> Refresh
             </button>
         </div>
@@ -189,13 +189,13 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Auto-refresh every 30 seconds
         let refreshInterval = setInterval(() => location.reload(), 30000);
 
         document.getElementById('refreshBtn').addEventListener('click', () => {
             clearInterval(refreshInterval);
-            refreshInterval = setInterval(() => location.reload(), 30000);
+            location.reload();
         });
     </script>
 }
