@@ -9,6 +9,7 @@ Command-line interface for managing MrWhoOidc OIDC server with built-in MCP (Mod
   - **MCP Mode**: JSON-RPC 2.0 stdio server for direct LLM tool integration (VS Code Copilot, Claude Desktop, etc.)
 
 - **Authentication**: Device Code Flow (RFC 8628) with automatic token refresh
+- **Multi-Profile**: Named profiles per server/tenant, rename, switch; server context header on every command
 - **Multi-Tenancy Aware**: Respects tenant boundaries; platform-admin can operate cross-tenant
 - **Comprehensive Admin Operations**: Manage clients, users, roles, realms, scopes, identity providers, tenants, keys, and more
 
@@ -57,6 +58,9 @@ dotnet tool install --global --add-source ./nupkg MrWhoOidc.Cli
 # Login to your tenant-aware OIDC server
 mrwho-cli login --server https://auth.example.com/t/acme
 
+# Login and name the profile
+mrwho-cli login --server https://auth.example.com/t/acme --profile acme-prod
+
 # Follow the device code flow instructions in your browser
 
 # Inspect the connected server discovery document
@@ -82,6 +86,12 @@ mrwho-cli profile list
 
 # Show the active profile
 mrwho-cli profile show
+
+# Rename a profile
+mrwho-cli profile rename default my-prod
+
+# Switch to a different profile
+mrwho-cli profile switch my-prod
 
 # Clear tokens for the current profile
 mrwho-cli logout
@@ -116,7 +126,7 @@ Current command coverage includes:
 
 - Device-code login and logout
 - Discovery inspection
-- Profile management (`list`, `show`, `switch`, `remove`)
+- Profile management (`list`, `show`, `switch`, `remove`, `rename`)
 - Authenticated listing commands for tenants, clients, scopes, users, and related admin entities as implemented by the current command surface
 - Export and import workflows for tenant and configuration manifests
 - MCP stdio mode for tool-based integrations
@@ -137,7 +147,7 @@ MrWhoOidc.Cli/
 ├── Commands/
 │   ├── LoginCommand.cs        # Device code flow auth
 │   ├── LogoutCommand.cs       # Clear tokens for a profile
-│   ├── ProfileCommand.cs      # Profile list/show/switch/remove
+│   ├── ProfileCommand.cs      # Profile list/show/switch/remove/rename
 │   ├── DiscoveryCommand.cs    # Inspect OIDC discovery metadata
 │   ├── ExportCommand.cs       # Export manifests to files
 │   ├── TenantCommand.cs       # Platform tenant listing

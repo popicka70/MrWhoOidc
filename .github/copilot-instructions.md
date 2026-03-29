@@ -122,7 +122,7 @@ E2E test files
   - `test_admin_pages.py` — tenant-admin: realms, clients, providers (+claim-mappings, keys), scopes, roles, users (+sub-tabs), registrations, config-audit, backchannel, obo-setup, license (all variants), branding, settings, rate-limits.
   - `test_platform_admin_pages.py` — platform-admin: dashboard, tenants CRUD/import, impersonation (+history), settings, license.
   - `test_crud_operations.py` — create→edit UI flows (realm, client, scope, role, user, profile, tenant). `e2e-crud` prefix; ordered tests.
-  - `test_cli_operations.py` — CLI E2E: read-only commands, CRUD lifecycle, M2M, OBO provisioning, full workflow + export. `e2e-cli` prefix.
+  - `test_cli_operations.py` — CLI E2E: read-only commands, profile management (rename, validation, server header), CRUD lifecycle, M2M, OBO provisioning, full workflow + export. `e2e-cli` prefix.
   - `test_oidc_flows.py` — protocol-level: auth-code+PKCE, client_credentials, token exchange, DPoP binding, negative cases. `e2e-oidc` prefix.
   - `test_example_apps.py` — exercises dockerized example apps (RazorClient, OidcDemo, ReactClient).
 
@@ -148,6 +148,9 @@ CLI administration (mrwho-cli)
 - Tool help is comprehensive; use `mrwho-cli <command> --help` for details on any command, its parameters, and examples. Or use `mrwho-cli --help` for a full list of commands and global options.
 - Typical operations: `mrwho-cli login`, `tenant list`, `realm create`, `client create --create-initial-secret`, `export tenant`, `import apply`.
 - Authentication: device-code flow (`mrwho-cli login --server https://host/t/<slug>`); tokens saved in named profiles.
+- Multi-profile: each login creates/updates a named profile. Use `profile switch <name>` to change context. `profile rename` to relabel. `--profile` on login to name it at creation time.
+- Server context: every authenticated command writes `Server: <url>  (profile: <name>)` to stderr so you always know the target. Does not affect JSON stdout.
+- Profile names: codename format (alphanumeric + hyphens, e.g. `my-prod`) or the profile's exact server URL. No spaces or special characters.
 - Output formats: `--format Table|Json|Yaml`; pipe JSON to `jq` for scripting.
 
 File breadcrumbs worth reading first
