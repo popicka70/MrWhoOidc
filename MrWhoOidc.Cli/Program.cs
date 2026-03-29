@@ -1,6 +1,7 @@
 using System.CommandLine;
 using MrWhoOidc.Cli.Commands;
 using MrWhoOidc.Cli.Mcp;
+using MrWhoOidc.Cli.Services;
 using Spectre.Console;
 
 namespace MrWhoOidc.Cli;
@@ -40,7 +41,12 @@ internal static class Program
         var rootCommand = BuildRootCommand();
         try
         {
-            return await rootCommand.Parse(args).InvokeAsync();
+            var parseResult = rootCommand.Parse(args);
+            // Propagate --dry-run to the API client before invoking subcommands
+            var dryRunOpt = rootCommand.Options.OfType<Option<bool>>().FirstOrDefault(o => o.Name == "--dry-run");
+            if (dryRunOpt is not null)
+                CliAdminApiClient.IsDryRun = parseResult.GetValue(dryRunOpt);
+            return await parseResult.InvokeAsync();
         }
         catch (Exception ex)
         {
@@ -90,10 +96,16 @@ internal static class Program
             Description = "Enable verbose output"
         };
 
+        var dryRunOption = new Option<bool>("--dry-run")
+        {
+            Description = "Show what would be changed without making any modifications"
+        };
+
         rootCommand.Options.Add(profileOption);
         rootCommand.Options.Add(serverOption);
         rootCommand.Options.Add(formatOption);
         rootCommand.Options.Add(verboseOption);
+        rootCommand.Options.Add(dryRunOption);
 
         // Add command groups (will be implemented in phases)
         rootCommand.Subcommands.Add(new LoginCommand());
@@ -107,6 +119,14 @@ internal static class Program
         rootCommand.Subcommands.Add(new ClientCommand());
         rootCommand.Subcommands.Add(new ScopeCommand());
         rootCommand.Subcommands.Add(new UserCommand());
+        rootCommand.Subcommands.Add(new ProviderCommand());
+        rootCommand.Subcommands.Add(new RoleCommand());
+        rootCommand.Subcommands.Add(new HealthCommand());
+        rootCommand.Subcommands.Add(new WhoAmICommand());
+        rootCommand.Subcommands.Add(new AuditCommand());
+        rootCommand.Subcommands.Add(new BclCommand());
+        rootCommand.Subcommands.Add(new RateLimitsCommand());
+        rootCommand.Subcommands.Add(new LicenseCommand());
 
         return rootCommand;
     }

@@ -120,8 +120,9 @@
                                     <i class="ph ph-key"></i> Reset
                                 </button>
                             }
-                            <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" 
-                                    onclick="if(confirm('Delete user @u.Username? This cannot be undone.')) { document.getElementById('deleteForm_@u.Id').submit(); }">
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-user" title="Delete" 
+                                    data-confirm-msg="Delete user @u.Username? This cannot be undone."
+                                    data-delete-form="deleteForm_@u.Id">
                                 <i class="ph ph-trash"></i> Del
                             </button>
                         </div>
@@ -182,8 +183,18 @@
     <partial name="~/Pages/Shared/_ValidationScriptsPartial.cshtml" />
     @if (Model.IsPlatformAdmin)
     {
-        <script>
+        <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
             document.addEventListener('DOMContentLoaded', function() {
+                // Delete user buttons
+                document.querySelectorAll('.btn-delete-user').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        if (confirm(this.getAttribute('data-confirm-msg'))) {
+                            var form = document.getElementById(this.getAttribute('data-delete-form'));
+                            if (form) form.submit();
+                        }
+                    });
+                });
+
                 var resetModal = document.getElementById('resetPasswordModal');
                 var currentUserId = null;
                 

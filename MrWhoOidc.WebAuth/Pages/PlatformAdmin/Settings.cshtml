@@ -210,7 +210,7 @@
 
 @section Scripts
 {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         (function () {
             const button = document.getElementById('copyNewInitialAccessTokenBtn');
             const input = document.getElementById('newInitialAccessTokenValue');

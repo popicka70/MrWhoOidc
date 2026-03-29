@@ -142,7 +142,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Update secret warning text when mode changes
         document.querySelectorAll('input[name="ExportMode"]').forEach(function(radio) {
             radio.addEventListener('change', function() {

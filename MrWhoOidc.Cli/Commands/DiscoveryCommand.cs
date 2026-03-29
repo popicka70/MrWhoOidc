@@ -64,7 +64,7 @@ public sealed class DiscoveryCommand : Command
 
         if (format == OutputFormat.Json)
         {
-            AnsiConsole.WriteLine(JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(payload, SharedJsonOptions.IndentedOptions));
             return;
         }
 

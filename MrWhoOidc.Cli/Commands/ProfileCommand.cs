@@ -106,7 +106,7 @@ public sealed class ProfileCommand : Command
 
         if (format == OutputFormat.Json)
         {
-            AnsiConsole.WriteLine(JsonSerializer.Serialize(profiles, new JsonSerializerOptions { WriteIndented = true }));
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(profiles, SharedJsonOptions.IndentedOptions));
             return;
         }
 
@@ -155,7 +155,7 @@ public sealed class ProfileCommand : Command
 
         if (format == OutputFormat.Json)
         {
-            AnsiConsole.WriteLine(JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true }));
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(model, SharedJsonOptions.IndentedOptions));
             return;
         }
 

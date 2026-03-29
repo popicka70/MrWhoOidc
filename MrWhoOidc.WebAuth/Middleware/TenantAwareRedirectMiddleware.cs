@@ -113,6 +113,7 @@ public class TenantAwareRedirectMiddleware
         return lowerPath.StartsWith("/health") ||
                lowerPath.StartsWith("/platform-admin") ||
                lowerPath.StartsWith("/platformadmin") ||
+               lowerPath.StartsWith("/admin/api") ||
                lowerPath.StartsWith("/_") ||
                lowerPath.StartsWith("/swagger") ||
                lowerPath.StartsWith("/api/platform") ||

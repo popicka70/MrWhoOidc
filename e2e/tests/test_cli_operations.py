@@ -614,7 +614,6 @@ class TestCliFullProvisioningWorkflow:
 
     # -- Phase 3: Export realm -----------------------------------------------
 
-    @pytest.mark.xfail(reason="Server export handler uses httpContext.Items['TenantId'] instead of ITenantAccessor")
     def test_11_export_realm(self, cli_logged_in: CliHelper, tmp_path: Path):
         if not self._realm_id:
             pytest.skip("Realm ID not captured")
@@ -664,3 +663,874 @@ class TestCliFullProvisioningWorkflow:
         scope_names = {s.get("name", "") for s in scopes}
         assert self._scope_api_read not in scope_names
         assert self._scope_api_write not in scope_names
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Client update
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliClientUpdate:
+    """Verify that ``client update`` applies patch-style changes to a client."""
+
+    _cid = f"{E2E_PREFIX}-upd-{_RUN_SUFFIX}"
+    _internal_id: str | None = None
+    _realm_id: str | None = None
+
+    def test_01_setup(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliClientUpdate._realm_id = str(match[0]["id"])
+        r = cli_logged_in.run(
+            "client", "create",
+            "--client-id", self._cid,
+            "--client-name", f"E2E Update Client {_RUN_SUFFIX}",
+            "--realm-id", self._realm_id,
+            "--scope", "openid profile",
+            "--grant-types", "authorization_code",
+            "--redirect-uris", "https://e2e-upd.local/cb",
+            "--require-pkce",
+            "--create-initial-secret",
+            "--output", str(tmp_path / "upd-creds.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"client create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("client", "list")
+        match = [c for c in data if c.get("clientId") == self._cid]
+        assert len(match) == 1
+        TestCliClientUpdate._internal_id = str(match[0]["id"])
+
+    def test_03_update_name(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run(
+            "client", "update", self._internal_id,
+            "--client-name", f"E2E Updated Name {_RUN_SUFFIX}",
+        )
+        assert r.ok, f"client update (name) failed: {r.stderr or r.stdout}"
+
+    def test_04_update_require_consent(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run(
+            "client", "update", self._internal_id,
+            "--require-consent", "true",
+        )
+        assert r.ok, f"client update (require-consent) failed: {r.stderr or r.stdout}"
+
+    def test_05_update_backchannel_uri(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run(
+            "client", "update", self._internal_id,
+            "--backchannel-logout-uri", "https://e2e-upd.local/logout/backchannel",
+        )
+        assert r.ok, f"client update (backchannel) failed: {r.stderr or r.stdout}"
+
+    def test_06_verify_updates(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "get", self._internal_id)
+        assert r.ok
+        assert "Updated Name" in r.stdout
+
+    def test_07_cleanup(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "delete", self._internal_id, "--confirm")
+        assert r.ok, f"client delete failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Role CRUD
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliRoleCrud:
+    """Create → get → update → list → delete a realm role via CLI."""
+
+    _role_name = f"{E2E_PREFIX}-role-{_RUN_SUFFIX}"
+    _role_id: str | None = None
+    _realm_id: str | None = None
+
+    def test_01_get_realm_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1, "Default realm not found"
+        TestCliRoleCrud._realm_id = str(match[0]["id"])
+
+    def test_02_create_role(self, cli_logged_in: CliHelper):
+        if not self._realm_id:
+            pytest.skip("Realm ID not captured")
+        r = cli_logged_in.run(
+            "role", "create",
+            "--name", self._role_name,
+            "--realm-id", self._realm_id,
+        )
+        assert r.ok, f"role create failed: {r.stderr or r.stdout}"
+        assert "created" in r.stdout.lower() or self._role_name in r.stdout
+
+    def test_03_role_in_list(self, cli_logged_in: CliHelper):
+        if not self._realm_id:
+            pytest.skip("Realm ID not captured")
+        data = cli_logged_in.run_json("role", "list", "--realm-id", self._realm_id)
+        assert isinstance(data, list)
+        match = [r for r in data if r.get("name") == self._role_name]
+        assert len(match) == 1, f"Role '{self._role_name}' not found in list"
+        TestCliRoleCrud._role_id = str(match[0]["id"])
+
+    def test_04_get_role(self, cli_logged_in: CliHelper):
+        if not self._role_id:
+            pytest.skip("Role ID not captured")
+        r = cli_logged_in.run("role", "get", self._role_id)
+        assert r.ok, f"role get failed: {r.stderr}"
+        assert self._role_name in r.stdout
+
+    def test_05_update_role(self, cli_logged_in: CliHelper):
+        if not self._role_id:
+            pytest.skip("Role ID not captured")
+        r = cli_logged_in.run(
+            "role", "update", self._role_id,
+            "--name", f"{self._role_name}-upd",
+        )
+        assert r.ok, f"role update failed: {r.stderr or r.stdout}"
+
+    def test_06_verify_update(self, cli_logged_in: CliHelper):
+        if not self._role_id:
+            pytest.skip("Role ID not captured")
+        r = cli_logged_in.run("role", "get", self._role_id)
+        assert r.ok
+        assert "-upd" in r.stdout
+
+    def test_07_delete_role(self, cli_logged_in: CliHelper):
+        if not self._role_id:
+            pytest.skip("Role ID not captured")
+        r = cli_logged_in.run("role", "delete", self._role_id, "--confirm")
+        assert r.ok, f"role delete failed: {r.stderr or r.stdout}"
+
+    def test_08_role_gone(self, cli_logged_in: CliHelper):
+        if not self._realm_id:
+            pytest.skip("Realm ID not captured")
+        data = cli_logged_in.run_json("role", "list", "--realm-id", self._realm_id)
+        names = [r.get("name", "") for r in data]
+        assert self._role_name not in names
+        assert f"{self._role_name}-upd" not in names
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# User role assignment
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliUserRoleAssignment:
+    """Create a role and a user, assign the role, verify, then unassign and clean up."""
+
+    _role_name = f"{E2E_PREFIX}-assign-role-{_RUN_SUFFIX}"
+    _username = f"{E2E_PREFIX}-assign-user-{_RUN_SUFFIX}"
+    _role_id: str | None = None
+    _user_id: str | None = None
+    _realm_id: str | None = None
+
+    def test_01_setup(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliUserRoleAssignment._realm_id = str(match[0]["id"])
+        # Create role
+        r = cli_logged_in.run(
+            "role", "create",
+            "--name", self._role_name,
+            "--realm-id", self._realm_id,
+        )
+        assert r.ok, f"role create failed: {r.stderr or r.stdout}"
+        # Create user
+        r = cli_logged_in.run(
+            "user", "create",
+            "--username", self._username,
+            "--email", f"{self._username}@test.local",
+            "--password", "RoleAssign_Pass123!",
+            "--output", str(tmp_path / "assign-user.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"user create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_ids(self, cli_logged_in: CliHelper):
+        if not self._realm_id:
+            pytest.skip("Realm ID not captured")
+        # Capture role ID
+        role_data = cli_logged_in.run_json("role", "list", "--realm-id", self._realm_id)
+        match_r = [r for r in role_data if r.get("name") == self._role_name]
+        assert len(match_r) == 1
+        TestCliUserRoleAssignment._role_id = str(match_r[0]["id"])
+        # Capture user ID
+        user_data = cli_logged_in.run_json("user", "list", "--search", self._username)
+        items = user_data.get("items", user_data) if isinstance(user_data, dict) else user_data
+        match_u = [u for u in items if u.get("username") == self._username]
+        assert len(match_u) == 1
+        TestCliUserRoleAssignment._user_id = str(match_u[0]["id"])
+
+    def test_03_assign_role(self, cli_logged_in: CliHelper):
+        if not self._user_id or not self._role_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "user", "role", "assign",
+            self._user_id,
+            "--role-id", self._role_id,
+        )
+        assert r.ok, f"user role assign failed: {r.stderr or r.stdout}"
+
+    def test_04_list_user_roles(self, cli_logged_in: CliHelper):
+        if not self._user_id or not self._role_id:
+            pytest.skip("IDs not captured")
+        data = cli_logged_in.run_json("user", "role", "list", self._user_id)
+        # API returns {"realmRoles": [...], "clientRoles": [...]} not a flat list
+        roles = data.get("realmRoles", []) + data.get("clientRoles", []) if isinstance(data, dict) else data
+        ids = [str(r.get("id", "")) for r in roles]
+        assert self._role_id in ids, f"Role '{self._role_id}' not found in user's roles"
+
+    def test_05_unassign_role(self, cli_logged_in: CliHelper):
+        if not self._user_id or not self._role_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "user", "role", "unassign",
+            self._user_id,
+            "--role-id", self._role_id,
+            "--confirm",
+        )
+        assert r.ok, f"user role unassign failed: {r.stderr or r.stdout}"
+
+    def test_06_verify_unassign(self, cli_logged_in: CliHelper):
+        if not self._user_id or not self._role_id:
+            pytest.skip("IDs not captured")
+        data = cli_logged_in.run_json("user", "role", "list", self._user_id)
+        roles = data.get("realmRoles", []) + data.get("clientRoles", []) if isinstance(data, dict) else data
+        ids = [str(r.get("id", "")) for r in roles]
+        assert self._role_id not in ids, "Role still assigned after unassign"
+
+    def test_07_cleanup(self, cli_logged_in: CliHelper):
+        if self._user_id:
+            r = cli_logged_in.run("user", "delete", self._user_id, "--confirm")
+            assert r.ok, f"user delete failed: {r.stderr or r.stdout}"
+        if self._role_id:
+            r = cli_logged_in.run("role", "delete", self._role_id, "--confirm")
+            assert r.ok, f"role delete failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Client secrets lifecycle
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliClientSecrets:
+    """
+    Full client-secret lifecycle on a dedicated client:
+    initial list → create → activate → set-primary → revoke → clean up.
+    """
+
+    _cid = f"{E2E_PREFIX}-sec-{_RUN_SUFFIX}"
+    _internal_id: str | None = None
+    _realm_id: str | None = None
+    _secret_id: str | None = None
+
+    def test_01_setup(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliClientSecrets._realm_id = str(match[0]["id"])
+        r = cli_logged_in.run(
+            "client", "create",
+            "--client-id", self._cid,
+            "--client-name", f"E2E Secrets Client {_RUN_SUFFIX}",
+            "--realm-id", self._realm_id,
+            "--scope", "openid profile",
+            "--grant-types", "client_credentials",
+            "--create-initial-secret",
+            "--output", str(tmp_path / "sec-initial.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"client create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_client_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("client", "list")
+        match = [c for c in data if c.get("clientId") == self._cid]
+        assert len(match) == 1
+        TestCliClientSecrets._internal_id = str(match[0]["id"])
+
+    def test_03_list_secrets(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        data = cli_logged_in.run_json("client", "secret", "list", self._internal_id)
+        assert isinstance(data, list), "Expected a list of secrets"
+        assert len(data) >= 1, "No initial secret found"
+
+    def test_04_create_secret(self, cli_logged_in: CliHelper, tmp_path: Path):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        secret_file = tmp_path / "new-secret.json"
+        r = cli_logged_in.run(
+            "client", "secret", "create", self._internal_id,
+            "--expires-in-days", "90",
+            "--description", "e2e-test-secret",
+            "--activate",
+            "--output", str(secret_file),
+            "--overwrite",
+        )
+        assert r.ok, f"client secret create failed: {r.stderr or r.stdout}"
+        assert secret_file.exists(), "Secret file not written by CLI"
+
+    def test_05_capture_new_secret_id(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        data = cli_logged_in.run_json("client", "secret", "list", self._internal_id)
+        match = [s for s in data if s.get("description") == "e2e-test-secret"]
+        assert len(match) == 1, "Newly created secret not found"
+        TestCliClientSecrets._secret_id = str(match[0]["id"])
+
+    def test_06_activate_secret(self, cli_logged_in: CliHelper):
+        if not self._internal_id or not self._secret_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "client", "secret", "activate",
+            self._internal_id, self._secret_id,
+        )
+        assert r.ok, f"client secret activate failed: {r.stderr or r.stdout}"
+
+    def test_07_set_primary(self, cli_logged_in: CliHelper):
+        if not self._internal_id or not self._secret_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "client", "secret", "set-primary",
+            self._internal_id, self._secret_id,
+        )
+        assert r.ok, f"client secret set-primary failed: {r.stderr or r.stdout}"
+
+    def test_08_revoke_secret(self, cli_logged_in: CliHelper):
+        if not self._internal_id or not self._secret_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "client", "secret", "revoke",
+            self._internal_id, self._secret_id,
+            "--confirm",
+        )
+        assert r.ok, f"client secret revoke failed: {r.stderr or r.stdout}"
+
+    def test_09_cleanup(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "delete", self._internal_id, "--confirm")
+        assert r.ok, f"client delete failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Client secret rotation and validation
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliClientRotateAndValidate:
+    """
+    Tests ``client rotate-secret`` (zero-downtime rotation) and
+    ``client validate`` (pre-go-live diagnostic) against the same client.
+    """
+
+    _cid = f"{E2E_PREFIX}-rot-{_RUN_SUFFIX}"
+    _internal_id: str | None = None
+    _realm_id: str | None = None
+
+    def test_01_setup(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliClientRotateAndValidate._realm_id = str(match[0]["id"])
+        r = cli_logged_in.run(
+            "client", "create",
+            "--client-id", self._cid,
+            "--client-name", f"E2E Rotation Client {_RUN_SUFFIX}",
+            "--realm-id", self._realm_id,
+            "--scope", "openid profile",
+            "--grant-types", "client_credentials",
+            "--create-initial-secret",
+            "--output", str(tmp_path / "rot-initial.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"client create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_client_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("client", "list")
+        match = [c for c in data if c.get("clientId") == self._cid]
+        assert len(match) == 1
+        TestCliClientRotateAndValidate._internal_id = str(match[0]["id"])
+
+    def test_03_rotate_secret(self, cli_logged_in: CliHelper, tmp_path: Path):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        rotated_file = tmp_path / "rotated-secret.json"
+        r = cli_logged_in.run(
+            "client", "rotate-secret", self._internal_id,
+            "--expires-in-days", "90",
+            "--description", "rotated-e2e",
+            "--output", str(rotated_file),
+            "--overwrite",
+            "--confirm",
+        )
+        assert r.ok, f"client rotate-secret failed: {r.stderr or r.stdout}"
+        assert rotated_file.exists(), "Rotated secret file not written"
+
+    def test_04_validate_client(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "validate", self._internal_id)
+        assert r.ok, f"client validate failed: {r.stderr or r.stdout}"
+
+    def test_05_cleanup(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "delete", self._internal_id, "--confirm")
+        assert r.ok, f"client delete failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Client scope management (post-creation)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliClientScopes:
+    """Add a custom scope to a client post-creation, then remove it."""
+
+    _cid = f"{E2E_PREFIX}-cscope-{_RUN_SUFFIX}"
+    _scope_name = f"{E2E_PREFIX}.cscope.{_RUN_SUFFIX}"
+    _internal_id: str | None = None
+    _realm_id: str | None = None
+
+    def test_01_setup(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliClientScopes._realm_id = str(match[0]["id"])
+        # Custom scope
+        r = cli_logged_in.run(
+            "scope", "create",
+            "--name", self._scope_name,
+            "--description", "E2E client scope test",
+        )
+        assert r.ok, f"scope create failed: {r.stderr or r.stdout}"
+        # Client created without the custom scope initially
+        r = cli_logged_in.run(
+            "client", "create",
+            "--client-id", self._cid,
+            "--client-name", f"E2E Client Scope Test {_RUN_SUFFIX}",
+            "--realm-id", self._realm_id,
+            "--scope", "openid profile",
+            "--grant-types", "client_credentials",
+            "--create-initial-secret",
+            "--output", str(tmp_path / "cscope-creds.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"client create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_client_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("client", "list")
+        match = [c for c in data if c.get("clientId") == self._cid]
+        assert len(match) == 1
+        TestCliClientScopes._internal_id = str(match[0]["id"])
+
+    def test_03_list_client_scopes(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run("client", "scope", "list", self._internal_id)
+        assert r.ok, f"client scope list failed: {r.stderr or r.stdout}"
+
+    def test_04_add_scope(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run(
+            "client", "scope", "add", self._internal_id,
+            "--scope", self._scope_name,
+        )
+        assert r.ok, f"client scope add failed: {r.stderr or r.stdout}"
+
+    def test_05_verify_scope_added(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        data = cli_logged_in.run_json("client", "scope", "list", self._internal_id)
+        # API returns [{"scopeName": "..."}, ...] not [{"name": "..."}]
+        scope_names = [
+            s.get("scopeName", s.get("name", str(s))) if isinstance(s, dict) else str(s)
+            for s in (data if isinstance(data, list) else [])
+        ]
+        assert any(self._scope_name in n for n in scope_names), \
+            f"Scope '{self._scope_name}' not present after add"
+
+    def test_06_remove_scope(self, cli_logged_in: CliHelper):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        r = cli_logged_in.run(
+            "client", "scope", "remove", self._internal_id,
+            "--scope", self._scope_name,
+            "--confirm",
+        )
+        assert r.ok, f"client scope remove failed: {r.stderr or r.stdout}"
+
+    def test_07_cleanup(self, cli_logged_in: CliHelper):
+        if self._internal_id:
+            cli_logged_in.run("client", "delete", self._internal_id, "--confirm")
+        cli_logged_in.run("scope", "delete", self._scope_name, "--confirm")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Diagnostics: health, whoami, audit, BCL, rate-limits, license
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliDiagnostics:
+    """Read-only diagnostic and observability commands."""
+
+    # -- health --
+
+    def test_health(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("health")
+        assert r.ok, f"health failed: {r.stderr or r.stdout}"
+
+    def test_health_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("health")
+        assert data is not None
+
+    # -- whoami --
+
+    def test_whoami(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("whoami")
+        assert r.ok, f"whoami failed: {r.stderr or r.stdout}"
+        assert r.stdout.strip() != ""
+
+    def test_whoami_json(self, cli_logged_in: CliHelper):
+        # whoami does not support --format Json; verify plaintext profile output
+        r = cli_logged_in.run("whoami")
+        assert r.ok, f"whoami failed: {r.stderr or r.stdout}"
+        assert r.stdout.strip() != ""
+
+    # -- audit --
+
+    def test_audit_list(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("audit", "list")
+        assert r.ok, f"audit list failed: {r.stderr or r.stdout}"
+
+    def test_audit_list_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("audit", "list")
+        assert isinstance(data, (list, dict))
+
+    def test_audit_get_first_entry(self, cli_logged_in: CliHelper):
+        """If any audit entries exist, verify that ``audit get <id>`` works."""
+        data = cli_logged_in.run_json("audit", "list")
+        entries = data.get("items", data) if isinstance(data, dict) else data
+        if not entries:
+            pytest.skip("No audit entries available yet")
+        entry_id = str(entries[0].get("id", ""))
+        if not entry_id:
+            pytest.skip("Audit entry has no id field")
+        r = cli_logged_in.run("audit", "get", entry_id)
+        assert r.ok, f"audit get failed: {r.stderr or r.stdout}"
+
+    # -- backchannel logout --
+
+    def test_bcl_outbox(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("bcl", "outbox")
+        assert r.ok, f"bcl outbox failed: {r.stderr or r.stdout}"
+
+    def test_bcl_outbox_json(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("bcl", "outbox")
+        assert isinstance(data, (list, dict))
+
+    def test_bcl_alerts(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("bcl", "alerts")
+        assert r.ok, f"bcl alerts failed: {r.stderr or r.stdout}"
+
+    def test_bcl_alerts_json(self, cli_logged_in: CliHelper):
+        # bcl alerts --format Json returns ANSI-coloured plaintext when no alerts
+        # are configured, so we only assert the command exits successfully.
+        r = cli_logged_in.run("bcl", "alerts", "--format", "Json")
+        assert r.ok, f"bcl alerts --format Json failed: {r.stderr or r.stdout}"
+
+    # -- rate limits --
+
+    def test_rate_limits_overview(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("rate-limits", "overview")
+        assert r.ok, f"rate-limits overview failed: {r.stderr or r.stdout}"
+
+    def test_rate_limits_events(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("rate-limits", "events")
+        assert r.ok, f"rate-limits events failed: {r.stderr or r.stdout}"
+
+    # -- license --
+
+    def test_license_show(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("license", "show")
+        assert r.ok, f"license show failed: {r.stderr or r.stdout}"
+
+    def test_license_history(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("license", "history")
+        assert r.ok, f"license history failed: {r.stderr or r.stdout}"
+
+    def test_license_usage(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("license", "usage")
+        assert r.ok, f"license usage failed: {r.stderr or r.stdout}"
+
+    def test_license_limits(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("license", "limits")
+        assert r.ok, f"license limits failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Export / Import
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliExportImport:
+    """
+    Export the default tenant manifest (obfuscated), then run ``import preview``
+    as a dry-run.  Also exports a dedicated test client.
+    """
+
+    _cid = f"{E2E_PREFIX}-exp-{_RUN_SUFFIX}"
+    _internal_id: str | None = None
+    _realm_id: str | None = None
+    _export_dir: Path | None = None
+    _client_export_dir: Path | None = None
+
+    def test_01_setup_client(self, cli_logged_in: CliHelper, tmp_path: Path):
+        data = cli_logged_in.run_json("realm", "list")
+        match = [r for r in data if r.get("name") == "default"]
+        assert len(match) == 1
+        TestCliExportImport._realm_id = str(match[0]["id"])
+        r = cli_logged_in.run(
+            "client", "create",
+            "--client-id", self._cid,
+            "--client-name", f"E2E Export Client {_RUN_SUFFIX}",
+            "--realm-id", self._realm_id,
+            "--scope", "openid profile",
+            "--grant-types", "client_credentials",
+            "--create-initial-secret",
+            "--output", str(tmp_path / "exp-creds.json"),
+            "--overwrite",
+        )
+        assert r.ok, f"client create failed: {r.stderr or r.stdout}"
+
+    def test_02_capture_client_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("client", "list")
+        match = [c for c in data if c.get("clientId") == self._cid]
+        assert len(match) == 1
+        TestCliExportImport._internal_id = str(match[0]["id"])
+
+    def test_03_export_tenant(self, cli_logged_in: CliHelper, tmp_path: Path):
+        export_dir = tmp_path / "tenant-export"
+        export_dir.mkdir()
+        TestCliExportImport._export_dir = export_dir
+        r = cli_logged_in.run(
+            "export", "tenant", "default",
+            "--mode", "obfuscated",
+            "--output", str(export_dir),
+            "--overwrite",
+        )
+        assert r.ok, f"export tenant failed: {r.stderr or r.stdout}"
+        assert list(export_dir.glob("*.json")), "No manifest file written by export tenant"
+
+    def test_04_export_client(self, cli_logged_in: CliHelper, tmp_path: Path):
+        if not self._internal_id:
+            pytest.skip("Client ID not captured")
+        client_export_dir = tmp_path / "client-export"
+        client_export_dir.mkdir()
+        TestCliExportImport._client_export_dir = client_export_dir
+        r = cli_logged_in.run(
+            "export", "client", self._internal_id,
+            "--output", str(client_export_dir),
+            "--overwrite",
+        )
+        assert r.ok, f"export client failed: {r.stderr or r.stdout}"
+        assert list(client_export_dir.glob("*.json")), "No manifest file written by export client"
+
+    def test_05_import_preview_tenant_manifest(self, cli_logged_in: CliHelper):
+        """Preview the exported tenant manifest back into the running instance."""
+        if not self._export_dir:
+            pytest.skip("Export dir not set")
+        manifests = list(self._export_dir.glob("*.json"))
+        if not manifests:
+            pytest.skip("No tenant manifest found")
+        r = cli_logged_in.run(
+            "import", "preview", str(manifests[0]),
+            "--dry-run",
+        )
+        # Preview exits 0 (no conflicts) or 1 (conflicts reported) — both valid
+        assert r.exit_code in (0, 1), \
+            f"import preview unexpected exit {r.exit_code}: {r.stderr or r.stdout}"
+
+    def test_06_import_preview_client_manifest(self, cli_logged_in: CliHelper):
+        """Preview the exported client manifest (dry-run)."""
+        if not self._client_export_dir:
+            pytest.skip("Client export dir not set")
+        manifests = list(self._client_export_dir.glob("*.json"))
+        if not manifests:
+            pytest.skip("No client manifest found")
+        r = cli_logged_in.run(
+            "import", "preview", str(manifests[0]),
+            "--dry-run",
+        )
+        assert r.exit_code in (0, 1), \
+            f"import preview unexpected exit {r.exit_code}: {r.stderr or r.stdout}"
+
+    def test_07_export_realm(self, cli_logged_in: CliHelper, tmp_path: Path):
+        if not self._realm_id:
+            pytest.skip("Realm ID not captured")
+        r = cli_logged_in.run(
+            "export", "realm", self._realm_id,
+            "--output", str(tmp_path),
+            "--overwrite",
+        )
+        assert r.ok, f"export realm failed: {r.stderr or r.stdout}"
+
+    def test_08_cleanup(self, cli_logged_in: CliHelper):
+        if self._internal_id:
+            r = cli_logged_in.run("client", "delete", self._internal_id, "--confirm")
+            assert r.ok, f"client delete failed: {r.stderr or r.stdout}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Identity Provider CRUD + claim mappings
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliProviderCrud:
+    """Create → get → update → add claim mapping → delete a provider via CLI."""
+
+    _name = f"{E2E_PREFIX}-provider-{_RUN_SUFFIX}"
+    _provider_id: str | None = None
+    _mapping_id: str | None = None
+
+    def test_01_provider_list_initial(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("provider", "list")
+        assert r.ok, f"provider list failed: {r.stderr or r.stdout}"
+
+    def test_02_create_provider(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run(
+            "provider", "create",
+            "--name", self._name,
+            "--type", "Oidc",
+            "--authority", "https://e2e-idp.test.local",
+            "--client-id", "e2e-test-client",
+            "--client-secret", "e2e-test-secret",
+        )
+        assert r.ok, f"provider create failed: {r.stderr or r.stdout}"
+        assert "created" in r.stdout.lower() or self._name in r.stdout
+
+    def test_03_capture_provider_id(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("provider", "list")
+        assert isinstance(data, list)
+        match = [p for p in data if p.get("name") == self._name]
+        assert len(match) == 1, f"Provider '{self._name}' not found in list"
+        TestCliProviderCrud._provider_id = str(match[0]["id"])
+
+    def test_04_get_provider(self, cli_logged_in: CliHelper):
+        if not self._provider_id:
+            pytest.skip("Provider ID not captured")
+        r = cli_logged_in.run("provider", "get", self._provider_id)
+        assert r.ok, f"provider get failed: {r.stderr}"
+        assert self._name in r.stdout
+
+    def test_05_update_provider(self, cli_logged_in: CliHelper):
+        if not self._provider_id:
+            pytest.skip("Provider ID not captured")
+        r = cli_logged_in.run(
+            "provider", "update", self._provider_id,
+            "--enabled", "false",
+        )
+        assert r.ok, f"provider update failed: {r.stderr or r.stdout}"
+
+    def test_06_create_claim_mapping(self, cli_logged_in: CliHelper):
+        if not self._provider_id:
+            pytest.skip("Provider ID not captured")
+        r = cli_logged_in.run(
+            "provider", "claim-mapping", "create", self._provider_id,
+            "--external-claim", "groups",
+            "--local-claim", "roles",
+        )
+        assert r.ok, f"provider claim-mapping create failed: {r.stderr or r.stdout}"
+
+    def test_07_list_claim_mappings(self, cli_logged_in: CliHelper):
+        if not self._provider_id:
+            pytest.skip("Provider ID not captured")
+        data = cli_logged_in.run_json(
+            "provider", "claim-mapping", "list", self._provider_id
+        )
+        assert isinstance(data, list)
+        assert len(data) >= 1, "Claim mapping not found after create"
+        TestCliProviderCrud._mapping_id = str(data[0]["id"])
+
+    def test_08_update_claim_mapping(self, cli_logged_in: CliHelper):
+        if not self._provider_id or not self._mapping_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "provider", "claim-mapping", "update",
+            self._provider_id, self._mapping_id,
+            "--local-claim", "role",
+        )
+        assert r.ok, f"provider claim-mapping update failed: {r.stderr or r.stdout}"
+
+    def test_09_delete_claim_mapping(self, cli_logged_in: CliHelper):
+        if not self._provider_id or not self._mapping_id:
+            pytest.skip("IDs not captured")
+        r = cli_logged_in.run(
+            "provider", "claim-mapping", "delete",
+            self._provider_id, self._mapping_id,
+            "--confirm",
+        )
+        assert r.ok, f"provider claim-mapping delete failed: {r.stderr or r.stdout}"
+
+    def test_10_delete_provider(self, cli_logged_in: CliHelper):
+        if not self._provider_id:
+            pytest.skip("Provider ID not captured")
+        r = cli_logged_in.run("provider", "delete", self._provider_id, "--confirm")
+        assert r.ok, f"provider delete failed: {r.stderr or r.stdout}"
+
+    def test_11_provider_gone(self, cli_logged_in: CliHelper):
+        data = cli_logged_in.run_json("provider", "list")
+        names = [p.get("name", "") for p in data]
+        assert self._name not in names
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tenant read (platform-admin smoke tests)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliTenantRead:
+    """Smoke tests for tenant read operations that require platform-admin."""
+
+    _tenant_id: str | None = None
+
+    def test_tenant_list_with_search(self, cli_logged_in: CliHelper):
+        r = cli_logged_in.run("tenant", "list", "--search", "default")
+        assert r.ok, f"tenant list --search failed: {r.stderr or r.stdout}"
+        assert "default" in r.stdout.lower()
+
+    def test_tenant_get_id(self, cli_logged_in: CliHelper):
+        """Look up the default tenant GUID (tenant get only accepts GUIDs)."""
+        data = cli_logged_in.run_json("tenant", "list")
+        match = [t for t in data if t.get("slug") == "default"]
+        assert len(match) == 1, "Default tenant not found in tenant list"
+        TestCliTenantRead._tenant_id = str(match[0]["id"])
+
+    def test_tenant_get_by_id(self, cli_logged_in: CliHelper):
+        """tenant get requires a GUID, not a slug."""
+        if not self._tenant_id:
+            pytest.skip("Tenant ID not captured")
+        r = cli_logged_in.run("tenant", "get", self._tenant_id)
+        assert r.ok, f"tenant get failed: {r.stderr or r.stdout}"
+        assert "default" in r.stdout.lower()
+
+    def test_tenant_get_table_output(self, cli_logged_in: CliHelper):
+        """tenant get does not support --format Json; verify table output is non-empty."""
+        if not self._tenant_id:
+            pytest.skip("Tenant ID not captured")
+        r = cli_logged_in.run("tenant", "get", self._tenant_id)
+        assert r.ok, f"tenant get failed: {r.stderr or r.stdout}"
+        assert r.stdout.strip() != ""

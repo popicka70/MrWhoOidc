@@ -86,7 +86,7 @@ else
     @@media (prefers-reduced-motion: no-preference) { .provider-item { transition: background-color .15s ease; } }
 </style>
 
-<script>
+<script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
 (() => {
     const list = document.getElementById('provider-list');
     if (!list) return;

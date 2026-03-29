@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
+using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Services;
 
 namespace MrWhoOidc.WebAuth.Handlers;
@@ -26,12 +27,13 @@ public static class ExportImportHandler
     /// <remarks>
     /// GET /admin/api/platform/tenants/{slug}/export?mode=obfuscated
     /// </remarks>
-    [Authorize(Policy = "PlatformAdmin")]
+    [Authorize(Policy = "platform-admin")]
     public static async Task<IResult> ExportTenant(
         [FromRoute] string slug,
         [FromQuery] string? mode,
         [FromServices] AuthDbContext dbContext,
         [FromServices] IConfigurationExportService exportService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -86,7 +88,7 @@ public static class ExportImportHandler
     /// <summary>
     /// Gets export preview information for a tenant (entity counts, etc.).
     /// </summary>
-    [Authorize(Policy = "PlatformAdmin")]
+    [Authorize(Policy = "platform-admin")]
     public static async Task<IResult> GetExportPreview(
         [FromRoute] string slug,
         [FromServices] AuthDbContext dbContext,
@@ -145,10 +147,11 @@ public static class ExportImportHandler
         [FromQuery] string? mode,
         [FromServices] AuthDbContext dbContext,
         [FromServices] IConfigurationExportService exportService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -193,10 +196,11 @@ public static class ExportImportHandler
     public static async Task<IResult> GetRealmExportPreview(
         [FromRoute] Guid id,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -240,10 +244,11 @@ public static class ExportImportHandler
         [FromQuery] string? mode,
         [FromServices] AuthDbContext dbContext,
         [FromServices] IConfigurationExportService exportService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -286,10 +291,11 @@ public static class ExportImportHandler
     public static async Task<IResult> GetClientExportPreview(
         [FromRoute] Guid id,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -329,10 +335,11 @@ public static class ExportImportHandler
         [FromQuery] string? mode,
         [FromServices] AuthDbContext dbContext,
         [FromServices] IConfigurationExportService exportService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -374,10 +381,11 @@ public static class ExportImportHandler
     public static async Task<IResult> GetProviderExportPreview(
         [FromRoute] Guid id,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var tenantId = httpContext.Items["TenantId"] as Guid?;
+        var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         if (!tenantId.HasValue)
         {
             return Results.BadRequest(new { error = "Tenant context required" });
@@ -414,7 +422,7 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/platform/tenants/import/preview
     /// </remarks>
-    [Authorize(Policy = "PlatformAdmin")]
+    [Authorize(Policy = "platform-admin")]
     public static async Task<IResult> PreviewImport(
         [FromBody] ImportPreviewRequest request,
         [FromServices] IConfigurationImportService importService,
@@ -467,10 +475,11 @@ public static class ExportImportHandler
     /// <remarks>
     /// POST /admin/api/platform/tenants/import
     /// </remarks>
-    [Authorize(Policy = "PlatformAdmin")]
+    [Authorize(Policy = "platform-admin")]
     public static async Task<IResult> ImportTenant(
         [FromBody] ImportTenantRequest request,
         [FromServices] IConfigurationImportService importService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -549,6 +558,7 @@ public static class ExportImportHandler
         [FromBody] ImportRealmRequest request,
         [FromServices] IConfigurationImportService importService,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -566,7 +576,7 @@ public static class ExportImportHandler
             }
 
             // Get target tenant
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -617,6 +627,7 @@ public static class ExportImportHandler
     public static async Task<IResult> ImportRealm(
         [FromBody] ImportRealmRequest request,
         [FromServices] IConfigurationImportService importService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -633,7 +644,7 @@ public static class ExportImportHandler
                 return Results.BadRequest(new { error = "Invalid realm JSON format" });
             }
 
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -689,6 +700,7 @@ public static class ExportImportHandler
     public static async Task<IResult> PreviewClientImport(
         [FromBody] ImportClientRequest request,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -705,7 +717,7 @@ public static class ExportImportHandler
                 return Results.BadRequest(new { error = "Invalid client JSON format" });
             }
 
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -773,6 +785,7 @@ public static class ExportImportHandler
         [FromBody] ImportClientRequest request,
         [FromServices] IConfigurationImportService importService,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -794,7 +807,7 @@ public static class ExportImportHandler
                 return Results.BadRequest(new { error = "Invalid client JSON format" });
             }
 
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -866,6 +879,7 @@ public static class ExportImportHandler
     public static async Task<IResult> PreviewProviderImport(
         [FromBody] ImportProviderRequest request,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -882,7 +896,7 @@ public static class ExportImportHandler
                 return Results.BadRequest(new { error = "Invalid provider JSON format" });
             }
 
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -933,6 +947,7 @@ public static class ExportImportHandler
     public static async Task<IResult> ImportProvider(
         [FromBody] ImportProviderRequest request,
         [FromServices] IConfigurationImportService importService,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -949,7 +964,7 @@ public static class ExportImportHandler
                 return Results.BadRequest(new { error = "Invalid provider JSON format" });
             }
 
-            var tenantId = httpContext.Items["TenantId"] as Guid?;
+            var tenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
             if (tenantId == null)
             {
                 return Results.BadRequest(new { error = "Tenant context required" });
@@ -1199,6 +1214,19 @@ public static class ExportImportHandler
             .WithDescription("Get details of a specific audit log entry")
             .Produces<object>(200)
             .Produces(404);
+
+        // Tenant-prefixed audit group (so CLI calls via /t/{slug}/admin/api/... work)
+        var tenantAuditGroup = endpoints.MapGroup("/t/{slug}/admin/api/configuration-audit")
+            .WithTags("Export/Import");
+
+        tenantAuditGroup.MapGet("/", GetAuditLogs)
+            .WithName("TenantGetConfigurationAuditLogs")
+            .Produces<IEnumerable<object>>(200);
+
+        tenantAuditGroup.MapGet("/{id:guid}", GetAuditLogDetail)
+            .WithName("TenantGetConfigurationAuditLogDetail")
+            .Produces<object>(200)
+            .Produces(404);
     }
 
     /// <summary>
@@ -1210,6 +1238,7 @@ public static class ExportImportHandler
     [Authorize(Policy = "tenant-admin")]
     public static async Task<IResult> GetAuditLogs(
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken,
         [FromQuery] Guid? tenantId = null,
@@ -1219,7 +1248,7 @@ public static class ExportImportHandler
         [FromQuery] int pageSize = 20)
     {
         // Restrict to current tenant if not platform admin
-        var contextTenantId = httpContext.Items["TenantId"] as Guid?;
+        var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
 
         var query = dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>().AsNoTracking();
@@ -1291,10 +1320,11 @@ public static class ExportImportHandler
     public static async Task<IResult> GetAuditLogDetail(
         [FromRoute] Guid id,
         [FromServices] AuthDbContext dbContext,
+        [FromServices] ITenantAccessor tenantAccessor,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var contextTenantId = httpContext.Items["TenantId"] as Guid?;
+        var contextTenantId = httpContext.Items["TenantId"] as Guid? ?? tenantAccessor.CurrentTenant?.TenantId;
         var isPlatformAdmin = httpContext.User.IsInRole("PlatformAdmin");
 
         var auditLog = await dbContext.Set<MrWhoOidc.Auth.Seeding.ConfigurationAuditLog>()

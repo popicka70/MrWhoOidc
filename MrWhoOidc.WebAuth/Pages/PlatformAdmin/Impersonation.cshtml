@@ -200,7 +200,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             var alerts = document.querySelectorAll('.alert-dismissible');

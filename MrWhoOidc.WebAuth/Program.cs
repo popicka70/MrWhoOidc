@@ -95,6 +95,12 @@ builder.Services.AddMrWhoOidcHybridCache(builder.Configuration, redisMux);
 // Presentation layer (Razor Pages + MVC + antiforgery + localization)
 builder.Services.AddLocalizationAndMvc(builder.Configuration);
 
+// Serialize enums as strings in all MinimalAPI responses (so CLI can read e.g. IdentityProviderType)
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
+
 // Security core (DPoP, JAR replay cache, DataProtection, cert forwarding, TE limiter)
 builder.Services.AddMrWhoOidcSecurityCore(builder.Configuration, redisMux);
 

@@ -305,7 +305,7 @@
 </div>
 
 @section Scripts {
-    <script>
+    <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
         // Auto-focus tenant slug input when modal opens
         document.getElementById('seedTenantModal').addEventListener('shown.bs.modal', function () {
             document.getElementById('tenantSlug').focus();

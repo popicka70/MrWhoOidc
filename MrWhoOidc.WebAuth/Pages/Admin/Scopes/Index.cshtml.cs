@@ -24,6 +24,9 @@ public class IndexModel(
     public IReadOnlyList<ScopeRow> Scopes { get; private set; } = Array.Empty<ScopeRow>();
     public bool IsPlatformAdmin { get; private set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? Search { get; set; }
+
     public async Task OnGetAsync()
     {
         // Check if user is platform admin
@@ -48,6 +51,9 @@ public class IndexModel(
         }
 
         Scopes = await query
+            .Where(s => string.IsNullOrWhiteSpace(Search) ||
+                        s.Name.Contains(Search) ||
+                        (s.Description != null && s.Description.Contains(Search)))
             .OrderBy(s => s.IsGlobal ? 0 : 1) // Global first - MUST sort before projection
             .ThenBy(s => s.Name)
             .GroupJoin(

@@ -78,7 +78,7 @@
                                         <label for="cli-server-url" class="form-label">CLI Server URL</label>
                                         <div class="input-group">
                                             <input id="cli-server-url" type="text" class="form-control" value="@Model.CurrentCliServerUrl" readonly>
-                                            <button type="button" class="btn btn-outline-secondary" onclick="copyCliServerUrl(this)">
+                                            <button id="btn-copy-cli-url" type="button" class="btn btn-outline-secondary">
                                                 <i class="ph ph-copy me-1"></i>Copy
                                             </button>
                                         </div>
@@ -227,7 +227,7 @@
                         <a asp-page="/admin/clients" asp-route-tenantSlug="@Model.TenantSlug" class="btn btn-secondary">
                             <i class="ph ph-arrow-left me-1"></i>Back
                         </a>
-                        <button type="button" class="btn btn-outline-secondary" onclick="resetToDefaults()">
+                        <button id="btn-reset-defaults" type="button" class="btn btn-outline-secondary">
                             <i class="ph ph-arrow-counterclockwise me-1"></i>Reset to Platform Defaults
                         </button>
                     </div>
@@ -243,38 +243,43 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script nonce="@(HttpContext.Items["csp-nonce"] as string ?? string.Empty)">
-        function resetToDefaults() {
-            if (confirm('Are you sure you want to reset all settings to platform defaults? This will clear all tenant-specific overrides.')) {
-                // Clear all form fields
-                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
-                document.querySelectorAll('select').forEach(sel => sel.value = '');
-            }
-        }
-
-        async function copyCliServerUrl(button) {
-            const input = document.getElementById('cli-server-url');
-            if (!input) {
-                return;
+        document.addEventListener('DOMContentLoaded', function () {
+            var resetBtn = document.getElementById('btn-reset-defaults');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function () {
+                    if (confirm('Are you sure you want to reset all settings to platform defaults? This will clear all tenant-specific overrides.')) {
+                        document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                        document.querySelectorAll('input[type="number"]').forEach(num => num.value = '');
+                        document.querySelectorAll('select').forEach(sel => sel.value = '');
+                    }
+                });
             }
 
-            const value = input.value;
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(value);
-                } else {
-                    input.focus();
-                    input.select();
-                    document.execCommand('copy');
-                }
+            var copyBtn = document.getElementById('btn-copy-cli-url');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async function () {
+                    var input = document.getElementById('cli-server-url');
+                    if (!input) return;
 
-                const original = button.innerHTML;
-                button.innerHTML = '<i class="ph ph-check me-1"></i>Copied';
-                setTimeout(() => button.innerHTML = original, 1500);
-            } catch {
-                input.focus();
-                input.select();
+                    var value = input.value;
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(value);
+                        } else {
+                            input.focus();
+                            input.select();
+                            document.execCommand('copy');
+                        }
+
+                        var original = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '<i class="ph ph-check me-1"></i>Copied';
+                        setTimeout(function () { copyBtn.innerHTML = original; }, 1500);
+                    } catch {
+                        input.focus();
+                        input.select();
+                    }
+                });
             }
-        }
+        });
     </script>
 }

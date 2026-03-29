@@ -10,11 +10,16 @@ namespace MrWhoOidc.WebAuth.Admin.Api;
 
 internal static class RateLimitingEndpoints
 {
-    public static void MapRateLimitingEndpoints(RouteGroupBuilder? adminGroup, RouteGroupBuilder? platformAdminGroup = null)
+    public static void MapRateLimitingEndpoints(RouteGroupBuilder? adminGroup, RouteGroupBuilder? tenantAdminGroup = null, RouteGroupBuilder? platformAdminGroup = null)
     {
         ArgumentNullException.ThrowIfNull(adminGroup);
 
         MapGroup(adminGroup, null);
+
+        if (tenantAdminGroup is not null)
+        {
+            MapGroup(tenantAdminGroup, "Tenant");
+        }
 
         if (platformAdminGroup is not null)
         {

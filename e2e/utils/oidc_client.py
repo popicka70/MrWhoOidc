@@ -379,3 +379,168 @@ class OidcClient:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         return resp.status_code
+
+    # ------------------------------------------------------------------
+    # Introspection
+    # ------------------------------------------------------------------
+
+    def introspect(
+        self,
+        token: str,
+        client_id: str,
+        *,
+        client_secret: str | None = None,
+        token_type_hint: str | None = None,
+        auth_method: str = "post",
+    ) -> tuple[int, dict[str, Any]]:
+        """Introspect a token (RFC 7662). Returns (status_code, json_body)."""
+        data: dict[str, str] = {"token": token}
+        if token_type_hint:
+            data["token_type_hint"] = token_type_hint
+        headers: dict[str, str] = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        auth = None
+        if auth_method == "basic" and client_id and client_secret:
+            auth = (client_id, client_secret)
+        else:
+            data["client_id"] = client_id
+            if client_secret:
+                data["client_secret"] = client_secret
+
+        endpoint = self._endpoint("introspection_endpoint")
+        resp = self._session.post(endpoint, data=data, headers=headers, auth=auth)
+        try:
+            body = resp.json()
+        except Exception:
+            body = {"raw_body": resp.text}
+        return resp.status_code, body
+
+    # ------------------------------------------------------------------
+    # Pushed Authorization Requests (PAR)
+    # ------------------------------------------------------------------
+
+    @property
+    def par_endpoint(self) -> str | None:
+        """Get the PAR endpoint from discovery, or None if not advertised."""
+        if not self._discovery:
+            self.discover()
+        return self._discovery.get("pushed_authorization_request_endpoint")  # type: ignore[union-attr]
+
+    def pushed_authorization_request(
+        self,
+        client_id: str,
+        *,
+        client_secret: str | None = None,
+        redirect_uri: str,
+        scope: str = "openid",
+        code_challenge: str | None = None,
+        code_challenge_method: str = "S256",
+        state: str | None = None,
+        nonce: str | None = None,
+        extra_params: dict[str, str] | None = None,
+        auth_method: str = "post",
+    ) -> tuple[int, dict[str, Any]]:
+        """Push an authorization request to the PAR endpoint (RFC 9126).
+
+        Returns (status_code, json_body) where body contains request_uri and expires_in on success.
+        """
+        endpoint = self.par_endpoint
+        if not endpoint:
+            raise ValueError("PAR endpoint not advertised in discovery")
+
+        data: dict[str, str] = {
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+        }
+        if code_challenge:
+            data["code_challenge"] = code_challenge
+            data["code_challenge_method"] = code_challenge_method
+        if state:
+            data["state"] = state
+        if nonce:
+            data["nonce"] = nonce
+        if extra_params:
+            data.update(extra_params)
+
+        headers: dict[str, str] = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        auth = None
+        if auth_method == "basic" and client_id and client_secret:
+            auth = (client_id, client_secret)
+        else:
+            data["client_id"] = client_id
+            if client_secret:
+                data["client_secret"] = client_secret
+
+        resp = self._session.post(endpoint, data=data, headers=headers, auth=auth)
+        try:
+            body = resp.json()
+        except Exception:
+            body = {"raw_body": resp.text}
+        return resp.status_code, body
+
+    # ------------------------------------------------------------------
+    # End Session
+    # ------------------------------------------------------------------
+
+    @property
+    def end_session_endpoint(self) -> str:
+        return self._endpoint("end_session_endpoint")
+
+    def end_session(
+        self,
+        *,
+        id_token_hint: str | None = None,
+        post_logout_redirect_uri: str | None = None,
+        state: str | None = None,
+        client_id: str | None = None,
+    ) -> tuple[int, str]:
+        """Call the end_session endpoint. Returns (status_code, response_body)."""
+        params: dict[str, str] = {}
+        if id_token_hint:
+            params["id_token_hint"] = id_token_hint
+        if post_logout_redirect_uri:
+            params["post_logout_redirect_uri"] = post_logout_redirect_uri
+        if state:
+            params["state"] = state
+        if client_id:
+            params["client_id"] = client_id
+
+        url = self.end_session_endpoint
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        resp = self._session.get(url, allow_redirects=False)
+        return resp.status_code, resp.text
+
+    # ------------------------------------------------------------------
+    # Raw request helper (for custom / malformed requests)
+    # ------------------------------------------------------------------
+
+    def raw_token_request(
+        self,
+        data: dict[str, str],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, dict[str, Any]]:
+        """Send an arbitrary POST to the token endpoint. For negative testing."""
+        hdrs = {"Content-Type": "application/x-www-form-urlencoded"}
+        if headers:
+            hdrs.update(headers)
+        resp = self._session.post(self.token_endpoint, data=data, headers=hdrs)
+        try:
+            body = resp.json()
+        except Exception:
+            body = {"raw_body": resp.text}
+        return resp.status_code, body
+
+    def raw_get(self, url: str, *, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+        """Send an arbitrary GET request. For negative testing."""
+        resp = self._session.get(url, headers=headers or {})
+        try:
+            body = resp.json()
+        except Exception:
+            body = resp.text
+        return resp.status_code, body

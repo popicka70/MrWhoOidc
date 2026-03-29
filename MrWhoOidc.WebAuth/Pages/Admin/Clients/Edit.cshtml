@@ -284,38 +284,25 @@
                 <div class="col-12">
                     <div class="card mb-3">
                         <div class="card-header bg-info text-white">
-                            <i class="ph ph-link me-2"></i>IdP Chaining Configuration URLs
+                            <i class="ph ph-link me-2"></i>IdP Chaining
                         </div>
                         <div class="card-body">
                             <p class="mb-3">
                                 <i class="ph ph-info me-1"></i>
-                                Use these tenant-aware URLs when configuring this instance as a downstream IdP in an identity provider chaining scenario.
+                                When configuring an upstream IdP to chain into this instance, use the issuer URL below as the <strong>issuer</strong> (or authority) of this identity provider.
+                                The upstream IdP will discover all endpoints automatically via the <a href="@Model.IdpChainingIssuerUrl/.well-known/openid-configuration" target="_blank" rel="noopener">OpenID Connect discovery document</a>.
                             </p>
-                            <div class="row g-3">
-                                <div class="col-12">
-                                    <label class="form-label fw-bold">
-                                        <i class="ph ph-sign-in me-1"></i>Authorization Endpoint (Login URL)
-                                    </label>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingAuthorizationUrl" id="authz-url" />
-                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('authz-url', this)" title="Copy to clipboard">
-                                            <i class="ph ph-clipboard"></i> Copy
-                                        </button>
-                                    </div>
-                                    <small class="form-text text-muted">Use this URL as the <code>authorization_endpoint</code> in upstream IdP configuration.</small>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">
+                                    <i class="ph ph-globe me-1"></i>Issuer URL
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingIssuerUrl" id="idp-issuer-url" />
+                                    <button type="button" id="idp-copy-btn" class="btn btn-outline-secondary" data-copy-text="@Model.IdpChainingIssuerUrl" title="Copy to clipboard">
+                                        <i class="ph ph-clipboard"></i> Copy
+                                    </button>
                                 </div>
-                                <div class="col-12">
-                                    <label class="form-label fw-bold">
-                                        <i class="ph ph-sign-out me-1"></i>End Session Endpoint (Logout URL)
-                                    </label>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control font-monospace" readonly value="@Model.IdpChainingEndSessionUrl" id="endsession-url" />
-                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('endsession-url', this)" title="Copy to clipboard">
-                                            <i class="ph ph-clipboard"></i> Copy
-                                        </button>
-                                    </div>
-                                    <small class="form-text text-muted">Use this URL as the <code>end_session_endpoint</code> in upstream IdP configuration.</small>
-                                </div>
+                                <small class="form-text text-muted">Use this as the <code>issuer</code> / authority in your upstream IdP configuration.</small>
                             </div>
                         </div>
                     </div>
@@ -1445,39 +1432,34 @@
             });
         })();
 
-        // IdP Chaining URL copy function
-        window.copyToClipboard = async function(inputId, button) {
-            const input = document.getElementById(inputId);
-            if (!input || !input.value) return;
-            
-            const originalHtml = button.innerHTML;
-            try {
+        // IdP Chaining copy button — wired here (not via onclick) to satisfy CSP nonce requirement
+        const idpCopyBtn = document.getElementById('idp-copy-btn');
+        if (idpCopyBtn) {
+            idpCopyBtn.addEventListener('click', function() {
+                const text = idpCopyBtn.getAttribute('data-copy-text');
+                if (!text) return;
+
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(input.value);
-                } else {
-                    input.select();
-                    document.execCommand('copy');
-                    window.getSelection().removeAllRanges();
+                    navigator.clipboard.writeText(text).catch(() => {});
                 }
-                button.innerHTML = '<i class="ph ph-check"></i> Copied!';
-                button.classList.remove('btn-outline-secondary');
-                button.classList.add('btn-success');
+
+                const originalHtml = idpCopyBtn.innerHTML;
+                idpCopyBtn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+                idpCopyBtn.classList.replace('btn-outline-secondary', 'btn-success');
                 setTimeout(() => {
-                    button.innerHTML = originalHtml;
-                    button.classList.remove('btn-success');
-                    button.classList.add('btn-outline-secondary');
+                    idpCopyBtn.innerHTML = originalHtml;
+                    idpCopyBtn.classList.replace('btn-success', 'btn-outline-secondary');
                 }, 1500);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-                button.innerHTML = '<i class="ph ph-x-circle"></i> Failed';
-                button.classList.remove('btn-outline-secondary');
-                button.classList.add('btn-danger');
-                setTimeout(() => {
-                    button.innerHTML = originalHtml;
-                    button.classList.remove('btn-danger');
-                    button.classList.add('btn-outline-secondary');
-                }, 1500);
-            }
-        };
+            });
+        }
     </script>
 }

@@ -110,9 +110,8 @@ public class EditModel(
 
     public JwksValidationStatus? JwksStatus { get; private set; }
 
-    // IdP Chaining URLs (tenant-aware)
-    public string IdpChainingAuthorizationUrl { get; private set; } = string.Empty;
-    public string IdpChainingEndSessionUrl { get; private set; } = string.Empty;
+    // IdP Chaining — tenant-aware issuer URL (the single URL an upstream IdP needs)
+    public string IdpChainingIssuerUrl { get; private set; } = string.Empty;
 
     [TempData]
     public string? SecretErrorMessage { get; set; }
@@ -163,19 +162,8 @@ public class EditModel(
         await LoadUserAssignmentsAsync(client.Id, client.RealmId, currentTenantId.Value);
 
 
-        // Build tenant-aware IdP chaining URLs
-        var issuer = HttpContext.GetIssuer(oidcOptions.Value);
-        var baseUrl = issuer.TrimEnd('/');
-
-        // If multi-tenancy is enabled, append tenant path to the issuer
-        if (MultiTenancyOptions.Enabled && TenantAccessor.CurrentTenant != null)
-        {
-            var tenantSlug = TenantAccessor.CurrentTenant.Slug;
-            baseUrl = $"{baseUrl}/t/{tenantSlug}";
-        }
-
-        IdpChainingAuthorizationUrl = $"{baseUrl}/authorize";
-        IdpChainingEndSessionUrl = $"{baseUrl}/connect/endsession";
+        // Tenant-aware issuer URL — what an upstream IdP needs to chain into this instance
+        IdpChainingIssuerUrl = HttpContext.GetIssuer(oidcOptions.Value).TrimEnd('/');
 
         string introspectionAudiences = string.Empty;
         if (!string.IsNullOrEmpty(client.IntrospectionAudiencesJson))

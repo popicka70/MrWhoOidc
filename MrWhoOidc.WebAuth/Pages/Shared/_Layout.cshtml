@@ -11,7 +11,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MrWhoOidc.WebAuth</title>
-    <script type="importmap"></script>
+    <script type="importmap" nonce="@(ViewContext.HttpContext.Items["csp-nonce"] as string ?? string.Empty)"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
@@ -348,7 +348,7 @@
 
     <footer class="border-top footer text-muted app-footer">
         <div class="container py-2">
-            &copy; 2025 - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
+            &copy; @DateTime.Now.Year - MrWhoOidc.WebAuth - <a asp-area="" asp-page="/Privacy">Privacy</a>
         </div>
     </footer>
 

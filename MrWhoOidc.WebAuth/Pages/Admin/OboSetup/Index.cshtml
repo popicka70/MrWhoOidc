@@ -253,10 +253,10 @@
                                 <div id="redirectUrisContainer">
                                     <div class="input-group mb-2">
                                         <input type="text" class="form-control redirect-uri" placeholder="https://app.example.com/login/callback" />
-                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
                                     </div>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addRedirectUri()">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addRedirectUriBtn">
                                     <i class="ph ph-plus"></i> Add Redirect URI
                                 </button>
                                 <span asp-validation-for="Wizard.UiRedirectUris" class="text-danger d-block mt-2"></span>
@@ -267,10 +267,10 @@
                                 <div id="postLogoutUrisContainer">
                                     <div class="input-group mb-2">
                                         <input type="text" class="form-control post-logout-uri" placeholder="https://app.example.com" />
-                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
                                     </div>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addPostLogoutUri()">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addPostLogoutUriBtn">
                                     <i class="ph ph-plus"></i> Add Post-Logout URI
                                 </button>
                                 <span asp-validation-for="Wizard.UiPostLogoutRedirectUris" class="text-danger d-block mt-2"></span>
@@ -365,10 +365,10 @@
                                 <div id="delegatedScopesContainer">
                                     <div class="input-group mb-2">
                                         <input type="text" class="form-control delegated-scope" placeholder="e.g., read" />
-                                        <button class="btn btn-outline-secondary" type="button">Remove</button>
+                                        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
                                     </div>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addDelegatedScope()">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addDelegatedScopeBtn">
                                     <i class="ph ph-plus"></i> Add Scope
                                 </button>
                                 <small class="form-text text-muted d-block mt-2">Scopes the UI app can request when exchanging tokens for the API</small>
@@ -643,8 +643,8 @@
                                     </div>
                                     <div class="input-group">
                                         <input type="password" class="form-control" id="clientSecret" value="@Model.ProvisioningResult.GeneratedUiClientSecret" readonly />
-                                        <button type="button" class="btn btn-outline-secondary" onclick="toggleSecretVisibility()">Show</button>
-                                        <button type="button" class="btn btn-outline-secondary" onclick="copyToClipboard('#clientSecret')">Copy</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="toggleSecretBtn">Show</button>
+                                        <button type="button" class="btn btn-outline-secondary" id="copySecretBtn">Copy</button>
                                     </div>
                                 </div>
                             }
@@ -727,7 +727,7 @@ function addRedirectUri() {
     div.className = 'input-group mb-2';
     div.innerHTML = `
         <input type="text" class="form-control redirect-uri" placeholder="https://app.example.com/callback" />
-        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
     `;
     container.appendChild(div);
 }
@@ -738,7 +738,7 @@ function addPostLogoutUri() {
     div.className = 'input-group mb-2';
     div.innerHTML = `
         <input type="text" class="form-control post-logout-uri" placeholder="https://app.example.com" />
-        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
     `;
     container.appendChild(div);
 }
@@ -749,7 +749,7 @@ function addDelegatedScope() {
     div.className = 'input-group mb-2';
     div.innerHTML = `
         <input type="text" class="form-control delegated-scope" placeholder="e.g., read" />
-        <button class="btn btn-outline-secondary" type="button" onclick="this.parentElement.remove()">Remove</button>
+        <button class="btn btn-outline-secondary btn-remove-row" type="button">Remove</button>
     `;
     container.appendChild(div);
 }
@@ -761,6 +761,28 @@ function updateSelectedUsers() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Add URI/scope buttons
+    var addRedirectBtn = document.getElementById('addRedirectUriBtn');
+    if (addRedirectBtn) addRedirectBtn.addEventListener('click', addRedirectUri);
+    var addPostLogoutBtn = document.getElementById('addPostLogoutUriBtn');
+    if (addPostLogoutBtn) addPostLogoutBtn.addEventListener('click', addPostLogoutUri);
+    var addScopeBtn = document.getElementById('addDelegatedScopeBtn');
+    if (addScopeBtn) addScopeBtn.addEventListener('click', addDelegatedScope);
+
+    // Toggle secret visibility
+    var toggleBtn = document.getElementById('toggleSecretBtn');
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleSecretVisibility);
+    // Copy secret
+    var copyBtn = document.getElementById('copySecretBtn');
+    if (copyBtn) copyBtn.addEventListener('click', function() { copyToClipboard('#clientSecret'); });
+
+    // Event delegation for dynamically added Remove buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-remove-row')) {
+            e.target.parentElement.remove();
+        }
+    });
+
     document.querySelectorAll('.user-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', updateSelectedUsers);
     });

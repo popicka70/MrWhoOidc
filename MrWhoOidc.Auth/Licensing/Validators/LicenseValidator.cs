@@ -260,13 +260,34 @@ internal sealed class LicenseValidator : ILicenseValidator
         {
             var ecdsa = CreateEcdsaFromPem(_options.PublicKeyPem);
             return new ECDsaSecurityKey(ecdsa) { KeyId = kid };
-        }).ToArray();
+        }).ToList();
+
+        // When an additional public key is configured (e.g. test/E2E environments),
+        // add signing keys for it as well so licenses signed by the test keypair are accepted.
+        if (!string.IsNullOrWhiteSpace(_options.AdditionalPublicKeyPem))
+        {
+            _logger.LogInformation("Additional licensing public key configured; adding {Count} extra signing keys.", KnownKeyIds.Length);
+            foreach (var kid in KnownKeyIds)
+            {
+                var ecdsa = CreateEcdsaFromPem(_options.AdditionalPublicKeyPem);
+                keys.Add(new ECDsaSecurityKey(ecdsa) { KeyId = kid });
+            }
+        }
+        else
+        {
+            _logger.LogDebug("No additional licensing public key configured.");
+        }
+
+        // Use IssuerSigningKeyResolver to ensure ALL keys are tried during validation.
+        // JwtSecurityTokenHandler may only try the first kid-matched key from IssuerSigningKeys,
+        // which fails when multiple key sources share the same kid values.
+        var allKeys = keys.ToArray();
 
         return new TokenValidationParameters
         {
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = keys,
+            IssuerSigningKeyResolver = (_, _, _, _) => allKeys,
             ValidateAudience = false,
             RequireAudience = false,
             ValidateIssuer = _options.StrictValidation,
