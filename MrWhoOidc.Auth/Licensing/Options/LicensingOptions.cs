@@ -26,7 +26,7 @@ public sealed record LicensingOptions
     /// When set, the license validator trusts this key in addition to the embedded production key.
     /// Intended for test/E2E environments that generate licenses with a dedicated test keypair.
     /// </summary>
-    public string? AdditionalPublicKeyPem { get; init; }
+    public string? AdditionalPublicKeyPem { get; set; }
 }
 
 public static class LicensingOptionsExtensions

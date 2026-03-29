@@ -412,28 +412,33 @@ def install_enterprise_license(
     authenticated_context: BrowserContext,
 ) -> str:
     """
-    Generate an Enterprise+ platform license and install it via the admin API.
+    Generate an Enterprise+ tenant-scoped license and install it via the admin API.
 
     Returns the signed JWT string.  Opt-in fixture — only tests that need
     license-gated features should request it.
     """
     import logging
 
-    from utils.license_generator import LicenseGenerator
+    from utils.license_generator import LicenseGenerator, ALL_FEATURES
 
     log = logging.getLogger("license_install")
+
+    # Use tenant scope so the tenant-admin can install it.
+    # Exclude multi_tenancy which is a platform-only feature.
+    tenant_features = [f for f in ALL_FEATURES if f != "multi_tenancy"]
 
     generator = LicenseGenerator()
     license_jwt = generator.generate(
         tier="enterprise+",
         organization="E2E Test Organization",
-        scope="platform",
-        deployment_mode="multi_tenant",
+        scope="tenant",
+        deployment_mode="",
+        features=tenant_features,
         valid_seconds=86400,  # 24h
     )
-    log.info("Generated Enterprise+ test license")
+    log.info("Generated Enterprise+ tenant-scoped test license")
 
-    # Use Playwright's API request context which shares the authenticated cookies
+    # Use Playwright's API request context which shares the authenticated cookies.
     api = authenticated_context.request
     response = api.post(
         f"{BASE_URL}/admin/api/license",
