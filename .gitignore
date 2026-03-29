@@ -31,6 +31,8 @@ bld/
 **/[Bb]in\\[Dd]ebug/
 **/[Bb]in\\[Dd]ebug/**
 
+MrWho/
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json
