@@ -25,19 +25,33 @@ public sealed class LoginCommand : Command
             Description = "Client ID override. If omitted, the CLI client ID is discovered automatically."
         };
 
+        var profileOption = new Option<string?>("--profile", "-p")
+        {
+            Description = "Name for the profile (codename: alphanumeric + hyphens). Auto-generated from tenant slug if omitted."
+        };
+
         Options.Add(serverOption);
         Options.Add(clientIdOption);
+        Options.Add(profileOption);
 
         this.SetSafeAction(async parseResult =>
         {
             var server = parseResult.GetValue(serverOption);
             var clientId = parseResult.GetValue(clientIdOption);
-            await HandleAsync(server, clientId);
+            var profile = parseResult.GetValue(profileOption);
+            await HandleAsync(server, clientId, profile);
         });
     }
 
-    private static async Task HandleAsync(string? server, string? clientId)
+    private static async Task HandleAsync(string? server, string? clientId, string? explicitProfile)
     {
+        // Validate explicit profile name early
+        if (!string.IsNullOrWhiteSpace(explicitProfile) && !CliConfig.IsValidProfileName(explicitProfile))
+        {
+            throw new InvalidOperationException(
+                $"Invalid profile name '{explicitProfile}'. Use a codename (alphanumeric and hyphens, e.g. 'my-prod') or the server URL.");
+        }
+
         var config = await CliConfig.LoadAsync().ConfigureAwait(false);
         var normalizedServer = CliServerConnection.ResolveServerUrlOrThrow(config, server);
 
@@ -88,7 +102,7 @@ public sealed class LoginCommand : Command
             resolvedClientId,
             deviceAuthorization).ConfigureAwait(false);
 
-        var profileName = ResolveProfileName(config, normalizedServer, tenantSlug);
+        var profileName = ResolveProfileName(config, normalizedServer, tenantSlug, explicitProfile);
         DateTimeOffset? tokenExpiry = tokenResponse.ExpiresIn > 0
             ? DateTimeOffset.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
             : null;
@@ -190,8 +204,26 @@ public sealed class LoginCommand : Command
         throw new TimeoutException("Timed out waiting for device authorization to complete.");
     }
 
-    private static string ResolveProfileName(CliConfig config, string serverUrl, string? tenantSlug)
+    private static string ResolveProfileName(CliConfig config, string serverUrl, string? tenantSlug, string? explicitProfile)
     {
+        // If an explicit profile name was provided, use it (already validated)
+        if (!string.IsNullOrWhiteSpace(explicitProfile))
+        {
+            // If the name is already taken, verify it points to the same server
+            if (config.Profiles.TryGetValue(explicitProfile, out var existingProfile))
+            {
+                var existingServer = CliServerConnection.NormalizeServerUrl(existingProfile.ServerUrl);
+                if (!string.Equals(existingServer, serverUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Profile '{explicitProfile}' is already bound to {existingServer}. Choose a different name or remove it first.");
+                }
+            }
+
+            return explicitProfile;
+        }
+
+        // Auto-generate: look for an existing profile targeting the same server
         var existing = config.Profiles.FirstOrDefault(pair =>
             string.Equals(CliServerConnection.NormalizeServerUrl(pair.Value.ServerUrl), serverUrl, StringComparison.OrdinalIgnoreCase));
 

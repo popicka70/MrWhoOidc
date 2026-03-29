@@ -1,4 +1,5 @@
 using System.CommandLine;
+using MrWhoOidc.Cli.Services;
 using Spectre.Console;
 
 namespace MrWhoOidc.Cli.Commands;
@@ -31,5 +32,14 @@ internal static class CommandExtensions
                 return 1;
             }
         });
+    }
+
+    /// <summary>
+    /// Writes a dim server/profile header line to stderr so it never pollutes
+    /// JSON output on stdout. Call this after resolving an authenticated connection.
+    /// </summary>
+    public static void WriteServerHeader(AuthenticatedConnection connection)
+    {
+        Console.Error.WriteLine($"Server: {connection.ServerUrl}  (profile: {connection.ProfileName})");
     }
 }

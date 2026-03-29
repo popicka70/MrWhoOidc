@@ -103,7 +103,12 @@ public static class CliServerConnection
             throw new InvalidOperationException($"Profile '{resolvedProfileName}' is not authenticated. Run login first.");
         }
 
-        return new AuthenticatedConnection(resolvedProfileName, resolvedServer, profile);
+        var connection = new AuthenticatedConnection(resolvedProfileName, resolvedServer, profile);
+
+        // Write server context to stderr so it never pollutes JSON on stdout
+        Console.Error.WriteLine($"Server: {resolvedServer}  (profile: {resolvedProfileName})");
+
+        return connection;
     }
 
     public static string NormalizeServerUrl(string? server)

@@ -70,6 +70,30 @@ public sealed class ProfileCommand : Command
             await RemoveProfileAsync(name);
         });
         Subcommands.Add(removeCommand);
+
+        var renameCommand = new Command("rename", "Rename a profile");
+        var renameOldArgument = new Argument<string>("old-name")
+        {
+            Description = "Current profile name"
+        };
+        var renameNewArgument = new Argument<string>("new-name")
+        {
+            Description = "New profile name (codename: alphanumeric + hyphens, or the profile's server URL)"
+        };
+        renameCommand.Arguments.Add(renameOldArgument);
+        renameCommand.Arguments.Add(renameNewArgument);
+        renameCommand.SetSafeAction(async parseResult =>
+        {
+            var oldName = parseResult.GetValue(renameOldArgument);
+            var newName = parseResult.GetValue(renameNewArgument);
+            if (string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+            {
+                throw new InvalidOperationException("Both old-name and new-name arguments are required.");
+            }
+
+            await RenameProfileAsync(oldName, newName);
+        });
+        Subcommands.Add(renameCommand);
     }
 
     private static Option<OutputFormat> CreateFormatOption()
@@ -199,5 +223,46 @@ public sealed class ProfileCommand : Command
 
         await config.SaveAsync().ConfigureAwait(false);
         AnsiConsole.MarkupLine($"[green]Removed profile[/] [bold]{Markup.Escape(name)}[/]");
+    }
+
+    private static async Task RenameProfileAsync(string oldName, string newName)
+    {
+        if (!CliConfig.IsValidProfileName(newName))
+        {
+            throw new InvalidOperationException(
+                $"Invalid profile name '{newName}'. Use a codename (alphanumeric and hyphens, e.g. 'my-prod') or the profile's server URL.");
+        }
+
+        var config = await CliConfig.LoadAsync().ConfigureAwait(false);
+
+        if (!config.Profiles.ContainsKey(oldName))
+        {
+            throw new InvalidOperationException($"Profile '{oldName}' was not found.");
+        }
+
+        if (config.Profiles.ContainsKey(newName))
+        {
+            throw new InvalidOperationException($"A profile named '{newName}' already exists.");
+        }
+
+        // When the new name is a URL, verify it matches the profile's server URL
+        if (Uri.TryCreate(newName, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            var profile = config.Profiles[oldName];
+            if (!string.Equals(newName.TrimEnd('/'), profile.ServerUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"URL-based profile name must match the profile's server URL ({profile.ServerUrl}).");
+            }
+        }
+
+        if (!config.RenameProfile(oldName, newName))
+        {
+            throw new InvalidOperationException($"Failed to rename profile '{oldName}' to '{newName}'.");
+        }
+
+        await config.SaveAsync().ConfigureAwait(false);
+        AnsiConsole.MarkupLine($"[green]Renamed profile[/] [bold]{Markup.Escape(oldName)}[/] → [bold]{Markup.Escape(newName)}[/]");
     }
 }

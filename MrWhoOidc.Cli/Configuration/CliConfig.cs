@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace MrWhoOidc.Cli.Configuration;
 
@@ -7,7 +8,7 @@ namespace MrWhoOidc.Cli.Configuration;
 /// CLI configuration stored in ~/.mrwhooidc/config.json
 /// Contains profiles for multiple server connections and authentication state.
 /// </summary>
-public sealed class CliConfig
+public sealed partial class CliConfig
 {
     [JsonPropertyName("currentProfile")]
     public string CurrentProfile { get; set; } = "default";
@@ -99,6 +100,51 @@ public sealed class CliConfig
 
         return removed;
     }
+
+    /// <summary>
+    /// Validates that a profile name is either a codename (alphanumeric + hyphens,
+    /// no leading/trailing hyphen, no whitespace) or a valid absolute HTTP/HTTPS URL.
+    /// </summary>
+    public static bool IsValidProfileName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        // Allow codenames: alphanumeric with optional hyphens in the middle
+        if (CodeNameRegex().IsMatch(name))
+            return true;
+
+        // Allow valid absolute HTTP/HTTPS URLs (server URLs used as profile names)
+        if (Uri.TryCreate(name, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Renames a profile entry. Returns false if the old profile was not found
+    /// or the new name already exists.
+    /// </summary>
+    public bool RenameProfile(string oldName, string newName)
+    {
+        if (!Profiles.TryGetValue(oldName, out var profile))
+            return false;
+
+        if (Profiles.ContainsKey(newName))
+            return false;
+
+        Profiles.Remove(oldName);
+        Profiles[newName] = profile;
+
+        if (string.Equals(CurrentProfile, oldName, StringComparison.Ordinal))
+            CurrentProfile = newName;
+
+        return true;
+    }
+
+    [GeneratedRegex(@"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$")]
+    private static partial Regex CodeNameRegex();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

@@ -23,6 +23,7 @@ device, and the CLI saves the profile automatically.
 **Options:**
 - `--server` / `-s` — OIDC server URL. Include the `/t/<slug>` path to target a specific tenant (e.g. `https://host/t/default`).
 - `--client-id` / `-c` — Override the CLI client ID (auto-discovered when omitted).
+- `--profile` / `-p` — Name the profile (codename: alphanumeric + hyphens). Auto-generated from tenant slug if omitted. If the name already exists and targets the same server, tokens are updated in place.
 
 ### Logout
 
@@ -39,7 +40,14 @@ mrwho-cli profile list [--format Table|Json|Yaml]
 mrwho-cli profile show [<name>]
 mrwho-cli profile switch <name>
 mrwho-cli profile remove <name>
+mrwho-cli profile rename <old-name> <new-name>
 ```
+
+Profile names must be a **codename** (alphanumeric characters and hyphens, e.g. `my-prod`)
+or the profile's **server URL**. No spaces or other special characters allowed.
+
+Every authenticated command writes a `Server: <url>  (profile: <name>)` line to stderr
+so you always know which server you are targeting. This line does not appear in JSON output.
 
 ---
 

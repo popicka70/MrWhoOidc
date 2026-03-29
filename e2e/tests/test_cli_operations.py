@@ -116,6 +116,88 @@ class TestCliReadOnly:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Profile management (rename, validation, server header)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCliProfileManagement:
+    """Tests for multi-profile features: rename, name validation, server header."""
+
+    def _current_profile_name(self, cli: CliHelper) -> str:
+        """Return the name of the currently active profile via JSON."""
+        data = cli.run_json("profile", "show")
+        name = data.get("Name") or data.get("name")
+        assert name, f"Could not determine profile name from: {data}"
+        return name
+
+    # -- server header in stderr -------------------------------------------
+
+    def test_server_header_in_stderr(self, cli_logged_in: CliHelper):
+        """Authenticated server commands should emit a Server: header to stderr."""
+        r = cli_logged_in.run("scope", "list")
+        assert r.ok
+        assert "Server:" in r.stderr, (
+            f"Expected 'Server:' header in stderr, got:\n{r.stderr}"
+        )
+
+    def test_server_header_contains_url(self, cli_logged_in: CliHelper):
+        """The server header should contain the target server URL."""
+        r = cli_logged_in.run("scope", "list")
+        assert r.ok
+        assert "localhost" in r.stderr, (
+            f"Expected server URL in stderr header, got:\n{r.stderr}"
+        )
+
+    def test_server_header_not_in_stdout_json(self, cli_logged_in: CliHelper):
+        """JSON output on stdout must not contain the server header."""
+        data = cli_logged_in.run_json("scope", "list")
+        # If we got here, JSON parsed successfully — header is not in stdout
+        assert isinstance(data, list)
+
+    # -- profile rename ----------------------------------------------------
+
+    def test_profile_rename_and_back(self, cli_logged_in: CliHelper):
+        """Rename the current profile, verify it sticks, then rename back."""
+        original = self._current_profile_name(cli_logged_in)
+        temp_name = f"{E2E_PREFIX}-prof"
+
+        # Rename to temp name
+        r = cli_logged_in.run("profile", "rename", original, temp_name)
+        assert r.ok, f"rename failed: {r.stdout}\n{r.stderr}"
+
+        # Verify the new name via JSON (table output wraps long names)
+        new_name = self._current_profile_name(cli_logged_in)
+        assert new_name == temp_name, f"Expected '{temp_name}', got '{new_name}'"
+
+        # Rename back
+        r3 = cli_logged_in.run("profile", "rename", temp_name, original)
+        assert r3.ok, f"rename-back failed: {r3.stdout}\n{r3.stderr}"
+
+    def test_profile_rename_invalid_spaces(self, cli_logged_in: CliHelper):
+        """Profile names with spaces should be rejected."""
+        original = self._current_profile_name(cli_logged_in)
+        r = cli_logged_in.run("profile", "rename", original, "bad name")
+        assert not r.ok or "invalid" in (r.stdout + r.stderr).lower(), (
+            f"Expected rejection of name with spaces:\nstdout={r.stdout}\nstderr={r.stderr}"
+        )
+
+    def test_profile_rename_invalid_special_chars(self, cli_logged_in: CliHelper):
+        """Profile names with special characters should be rejected."""
+        original = self._current_profile_name(cli_logged_in)
+        r = cli_logged_in.run("profile", "rename", original, "bad!@#name")
+        assert not r.ok or "invalid" in (r.stdout + r.stderr).lower(), (
+            f"Expected rejection of name with special chars:\nstdout={r.stdout}\nstderr={r.stderr}"
+        )
+
+    def test_profile_rename_nonexistent_source(self, cli_logged_in: CliHelper):
+        """Renaming a profile that doesn't exist should fail."""
+        r = cli_logged_in.run("profile", "rename", "does-not-exist", "new-name")
+        assert not r.ok or "not found" in (r.stdout + r.stderr).lower(), (
+            f"Expected error for nonexistent profile:\nstdout={r.stdout}\nstderr={r.stderr}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Realm CRUD
 # ═══════════════════════════════════════════════════════════════════════════
 
