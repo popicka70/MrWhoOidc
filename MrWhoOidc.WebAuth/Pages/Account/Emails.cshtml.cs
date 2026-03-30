@@ -30,9 +30,6 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     public DateTimeOffset? PrimaryEmailVerifiedAt { get; private set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Email address is required")]
-    [EmailAddress(ErrorMessage = "Please enter a valid email address")]
-    [MaxLength(256, ErrorMessage = "Email address cannot exceed 256 characters")]
     public string NewEmail { get; set; } = string.Empty;
 
     public async Task OnGetAsync()
@@ -65,6 +62,9 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
     {
         var user = await GetCurrentUserAsync();
         if (user is null) return RedirectToPage("/login", new { returnUrl = Url.Page("/account/emails") });
+
+        NewEmail = (NewEmail ?? string.Empty).Trim();
+        ValidateNewEmail();
 
         if (!ModelState.IsValid)
         {
@@ -219,6 +219,25 @@ public class EmailsModel(AuthDbContext db, IEmailConfirmationWorkflow emailWorkf
 
         return await _db.Users
             .FirstOrDefaultAsync(u => u.Id == userId);
+    }
+
+    private void ValidateNewEmail()
+    {
+        if (string.IsNullOrWhiteSpace(NewEmail))
+        {
+            ModelState.AddModelError(nameof(NewEmail), "Email address is required");
+            return;
+        }
+
+        if (NewEmail.Length > 256)
+        {
+            ModelState.AddModelError(nameof(NewEmail), "Email address cannot exceed 256 characters");
+        }
+
+        if (!new EmailAddressAttribute().IsValid(NewEmail))
+        {
+            ModelState.AddModelError(nameof(NewEmail), "Please enter a valid email address");
+        }
     }
 }
 

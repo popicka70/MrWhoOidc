@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="MrWhoOidc – a lightweight, standards-compliant OpenID Connect identity provider built on .NET">
+    <title>MrWhoOidc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+         
+         >
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+         
+         >
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">
+                <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
+            </a>
+            <button class="navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link active" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="bg-light py-5">
+        <div class="container text-center">
+            <h1 class="display-4 fw-bold">MrWhoOidc</h1>
+            <p class="lead text-secondary mt-3">
+                A lightweight, standards-compliant OpenID Connect identity provider built on .NET.
+            </p>
+            <div class="mt-4">
+                <a href="features.html" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-list-check me-1"></i>Explore Features
+                </a>
+                <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-dark btn-lg" target="_blank" rel="noopener">
+                    <i class="bi bi-github me-1"></i>View on GitHub
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <i class="bi bi-shield-check display-4 text-primary"></i>
+                            <h5 class="card-title mt-3">Standards Compliant</h5>
+                            <p class="card-text text-secondary">
+                                Implements OpenID Connect Core, Discovery, Dynamic Registration, and OAuth 2.0 extensions
+                                including PKCE, PAR, DPoP, and Token Exchange.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <i class="bi bi-people display-4 text-primary"></i>
+                            <h5 class="card-title mt-3">Multi-Tenant</h5>
+                            <p class="card-text text-secondary">
+                                First-class multi-tenancy with isolated realms, clients, scopes, and roles per tenant.
+                                Manage everything through the admin UI or the CLI.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body text-center">
+                            <i class="bi bi-gear display-4 text-primary"></i>
+                            <h5 class="card-title mt-3">Developer Friendly</h5>
+                            <p class="card-text text-secondary">
+                                Built on .NET with Aspire for local development. Includes a CLI tool, example apps,
+                                and comprehensive E2E test coverage.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-light py-5">
+        <div class="container">
+            <h2 class="text-center mb-4">Quick Start</h2>
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+<pre class="mb-0"><code># Clone the repository
+git clone https://github.com/popicka70/MrWho.git
+cd MrWho
+
+# Run with .NET Aspire
+dotnet run --project MrWhoOidc.AppHost
+
+# Or run with Docker Compose
+docker compose up -d</code></pre>
+                        </div>
+                    </div>
+                    <p class="text-center text-secondary mt-3">
+                        See the <a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub repository</a>
+                        for full documentation and guides.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-1">
+                &copy; 2026 MrWhoOidc &mdash;
+                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
+                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
+            </p>
+            <p class="text-secondary small mb-0">
+                Built with .NET &middot; OpenID Connect &middot; OAuth 2.0
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+           
+           ></script>
+</body>
+</html>

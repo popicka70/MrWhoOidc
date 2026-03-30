@@ -19,11 +19,16 @@ services:
       # OIDC configuration
       Oidc__PublicBaseUrl: "https://localhost:8443"
       # Multi-tenancy is controlled by the installed platform license (deployment_mode).
-      Mail__Enabled: "true"
-      Mail__SmtpHost: "mailhog"
-      Mail__SmtpPort: "1025"
-      Mail__FromAddress: "no-reply@mrwho.local"
-      Mail__FromName: "MrWhoOidc"
+      # Mail defaults target MailHog unless overridden via --env-file .env.dev.local.
+      # DEV_MAIL_* avoids accidental overrides from the tracked root .env used by other compose workflows.
+      Mail__Enabled: "${DEV_MAIL_ENABLED:-true}"
+      Mail__SmtpHost: "${DEV_MAIL_SMTP_HOST:-mailhog}"
+      Mail__SmtpPort: "${DEV_MAIL_SMTP_PORT:-1025}"
+      Mail__UseSsl: "${DEV_MAIL_SMTP_USE_SSL:-false}"
+      Mail__FromAddress: "${DEV_MAIL_FROM_ADDRESS:-no-reply@mrwho.local}"
+      Mail__FromName: "${DEV_MAIL_FROM_NAME:-MrWhoOidc}"
+      Mail__Username: "${DEV_MAIL_SMTP_USERNAME:-}"
+      Mail__Password: "${DEV_MAIL_SMTP_PASSWORD:-}"
       # Test licensing public key for E2E license generation (matches e2e/fixtures/licensing-test-public-key.pem)
       Licensing__AdditionalPublicKeyPem: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEM/Sc9iNCCXaGirJhKGX+/CNP8Ell\n8/rQgKHevAOYALTb2fltWRzX9S1vjaC8jwgxzy3s6Pzuai6O6c6rqyAhOw==\n-----END PUBLIC KEY-----"
     ports:

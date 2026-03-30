@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>About – MrWhoOidc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+         
+         >
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+         
+         >
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">
+                <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
+            </a>
+            <button class="navbar-toggler" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="about.html">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <section class="py-5">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <h1 class="mb-4">About MrWhoOidc</h1>
+
+                    <p>
+                        MrWhoOidc is an open-source OpenID Connect and OAuth 2.0 identity provider
+                        built from the ground up on .NET. It is designed for teams that want full control
+                        over their identity infrastructure without depending on large third-party frameworks.
+                    </p>
+
+                    <h3 class="mt-4">Why MrWhoOidc?</h3>
+                    <p>
+                        Most .NET identity solutions rely on heavyweight libraries that abstract away protocol details.
+                        MrWhoOidc takes a different approach: every OIDC flow is implemented directly against the
+                        specifications, giving you transparency into what your identity provider actually does.
+                    </p>
+
+                    <h3 class="mt-4">Design Principles</h3>
+                    <ul>
+                        <li>
+                            <strong>Standards first</strong> &mdash; strict adherence to OpenID Connect Core,
+                            Discovery, and the latest OAuth 2.0 security extensions (DPoP, PAR, JARM, Token Exchange).
+                        </li>
+                        <li>
+                            <strong>Multi-tenant by default</strong> &mdash; isolated tenants, realms, and
+                            client configurations from day one.
+                        </li>
+                        <li>
+                            <strong>Operationally simple</strong> &mdash; PostgreSQL for persistence, Docker Compose
+                            for deployment, .NET Aspire for local development.
+                        </li>
+                        <li>
+                            <strong>Observable</strong> &mdash; built-in OpenTelemetry, structured logging,
+                            health endpoints, and audit trails.
+                        </li>
+                    </ul>
+
+                    <h3 class="mt-4">Technology</h3>
+                    <p>
+                        MrWhoOidc is built on .NET 10, uses EF Core with PostgreSQL, and ships with
+                        a CLI administration tool (<code>mrwho-cli</code>), a full admin UI, and
+                        example client applications in C#, React, and Go.
+                    </p>
+
+                    <h3 class="mt-4">Open Source</h3>
+                    <p>
+                        The project is developed in the open on GitHub. Contributions, issues, and
+                        discussions are welcome.
+                    </p>
+                    <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-dark" target="_blank" rel="noopener">
+                        <i class="bi bi-github me-1"></i>View on GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-1">
+                &copy; 2026 MrWhoOidc &mdash;
+                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
+                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
+            </p>
+            <p class="text-secondary small mb-0">
+                Built with .NET &middot; OpenID Connect &middot; OAuth 2.0
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+           
+           ></script>
+</body>
+</html>

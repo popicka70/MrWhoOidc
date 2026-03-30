@@ -11,12 +11,6 @@ var apiService = builder.AddProject<Projects.MrWhoOidc_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WaitFor(authDb);
 
-builder.AddProject<Projects.MrWhoOidc_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithHttpHealthCheck("/health")
-    .WithReference(apiService)
-    .WaitFor(apiService);
-
 var webAuth = builder.AddProject<Projects.MrWhoOidc_WebAuth>("mrwhooidc-webauth")
     .WithReference(authDb)
     .WaitFor(authDb);

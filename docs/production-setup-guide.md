@@ -80,10 +80,13 @@ For the seeded local stack, use [for-developers/quickstart-15-min.md](for-develo
 | `Mail__Enabled` | Enable email sending | `true` |
 | `Mail__SmtpHost` | SMTP server hostname | `smtp.sendgrid.net` |
 | `Mail__SmtpPort` | SMTP port | `587` |
-| `Mail__SmtpUsername` | SMTP username | `apikey` |
-| `Mail__SmtpPassword` | SMTP password/API key | `SG.xxxxx` |
+| `Mail__Username` | SMTP username | `apikey` |
+| `Mail__Password` | SMTP password/API key | `SG.xxxxx` |
 | `Mail__FromAddress` | Sender email address | `noreply@example.com` |
 | `Mail__FromName` | Sender display name | `MrWho Auth` |
+
+When configuring the ASP.NET application directly, use the `Mail__...` keys above.
+When configuring Docker Compose via `.env`, use the shell variables `MAIL_SMTP_USERNAME` and `MAIL_SMTP_PASSWORD`, which the compose file maps to `Mail__Username` and `Mail__Password`.
 
 ---
 

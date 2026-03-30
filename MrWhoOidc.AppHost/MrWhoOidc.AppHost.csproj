@@ -15,7 +15,6 @@
     <ProjectReference Include="..\Examples\MrWhoOidc.RazorClient\MrWhoOidc.RazorClient.csproj" />
     <ProjectReference Include="..\MrWhoOidc.ApiService\MrWhoOidc.ApiService.csproj" />
     <ProjectReference Include="..\MrWhoOidc.WebAuth\MrWhoOidc.WebAuth.csproj" />
-    <ProjectReference Include="..\MrWhoOidc.Web\MrWhoOidc.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -31,6 +31,8 @@ bld/
 **/[Bb]in\\[Dd]ebug/
 **/[Bb]in\\[Dd]ebug/**
 
+MrWho/
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json
@@ -85,6 +87,9 @@ sbom/
 
 # Local secrets (keys, certificates, env overrides)
 secrets/
+.env.local
+.env.dev.local
+.env.*.local
 
 .python-packages/
 
