@@ -114,6 +114,13 @@
 			"command": "dotnet build",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"type": "dotnet",
+			"task": "watch MrWhoOidc.WebAuth",
+			"file": "/home/pavel/github/MrWhoOidc/MrWhoOidc.WebAuth/MrWhoOidc.WebAuth.csproj",
+			"problemMatcher": [],
+			"label": "dotnet: watch MrWhoOidc.WebAuth"
 		}
 	]
 }

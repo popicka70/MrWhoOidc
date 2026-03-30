@@ -14,15 +14,25 @@ internal sealed class SmtpEmailSender(IOptions<MailOptions> options, ILogger<Smt
         var settings = options.Value;
         if (!settings.Enabled)
         {
-            logger.LogDebug("SMTP email disabled. Skipping send for {Subject}", message.Subject);
-            return;
+            logger.LogWarning("SMTP email disabled. Cannot send {Subject} to {Recipient}", message.Subject, message.To.Email);
+            throw new InvalidOperationException("Outgoing email is disabled. Set Mail:Enabled to true before sending email.");
         }
 
         if (string.IsNullOrWhiteSpace(settings.SmtpHost))
         {
-            logger.LogWarning("SMTP host not configured. Unable to send email {Subject}", message.Subject);
-            return;
+            logger.LogWarning("SMTP host not configured. Unable to send email {Subject} to {Recipient}", message.Subject, message.To.Email);
+            throw new InvalidOperationException("Outgoing email is not configured. Set Mail:SmtpHost before sending email.");
         }
+
+        logger.LogInformation(
+            "Attempting SMTP send {Subject} to {Recipient} via {Host}:{Port} ssl={UseSsl} from {FromAddress} auth={HasUsername}",
+            message.Subject,
+            message.To.Email,
+            settings.SmtpHost,
+            settings.SmtpPort,
+            settings.UseSsl,
+            settings.FromAddress,
+            !string.IsNullOrWhiteSpace(settings.Username));
 
         using var client = new SmtpClient(settings.SmtpHost, settings.SmtpPort)
         {

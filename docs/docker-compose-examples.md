@@ -213,6 +213,9 @@ MAIL_SMTP_USERNAME=apikey
 MAIL_SMTP_PASSWORD=your_sendgrid_api_key
 ```
 
+These are Docker Compose `.env` variable names.
+Inside the ASP.NET app, they map to `Mail__Username` and `Mail__Password`.
+
 ### Common SMTP Providers
 
 #### SendGrid

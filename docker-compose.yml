@@ -52,8 +52,8 @@ services:
       Mail__UseSsl: ${MAIL_SMTP_USE_SSL:-true}
       Mail__FromAddress: ${MAIL_FROM_ADDRESS}
       Mail__FromName: ${MAIL_FROM_NAME:-MrWhoOidc}
-      Mail__SmtpUsername: ${MAIL_SMTP_USERNAME}
-      Mail__SmtpPassword: ${MAIL_SMTP_PASSWORD}
+      Mail__Username: ${MAIL_SMTP_USERNAME}
+      Mail__Password: ${MAIL_SMTP_PASSWORD}
       
       # Logging Configuration
       Logging__LogLevel__Default: ${LOGGING_LEVEL:-Information}
