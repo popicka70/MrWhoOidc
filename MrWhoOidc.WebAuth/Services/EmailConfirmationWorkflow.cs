@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
@@ -19,6 +20,7 @@ internal sealed class EmailConfirmationWorkflow(
     IEmailConfirmationService confirmationService,
     IEmailSender emailSender,
     IOptions<OidcOptions> oidcOptions,
+    IHttpContextAccessor httpContextAccessor,
     IMultiTenancyOptions multiTenancyOptions,
     ITenantAccessor tenantAccessor,
     AuthDbContext db,
@@ -75,14 +77,22 @@ internal sealed class EmailConfirmationWorkflow(
 
     private async Task<string> BuildConfirmationLinkAsync(Guid tenantId, string token, CancellationToken cancellationToken)
     {
-        var baseUrl = (_oidc.PublicBaseUrl ?? string.Empty).TrimEnd('/');
-        if (string.IsNullOrEmpty(baseUrl))
-        {
-            baseUrl = "https://localhost"; // fallback for local dev when not configured
-        }
+        var request = httpContextAccessor.HttpContext?.Request;
+        var requestBaseUrl = request is not null && request.Host.HasValue
+            ? $"{request.Scheme}://{request.Host}{request.PathBase}".TrimEnd('/')
+            : null;
+
+        var baseUrl = requestBaseUrl
+            ?? (!string.IsNullOrWhiteSpace(_oidc.PublicBaseUrl) ? _oidc.PublicBaseUrl.TrimEnd('/') : null)
+            ?? (!string.IsNullOrWhiteSpace(_oidc.Issuer) ? _oidc.Issuer.TrimEnd('/') : null)
+            ?? "https://localhost:8443";
 
         var tenantSegment = await ResolveTenantSegmentAsync(tenantId, cancellationToken).ConfigureAwait(false);
         var path = string.Concat(tenantSegment, "/account/confirm-email");
+        logger.LogInformation(
+            "Building email confirmation link using base URL {BaseUrl} for tenant {TenantId}",
+            baseUrl,
+            tenantId);
         return $"{baseUrl}{path}?token={Uri.EscapeDataString(token)}";
     }
 
