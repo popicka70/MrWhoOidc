@@ -396,7 +396,7 @@
     "Pattern": "/admin/api/platform/tenants/{slug}/export",
     "Methods": "GET",
     "RateLimiters": [],
-    "Authz": "PlatformAdmin",
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -405,7 +405,7 @@
     "Pattern": "/admin/api/platform/tenants/{slug}/export/preview",
     "Methods": "GET",
     "RateLimiters": [],
-    "Authz": "PlatformAdmin",
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -414,7 +414,7 @@
     "Pattern": "/admin/api/platform/tenants/import/",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "PlatformAdmin",
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -423,7 +423,7 @@
     "Pattern": "/admin/api/platform/tenants/import/preview",
     "Methods": "POST",
     "RateLimiters": [],
-    "Authz": "PlatformAdmin",
+    "Authz": "platform-admin",
     "HasAntiforgery": false,
     "HasCors": false,
     "IsAnonymous": false
@@ -1023,7 +1023,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/challenge",
+    "Pattern": "/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1034,7 +1034,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/authentication/complete",
+    "Pattern": "/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1078,7 +1078,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/challenge",
+    "Pattern": "/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1089,7 +1089,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/api/webauthn/registration/complete",
+    "Pattern": "/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -1204,17 +1204,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/connect/checksession",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-authorize"
-    ],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": true,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/connect/endsession",
     "Methods": "GET",
     "RateLimiters": [
@@ -1223,6 +1212,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/connect/checksession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {
@@ -1695,6 +1695,39 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/admin/api/bcl/alerts/snapshot",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/bcl/outbox",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/bcl/outbox/{id:guid}/retry",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/admin/api/clients",
     "Methods": "GET",
     "RateLimiters": [
@@ -1708,6 +1741,72 @@
   {
     "Pattern": "/t/{slug}/admin/api/clients",
     "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/keys",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/keys",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/providers",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/providers",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/providers/{identityProviderId:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/clients/{clientId:guid}/providers/{identityProviderId:guid}",
+    "Methods": "PUT",
     "RateLimiters": [
       "rl-admin"
     ],
@@ -1856,6 +1955,24 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/admin/api/configuration-audit/",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/configuration-audit/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/admin/api/license",
     "Methods": "GET",
     "RateLimiters": [
@@ -1933,6 +2050,61 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/t/{slug}/admin/api/providers",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{id:guid}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/t/{slug}/admin/api/providers/{id:guid}/export",
     "Methods": "GET",
     "RateLimiters": [],
@@ -1945,6 +2117,138 @@
     "Pattern": "/t/{slug}/admin/api/providers/{id:guid}/export/preview",
     "Methods": "GET",
     "RateLimiters": [],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/claim-mappings",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/claim-mappings",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/claim-mappings/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/claim-mappings/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/keys",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/keys",
+    "Methods": "POST",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/keys/{id:guid}",
+    "Methods": "DELETE",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/providers/{providerId:guid}/keys/{id:guid}",
+    "Methods": "PUT",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/rate-limits/client/{clientId}",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/rate-limits/events",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/rate-limits/metrics",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
+    "Authz": "tenant-admin",
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin/api/rate-limits/overview",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-admin"
+    ],
     "Authz": "tenant-admin",
     "HasAntiforgery": false,
     "HasCors": false,
@@ -2295,7 +2599,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2306,7 +2610,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/authentication/complete",
+    "Pattern": "/t/{slug}/api/webauthn/authentication/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2350,7 +2654,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
+    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2361,7 +2665,7 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/api/webauthn/registration/complete",
+    "Pattern": "/t/{slug}/api/webauthn/registration/challenge",
     "Methods": "POST",
     "RateLimiters": [
       "rl-authorize"
@@ -2467,17 +2771,6 @@
     "IsAnonymous": false
   },
   {
-    "Pattern": "/t/{slug}/connect/checksession",
-    "Methods": "GET",
-    "RateLimiters": [
-      "rl-authorize"
-    ],
-    "Authz": null,
-    "HasAntiforgery": false,
-    "HasCors": true,
-    "IsAnonymous": false
-  },
-  {
     "Pattern": "/t/{slug}/connect/endsession",
     "Methods": "GET",
     "RateLimiters": [
@@ -2486,6 +2779,17 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/connect/checksession",
+    "Methods": "GET",
+    "RateLimiters": [
+      "rl-authorize"
+    ],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": true,
     "IsAnonymous": false
   },
   {

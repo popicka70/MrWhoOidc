@@ -247,9 +247,9 @@ public class ProgramSurfaceSnapshotTests
                     }
                 }
             }
-            catch
+            catch (Exception ex) when (ex is not Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException)
             {
-                // Fallback to legacy behavior if parse fails
+                // Fallback to legacy behavior if parse fails (but don't swallow Assert.Fail from the try block)
                 Assert.AreEqual(existingRaw, json, "Endpoint manifest changed. If intentional, update the snapshot file to approve new surface.");
             }
         }
