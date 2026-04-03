@@ -27,9 +27,10 @@ POSTGRES_PASSWORD=your_secure_postgres_password_here
 OIDC_PUBLIC_BASE_URL=https://auth.example.com
 CERT_PASSWORD=your_certificate_password
 
-# Single-Tenant Settings (defaults)
-MULTITENANT_ENABLED=false
 ASPNETCORE_ENVIRONMENT=Production
+
+# Fresh databases also need a temporary bootstrap token
+BOOTSTRAP_TOKEN=your_secure_bootstrap_token
 ```
 
 ### docker-compose.yml
@@ -42,17 +43,22 @@ Use the base `docker-compose.yml` without modifications. Single-tenant mode is t
 # Start services
 docker compose up -d
 
-# Check discovery endpoint
-curl -k https://localhost:8443/.well-known/openid-configuration
+# Check health endpoint
+curl -k https://localhost:8443/health
 
-# Verify tenant configuration
-docker compose logs webauth | grep -i tenant
-# Should show: Multi-tenant mode: Disabled
+# Bootstrap the initial tenant on an empty database
+curl -k -X POST https://localhost:8443/bootstrap \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+  -d '{"tenantSlug":"default","tenantName":"Default Tenant","adminEmail":"admin@example.com","adminPassword":"ChangeMeNow123!","adminName":"Administrator"}'
+
+# Verify tenant-scoped discovery
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 ## Multi-Tenant Configuration
 
-Enable multi-tenancy to serve multiple isolated identity domains from one deployment.
+Tenant-scoped deployments use the same base compose file. The installed platform license controls the effective mode, and tenant-specific URLs become usable after bootstrap.
 
 ### .env Configuration
 
@@ -61,31 +67,20 @@ Enable multi-tenancy to serve multiple isolated identity domains from one deploy
 POSTGRES_PASSWORD=your_secure_postgres_password_here
 OIDC_PUBLIC_BASE_URL=https://auth.example.com
 CERT_PASSWORD=your_certificate_password
-
-# Multi-Tenant Settings
-MULTITENANT_ENABLED=true
-MULTITENANT_DEFAULT_TENANT_SLUG=default
-
-# Optional: Configure tenant resolution
-# Tenant resolution typically uses subdomain or path-based routing
+BOOTSTRAP_TOKEN=your_secure_bootstrap_token
 ```
 
 ### docker-compose.yml
 
-Use the base `docker-compose.yml` - multi-tenancy is configured via environment variables only.
+Use the base `docker-compose.yml` and bootstrap the initial tenant explicitly.
 
 ### Tenant URL Patterns
 
-With multi-tenancy enabled, URLs follow this pattern:
+Tenant-scoped URLs follow this pattern:
 
 ```text
-# Subdomain-based (recommended)
-https://tenant1.auth.example.com/.well-known/openid-configuration
-https://tenant2.auth.example.com/.well-known/openid-configuration
-
-# Path-based
-https://auth.example.com/tenant1/.well-known/openid-configuration
-https://auth.example.com/tenant2/.well-known/openid-configuration
+https://auth.example.com/t/tenant1/.well-known/openid-configuration
+https://auth.example.com/t/tenant2/.well-known/openid-configuration
 ```
 
 ### Verification
@@ -94,24 +89,23 @@ https://auth.example.com/tenant2/.well-known/openid-configuration
 # Start services
 docker compose up -d
 
-# Check multi-tenant mode enabled
-docker compose logs webauth | grep -i "multi-tenant"
-# Should show: Multi-tenant mode: Enabled
+# Check health endpoint
+curl -k https://localhost:8443/health
 
 # Verify default tenant
-curl -k https://localhost:8443/default/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 ### Creating Tenants
 
-Tenants are created via the admin UI or admin API:
+Tenants are created via the Platform Admin UI or platform admin API:
 
 ```bash
-# Access admin UI
-https://auth.example.com/admin/tenants
+# Access platform admin UI
+https://auth.example.com/platform-admin/tenants
 
 # Or via API
-curl -X POST https://auth.example.com/admin/api/tenants \
+curl -X POST https://auth.example.com/platform-admin/api/tenants \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -d '{
@@ -187,7 +181,7 @@ docker compose up -d
 openssl s_client -connect auth.example.com:8443 -showcerts
 
 # Check certificate details
-curl -v https://auth.example.com/.well-known/openid-configuration
+curl -v https://auth.example.com/t/default/.well-known/openid-configuration
 ```
 
 ## SMTP Email Configuration
@@ -451,9 +445,8 @@ CERT_PASSWORD=certificate_password_from_ca
 # Environment
 ASPNETCORE_ENVIRONMENT=Production
 
-# Multi-Tenancy
-MULTITENANT_ENABLED=true
-MULTITENANT_DEFAULT_TENANT_SLUG=default
+# Bootstrap
+BOOTSTRAP_TOKEN=your_secure_bootstrap_token
 
 # Redis (Performance)
 REDIS_ENABLED=true

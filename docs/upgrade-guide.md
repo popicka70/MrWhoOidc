@@ -418,7 +418,7 @@ docker compose pull webauth
 docker compose up -d webauth
 
 # Step 5: Verify
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 ### Full Rollback (With Database Restore)
@@ -448,7 +448,7 @@ gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
 docker compose up -d
 
 # Step 5: Verify
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 ### Emergency Rollback (Full System)
@@ -509,7 +509,7 @@ docker compose logs --tail=50 webauth
 
 ```bash
 # Test OIDC discovery endpoint
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 
 # Should return JSON with OIDC metadata
 # Check "issuer" field matches your OIDC_PUBLIC_BASE_URL
@@ -519,7 +519,7 @@ curl -k https://localhost:8443/.well-known/openid-configuration
 
 ```bash
 # Test JSON Web Key Set endpoint
-curl -k https://localhost:8443/.well-known/jwks
+curl -k https://localhost:8443/jwks
 
 # Should return JSON with signing keys
 ```
@@ -528,7 +528,7 @@ curl -k https://localhost:8443/.well-known/jwks
 
 ```bash
 # Access admin interface
-# https://localhost:8443/admin
+# https://localhost:8443/admin/clients
 
 # Verify:
 # - Login page loads
@@ -648,7 +648,7 @@ docker compose exec postgres psql -U oidc authdb -c "SELECT pid, now() - pg_stat
 
 ```bash
 # Test discovery endpoint with verbose output
-curl -v -k https://localhost:8443/.well-known/openid-configuration
+curl -v -k https://localhost:8443/t/default/.well-known/openid-configuration
 
 # Check for:
 # - HTTP 500 errors

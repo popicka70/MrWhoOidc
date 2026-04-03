@@ -88,7 +88,7 @@ The development stack auto-seeds the default tenant on first request. Use these 
 - **Username:** `admin@mrwho.local`
 - **Password:** `Admin123!`
 
-Open `https://localhost:8443/login` or go directly to `https://localhost:8443/admin`.
+Open `https://localhost:8443/login` or go directly to `https://localhost:8443/admin/clients`.
 
 > The `/bootstrap` endpoint is for fresh production deployments. It is not required for the development compose stack.
 
@@ -99,13 +99,13 @@ Open `https://localhost:8443/login` or go directly to `https://localhost:8443/ad
 ### Check OIDC Discovery Endpoint
 
 ```bash
-curl -k https://localhost:8443/.well-known/openid-configuration | jq
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration | jq
 ```
 
 **Expected:** JSON document with OIDC configuration including:
-- `issuer`: `https://localhost:8443`
-- `authorization_endpoint`: `https://localhost:8443/authorize`
-- `token_endpoint`: `https://localhost:8443/token`
+- `issuer`: `https://localhost:8443/t/default`
+- `authorization_endpoint`: `https://localhost:8443/t/default/authorize`
+- `token_endpoint`: `https://localhost:8443/t/default/token`
 - `jwks_uri`: `https://localhost:8443/jwks`
 
 ### Check Health Endpoints
@@ -113,15 +113,9 @@ curl -k https://localhost:8443/.well-known/openid-configuration | jq
 ```bash
 # Health check
 curl -k https://localhost:8443/health
-
-# Readiness check
-curl -k https://localhost:8443/ready
-
-# Prometheus metrics
-curl -k https://localhost:8443/metrics
 ```
 
-**Expected:** All should return HTTP 200 with status information.
+**Expected:** HTTP 200 with status information.
 
 ### Check the Tenant Discovery Document Used by the Sample Apps
 
@@ -136,7 +130,7 @@ The example applications in `docker-compose.dev.yml` use the tenant-scoped issue
 Open your browser and navigate to:
 
 ```
-https://localhost:8443/admin
+https://localhost:8443/admin/clients
 ```
 
 Log in with:
@@ -302,7 +296,7 @@ Wait for "database system is ready to accept connections" message.
 **Solution:** Check if tenant already exists:
 
 ```bash
-curl -k https://localhost:8443/admin/tenants \
+curl -k https://localhost:8443/platform-admin/api/tenants \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
@@ -372,7 +366,7 @@ To test IdP chaining:
 Review the OIDC discovery document:
 
 ```
-https://localhost:8443/.well-known/openid-configuration
+https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 Key endpoints:
@@ -479,8 +473,8 @@ docker compose down -v
 | Stop services | `docker compose down` |
 | View logs | `docker compose logs -f webauth` |
 | Health check | `curl -k https://localhost:8443/health` |
-| OIDC discovery | `curl -k https://localhost:8443/.well-known/openid-configuration` |
-| Admin UI | `https://localhost:8443/admin` |
+| OIDC discovery | `curl -k https://localhost:8443/t/default/.well-known/openid-configuration` |
+| Admin UI | `https://localhost:8443/admin/clients` |
 | Bootstrap | `curl -k -X POST https://localhost:8443/bootstrap ...` |
 
 ---

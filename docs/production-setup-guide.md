@@ -153,7 +153,7 @@ A successful response looks like:
 {
   "tenantId": "01234567-89ab-cdef-0123-456789abcdef",
   "slug": "default",
-  "issuer": "https://your-app.onrender.com"
+  "issuer": "https://your-app.onrender.com/t/default"
 }
 ```
 
@@ -165,7 +165,8 @@ A successful response looks like:
 
 1. Access the application URL - you should see the login page
 2. Log in with the admin credentials you specified
-3. Access the Platform Admin section to manage tenants
+3. Access `https://your-app.onrender.com/admin/clients` to verify tenant admin access
+4. Access the Platform Admin section to manage tenants
 
 ---
 
@@ -351,7 +352,7 @@ $token = "your-token"; $body = '{"tenantSlug":"default","tenantName":"Default Te
 
 ```powershell
 # Check OIDC discovery
-Invoke-RestMethod -Uri "https://your-app.example.com/.well-known/openid-configuration"
+Invoke-RestMethod -Uri "https://your-app.example.com/t/default/.well-known/openid-configuration"
 
 # Check health
 Invoke-RestMethod -Uri "https://your-app.example.com/health"

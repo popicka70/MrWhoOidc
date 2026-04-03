@@ -127,10 +127,10 @@ curl -k -X POST https://localhost:8443/bootstrap \
 9. **Verify discovery and sign in**:
 
 ```bash
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
-Open browser to `https://localhost:8443/admin`
+Open browser to `https://localhost:8443/admin/clients`
 
 After the bootstrap succeeds, remove `BOOTSTRAP_TOKEN` from the environment or set it back to an empty value.
 
@@ -319,7 +319,7 @@ docker compose ps redis
 docker compose stop redis
 
 # OIDC server continues functioning
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 # Expected: HTTP 200 (success, using fallback cache)
 
 # Check logs
@@ -847,7 +847,7 @@ docker compose logs webauth
 
 ### Discovery Endpoint Returns 404
 
-**Symptom**: Curl to `/.well-known/openid-configuration` returns 404
+**Symptom**: Curl to `/.well-known/openid-configuration` or the tenant discovery document returns 404
 
 **Checks**:
 
@@ -855,6 +855,7 @@ docker compose logs webauth
 2. Check container is running: `docker compose ps`
 3. Check logs for startup errors: `docker compose logs webauth`
 4. Verify port mapping: Should see `0.0.0.0:8443->8443/tcp`
+5. For a fresh database, complete bootstrap before testing `https://<host>/t/default/.well-known/openid-configuration`
 
 **Solution**:
 
@@ -1080,7 +1081,7 @@ Use this checklist before deploying to production:
 
 #### Verification
 
-- [ ] **Discovery Endpoint**: `curl https://yourdomain/.well-known/openid-configuration` returns valid JSON
+- [ ] **Discovery Endpoint**: `curl https://yourdomain/t/default/.well-known/openid-configuration` returns valid JSON
 - [ ] **SSL/TLS**: No browser certificate warnings (valid chain of trust)
 - [ ] **Database Connection**: Application logs show successful database connection
 - [ ] **Redis Connection**: (if enabled) Application logs show successful Redis connection
@@ -1234,7 +1235,7 @@ gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
 docker compose start webauth
 
 # 4. Verify
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 #### Full Restore (Services Stopped)
@@ -1257,7 +1258,7 @@ gunzip < backups/mrwhooidc-backup-YYYYMMDD-HHMMSS.sql.gz | \
 docker compose up -d webauth
 
 # 5. Verify
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 #### Restore from Uncompressed Backup
@@ -1301,7 +1302,7 @@ docker compose exec postgres psql -U oidc authdb -c "\
   SELECT 'consent_grants', COUNT(*) FROM consent_grants;"
 
 # 2. Test authentication
-# - Open admin UI: https://localhost:8443/admin
+# - Open admin UI: https://localhost:8443/admin/clients
 # - Verify can login
 # - Check client list displays
 

@@ -22,7 +22,7 @@ cp .env.example .env
 docker compose -f docker-compose.dev.yml up -d --build
 
 # Verify the auth server is up.
-curl -k https://localhost:8443/.well-known/openid-configuration
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
 ```
 
 The development stack starts:
@@ -35,6 +35,8 @@ The development stack starts:
 - TestApi at `https://localhost:7149`
 
 Development mode auto-seeds the default tenant and admin account. Sign in with `admin@mrwho.local` / `Admin123!`.
+
+The canonical local admin entry is `https://localhost:8443/admin/clients`. The `/admin` route redirects there.
 
 For an IDE-first workflow, you can also run the Aspire host:
 
