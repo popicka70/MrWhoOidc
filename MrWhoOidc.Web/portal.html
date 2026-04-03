@@ -34,6 +34,7 @@
                     <li class="nav-item"><a class="nav-link" href="getting-started.html">Getting Started</a></li>
                     <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="portal.html">Portal</a></li>
                 </ul>
             </div>
         </div>
@@ -269,6 +270,67 @@
                                     <div class="alert alert-secondary mb-0" role="alert">
                                         <i class="bi bi-clock-history me-1"></i>
                                         Customer action ends at request submission. Payment capture, approval, and final fulfillment are separate steps in the workflow.
+                                    </div>
+                                </div>
+                                <div id="ops-panel" class="col-12 d-none">
+                                    <div class="card border-0 shadow-sm ops-card">
+                                        <div class="card-body p-4">
+                                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                                                <div>
+                                                    <h2 class="h5 fw-bold mb-1">Development Operations Panel</h2>
+                                                    <p class="text-secondary small mb-0">Use this local-only console to review requests, record payments, and fulfill licenses after payment is reconciled.</p>
+                                                </div>
+                                                <span class="badge text-bg-warning ops-badge">Internal workflow</span>
+                                            </div>
+
+                                            <div class="row g-4">
+                                                <div class="col-xl-7">
+                                                    <h3 class="h6 fw-bold">Request actions</h3>
+                                                    <div class="table-responsive mt-3">
+                                                        <table class="table align-middle table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Request</th>
+                                                                    <th>Status</th>
+                                                                    <th>Payment</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="ops-requests-body"></tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-xl-5">
+                                                    <h3 class="h6 fw-bold">Record manual payment</h3>
+                                                    <form id="ops-payment-form" class="row g-3 mt-1">
+                                                        <div class="col-12">
+                                                            <label for="opsRequestId" class="form-label">License request</label>
+                                                            <select id="opsRequestId" name="opsRequestId" class="form-select"></select>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label for="opsAmount" class="form-label">Amount</label>
+                                                            <input id="opsAmount" name="opsAmount" type="number" min="0.01" step="0.01" class="form-control" value="249.00" required>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label for="opsCurrency" class="form-label">Currency</label>
+                                                            <input id="opsCurrency" name="opsCurrency" class="form-control" value="USD" maxlength="16" required>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label for="opsExternalReference" class="form-label">Reference</label>
+                                                            <input id="opsExternalReference" name="opsExternalReference" class="form-control" placeholder="invoice-2026-001">
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label for="opsNotes" class="form-label">Notes</label>
+                                                            <textarea id="opsNotes" name="opsNotes" class="form-control" rows="2" placeholder="Manual payment received."></textarea>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <button type="submit" class="btn btn-outline-dark">Create Payment Record</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

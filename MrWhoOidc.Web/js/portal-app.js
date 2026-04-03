@@ -15,6 +15,8 @@ const pageState = {
     me: null
 };
 
+const isDevelopmentOperationsMode = window.location.hostname === 'localhost';
+
 function randomString(length) {
     const bytes = new Uint8Array(length);
     crypto.getRandomValues(bytes);
@@ -325,6 +327,116 @@ function renderPayments(payments) {
         </tr>`).join('');
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function findPaymentForRequest(requestId) {
+    const payments = pageState.me?.payments || [];
+    return payments.find(payment => payment.licenseChangeRequestId === requestId) || null;
+}
+
+function findLicenseForRequest(requestId) {
+    const licenses = pageState.me?.licenses || [];
+    return licenses.find(license => license.licenseChangeRequestId === requestId) || null;
+}
+
+function renderOpsRequestOptions() {
+    const select = document.getElementById('opsRequestId');
+    if (!select) {
+        return;
+    }
+
+    const requests = pageState.me?.licenseRequests || [];
+    if (requests.length === 0) {
+        select.innerHTML = '<option value="">No requests available</option>';
+        select.disabled = true;
+        return;
+    }
+
+    select.disabled = false;
+    select.innerHTML = requests.map(request =>
+        `<option value="${request.id}">${escapeHtml(request.productKey)} / ${escapeHtml(request.requestedPlanKey)} / ${escapeHtml(request.status)}</option>`).join('');
+}
+
+function buildRequestActions(request) {
+    const payment = findPaymentForRequest(request.id);
+    const license = findLicenseForRequest(request.id);
+    const actions = [];
+
+    if (request.status === 'Submitted') {
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-secondary" data-request-action="UnderReview" data-request-id="${request.id}">Review</button>`);
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-success" data-request-action="Approved" data-request-id="${request.id}">Approve</button>`);
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-request-action="Rejected" data-request-id="${request.id}">Reject</button>`);
+    }
+
+    if (request.status === 'UnderReview') {
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-success" data-request-action="Approved" data-request-id="${request.id}">Approve</button>`);
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-request-action="Rejected" data-request-id="${request.id}">Reject</button>`);
+    }
+
+    if (payment && payment.status === 'Pending') {
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-primary" data-payment-action="Received" data-payment-id="${payment.id}">Mark received</button>`);
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-payment-action="Cancelled" data-payment-id="${payment.id}">Cancel payment</button>`);
+    }
+
+    if (payment && payment.status === 'Received') {
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-primary" data-payment-action="Reconciled" data-payment-id="${payment.id}">Reconcile</button>`);
+        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-payment-action="Cancelled" data-payment-id="${payment.id}">Cancel payment</button>`);
+    }
+
+    if (request.status === 'Approved' && payment?.status === 'Reconciled' && !license) {
+        actions.push(`<button type="button" class="btn btn-sm btn-accent" data-fulfill-request-id="${request.id}">Fulfill license</button>`);
+    }
+
+    return actions.length > 0
+        ? `<div class="ops-actions">${actions.join('')}</div>`
+        : '<span class="text-secondary small">No actions</span>';
+}
+
+function renderOpsPanel() {
+    setVisible('ops-panel', !!pageState.me && isDevelopmentOperationsMode);
+
+    const body = document.getElementById('ops-requests-body');
+    if (!body || !pageState.me || !isDevelopmentOperationsMode) {
+        return;
+    }
+
+    const requests = pageState.me.licenseRequests || [];
+    if (requests.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" class="text-secondary">No requests available for ops actions.</td></tr>';
+        renderOpsRequestOptions();
+        return;
+    }
+
+    body.innerHTML = requests.map(request => {
+        const payment = findPaymentForRequest(request.id);
+        const license = findLicenseForRequest(request.id);
+        const paymentSummary = payment
+            ? `${escapeHtml(payment.status)}${payment.externalReference ? ` / ${escapeHtml(payment.externalReference)}` : ''}`
+            : 'No payment';
+        const licenseSummary = license ? ` / Fulfilled as ${escapeHtml(shortId(license.id))}` : '';
+
+        return `
+            <tr>
+                <td>
+                    <div class="fw-semibold">${escapeHtml(request.productKey)} / ${escapeHtml(request.requestedPlanKey)}</div>
+                    <div class="small text-secondary">${escapeHtml(shortId(request.id))}${request.reason ? ` / ${escapeHtml(request.reason)}` : ''}</div>
+                </td>
+                <td>${escapeHtml(request.status)}</td>
+                <td>${paymentSummary}${licenseSummary}</td>
+                <td>${buildRequestActions(request)}</td>
+            </tr>`;
+    }).join('');
+
+    renderOpsRequestOptions();
+}
+
 function renderDashboard() {
     const session = loadSession();
     const claims = session?.claims || {};
@@ -343,6 +455,7 @@ function renderDashboard() {
     renderLicenses(pageState.me?.licenses || []);
     renderLicenseRequests(pageState.me?.licenseRequests || []);
     renderPayments(pageState.me?.payments || []);
+    renderOpsPanel();
 }
 
 async function handleOnboardingSubmit(event) {
@@ -393,6 +506,106 @@ async function handleLicenseRequestSubmit(event) {
     }
 }
 
+async function updateLicenseRequestStatus(requestId, status) {
+    await authorizedJson(`/api/license-requests/${requestId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status })
+    });
+}
+
+async function updatePaymentStatus(paymentId, status) {
+    await authorizedJson(`/api/payment-records/${paymentId}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status })
+    });
+}
+
+async function fulfillLicenseRequest(requestId) {
+    const expiration = new Date();
+    expiration.setFullYear(expiration.getFullYear() + 1);
+
+    await authorizedJson('/api/licenses/issue', {
+        method: 'POST',
+        body: JSON.stringify({
+            licenseRequestId: requestId,
+            expiresAt: expiration.toISOString(),
+            createdBy: 'portal-ops'
+        })
+    });
+}
+
+async function handleOpsPaymentSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const requestId = form.opsRequestId.value;
+    const linkedRequest = (pageState.me?.licenseRequests || []).find(request => request.id === requestId);
+    if (!linkedRequest) {
+        renderAlert('danger', 'Select a valid license request before recording a payment.');
+        return;
+    }
+
+    try {
+        await authorizedJson('/api/payment-records', {
+            method: 'POST',
+            body: JSON.stringify({
+                organizationId: pageState.me.organization.id,
+                licenseChangeRequestId: linkedRequest.id,
+                productKey: linkedRequest.productKey,
+                amount: Number(form.opsAmount.value),
+                currency: form.opsCurrency.value,
+                externalReference: form.opsExternalReference.value || null,
+                notes: form.opsNotes.value || null
+            })
+        });
+
+        await loadPortalContext();
+        renderAlert('success', 'Payment record created. Move it to received and reconciled when processing completes.');
+        form.reset();
+        form.opsCurrency.value = 'USD';
+        form.opsAmount.value = '249.00';
+    } catch (error) {
+        renderAlert('danger', error.message);
+    }
+}
+
+async function handleOpsActionsClick(event) {
+    const requestButton = event.target.closest('[data-request-action]');
+    const paymentButton = event.target.closest('[data-payment-action]');
+    const fulfillButton = event.target.closest('[data-fulfill-request-id]');
+
+    if (!requestButton && !paymentButton && !fulfillButton) {
+        return;
+    }
+
+    try {
+        if (requestButton) {
+            await updateLicenseRequestStatus(
+                requestButton.dataset.requestId,
+                requestButton.dataset.requestAction);
+            await loadPortalContext();
+            renderAlert('success', `Request moved to ${requestButton.dataset.requestAction}.`);
+            return;
+        }
+
+        if (paymentButton) {
+            await updatePaymentStatus(
+                paymentButton.dataset.paymentId,
+                paymentButton.dataset.paymentAction);
+            await loadPortalContext();
+            renderAlert('success', `Payment moved to ${paymentButton.dataset.paymentAction}.`);
+            return;
+        }
+
+        if (fulfillButton) {
+            await fulfillLicenseRequest(fulfillButton.dataset.fulfillRequestId);
+            await loadPortalContext();
+            renderAlert('success', 'Approved paid request fulfilled into an issued license.');
+        }
+    } catch (error) {
+        renderAlert('danger', error.message);
+    }
+}
+
 async function bootstrapPortalPage() {
     loadSession();
 
@@ -413,6 +626,8 @@ async function bootstrapPortalPage() {
 
     document.getElementById('onboarding-form')?.addEventListener('submit', handleOnboardingSubmit);
     document.getElementById('request-license-form')?.addEventListener('submit', handleLicenseRequestSubmit);
+    document.getElementById('ops-payment-form')?.addEventListener('submit', handleOpsPaymentSubmit);
+    document.getElementById('ops-panel')?.addEventListener('click', handleOpsActionsClick);
 
     if (!pageState.session?.accessToken) {
         setVisible('signed-out-card', true);
