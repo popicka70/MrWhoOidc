@@ -3,26 +3,27 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc – a lightweight, standards-compliant OpenID Connect identity provider built on .NET">
-    <title>MrWhoOidc</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-         
-         >
-    <link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-         
-         >
+    <meta name="description" content="MrWhoOidc is a .NET OpenID Connect and OAuth 2.0 identity provider with multi-tenant administration, modern protocol support, and public deployment assets.">
+    <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#0b1020">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MrWhoOidc">
+    <meta property="og:title" content="MrWhoOidc | Evaluate the local IdP without guesswork">
+    <meta property="og:description" content="Install the public MrWhoOidc stack with Docker, bootstrap the first tenant, and verify tenant-scoped discovery and JWKS endpoints.">
+    <meta property="og:url" content="https://mrwhooidc.com/">
+    <link rel="canonical" href="https://mrwhooidc.com/">
+    <title>MrWhoOidc | Evaluate the local IdP without guesswork</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark site-nav">
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
@@ -32,129 +33,202 @@
                     <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
                     <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
-                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal</a></li>
+                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal Prototype</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <section class="bg-light py-5">
-        <div class="container text-center">
-            <h1 class="display-4 fw-bold">MrWhoOidc</h1>
-            <p class="lead text-secondary mt-3">
-                A lightweight, standards-compliant OpenID Connect identity provider built on .NET.
-            </p>
-            <div class="mt-4">
-                <a href="features.html" class="btn btn-primary btn-lg me-2">
-                    <i class="bi bi-list-check me-1"></i>Explore Features
-                </a>
-                <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-dark btn-lg" target="_blank" rel="noopener">
-                    <i class="bi bi-github me-1"></i>View on GitHub
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-5">
-        <div class="container">
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body text-center">
-                            <i class="bi bi-shield-check display-4 text-primary"></i>
-                            <h5 class="card-title mt-3">Standards Compliant</h5>
-                            <p class="card-text text-secondary">
-                                Implements OpenID Connect Core, Discovery, Dynamic Registration, and OAuth 2.0 extensions
-                                including PKCE, PAR, DPoP, and Token Exchange.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body text-center">
-                            <i class="bi bi-people display-4 text-primary"></i>
-                            <h5 class="card-title mt-3">Multi-Tenant</h5>
-                            <p class="card-text text-secondary">
-                                First-class multi-tenancy with isolated realms, clients, scopes, and roles per tenant.
-                                Manage everything through the admin UI or the CLI.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body text-center">
-                            <i class="bi bi-gear display-4 text-primary"></i>
-                            <h5 class="card-title mt-3">Developer Friendly</h5>
-                            <p class="card-text text-secondary">
-                                Built on .NET with Aspire for local development. Includes a CLI tool, example apps,
-                                and comprehensive E2E test coverage.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body text-center">
-                            <i class="bi bi-person-badge display-4 text-primary"></i>
-                            <h5 class="card-title mt-3">Customer Portal</h5>
-                            <p class="card-text text-secondary">
-                                A lightweight portal shell is now available for signed-in customers to review licenses,
-                                requests, and payment records through the future licensing platform.
-                            </p>
-                            <a href="portal.html" class="btn btn-outline-primary btn-sm mt-2">
-                                Open portal
+    <main>
+        <section class="hero-surface py-5 py-lg-6">
+            <div class="container">
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-7">
+                        <p class="section-kicker">OpenID Connect and OAuth 2.0 on .NET</p>
+                        <h1 class="display-4 fw-bold mb-3">Identity infrastructure you can evaluate without reverse-engineering the setup.</h1>
+                        <p class="lead text-secondary mb-4">
+                            MrWhoOidc provides a standards-based identity provider with multi-tenant administration,
+                            modern protocol support, and public deployment assets. For first-time public evaluation,
+                            use the Docker path, bootstrap the first tenant once, then verify tenant-scoped discovery.
+                        </p>
+                        <div class="d-flex flex-wrap gap-3">
+                            <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="btn btn-primary btn-lg" target="_blank" rel="noopener">
+                                <i class="bi bi-rocket-takeoff me-1"></i>Deployment guide
+                            </a>
+                            <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-light btn-lg" target="_blank" rel="noopener">
+                                <i class="bi bi-github me-1"></i>Public repository
                             </a>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="bg-light py-5">
-        <div class="container">
-            <h2 class="text-center mb-4">Quick Start</h2>
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body">
-<pre class="mb-0"><code># Clone the repository
-git clone https://github.com/popicka70/MrWho.git
-cd MrWho
-
-# Run with .NET Aspire
-dotnet run --project MrWhoOidc.AppHost
-
-# Or run with Docker Compose
-docker compose up -d</code></pre>
+                    <div class="col-lg-5">
+                        <div class="hero-panel card border-0 shadow-lg h-100">
+                            <div class="card-body p-4">
+                                <p class="section-kicker mb-2">First local install</p>
+                                <h2 class="h4 mb-3">The public happy path is explicit.</h2>
+                                <ol class="mb-0 text-secondary small ps-3 install-steps">
+                                    <li>Create `certs/aspnetapp.pfx` with `bash ./scripts/generate-cert.sh localhost changeit`.</li>
+                                    <li>Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`, `CERT_PASSWORD`, `OIDC_PUBLIC_BASE_URL`, and a temporary `BOOTSTRAP_TOKEN`.</li>
+                                    <li>Start Docker, call `POST /bootstrap`, then remove `BOOTSTRAP_TOKEN` and re-apply the containers.</li>
+                                    <li>Verify tenant discovery, admin redirect behavior, and tenant JWKS.</li>
+                                </ol>
+                            </div>
                         </div>
                     </div>
-                    <p class="text-center text-secondary mt-3">
-                        See the <a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub repository</a>
-                        for full documentation and guides.
-                    </p>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <footer class="bg-dark text-light py-4 mt-5">
+        <section class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card h-100 border-0 shadow-sm info-card">
+                            <div class="card-body">
+                                <i class="bi bi-shield-check display-6 text-primary"></i>
+                                <h2 class="h5 mt-3">Modern protocol support</h2>
+                                <p class="text-secondary mb-0">
+                                    Authorization Code + PKCE, Client Credentials, Device Authorization, Token Exchange,
+                                    PAR, JAR, JARM, DPoP, CIBA, discovery, and JWKS publication.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card h-100 border-0 shadow-sm info-card">
+                            <div class="card-body">
+                                <i class="bi bi-building display-6 text-primary"></i>
+                                <h2 class="h5 mt-3">Multi-tenant administration</h2>
+                                <p class="text-secondary mb-0">
+                                    Isolated tenants, client and realm configuration, role and scope management,
+                                    platform administration, and CLI support.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card h-100 border-0 shadow-sm info-card">
+                            <div class="card-body">
+                                <i class="bi bi-box-seam display-6 text-primary"></i>
+                                <h2 class="h5 mt-3">Public deployment assets</h2>
+                                <p class="text-secondary mb-0">
+                                    Docker Compose files, environment templates, scripts, examples, and troubleshooting
+                                    docs are published in the public repository.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card h-100 border-0 shadow-sm info-card">
+                            <div class="card-body">
+                                <i class="bi bi-person-badge display-6 text-primary"></i>
+                                <h2 class="h5 mt-3">Portal prototype</h2>
+                                <p class="text-secondary mb-3">
+                                    The customer portal is still a public prototype page, not a production-authenticated
+                                    application. It documents the intended direction.
+                                </p>
+                                <a href="portal.html" class="btn btn-outline-primary btn-sm">Review prototype</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5 section-muted">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-xl-10">
+                        <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3 mb-4">
+                            <div>
+                                <p class="section-kicker mb-2">Local Docker evaluation</p>
+                                <h2 class="mb-2">Use the real first-run flow, not just `docker compose up -d`.</h2>
+                                <p class="text-secondary mb-0">
+                                    On an empty database, the base public compose path requires an explicit bootstrap before
+                                    tenant discovery and admin login become useful.
+                                </p>
+                            </div>
+                            <a href="https://github.com/popicka70/MrWho/blob/master/README.md" class="btn btn-outline-primary" target="_blank" rel="noopener">
+                                Open README
+                            </a>
+                        </div>
+
+                        <div class="card border-0 shadow-sm code-card mb-4">
+                            <div class="card-body">
+<pre class="mb-0"><code>git clone https://github.com/popicka70/MrWho.git
+cd MrWho
+
+bash ./scripts/generate-cert.sh localhost changeit
+cp .env.example .env
+# set POSTGRES_PASSWORD, CERT_PASSWORD, OIDC_PUBLIC_BASE_URL
+# on a fresh database also set BOOTSTRAP_TOKEN
+
+docker compose up -d
+
+curl -k -X POST https://localhost:8443/bootstrap \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+  -d '{
+    "tenantSlug": "default",
+    "tenantName": "Default Tenant",
+    "adminEmail": "admin@example.com",
+    "adminPassword": "ChangeMeNow123!",
+    "adminName": "Administrator"
+  }'
+
+# remove BOOTSTRAP_TOKEN from .env, then re-apply
+docker compose up -d
+
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+curl -k -I https://localhost:8443/admin/clients
+curl -k https://localhost:8443/t/default/jwks</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm info-card h-100">
+                                    <div class="card-body">
+                                        <h3 class="h5">What to expect</h3>
+                                        <ul class="text-secondary mb-0 check-list">
+                                            <li>The admin URL redirects anonymous users to the tenant login page.</li>
+                                            <li>The strongest first smoke test is tenant-scoped discovery.</li>
+                                            <li>After removing `BOOTSTRAP_TOKEN`, `POST /bootstrap` should no longer be available.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm info-card h-100">
+                                    <div class="card-body">
+                                        <h3 class="h5">Contributor path</h3>
+                                        <p class="text-secondary mb-0">
+                                            Aspire remains useful for repo contributors and local development, but the public
+                                            evaluation path on this site is intentionally documented around the published Docker assets.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer text-light py-4 mt-5">
         <div class="container text-center">
             <p class="mb-1">
-                &copy; 2026 MrWhoOidc &mdash;
-                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
+                &copy; 2026 MrWhoOidc &middot;
+                <a href="https://github.com/popicka70/MrWho" class="text-light" target="_blank" rel="noopener">GitHub</a> &middot;
+                <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="text-light" target="_blank" rel="noopener">Deployment guide</a> &middot;
                 <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
             </p>
             <p class="text-secondary small mb-0">
-                Built with .NET &middot; OpenID Connect &middot; OAuth 2.0
+                Public site for the MrWhoOidc product, deployment assets, and roadmap direction.
             </p>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-           
-           ></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

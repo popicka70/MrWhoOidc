@@ -1,11 +1,18 @@
 :root {
     --mrwho-primary: #0d6efd;
+    --mrwho-surface: #f4f7fb;
+    --mrwho-ink: #0d1b2a;
+    --mrwho-nav: #071120;
 }
 
 body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    color: var(--mrwho-ink);
+    background:
+        radial-gradient(circle at top left, rgba(13, 110, 253, 0.08), transparent 28rem),
+        linear-gradient(180deg, #fbfdff 0%, #f2f6fb 100%);
 }
 
 main, section:last-of-type {
@@ -14,6 +21,67 @@ main, section:last-of-type {
 
 footer {
     margin-top: auto;
+}
+
+.site-nav {
+    background: linear-gradient(135deg, #081222, var(--mrwho-nav));
+}
+
+.site-footer {
+    background: linear-gradient(135deg, #081222, var(--mrwho-nav));
+}
+
+.hero-surface {
+    background:
+        radial-gradient(circle at top right, rgba(13, 110, 253, 0.18), transparent 24rem),
+        linear-gradient(135deg, #081222 0%, #12243b 100%);
+    color: #f8fbff;
+}
+
+.hero-surface .text-secondary,
+.hero-surface .section-kicker,
+.hero-panel .text-secondary {
+    color: rgba(248, 251, 255, 0.75) !important;
+}
+
+.hero-panel {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    color: #f8fbff;
+}
+
+.section-kicker {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mrwho-primary);
+}
+
+.hero-surface .section-kicker {
+    color: #90bfff;
+}
+
+.section-muted,
+.page-section {
+    background: transparent;
+}
+
+.info-card {
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.code-card {
+    background: #ffffff;
+}
+
+.install-steps li,
+.check-list li {
+    margin-bottom: 0.75rem;
+}
+
+.prototype-badge {
+    letter-spacing: 0.04em;
 }
 
 pre {
@@ -28,6 +96,10 @@ pre {
     font-size: 1.25rem;
 }
 
+.nav-link {
+    font-weight: 500;
+}
+
 .portal-details dt {
     font-weight: 600;
     color: #6c757d;
@@ -35,4 +107,11 @@ pre {
 
 .portal-details dd {
     margin-bottom: 0.75rem;
+}
+
+@media (min-width: 992px) {
+    .py-lg-6 {
+        padding-top: 6rem !important;
+        padding-bottom: 6rem !important;
+    }
 }
