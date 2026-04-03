@@ -147,4 +147,72 @@ public sealed class LicenseValidatorTests
         Assert.IsFalse(result.IsValid, "Should have rejected token signed by unknown key");
         Assert.AreEqual("invalid_signature", result.ErrorCode);
     }
+
+    [TestMethod]
+    public async Task ValidateSignature_AcceptsTokenSignedByConfiguredPrimaryJwks()
+    {
+        var options = new LicensingOptions
+        {
+            PrimaryJwksJson = CreateJwksJson(TestPublicKeyPem, "mrwho-licensing-dev"),
+            AdditionalTrustedIssuers = ["MrWhoLicensing"],
+            UseEmbeddedPublicKeyFallback = false
+        };
+
+        var validator = new LicenseValidator(
+            Options.Create(options),
+            NullLogger<LicenseValidator>.Instance);
+
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromPem(TestPrivateKeyPem);
+        var signingCredentials = new SigningCredentials(
+            new ECDsaSecurityKey(ecdsa) { KeyId = "mrwho-licensing-dev" },
+            SecurityAlgorithms.EcdsaSha256);
+
+        var handler = new JwtSecurityTokenHandler();
+        var token = handler.CreateEncodedJwt(new SecurityTokenDescriptor
+        {
+            Issuer = "MrWhoLicensing",
+            NotBefore = DateTime.UtcNow.AddMinutes(-1),
+            Expires = DateTime.UtcNow.AddHours(24),
+            SigningCredentials = signingCredentials,
+            Claims = new Dictionary<string, object>
+            {
+                ["tier"] = "enterprise",
+                ["organization"] = "Test Org",
+                ["features"] = "[\"pdf_html\",\"pdf_templates\"]",
+                ["license_scope"] = "platform",
+                ["jti"] = Guid.NewGuid().ToString(),
+            }
+        });
+
+        var result = await validator.ValidateSignatureAsync(token);
+
+        Assert.IsTrue(result.IsValid, $"Expected valid signature but got: {result.ErrorCode} - {result.ErrorMessage}");
+    }
+
+    private static string CreateJwksJson(string publicKeyPem, string keyId)
+    {
+        var ecdsa = ECDsa.Create();
+        ecdsa.ImportFromPem(publicKeyPem);
+        var parameters = ecdsa.ExportParameters(false);
+
+        var x = Base64UrlEncoder.Encode(parameters.Q.X);
+        var y = Base64UrlEncoder.Encode(parameters.Q.Y);
+
+        return $$"""
+            {
+              "keys": [
+                {
+                  "kty": "EC",
+                  "use": "sig",
+                  "kid": "{{keyId}}",
+                  "crv": "P-256",
+                  "alg": "ES256",
+                  "x": "{{x}}",
+                  "y": "{{y}}"
+                }
+              ]
+            }
+            """;
+    }
 }

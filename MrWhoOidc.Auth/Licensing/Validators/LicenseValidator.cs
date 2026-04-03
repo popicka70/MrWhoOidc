@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -248,40 +249,21 @@ internal sealed class LicenseValidator : ILicenseValidator
 
     private TokenValidationParameters CreateValidationParameters()
     {
-        if (string.IsNullOrWhiteSpace(_options.PublicKeyPem))
+        var keys = CreateSigningKeys();
+        if (keys.Count == 0)
         {
             throw new InvalidOperationException("Licensing public key is not configured.");
-        }
-
-        // Create a key instance for each known kid value so that JWT validation
-        // can match the token's kid to one of them. All keys use the same underlying
-        // public key material, just with different KeyId values.
-        var keys = KnownKeyIds.Select(kid =>
-        {
-            var ecdsa = CreateEcdsaFromPem(_options.PublicKeyPem);
-            return new ECDsaSecurityKey(ecdsa) { KeyId = kid };
-        }).ToList();
-
-        // When an additional public key is configured (e.g. test/E2E environments),
-        // add signing keys for it as well so licenses signed by the test keypair are accepted.
-        if (!string.IsNullOrWhiteSpace(_options.AdditionalPublicKeyPem))
-        {
-            _logger.LogInformation("Additional licensing public key configured; adding {Count} extra signing keys.", KnownKeyIds.Length);
-            foreach (var kid in KnownKeyIds)
-            {
-                var ecdsa = CreateEcdsaFromPem(_options.AdditionalPublicKeyPem);
-                keys.Add(new ECDsaSecurityKey(ecdsa) { KeyId = kid });
-            }
-        }
-        else
-        {
-            _logger.LogDebug("No additional licensing public key configured.");
         }
 
         // Use IssuerSigningKeyResolver to ensure ALL keys are tried during validation.
         // JwtSecurityTokenHandler may only try the first kid-matched key from IssuerSigningKeys,
         // which fails when multiple key sources share the same kid values.
         var allKeys = keys.ToArray();
+        var validIssuers = AllowedIssuers
+            .Concat(_options.AdditionalTrustedIssuers ?? Array.Empty<string>())
+            .Where(issuer => !string.IsNullOrWhiteSpace(issuer))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         return new TokenValidationParameters
         {
@@ -292,12 +274,100 @@ internal sealed class LicenseValidator : ILicenseValidator
             RequireAudience = false,
             ValidateIssuer = _options.StrictValidation,
             ValidIssuer = KeyGenIssuer,
-            ValidIssuers = AllowedIssuers,
+            ValidIssuers = validIssuers,
             ValidateLifetime = true,
             ClockSkew = ClockSkew,
             RequireExpirationTime = true,
             ValidAlgorithms = new[] { SecurityAlgorithms.EcdsaSha256 }
         };
+    }
+
+    private List<SecurityKey> CreateSigningKeys()
+    {
+        var keys = new List<SecurityKey>();
+
+        var primaryPem = ResolvePrimaryPublicKeyPem();
+        if (!string.IsNullOrWhiteSpace(primaryPem))
+        {
+            keys.AddRange(CreateKnownKidKeys(primaryPem));
+        }
+
+        AddKeysFromJwks(keys, _options.PrimaryJwksJson, "primary");
+
+        if (!string.IsNullOrWhiteSpace(_options.AdditionalPublicKeyPem))
+        {
+            _logger.LogInformation(
+                "Additional licensing public key configured; adding {Count} extra signing keys.",
+                KnownKeyIds.Length);
+            keys.AddRange(CreateKnownKidKeys(_options.AdditionalPublicKeyPem));
+        }
+        else
+        {
+            _logger.LogDebug("No additional licensing public key configured.");
+        }
+
+        AddKeysFromJwks(keys, _options.AdditionalJwksJson, "additional");
+
+        return keys;
+    }
+
+    private string? ResolvePrimaryPublicKeyPem()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.PublicKeyPem))
+        {
+            return _options.PublicKeyPem;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.PublicKeyPemPath))
+        {
+            if (!File.Exists(_options.PublicKeyPemPath))
+            {
+                throw new FileNotFoundException(
+                    $"Configured licensing public key file was not found: {_options.PublicKeyPemPath}",
+                    _options.PublicKeyPemPath);
+            }
+
+            return File.ReadAllText(_options.PublicKeyPemPath);
+        }
+
+        if (_options.UseEmbeddedPublicKeyFallback)
+        {
+            _logger.LogDebug("Using embedded licensing public key fallback.");
+            return EmbeddedLicensingKeys.PrimaryPublicKeyPem;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<SecurityKey> CreateKnownKidKeys(string publicKeyPem)
+    {
+        return KnownKeyIds.Select(kid =>
+        {
+            var ecdsa = CreateEcdsaFromPem(publicKeyPem);
+            return (SecurityKey)new ECDsaSecurityKey(ecdsa) { KeyId = kid };
+        });
+    }
+
+    private void AddKeysFromJwks(List<SecurityKey> keys, string? jwksJson, string label)
+    {
+        if (string.IsNullOrWhiteSpace(jwksJson))
+        {
+            return;
+        }
+
+        var jwks = new JsonWebKeySet(jwksJson);
+        if (jwks.Keys.Count == 0)
+        {
+            _logger.LogWarning("Configured {Label} JWKS document did not contain any keys.", label);
+            return;
+        }
+
+        foreach (var key in jwks.Keys)
+        {
+            keys.Add(key);
+        }
+
+        _logger.LogInformation("Loaded {Count} {Label} JWKS signing keys for license validation.", jwks.Keys.Count, label);
     }
 
     private LicenseInfo ParseLicense(JwtSecurityToken token, IEnumerable<Claim> claims)

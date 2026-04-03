@@ -27,3 +27,12 @@ pre {
 .navbar-brand {
     font-size: 1.25rem;
 }
+
+.portal-details dt {
+    font-weight: 600;
+    color: #6c757d;
+}
+
+.portal-details dd {
+    margin-bottom: 0.75rem;
+}
