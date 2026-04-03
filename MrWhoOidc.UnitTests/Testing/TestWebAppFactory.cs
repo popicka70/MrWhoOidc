@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using MrWhoOidc.WebAuth; // Program
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -20,6 +22,8 @@ namespace MrWhoOidc.UnitTests.Testing;
 /// </summary>
 internal static class TestWebAppFactory
 {
+    private const string ReloadConfigOnChangeKey = "hostBuilder:reloadConfigOnChange";
+
     internal static WebApplicationFactory<Program> CreateInMemory()
     {
         // Use a unique database name per factory instance to avoid conflicts when tests run in parallel
@@ -29,6 +33,7 @@ internal static class TestWebAppFactory
             .WithWebHostBuilder(b =>
             {
                 b.UseEnvironment("Development");
+                b.UseSetting(ReloadConfigOnChangeKey, "false");
                 // EARLY flags so Program.cs sees them during registration
                 b.UseSetting("Testing:UseInMemoryAuthDb", "true");
                 b.UseSetting("Testing:SkipAuthMigrations", "true");
@@ -76,6 +81,8 @@ internal static class TestWebAppFactory
                 // Override services AFTER all other registration (this runs last)
                 b.ConfigureTestServices(services =>
                 {
+                    services.AddSingleton<IFileVersionProvider, NoopFileVersionProvider>();
+
                     // Override TenantAccessor to automatically set default tenant for test scopes
                     services.AddScoped<ITenantAccessor>(sp =>
                     {
@@ -92,6 +99,7 @@ internal static class TestWebAppFactory
             .WithWebHostBuilder(b =>
             {
                 b.UseEnvironment("Development");
+                b.UseSetting(ReloadConfigOnChangeKey, "false");
                 // Don't set in-memory flag here. Expect a real connection string.
                 var cs = Environment.GetEnvironmentVariable("AUTHDB__CONNECTIONSTRING")
                          ?? Environment.GetEnvironmentVariable("AUTHDB_CONNECTIONSTRING")
@@ -153,6 +161,11 @@ internal sealed class DefaultTenantSeedingService : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+internal sealed class NoopFileVersionProvider : IFileVersionProvider
+{
+    public string AddFileVersionToPath(PathString requestPathBase, string path) => path;
 }
 
 /// <summary>

@@ -20,6 +20,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/admin",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/admin/api/bcl/alerts/snapshot",
     "Methods": "GET",
     "RateLimiters": [
@@ -1255,6 +1264,15 @@
     "IsAnonymous": false
   },
   {
+    "Pattern": "/health",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": false
+  },
+  {
     "Pattern": "/health/backchannel",
     "Methods": "GET",
     "RateLimiters": [],
@@ -1692,6 +1710,15 @@
     "Authz": null,
     "HasAntiforgery": false,
     "HasCors": true,
+    "IsAnonymous": false
+  },
+  {
+    "Pattern": "/t/{slug}/admin",
+    "Methods": "GET",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
     "IsAnonymous": false
   },
   {
