@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "tenants": [
+    {
+      "slug": "default",
+      "name": "Default Tenant",
+      "clients": [
+        {
+          "clientId": "portal-web",
+          "clientName": "Licensing Portal Web",
+          "requirePkce": true,
+          "requireConsent": false,
+          "allowLocalLogin": true,
+          "allowExternalIdp": true,
+          "allowedLoginRedirectUris": [
+            "http://localhost:8088/portal-callback.html"
+          ],
+          "allowedLogoutRedirectUris": [
+            "http://localhost:8088/portal.html",
+            "http://localhost:8088/"
+          ],
+          "allowedScopes": [
+            "openid",
+            "profile",
+            "email",
+            "offline_access"
+          ]
+        }
+      ]
+    }
+  ]
+}

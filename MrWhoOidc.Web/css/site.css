@@ -258,6 +258,17 @@ pre {
     margin-bottom: 0.75rem;
 }
 
+.portal-signed-in-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.table td,
+.table th {
+    vertical-align: middle;
+}
+
 /* ===== Footer ===== */
 .site-footer {
     background: var(--mrwho-nav);
