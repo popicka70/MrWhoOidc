@@ -2,6 +2,8 @@
 
 Get MrWhoOidc running locally in 15 minutes for development and testing.
 
+Estimated time for the seeded Docker path is 3-5 minutes on a clean machine. The commands below use `docker compose` (Compose V2). If your environment still only provides `docker-compose`, substitute that command name.
+
 ## Prerequisites
 
 Ensure you have the following installed:
@@ -9,6 +11,7 @@ Ensure you have the following installed:
 - **Docker Desktop** (v24+) or **Podman** with Docker Compose
 - **.NET 10 SDK** (for running tests, AppHost, or building locally)
 - **Git** (for cloning the repository)
+- **4 GB RAM recommended** and **2-3 GB free disk space** for containers, images, and build layers
 
 **Optional:**
 - **Visual Studio 2022** or **VS Code** with C# extensions
@@ -42,6 +45,8 @@ POSTGRES_PASSWORD=YourSecurePassword123!
 # Required: Public URL (use localhost for development)
 OIDC_PUBLIC_BASE_URL=https://localhost:8443
 ```
+
+For the seeded development stack, the included development certificate already matches `CERT_PASSWORD=changeit`, and `BOOTSTRAP_TOKEN` is not required.
 
 **Optional for development:**
 
@@ -107,6 +112,12 @@ curl -k https://localhost:8443/t/default/.well-known/openid-configuration | jq
 - `authorization_endpoint`: `https://localhost:8443/t/default/authorize`
 - `token_endpoint`: `https://localhost:8443/t/default/token`
 - `jwks_uri`: `https://localhost:8443/jwks`
+
+For a fuller verification pass, run:
+
+```bash
+bash ./scripts/verify-installation.sh
+```
 
 ### Check Health Endpoints
 
@@ -178,7 +189,7 @@ See [../example-applications-guide.md](../example-applications-guide.md) for the
 **1. Get Authorization Code:**
 
 ```
-https://localhost:8443/authorize?
+https://localhost:8443/t/default/authorize?
   client_id=your-client-id&
   redirect_uri=https://localhost:7000/callback&
   response_type=code&
@@ -191,7 +202,7 @@ https://localhost:8443/authorize?
 **2. Exchange Code for Tokens:**
 
 ```bash
-curl -k -X POST https://localhost:8443/token \
+curl -k -X POST https://localhost:8443/t/default/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code" \
   -d "code=AUTH_CODE_FROM_STEP_1" \
@@ -214,7 +225,7 @@ curl -k -X POST https://localhost:8443/token \
 **3. Call UserInfo Endpoint:**
 
 ```bash
-curl -k https://localhost:8443/userinfo \
+curl -k https://localhost:8443/t/default/userinfo \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
@@ -259,6 +270,31 @@ If not running, check logs:
 docker compose -f docker-compose.dev.yml logs webauth
 ```
 
+### Issue: Port 8443, 5001, 5003, 5173, or 7149 Is Already In Use
+
+**Symptom:** Docker Compose fails to start one or more containers with an "address already in use" error.
+
+**Solution:** Stop the conflicting process or override the published port mapping before retrying.
+
+```bash
+# Linux
+sudo lsof -i :8443
+sudo lsof -i :5001
+```
+
+If you need a deeper checklist, use [../troubleshooting/local-development.md](../troubleshooting/local-development.md).
+
+### Issue: First Startup Looks Stuck
+
+**Symptom:** Containers are still starting after `docker compose -f docker-compose.dev.yml up -d --build`.
+
+**Solution:** The first run has to build multiple images and may take a minute or two. Re-check status before assuming failure:
+
+```bash
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs --tail=100 webauth
+```
+
 ### Issue: Need a Production-Like Empty Database
 
 The development stack intentionally auto-seeds data. For a fresh production-style environment, use `docker-compose.yml` and the bootstrap flow documented in [../production-setup-guide.md](../production-setup-guide.md).
@@ -272,10 +308,6 @@ dotnet run --project MrWhoOidc.AppHost
 ```
 
 This launches the core auth server and the primary .NET demo applications in an IDE-friendly workflow.
-
-```bash
-docker compose logs webauth
-```
 
 ### Issue: Database Connection Failed
 
@@ -358,6 +390,7 @@ To test IdP chaining:
 1. Navigate to **Admin → Identity Providers**
 2. Click **New Provider**
 3. Select provider type (OIDC, OAuth, SAML)
+
 4. Enter provider configuration
 5. Test the connection
 

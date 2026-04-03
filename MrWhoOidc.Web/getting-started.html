@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Install MrWhoOidc locally with Docker Compose. Clone, configure, bootstrap your first tenant, and verify the identity provider in minutes.">
+    <meta name="description" content="Install MrWhoOidc locally with Docker Compose. Follow the public deployment path, bootstrap your first tenant, and verify the identity provider in minutes.">
     <meta name="robots" content="index,follow">
     <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
@@ -49,8 +49,8 @@
                         <p class="section-kicker mb-2">Installation guide</p>
                         <h1 class="display-5 fw-bold mb-3">Get MrWhoOidc running locally.</h1>
                         <p class="lead">
-                            From clone to a working identity provider with tenant-scoped discovery in minutes.
-                            All you need is Docker and Git.
+                            This page covers the public Docker deployment path.
+                            Estimated time: 3-5 minutes on a typical machine.
                         </p>
                     </div>
                 </div>
@@ -67,7 +67,7 @@
                             <div class="col-md-6">
                                 <div class="feature-card p-3 h-100">
                                     <strong>Docker &amp; Docker Compose</strong>
-                                    <p class="text-secondary small mb-0">Docker Desktop or Docker Engine with Compose V2 plugin.</p>
+                                    <p class="text-secondary small mb-0">Docker Desktop or Docker Engine with the Compose V2 plugin. If you only have <code>docker-compose</code>, substitute that command name in the examples below.</p>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -76,6 +76,23 @@
                                     <p class="text-secondary small mb-0">To clone the public deployment repository.</p>
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Memory</strong>
+                                    <p class="text-secondary small mb-0">4 GB RAM recommended so the database and supporting containers start comfortably.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Disk Space</strong>
+                                    <p class="text-secondary small mb-0">Plan for roughly 2-3 GB of free disk space for images, layers, and local data.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info small mb-5">
+                            <i class="bi bi-info-circle me-1"></i>
+                            This guide documents the <strong>public deployment assets</strong>. If you are working from the source repository, prefer its seeded <code>docker-compose.dev.yml</code> workflow for the fastest local development path.
                         </div>
 
                         <!-- Step 1 -->
@@ -138,6 +155,7 @@ curl -k -I https://localhost:8443/admin/clients
 
 # Tenant JWKS (should return signing keys)
 curl -k https://localhost:8443/t/default/jwks</code></pre>
+                                <p class="text-secondary small mb-0">Expected discovery fields include <code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>.</p>
                             </div>
                         </div>
 
@@ -153,6 +171,19 @@ curl -k https://localhost:8443/t/default/jwks</code></pre>
                                     <li>Try the example applications (Blazor, Razor, React, Go) in the repo's <code>Examples/</code> directory.</li>
                                     <li>Use the <strong>CLI tool</strong> (<code>mrwho-cli</code>) for scripted tenant and client administration.</li>
                                     <li>Run the <strong>health check script</strong>: <code>bash ./scripts/health-check.sh</code></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">5</div>
+                            <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Troubleshoot Quickly</h3>
+                                <p class="text-secondary">Most first-run issues come from Docker not running yet, startup taking longer than expected, or local ports already being used.</p>
+                                <ul class="text-secondary mb-0">
+                                    <li>If port <code>8443</code> is busy, stop the conflicting process or remap the published port in <code>.env</code>.</li>
+                                    <li>If the stack looks stuck, wait for the initial image pulls and migrations to finish, then re-run <code>docker compose ps</code>.</li>
+                                    <li>If Docker is unavailable, start the daemon first and retry.</li>
                                 </ul>
                             </div>
                         </div>

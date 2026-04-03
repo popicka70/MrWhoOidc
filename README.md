@@ -9,6 +9,8 @@ A production-ready OpenID Connect (OIDC) and OAuth 2.0 provider built on .NET 10
 
 ## Local Development Quick Start
 
+Estimated time: 3-5 minutes on a typical development machine. The commands below use `docker compose` (Compose V2). If your Docker installation still exposes the legacy `docker-compose` binary, replace the command form accordingly.
+
 Start the full development stack, including seeded sample applications:
 
 ```bash
@@ -23,7 +25,12 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 # Verify the auth server is up.
 curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+
+# Run the broader smoke test.
+bash ./scripts/verify-installation.sh
 ```
+
+The discovery document should include fields such as `issuer`, `authorization_endpoint`, `token_endpoint`, and `jwks_uri`.
 
 The development stack starts:
 - MrWhoOidc WebAuth at `https://localhost:8443`
@@ -92,6 +99,7 @@ See [docs/example-applications-guide.md](docs/example-applications-guide.md) for
 
 ### Start Here
 - [docs/for-developers/quickstart-15-min.md](docs/for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [docs/troubleshooting/local-development.md](docs/troubleshooting/local-development.md) - Common local startup, port, certificate, and Docker issues
 - [docs/index.md](docs/index.md) - Documentation hub by audience and workflow
 - [docs/production-setup-guide.md](docs/production-setup-guide.md) - Production bootstrap, environment variables, and cloud deployment notes
 - [docs/deployment-guide.md](docs/deployment-guide.md) - Full deployment lifecycle and container operations

@@ -6,6 +6,7 @@ This hub points to the active documentation path for the current codebase. Use i
 
 ### Developers
 - [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md) - Local development with the seeded Docker stack
+- [troubleshooting/local-development.md](troubleshooting/local-development.md) - Local Docker, port, and certificate troubleshooting
 - [developer-guide.md](developer-guide.md) - Integration guide for discovery, authorization, token exchange, JAR/JARM, and DPoP
 - [example-applications-guide.md](example-applications-guide.md) - Demo applications, sample architecture, and which example to use
 - [../e2e/README.md](../e2e/README.md) - Browser E2E test suite
@@ -31,8 +32,9 @@ This hub points to the active documentation path for the current codebase. Use i
 ### Local Development
 1. Start with [for-developers/quickstart-15-min.md](for-developers/quickstart-15-min.md).
 2. Use `docker-compose.dev.yml` for the seeded local stack.
-3. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
-4. Use [../e2e/README.md](../e2e/README.md) for browser tests.
+3. Use [troubleshooting/local-development.md](troubleshooting/local-development.md) if Docker, ports, certificates, or startup timing cause issues.
+4. Use [example-applications-guide.md](example-applications-guide.md) to choose a demo application.
+5. Use [../e2e/README.md](../e2e/README.md) for browser tests.
 
 ### Production Deployment
 1. Read [production-setup-guide.md](production-setup-guide.md) for first-run bootstrap requirements.
