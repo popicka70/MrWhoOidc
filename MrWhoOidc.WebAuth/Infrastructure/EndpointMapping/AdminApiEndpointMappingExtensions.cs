@@ -35,6 +35,10 @@ public static class AdminApiEndpointMappingExtensions
         // Multi-tenant admin API routes for tenant-aware endpoints
         var tenantAdmin = app.MapGroup("/t/{slug}/admin/api").RequireAuthorization("tenant-admin").RequireRateLimiting("rl-admin");
 
+        // Friendly entry points for the admin UI.
+        app.MapGet("/admin", static () => Results.Redirect("/admin/clients", permanent: false));
+        app.MapGet("/t/{slug}/admin", static (string slug) => Results.Redirect($"/t/{slug}/admin/clients", permanent: false));
+
         // Client Secrets Management (Phase 2: Secret Rotation)
         MapClientSecretsEndpoints(admin);
         MapClientSecretsEndpoints(tenantAdmin);
@@ -90,6 +94,52 @@ public static class AdminApiEndpointMappingExtensions
         // BCL outbox admin endpoints
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(admin);
         ProviderAndBclEndpoints.MapBclOutboxEndpoints(tenantAdmin);
+
+        // Root liveness/readiness endpoint used by public docs and operators.
+        app.MapGet("/health", async (AuthDbContext db, ILoggerFactory loggerFactory, CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("RootHealth");
+
+            try
+            {
+                if (!await db.Database.CanConnectAsync(ct))
+                {
+                    return Results.Problem(
+                        statusCode: 503,
+                        title: "Unhealthy",
+                        detail: "Database connection failed.",
+                        instance: "/health");
+                }
+
+                var hasTenants = await db.Tenants.AsNoTracking().AnyAsync(ct);
+
+                return Results.Ok(new
+                {
+                    status = hasTenants ? "healthy" : "degraded",
+                    database = "healthy",
+                    bootstrapRequired = !hasTenants,
+                    checks = new
+                    {
+                        issuer = "/health/issuer",
+                        globalAuth = "/health/global-auth",
+                        clientSecrets = "/health/client-secrets",
+                        backchannel = "/health/backchannel",
+                        forwardedHeaders = "/health/forwarded-headers"
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Root health probe failed.");
+
+                return Results.Problem(
+                    statusCode: 503,
+                    title: "Unhealthy",
+                    detail: "Health probe failed while checking application dependencies.",
+                    instance: "/health");
+            }
+        }).WithName("RootHealth");
+
         // Lightweight health endpoint for BCL dispatcher
         app.MapGet("/health/backchannel", async (AuthDbContext db, BackchannelRuntimeState state, CancellationToken ct) =>
         {
