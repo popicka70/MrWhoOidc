@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Contact the MrWhoOidc maintainers, open a GitHub issue, or jump to the public deployment documentation.">
+    <meta name="description" content="Contact the MrWhoOidc maintainers, open a GitHub issue, or review deployment documentation.">
     <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Contact – MrWhoOidc">
@@ -17,95 +18,123 @@
     <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+    <!-- Nav -->
     <nav class="navbar navbar-expand-lg navbar-dark site-nav">
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="getting-started.html">Getting Started</a></li>
                     <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link active" href="contact.html">Contact</a></li>
-                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
-                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal Prototype</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
     <main>
-    <section class="py-5 page-section">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-lg-6">
-                    <p class="section-kicker mb-2">Support and questions</p>
-                    <h1 class="mb-4">Contact</h1>
-                    <p class="text-secondary">
-                        Have questions about MrWhoOidc, need help with integration, or want to
-                        report an issue? Reach out through any of the channels below.
-                    </p>
 
-                    <div class="card border-0 shadow-sm mt-4">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center mb-3">
-                                <i class="bi bi-envelope-fill text-primary fs-4 me-3"></i>
-                                <div>
-                                    <h6 class="mb-0">Email</h6>
+        <section class="hero-surface py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-6 text-center">
+                        <p class="section-kicker mb-2">Support &amp; questions</p>
+                        <h1 class="display-5 fw-bold mb-3">Get in touch.</h1>
+                        <p class="lead">Have questions, need integration help, or want to report an issue?</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-6">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100 text-center">
+                                    <i class="bi bi-envelope-fill text-primary fs-2 mb-3 d-block"></i>
+                                    <h3 class="h6 fw-bold">Email</h3>
                                     <a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-github text-primary fs-4 me-3"></i>
-                                <div>
-                                    <h6 class="mb-0">GitHub</h6>
-                                    <a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">
-                                        github.com/popicka70/MrWho
-                                    </a>
-                                    <p class="text-secondary small mb-0">
-                                        Open an issue or start a discussion.
-                                    </p>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100 text-center">
+                                    <i class="bi bi-github text-primary fs-2 mb-3 d-block"></i>
+                                    <h3 class="h6 fw-bold">GitHub</h3>
+                                    <a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">popicka70/MrWho</a>
+                                    <p class="text-secondary small mb-0 mt-1">Open an issue or start a discussion.</p>
                                 </div>
                             </div>
-
-                            <hr>
-
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-book-half text-primary fs-4 me-3"></i>
-                                <div>
-                                    <h6 class="mb-0">Deployment docs</h6>
-                                    <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">
-                                        github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md
-                                    </a>
-                                    <p class="text-secondary small mb-0">
-                                        Start here for Docker setup, bootstrap, and smoke tests.
-                                    </p>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100 text-center">
+                                    <i class="bi bi-book-half text-primary fs-2 mb-3 d-block"></i>
+                                    <h3 class="h6 fw-bold">Deployment Docs</h3>
+                                    <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a>
+                                    <p class="text-secondary small mb-0 mt-1">Docker setup, bootstrap, and smoke tests.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-4 h-100 text-center">
+                                    <i class="bi bi-rocket-takeoff text-primary fs-2 mb-3 d-block"></i>
+                                    <h3 class="h6 fw-bold">Getting Started</h3>
+                                    <a href="getting-started.html">Installation Guide</a>
+                                    <p class="text-secondary small mb-0 mt-1">Step-by-step local setup.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+
     </main>
 
-    <footer class="site-footer text-light py-4 mt-5">
-        <div class="container text-center">
-            <p class="mb-1">
-                &copy; 2026 MrWhoOidc &middot;
-                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
-                <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="text-light">Deployment guide</a> &middot;
-                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
-            </p>
-            <p class="text-secondary small mb-0">
-                Public site for the MrWhoOidc product, deployment assets, and roadmap direction.
-            </p>
+    <!-- Footer -->
+    <footer class="site-footer text-light py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-6 col-md-3">
+                    <h6>Product</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="privacy.html">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Resources</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Community</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/discussions" target="_blank" rel="noopener">Discussions</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Contact</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
+                        <li><a href="portal.html">Portal Roadmap</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-secondary mt-4 mb-3">
+            <p class="text-center text-secondary small mb-0">&copy; 2026 MrWhoOidc. Open-source identity infrastructure.</p>
         </div>
     </footer>
 

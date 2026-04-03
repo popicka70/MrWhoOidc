@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Install MrWhoOidc locally with Docker Compose. Clone, configure, bootstrap your first tenant, and verify the identity provider in minutes.">
+    <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MrWhoOidc">
+    <meta property="og:title" content="Getting Started – MrWhoOidc">
+    <meta property="og:description" content="Step-by-step guide to install MrWhoOidc with Docker Compose, bootstrap a tenant, and verify the OIDC endpoints.">
+    <meta property="og:url" content="https://mrwhooidc.com/getting-started.html">
+    <link rel="canonical" href="https://mrwhooidc.com/getting-started.html">
+    <title>Getting Started – MrWhoOidc</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+    <!-- Nav -->
+    <nav class="navbar navbar-expand-lg navbar-dark site-nav">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="index.html">
+                <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="getting-started.html">Getting Started</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+
+        <!-- Header -->
+        <section class="hero-surface py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8 text-center">
+                        <p class="section-kicker mb-2">Installation guide</p>
+                        <h1 class="display-5 fw-bold mb-3">Get MrWhoOidc running locally.</h1>
+                        <p class="lead">
+                            From clone to a working identity provider with tenant-scoped discovery in minutes.
+                            All you need is Docker and Git.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Prerequisites -->
+        <section class="py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-9">
+                        <h2 class="h4 fw-bold mb-3"><i class="bi bi-check2-square text-primary me-2"></i>Prerequisites</h2>
+                        <div class="row g-3 mb-5">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Docker &amp; Docker Compose</strong>
+                                    <p class="text-secondary small mb-0">Docker Desktop or Docker Engine with Compose V2 plugin.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong>Git</strong>
+                                    <p class="text-secondary small mb-0">To clone the public deployment repository.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 1 -->
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">1</div>
+                            <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Clone &amp; Configure</h3>
+                                <p class="text-secondary">Clone the public deployment repo, generate a TLS certificate for localhost, and create your environment file.</p>
+<pre><code>git clone https://github.com/popicka70/MrWho.git
+cd MrWho
+
+bash ./scripts/generate-cert.sh localhost changeit
+cp .env.example .env</code></pre>
+                                <p class="text-secondary small">Open <code>.env</code> and set these values:</p>
+                                <ul class="text-secondary small">
+                                    <li><code>POSTGRES_PASSWORD</code> — database password</li>
+                                    <li><code>CERT_PASSWORD</code> — <code>changeit</code> (matches the cert generation)</li>
+                                    <li><code>OIDC_PUBLIC_BASE_URL</code> — <code>https://localhost:8443</code></li>
+                                    <li><code>BOOTSTRAP_TOKEN</code> — a temporary secret for first-time setup (any strong string)</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">2</div>
+                            <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Start &amp; Bootstrap</h3>
+                                <p class="text-secondary">Start the stack with Docker Compose, then bootstrap your first tenant.</p>
+<pre><code>docker compose up -d
+
+curl -k -X POST https://localhost:8443/bootstrap \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Token: ${BOOTSTRAP_TOKEN}" \
+  -d '{
+    "tenantSlug": "default",
+    "tenantName": "Default Tenant",
+    "adminEmail": "admin@example.com",
+    "adminPassword": "ChangeMeNow123!",
+    "adminName": "Administrator"
+  }'</code></pre>
+                                <div class="alert alert-warning small mt-3 mb-0">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    <strong>Important:</strong> After bootstrap, remove <code>BOOTSTRAP_TOKEN</code> from <code>.env</code> and run <code>docker compose up -d</code> again. The bootstrap endpoint should no longer be available.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">3</div>
+                            <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Verify</h3>
+                                <p class="text-secondary">Confirm your installation is working with these smoke tests.</p>
+<pre><code># Tenant-scoped discovery (should return JSON configuration)
+curl -k https://localhost:8443/t/default/.well-known/openid-configuration
+
+# Admin UI (should redirect to tenant login page)
+curl -k -I https://localhost:8443/admin/clients
+
+# Tenant JWKS (should return signing keys)
+curl -k https://localhost:8443/t/default/jwks</code></pre>
+                            </div>
+                        </div>
+
+                        <!-- Step 4 -->
+                        <div class="d-flex align-items-start gap-3 mb-4">
+                            <div class="step-number flex-shrink-0">4</div>
+                            <div class="flex-grow-1">
+                                <h3 class="h5 fw-bold">Explore</h3>
+                                <p class="text-secondary">You're up and running. Here's what to do next:</p>
+                                <ul class="text-secondary">
+                                    <li>Log into the <strong>Admin UI</strong> at <code>https://localhost:8443/admin</code> with the credentials from bootstrap.</li>
+                                    <li>Create OIDC clients and configure scopes for your applications.</li>
+                                    <li>Try the example applications (Blazor, Razor, React, Go) in the repo's <code>Examples/</code> directory.</li>
+                                    <li>Use the <strong>CLI tool</strong> (<code>mrwho-cli</code>) for scripted tenant and client administration.</li>
+                                    <li>Run the <strong>health check script</strong>: <code>bash ./scripts/health-check.sh</code></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- What to expect -->
+                        <div class="row g-4 mt-2">
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h4 class="h6 fw-bold"><i class="bi bi-info-circle text-primary me-2"></i>What to expect</h4>
+                                        <ul class="text-secondary small mb-0">
+                                            <li>The admin URL redirects anonymous users to the tenant login page — this is expected behavior.</li>
+                                            <li>The strongest first smoke test is tenant-scoped discovery.</li>
+                                            <li>After removing <code>BOOTSTRAP_TOKEN</code>, <code>POST /bootstrap</code> returns 404.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+                                        <h4 class="h6 fw-bold"><i class="bi bi-book text-primary me-2"></i>More resources</h4>
+                                        <ul class="list-unstyled small mb-0">
+                                            <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a> — production configuration</li>
+                                            <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a> — common issues</li>
+                                            <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a> — source code &amp; scripts</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer text-light py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-6 col-md-3">
+                    <h6>Product</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="privacy.html">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Resources</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Community</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/discussions" target="_blank" rel="noopener">Discussions</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Contact</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
+                        <li><a href="portal.html">Portal Roadmap</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-secondary mt-4 mb-3">
+            <p class="text-center text-secondary small mb-0">&copy; 2026 MrWhoOidc. Open-source identity infrastructure.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

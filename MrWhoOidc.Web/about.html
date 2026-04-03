@@ -3,12 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Learn what MrWhoOidc is, why it exists, and how the public repo is intended to get operators from clone to a working first tenant.">
+    <meta name="description" content="Learn why MrWhoOidc exists, its design principles, technology stack, and how it differs from heavyweight identity frameworks.">
     <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="About MrWhoOidc">
-    <meta property="og:description" content="Standards-first identity infrastructure on .NET with explicit public deployment guidance.">
+    <meta property="og:description" content="Standards-first identity infrastructure on .NET — why it exists and how it's built.">
     <meta property="og:url" content="https://mrwhooidc.com/about.html">
     <link rel="canonical" href="https://mrwhooidc.com/about.html">
     <title>About – MrWhoOidc</title>
@@ -17,108 +18,159 @@
     <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+    <!-- Nav -->
     <nav class="navbar navbar-expand-lg navbar-dark site-nav">
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="getting-started.html">Getting Started</a></li>
                     <li class="nav-item"><a class="nav-link active" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
-                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
-                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal Prototype</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
     <main>
-    <section class="py-5 page-section">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <p class="section-kicker mb-2">Project context</p>
-                    <h1 class="mb-4">About MrWhoOidc</h1>
 
-                    <p>
-                        MrWhoOidc is an open-source OpenID Connect and OAuth 2.0 identity provider
-                        built from the ground up on .NET. It is designed for teams that want full control
-                        over their identity infrastructure without depending on large third-party frameworks.
-                    </p>
-
-                    <h3 class="mt-4">Why MrWhoOidc?</h3>
-                    <p>
-                        Most .NET identity solutions rely on heavyweight libraries that abstract away protocol details.
-                        MrWhoOidc takes a different approach: every OIDC flow is implemented directly against the
-                        specifications, giving you transparency into what your identity provider actually does.
-                    </p>
-
-                    <h3 class="mt-4">Design Principles</h3>
-                    <ul>
-                        <li>
-                            <strong>Standards first</strong> &mdash; strict adherence to OpenID Connect Core,
-                            Discovery, and the latest OAuth 2.0 security extensions (DPoP, PAR, JARM, Token Exchange).
-                        </li>
-                        <li>
-                            <strong>Multi-tenant by default</strong> &mdash; isolated tenants, realms, and
-                            client configurations from day one.
-                        </li>
-                        <li>
-                            <strong>Operationally simple</strong> &mdash; PostgreSQL for persistence, Docker Compose
-                            for deployment, .NET Aspire for local development.
-                        </li>
-                        <li>
-                            <strong>Observable</strong> &mdash; OpenTelemetry instrumentation, structured logging,
-                            and audit trails that make operator behavior easier to inspect.
-                        </li>
-                    </ul>
-
-                    <h3 class="mt-4">Public install model</h3>
-                    <p>
-                        The public repository is intended to get evaluators from clone to a working first tenant
-                        using explicit Docker setup, a one-time bootstrap, and tenant-scoped smoke tests. This site
-                        now reflects that workflow instead of implying that a blank database becomes usable by itself.
-                    </p>
-
-                    <h3 class="mt-4">Technology</h3>
-                    <p>
-                        MrWhoOidc is built on .NET 10, uses EF Core with PostgreSQL, and ships with
-                        a CLI administration tool (<code>mrwho-cli</code>), a full admin UI, and
-                        example client applications in C#, React, and Go.
-                    </p>
-
-                    <h3 class="mt-4">Open Source</h3>
-                    <p>
-                        The project is developed in the open on GitHub. Contributions, issues, and
-                        discussions are welcome.
-                    </p>
-                    <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-dark" target="_blank" rel="noopener">
-                        <i class="bi bi-github me-1"></i>View on GitHub
-                    </a>
+        <!-- Header -->
+        <section class="hero-surface py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8 text-center">
+                        <p class="section-kicker mb-2">About the project</p>
+                        <h1 class="display-5 fw-bold mb-3">Identity infrastructure, built transparent.</h1>
+                        <p class="lead">
+                            MrWhoOidc is an open-source identity provider for teams that want full control
+                            over their authentication stack — without heavyweight frameworks or vendor lock-in.
+                        </p>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+
+        <section class="py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+
+                        <h2 class="h4 fw-bold mt-2 mb-3">Why MrWhoOidc?</h2>
+                        <p>
+                            Most .NET identity solutions rely on heavyweight libraries that abstract away protocol details.
+                            MrWhoOidc takes a different approach: every OIDC flow is implemented directly against the
+                            specifications, giving you full transparency into what your identity provider actually does.
+                        </p>
+                        <p>
+                            If your team needs to understand, debug, or extend every aspect of auth code exchange,
+                            token binding, or key rotation — MrWhoOidc gives you that control without trading off
+                            production readiness.
+                        </p>
+
+                        <h2 class="h4 fw-bold mt-5 mb-3">Design Principles</h2>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong><i class="bi bi-file-earmark-code text-primary me-2"></i>Standards first</strong>
+                                    <p class="text-secondary small mb-0">Strict adherence to OpenID Connect Core, Discovery, and the latest OAuth 2.0 security extensions.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong><i class="bi bi-building text-primary me-2"></i>Multi-tenant by default</strong>
+                                    <p class="text-secondary small mb-0">Isolated tenants, realms, and client configurations from day one.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong><i class="bi bi-box-seam text-primary me-2"></i>Operationally simple</strong>
+                                    <p class="text-secondary small mb-0">PostgreSQL for persistence, Docker Compose for deployment, .NET Aspire for local development.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-card p-3 h-100">
+                                    <strong><i class="bi bi-speedometer2 text-primary me-2"></i>Observable</strong>
+                                    <p class="text-secondary small mb-0">OpenTelemetry instrumentation, structured logging, and audit trails for full operational visibility.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h2 class="h4 fw-bold mt-5 mb-3">Technology Stack</h2>
+                        <p>
+                            MrWhoOidc is built on <strong>.NET 10</strong>, uses <strong>EF Core with PostgreSQL</strong>,
+                            and ships with a CLI administration tool (<code>mrwho-cli</code>), a full admin UI,
+                            and example client applications in C#, React, and Go.
+                        </p>
+                        <p>
+                            Deployment is supported via Docker Compose with production-ready templates, TLS certificate
+                            generation scripts, and a one-time bootstrap flow for first tenant creation.
+                        </p>
+
+                        <h2 class="h4 fw-bold mt-5 mb-3">Open Source</h2>
+                        <p>
+                            The project is developed in the open on GitHub. Contributions, issues, and
+                            discussions are welcome.
+                        </p>
+                        <div class="d-flex flex-wrap gap-3">
+                            <a href="https://github.com/popicka70/MrWho" class="btn btn-outline-dark" target="_blank" rel="noopener">
+                                <i class="bi bi-github me-1"></i>View on GitHub
+                            </a>
+                            <a href="getting-started.html" class="btn btn-accent">
+                                <i class="bi bi-rocket-takeoff me-1"></i>Get Started
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
-    <footer class="site-footer text-light py-4 mt-5">
-        <div class="container text-center">
-            <p class="mb-1">
-                &copy; 2026 MrWhoOidc &middot;
-                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
-                <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="text-light">Deployment guide</a> &middot;
-                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
-            </p>
-            <p class="text-secondary small mb-0">
-                Public site for the MrWhoOidc product, deployment assets, and roadmap direction.
-            </p>
+    <!-- Footer -->
+    <footer class="site-footer text-light py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-6 col-md-3">
+                    <h6>Product</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="privacy.html">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Resources</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Community</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/discussions" target="_blank" rel="noopener">Discussions</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Contact</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
+                        <li><a href="portal.html">Portal Roadmap</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-secondary mt-4 mb-3">
+            <p class="text-center text-secondary small mb-0">&copy; 2026 MrWhoOidc. Open-source identity infrastructure.</p>
         </div>
     </footer>
 

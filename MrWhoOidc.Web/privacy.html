@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Privacy information for the MrWhoOidc website and public product pages.">
+    <meta name="description" content="Privacy information for the MrWhoOidc website and the self-hosted identity provider.">
     <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Privacy Policy – MrWhoOidc">
@@ -17,78 +18,106 @@
     <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+    <!-- Nav -->
     <nav class="navbar navbar-expand-lg navbar-dark site-nav">
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="getting-started.html">Getting Started</a></li>
                     <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="privacy.html">Privacy</a></li>
-                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal Prototype</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
     <main>
-    <section class="py-5 page-section">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <p class="section-kicker mb-2">Privacy</p>
-                    <h1 class="mb-4">Privacy Policy</h1>
-                    <p class="text-secondary">Last updated: March 2026</p>
 
-                    <h4 class="mt-4">Data We Collect</h4>
-                    <p>
-                        MrWhoOidc is a self-hosted identity provider. When you deploy MrWhoOidc,
-                        all identity data (users, credentials, tokens, sessions) stays on your own
-                        infrastructure. No data is transmitted to MrWhoOidc maintainers or any
-                        third-party service.
-                    </p>
+        <section class="py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <p class="section-kicker mb-2">Privacy</p>
+                        <h1 class="mb-4">Privacy Policy</h1>
+                        <p class="text-secondary">Last updated: March 2026</p>
 
-                    <h4 class="mt-4">This Website</h4>
-                    <p>
-                        This informational website does not use cookies for tracking, does not collect
-                        personal data, and does not include third-party analytics.
-                    </p>
-                    <p>
-                        The site currently loads Bootstrap and Bootstrap Icons from the jsDelivr CDN.
-                        Standard request metadata required to deliver those static assets may be processed
-                        by that CDN provider. No site-specific analytics or marketing tags are embedded here.
-                    </p>
+                        <h4 class="mt-4">Data We Collect</h4>
+                        <p>
+                            MrWhoOidc is a self-hosted identity provider. When you deploy MrWhoOidc,
+                            all identity data (users, credentials, tokens, sessions) stays on your own
+                            infrastructure. No data is transmitted to MrWhoOidc maintainers or any
+                            third-party service.
+                        </p>
 
-                    <h4 class="mt-4">Contact</h4>
-                    <p>
-                        If you have privacy-related questions, contact us at
-                        <a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a>.
-                    </p>
+                        <h4 class="mt-4">This Website</h4>
+                        <p>
+                            This informational website does not use cookies for tracking, does not collect
+                            personal data, and does not include third-party analytics.
+                        </p>
+                        <p>
+                            The site loads Bootstrap and Bootstrap Icons from the jsDelivr CDN.
+                            Standard request metadata required to deliver those static assets may be processed
+                            by that CDN provider. No site-specific analytics or marketing tags are embedded.
+                        </p>
+
+                        <h4 class="mt-4">Contact</h4>
+                        <p>
+                            If you have privacy-related questions, contact us at
+                            <a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a>.
+                        </p>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+
     </main>
 
-    <footer class="site-footer text-light py-4 mt-5">
-        <div class="container text-center">
-            <p class="mb-1">
-                &copy; 2026 MrWhoOidc &middot;
-                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
-                <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="text-light">Deployment guide</a> &middot;
-                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
-            </p>
-            <p class="text-secondary small mb-0">
-                Public site for the MrWhoOidc product, deployment assets, and roadmap direction.
-            </p>
+    <!-- Footer -->
+    <footer class="site-footer text-light py-5">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-6 col-md-3">
+                    <h6>Product</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="privacy.html">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Resources</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Community</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/discussions" target="_blank" rel="noopener">Discussions</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-md-3">
+                    <h6>Contact</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
+                        <li><a href="portal.html">Portal Roadmap</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-secondary mt-4 mb-3">
+            <p class="text-center text-secondary small mb-0">&copy; 2026 MrWhoOidc. Open-source identity infrastructure.</p>
         </div>
     </footer>
 

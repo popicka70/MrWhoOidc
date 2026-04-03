@@ -3,12 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="MrWhoOidc features: OIDC and OAuth flows, security extensions, multi-tenant administration, and public deployment tooling.">
+    <meta name="description" content="MrWhoOidc features: OIDC and OAuth flows, security extensions, multi-tenant administration, developer tooling, and public deployment assets.">
     <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#071120">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="MrWhoOidc">
     <meta property="og:title" content="Features – MrWhoOidc">
-    <meta property="og:description" content="Modern identity protocol support, administration features, and deployment tooling in the public repo.">
+    <meta property="og:description" content="Modern identity protocol support, security extensions, administration features, and deployment tooling.">
     <meta property="og:url" content="https://mrwhooidc.com/features.html">
     <link rel="canonical" href="https://mrwhooidc.com/features.html">
     <title>Features – MrWhoOidc</title>
@@ -17,118 +18,210 @@
     <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
+    <!-- Nav -->
     <nav class="navbar navbar-expand-lg navbar-dark site-nav">
         <div class="container">
             <a class="navbar-brand fw-bold" href="index.html">
                 <i class="bi bi-shield-lock me-2"></i>MrWhoOidc
             </a>
-            <button class="navbar-toggler" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
                     <li class="nav-item"><a class="nav-link active" href="features.html">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="getting-started.html">Getting Started</a></li>
                     <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
                     <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
-                    <li class="nav-item"><a class="nav-link" href="privacy.html">Privacy</a></li>
-                    <li class="nav-item"><a class="nav-link" href="portal.html">Portal Prototype</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
     <main>
-    <section class="py-5 page-section">
+
+        <!-- Header -->
+        <section class="hero-surface py-5">
+            <div class="container text-center">
+                <p class="section-kicker mb-2">Feature overview</p>
+                <h1 class="display-5 fw-bold mb-3">Everything you need in a modern identity provider.</h1>
+                <p class="lead">Full OIDC/OAuth 2.0 protocol support, advanced security extensions, and multi-tenant administration — built on .NET 10.</p>
+            </div>
+        </section>
+
+        <!-- OIDC & OAuth -->
+        <section id="oidc" class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="feature-category-icon mb-3"><i class="bi bi-key"></i></div>
+                        <h2 class="h4 fw-bold">OpenID Connect &amp; OAuth 2.0</h2>
+                        <p class="text-secondary">Complete protocol implementation directly against the specifications. Every flow is transparent and inspectable.</p>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Authorization Code + PKCE</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Client Credentials</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Device Authorization (RFC 8628)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Token Exchange (RFC 8693)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>CIBA (Backchannel Auth)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>On-Behalf-Of flows</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Refresh Token Rotation</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Discovery &amp; JWKS endpoints</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Security extensions -->
+        <section id="security" class="section-alt py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-shield-lock"></i></div>
+                        <h2 class="h4 fw-bold">Security Extensions</h2>
+                        <p class="text-secondary">Modern security hardening beyond baseline OAuth. Proof-of-possession, pushed requests, and cryptographic response modes.</p>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>DPoP (Proof-of-Possession)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>PAR (Pushed Authorization)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>JAR (JWT Secured Requests)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>JARM (JWT Response Mode)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Back-Channel Logout</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Automatic Key Rotation</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Multi-secret credentials</div></div>
+                            <div class="col-sm-6" id="passkeys"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>WebAuthn / Passkeys (FIDO2)</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Multi-tenancy & Admin -->
+        <section id="tenancy" class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);"><i class="bi bi-building"></i></div>
+                        <h2 id="admin" class="h4 fw-bold">Multi-Tenancy &amp; Administration</h2>
+                        <p class="text-secondary">Isolated tenants with separate realms, a full admin UI, and platform-level management tools.</p>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Tenant isolation with realms</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Admin UI for clients, scopes, roles, users</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Platform admin dashboard</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>External IdP federation</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Consent management</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Configuration audit logging</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Rate limiting per endpoint</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Developer Experience -->
+        <section id="devex" class="section-alt py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="feature-category-icon mb-3"><i class="bi bi-terminal"></i></div>
+                        <h2 class="h4 fw-bold">Developer Experience</h2>
+                        <p class="text-secondary">CLI automation, .NET Aspire integration, example apps, and end-to-end testing for a complete development workflow.</p>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>CLI tool (<code>mrwho-cli</code>)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>.NET Aspire integration</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Docker Compose deployment</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>PostgreSQL + EF Core</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>OpenTelemetry observability</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Example apps (Blazor, React, Go)</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>E2E test suite (Playwright)</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Public deployment assets -->
+        <section id="deployment" class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="feature-category-icon mb-3" style="background:linear-gradient(135deg,#10b981,#34d399);"><i class="bi bi-box-seam"></i></div>
+                        <h2 class="h4 fw-bold">Public Deployment Assets</h2>
+                        <p class="text-secondary">Everything you need to deploy is in the public repository. No hidden setup steps, no guesswork.</p>
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Docker Compose files &amp; overlays</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>.env templates &amp; config reference</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Bootstrap flow for first tenant</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Smoke test guidance</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Troubleshooting documentation</div></div>
+                            <div class="col-sm-6"><div class="feature-card p-3"><i class="bi bi-check-circle text-success me-2"></i>Health-check scripts</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="cta-banner py-5">
+            <div class="container text-center">
+                <h2 class="h3 fw-bold mb-3">Ready to try it?</h2>
+                <p class="mb-4" style="color: rgba(240,246,255,0.75);">Get MrWhoOidc running locally in minutes with Docker Compose.</p>
+                <a href="getting-started.html" class="btn btn-accent btn-lg px-4">
+                    <i class="bi bi-rocket-takeoff me-1"></i>Get Started
+                </a>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer text-light py-5">
         <div class="container">
-            <p class="section-kicker mb-2">Feature overview</p>
-            <h1 class="mb-2">Features</h1>
-            <p class="lead text-secondary mb-5">
-                MrWhoOidc implements a broad set of modern identity protocols and management capabilities.
-            </p>
-
             <div class="row g-4">
-                <div class="col-lg-6">
-                    <h4><i class="bi bi-key me-2 text-primary"></i>OpenID Connect &amp; OAuth 2.0</h4>
-                    <ul class="list-unstyled ms-4">
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Authorization Code + PKCE</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Client Credentials</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Device Authorization (RFC 8628)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Token Exchange (RFC 8693)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> CIBA (Client Initiated Backchannel Auth)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> On-Behalf-Of flows</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Refresh Token Rotation</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Discovery &amp; JWKS endpoints</li>
+                <div class="col-6 col-md-3">
+                    <h6>Product</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="about.html">About</a></li>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="privacy.html">Privacy</a></li>
                     </ul>
                 </div>
-
-                <div class="col-lg-6">
-                    <h4><i class="bi bi-shield-lock me-2 text-primary"></i>Security Extensions</h4>
-                    <ul class="list-unstyled ms-4">
-                        <li><i class="bi bi-check-circle text-success me-1"></i> DPoP (Demonstrating Proof-of-Possession)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> PAR (Pushed Authorization Requests)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> JAR (JWT Secured Authorization Requests)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> JARM (JWT Authorization Response Mode)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Back-Channel Logout</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Automatic Key Rotation</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Multi-secret client credentials</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> WebAuthn / Passkeys (FIDO2)</li>
+                <div class="col-6 col-md-3">
+                    <h6>Resources</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho" target="_blank" rel="noopener">GitHub Repository</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" target="_blank" rel="noopener">Deployment Guide</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/blob/master/docs/troubleshooting.md" target="_blank" rel="noopener">Troubleshooting</a></li>
                     </ul>
                 </div>
-
-                <div class="col-lg-6">
-                    <h4><i class="bi bi-building me-2 text-primary"></i>Multi-Tenancy &amp; Administration</h4>
-                    <ul class="list-unstyled ms-4">
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Tenant isolation with separate realms</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Admin UI for clients, scopes, roles, users</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Platform admin dashboard</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> External identity provider federation</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Consent management</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Configuration audit logging</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Rate limiting per endpoint</li>
+                <div class="col-6 col-md-3">
+                    <h6>Community</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="https://github.com/popicka70/MrWho/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+                        <li><a href="https://github.com/popicka70/MrWho/discussions" target="_blank" rel="noopener">Discussions</a></li>
                     </ul>
                 </div>
-
-                <div class="col-lg-6">
-                    <h4><i class="bi bi-terminal me-2 text-primary"></i>Developer Experience</h4>
-                    <ul class="list-unstyled ms-4">
-                        <li><i class="bi bi-check-circle text-success me-1"></i> CLI tool (<code>mrwho-cli</code>) for automation</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> .NET Aspire integration for local dev</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Docker Compose deployment</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> PostgreSQL persistence (EF Core)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> OpenTelemetry observability</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Example apps (Blazor, Razor, React, Go)</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Comprehensive E2E test suite</li>
-                    </ul>
-                </div>
-
-                <div class="col-lg-6">
-                    <h4><i class="bi bi-box-seam me-2 text-primary"></i>Public deployment assets</h4>
-                    <ul class="list-unstyled ms-4">
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Public Docker Compose files and overlays</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> `.env.example` and configuration reference</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Bootstrap flow for first tenant creation</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Tenant-scoped smoke test guidance</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Troubleshooting and deployment documentation</li>
+                <div class="col-6 col-md-3">
+                    <h6>Contact</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="mailto:info@mrwhooidc.com">info@mrwhooidc.com</a></li>
+                        <li><a href="portal.html">Portal Roadmap</a></li>
                     </ul>
                 </div>
             </div>
-        </div>
-    </section>
-    </main>
-
-    <footer class="site-footer text-light py-4 mt-5">
-        <div class="container text-center">
-            <p class="mb-1">
-                &copy; 2026 MrWhoOidc &middot;
-                <a href="https://github.com/popicka70/MrWho" class="text-light">GitHub</a> &middot;
-                <a href="https://github.com/popicka70/MrWho/blob/master/docs/deployment-guide.md" class="text-light">Deployment guide</a> &middot;
-                <a href="mailto:info@mrwhooidc.com" class="text-light">info@mrwhooidc.com</a>
-            </p>
-            <p class="text-secondary small mb-0">
-                Public site for the MrWhoOidc product, deployment assets, and roadmap direction.
-            </p>
+            <hr class="border-secondary mt-4 mb-3">
+            <p class="text-center text-secondary small mb-0">&copy; 2026 MrWhoOidc. Open-source identity infrastructure.</p>
         </div>
     </footer>
 
