@@ -1,9 +1,10 @@
 const portalConfig = {
     authority: 'https://localhost:8443/t/default',
+    oidcProxyBaseUrl: `${window.location.origin}/oidc/t/default`,
     clientId: 'portal-web',
     redirectUri: `${window.location.origin}/portal-callback.html`,
     postLogoutRedirectUri: `${window.location.origin}/portal.html`,
-    licensingApiBaseUrl: 'https://localhost:7443',
+    licensingApiBaseUrl: `${window.location.origin}/licensing`,
     scope: 'openid profile email offline_access',
     storageKey: 'mrwho.portal.session',
     pkceKey: 'mrwho.portal.pkce'
@@ -16,6 +17,19 @@ const pageState = {
 };
 
 const isDevelopmentOperationsMode = window.location.hostname === 'localhost';
+
+const productPlans = {
+    mrwhopdf: [
+        { key: 'pdf-community', label: 'MrWhoPdf Community' },
+        { key: 'pdf-professional', label: 'MrWhoPdf Professional' },
+        { key: 'pdf-enterprise', label: 'MrWhoPdf Enterprise' }
+    ],
+    mrwhooidc: [
+        { key: 'oidc-community', label: 'MrWhoOidc Community' },
+        { key: 'oidc-professional', label: 'MrWhoOidc Professional' },
+        { key: 'oidc-enterprise', label: 'MrWhoOidc Enterprise' }
+    ]
+};
 
 function randomString(length) {
     const bytes = new Uint8Array(length);
@@ -94,7 +108,15 @@ function parseJwt(token) {
 }
 
 async function fetchJson(url, options = {}) {
-    const response = await fetch(url, options);
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (error) {
+        const networkError = new Error(`Network request failed for ${url}.`);
+        networkError.cause = error;
+        throw networkError;
+    }
+
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
@@ -105,6 +127,15 @@ async function fetchJson(url, options = {}) {
     }
 
     return body;
+}
+
+async function getOidcMetadata() {
+    const metadata = await fetchJson(`${portalConfig.oidcProxyBaseUrl}/.well-known/openid-configuration`);
+    return {
+        ...metadata,
+        authorization_endpoint: `${portalConfig.authority}/authorize`,
+        token_endpoint: `${portalConfig.oidcProxyBaseUrl}/token`
+    };
 }
 
 function setText(id, value) {
@@ -118,6 +149,28 @@ function setVisible(id, visible) {
     const node = document.getElementById(id);
     if (node) {
         node.classList.toggle('d-none', !visible);
+    }
+}
+
+function syncRequestPlanOptions(preferredPlanKey) {
+    const productSelect = document.getElementById('productKey');
+    const planSelect = document.getElementById('planKey');
+    if (!productSelect || !planSelect) {
+        return;
+    }
+
+    const selectedProductKey = productSelect.value;
+    const plans = productPlans[selectedProductKey] || [];
+    const selectedPlanKey = plans.some(plan => plan.key === preferredPlanKey)
+        ? preferredPlanKey
+        : plans[0]?.key;
+
+    planSelect.innerHTML = plans
+        .map(plan => `<option value="${plan.key}">${plan.label}</option>`)
+        .join('');
+
+    if (selectedPlanKey) {
+        planSelect.value = selectedPlanKey;
     }
 }
 
@@ -138,7 +191,7 @@ function renderAlert(kind, message) {
 }
 
 async function beginLogin() {
-    const metadata = await fetchJson(`${portalConfig.authority}/.well-known/openid-configuration`);
+    const metadata = await getOidcMetadata();
     const pkce = await createPkce();
     const url = new URL(metadata.authorization_endpoint);
     url.searchParams.set('client_id', portalConfig.clientId);
@@ -169,7 +222,7 @@ async function finishLogin() {
         throw new Error('OIDC state validation failed.');
     }
 
-    const metadata = await fetchJson(`${portalConfig.authority}/.well-known/openid-configuration`);
+    const metadata = await getOidcMetadata();
     const body = new URLSearchParams();
     body.set('grant_type', 'authorization_code');
     body.set('client_id', portalConfig.clientId);
@@ -236,6 +289,21 @@ async function authorizedJson(path, init = {}) {
     });
 }
 
+async function authorizedFetch(path, init = {}) {
+    const session = loadSession();
+    if (!session?.accessToken) {
+        throw new Error('You are not signed in.');
+    }
+
+    return fetch(`${portalConfig.licensingApiBaseUrl}${path}`, {
+        ...init,
+        headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+            ...(init.headers || {})
+        }
+    });
+}
+
 async function loadPortalContext() {
     try {
         const me = await authorizedJson('/api/portal/me');
@@ -266,14 +334,35 @@ function renderLicenses(licenses) {
         return;
     }
 
-    body.innerHTML = licenses.map(license => `
+    body.innerHTML = licenses.map(license => {
+        const linkedRequest = findRequestForLicense(license.licenseChangeRequestId);
+        const sourceLabel = linkedRequest
+            ? `Request ${shortId(linkedRequest.id)} / ${linkedRequest.status}`
+            : 'Manual grant';
+        const canDownload = license.downloadReady && (!linkedRequest || linkedRequest.status === 'Fulfilled');
+        const actionLabel = canDownload
+            ? `<button type="button" class="btn btn-sm btn-outline-primary" data-download-license-id="${license.id}">Download</button>`
+            : '<span class="text-secondary small">Pending</span>';
+        const validityLabel = `<div>${license.validFrom}</div><div class="license-source-note">until ${license.validUntil ?? 'Open-ended'}</div>`;
+
+        return `
         <tr>
             <td>${license.productKey}</td>
-            <td>${license.planKey}</td>
+            <td><div>${license.planKey}</div><div class="license-source-note">${sourceLabel}</div></td>
             <td>${license.status}</td>
-            <td>${license.validFrom}</td>
-            <td>${license.validUntil ?? 'Open-ended'}</td>
-        </tr>`).join('');
+            <td>${validityLabel}</td>
+            <td>${actionLabel}</td>
+        </tr>`;
+    }).join('');
+}
+
+function findRequestForLicense(requestId) {
+    if (!requestId) {
+        return null;
+    }
+
+    const requests = pageState.me?.licenseRequests || [];
+    return requests.find(request => request.id === requestId) || null;
 }
 
 function shortId(value) {
@@ -485,6 +574,14 @@ async function handleOnboardingSubmit(event) {
 async function handleLicenseRequestSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const availablePlans = productPlans[form.productKey.value] || [];
+    const selectedPlan = availablePlans.find(plan => plan.key === form.planKey.value);
+    if (!selectedPlan) {
+        renderAlert('danger', 'Select a valid plan for the chosen product.');
+        syncRequestPlanOptions();
+        return;
+    }
+
     const payload = {
         organizationId: pageState.me.organization.id,
         productKey: form.productKey.value,
@@ -501,6 +598,7 @@ async function handleLicenseRequestSubmit(event) {
         await loadPortalContext();
         renderAlert('success', 'Request submitted. A license will be issued only after payment is recorded, reconciled, and the request is fulfilled.');
         form.reset();
+        syncRequestPlanOptions();
     } catch (error) {
         renderAlert('danger', error.message);
     }
@@ -532,6 +630,40 @@ async function fulfillLicenseRequest(requestId) {
             createdBy: 'portal-ops'
         })
     });
+}
+
+function getDownloadFileName(response, fallbackFileName) {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    const match = contentDisposition?.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || fallbackFileName;
+}
+
+async function downloadLicenseKey(licenseId) {
+    const response = await authorizedFetch(`/api/licenses/${licenseId}/download`);
+    if (!response.ok) {
+        const text = await response.text();
+        let message = `Request failed with status ${response.status}`;
+        if (text) {
+            try {
+                const body = JSON.parse(text);
+                message = body?.title || body?.detail || message;
+            } catch {
+                message = text;
+            }
+        }
+
+        throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = getDownloadFileName(response, `license-${licenseId}.jwt`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
 }
 
 async function handleOpsPaymentSubmit(event) {
@@ -568,16 +700,23 @@ async function handleOpsPaymentSubmit(event) {
     }
 }
 
-async function handleOpsActionsClick(event) {
+async function handleDashboardActionsClick(event) {
     const requestButton = event.target.closest('[data-request-action]');
     const paymentButton = event.target.closest('[data-payment-action]');
     const fulfillButton = event.target.closest('[data-fulfill-request-id]');
+    const downloadButton = event.target.closest('[data-download-license-id]');
 
-    if (!requestButton && !paymentButton && !fulfillButton) {
+    if (!requestButton && !paymentButton && !fulfillButton && !downloadButton) {
         return;
     }
 
     try {
+        if (downloadButton) {
+            await downloadLicenseKey(downloadButton.dataset.downloadLicenseId);
+            renderAlert('success', 'License key download started.');
+            return;
+        }
+
         if (requestButton) {
             await updateLicenseRequestStatus(
                 requestButton.dataset.requestId,
@@ -627,7 +766,9 @@ async function bootstrapPortalPage() {
     document.getElementById('onboarding-form')?.addEventListener('submit', handleOnboardingSubmit);
     document.getElementById('request-license-form')?.addEventListener('submit', handleLicenseRequestSubmit);
     document.getElementById('ops-payment-form')?.addEventListener('submit', handleOpsPaymentSubmit);
-    document.getElementById('ops-panel')?.addEventListener('click', handleOpsActionsClick);
+    document.getElementById('dashboard-card')?.addEventListener('click', handleDashboardActionsClick);
+    document.getElementById('productKey')?.addEventListener('change', () => syncRequestPlanOptions());
+    syncRequestPlanOptions();
 
     if (!pageState.session?.accessToken) {
         setVisible('signed-out-card', true);
@@ -640,7 +781,9 @@ async function bootstrapPortalPage() {
     try {
         await loadPortalContext();
     } catch (error) {
-        renderAlert('danger', error.message);
+        renderAlert('danger', error.message.includes('Network request failed')
+            ? 'Portal could not reach the local licensing services. Refresh once the stack is ready.'
+            : error.message);
     }
 
     renderDashboard();

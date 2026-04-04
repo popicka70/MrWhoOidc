@@ -285,6 +285,19 @@ pre {
     vertical-align: middle;
 }
 
+.issued-licenses-table td,
+.issued-licenses-table th {
+    white-space: nowrap;
+}
+
+.issued-licenses-table .license-source-note {
+    display: block;
+    color: var(--mrwho-muted);
+    font-size: 0.75rem;
+    white-space: normal;
+    line-height: 1.25;
+}
+
 /* ===== Footer ===== */
 .site-footer {
     background: var(--mrwho-nav);
