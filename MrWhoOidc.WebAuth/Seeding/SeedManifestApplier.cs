@@ -333,6 +333,7 @@ internal sealed class SeedManifestApplier(
                     RealmId = realm.Id,
                     TenantId = tenant.TenantId,
                     AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode),
+                    AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient ?? false,
                     ClientSecretHash = string.IsNullOrWhiteSpace(resolvedSecret) ? null : passwordHasher.Hash(resolvedSecret)
                 };
 #pragma warning restore CS0618
@@ -368,6 +369,7 @@ internal sealed class SeedManifestApplier(
                 if (clientDef.RequirePkce is not null) client.RequirePkce = clientDef.RequirePkce.Value;
                 if (clientDef.RequireConsent is not null) client.RequireConsent = clientDef.RequireConsent.Value;
                 if (!string.IsNullOrWhiteSpace(clientDef.AutoApprovalMode)) client.AutoApprovalMode = ParseAutoApprovalMode(clientDef.AutoApprovalMode);
+                if (clientDef.AutoAssignNewUsersToClient is not null) client.AutoAssignNewUsersToClient = clientDef.AutoAssignNewUsersToClient.Value;
 
                 // Move realm if requested (by name)
                 if (client.RealmId != realm.Id) client.RealmId = realm.Id;

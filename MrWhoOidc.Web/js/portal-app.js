@@ -229,6 +229,21 @@ async function getOidcMetadata() {
     };
 }
 
+async function buildAuthorizationUrl() {
+    const metadata = await getOidcMetadata();
+    const pkce = await createPkce();
+    const url = new URL(metadata.authorization_endpoint);
+    url.searchParams.set('client_id', portalConfig.clientId);
+    url.searchParams.set('redirect_uri', portalConfig.redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', portalConfig.scope);
+    url.searchParams.set('code_challenge', pkce.challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    url.searchParams.set('state', pkce.state);
+    url.searchParams.set('nonce', pkce.nonce);
+    return url;
+}
+
 function setText(id, value) {
     const node = document.getElementById(id);
     if (node) {
@@ -282,18 +297,15 @@ function renderAlert(kind, message) {
 }
 
 async function beginLogin() {
-    const metadata = await getOidcMetadata();
-    const pkce = await createPkce();
-    const url = new URL(metadata.authorization_endpoint);
-    url.searchParams.set('client_id', portalConfig.clientId);
-    url.searchParams.set('redirect_uri', portalConfig.redirectUri);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', portalConfig.scope);
-    url.searchParams.set('code_challenge', pkce.challenge);
-    url.searchParams.set('code_challenge_method', 'S256');
-    url.searchParams.set('state', pkce.state);
-    url.searchParams.set('nonce', pkce.nonce);
+    const url = await buildAuthorizationUrl();
     window.location.assign(url.toString());
+}
+
+async function beginRegistration() {
+    const authorizeUrl = await buildAuthorizationUrl();
+    const registrationUrl = new URL(`${portalConfig.authority}/Registrations`);
+    registrationUrl.searchParams.set('returnUrl', `${authorizeUrl.pathname}${authorizeUrl.search}`);
+    window.location.assign(registrationUrl.toString());
 }
 
 async function finishLogin() {
@@ -743,6 +755,16 @@ async function bootstrapPortalPage() {
         renderAlert(null, null);
         try {
             await beginLogin();
+        } catch (error) {
+            renderAlert('danger', error.message);
+        }
+    });
+
+    document.getElementById('register-button')?.addEventListener('click', async () =>
+    {
+        renderAlert(null, null);
+        try {
+            await beginRegistration();
         } catch (error) {
             renderAlert('danger', error.message);
         }
