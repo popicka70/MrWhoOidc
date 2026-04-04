@@ -7,13 +7,16 @@ const portalConfig = {
     licensingApiBaseUrl: `${window.location.origin}/licensing`,
     scope: 'openid profile email offline_access',
     storageKey: 'mrwho.portal.session',
-    pkceKey: 'mrwho.portal.pkce'
+    pkceKey: 'mrwho.portal.pkce',
+    sessionExpirySkewMs: 5000,
+    sessionExpiredMessage: 'Your portal session expired. Sign in again to continue.'
 };
 
 const pageState = {
     session: null,
     user: null,
-    me: null
+    me: null,
+    sessionExpiryTimerId: null
 };
 
 const isDevelopmentOperationsMode = window.location.hostname === 'localhost';
@@ -65,12 +68,96 @@ function getPkce() {
     return raw ? JSON.parse(raw) : null;
 }
 
+function clearSessionExpiryTimer() {
+    if (pageState.sessionExpiryTimerId) {
+        window.clearTimeout(pageState.sessionExpiryTimerId);
+        pageState.sessionExpiryTimerId = null;
+    }
+}
+
+function isSessionExpired(session = pageState.session) {
+    if (!session?.accessToken || !Number.isFinite(session.expiresAt)) {
+        return false;
+    }
+
+    return Date.now() >= (session.expiresAt - portalConfig.sessionExpirySkewMs);
+}
+
+function renderSignedOutState(message = null) {
+    setVisible('signed-out-card', true);
+    setVisible('signed-in-card', false);
+    setVisible('dashboard-card', false);
+    setVisible('onboarding-card', false);
+    setVisible('ops-panel', false);
+
+    if (message) {
+        renderAlert('warning', message);
+        return;
+    }
+
+    renderAlert(null, null);
+}
+
+function createSessionExpiredError(message = portalConfig.sessionExpiredMessage) {
+    const error = new Error(message);
+    error.code = 'SESSION_EXPIRED';
+    error.status = 401;
+    return error;
+}
+
+function expireSession(message = portalConfig.sessionExpiredMessage) {
+    clearSession();
+    renderSignedOutState(message);
+}
+
+function scheduleSessionExpiry() {
+    clearSessionExpiryTimer();
+
+    if (!pageState.session?.accessToken) {
+        return;
+    }
+
+    if (isSessionExpired(pageState.session)) {
+        expireSession();
+        return;
+    }
+
+    const delay = Math.min(
+        Math.max(0, pageState.session.expiresAt - Date.now() - portalConfig.sessionExpirySkewMs),
+        2147483647);
+
+    pageState.sessionExpiryTimerId = window.setTimeout(() =>
+    {
+        expireSession();
+    }, delay);
+}
+
+function requireActiveSession() {
+    const session = loadSession();
+    if (!session?.accessToken) {
+        throw new Error('You are not signed in.');
+    }
+
+    if (isSessionExpired(session)) {
+        expireSession();
+        throw createSessionExpiredError();
+    }
+
+    return session;
+}
+
+function isSessionExpiredError(error) {
+    return error?.code === 'SESSION_EXPIRED';
+}
+
 function saveSession(session) {
     localStorage.setItem(portalConfig.storageKey, JSON.stringify(session));
     pageState.session = session;
+    scheduleSessionExpiry();
 }
 
 function clearSession() {
+    clearSessionExpiryTimer();
     localStorage.removeItem(portalConfig.storageKey);
     sessionStorage.removeItem(portalConfig.pkceKey);
     pageState.session = null;
@@ -92,6 +179,12 @@ function loadSession() {
             email: accessClaims.email || idClaims.email || idClaims.preferred_username,
             name: accessClaims.name || idClaims.name
         };
+    }
+
+    if (pageState.session?.accessToken) {
+        scheduleSessionExpiry();
+    } else {
+        clearSessionExpiryTimer();
     }
 
     return pageState.session;
@@ -274,34 +367,43 @@ function beginLogout() {
 }
 
 async function authorizedJson(path, init = {}) {
-    const session = loadSession();
-    if (!session?.accessToken) {
-        throw new Error('You are not signed in.');
-    }
+    const session = requireActiveSession();
 
-    return fetchJson(`${portalConfig.licensingApiBaseUrl}${path}`, {
-        ...init,
-        headers: {
-            'Authorization': `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
-            ...(init.headers || {})
+    try {
+        return await fetchJson(`${portalConfig.licensingApiBaseUrl}${path}`, {
+            ...init,
+            headers: {
+                'Authorization': `Bearer ${session.accessToken}`,
+                'Content-Type': 'application/json',
+                ...(init.headers || {})
+            }
+        });
+    } catch (error) {
+        if (error.status === 401) {
+            expireSession();
+            throw createSessionExpiredError();
         }
-    });
+
+        throw error;
+    }
 }
 
 async function authorizedFetch(path, init = {}) {
-    const session = loadSession();
-    if (!session?.accessToken) {
-        throw new Error('You are not signed in.');
-    }
-
-    return fetch(`${portalConfig.licensingApiBaseUrl}${path}`, {
+    const session = requireActiveSession();
+    const response = await fetch(`${portalConfig.licensingApiBaseUrl}${path}`, {
         ...init,
         headers: {
             'Authorization': `Bearer ${session.accessToken}`,
             ...(init.headers || {})
         }
     });
+
+    if (response.status === 401) {
+        expireSession();
+        throw createSessionExpiredError();
+    }
+
+    return response;
 }
 
 async function loadPortalContext() {
@@ -528,6 +630,16 @@ function renderOpsPanel() {
 
 function renderDashboard() {
     const session = loadSession();
+    if (!session?.accessToken || isSessionExpired(session)) {
+        if (session?.accessToken) {
+            expireSession();
+            return;
+        }
+
+        renderSignedOutState();
+        return;
+    }
+
     const claims = session?.claims || {};
     setVisible('signed-out-card', false);
     setVisible('signed-in-card', true);
@@ -545,6 +657,14 @@ function renderDashboard() {
     renderLicenseRequests(pageState.me?.licenseRequests || []);
     renderPayments(pageState.me?.payments || []);
     renderOpsPanel();
+}
+
+function handlePortalError(error) {
+    if (isSessionExpiredError(error)) {
+        return;
+    }
+
+    renderAlert('danger', error.message);
 }
 
 async function handleOnboardingSubmit(event) {
@@ -567,7 +687,7 @@ async function handleOnboardingSubmit(event) {
         renderDashboard();
         renderAlert('success', 'Organization onboarding completed.');
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
@@ -600,7 +720,7 @@ async function handleLicenseRequestSubmit(event) {
         form.reset();
         syncRequestPlanOptions();
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
@@ -696,7 +816,7 @@ async function handleOpsPaymentSubmit(event) {
         form.opsCurrency.value = 'USD';
         form.opsAmount.value = '249.00';
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
@@ -741,7 +861,7 @@ async function handleDashboardActionsClick(event) {
             renderAlert('success', 'Approved paid request fulfilled into an issued license.');
         }
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
@@ -768,19 +888,38 @@ async function bootstrapPortalPage() {
     document.getElementById('ops-payment-form')?.addEventListener('submit', handleOpsPaymentSubmit);
     document.getElementById('dashboard-card')?.addEventListener('click', handleDashboardActionsClick);
     document.getElementById('productKey')?.addEventListener('change', () => syncRequestPlanOptions());
+    document.addEventListener('visibilitychange', () =>
+    {
+        if (document.hidden || !pageState.session?.accessToken) {
+            return;
+        }
+
+        if (isSessionExpired(pageState.session)) {
+            expireSession();
+            return;
+        }
+
+        scheduleSessionExpiry();
+    });
     syncRequestPlanOptions();
 
     if (!pageState.session?.accessToken) {
-        setVisible('signed-out-card', true);
-        setVisible('signed-in-card', false);
-        setVisible('dashboard-card', false);
-        setVisible('onboarding-card', false);
+        renderSignedOutState();
+        return;
+    }
+
+    if (isSessionExpired(pageState.session)) {
+        expireSession();
         return;
     }
 
     try {
         await loadPortalContext();
     } catch (error) {
+        if (isSessionExpiredError(error)) {
+            return;
+        }
+
         renderAlert('danger', error.message.includes('Network request failed')
             ? 'Portal could not reach the local licensing services. Refresh once the stack is ready.'
             : error.message);
