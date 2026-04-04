@@ -26,6 +26,8 @@ services:
       ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
       ASPNETCORE_Kestrel__Certificates__Default__Password: changeit
       ConnectionStrings__LicensingDb: Data Source=/data/mrwholicensing-dev.db
+      DataProtection__KeyStoragePath: "/data/data-protection-keys"
+      DataProtection__ApplicationName: "MrWhoLicensing"
       Authentication__Oidc__Enabled: "true"
       Authentication__Oidc__Authority: "https://webauth:8443/t/default"
       Authentication__Oidc__JwksUrl: "https://webauth:8443/t/default/jwks"
@@ -33,6 +35,19 @@ services:
       Authentication__Oidc__Audience: ""
       Authentication__Oidc__RequireHttpsMetadata: "true"
       Authentication__Oidc__AllowDevelopmentCertificateBypass: "true"
+      Authentication__AdminPortal__Enabled: "true"
+      Authentication__AdminPortal__Authority: "https://localhost:8443/t/default"
+      Authentication__AdminPortal__InternalAuthority: "https://localhost:8443/t/default"
+      Authentication__AdminPortal__ClientId: "licensing-admin"
+      Authentication__AdminPortal__ClientSecret: "licensing-admin-dev-secret"
+      Authentication__AdminPortal__RealmName: "admin"
+      Authentication__AdminPortal__AdminRoleName: "admin"
+      Authentication__AdminPortal__Scopes__0: "openid"
+      Authentication__AdminPortal__Scopes__1: "profile"
+      Authentication__AdminPortal__Scopes__2: "email"
+      Authentication__AdminPortal__Scopes__3: "roles"
+      Authentication__AdminPortal__RequireHttpsMetadata: "true"
+      Authentication__AdminPortal__AllowDevelopmentCertificateBypass: "true"
       Cors__AllowedOrigins__0: "http://localhost:8088"
       LicensingSigning__Issuer: "MrWhoLicensing"
       LicensingSigning__KeyId: "mrwho-licensing-dev"
@@ -40,6 +55,8 @@ services:
     ports:
       - "7443:7443"
       - "7442:7442"
+    extra_hosts:
+      - "localhost:host-gateway"
     volumes:
       - ./certs:/https:ro
       - licensing-data:/data

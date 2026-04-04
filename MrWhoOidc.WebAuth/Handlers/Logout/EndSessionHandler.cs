@@ -72,7 +72,10 @@ public sealed class EndSessionHandler(
         }
 
         // Render HTML page with front-channel iframes and optional redirect
-        var html = FrontChannelPageBuilder.BuildPage(iframes, refId, request.State);
+        var cspNonce = http.Items.TryGetValue("csp-nonce", out var nonceValue)
+            ? nonceValue as string
+            : null;
+        var html = FrontChannelPageBuilder.BuildPage(iframes, refId, request.State, cspNonce);
         return Results.Content(html, "text/html; charset=utf-8");
     }
 

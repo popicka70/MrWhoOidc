@@ -15,7 +15,7 @@
     <title>Licensing Portal – MrWhoOidc</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="css/site.css?v=20260404d">
+    <link rel="stylesheet" href="css/site.css?v=20260404g">
 </head>
 <body>
     <!-- Nav -->
@@ -223,8 +223,14 @@
                                 </div>
 
                                 <div class="col-lg-6">
+                                    <h2 class="h5 fw-bold">Payment instructions</h2>
+                                    <p class="text-secondary small mb-0">Each request gets a licensing-side payment instruction. Scan the QR code or use the reference manually.</p>
+                                    <div id="payment-instructions-body" class="row g-3 mt-1"></div>
+                                </div>
+
+                                <div class="col-lg-6">
                                     <h2 class="h5 fw-bold">Payments</h2>
-                                    <p class="text-secondary small mb-0">Manual payment records are linked back to the request when finance has processed them.</p>
+                                    <p class="text-secondary small mb-0">Status moves on the licensing side after finance receives and reconciles the payment.</p>
                                     <div class="table-responsive mt-3">
                                         <table class="table align-middle">
                                             <thead>
@@ -241,7 +247,7 @@
                                     </div>
                                 </div>
 
-                                <div class="col-lg-6">
+                                <div class="col-12">
                                     <h2 class="h5 fw-bold">Issued licenses</h2>
                                     <p class="text-secondary small mb-0">A grant only appears here after a request has been approved and paid.</p>
                                     <div class="table-responsive mt-3">
@@ -262,68 +268,7 @@
                                 <div class="col-12">
                                     <div class="alert alert-secondary mb-0" role="alert">
                                         <i class="bi bi-clock-history me-1"></i>
-                                        Customer action ends at request submission. Payment capture, approval, and final fulfillment are separate steps in the workflow.
-                                    </div>
-                                </div>
-                                <div id="ops-panel" class="col-12 d-none">
-                                    <div class="card border-0 shadow-sm ops-card">
-                                        <div class="card-body p-4">
-                                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
-                                                <div>
-                                                    <h2 class="h5 fw-bold mb-1">Development Operations Panel</h2>
-                                                    <p class="text-secondary small mb-0">Use this local-only console to review requests, record payments, and fulfill licenses after payment is reconciled.</p>
-                                                </div>
-                                                <span class="badge text-bg-warning ops-badge">Internal workflow</span>
-                                            </div>
-
-                                            <div class="row g-4">
-                                                <div class="col-xl-7">
-                                                    <h3 class="h6 fw-bold">Request actions</h3>
-                                                    <div class="table-responsive mt-3">
-                                                        <table class="table align-middle table-sm">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Request</th>
-                                                                    <th>Status</th>
-                                                                    <th>Payment</th>
-                                                                    <th>Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody id="ops-requests-body"></tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-
-                                                <div class="col-xl-5">
-                                                    <h3 class="h6 fw-bold">Record manual payment</h3>
-                                                    <form id="ops-payment-form" class="row g-3 mt-1">
-                                                        <div class="col-12">
-                                                            <label for="opsRequestId" class="form-label">License request</label>
-                                                            <select id="opsRequestId" name="opsRequestId" class="form-select"></select>
-                                                        </div>
-                                                        <div class="col-md-6">
-                                                            <label for="opsAmount" class="form-label">Amount</label>
-                                                            <input id="opsAmount" name="opsAmount" type="number" min="0.01" step="0.01" class="form-control" value="249.00" required>
-                                                        </div>
-                                                        <div class="col-md-6">
-                                                            <label for="opsCurrency" class="form-label">Currency</label>
-                                                            <input id="opsCurrency" name="opsCurrency" class="form-control" value="USD" maxlength="16" required>
-                                                        </div>
-                                                        <div class="col-12">
-                                                            <label for="opsExternalReference" class="form-label">Reference</label>
-                                                            <input id="opsExternalReference" name="opsExternalReference" class="form-control" placeholder="invoice-2026-001">
-                                                        </div>
-                                                        <div class="col-12">
-                                                            <label for="opsNotes" class="form-label">Notes</label>
-                                                            <textarea id="opsNotes" name="opsNotes" class="form-control" rows="2" placeholder="Manual payment received."></textarea>
-                                                        </div>
-                                                        <div class="col-12">
-                                                            <button type="submit" class="btn btn-outline-dark">Create Payment Record</button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        Customer action ends at request submission and payment. Approval and issuance happen only in the internal licensing backoffice.
                                     </div>
                                 </div>
                             </div>
@@ -377,6 +322,7 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/portal-app.js?v=20260404e"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script src="js/portal-app.js?v=20260404g"></script>
 </body>
 </html>

@@ -17,12 +17,37 @@
           ],
           "allowedLogoutRedirectUris": [
             "http://localhost:8088/portal.html",
+            "http://localhost:8088/portal-signed-out.html",
             "http://localhost:8088/"
           ],
           "allowedScopes": [
             "openid",
             "profile",
             "email",
+            "offline_access"
+          ]
+        },
+        {
+          "clientId": "licensing-admin",
+          "clientName": "Licensing Admin Backoffice",
+          "requirePkce": false,
+          "requireConsent": false,
+          "allowLocalLogin": true,
+          "allowExternalIdp": false,
+          "clientSecret": "licensing-admin-dev-secret",
+          "allowedLoginRedirectUris": [
+            "https://localhost:7443/signin-oidc"
+          ],
+          "allowedLogoutRedirectUris": [
+            "https://localhost:7443/signout-callback-oidc",
+            "https://localhost:7443/admin",
+            "https://localhost:7443/admin/signed-out"
+          ],
+          "allowedScopes": [
+            "openid",
+            "profile",
+            "email",
+            "roles",
             "offline_access"
           ]
         }
