@@ -284,7 +284,7 @@ An initial repo-side certification harness now exists under `tools/certification
 
 This starts the self-certification path at the environment level, even though actual OpenID Foundation test-plan execution and submission still happen through the official suite. The default green path now includes `Config OP`, `Basic OP`, and the DCR prerequisites needed for `Dynamic OP` discovery and routing. Full `Dynamic OP` certification still requires the metadata-fidelity fixes already called out elsewhere in this document.
 
-The repo now also has the first thin layer of runner scaffolding: generated suite-input artifacts, a stable environment-variable contract (`CONFORMANCE_SERVER`, `CONFORMANCE_SERVER_LOCAL`, `CONFORMANCE_SERVER_MTLS`), and a wrapper that can call the upstream conformance-suite runner once official plan expressions and config JSON files are ready.
+The repo now also has the first thin layer of runner scaffolding: generated suite-input artifacts, a stable environment-variable contract (`CONFORMANCE_SERVER`, `CONFORMANCE_SERVER_LOCAL`, `CONFORMANCE_SERVER_MTLS`) reserved for the conformance-suite API host, starter OP config JSON files that carry the issuer-under-test URLs directly, and a wrapper that can call the upstream conformance-suite runner once official plan expressions and config JSON files are ready.
 
 ## Sources
 

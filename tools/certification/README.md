@@ -16,8 +16,8 @@ This harness does not submit results to the OpenID Foundation and does not attem
 
 - `start-self-certification.ps1` - renders the certification manifest, starts the stack, and runs verification
 - `verify-self-certification.ps1` - checks discovery fidelity, JWKS, negative authorize behavior, PAR when available, DCR CRUD, logout metadata, and seeded clients
-- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, runner environment variables, and empty expected-failure / expected-skip files
-- `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct environment variables for this issuer
+- `prepare-conformance-suite.ps1` - renders hosted-suite inputs, suite API environment variables, starter official-runner config JSON files with the issuer URL embedded directly, and empty expected-failure / expected-skip files
+- `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct suite API environment and rewrites any placeholder-based JSON config arguments for this issuer
 - `docker-compose.certification.dev.yml` - Compose overlay that mounts the generated manifest and enables certification-specific settings
 - `templates/certification-seed-manifest.template.json` - template for the seeded certification clients
 
@@ -38,6 +38,36 @@ Dynamic registration initial access token:
 - `oidf-dcr-initial-access-token`
 
 These clients are intended for the official OP flow where the suite may require manually registered clients. The deployment also enables and advertises Dynamic Client Registration so you can test that path separately.
+
+## Apply the Certification Manifest to an Existing Deployment
+
+If a public deployment already has data and is missing the fallback OIDF clients or DCR settings, you can apply the rendered certification manifest without logging into the tenant admin UI.
+
+Requirements:
+
+- set `Bootstrap__Token` on the deployment
+- set `Auth__EnableDynamicClientRegistration=true`
+- provide the rendered certification manifest through one of the standard seeding inputs:
+  - `Seeding__ManifestPath`
+  - `Seeding__ManifestJson`
+  - `Seeding__ManifestBase64`
+
+Then call the operator endpoint:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri https://your-public-issuer.example/bootstrap/apply-seed-manifest `
+  -Headers @{ 'X-Bootstrap-Token' = '<your bootstrap token>' }
+```
+
+This applies the configured manifest to the existing database, including:
+
+- platform DCR enablement
+- platform initial access tokens
+- tenant DCR realm assignment
+- fallback OIDF clients such as `oidf-basic-primary` and `oidf-basic-secondary`
+
+Remove `Bootstrap__Token` again after the manifest has been applied.
 
 ## Start the Issuer
 
@@ -97,9 +127,9 @@ $runnerArgs = @(
   -RunnerArguments $runnerArgs
 ```
 
-This wrapper does not invent suite config JSON for you. It keeps the environment contract, export directory, and expected-failure / expected-skip files consistent with the local certification issuer.
+This wrapper does not invent suite config JSON for you. It keeps the suite API environment contract, export directory, and expected-failure / expected-skip files consistent with the local certification issuer.
 
-`prepare-conformance-suite.ps1` now also emits starter official-runner config JSON files for static-client and dynamic-client OP runs, including browser automation for provider selection, login, consent, and callback completion. These are intended as practical starting points for `Config OP`, `Basic OP`, and `Form Post OP` plans.
+`prepare-conformance-suite.ps1` now also emits starter official-runner config JSON files for static-client and dynamic-client OP runs, including browser automation for provider selection, login, consent, and callback completion. These are intended as practical starting points for `Config OP`, `Basic OP`, and `Form Post OP` plans. The generated JSON files carry the issuer-under-test discovery URL directly; `CONFORMANCE_SERVER*` stays reserved for the conformance-suite API host.
 
 ## Expected Issuer
 

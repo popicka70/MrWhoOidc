@@ -26,6 +26,7 @@ using MrWhoOidc.WebAuth.Services;
 using MrWhoOidc.WebAuth.Observability;
 using MrWhoOidc.UnitTests.Helpers;
 using Microsoft.AspNetCore.DataProtection;
+using System.Web;
 
 #pragma warning disable CS0618 // Type or member is obsolete - backward compatibility during migration
 using System.Security.Claims;
@@ -442,7 +443,9 @@ public sealed class AuthorizeHandlerTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
         Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("state=claims-state", StringComparison.Ordinal), $"Expected state=claims-state; got Location='{loc}'");
-        Assert.IsTrue(loc.Contains("claims%20parameter%20is%20not%20valid%20JSON", StringComparison.Ordinal), $"Expected claims validation detail; got Location='{loc}'");
+        var errorDescription = HttpUtility.ParseQueryString(new Uri(loc).Query)["error_description"];
+        Assert.IsNotNull(errorDescription, $"Expected error_description; got Location='{loc}'");
+        StringAssert.Contains(errorDescription, "claims parameter is not valid JSON");
     }
 
     [TestMethod]
@@ -485,7 +488,9 @@ public sealed class AuthorizeHandlerTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
         Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("state=rar-state", StringComparison.Ordinal), $"Expected state=rar-state; got Location='{loc}'");
-        Assert.IsTrue(loc.Contains("authorization_details%20must%20be%20valid%20JSON", StringComparison.Ordinal), $"Expected authorization_details validation detail; got Location='{loc}'");
+        var errorDescription = HttpUtility.ParseQueryString(new Uri(loc).Query)["error_description"];
+        Assert.IsNotNull(errorDescription, $"Expected error_description; got Location='{loc}'");
+        StringAssert.Contains(errorDescription, "authorization_details must be valid JSON");
     }
 
     [TestMethod]
@@ -1598,7 +1603,8 @@ public sealed class AuthorizeHandlerTests
                 acr_values: Q(http, "acr_values"),
                 display: Q(http, "display"),
                 ui_locales: Q(http, "ui_locales"),
-                claims: Q(http, "claims"));
+                claims: Q(http, "claims"),
+                authorization_details: Q(http, "authorization_details"));
             if (!_valid)
             {
                 return Task.FromResult<(IResult? error, AuthorizationContext? context)>((Results.BadRequest("Invalid request"), null));
