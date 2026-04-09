@@ -271,6 +271,17 @@ The most efficient next technical step is to create a small `certification/` or 
 
 That would turn this research into an executable readiness workflow.
 
+## Repository Harness
+
+An initial repo-side certification harness now exists under `tools/certification/`.
+
+- `tools/certification/start-self-certification.ps1` renders a certification seed manifest, starts the local WebAuth stack, prepares the certification environment for DCR work, and runs a verifier.
+- `tools/certification/verify-self-certification.ps1` checks discovery, JWKS, logout metadata, DCR routing, and fallback certification clients.
+- `tools/certification/docker-compose.certification.dev.yml` is the Docker Compose overlay for the certification issuer.
+- `tools/certification/templates/certification-seed-manifest.template.json` contains the fallback clients and suite callback/logout URI pattern.
+
+This starts the self-certification path at the environment level, even though actual OpenID Foundation test-plan execution and submission still happen through the official suite. The default green path is currently `Config OP` plus `Basic OP`; `Dynamic OP` still requires additional platform-level enablement and the metadata-fidelity fixes already called out elsewhere in this document.
+
 ## Sources
 
 Official external sources reviewed on 2026-04-09:
