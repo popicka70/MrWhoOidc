@@ -52,20 +52,32 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
         if (tokenTypeHint == "refresh_token") query = query.Where(t => t.Type == "refresh");
         else if (tokenTypeHint == "access_token") query = query.Where(t => t.Type == "access");
 
-        var entities = await query.ToListAsync(ct).ConfigureAwait(false);
-        bool changed = false;
-        foreach (var entity in entities)
+        if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
         {
-            if (entity.RevokedAt == null)
+            var entities = await query.ToListAsync(ct).ConfigureAwait(false);
+            bool changed = false;
+            foreach (var entity in entities)
             {
-                entity.RevokedAt = DateTimeOffset.UtcNow;
-                changed = true;
+                if (entity.RevokedAt == null)
+                {
+                    entity.RevokedAt = DateTimeOffset.UtcNow;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
             }
         }
-
-        if (changed)
+        else
         {
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            // ⚡ Bolt Optimization: Use ExecuteUpdateAsync for bulk update instead of loading entities into memory
+            await query
+                .Where(t => t.RevokedAt == null)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(b => b.RevokedAt, DateTimeOffset.UtcNow),
+                    ct).ConfigureAwait(false);
         }
 
         // Audit (best effort)
@@ -84,14 +96,25 @@ internal sealed class RevocationService(AuthDbContext db, ITenantAccessor tenant
     {
         var tenantId = tenantAccessor.CurrentTenant?.TenantId ?? throw new InvalidOperationException("Tenant context required");
 
-        var tokens = await db.Tokens
-            .Where(t => t.UserId == userId && t.ClientId == clientId && t.TenantId == tenantId && t.RevokedAt == null)
-            .ToListAsync(ct).ConfigureAwait(false);
+        var query = db.Tokens
+            .Where(t => t.UserId == userId && t.ClientId == clientId && t.TenantId == tenantId && t.RevokedAt == null);
 
-        if (tokens.Count > 0)
+        if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
         {
-            foreach (var t in tokens) t.RevokedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            var tokens = await query.ToListAsync(ct).ConfigureAwait(false);
+
+            if (tokens.Count > 0)
+            {
+                foreach (var t in tokens) t.RevokedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            // ⚡ Bolt Optimization: Use ExecuteUpdateAsync for bulk update instead of loading entities into memory
+            await query.ExecuteUpdateAsync(
+                setters => setters.SetProperty(b => b.RevokedAt, DateTimeOffset.UtcNow),
+                ct).ConfigureAwait(false);
         }
     }
 
