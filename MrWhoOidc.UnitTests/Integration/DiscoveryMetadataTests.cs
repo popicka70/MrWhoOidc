@@ -182,6 +182,19 @@ public sealed class DiscoveryMetadataTests
     }
 
     [TestMethod]
+    public async Task Discovery_Advertises_Par_Metadata_Without_AdvancedSecurity_License()
+    {
+        using var doc = await GetDiscoveryAsync(Factory);
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("pushed_authorization_request_endpoint", out var parEndpoint), "pushed_authorization_request_endpoint missing");
+        Assert.AreEqual(JsonValueKind.String, parEndpoint.ValueKind, "pushed_authorization_request_endpoint must be string");
+        Assert.IsTrue(parEndpoint.GetString()!.EndsWith("/par", StringComparison.Ordinal), $"Unexpected pushed_authorization_request_endpoint='{parEndpoint.GetString()}'");
+
+        Assert.IsTrue(doc.RootElement.TryGetProperty("require_pushed_authorization_requests", out var requirePar), "require_pushed_authorization_requests missing");
+        Assert.IsTrue(requirePar.ValueKind is JsonValueKind.True or JsonValueKind.False, "require_pushed_authorization_requests must be boolean");
+    }
+
+    [TestMethod]
     public async Task Discovery_Advertises_CheckSessionIFrame()
     {
         var factory = Factory;

@@ -45,14 +45,6 @@ public sealed class AuthorizeRequestOrchestrator(
         metrics.AuthorizeRequests.Add(1, new TagList { new("client", clientBucket), new("mode", mode) });
 
         string? requestUriRaw = http.Request.Query[OAuthConstants.Parameters.RequestUri];
-        if (!string.IsNullOrEmpty(requestUriRaw))
-        {
-            if (!await IsFeatureEnabledAsync(FeatureFlags.AdvancedSecurity, tenantId, ct))
-            {
-                logger.LogWarning("/authorize 403: PAR requires advanced_security feature corr={Corr} tenant={Tenant}", corr, tenantId?.ToString() ?? "platform");
-                return (ErrorResults.AccessDenied("Pushed authorization requests require an advanced security license.", correlationId: corr), null);
-            }
-        }
 
         // Optional: max request object size for query param 'request'
         var roJwtFromQuery = http.Request.Query[OAuthConstants.Parameters.Request].ToString();
