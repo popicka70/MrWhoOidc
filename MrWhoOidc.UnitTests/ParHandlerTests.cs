@@ -123,6 +123,60 @@ public sealed class ParHandlerTests
     }
 
     [TestMethod]
+    public async Task PAR_Form_Request_Preserves_Oidc_Parameters_When_Persisted()
+    {
+        // Arrange
+        var clientStore = new StubClientStore(authenticated: true);
+        var authorize = new StubAuthorizeService(valid: true);
+        var parStore = new StubPushedAuthorizationRequestStore(createSuccess: true);
+        var handler = CreateHandler(clients: clientStore, authorize: authorize, parStore: parStore);
+
+        const string claimsJson = "{\"userinfo\":{\"email\":null}}";
+        const string authorizationDetailsJson = "[{\"type\":\"payment_initiation\"}]";
+
+        var formData = new Dictionary<string, string>
+        {
+            ["response_type"] = "code",
+            ["client_id"] = "test_client",
+            ["client_secret"] = "test_secret",
+            ["redirect_uri"] = "https://app/callback",
+            ["scope"] = "openid profile",
+            ["state"] = "s1",
+            ["nonce"] = "n1",
+            ["code_challenge"] = new string('p', 43),
+            ["code_challenge_method"] = "S256",
+            ["resource"] = "https://api.example.com",
+            ["response_mode"] = "query",
+            ["prompt"] = "none",
+            ["max_age"] = "600",
+            ["id_token_hint"] = "id-token-hint",
+            ["login_hint"] = "alice@example.com",
+            ["acr_values"] = "urn:mfa",
+            ["display"] = "popup",
+            ["ui_locales"] = "de",
+            ["claims"] = claimsJson,
+            ["authorization_details"] = authorizationDetailsJson
+        };
+        var context = CreateHttpContext(formData);
+
+        // Act
+        await handler.HandleAsync(context);
+
+        // Assert
+        Assert.IsNotNull(parStore.LastRequest);
+        Assert.AreEqual("query", parStore.LastRequest.response_mode, "response_mode");
+        Assert.AreEqual("none", parStore.LastRequest.prompt, "prompt");
+        Assert.AreEqual("600", parStore.LastRequest.max_age, "max_age");
+        Assert.AreEqual("id-token-hint", parStore.LastRequest.id_token_hint, "id_token_hint");
+        Assert.AreEqual("alice@example.com", parStore.LastRequest.login_hint, "login_hint");
+        Assert.AreEqual("urn:mfa", parStore.LastRequest.acr_values, "acr_values");
+        Assert.AreEqual("popup", parStore.LastRequest.display, "display");
+        Assert.AreEqual("de", parStore.LastRequest.ui_locales, "ui_locales");
+        Assert.AreEqual(claimsJson, parStore.LastRequest.claims, "claims");
+        Assert.AreEqual(authorizationDetailsJson, parStore.LastRequest.authorization_details, "authorization_details");
+    }
+
+    [TestMethod]
     public async Task PAR_Request_Object_Signed_JWT_Validated()
     {
         // Arrange
@@ -575,6 +629,8 @@ public sealed class ParHandlerTests
         private readonly bool _createSuccess;
         private readonly bool _throwsPendingLimit;
 
+        public AuthorizeRequest? LastRequest { get; private set; }
+
         public StubPushedAuthorizationRequestStore(bool createSuccess = true, bool throwsPendingLimit = false)
         {
             _createSuccess = createSuccess;
@@ -583,6 +639,8 @@ public sealed class ParHandlerTests
 
         public DateTimeOffset Create(string id, AuthorizeRequest request, string clientId, TimeSpan lifetime, string? requestUri)
         {
+            LastRequest = request;
+
             if (_throwsPendingLimit)
             {
                 throw new InvalidOperationException("PAR pending limit reached");

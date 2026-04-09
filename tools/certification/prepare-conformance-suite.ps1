@@ -7,6 +7,8 @@ param(
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
     [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
+    [string]$BrowserUsername = "admin@mrwho.local",
+    [string]$BrowserPassword = "Admin123!",
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
@@ -80,6 +82,121 @@ $notesPath = Join-Path $resolvedOutputDir "conformance-suite-notes.md"
 $envPath = Join-Path $resolvedOutputDir "conformance-suite-env.ps1"
 $expectedFailuresPath = Join-Path $resolvedOutputDir "expected-failures.json"
 $expectedSkipsPath = Join-Path $resolvedOutputDir "expected-skips.json"
+$staticRunnerConfigPath = Join-Path $resolvedOutputDir "official-runner-static-op-config.json"
+$dynamicRunnerConfigPath = Join-Path $resolvedOutputDir "official-runner-dynamic-op-config.json"
+
+$certificationPlans = [ordered]@{
+    configOp = "oidcc-config-certification-test-plan"
+    basicOp = "oidcc-basic-certification-test-plan"
+    formPostOp = "oidcc-formpost-basic-certification-test-plan"
+}
+
+$browserAutomation = @(
+    [ordered]@{
+        match = "*/t/$TenantSlug/auth/providers/select*"
+        tasks = @(
+            [ordered]@{
+                task = "Choose local login"
+                optional = $true
+                match = "*/t/$TenantSlug/auth/providers/select*"
+                commands = @(
+                    @("click", "id", "btn-local-login")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/t/$TenantSlug/login*"
+        tasks = @(
+            [ordered]@{
+                task = "Login"
+                optional = $true
+                match = "*/t/$TenantSlug/login*"
+                commands = @(
+                    @("text", "name", "Username", $BrowserUsername, "optional"),
+                    @("text", "name", "Password", $BrowserPassword, "optional"),
+                    @("click", "css", "button[type='submit']")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/t/$TenantSlug/consent*"
+        tasks = @(
+            [ordered]@{
+                task = "Consent"
+                optional = $true
+                match = "*/t/$TenantSlug/consent*"
+                commands = @(
+                    @("click", "css", "button[type='submit']")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/test/*/callback*"
+        tasks = @(
+            [ordered]@{
+                task = "Verify Complete"
+                match = "*/test/*/callback*"
+                commands = @(
+                    @("wait", "id", "submission_complete", 10)
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/test/*/post_logout_redirect*"
+        tasks = @(
+            [ordered]@{
+                task = "Verify Logout Complete"
+                optional = $true
+                match = "*/test/*/post_logout_redirect*"
+                commands = @(
+                    @("wait", "id", "submission_complete", 10)
+                )
+            }
+        )
+    }
+)
+
+$staticRunnerConfig = [ordered]@{
+    alias = $Alias
+    description = "MrWhoOidc OIDC static-client runner config"
+    server = [ordered]@{
+        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+    }
+    client = [ordered]@{
+        client_id = "oidf-basic-primary"
+        client_secret = "oidf-basic-primary-dev-secret"
+        scope = "openid profile email"
+        redirect_uri = $callbackUrl
+        post_logout_redirect_uri = $postLogoutRedirectUrl
+    }
+    client2 = [ordered]@{
+        client_id = "oidf-basic-secondary"
+        client_secret = "oidf-basic-secondary-dev-secret"
+        scope = "openid profile email"
+        redirect_uri = $callbackUrl
+        post_logout_redirect_uri = $postLogoutRedirectUrl
+    }
+    browser = $browserAutomation
+}
+
+$dynamicRunnerConfig = [ordered]@{
+    alias = $Alias
+    description = "MrWhoOidc OIDC dynamic-client runner config"
+    server = [ordered]@{
+        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+    }
+    client = [ordered]@{
+        client_name = "MrWhoOidc Dynamic Primary"
+    }
+    client2 = [ordered]@{
+        client_name = "MrWhoOidc Dynamic Secondary"
+    }
+    browser = $browserAutomation
+}
 
 $runnerEnvironment = [ordered]@{
     CONFORMANCE_SERVER = Ensure-TrailingSlash -Url $PublicServerBaseUrl
@@ -135,16 +252,31 @@ $inputs = [ordered]@{
         "Basic OP",
         "Form Post OP"
     )
+    certificationPlans = $certificationPlans
     runnerEnvironment = $runnerEnvironment
     runnerArtifacts = [ordered]@{
         expectedFailuresFile = $expectedFailuresPath
         expectedSkipsFile = $expectedSkipsPath
         notesFile = $notesPath
         envFile = $envPath
+        staticRunnerConfigFile = $staticRunnerConfigPath
+        dynamicRunnerConfigFile = $dynamicRunnerConfigPath
+    }
+    browserAutomation = [ordered]@{
+        username = $BrowserUsername
+        tasks = @(
+            "optional provider-selection click via #btn-local-login",
+            "login via Username and Password form fields",
+            "optional consent approval via submit button",
+            "callback completion wait via #submission_complete",
+            "optional post-logout completion wait via #submission_complete"
+        )
     }
 }
 
 $inputs | ConvertTo-Json -Depth 10 | Set-Content -Path $jsonPath
+$staticRunnerConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $staticRunnerConfigPath
+$dynamicRunnerConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $dynamicRunnerConfigPath
 
 if (-not (Test-Path -Path $expectedFailuresPath)) {
     Set-Content -Path $expectedFailuresPath -Value "[]"
@@ -207,23 +339,42 @@ Generated: $($inputs.generatedAtUtc)
 - Environment script: $envPath
 - Expected failures file: $expectedFailuresPath
 - Expected skips file: $expectedSkipsPath
+- Static runner config: $staticRunnerConfigPath
+- Dynamic runner config: $dynamicRunnerConfigPath
+
+## Certification Plan Names
+
+- Config OP: $($certificationPlans.configOp)
+- Basic OP: $($certificationPlans.basicOp)
+- Form Post OP: $($certificationPlans.formPostOp)
+
+## Browser Automation Defaults
+
+- Username: $BrowserUsername
+- Password: $BrowserPassword
+- Provider picker: clicks `#btn-local-login` when the provider selection page appears.
+- Login form: fills `Username` and `Password`, then submits.
+- Consent page: approves via the primary submit button when a consent page appears.
 
 ## Wrapper Usage
 
 Example with the repo wrapper around the official run-test-plan.py script:
 
 ```powershell
-pwsh ./tools/certification/invoke-official-run-test-plan.ps1 `
-  -ConformanceSuitePath C:\src\conformance-suite `
-  -Alias $Alias `
-  -RunnerArguments @(
+`$runnerArgs = @(
     '--list',
-    '<test-plan expression as one string>',
-    '<config-file path>'
-  )
+    '$($certificationPlans.basicOp)',
+    '$staticRunnerConfigPath'
+)
+
+& ./tools/certification/invoke-official-run-test-plan.ps1 `
+    -ConformanceSuitePath C:\src\conformance-suite `
+    -ConformanceToken '<hosted-suite token>' `
+    -Alias $Alias `
+    -RunnerArguments `$runnerArgs
 ```
 
-For actual execution, replace the placeholder plan expression and config-file path with the official conformance-suite values you are using.
+For actual execution, replace `--list` with the official runner mode you need and choose either the static or dynamic runner config file generated in this directory.
 "@
 Set-Content -Path $notesPath -Value $notes
 
@@ -232,3 +383,5 @@ Write-Host "Rendered runner environment script: $envPath" -ForegroundColor Green
 Write-Host "Rendered hosted-suite notes: $notesPath" -ForegroundColor Green
 Write-Host "Prepared expected-failures file: $expectedFailuresPath" -ForegroundColor Green
 Write-Host "Prepared expected-skips file: $expectedSkipsPath" -ForegroundColor Green
+Write-Host "Rendered static runner config: $staticRunnerConfigPath" -ForegroundColor Green
+Write-Host "Rendered dynamic runner config: $dynamicRunnerConfigPath" -ForegroundColor Green

@@ -78,22 +78,28 @@ This renders the following files under `tools/certification/.generated/`:
 - `conformance-suite-env.ps1`
 - `expected-failures.json`
 - `expected-skips.json`
+- `official-runner-static-op-config.json`
+- `official-runner-dynamic-op-config.json`
 
 ## Invoke the Official Runner
 
 If you have a local checkout of the official OpenID Foundation conformance-suite repository, you can wrap its `scripts/run-test-plan.py` entrypoint with the issuer-specific environment variables from this repo:
 
 ```powershell
-pwsh ./tools/certification/invoke-official-run-test-plan.ps1 `
+$runnerArgs = @(
+  '--list',
+  '<test-plan expression as one string>',
+  '<config-file path>'
+)
+
+& ./tools/certification/invoke-official-run-test-plan.ps1 `
   -ConformanceSuitePath C:\src\conformance-suite `
-  -RunnerArguments @(
-    '--list',
-    '<test-plan expression as one string>',
-    '<config-file path>'
-  )
+  -RunnerArguments $runnerArgs
 ```
 
 This wrapper does not invent suite config JSON for you. It keeps the environment contract, export directory, and expected-failure / expected-skip files consistent with the local certification issuer.
+
+`prepare-conformance-suite.ps1` now also emits starter official-runner config JSON files for static-client and dynamic-client OP runs, including browser automation for provider selection, login, consent, and callback completion. These are intended as practical starting points for `Config OP`, `Basic OP`, and `Form Post OP` plans.
 
 ## Expected Issuer
 
