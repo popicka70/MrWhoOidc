@@ -12,6 +12,12 @@ public sealed record SeedManifest
     public int Version { get; init; } = 1;
 
     /// <summary>
+    /// Optional platform-wide settings to apply during dev/test seeding.
+    /// </summary>
+    [JsonPropertyName("platformSettings")]
+    public PlatformSettingsSeedDefinition? PlatformSettings { get; init; }
+
+    /// <summary>
     /// Optional license definitions to install at startup (dev/test seeding).
     /// </summary>
     [JsonPropertyName("licenses")]
@@ -113,6 +119,18 @@ public sealed record ScopeSeedDefinition
     public string? TenantSlug { get; init; }
 }
 
+public sealed record PlatformSettingsSeedDefinition
+{
+    [JsonPropertyName("qrLoginAtDiscoveryEnabled")]
+    public bool? QrLoginAtDiscoveryEnabled { get; init; }
+
+    [JsonPropertyName("dynamicClientRegistrationEnabled")]
+    public bool? DynamicClientRegistrationEnabled { get; init; }
+
+    [JsonPropertyName("enableTokenExchange")]
+    public bool? EnableTokenExchange { get; init; }
+}
+
 public sealed record TenantSeedDefinition
 {
     [JsonPropertyName("slug")]
@@ -135,6 +153,14 @@ public sealed record TenantSeedDefinition
 
     [JsonPropertyName("billingPlan")]
     public string? BillingPlan { get; init; }
+
+    /// <summary>
+    /// Optional realm name that dynamically registered clients should be assigned to.
+    /// Null leaves the existing tenant setting unchanged.
+    /// Empty string disables dynamic client registration for this tenant.
+    /// </summary>
+    [JsonPropertyName("dynamicClientRegistrationRealm")]
+    public string? DynamicClientRegistrationRealm { get; init; }
 
     // --- Export/Import extensions ---
 

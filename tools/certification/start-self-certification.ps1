@@ -7,6 +7,7 @@ param(
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
     [int]$TimeoutSeconds = 240,
+    [switch]$SkipBuild,
     [switch]$RenderOnly,
     [switch]$SkipVerify
 )
@@ -87,8 +88,14 @@ $composeArgs += $composeTool.Prefix
 $composeArgs += @(
     "-f", $baseComposePath,
     "-f", $overlayComposePath,
-    "up", "-d", "webauth"
+    "up", "-d"
 )
+
+if (-not $SkipBuild) {
+    $composeArgs += "--build"
+}
+
+$composeArgs += "webauth"
 
 Push-Location $repoRoot
 try {
@@ -131,7 +138,7 @@ Write-Host "Fallback client: oidf-basic-primary / oidf-basic-primary-dev-secret"
 Write-Host "Fallback client: oidf-basic-secondary / oidf-basic-secondary-dev-secret" -ForegroundColor DarkGray
 
 if (-not $SkipVerify) {
-    & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug
+    & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug -RequireDynamicRegistration
 
     if ($LASTEXITCODE -ne 0) {
         throw "Certification verification failed."

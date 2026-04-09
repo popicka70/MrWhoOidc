@@ -275,12 +275,16 @@ That would turn this research into an executable readiness workflow.
 
 An initial repo-side certification harness now exists under `tools/certification/`.
 
-- `tools/certification/start-self-certification.ps1` renders a certification seed manifest, starts the local WebAuth stack, prepares the certification environment for DCR work, and runs a verifier.
+- `tools/certification/start-self-certification.ps1` renders a certification seed manifest, starts the local WebAuth stack, enables DCR prerequisites for the certification environment, and runs a verifier.
 - `tools/certification/verify-self-certification.ps1` checks discovery, JWKS, logout metadata, DCR routing, and fallback certification clients.
+- `tools/certification/prepare-conformance-suite.ps1` renders hosted-suite inputs, environment-variable files, and expected-failure / expected-skip files for the official automation path.
+- `tools/certification/invoke-official-run-test-plan.ps1` wraps the official `scripts/run-test-plan.py` entrypoint with the correct environment contract for the MrWhoOidc certification issuer.
 - `tools/certification/docker-compose.certification.dev.yml` is the Docker Compose overlay for the certification issuer.
 - `tools/certification/templates/certification-seed-manifest.template.json` contains the fallback clients and suite callback/logout URI pattern.
 
-This starts the self-certification path at the environment level, even though actual OpenID Foundation test-plan execution and submission still happen through the official suite. The default green path is currently `Config OP` plus `Basic OP`; `Dynamic OP` still requires additional platform-level enablement and the metadata-fidelity fixes already called out elsewhere in this document.
+This starts the self-certification path at the environment level, even though actual OpenID Foundation test-plan execution and submission still happen through the official suite. The default green path now includes `Config OP`, `Basic OP`, and the DCR prerequisites needed for `Dynamic OP` discovery and routing. Full `Dynamic OP` certification still requires the metadata-fidelity fixes already called out elsewhere in this document.
+
+The repo now also has the first thin layer of runner scaffolding: generated suite-input artifacts, a stable environment-variable contract (`CONFORMANCE_SERVER`, `CONFORMANCE_SERVER_LOCAL`, `CONFORMANCE_SERVER_MTLS`), and a wrapper that can call the upstream conformance-suite runner once official plan expressions and config JSON files are ready.
 
 ## Sources
 

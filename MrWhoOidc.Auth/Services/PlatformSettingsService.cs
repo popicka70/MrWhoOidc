@@ -49,6 +49,7 @@ public class PlatformSettingsService : IPlatformSettingsService
                         // Create default settings on first access
                         settings = new PlatformSettings
                         {
+                            DynamicClientRegistrationEnabled = _authOptions.Value.EnableDynamicClientRegistration,
                             EnableTokenExchange = _authOptions.Value.EnableTokenExchange
                         };
                         _db.PlatformSettings.Add(settings);

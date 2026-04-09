@@ -1,9 +1,13 @@
 {
   "version": 1,
+  "platformSettings": {
+    "dynamicClientRegistrationEnabled": true
+  },
   "tenants": [
     {
       "slug": "default",
       "name": "Default Tenant",
+      "dynamicClientRegistrationRealm": "default",
       "clients": [
         {
           "clientId": "oidf-basic-primary",
