@@ -11,7 +11,7 @@ public static class FrontChannelPageBuilder
     /// Creates an HTML page with hidden iframes for front-channel logout notifications
     /// and optional auto-redirect to final logout page.
     /// </summary>
-    public static string BuildPage(IEnumerable<string> iframeUrls, string? refId, string? state)
+    public static string BuildPage(IEnumerable<string> iframeUrls, string? refId, string? state, string? cspNonce)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -32,7 +32,15 @@ public static class FrontChannelPageBuilder
         if (!string.IsNullOrEmpty(refId))
         {
             var finalUrl = "/logout/final?ref=" + HttpUtility.UrlEncode(refId);
-            sb.Append("<script>setTimeout(function(){ window.location.replace('");
+            sb.Append("<script");
+            if (!string.IsNullOrWhiteSpace(cspNonce))
+            {
+                sb.Append(" nonce=\"");
+                sb.Append(HttpUtility.HtmlAttributeEncode(cspNonce));
+                sb.Append("\"");
+            }
+
+            sb.Append(">setTimeout(function(){ window.location.replace('");
             sb.Append(HttpUtility.JavaScriptStringEncode(finalUrl));
             sb.Append("'); }, 200);</script>");
         }

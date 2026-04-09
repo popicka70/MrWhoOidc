@@ -1,21 +1,36 @@
 const portalConfig = {
     authority: 'https://localhost:8443/t/default',
+    oidcProxyBaseUrl: `${window.location.origin}/oidc/t/default`,
     clientId: 'portal-web',
     redirectUri: `${window.location.origin}/portal-callback.html`,
-    postLogoutRedirectUri: `${window.location.origin}/portal.html`,
-    licensingApiBaseUrl: 'https://localhost:7443',
+    postLogoutRedirectUri: `${window.location.origin}/portal-signed-out.html`,
+    licensingApiBaseUrl: `${window.location.origin}/licensing`,
     scope: 'openid profile email offline_access',
     storageKey: 'mrwho.portal.session',
-    pkceKey: 'mrwho.portal.pkce'
+    pkceKey: 'mrwho.portal.pkce',
+    sessionExpirySkewMs: 5000,
+    sessionExpiredMessage: 'Your portal session expired. Sign in again to continue.'
 };
 
 const pageState = {
     session: null,
     user: null,
-    me: null
+    me: null,
+    sessionExpiryTimerId: null
 };
 
-const isDevelopmentOperationsMode = window.location.hostname === 'localhost';
+const productPlans = {
+    mrwhopdf: [
+        { key: 'pdf-community', label: 'MrWhoPdf Community' },
+        { key: 'pdf-professional', label: 'MrWhoPdf Professional' },
+        { key: 'pdf-enterprise', label: 'MrWhoPdf Enterprise' }
+    ],
+    mrwhooidc: [
+        { key: 'oidc-community', label: 'MrWhoOidc Community' },
+        { key: 'oidc-professional', label: 'MrWhoOidc Professional' },
+        { key: 'oidc-enterprise', label: 'MrWhoOidc Enterprise' }
+    ]
+};
 
 function randomString(length) {
     const bytes = new Uint8Array(length);
@@ -51,12 +66,96 @@ function getPkce() {
     return raw ? JSON.parse(raw) : null;
 }
 
+function clearSessionExpiryTimer() {
+    if (pageState.sessionExpiryTimerId) {
+        window.clearTimeout(pageState.sessionExpiryTimerId);
+        pageState.sessionExpiryTimerId = null;
+    }
+}
+
+function isSessionExpired(session = pageState.session) {
+    if (!session?.accessToken || !Number.isFinite(session.expiresAt)) {
+        return false;
+    }
+
+    return Date.now() >= (session.expiresAt - portalConfig.sessionExpirySkewMs);
+}
+
+function renderSignedOutState(message = null) {
+    setVisible('signed-out-card', true);
+    setVisible('signed-in-card', false);
+    setVisible('dashboard-card', false);
+    setVisible('onboarding-card', false);
+    setVisible('ops-panel', false);
+
+    if (message) {
+        renderAlert('warning', message);
+        return;
+    }
+
+    renderAlert(null, null);
+}
+
+function createSessionExpiredError(message = portalConfig.sessionExpiredMessage) {
+    const error = new Error(message);
+    error.code = 'SESSION_EXPIRED';
+    error.status = 401;
+    return error;
+}
+
+function expireSession(message = portalConfig.sessionExpiredMessage) {
+    clearSession();
+    renderSignedOutState(message);
+}
+
+function scheduleSessionExpiry() {
+    clearSessionExpiryTimer();
+
+    if (!pageState.session?.accessToken) {
+        return;
+    }
+
+    if (isSessionExpired(pageState.session)) {
+        expireSession();
+        return;
+    }
+
+    const delay = Math.min(
+        Math.max(0, pageState.session.expiresAt - Date.now() - portalConfig.sessionExpirySkewMs),
+        2147483647);
+
+    pageState.sessionExpiryTimerId = window.setTimeout(() =>
+    {
+        expireSession();
+    }, delay);
+}
+
+function requireActiveSession() {
+    const session = loadSession();
+    if (!session?.accessToken) {
+        throw new Error('You are not signed in.');
+    }
+
+    if (isSessionExpired(session)) {
+        expireSession();
+        throw createSessionExpiredError();
+    }
+
+    return session;
+}
+
+function isSessionExpiredError(error) {
+    return error?.code === 'SESSION_EXPIRED';
+}
+
 function saveSession(session) {
     localStorage.setItem(portalConfig.storageKey, JSON.stringify(session));
     pageState.session = session;
+    scheduleSessionExpiry();
 }
 
 function clearSession() {
+    clearSessionExpiryTimer();
     localStorage.removeItem(portalConfig.storageKey);
     sessionStorage.removeItem(portalConfig.pkceKey);
     pageState.session = null;
@@ -80,6 +179,12 @@ function loadSession() {
         };
     }
 
+    if (pageState.session?.accessToken) {
+        scheduleSessionExpiry();
+    } else {
+        clearSessionExpiryTimer();
+    }
+
     return pageState.session;
 }
 
@@ -94,7 +199,15 @@ function parseJwt(token) {
 }
 
 async function fetchJson(url, options = {}) {
-    const response = await fetch(url, options);
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (error) {
+        const networkError = new Error(`Network request failed for ${url}.`);
+        networkError.cause = error;
+        throw networkError;
+    }
+
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
@@ -105,6 +218,30 @@ async function fetchJson(url, options = {}) {
     }
 
     return body;
+}
+
+async function getOidcMetadata() {
+    const metadata = await fetchJson(`${portalConfig.oidcProxyBaseUrl}/.well-known/openid-configuration`);
+    return {
+        ...metadata,
+        authorization_endpoint: `${portalConfig.authority}/authorize`,
+        token_endpoint: `${portalConfig.oidcProxyBaseUrl}/token`
+    };
+}
+
+async function buildAuthorizationUrl() {
+    const metadata = await getOidcMetadata();
+    const pkce = await createPkce();
+    const url = new URL(metadata.authorization_endpoint);
+    url.searchParams.set('client_id', portalConfig.clientId);
+    url.searchParams.set('redirect_uri', portalConfig.redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', portalConfig.scope);
+    url.searchParams.set('code_challenge', pkce.challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    url.searchParams.set('state', pkce.state);
+    url.searchParams.set('nonce', pkce.nonce);
+    return url;
 }
 
 function setText(id, value) {
@@ -118,6 +255,28 @@ function setVisible(id, visible) {
     const node = document.getElementById(id);
     if (node) {
         node.classList.toggle('d-none', !visible);
+    }
+}
+
+function syncRequestPlanOptions(preferredPlanKey) {
+    const productSelect = document.getElementById('productKey');
+    const planSelect = document.getElementById('planKey');
+    if (!productSelect || !planSelect) {
+        return;
+    }
+
+    const selectedProductKey = productSelect.value;
+    const plans = productPlans[selectedProductKey] || [];
+    const selectedPlanKey = plans.some(plan => plan.key === preferredPlanKey)
+        ? preferredPlanKey
+        : plans[0]?.key;
+
+    planSelect.innerHTML = plans
+        .map(plan => `<option value="${plan.key}">${plan.label}</option>`)
+        .join('');
+
+    if (selectedPlanKey) {
+        planSelect.value = selectedPlanKey;
     }
 }
 
@@ -138,18 +297,15 @@ function renderAlert(kind, message) {
 }
 
 async function beginLogin() {
-    const metadata = await fetchJson(`${portalConfig.authority}/.well-known/openid-configuration`);
-    const pkce = await createPkce();
-    const url = new URL(metadata.authorization_endpoint);
-    url.searchParams.set('client_id', portalConfig.clientId);
-    url.searchParams.set('redirect_uri', portalConfig.redirectUri);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', portalConfig.scope);
-    url.searchParams.set('code_challenge', pkce.challenge);
-    url.searchParams.set('code_challenge_method', 'S256');
-    url.searchParams.set('state', pkce.state);
-    url.searchParams.set('nonce', pkce.nonce);
+    const url = await buildAuthorizationUrl();
     window.location.assign(url.toString());
+}
+
+async function beginRegistration() {
+    const authorizeUrl = await buildAuthorizationUrl();
+    const registrationUrl = new URL(`${portalConfig.authority}/Registrations`);
+    registrationUrl.searchParams.set('returnUrl', `${authorizeUrl.pathname}${authorizeUrl.search}`);
+    window.location.assign(registrationUrl.toString());
 }
 
 async function finishLogin() {
@@ -169,7 +325,7 @@ async function finishLogin() {
         throw new Error('OIDC state validation failed.');
     }
 
-    const metadata = await fetchJson(`${portalConfig.authority}/.well-known/openid-configuration`);
+    const metadata = await getOidcMetadata();
     const body = new URLSearchParams();
     body.set('grant_type', 'authorization_code');
     body.set('client_id', portalConfig.clientId);
@@ -221,19 +377,43 @@ function beginLogout() {
 }
 
 async function authorizedJson(path, init = {}) {
-    const session = loadSession();
-    if (!session?.accessToken) {
-        throw new Error('You are not signed in.');
-    }
+    const session = requireActiveSession();
 
-    return fetchJson(`${portalConfig.licensingApiBaseUrl}${path}`, {
+    try {
+        return await fetchJson(`${portalConfig.licensingApiBaseUrl}${path}`, {
+            ...init,
+            headers: {
+                'Authorization': `Bearer ${session.accessToken}`,
+                'Content-Type': 'application/json',
+                ...(init.headers || {})
+            }
+        });
+    } catch (error) {
+        if (error.status === 401) {
+            expireSession();
+            throw createSessionExpiredError();
+        }
+
+        throw error;
+    }
+}
+
+async function authorizedFetch(path, init = {}) {
+    const session = requireActiveSession();
+    const response = await fetch(`${portalConfig.licensingApiBaseUrl}${path}`, {
         ...init,
         headers: {
             'Authorization': `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
             ...(init.headers || {})
         }
     });
+
+    if (response.status === 401) {
+        expireSession();
+        throw createSessionExpiredError();
+    }
+
+    return response;
 }
 
 async function loadPortalContext() {
@@ -266,14 +446,35 @@ function renderLicenses(licenses) {
         return;
     }
 
-    body.innerHTML = licenses.map(license => `
+    body.innerHTML = licenses.map(license => {
+        const linkedRequest = findRequestForLicense(license.licenseChangeRequestId);
+        const sourceLabel = linkedRequest
+            ? `Request ${shortId(linkedRequest.id)} / ${linkedRequest.status}`
+            : 'Manual grant';
+        const canDownload = license.downloadReady && (!linkedRequest || linkedRequest.status === 'Fulfilled');
+        const actionLabel = canDownload
+            ? `<button type="button" class="btn btn-sm btn-outline-primary" data-download-license-id="${license.id}">Download</button>`
+            : '<span class="text-secondary small">Pending</span>';
+        const validityLabel = `<div>${license.validFrom}</div><div class="license-source-note">until ${license.validUntil ?? 'Open-ended'}</div>`;
+
+        return `
         <tr>
             <td>${license.productKey}</td>
-            <td>${license.planKey}</td>
+            <td><div>${license.planKey}</div><div class="license-source-note">${sourceLabel}</div></td>
             <td>${license.status}</td>
-            <td>${license.validFrom}</td>
-            <td>${license.validUntil ?? 'Open-ended'}</td>
-        </tr>`).join('');
+            <td>${validityLabel}</td>
+            <td>${actionLabel}</td>
+        </tr>`;
+    }).join('');
+}
+
+function findRequestForLicense(requestId) {
+    if (!requestId) {
+        return null;
+    }
+
+    const requests = pageState.me?.licenseRequests || [];
+    return requests.find(request => request.id === requestId) || null;
 }
 
 function shortId(value) {
@@ -327,6 +528,71 @@ function renderPayments(payments) {
         </tr>`).join('');
 }
 
+function renderPaymentInstructions(instructions) {
+    const body = document.getElementById('payment-instructions-body');
+    if (!body) {
+        return;
+    }
+
+    if (!instructions || instructions.length === 0) {
+        body.innerHTML = '<div class="col-12"><div class="text-secondary">No payment instructions yet.</div></div>';
+        return;
+    }
+
+    body.innerHTML = instructions.map((instruction, index) => `
+        <div class="col-md-6">
+            <div class="payment-instruction-card p-3 shadow-sm">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <div class="fw-semibold">${escapeHtml(instruction.productKey)} / ${escapeHtml(instruction.requestedPlanKey)}</div>
+                        <div class="small text-secondary">${escapeHtml(instruction.changeType)} request ${escapeHtml(shortId(instruction.licenseChangeRequestId))}</div>
+                    </div>
+                    <span class="badge text-bg-light border">${escapeHtml(instruction.paymentStatus || 'Pending')}</span>
+                </div>
+                <div id="payment-qr-${index}" class="payment-qr mb-3"></div>
+                <div class="row g-2 small">
+                    <div class="col-6">
+                        <div class="payment-meta-label">Amount</div>
+                        <div>${escapeHtml(`${instruction.amount} ${instruction.currency}`)}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="payment-meta-label">Reference</div>
+                        <div>${escapeHtml(instruction.paymentReference)}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="payment-meta-label">Description</div>
+                        <div>${escapeHtml(instruction.paymentDescription)}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="payment-meta-label">Expires</div>
+                        <div>${escapeHtml(new Date(instruction.expiresAtUtc).toLocaleString())}</div>
+                    </div>
+                </div>
+            </div>
+        </div>`).join('');
+
+    instructions.forEach((instruction, index) => {
+        const node = document.getElementById(`payment-qr-${index}`);
+        if (!node) {
+            return;
+        }
+
+        if (!window.QRCode?.toCanvas) {
+            node.innerHTML = '<div class="text-secondary small">QR rendering unavailable.</div>';
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        node.innerHTML = '';
+        node.appendChild(canvas);
+        window.QRCode.toCanvas(canvas, instruction.qrPayload, { width: 160, margin: 1 }, error => {
+            if (error) {
+                node.innerHTML = '<div class="text-secondary small">QR rendering unavailable.</div>';
+            }
+        });
+    });
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -336,109 +602,18 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function findPaymentForRequest(requestId) {
-    const payments = pageState.me?.payments || [];
-    return payments.find(payment => payment.licenseChangeRequestId === requestId) || null;
-}
-
-function findLicenseForRequest(requestId) {
-    const licenses = pageState.me?.licenses || [];
-    return licenses.find(license => license.licenseChangeRequestId === requestId) || null;
-}
-
-function renderOpsRequestOptions() {
-    const select = document.getElementById('opsRequestId');
-    if (!select) {
-        return;
-    }
-
-    const requests = pageState.me?.licenseRequests || [];
-    if (requests.length === 0) {
-        select.innerHTML = '<option value="">No requests available</option>';
-        select.disabled = true;
-        return;
-    }
-
-    select.disabled = false;
-    select.innerHTML = requests.map(request =>
-        `<option value="${request.id}">${escapeHtml(request.productKey)} / ${escapeHtml(request.requestedPlanKey)} / ${escapeHtml(request.status)}</option>`).join('');
-}
-
-function buildRequestActions(request) {
-    const payment = findPaymentForRequest(request.id);
-    const license = findLicenseForRequest(request.id);
-    const actions = [];
-
-    if (request.status === 'Submitted') {
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-secondary" data-request-action="UnderReview" data-request-id="${request.id}">Review</button>`);
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-success" data-request-action="Approved" data-request-id="${request.id}">Approve</button>`);
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-request-action="Rejected" data-request-id="${request.id}">Reject</button>`);
-    }
-
-    if (request.status === 'UnderReview') {
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-success" data-request-action="Approved" data-request-id="${request.id}">Approve</button>`);
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-request-action="Rejected" data-request-id="${request.id}">Reject</button>`);
-    }
-
-    if (payment && payment.status === 'Pending') {
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-primary" data-payment-action="Received" data-payment-id="${payment.id}">Mark received</button>`);
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-payment-action="Cancelled" data-payment-id="${payment.id}">Cancel payment</button>`);
-    }
-
-    if (payment && payment.status === 'Received') {
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-primary" data-payment-action="Reconciled" data-payment-id="${payment.id}">Reconcile</button>`);
-        actions.push(`<button type="button" class="btn btn-sm btn-outline-danger" data-payment-action="Cancelled" data-payment-id="${payment.id}">Cancel payment</button>`);
-    }
-
-    if (request.status === 'Approved' && payment?.status === 'Reconciled' && !license) {
-        actions.push(`<button type="button" class="btn btn-sm btn-accent" data-fulfill-request-id="${request.id}">Fulfill license</button>`);
-    }
-
-    return actions.length > 0
-        ? `<div class="ops-actions">${actions.join('')}</div>`
-        : '<span class="text-secondary small">No actions</span>';
-}
-
-function renderOpsPanel() {
-    setVisible('ops-panel', !!pageState.me && isDevelopmentOperationsMode);
-
-    const body = document.getElementById('ops-requests-body');
-    if (!body || !pageState.me || !isDevelopmentOperationsMode) {
-        return;
-    }
-
-    const requests = pageState.me.licenseRequests || [];
-    if (requests.length === 0) {
-        body.innerHTML = '<tr><td colspan="4" class="text-secondary">No requests available for ops actions.</td></tr>';
-        renderOpsRequestOptions();
-        return;
-    }
-
-    body.innerHTML = requests.map(request => {
-        const payment = findPaymentForRequest(request.id);
-        const license = findLicenseForRequest(request.id);
-        const paymentSummary = payment
-            ? `${escapeHtml(payment.status)}${payment.externalReference ? ` / ${escapeHtml(payment.externalReference)}` : ''}`
-            : 'No payment';
-        const licenseSummary = license ? ` / Fulfilled as ${escapeHtml(shortId(license.id))}` : '';
-
-        return `
-            <tr>
-                <td>
-                    <div class="fw-semibold">${escapeHtml(request.productKey)} / ${escapeHtml(request.requestedPlanKey)}</div>
-                    <div class="small text-secondary">${escapeHtml(shortId(request.id))}${request.reason ? ` / ${escapeHtml(request.reason)}` : ''}</div>
-                </td>
-                <td>${escapeHtml(request.status)}</td>
-                <td>${paymentSummary}${licenseSummary}</td>
-                <td>${buildRequestActions(request)}</td>
-            </tr>`;
-    }).join('');
-
-    renderOpsRequestOptions();
-}
-
 function renderDashboard() {
     const session = loadSession();
+    if (!session?.accessToken || isSessionExpired(session)) {
+        if (session?.accessToken) {
+            expireSession();
+            return;
+        }
+
+        renderSignedOutState();
+        return;
+    }
+
     const claims = session?.claims || {};
     setVisible('signed-out-card', false);
     setVisible('signed-in-card', true);
@@ -455,7 +630,15 @@ function renderDashboard() {
     renderLicenses(pageState.me?.licenses || []);
     renderLicenseRequests(pageState.me?.licenseRequests || []);
     renderPayments(pageState.me?.payments || []);
-    renderOpsPanel();
+    renderPaymentInstructions(pageState.me?.paymentInstructions || []);
+}
+
+function handlePortalError(error) {
+    if (isSessionExpiredError(error)) {
+        return;
+    }
+
+    renderAlert('danger', error.message);
 }
 
 async function handleOnboardingSubmit(event) {
@@ -478,13 +661,21 @@ async function handleOnboardingSubmit(event) {
         renderDashboard();
         renderAlert('success', 'Organization onboarding completed.');
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
 async function handleLicenseRequestSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const availablePlans = productPlans[form.productKey.value] || [];
+    const selectedPlan = availablePlans.find(plan => plan.key === form.planKey.value);
+    if (!selectedPlan) {
+        renderAlert('danger', 'Select a valid plan for the chosen product.');
+        syncRequestPlanOptions();
+        return;
+    }
+
     const payload = {
         organizationId: pageState.me.organization.id,
         productKey: form.productKey.value,
@@ -501,108 +692,58 @@ async function handleLicenseRequestSubmit(event) {
         await loadPortalContext();
         renderAlert('success', 'Request submitted. A license will be issued only after payment is recorded, reconciled, and the request is fulfilled.');
         form.reset();
+        syncRequestPlanOptions();
     } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
-async function updateLicenseRequestStatus(requestId, status) {
-    await authorizedJson(`/api/license-requests/${requestId}/status`, {
-        method: 'POST',
-        body: JSON.stringify({ status })
-    });
+function getDownloadFileName(response, fallbackFileName) {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    const match = contentDisposition?.match(/filename="?([^";]+)"?/i);
+    return match?.[1] || fallbackFileName;
 }
 
-async function updatePaymentStatus(paymentId, status) {
-    await authorizedJson(`/api/payment-records/${paymentId}/status`, {
-        method: 'POST',
-        body: JSON.stringify({ status })
-    });
+async function downloadLicenseKey(licenseId) {
+    const response = await authorizedFetch(`/api/licenses/${licenseId}/download`);
+    if (!response.ok) {
+        const text = await response.text();
+        let message = `Request failed with status ${response.status}`;
+        if (text) {
+            try {
+                const body = JSON.parse(text);
+                message = body?.title || body?.detail || message;
+            } catch {
+                message = text;
+            }
+        }
+
+        throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = getDownloadFileName(response, `license-${licenseId}.jwt`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
 }
 
-async function fulfillLicenseRequest(requestId) {
-    const expiration = new Date();
-    expiration.setFullYear(expiration.getFullYear() + 1);
+async function handleDashboardActionsClick(event) {
+    const downloadButton = event.target.closest('[data-download-license-id]');
 
-    await authorizedJson('/api/licenses/issue', {
-        method: 'POST',
-        body: JSON.stringify({
-            licenseRequestId: requestId,
-            expiresAt: expiration.toISOString(),
-            createdBy: 'portal-ops'
-        })
-    });
-}
-
-async function handleOpsPaymentSubmit(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const requestId = form.opsRequestId.value;
-    const linkedRequest = (pageState.me?.licenseRequests || []).find(request => request.id === requestId);
-    if (!linkedRequest) {
-        renderAlert('danger', 'Select a valid license request before recording a payment.');
+    if (!downloadButton) {
         return;
     }
 
     try {
-        await authorizedJson('/api/payment-records', {
-            method: 'POST',
-            body: JSON.stringify({
-                organizationId: pageState.me.organization.id,
-                licenseChangeRequestId: linkedRequest.id,
-                productKey: linkedRequest.productKey,
-                amount: Number(form.opsAmount.value),
-                currency: form.opsCurrency.value,
-                externalReference: form.opsExternalReference.value || null,
-                notes: form.opsNotes.value || null
-            })
-        });
-
-        await loadPortalContext();
-        renderAlert('success', 'Payment record created. Move it to received and reconciled when processing completes.');
-        form.reset();
-        form.opsCurrency.value = 'USD';
-        form.opsAmount.value = '249.00';
+        await downloadLicenseKey(downloadButton.dataset.downloadLicenseId);
+        renderAlert('success', 'License key download started.');
     } catch (error) {
-        renderAlert('danger', error.message);
-    }
-}
-
-async function handleOpsActionsClick(event) {
-    const requestButton = event.target.closest('[data-request-action]');
-    const paymentButton = event.target.closest('[data-payment-action]');
-    const fulfillButton = event.target.closest('[data-fulfill-request-id]');
-
-    if (!requestButton && !paymentButton && !fulfillButton) {
-        return;
-    }
-
-    try {
-        if (requestButton) {
-            await updateLicenseRequestStatus(
-                requestButton.dataset.requestId,
-                requestButton.dataset.requestAction);
-            await loadPortalContext();
-            renderAlert('success', `Request moved to ${requestButton.dataset.requestAction}.`);
-            return;
-        }
-
-        if (paymentButton) {
-            await updatePaymentStatus(
-                paymentButton.dataset.paymentId,
-                paymentButton.dataset.paymentAction);
-            await loadPortalContext();
-            renderAlert('success', `Payment moved to ${paymentButton.dataset.paymentAction}.`);
-            return;
-        }
-
-        if (fulfillButton) {
-            await fulfillLicenseRequest(fulfillButton.dataset.fulfillRequestId);
-            await loadPortalContext();
-            renderAlert('success', 'Approved paid request fulfilled into an issued license.');
-        }
-    } catch (error) {
-        renderAlert('danger', error.message);
+        handlePortalError(error);
     }
 }
 
@@ -619,6 +760,16 @@ async function bootstrapPortalPage() {
         }
     });
 
+    document.getElementById('register-button')?.addEventListener('click', async () =>
+    {
+        renderAlert(null, null);
+        try {
+            await beginRegistration();
+        } catch (error) {
+            renderAlert('danger', error.message);
+        }
+    });
+
     document.getElementById('logout-button')?.addEventListener('click', () =>
     {
         beginLogout();
@@ -626,21 +777,43 @@ async function bootstrapPortalPage() {
 
     document.getElementById('onboarding-form')?.addEventListener('submit', handleOnboardingSubmit);
     document.getElementById('request-license-form')?.addEventListener('submit', handleLicenseRequestSubmit);
-    document.getElementById('ops-payment-form')?.addEventListener('submit', handleOpsPaymentSubmit);
-    document.getElementById('ops-panel')?.addEventListener('click', handleOpsActionsClick);
+    document.getElementById('dashboard-card')?.addEventListener('click', handleDashboardActionsClick);
+    document.getElementById('productKey')?.addEventListener('change', () => syncRequestPlanOptions());
+    document.addEventListener('visibilitychange', () =>
+    {
+        if (document.hidden || !pageState.session?.accessToken) {
+            return;
+        }
+
+        if (isSessionExpired(pageState.session)) {
+            expireSession();
+            return;
+        }
+
+        scheduleSessionExpiry();
+    });
+    syncRequestPlanOptions();
 
     if (!pageState.session?.accessToken) {
-        setVisible('signed-out-card', true);
-        setVisible('signed-in-card', false);
-        setVisible('dashboard-card', false);
-        setVisible('onboarding-card', false);
+        renderSignedOutState();
+        return;
+    }
+
+    if (isSessionExpired(pageState.session)) {
+        expireSession();
         return;
     }
 
     try {
         await loadPortalContext();
     } catch (error) {
-        renderAlert('danger', error.message);
+        if (isSessionExpiredError(error)) {
+            return;
+        }
+
+        renderAlert('danger', error.message.includes('Network request failed')
+            ? 'Portal could not reach the local licensing services. Refresh once the stack is ready.'
+            : error.message);
     }
 
     renderDashboard();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -51,6 +52,9 @@ public class SeedManifestApplierTests
 
         _oidcOptions.Setup(o => o.Value).Returns(new OidcOptions());
         _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions());
+        _clientStore
+            .Setup(store => store.InvalidateClientCacheAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         _applier = new SeedManifestApplier(
             _db,
@@ -108,5 +112,112 @@ public class SeedManifestApplierTests
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
 #pragma warning restore CS8602, CS8620
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_CreatesClient_WithAutoAssignNewUsersToClientFromManifest()
+    {
+        var tenantId = Guid.NewGuid();
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        _db.Realms.Add(new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        });
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "portal-web",
+                            ClientName = "Licensing Portal Web",
+                            AutoAssignNewUsersToClient = true,
+                            Realm = "admin"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var client = _db.Clients.Single(item => item.ClientId == "portal-web" && item.TenantId == tenantId);
+        Assert.IsTrue(client.AutoAssignNewUsersToClient);
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_UpdatesExistingClient_AutoAssignNewUsersToClientWhenAllowed()
+    {
+        var tenantId = Guid.NewGuid();
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+        _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions { AllowUpdates = true });
+
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        };
+        _db.Realms.Add(realm);
+
+        _db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = tenantId,
+            ClientId = "portal-web",
+            ClientName = "Licensing Portal Web",
+            RealmId = realm.Id,
+            AutoAssignNewUsersToClient = false
+        });
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "portal-web",
+                            ClientName = "Licensing Portal Web",
+                            AutoAssignNewUsersToClient = true,
+                            Realm = "admin"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var client = _db.Clients.Single(item => item.ClientId == "portal-web" && item.TenantId == tenantId);
+        Assert.IsTrue(client.AutoAssignNewUsersToClient);
     }
 }

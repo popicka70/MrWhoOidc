@@ -274,6 +274,35 @@ pre {
     gap: 0.5rem;
 }
 
+.payment-instruction-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #fff;
+    height: 100%;
+}
+
+.payment-qr {
+    min-height: 172px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+}
+
+.payment-qr canvas,
+.payment-qr img {
+    max-width: 100%;
+    height: auto;
+}
+
+.payment-meta-label {
+    font-size: 0.75rem;
+    color: var(--mrwho-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .portal-signed-in-actions {
     display: flex;
     gap: 0.75rem;
@@ -283,6 +312,19 @@ pre {
 .table td,
 .table th {
     vertical-align: middle;
+}
+
+.issued-licenses-table td,
+.issued-licenses-table th {
+    white-space: nowrap;
+}
+
+.issued-licenses-table .license-source-note {
+    display: block;
+    color: var(--mrwho-muted);
+    font-size: 0.75rem;
+    white-space: normal;
+    line-height: 1.25;
 }
 
 /* ===== Footer ===== */

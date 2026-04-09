@@ -20,6 +20,21 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        context.ProblemDetails.Instance = context.HttpContext.Request.Path;
+
+        if (!builder.Environment.IsDevelopment()
+            && context.ProblemDetails.Status is >= StatusCodes.Status500InternalServerError)
+        {
+            context.ProblemDetails.Title = "Internal Server Error";
+            context.ProblemDetails.Detail = "An unexpected error occurred.";
+        }
+    };
+});
+
 // Force early load of Auth assembly to avoid stale/partial incremental build races impacting extension method availability.
 _ = typeof(MrWhoOidc.Auth.AuthServiceCollectionExtensions);
 
@@ -240,7 +255,7 @@ builder.Services.AddScoped<MrWhoOidc.Auth.Services.IOboSetupOrchestrator, MrWhoO
 builder.Services.AddOidcCorsPolicy(oidcOptions);
 
 // Rate limiting policies extracted
-builder.Services.AddRateLimitingPolicies(redisMux is not null, redisMux);
+builder.Services.AddRateLimitingPolicies(true, redisMux);
 
 // (Handlers & grant registrations moved into AddMrWhoOidcPersistenceAndCore)
 builder.Services.Configure<FederatedLogoutOptions>(builder.Configuration.GetSection("FederatedLogout"));
