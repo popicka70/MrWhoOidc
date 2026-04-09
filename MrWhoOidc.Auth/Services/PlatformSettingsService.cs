@@ -34,7 +34,7 @@ public class PlatformSettingsService : IPlatformSettingsService
 
         var tags = new List<string> { "platform-settings" };
 
-        return await _cache.GetOrCreateAsync(
+        var cachedSettings = await _cache.GetOrCreateAsync(
             CacheKey,
             async cancel =>
             {
@@ -42,60 +42,54 @@ public class PlatformSettingsService : IPlatformSettingsService
                 var strategy = _db.Database.CreateExecutionStrategy();
                 return await strategy.ExecuteAsync(async ct =>
                 {
-                    var settings = await _db.PlatformSettings.FirstOrDefaultAsync(ct);
+                    var settings = await _db.PlatformSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(ct)
+                        .ConfigureAwait(false);
 
                     if (settings == null)
                     {
                         // Create default settings on first access
-                        settings = new PlatformSettings
-                        {
-                            DynamicClientRegistrationEnabled = _authOptions.Value.EnableDynamicClientRegistration,
-                            EnableTokenExchange = _authOptions.Value.EnableTokenExchange
-                        };
+                        settings = CreateDefaultSettings();
                         _db.PlatformSettings.Add(settings);
-                        await _db.SaveChangesAsync(ct);
+                        await _db.SaveChangesAsync(ct).ConfigureAwait(false);
                     }
 
-                    return settings;
+                    return CloneSettings(settings);
                 }, cancel);
             },
             options,
             tags,
             CancellationToken.None
         ).ConfigureAwait(false);
+
+        return CloneSettings(cachedSettings);
     }
 
     /// <inheritdoc />
     public async Task UpdateSettingsAsync(PlatformSettings settings, string? updatedBy)
     {
-        settings.UpdatedAt = DateTimeOffset.UtcNow;
-        settings.UpdatedBy = updatedBy;
-
-        // Check if this entity or another entity with same key is already being tracked
-        var trackedEntity = _db.ChangeTracker.Entries<PlatformSettings>()
-            .FirstOrDefault(e => e.Entity.Id == settings.Id);
-
-        if (trackedEntity != null)
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            // If different instance with same key is tracked, detach it first
-            if (!ReferenceEquals(trackedEntity.Entity, settings))
+            var currentSettings = await _db.PlatformSettings.FirstOrDefaultAsync().ConfigureAwait(false);
+            var now = DateTimeOffset.UtcNow;
+
+            if (currentSettings == null)
             {
-                trackedEntity.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                currentSettings = CreateDefaultSettings();
+                currentSettings.CreatedAt = settings.CreatedAt == default ? now : settings.CreatedAt;
+                _db.PlatformSettings.Add(currentSettings);
             }
-        }
 
-        // Now attach/update the settings entity
-        var entry = _db.Entry(settings);
-        if (entry.State == Microsoft.EntityFrameworkCore.EntityState.Detached)
-        {
-            _db.PlatformSettings.Update(settings);
-        }
-        else
-        {
-            entry.State = Microsoft.EntityFrameworkCore.EntityState.Modified;
-        }
+            currentSettings.QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled;
+            currentSettings.DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled;
+            currentSettings.EnableTokenExchange = settings.EnableTokenExchange;
+            currentSettings.UpdatedAt = now;
+            currentSettings.UpdatedBy = updatedBy;
 
-        await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync().ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         // Invalidate cache so changes take effect immediately
         await _cache.RemoveAsync(CacheKey).ConfigureAwait(false);
@@ -107,4 +101,23 @@ public class PlatformSettingsService : IPlatformSettingsService
         var settings = await GetSettingsAsync();
         return settings.QrLoginAtDiscoveryEnabled;
     }
+
+    private PlatformSettings CreateDefaultSettings()
+        => new()
+        {
+            DynamicClientRegistrationEnabled = _authOptions.Value.EnableDynamicClientRegistration,
+            EnableTokenExchange = _authOptions.Value.EnableTokenExchange
+        };
+
+    private static PlatformSettings CloneSettings(PlatformSettings settings)
+        => new()
+        {
+            Id = settings.Id,
+            QrLoginAtDiscoveryEnabled = settings.QrLoginAtDiscoveryEnabled,
+            DynamicClientRegistrationEnabled = settings.DynamicClientRegistrationEnabled,
+            EnableTokenExchange = settings.EnableTokenExchange,
+            CreatedAt = settings.CreatedAt,
+            UpdatedAt = settings.UpdatedAt,
+            UpdatedBy = settings.UpdatedBy
+        };
 }
