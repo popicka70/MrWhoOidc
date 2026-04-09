@@ -58,18 +58,28 @@ public sealed class AuthorizeRequestValidator(
             }
         }
 
+        AuthorizeValidationResult ClientError(string code, string description) => new(
+            IsValid: false,
+            Error: code,
+            ErrorDescription: description,
+            ClientId: client.ClientId,
+            RedirectUri: request.redirect_uri,
+            ResponseMode: request.response_mode,
+            State: request.state
+        );
+
         if (client.RequirePkce)
         {
             if (string.IsNullOrWhiteSpace(request.code_challenge) || !string.Equals(request.code_challenge_method, OAuthConstants.CodeChallengeMethods.S256, StringComparison.Ordinal))
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "PKCE S256 is required for this client");
         }
 
         if (string.IsNullOrWhiteSpace(request.nonce))
-            return Error(OAuthConstants.ErrorCodes.InvalidRequest, "Missing nonce");
+            return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "Missing nonce");
 
         var scopes = (request.scope ?? OidcConstants.Scopes.OpenId).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (!scopes.Contains(OidcConstants.Scopes.OpenId))
-            return Error(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
+            return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "scope must include 'openid'");
 
         // Enforce requested scopes ? assigned client scopes (if any assigned)
         var allowedScopes = await db.ClientScopes
@@ -85,7 +95,7 @@ public sealed class AuthorizeRequestValidator(
         {
             if (!allowedScopes.Contains(OidcConstants.Scopes.Tenants, StringComparer.Ordinal))
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, "The 'tenants' scope is not enabled for this client.");
             }
         }
         if (allowedScopes.Count > 0)
@@ -93,13 +103,13 @@ public sealed class AuthorizeRequestValidator(
             var invalid = scopes.Where(s => !allowedScopes.Contains(s, StringComparer.Ordinal)).ToArray();
             if (invalid.Length > 0)
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidScope, $"The following scopes are not allowed for this client: {string.Join(", ", invalid)}");
             }
         }
 
         // RFC 8707 resource (optional): must be absolute URI when present
         if (!string.IsNullOrEmpty(request.resource) && !UrlComparison.IsValidAbsolute(request.resource))
-            return Error(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
+            return ClientError(OAuthConstants.ErrorCodes.InvalidTarget, "resource must be an absolute URI");
 
         // response_mode (optional): support standard modes and JARM modes
         string? responseMode = request.response_mode;
@@ -116,7 +126,7 @@ public sealed class AuthorizeRequestValidator(
             };
             if (!validModes.Contains(responseMode, StringComparer.Ordinal))
             {
-                return Error(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
+                return ClientError(OAuthConstants.ErrorCodes.UnsupportedResponseMode,
                     $"Unsupported response_mode '{responseMode}'. Supported modes: query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt");
             }
         }
@@ -135,13 +145,13 @@ public sealed class AuthorizeRequestValidator(
             var invalid = promptValues.Where(p => !supported.Contains(p, StringComparer.Ordinal)).ToArray();
             if (invalid.Length > 0)
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest,
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest,
                     $"Unsupported prompt value(s): {string.Join(", ", invalid)}");
             }
 
             if (promptValues.Contains("none", StringComparer.Ordinal) && promptValues.Length > 1)
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "prompt=none must not be combined with other prompt values");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "prompt=none must not be combined with other prompt values");
             }
         }
 
@@ -151,7 +161,7 @@ public sealed class AuthorizeRequestValidator(
         {
             if (!int.TryParse(request.max_age, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 0)
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, "max_age must be a non-negative integer");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, "max_age must be a non-negative integer");
             }
             maxAgeSeconds = parsed;
         }
@@ -177,7 +187,7 @@ public sealed class AuthorizeRequestValidator(
                     out var normalized,
                     out var claimsError))
             {
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, claimsError ?? "Invalid claims parameter");
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, claimsError ?? "Invalid claims parameter");
             }
             normalizedClaimsJson = normalized;
         }
@@ -188,7 +198,7 @@ public sealed class AuthorizeRequestValidator(
         {
             var authDetailsError = ValidateAuthorizationDetails(request.authorization_details, out normalizedAuthorizationDetailsJson);
             if (authDetailsError is not null)
-                return Error(OAuthConstants.ErrorCodes.InvalidRequest, authDetailsError);
+                return ClientError(OAuthConstants.ErrorCodes.InvalidRequest, authDetailsError);
         }
 
         return new AuthorizeValidationResult(

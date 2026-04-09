@@ -5,6 +5,7 @@ using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
 using System.Text;
@@ -420,7 +421,7 @@ public sealed class ClientConfigurationHandler(
             ClientSecret = null, // Never return client_secret on GET/PUT
             ClientIdIssuedAt = 0, // We don't track this
             ClientSecretExpiresAt = 0, // 0 = never expires
-            RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{client.ClientId}"!,
+            RegistrationClientUri = $"{http.GetIssuer().TrimEnd('/')}/register/{client.ClientId}"!,
             RedirectUris = redirectUris,
             TokenEndpointAuthMethod = client.TokenEndpointAuthMethod,
             GrantTypes = ParseStringList(client.GrantTypesJson),

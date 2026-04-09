@@ -6,8 +6,8 @@ What it does:
 
 - renders a seed manifest with OpenID Foundation callback and logout URIs
 - starts the local WebAuth certification issuer through Docker Compose
-- enables Dynamic Client Registration prerequisites for the certification stack
-- verifies the issuer contract needed for `Config OP` and `Basic OP`
+- enables Dynamic Client Registration prerequisites for the certification stack, including a deterministic initial access token
+- verifies the issuer contract needed for `Config OP`, `Basic OP`, and the locally testable portions of `Dynamic OP`
 - renders repo-managed hosted-suite and official runner inputs
 
 This harness does not submit results to the OpenID Foundation and does not attempt to drive the hosted suite UI. It prepares a stable issuer that can be targeted from the official conformance suite.
@@ -15,7 +15,7 @@ This harness does not submit results to the OpenID Foundation and does not attem
 ## Files
 
 - `start-self-certification.ps1` - renders the certification manifest, starts the stack, and runs verification
-- `verify-self-certification.ps1` - checks discovery, JWKS, logout metadata, DCR routing, and seeded clients
+- `verify-self-certification.ps1` - checks discovery fidelity, JWKS, negative authorize behavior, PAR when available, DCR CRUD, logout metadata, and seeded clients
 - `prepare-conformance-suite.ps1` - renders hosted-suite inputs, runner environment variables, and empty expected-failure / expected-skip files
 - `invoke-official-run-test-plan.ps1` - wraps the official `run-test-plan.py` script with the correct environment variables for this issuer
 - `docker-compose.certification.dev.yml` - Compose overlay that mounts the generated manifest and enables certification-specific settings
@@ -32,6 +32,10 @@ Client secrets:
 
 - `oidf-basic-primary-dev-secret`
 - `oidf-basic-secondary-dev-secret`
+
+Dynamic registration initial access token:
+
+- `oidf-dcr-initial-access-token`
 
 These clients are intended for the official OP flow where the suite may require manually registered clients. The deployment also enables and advertises Dynamic Client Registration so you can test that path separately.
 
@@ -111,13 +115,13 @@ The current starter scope is:
 - `Config OP`
 - `Basic OP`
 - `Form Post OP`
-- Dynamic-registration prerequisites (`registration_endpoint` and `/register` routing)
+- locally testable `Dynamic OP` coverage (`registration_endpoint`, seeded initial access token, and `/register` CRUD smoke)
 
-`Dynamic OP` still remains a second-phase target overall, because metadata fidelity and round-trip behavior are not the same thing as merely advertising and routing `/register`.
+The official hosted-suite `Dynamic OP` profile still depends on the OpenID Foundation runner and any additional profile-specific config it requires. The local harness now covers the repo-side DCR prerequisites and an end-to-end CRUD smoke path.
 
 The current repo-managed runner scaffolding now covers:
 
 - stable issuer bootstrap
-- verifier checks for discovery, logout metadata, DCR routing, and fallback clients
+- verifier checks for discovery fidelity, logout metadata, negative authorize flows, PAR when advertised, DCR CRUD, and fallback clients
 - generated hosted-suite inputs and runner environment files
 - a thin wrapper around the official `run-test-plan.py` automation entrypoint

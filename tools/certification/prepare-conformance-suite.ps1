@@ -6,6 +6,7 @@ param(
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
+    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
     [string]$PublicServerBaseUrl,
     [string]$LocalServerBaseUrl,
     [string]$MtlsServerBaseUrl,
@@ -107,6 +108,10 @@ $inputs = [ordered]@{
         frontChannelLogout = $frontChannelLogoutUrl
         backChannelLogout = $backChannelLogoutUrl
     }
+    dynamicRegistration = [ordered]@{
+        endpoint = $registrationUrl
+        initialAccessToken = $DynamicRegistrationInitialAccessToken
+    }
     fallbackClients = @(
         [ordered]@{
             clientId = "oidf-basic-primary"
@@ -179,6 +184,11 @@ Generated: $($inputs.generatedAtUtc)
 - Post-logout redirect URI: $postLogoutRedirectUrl
 - Front-channel logout URI: $frontChannelLogoutUrl
 - Back-channel logout URI: $backChannelLogoutUrl
+
+## Dynamic Registration
+
+- Registration endpoint: $registrationUrl
+- Initial access token: $DynamicRegistrationInitialAccessToken
 
 ## Fallback Clients
 

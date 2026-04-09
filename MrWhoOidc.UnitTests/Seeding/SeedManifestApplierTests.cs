@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -247,6 +249,31 @@ public class SeedManifestApplierTests
                 It.Is<PlatformSettings>(settings => settings.DynamicClientRegistrationEnabled),
                 "seed-manifest"),
             Times.Once);
+    }
+
+    [TestMethod]
+    public async Task ApplyTenantsAsync_SeedsPlatformInitialAccessTokens_FromManifest()
+    {
+        var manifest = new SeedManifest
+        {
+            PlatformInitialAccessTokens = new List<PlatformInitialAccessTokenSeedDefinition>
+            {
+                new()
+                {
+                    Token = "oidf-dcr-initial-access-token",
+                    Description = "OIDF certification dynamic registration"
+                }
+            }
+        };
+
+        await _applier.ApplyTenantsAsync(manifest, "https://localhost:8443");
+
+        var token = _db.PlatformInitialAccessTokens.Single();
+        var expectedHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("oidf-dcr-initial-access-token")));
+
+        Assert.AreEqual(expectedHash, token.TokenHash);
+        Assert.AreEqual("OIDF certification dynamic registration", token.Description);
+        Assert.IsNull(token.RevokedAt);
     }
 
     [TestMethod]

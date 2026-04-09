@@ -3,6 +3,12 @@
   "platformSettings": {
     "dynamicClientRegistrationEnabled": true
   },
+  "platformInitialAccessTokens": [
+    {
+      "token": "__DCR_INITIAL_ACCESS_TOKEN__",
+      "description": "OIDF certification dynamic registration"
+    }
+  ],
   "tenants": [
     {
       "slug": "default",

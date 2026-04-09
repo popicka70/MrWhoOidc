@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -152,6 +154,7 @@ internal sealed class SeedManifestApplier(
     public async Task ApplyTenantsAsync(SeedManifest manifest, string authorityBaseUrl, CancellationToken ct = default)
     {
         await ApplyPlatformSettingsAsync(manifest).ConfigureAwait(false);
+        await ApplyPlatformInitialAccessTokensAsync(manifest, ct).ConfigureAwait(false);
 
         if (manifest.Tenants.Count == 0)
         {
@@ -256,6 +259,7 @@ internal sealed class SeedManifestApplier(
     public async Task ApplyForCurrentTenantAsync(SeedManifest manifest, CancellationToken ct = default)
     {
         await ApplyPlatformSettingsAsync(manifest).ConfigureAwait(false);
+        await ApplyPlatformInitialAccessTokensAsync(manifest, ct).ConfigureAwait(false);
 
         var tenant = tenantAccessor.CurrentTenant;
         if (tenant is null)
@@ -465,6 +469,73 @@ internal sealed class SeedManifestApplier(
         logger.LogInformation("Seed manifest updated platform settings.");
     }
 
+    private async Task ApplyPlatformInitialAccessTokensAsync(SeedManifest manifest, CancellationToken ct)
+    {
+        if (manifest.PlatformInitialAccessTokens.Count == 0)
+        {
+            return;
+        }
+
+        var changed = false;
+
+        foreach (var tokenDef in manifest.PlatformInitialAccessTokens)
+        {
+            if (string.IsNullOrWhiteSpace(tokenDef.Token))
+            {
+                continue;
+            }
+
+            var plaintextToken = tokenDef.Token.Trim();
+            var tokenHash = HashPlatformInitialAccessToken(plaintextToken);
+            var existing = await db.PlatformInitialAccessTokens
+                .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct)
+                .ConfigureAwait(false);
+
+            var normalizedDescription = string.IsNullOrWhiteSpace(tokenDef.Description) ? null : tokenDef.Description.Trim();
+            if (existing is null)
+            {
+                db.PlatformInitialAccessTokens.Add(new PlatformInitialAccessToken
+                {
+                    TokenHash = tokenHash,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = string.IsNullOrWhiteSpace(tokenDef.CreatedBy) ? "seed-manifest" : tokenDef.CreatedBy.Trim(),
+                    Description = normalizedDescription,
+                    RevokedAt = null,
+                    RevokedBy = null
+                });
+
+                changed = true;
+                continue;
+            }
+
+            if (!seedOptions.Value.AllowUpdates)
+            {
+                continue;
+            }
+
+            if (existing.RevokedAt is not null)
+            {
+                existing.RevokedAt = null;
+                existing.RevokedBy = null;
+                changed = true;
+            }
+
+            if (existing.Description != normalizedDescription)
+            {
+                existing.Description = normalizedDescription;
+                changed = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger.LogInformation("Seed manifest ensured platform initial access tokens.");
+    }
+
     private async Task ApplyDynamicClientRegistrationRealmAsync(TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)
     {
         if (tenantDef.DynamicClientRegistrationRealm is null)
@@ -576,6 +647,12 @@ internal sealed class SeedManifestApplier(
             client.ClientId,
             overwrite,
             overwrite ? existingSecrets.Count : 0);
+    }
+
+    private static string HashPlatformInitialAccessToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
     }
 
     private async Task EnsureScopesAsync(SeedManifest manifest, TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)

@@ -18,6 +18,13 @@ public sealed record SeedManifest
     public PlatformSettingsSeedDefinition? PlatformSettings { get; init; }
 
     /// <summary>
+    /// Optional platform-managed initial access tokens for RFC 7591 dynamic client registration.
+    /// These are seeded as plaintext values and stored as hashes.
+    /// </summary>
+    [JsonPropertyName("platformInitialAccessTokens")]
+    public List<PlatformInitialAccessTokenSeedDefinition> PlatformInitialAccessTokens { get; init; } = [];
+
+    /// <summary>
     /// Optional license definitions to install at startup (dev/test seeding).
     /// </summary>
     [JsonPropertyName("licenses")]
@@ -129,6 +136,18 @@ public sealed record PlatformSettingsSeedDefinition
 
     [JsonPropertyName("enableTokenExchange")]
     public bool? EnableTokenExchange { get; init; }
+}
+
+public sealed record PlatformInitialAccessTokenSeedDefinition
+{
+    [JsonPropertyName("token")]
+    public required string Token { get; init; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; init; }
+
+    [JsonPropertyName("createdBy")]
+    public string? CreatedBy { get; init; }
 }
 
 public sealed record TenantSeedDefinition

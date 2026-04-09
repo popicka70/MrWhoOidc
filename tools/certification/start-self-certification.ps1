@@ -6,6 +6,7 @@ param(
     [string]$SuiteHost = "www.certification.openid.net",
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
+    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
     [int]$TimeoutSeconds = 240,
     [switch]$SkipBuild,
     [switch]$RenderOnly,
@@ -68,7 +69,7 @@ if (-not (Test-Path -Path $generatedDir)) {
 }
 
 $templateContent = Get-Content -Path $templatePath -Raw
-$renderedManifest = $templateContent.Replace("__ALIAS__", $Alias).Replace("__SUITE_HOST__", $SuiteHost)
+$renderedManifest = $templateContent.Replace("__ALIAS__", $Alias).Replace("__SUITE_HOST__", $SuiteHost).Replace("__DCR_INITIAL_ACCESS_TOKEN__", $DynamicRegistrationInitialAccessToken)
 
 $null = $renderedManifest | ConvertFrom-Json
 Set-Content -Path $manifestPath -Value $renderedManifest
@@ -76,6 +77,7 @@ Set-Content -Path $manifestPath -Value $renderedManifest
 Write-Host "Rendered certification manifest: $manifestPath" -ForegroundColor Green
 Write-Host "Suite alias: $Alias" -ForegroundColor Cyan
 Write-Host "Suite host: $SuiteHost" -ForegroundColor Cyan
+Write-Host "Dynamic registration initial access token: $DynamicRegistrationInitialAccessToken" -ForegroundColor DarkGray
 
 if ($RenderOnly) {
     Write-Host "RenderOnly was set; skipping Docker Compose startup." -ForegroundColor Yellow
@@ -138,7 +140,7 @@ Write-Host "Fallback client: oidf-basic-primary / oidf-basic-primary-dev-secret"
 Write-Host "Fallback client: oidf-basic-secondary / oidf-basic-secondary-dev-secret" -ForegroundColor DarkGray
 
 if (-not $SkipVerify) {
-    & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug -RequireDynamicRegistration
+    & $verifyScriptPath -Alias $Alias -SuiteHost $SuiteHost -BaseUrl $BaseUrl -TenantSlug $TenantSlug -DynamicRegistrationInitialAccessToken $DynamicRegistrationInitialAccessToken -RequireDynamicRegistration
 
     if ($LASTEXITCODE -ne 0) {
         throw "Certification verification failed."

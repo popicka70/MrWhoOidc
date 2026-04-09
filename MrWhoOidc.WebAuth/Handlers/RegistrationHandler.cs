@@ -6,6 +6,7 @@ using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Services.SubjectIdentifiers;
 using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Utils;
+using MrWhoOidc.WebAuth.Extensions;
 using MrWhoOidc.WebAuth.Models.DynamicRegistration;
 using System.Security.Cryptography;
 using System.Text;
@@ -424,7 +425,7 @@ public sealed class RegistrationHandler(
             ClientIdIssuedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             ClientSecretExpiresAt = clientSecretExpiresAt,
             RegistrationAccessToken = registrationToken,
-            RegistrationClientUri = $"{http.Request.Scheme}://{http.Request.Host}/register/{clientId}",
+            RegistrationClientUri = $"{http.GetIssuer().TrimEnd('/')}/register/{clientId}",
 
             // Echo back all metadata
             RedirectUris = ClientConfigurationHandler.ParseStringList(client.AllowedLoginRedirectUrisJson) ?? new List<string>(),

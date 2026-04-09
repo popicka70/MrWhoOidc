@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -399,6 +400,92 @@ public sealed class AuthorizeHandlerTests
         Assert.AreEqual("/callback", uri.AbsolutePath, $"Expected path=/callback; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("error=login_required", StringComparison.Ordinal), $"Expected login_required; got Location='{loc}'");
         Assert.IsTrue(loc.Contains("state=state1", StringComparison.Ordinal), $"Expected state=state1; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task Authorize_InvalidClaimsParameter_WithRedirectUri_RedirectsWithInvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            ClientId = "test_client",
+            ClientName = "Test Client",
+            RequirePkce = false,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
+        };
+
+        var validator = new AuthorizeRequestValidator(db, new StubClientStore(client), NullLogger<AuthorizeRequestValidator>.Instance);
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), new EphemeralDataProtectionProvider());
+        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["claims"] = "{not-json",
+            ["state"] = "claims-state"
+        };
+
+        var context = CreateHttpContext(queryParams);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=claims-state", StringComparison.Ordinal), $"Expected state=claims-state; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("claims%20parameter%20is%20not%20valid%20JSON", StringComparison.Ordinal), $"Expected claims validation detail; got Location='{loc}'");
+    }
+
+    [TestMethod]
+    public async Task Authorize_InvalidAuthorizationDetails_WithRedirectUri_RedirectsWithInvalidRequest()
+    {
+        using var db = CreateDb();
+
+        var client = new MrWhoOidc.Auth.Persistence.Client
+        {
+            Id = Guid.NewGuid(),
+            TenantId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            ClientId = "test_client",
+            ClientName = "Test Client",
+            RequirePkce = false,
+            RequireConsent = false,
+            AllowedLoginRedirectUrisJson = JsonSerializer.Serialize(new[] { "https://app/callback" })
+        };
+
+        var validator = new AuthorizeRequestValidator(db, new StubClientStore(client), NullLogger<AuthorizeRequestValidator>.Instance);
+        var responseGenerator = new AuthorizeResponseGenerator(new StubJarmService(), new EphemeralDataProtectionProvider());
+        var handler = CreateHandler(db, validator: validator, responseGenerator: responseGenerator);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["client_id"] = "test_client",
+            ["redirect_uri"] = "https://app/callback",
+            ["response_type"] = "code",
+            ["scope"] = "openid",
+            ["nonce"] = "nonce123",
+            ["authorization_details"] = "{not-json",
+            ["state"] = "rar-state"
+        };
+
+        var context = CreateHttpContext(queryParams);
+
+        var result = await handler.HandleAsync(context);
+
+        Assert.IsNotNull(result);
+        var loc = await ExecuteRedirectLocationAsync(result, context);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(loc));
+        Assert.IsTrue(loc!.Contains("error=invalid_request", StringComparison.Ordinal), $"Expected invalid_request; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("state=rar-state", StringComparison.Ordinal), $"Expected state=rar-state; got Location='{loc}'");
+        Assert.IsTrue(loc.Contains("authorization_details%20must%20be%20valid%20JSON", StringComparison.Ordinal), $"Expected authorization_details validation detail; got Location='{loc}'");
     }
 
     [TestMethod]
