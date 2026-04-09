@@ -176,7 +176,9 @@ public sealed class PlatformSettingsServiceTests
     public async Task UpdateSettingsAsync_SetsUpdatedAtTimestamp()
     {
         // Arrange
-        using var db = CreateDb();
+        var dbName = Guid.NewGuid().ToString();
+        using var db = new AuthDbContext(
+            new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(dbName).Options);
         var cache = CreateCache();
         var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
 
@@ -189,7 +191,71 @@ public sealed class PlatformSettingsServiceTests
         // Act
         await service.UpdateSettingsAsync(settings, "test-admin");
 
+        using var verifyDb = new AuthDbContext(
+            new DbContextOptionsBuilder<AuthDbContext>().UseInMemoryDatabase(dbName).Options);
+        var persisted = await verifyDb.PlatformSettings.FirstAsync();
+
         // Assert
-        Assert.IsTrue(settings.UpdatedAt > originalUpdatedAt, "UpdatedAt should be updated");
+        Assert.IsTrue(persisted.UpdatedAt > originalUpdatedAt, "UpdatedAt should be updated");
+    }
+
+    [TestMethod]
+    public async Task GetSettingsAsync_ReturnsIndependentSnapshots()
+    {
+        using var db = CreateDb();
+        var cache = CreateCache();
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions());
+
+        var firstRead = await service.GetSettingsAsync();
+        firstRead.DynamicClientRegistrationEnabled = true;
+        firstRead.QrLoginAtDiscoveryEnabled = true;
+
+        var secondRead = await service.GetSettingsAsync();
+
+        Assert.IsFalse(secondRead.DynamicClientRegistrationEnabled, "Mutating a returned settings snapshot should not mutate the cached value.");
+        Assert.IsFalse(secondRead.QrLoginAtDiscoveryEnabled, "Mutating a returned settings snapshot should not leak into later reads.");
+    }
+
+    [TestMethod]
+    public async Task UpdateSettingsAsync_UpsertsCurrentStore_WhenCacheContainsSnapshotFromDifferentStore()
+    {
+        var cache = CreateCache();
+        var authOptions = CreateAuthOptions();
+
+        using (var firstDb = new AuthDbContext(
+                   new DbContextOptionsBuilder<AuthDbContext>()
+                       .UseInMemoryDatabase("platform-settings-store-a-" + Guid.NewGuid().ToString("N"))
+                       .Options))
+        {
+            var firstService = new PlatformSettingsService(firstDb, cache, authOptions);
+            _ = await firstService.GetSettingsAsync();
+        }
+
+        var secondDbName = "platform-settings-store-b-" + Guid.NewGuid().ToString("N");
+        using (var secondDb = new AuthDbContext(
+                   new DbContextOptionsBuilder<AuthDbContext>()
+                       .UseInMemoryDatabase(secondDbName)
+                       .Options))
+        {
+            var secondService = new PlatformSettingsService(secondDb, cache, authOptions);
+            var staleCachedSnapshot = await secondService.GetSettingsAsync();
+
+            staleCachedSnapshot.DynamicClientRegistrationEnabled = true;
+            staleCachedSnapshot.EnableTokenExchange = true;
+
+            await secondService.UpdateSettingsAsync(staleCachedSnapshot, "test-admin");
+        }
+
+        using var verifyDb = new AuthDbContext(
+            new DbContextOptionsBuilder<AuthDbContext>()
+                .UseInMemoryDatabase(secondDbName)
+                .Options);
+
+        var persisted = await verifyDb.PlatformSettings.FirstOrDefaultAsync();
+
+        Assert.IsNotNull(persisted, "Update should create the platform settings row when the current store does not have one.");
+        Assert.IsTrue(persisted.DynamicClientRegistrationEnabled);
+        Assert.IsTrue(persisted.EnableTokenExchange);
+        Assert.AreEqual("test-admin", persisted.UpdatedBy);
     }
 }
