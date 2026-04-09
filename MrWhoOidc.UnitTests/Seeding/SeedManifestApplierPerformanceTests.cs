@@ -33,6 +33,7 @@ public class SeedManifestApplierPerformanceTests
     private Mock<IConfiguration> _configuration = null!;
     private Mock<IPasswordHasher> _passwordHasher = null!;
     private Mock<IClientStore> _clientStore = null!;
+    private Mock<IPlatformSettingsService> _platformSettingsService = null!;
     private Mock<ILicenseService> _licenseService = null!;
     private Mock<ILogger<SeedManifestApplier>> _logger = null!;
     private SeedManifestApplier _applier = null!;
@@ -50,11 +51,16 @@ public class SeedManifestApplierPerformanceTests
         _configuration = new Mock<IConfiguration>();
         _passwordHasher = new Mock<IPasswordHasher>();
         _clientStore = new Mock<IClientStore>();
+        _platformSettingsService = new Mock<IPlatformSettingsService>();
         _licenseService = new Mock<ILicenseService>();
         _logger = new Mock<ILogger<SeedManifestApplier>>();
 
         _oidcOptions.Setup(o => o.Value).Returns(new OidcOptions());
         _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions());
+        _platformSettingsService.Setup(service => service.GetSettingsAsync()).ReturnsAsync(new PlatformSettings());
+        _platformSettingsService
+            .Setup(service => service.UpdateSettingsAsync(It.IsAny<PlatformSettings>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
 
         _licenseService.Setup(l => l.InstallLicenseAsync(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new LicenseValidationResult(true, null, null, null));
@@ -69,6 +75,7 @@ public class SeedManifestApplierPerformanceTests
             _configuration.Object,
             _passwordHasher.Object,
             _clientStore.Object,
+            _platformSettingsService.Object,
             _licenseService.Object,
             _logger.Object
         );

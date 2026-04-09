@@ -139,6 +139,15 @@ public sealed class ParHandler(OidcOptions options, IClientStore clients, IClien
                 code_challenge: form[OAuthConstants.Parameters.CodeChallenge],
                 code_challenge_method: form[OAuthConstants.Parameters.CodeChallengeMethod],
                 resource: form[OAuthConstants.Parameters.Resource],
+                response_mode: form[OAuthConstants.Parameters.ResponseMode],
+                prompt: form[OAuthConstants.Parameters.Prompt],
+                max_age: form[OAuthConstants.Parameters.MaxAge],
+                id_token_hint: form[OAuthConstants.Parameters.IdTokenHint],
+                login_hint: form[OAuthConstants.Parameters.LoginHint],
+                acr_values: form[OAuthConstants.Parameters.AcrValues],
+                display: form[OAuthConstants.Parameters.Display],
+                ui_locales: form[OAuthConstants.Parameters.UiLocales],
+                claims: form[OAuthConstants.Parameters.Claims],
                 authorization_details: form[OAuthConstants.Parameters.AuthorizationDetails].ToString() is { Length: > 0 } ad ? ad : null
             );
         }

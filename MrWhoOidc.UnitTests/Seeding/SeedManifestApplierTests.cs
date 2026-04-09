@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +34,7 @@ public class SeedManifestApplierTests
     private Mock<IConfiguration> _configuration = null!;
     private Mock<IPasswordHasher> _passwordHasher = null!;
     private Mock<IClientStore> _clientStore = null!;
+    private Mock<IPlatformSettingsService> _platformSettingsService = null!;
     private Mock<ILicenseService> _licenseService = null!;
     private Mock<ILogger<SeedManifestApplier>> _logger = null!;
     private SeedManifestApplier _applier = null!;
@@ -47,11 +51,16 @@ public class SeedManifestApplierTests
         _configuration = new Mock<IConfiguration>();
         _passwordHasher = new Mock<IPasswordHasher>();
         _clientStore = new Mock<IClientStore>();
+        _platformSettingsService = new Mock<IPlatformSettingsService>();
         _licenseService = new Mock<ILicenseService>();
         _logger = new Mock<ILogger<SeedManifestApplier>>();
 
         _oidcOptions.Setup(o => o.Value).Returns(new OidcOptions());
         _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions());
+        _platformSettingsService.Setup(service => service.GetSettingsAsync()).ReturnsAsync(new PlatformSettings());
+        _platformSettingsService
+            .Setup(service => service.UpdateSettingsAsync(It.IsAny<PlatformSettings>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
         _clientStore
             .Setup(store => store.InvalidateClientCacheAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -66,6 +75,7 @@ public class SeedManifestApplierTests
             _configuration.Object,
             _passwordHasher.Object,
             _clientStore.Object,
+            _platformSettingsService.Object,
             _licenseService.Object,
             _logger.Object
         );
@@ -219,5 +229,201 @@ public class SeedManifestApplierTests
 
         var client = _db.Clients.Single(item => item.ClientId == "portal-web" && item.TenantId == tenantId);
         Assert.IsTrue(client.AutoAssignNewUsersToClient);
+    }
+
+    [TestMethod]
+    public async Task ApplyTenantsAsync_UpdatesPlatformSettings_WhenPresentInManifest()
+    {
+        var manifest = new SeedManifest
+        {
+            PlatformSettings = new PlatformSettingsSeedDefinition
+            {
+                DynamicClientRegistrationEnabled = true
+            }
+        };
+
+        await _applier.ApplyTenantsAsync(manifest, "https://localhost:8443");
+
+        _platformSettingsService.Verify(
+            service => service.UpdateSettingsAsync(
+                It.Is<PlatformSettings>(settings => settings.DynamicClientRegistrationEnabled),
+                "seed-manifest"),
+            Times.Once);
+    }
+
+    [TestMethod]
+    public async Task ApplyTenantsAsync_SeedsPlatformInitialAccessTokens_FromManifest()
+    {
+        var manifest = new SeedManifest
+        {
+            PlatformInitialAccessTokens = new List<PlatformInitialAccessTokenSeedDefinition>
+            {
+                new()
+                {
+                    Token = "oidf-dcr-initial-access-token",
+                    Description = "OIDF certification dynamic registration"
+                }
+            }
+        };
+
+        await _applier.ApplyTenantsAsync(manifest, "https://localhost:8443");
+
+        var token = _db.PlatformInitialAccessTokens.Single();
+        var expectedHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("oidf-dcr-initial-access-token")));
+
+        Assert.AreEqual(expectedHash, token.TokenHash);
+        Assert.AreEqual("OIDF certification dynamic registration", token.Description);
+        Assert.IsNull(token.RevokedAt);
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_SetsDynamicClientRegistrationRealmId_FromManifestRealmName()
+    {
+        var tenantId = Guid.NewGuid();
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "default",
+            DisplayName = "Default"
+        };
+
+        _db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default",
+            Status = TenantStatus.Active
+        });
+        _db.Realms.Add(realm);
+        await _db.SaveChangesAsync();
+
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    DynamicClientRegistrationRealm = "default"
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var tenant = _db.Tenants.Single(item => item.Id == tenantId);
+        var settings = JsonSerializer.Deserialize<MrWhoOidc.Auth.Settings.TenantSettings>(tenant.SettingsJson!);
+
+        Assert.IsNotNull(settings);
+        Assert.IsNotNull(settings.Auth);
+        Assert.AreEqual(realm.Id, settings.Auth.DynamicClientRegistrationRealmId);
+    }
+
+    [TestMethod]
+    public async Task ApplyForCurrentTenantAsync_PreservesRequirePkceFalse_WhenOverwritingSeededSecret()
+    {
+        var tenantId = Guid.NewGuid();
+        var realm = new Realm
+        {
+            TenantId = tenantId,
+            Name = "admin",
+            DisplayName = "Admin"
+        };
+
+        _seedOptions.Setup(o => o.Value).Returns(new SeedManifestOptions
+        {
+            AllowUpdates = true,
+            OverwriteClientSecrets = true
+        });
+
+        _tenantAccessor.SetupGet(accessor => accessor.CurrentTenant).Returns(new TenantContext
+        {
+            TenantId = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default"
+        });
+
+        _passwordHasher.Setup(hasher => hasher.Hash("seed-secret")).Returns("hashed-seed-secret");
+        _clientStore
+            .Setup(store => store.CreateSecretAsync(
+                It.IsAny<Guid>(),
+                "seed-secret",
+                "seed",
+                "seed",
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid clientId, string _, string? _, string? _, DateTime? _, CancellationToken _) => new ClientSecret
+            {
+                ClientId = clientId,
+                SecretHash = "hashed-seed-secret"
+            });
+        _clientStore
+            .Setup(store => store.ActivateSecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _clientStore
+            .Setup(store => store.SetPrimarySecretAsync(It.IsAny<Guid>(), "seed", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        _db.Tenants.Add(new Tenant
+        {
+            Id = tenantId,
+            Slug = "default",
+            Name = "Default Tenant",
+            IssuerUri = "https://localhost:8443/t/default",
+            Status = TenantStatus.Active
+        });
+        _db.Realms.Add(realm);
+
+        _db.Clients.Add(new MrWhoOidc.Auth.Persistence.Client
+        {
+            TenantId = tenantId,
+            ClientId = "oidf-basic-primary",
+            ClientName = "OIDF Basic Primary",
+            RealmId = realm.Id,
+            RequirePkce = false,
+            RequireConsent = false,
+            ClientSecretHash = "existing-hash"
+        });
+        await _db.SaveChangesAsync();
+
+        var manifest = new SeedManifest
+        {
+            Tenants = new List<TenantSeedDefinition>
+            {
+                new()
+                {
+                    Slug = "default",
+                    Name = "Default Tenant",
+                    Clients = new List<ClientSeedDefinition>
+                    {
+                        new()
+                        {
+                            ClientId = "oidf-basic-primary",
+                            ClientName = "OIDF Basic Primary",
+                            Realm = "admin",
+                            RequirePkce = false,
+                            ClientSecret = "seed-secret"
+                        }
+                    }
+                }
+            }
+        };
+
+        await _applier.ApplyForCurrentTenantAsync(manifest);
+
+        var client = _db.Clients.Single(item => item.ClientId == "oidf-basic-primary" && item.TenantId == tenantId);
+        Assert.IsFalse(client.RequirePkce);
+        Assert.AreEqual("hashed-seed-secret", client.ClientSecretHash);
     }
 }

@@ -109,10 +109,6 @@ public sealed class DiscoveryHandler(
             c => c.AuthorizationEncryptedResponseAlg != null && c.AuthorizationEncryptedResponseEnc != null,
             ctx.RequestAborted);
 
-        // Check if AdvancedSecurity feature is enabled for PAR
-        var advancedSecurityEnabled = await featureService.IsFeatureEnabledAsync(
-            FeatureFlags.AdvancedSecurity, tenantId, ctx.RequestAborted);
-
         var requestObjectAlgorithms = (authOptions.Value.RequestObjectAllowedAlgorithms is { Length: > 0 }
             ? authOptions.Value.RequestObjectAllowedAlgorithms
             : new[]
@@ -316,12 +312,8 @@ public sealed class DiscoveryHandler(
             }
         }
 
-        // Only advertise PAR endpoint if AdvancedSecurity feature is enabled
-        if (advancedSecurityEnabled)
-        {
-            body["pushed_authorization_request_endpoint"] = $"{baseUrl}/par";
-            body["require_pushed_authorization_requests"] = authOptions.Value.RequirePar;
-        }
+        body["pushed_authorization_request_endpoint"] = $"{baseUrl}/par";
+        body["require_pushed_authorization_requests"] = authOptions.Value.RequirePar;
 
         // RFC 8628: Device Authorization Grant endpoint
         if (deviceAuthEnabled)

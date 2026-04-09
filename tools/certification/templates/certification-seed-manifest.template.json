@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "platformSettings": {
+    "dynamicClientRegistrationEnabled": true
+  },
+  "platformInitialAccessTokens": [
+    {
+      "token": "__DCR_INITIAL_ACCESS_TOKEN__",
+      "description": "OIDF certification dynamic registration"
+    }
+  ],
+  "tenants": [
+    {
+      "slug": "default",
+      "name": "Default Tenant",
+      "dynamicClientRegistrationRealm": "default",
+      "clients": [
+        {
+          "clientId": "oidf-basic-primary",
+          "clientName": "OIDF Basic Primary",
+          "realm": "admin",
+          "requirePkce": false,
+          "requireConsent": false,
+          "allowLocalLogin": true,
+          "allowExternalIdp": false,
+          "clientSecret": "oidf-basic-primary-dev-secret",
+          "allowedLoginRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
+          ],
+          "allowedLogoutRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/post_logout_redirect"
+          ],
+          "frontChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/frontchannel_logout",
+          "frontChannelLogoutSessionRequired": true,
+          "backChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/backchannel_logout",
+          "backChannelLogoutSessionRequired": true,
+          "allowedScopes": [
+            "openid",
+            "profile",
+            "email"
+          ]
+        },
+        {
+          "clientId": "oidf-basic-secondary",
+          "clientName": "OIDF Basic Secondary",
+          "realm": "admin",
+          "requirePkce": false,
+          "requireConsent": false,
+          "allowLocalLogin": true,
+          "allowExternalIdp": false,
+          "clientSecret": "oidf-basic-secondary-dev-secret",
+          "allowedLoginRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/callback"
+          ],
+          "allowedLogoutRedirectUris": [
+            "https://__SUITE_HOST__/test/a/__ALIAS__/post_logout_redirect"
+          ],
+          "frontChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/frontchannel_logout",
+          "frontChannelLogoutSessionRequired": true,
+          "backChannelLogoutUri": "https://__SUITE_HOST__/test/a/__ALIAS__/backchannel_logout",
+          "backChannelLogoutSessionRequired": true,
+          "allowedScopes": [
+            "openid",
+            "profile",
+            "email"
+          ]
+        }
+      ]
+    }
+  ]
+}

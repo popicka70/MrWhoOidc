@@ -1,0 +1,387 @@
+#!/usr/bin/env pwsh
+
+[CmdletBinding()]
+param(
+    [string]$Alias = "mrwhooidc-local",
+    [string]$SuiteHost = "www.certification.openid.net",
+    [string]$BaseUrl = "https://localhost:8443",
+    [string]$TenantSlug = "default",
+    [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
+    [string]$BrowserUsername = "admin@mrwho.local",
+    [string]$BrowserPassword = "Admin123!",
+    [string]$PublicServerBaseUrl,
+    [string]$LocalServerBaseUrl,
+    [string]$MtlsServerBaseUrl,
+    [string]$OutputDir = ".\tools\certification\.generated"
+)
+
+$ErrorActionPreference = "Stop"
+
+function Resolve-AbsolutePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
+}
+
+function Normalize-BaseUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+
+    return $Url.Trim().TrimEnd('/')
+}
+
+function Ensure-TrailingSlash {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+
+    return "$(Normalize-BaseUrl -Url $Url)/"
+}
+
+if ([string]::IsNullOrWhiteSpace($PublicServerBaseUrl)) {
+    $PublicServerBaseUrl = $BaseUrl
+}
+
+if ([string]::IsNullOrWhiteSpace($LocalServerBaseUrl)) {
+    $LocalServerBaseUrl = $PublicServerBaseUrl
+}
+
+if ([string]::IsNullOrWhiteSpace($MtlsServerBaseUrl)) {
+    $MtlsServerBaseUrl = $PublicServerBaseUrl
+}
+
+$normalizedBaseUrl = Normalize-BaseUrl -Url $BaseUrl
+$issuer = "$normalizedBaseUrl/t/$TenantSlug"
+$discoveryUrl = "$issuer/.well-known/openid-configuration"
+$jwksUrl = "$issuer/jwks"
+$authorizeUrl = "$issuer/authorize"
+$registrationUrl = "$issuer/register"
+$endSessionUrl = "$issuer/connect/endsession"
+$checkSessionUrl = "$issuer/connect/checksession"
+
+$callbackUrl = "https://$SuiteHost/test/a/$Alias/callback"
+$postLogoutRedirectUrl = "https://$SuiteHost/test/a/$Alias/post_logout_redirect"
+$frontChannelLogoutUrl = "https://$SuiteHost/test/a/$Alias/frontchannel_logout"
+$backChannelLogoutUrl = "https://$SuiteHost/test/a/$Alias/backchannel_logout"
+
+$resolvedOutputDir = Resolve-AbsolutePath -Path $OutputDir
+New-Item -ItemType Directory -Path $resolvedOutputDir -Force | Out-Null
+
+$jsonPath = Join-Path $resolvedOutputDir "conformance-suite-inputs.json"
+$notesPath = Join-Path $resolvedOutputDir "conformance-suite-notes.md"
+$envPath = Join-Path $resolvedOutputDir "conformance-suite-env.ps1"
+$expectedFailuresPath = Join-Path $resolvedOutputDir "expected-failures.json"
+$expectedSkipsPath = Join-Path $resolvedOutputDir "expected-skips.json"
+$staticRunnerConfigPath = Join-Path $resolvedOutputDir "official-runner-static-op-config.json"
+$dynamicRunnerConfigPath = Join-Path $resolvedOutputDir "official-runner-dynamic-op-config.json"
+
+$certificationPlans = [ordered]@{
+    configOp = "oidcc-config-certification-test-plan"
+    basicOp = "oidcc-basic-certification-test-plan"
+    formPostOp = "oidcc-formpost-basic-certification-test-plan"
+}
+
+$browserAutomation = @(
+    [ordered]@{
+        match = "*/t/$TenantSlug/auth/providers/select*"
+        tasks = @(
+            [ordered]@{
+                task = "Choose local login"
+                optional = $true
+                match = "*/t/$TenantSlug/auth/providers/select*"
+                commands = @(
+                    @("click", "id", "btn-local-login")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/t/$TenantSlug/login*"
+        tasks = @(
+            [ordered]@{
+                task = "Login"
+                optional = $true
+                match = "*/t/$TenantSlug/login*"
+                commands = @(
+                    @("text", "name", "Username", $BrowserUsername, "optional"),
+                    @("text", "name", "Password", $BrowserPassword, "optional"),
+                    @("click", "css", "button[type='submit']")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/t/$TenantSlug/consent*"
+        tasks = @(
+            [ordered]@{
+                task = "Consent"
+                optional = $true
+                match = "*/t/$TenantSlug/consent*"
+                commands = @(
+                    @("click", "css", "button[type='submit']")
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/test/*/callback*"
+        tasks = @(
+            [ordered]@{
+                task = "Verify Complete"
+                match = "*/test/*/callback*"
+                commands = @(
+                    @("wait", "id", "submission_complete", 10)
+                )
+            }
+        )
+    },
+    [ordered]@{
+        match = "*/test/*/post_logout_redirect*"
+        tasks = @(
+            [ordered]@{
+                task = "Verify Logout Complete"
+                optional = $true
+                match = "*/test/*/post_logout_redirect*"
+                commands = @(
+                    @("wait", "id", "submission_complete", 10)
+                )
+            }
+        )
+    }
+)
+
+$staticRunnerConfig = [ordered]@{
+    alias = $Alias
+    description = "MrWhoOidc OIDC static-client runner config"
+    server = [ordered]@{
+        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+    }
+    client = [ordered]@{
+        client_id = "oidf-basic-primary"
+        client_secret = "oidf-basic-primary-dev-secret"
+        scope = "openid profile email"
+        redirect_uri = $callbackUrl
+        post_logout_redirect_uri = $postLogoutRedirectUrl
+    }
+    client2 = [ordered]@{
+        client_id = "oidf-basic-secondary"
+        client_secret = "oidf-basic-secondary-dev-secret"
+        scope = "openid profile email"
+        redirect_uri = $callbackUrl
+        post_logout_redirect_uri = $postLogoutRedirectUrl
+    }
+    browser = $browserAutomation
+}
+
+$dynamicRunnerConfig = [ordered]@{
+    alias = $Alias
+    description = "MrWhoOidc OIDC dynamic-client runner config"
+    server = [ordered]@{
+        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+    }
+    client = [ordered]@{
+        client_name = "MrWhoOidc Dynamic Primary"
+    }
+    client2 = [ordered]@{
+        client_name = "MrWhoOidc Dynamic Secondary"
+    }
+    browser = $browserAutomation
+}
+
+$runnerEnvironment = [ordered]@{
+    CONFORMANCE_SERVER = Ensure-TrailingSlash -Url $PublicServerBaseUrl
+    CONFORMANCE_SERVER_LOCAL = Ensure-TrailingSlash -Url $LocalServerBaseUrl
+    CONFORMANCE_SERVER_MTLS = Ensure-TrailingSlash -Url $MtlsServerBaseUrl
+}
+
+$inputs = [ordered]@{
+    generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+    alias = $Alias
+    suiteHost = $SuiteHost
+    issuer = [ordered]@{
+        baseUrl = $normalizedBaseUrl
+        tenantSlug = $TenantSlug
+        issuer = $issuer
+        discovery = $discoveryUrl
+        jwks = $jwksUrl
+        authorize = $authorizeUrl
+        registration = $registrationUrl
+        endSession = $endSessionUrl
+        checkSession = $checkSessionUrl
+    }
+    hostedSuite = [ordered]@{
+        callback = $callbackUrl
+        postLogoutRedirect = $postLogoutRedirectUrl
+        frontChannelLogout = $frontChannelLogoutUrl
+        backChannelLogout = $backChannelLogoutUrl
+    }
+    dynamicRegistration = [ordered]@{
+        endpoint = $registrationUrl
+        initialAccessToken = $DynamicRegistrationInitialAccessToken
+    }
+    fallbackClients = @(
+        [ordered]@{
+            clientId = "oidf-basic-primary"
+            clientSecret = "oidf-basic-primary-dev-secret"
+            redirectUri = $callbackUrl
+            postLogoutRedirectUri = $postLogoutRedirectUrl
+            frontChannelLogoutUri = $frontChannelLogoutUrl
+            backChannelLogoutUri = $backChannelLogoutUrl
+        },
+        [ordered]@{
+            clientId = "oidf-basic-secondary"
+            clientSecret = "oidf-basic-secondary-dev-secret"
+            redirectUri = $callbackUrl
+            postLogoutRedirectUri = $postLogoutRedirectUrl
+            frontChannelLogoutUri = $frontChannelLogoutUrl
+            backChannelLogoutUri = $backChannelLogoutUrl
+        }
+    )
+    recommendedProfiles = @(
+        "Config OP",
+        "Basic OP",
+        "Form Post OP"
+    )
+    certificationPlans = $certificationPlans
+    runnerEnvironment = $runnerEnvironment
+    runnerArtifacts = [ordered]@{
+        expectedFailuresFile = $expectedFailuresPath
+        expectedSkipsFile = $expectedSkipsPath
+        notesFile = $notesPath
+        envFile = $envPath
+        staticRunnerConfigFile = $staticRunnerConfigPath
+        dynamicRunnerConfigFile = $dynamicRunnerConfigPath
+    }
+    browserAutomation = [ordered]@{
+        username = $BrowserUsername
+        tasks = @(
+            "optional provider-selection click via #btn-local-login",
+            "login via Username and Password form fields",
+            "optional consent approval via submit button",
+            "callback completion wait via #submission_complete",
+            "optional post-logout completion wait via #submission_complete"
+        )
+    }
+}
+
+$inputs | ConvertTo-Json -Depth 10 | Set-Content -Path $jsonPath
+$staticRunnerConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $staticRunnerConfigPath
+$dynamicRunnerConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $dynamicRunnerConfigPath
+
+if (-not (Test-Path -Path $expectedFailuresPath)) {
+    Set-Content -Path $expectedFailuresPath -Value "[]"
+}
+
+if (-not (Test-Path -Path $expectedSkipsPath)) {
+    Set-Content -Path $expectedSkipsPath -Value "[]"
+}
+
+$envScript = @"
+# Generated by prepare-conformance-suite.ps1
+
+$env:CONFORMANCE_SERVER = '$($runnerEnvironment.CONFORMANCE_SERVER)'
+$env:CONFORMANCE_SERVER_LOCAL = '$($runnerEnvironment.CONFORMANCE_SERVER_LOCAL)'
+$env:CONFORMANCE_SERVER_MTLS = '$($runnerEnvironment.CONFORMANCE_SERVER_MTLS)'
+"@
+Set-Content -Path $envPath -Value $envScript
+
+$notes = @"
+# Conformance Suite Inputs
+
+Generated: $($inputs.generatedAtUtc)
+
+## Issuer
+
+- Alias: $Alias
+- Issuer: $issuer
+- Discovery: $discoveryUrl
+- JWKS: $jwksUrl
+- Registration endpoint: $registrationUrl
+- End-session endpoint: $endSessionUrl
+- Check-session iframe: $checkSessionUrl
+
+## Hosted Suite Values
+
+- Callback URI: $callbackUrl
+- Post-logout redirect URI: $postLogoutRedirectUrl
+- Front-channel logout URI: $frontChannelLogoutUrl
+- Back-channel logout URI: $backChannelLogoutUrl
+
+## Dynamic Registration
+
+- Registration endpoint: $registrationUrl
+- Initial access token: $DynamicRegistrationInitialAccessToken
+
+## Fallback Clients
+
+- oidf-basic-primary / oidf-basic-primary-dev-secret
+- oidf-basic-secondary / oidf-basic-secondary-dev-secret
+
+## Official Runner Environment
+
+- CONFORMANCE_SERVER=$($runnerEnvironment.CONFORMANCE_SERVER)
+- CONFORMANCE_SERVER_LOCAL=$($runnerEnvironment.CONFORMANCE_SERVER_LOCAL)
+- CONFORMANCE_SERVER_MTLS=$($runnerEnvironment.CONFORMANCE_SERVER_MTLS)
+
+## Generated Artifacts
+
+- Inputs JSON: $jsonPath
+- Environment script: $envPath
+- Expected failures file: $expectedFailuresPath
+- Expected skips file: $expectedSkipsPath
+- Static runner config: $staticRunnerConfigPath
+- Dynamic runner config: $dynamicRunnerConfigPath
+
+## Certification Plan Names
+
+- Config OP: $($certificationPlans.configOp)
+- Basic OP: $($certificationPlans.basicOp)
+- Form Post OP: $($certificationPlans.formPostOp)
+
+## Browser Automation Defaults
+
+- Username: $BrowserUsername
+- Password: $BrowserPassword
+- Provider picker: clicks `#btn-local-login` when the provider selection page appears.
+- Login form: fills `Username` and `Password`, then submits.
+- Consent page: approves via the primary submit button when a consent page appears.
+
+## Wrapper Usage
+
+Example with the repo wrapper around the official run-test-plan.py script:
+
+```powershell
+`$runnerArgs = @(
+    '--list',
+    '$($certificationPlans.basicOp)',
+    '$staticRunnerConfigPath'
+)
+
+& ./tools/certification/invoke-official-run-test-plan.ps1 `
+    -ConformanceSuitePath C:\src\conformance-suite `
+    -ConformanceToken '<hosted-suite token>' `
+    -Alias $Alias `
+    -RunnerArguments `$runnerArgs
+```
+
+For actual execution, replace `--list` with the official runner mode you need and choose either the static or dynamic runner config file generated in this directory.
+"@
+Set-Content -Path $notesPath -Value $notes
+
+Write-Host "Rendered conformance suite inputs: $jsonPath" -ForegroundColor Green
+Write-Host "Rendered runner environment script: $envPath" -ForegroundColor Green
+Write-Host "Rendered hosted-suite notes: $notesPath" -ForegroundColor Green
+Write-Host "Prepared expected-failures file: $expectedFailuresPath" -ForegroundColor Green
+Write-Host "Prepared expected-skips file: $expectedSkipsPath" -ForegroundColor Green
+Write-Host "Rendered static runner config: $staticRunnerConfigPath" -ForegroundColor Green
+Write-Host "Rendered dynamic runner config: $dynamicRunnerConfigPath" -ForegroundColor Green

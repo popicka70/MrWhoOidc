@@ -1,11 +1,14 @@
 using System.Text.Json;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using MrWhoOidc.Auth.MultiTenancy;
 using MrWhoOidc.Auth.Persistence;
 using MrWhoOidc.Auth.Seeding;
+using MrWhoOidc.Auth.Settings;
 using MrWhoOidc.Auth.Services;
 using MrWhoOidc.Auth.Options;
 using MrWhoOidc.WebAuth.Handlers;
@@ -33,6 +36,7 @@ internal sealed class SeedManifestApplier(
     IConfiguration configuration,
     IPasswordHasher passwordHasher,
     IClientStore clientStore,
+    IPlatformSettingsService platformSettingsService,
     ILicenseService licenseService,
     ILogger<SeedManifestApplier> logger) : ISeedManifestApplier
 {
@@ -149,6 +153,9 @@ internal sealed class SeedManifestApplier(
 
     public async Task ApplyTenantsAsync(SeedManifest manifest, string authorityBaseUrl, CancellationToken ct = default)
     {
+        await ApplyPlatformSettingsAsync(manifest).ConfigureAwait(false);
+        await ApplyPlatformInitialAccessTokensAsync(manifest, ct).ConfigureAwait(false);
+
         if (manifest.Tenants.Count == 0)
         {
             return;
@@ -251,6 +258,9 @@ internal sealed class SeedManifestApplier(
 
     public async Task ApplyForCurrentTenantAsync(SeedManifest manifest, CancellationToken ct = default)
     {
+        await ApplyPlatformSettingsAsync(manifest).ConfigureAwait(false);
+        await ApplyPlatformInitialAccessTokensAsync(manifest, ct).ConfigureAwait(false);
+
         var tenant = tenantAccessor.CurrentTenant;
         if (tenant is null)
         {
@@ -291,6 +301,8 @@ internal sealed class SeedManifestApplier(
         {
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
         }
+
+        await ApplyDynamicClientRegistrationRealmAsync(tenantDef, tenant, ct).ConfigureAwait(false);
 
         await EnsureScopesAsync(manifest, tenantDef, tenant, ct).ConfigureAwait(false);
 
@@ -401,7 +413,6 @@ internal sealed class SeedManifestApplier(
                 if (seedOptions.Value.OverwriteClientSecrets || string.IsNullOrWhiteSpace(client.ClientSecretHash))
                 {
                     client.ClientSecretHash = passwordHasher.Hash(resolvedClientSecret);
-                    client.RequirePkce = true;
                 }
 
                 // IMPORTANT: if the client already has active secrets in the new ClientSecrets table,
@@ -418,6 +429,176 @@ internal sealed class SeedManifestApplier(
 
             await EnsureSeededAdminHasAdminRoleForClientAsync(client, ct).ConfigureAwait(false);
         }
+    }
+
+    private async Task ApplyPlatformSettingsAsync(SeedManifest manifest)
+    {
+        var platformDef = manifest.PlatformSettings;
+        if (platformDef is null)
+        {
+            return;
+        }
+
+        var settings = await platformSettingsService.GetSettingsAsync().ConfigureAwait(false);
+        var changed = false;
+
+        if (platformDef.QrLoginAtDiscoveryEnabled is not null && settings.QrLoginAtDiscoveryEnabled != platformDef.QrLoginAtDiscoveryEnabled.Value)
+        {
+            settings.QrLoginAtDiscoveryEnabled = platformDef.QrLoginAtDiscoveryEnabled.Value;
+            changed = true;
+        }
+
+        if (platformDef.DynamicClientRegistrationEnabled is not null && settings.DynamicClientRegistrationEnabled != platformDef.DynamicClientRegistrationEnabled.Value)
+        {
+            settings.DynamicClientRegistrationEnabled = platformDef.DynamicClientRegistrationEnabled.Value;
+            changed = true;
+        }
+
+        if (platformDef.EnableTokenExchange is not null && settings.EnableTokenExchange != platformDef.EnableTokenExchange.Value)
+        {
+            settings.EnableTokenExchange = platformDef.EnableTokenExchange.Value;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        await platformSettingsService.UpdateSettingsAsync(settings, "seed-manifest").ConfigureAwait(false);
+        logger.LogInformation("Seed manifest updated platform settings.");
+    }
+
+    private async Task ApplyPlatformInitialAccessTokensAsync(SeedManifest manifest, CancellationToken ct)
+    {
+        if (manifest.PlatformInitialAccessTokens.Count == 0)
+        {
+            return;
+        }
+
+        var changed = false;
+
+        foreach (var tokenDef in manifest.PlatformInitialAccessTokens)
+        {
+            if (string.IsNullOrWhiteSpace(tokenDef.Token))
+            {
+                continue;
+            }
+
+            var plaintextToken = tokenDef.Token.Trim();
+            var tokenHash = HashPlatformInitialAccessToken(plaintextToken);
+            var existing = await db.PlatformInitialAccessTokens
+                .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, ct)
+                .ConfigureAwait(false);
+
+            var normalizedDescription = string.IsNullOrWhiteSpace(tokenDef.Description) ? null : tokenDef.Description.Trim();
+            if (existing is null)
+            {
+                db.PlatformInitialAccessTokens.Add(new PlatformInitialAccessToken
+                {
+                    TokenHash = tokenHash,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    CreatedBy = string.IsNullOrWhiteSpace(tokenDef.CreatedBy) ? "seed-manifest" : tokenDef.CreatedBy.Trim(),
+                    Description = normalizedDescription,
+                    RevokedAt = null,
+                    RevokedBy = null
+                });
+
+                changed = true;
+                continue;
+            }
+
+            if (!seedOptions.Value.AllowUpdates)
+            {
+                continue;
+            }
+
+            if (existing.RevokedAt is not null)
+            {
+                existing.RevokedAt = null;
+                existing.RevokedBy = null;
+                changed = true;
+            }
+
+            if (existing.Description != normalizedDescription)
+            {
+                existing.Description = normalizedDescription;
+                changed = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger.LogInformation("Seed manifest ensured platform initial access tokens.");
+    }
+
+    private async Task ApplyDynamicClientRegistrationRealmAsync(TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)
+    {
+        if (tenantDef.DynamicClientRegistrationRealm is null)
+        {
+            return;
+        }
+
+        var tenantEntity = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenant.TenantId, ct).ConfigureAwait(false);
+        if (tenantEntity is null)
+        {
+            return;
+        }
+
+        var desiredRealmName = tenantDef.DynamicClientRegistrationRealm.Trim();
+        Guid? desiredRealmId = null;
+
+        if (!string.IsNullOrWhiteSpace(desiredRealmName))
+        {
+            desiredRealmId = await db.Realms
+                .AsNoTracking()
+                .Where(r => r.TenantId == tenant.TenantId && r.Name == desiredRealmName)
+                .Select(r => (Guid?)r.Id)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false);
+
+            if (desiredRealmId is null)
+            {
+                logger.LogWarning(
+                    "Seed manifest requested dynamic client registration realm '{RealmName}' for tenant '{TenantSlug}', but no matching realm exists.",
+                    desiredRealmName,
+                    tenant.Slug);
+                return;
+            }
+        }
+
+        var settings = string.IsNullOrWhiteSpace(tenantEntity.SettingsJson)
+            ? new TenantSettings()
+            : JsonSerializer.Deserialize<TenantSettings>(tenantEntity.SettingsJson) ?? new TenantSettings();
+
+        settings.Auth ??= new AuthTenantSettings();
+
+        if (!seedOptions.Value.AllowUpdates && settings.Auth.DynamicClientRegistrationRealmId is not null)
+        {
+            return;
+        }
+
+        if (settings.Auth.DynamicClientRegistrationRealmId == desiredRealmId)
+        {
+            return;
+        }
+
+        settings.Auth.DynamicClientRegistrationRealmId = desiredRealmId;
+        tenantEntity.SettingsJson = JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        });
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        logger.LogInformation(
+            "Seed manifest configured dynamic client registration realm for tenant '{TenantSlug}' to '{RealmName}'.",
+            tenant.Slug,
+            string.IsNullOrWhiteSpace(desiredRealmName) ? "disabled" : desiredRealmName);
     }
 
     private async Task EnsureSeededClientSecretAsync(Client client, string resolvedClientSecret, CancellationToken ct)
@@ -466,6 +647,12 @@ internal sealed class SeedManifestApplier(
             client.ClientId,
             overwrite,
             overwrite ? existingSecrets.Count : 0);
+    }
+
+    private static string HashPlatformInitialAccessToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToBase64String(bytes);
     }
 
     private async Task EnsureScopesAsync(SeedManifest manifest, TenantSeedDefinition tenantDef, TenantContext tenant, CancellationToken ct)

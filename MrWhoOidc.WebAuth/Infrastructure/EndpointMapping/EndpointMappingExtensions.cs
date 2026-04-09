@@ -239,8 +239,7 @@ internal static class EndpointMappingExtensions
 
         routes.MapPost("/par", (IParHandler h, HttpContext ctx) => h.HandleAsync(ctx))
             .RequireCors("oidc")
-            .RequireRateLimiting("rl-par")
-            .WithMetadata(new RequireLicenseFeatureAttribute(FeatureFlags.AdvancedSecurity));
+            .RequireRateLimiting("rl-par");
         routes.MapMethods("/par", new[] { "OPTIONS" }, () => Results.Ok())
             .RequireCors("oidc");
 

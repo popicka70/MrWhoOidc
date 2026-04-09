@@ -1,0 +1,17 @@
+services:
+  webauth:
+    environment:
+      Oidc__AllowedCorsOrigins__3: "https://www.certification.openid.net"
+      Oidc__AllowedCorsOrigins__4: "https://staging.certification.openid.net"
+      Seeding__Enabled: "true"
+      Seeding__ManifestPath: "/seed/certification-seed-manifest.json"
+      Seeding__AllowUpdates: "true"
+      Seeding__OverwriteClientSecrets: "true"
+      Testing__EnableAutoSeed: "true"
+      Auth__EnableDynamicClientRegistration: "true"
+      Auth__EnableClientConfigurationEndpoint: "true"
+      Auth__RequireInitialAccessToken: "false"
+      Auth__DynamicClientAllowLocalhostHttp: "true"
+    volumes:
+      - ./certs:/https:ro
+      - ./tools/certification/.generated/certification-seed-manifest.json:/seed/certification-seed-manifest.json:ro

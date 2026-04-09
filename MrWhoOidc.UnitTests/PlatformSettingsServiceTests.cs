@@ -21,8 +21,12 @@ public sealed class PlatformSettingsServiceTests
         return provider.GetRequiredService<HybridCache>();
     }
 
-    private static IOptions<AuthOptions> CreateAuthOptions(bool enableTokenExchange = false)
-        => Options.Create(new AuthOptions { EnableTokenExchange = enableTokenExchange });
+    private static IOptions<AuthOptions> CreateAuthOptions(bool enableTokenExchange = false, bool enableDynamicClientRegistration = false)
+        => Options.Create(new AuthOptions
+        {
+            EnableTokenExchange = enableTokenExchange,
+            EnableDynamicClientRegistration = enableDynamicClientRegistration
+        });
 
     [TestMethod]
     public async Task GetSettingsAsync_CreatesDefault_WhenNotExists()
@@ -38,8 +42,21 @@ public sealed class PlatformSettingsServiceTests
         // Assert
         Assert.IsNotNull(settings);
         Assert.IsFalse(settings.QrLoginAtDiscoveryEnabled, "Default should be disabled");
+        Assert.IsFalse(settings.DynamicClientRegistrationEnabled, "Default should inherit disabled AuthOptions");
         Assert.IsFalse(settings.EnableTokenExchange, "Default should inherit disabled AuthOptions");
         Assert.AreNotEqual(Guid.Empty, settings.Id);
+    }
+
+    [TestMethod]
+    public async Task GetSettingsAsync_CreatesDefault_WithDynamicClientRegistrationInheritedFromAuthOptions()
+    {
+        using var db = CreateDb();
+        var cache = CreateCache();
+        var service = new PlatformSettingsService(db, cache, CreateAuthOptions(enableDynamicClientRegistration: true));
+
+        var settings = await service.GetSettingsAsync();
+
+        Assert.IsTrue(settings.DynamicClientRegistrationEnabled);
     }
 
     [TestMethod]
