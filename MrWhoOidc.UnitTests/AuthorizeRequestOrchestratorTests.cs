@@ -102,7 +102,9 @@ public sealed class AuthorizeRequestOrchestratorTests
 
     private static DefaultHttpContext CreateHttpContext(Dictionary<string, string> queryParams)
     {
-        var services = new ServiceCollection().BuildServiceProvider();
+        var services = new ServiceCollection()
+            .AddLogging()
+            .BuildServiceProvider();
 
         var context = new DefaultHttpContext();
         context.RequestServices = services;

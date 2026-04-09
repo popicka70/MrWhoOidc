@@ -171,6 +171,94 @@ public static class BootstrapEndpointMappingExtensions
             return Results.Ok(new { tenantId = tenant.Id, slug = tenant.Slug, issuer = tenant.IssuerUri });
         })
         .AllowAnonymous();
+
+        app.MapPost("/bootstrap/apply-seed-manifest", async (
+            HttpContext http,
+            AuthDbContext db,
+            ITenantAccessor tenantAccessor,
+            IMultiTenancyOptions multiTenancyOptions,
+            ISeedManifestProvider seedManifestProvider,
+            ISeedManifestApplier seedManifestApplier,
+            IOptions<OidcOptions> oidcOptions,
+            IConfiguration config,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("Bootstrap");
+
+            var configuredToken = config["Bootstrap:Token"];
+            if (string.IsNullOrWhiteSpace(configuredToken))
+            {
+                return Results.NotFound();
+            }
+
+            if (!TryGetProvidedToken(http, out var providedToken) || !FixedTimeEquals(configuredToken, providedToken))
+            {
+                return Results.Unauthorized();
+            }
+
+            var seedManifest = await seedManifestProvider.TryLoadAsync(ct).ConfigureAwait(false);
+            if (seedManifest is null)
+            {
+                return Results.NotFound(new { error = "seed_manifest_not_configured" });
+            }
+
+            var baseUrlCandidate =
+                (!string.IsNullOrWhiteSpace(oidcOptions.Value.PublicBaseUrl) ? oidcOptions.Value.PublicBaseUrl : null)
+                ?? (!string.IsNullOrWhiteSpace(oidcOptions.Value.Issuer) ? oidcOptions.Value.Issuer : null)
+                ?? $"{http.Request.Scheme}://{http.Request.Host}";
+
+            if (!TryGetAuthorityBaseUrl(baseUrlCandidate, out var baseUrl))
+            {
+                return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid configuration", detail: "Unable to determine a valid base URL from Oidc:PublicBaseUrl/Oidc:Issuer or request URL.");
+            }
+
+            await seedManifestApplier.ApplyTenantsAsync(seedManifest, baseUrl, ct).ConfigureAwait(false);
+
+            var appliedTenants = new List<string>();
+            foreach (var tenantDef in seedManifest.Tenants)
+            {
+                if (string.IsNullOrWhiteSpace(tenantDef.Slug))
+                {
+                    continue;
+                }
+
+                var slug = tenantDef.Slug.Trim();
+                var tenant = await db.Tenants
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.Slug == slug, ct)
+                    .ConfigureAwait(false);
+
+                if (tenant is null)
+                {
+                    continue;
+                }
+
+                tenantAccessor.SetTenant(new TenantContext
+                {
+                    TenantId = tenant.Id,
+                    Slug = tenant.Slug,
+                    Name = tenant.Name,
+                    IssuerUri = tenant.IssuerUri,
+                    IsMultiTenantMode = multiTenancyOptions.Enabled
+                });
+
+                await seedManifestApplier.ApplyForCurrentTenantAsync(seedManifest, ct).ConfigureAwait(false);
+                appliedTenants.Add(tenant.Slug);
+            }
+
+            logger.LogInformation(
+                "Seed manifest applied to existing deployment for {TenantCount} tenant(s): {TenantSlugs}",
+                appliedTenants.Count,
+                string.Join(", ", appliedTenants));
+
+            return Results.Ok(new
+            {
+                appliedTenants,
+                manifestConfigured = true
+            });
+        })
+        .AllowAnonymous();
     }
 
     private static bool TryGetProvidedToken(HttpContext http, out string token)

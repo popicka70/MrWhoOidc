@@ -1202,6 +1202,15 @@
     "IsAnonymous": true
   },
   {
+    "Pattern": "/bootstrap/apply-seed-manifest",
+    "Methods": "POST",
+    "RateLimiters": [],
+    "Authz": null,
+    "HasAntiforgery": false,
+    "HasCors": false,
+    "IsAnonymous": true
+  },
+  {
     "Pattern": "/clients/{clientId}/jwks",
     "Methods": "GET",
     "RateLimiters": [

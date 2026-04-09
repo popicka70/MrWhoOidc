@@ -4,6 +4,7 @@
 param(
     [string]$Alias = "mrwhooidc-local",
     [string]$SuiteHost = "www.certification.openid.net",
+    [string]$ConformanceApiBaseUrl,
     [string]$BaseUrl = "https://localhost:8443",
     [string]$TenantSlug = "default",
     [string]$DynamicRegistrationInitialAccessToken = "oidf-dcr-initial-access-token",
@@ -60,7 +61,20 @@ if ([string]::IsNullOrWhiteSpace($MtlsServerBaseUrl)) {
     $MtlsServerBaseUrl = $PublicServerBaseUrl
 }
 
+if ([string]::IsNullOrWhiteSpace($ConformanceApiBaseUrl)) {
+    if ($SuiteHost -match '^https?://') {
+        $ConformanceApiBaseUrl = $SuiteHost
+    }
+    else {
+        $ConformanceApiBaseUrl = "https://$SuiteHost"
+    }
+}
+
+$normalizedConformanceApiBaseUrl = Normalize-BaseUrl -Url $ConformanceApiBaseUrl
 $normalizedBaseUrl = Normalize-BaseUrl -Url $BaseUrl
+$normalizedPublicServerBaseUrl = Normalize-BaseUrl -Url $PublicServerBaseUrl
+$normalizedLocalServerBaseUrl = Normalize-BaseUrl -Url $LocalServerBaseUrl
+$normalizedMtlsServerBaseUrl = Normalize-BaseUrl -Url $MtlsServerBaseUrl
 $issuer = "$normalizedBaseUrl/t/$TenantSlug"
 $discoveryUrl = "$issuer/.well-known/openid-configuration"
 $jwksUrl = "$issuer/jwks"
@@ -68,6 +82,12 @@ $authorizeUrl = "$issuer/authorize"
 $registrationUrl = "$issuer/register"
 $endSessionUrl = "$issuer/connect/endsession"
 $checkSessionUrl = "$issuer/connect/checksession"
+$publicIssuer = "$normalizedPublicServerBaseUrl/t/$TenantSlug"
+$publicDiscoveryUrl = "$publicIssuer/.well-known/openid-configuration"
+$localIssuer = "$normalizedLocalServerBaseUrl/t/$TenantSlug"
+$localDiscoveryUrl = "$localIssuer/.well-known/openid-configuration"
+$mtlsIssuer = "$normalizedMtlsServerBaseUrl/t/$TenantSlug"
+$mtlsDiscoveryUrl = "$mtlsIssuer/.well-known/openid-configuration"
 
 $callbackUrl = "https://$SuiteHost/test/a/$Alias/callback"
 $postLogoutRedirectUrl = "https://$SuiteHost/test/a/$Alias/post_logout_redirect"
@@ -99,7 +119,7 @@ $browserAutomation = @(
                 task = "Choose local login"
                 optional = $true
                 match = "*/t/$TenantSlug/auth/providers/select*"
-                commands = @(
+                commands = @(,
                     @("click", "id", "btn-local-login")
                 )
             }
@@ -127,7 +147,7 @@ $browserAutomation = @(
                 task = "Consent"
                 optional = $true
                 match = "*/t/$TenantSlug/consent*"
-                commands = @(
+                commands = @(,
                     @("click", "css", "button[type='submit']")
                 )
             }
@@ -139,7 +159,7 @@ $browserAutomation = @(
             [ordered]@{
                 task = "Verify Complete"
                 match = "*/test/*/callback*"
-                commands = @(
+                commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
             }
@@ -152,7 +172,7 @@ $browserAutomation = @(
                 task = "Verify Logout Complete"
                 optional = $true
                 match = "*/test/*/post_logout_redirect*"
-                commands = @(
+                commands = @(,
                     @("wait", "id", "submission_complete", 10)
                 )
             }
@@ -164,7 +184,7 @@ $staticRunnerConfig = [ordered]@{
     alias = $Alias
     description = "MrWhoOidc OIDC static-client runner config"
     server = [ordered]@{
-        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+        discoveryUrl = $publicDiscoveryUrl
     }
     client = [ordered]@{
         client_id = "oidf-basic-primary"
@@ -187,7 +207,7 @@ $dynamicRunnerConfig = [ordered]@{
     alias = $Alias
     description = "MrWhoOidc OIDC dynamic-client runner config"
     server = [ordered]@{
-        discoveryUrl = "{LOCALBASEURL}t/$TenantSlug/.well-known/openid-configuration"
+        discoveryUrl = $publicDiscoveryUrl
     }
     client = [ordered]@{
         client_name = "MrWhoOidc Dynamic Primary"
@@ -199,15 +219,16 @@ $dynamicRunnerConfig = [ordered]@{
 }
 
 $runnerEnvironment = [ordered]@{
-    CONFORMANCE_SERVER = Ensure-TrailingSlash -Url $PublicServerBaseUrl
-    CONFORMANCE_SERVER_LOCAL = Ensure-TrailingSlash -Url $LocalServerBaseUrl
-    CONFORMANCE_SERVER_MTLS = Ensure-TrailingSlash -Url $MtlsServerBaseUrl
+    CONFORMANCE_SERVER = Ensure-TrailingSlash -Url $normalizedConformanceApiBaseUrl
+    CONFORMANCE_SERVER_LOCAL = Ensure-TrailingSlash -Url $normalizedConformanceApiBaseUrl
+    CONFORMANCE_SERVER_MTLS = Ensure-TrailingSlash -Url $normalizedConformanceApiBaseUrl
 }
 
 $inputs = [ordered]@{
     generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
     alias = $Alias
     suiteHost = $SuiteHost
+    suiteApiBaseUrl = $normalizedConformanceApiBaseUrl
     issuer = [ordered]@{
         baseUrl = $normalizedBaseUrl
         tenantSlug = $TenantSlug
@@ -218,6 +239,15 @@ $inputs = [ordered]@{
         registration = $registrationUrl
         endSession = $endSessionUrl
         checkSession = $checkSessionUrl
+        publicBaseUrl = $normalizedPublicServerBaseUrl
+        publicIssuer = $publicIssuer
+        publicDiscovery = $publicDiscoveryUrl
+        localBaseUrl = $normalizedLocalServerBaseUrl
+        localIssuer = $localIssuer
+        localDiscovery = $localDiscoveryUrl
+        mtlsBaseUrl = $normalizedMtlsServerBaseUrl
+        mtlsIssuer = $mtlsIssuer
+        mtlsDiscovery = $mtlsDiscoveryUrl
     }
     hostedSuite = [ordered]@{
         callback = $callbackUrl
@@ -289,9 +319,9 @@ if (-not (Test-Path -Path $expectedSkipsPath)) {
 $envScript = @"
 # Generated by prepare-conformance-suite.ps1
 
-$env:CONFORMANCE_SERVER = '$($runnerEnvironment.CONFORMANCE_SERVER)'
-$env:CONFORMANCE_SERVER_LOCAL = '$($runnerEnvironment.CONFORMANCE_SERVER_LOCAL)'
-$env:CONFORMANCE_SERVER_MTLS = '$($runnerEnvironment.CONFORMANCE_SERVER_MTLS)'
+`$env:CONFORMANCE_SERVER = '$($runnerEnvironment.CONFORMANCE_SERVER)'
+`$env:CONFORMANCE_SERVER_LOCAL = '$($runnerEnvironment.CONFORMANCE_SERVER_LOCAL)'
+`$env:CONFORMANCE_SERVER_MTLS = '$($runnerEnvironment.CONFORMANCE_SERVER_MTLS)'
 "@
 Set-Content -Path $envPath -Value $envScript
 
@@ -327,11 +357,21 @@ Generated: $($inputs.generatedAtUtc)
 - oidf-basic-primary / oidf-basic-primary-dev-secret
 - oidf-basic-secondary / oidf-basic-secondary-dev-secret
 
+## Conformance Suite API
+
+- Suite host: $SuiteHost
+- API base: $normalizedConformanceApiBaseUrl
+
 ## Official Runner Environment
 
 - CONFORMANCE_SERVER=$($runnerEnvironment.CONFORMANCE_SERVER)
 - CONFORMANCE_SERVER_LOCAL=$($runnerEnvironment.CONFORMANCE_SERVER_LOCAL)
 - CONFORMANCE_SERVER_MTLS=$($runnerEnvironment.CONFORMANCE_SERVER_MTLS)
+
+The generated runner config JSON files embed the issuer-under-test discovery URL directly:
+
+- Static runner discovery: $publicDiscoveryUrl
+- Dynamic runner discovery: $publicDiscoveryUrl
 
 ## Generated Artifacts
 
