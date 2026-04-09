@@ -26,6 +26,7 @@ This hub points to the active documentation path for the current codebase. Use i
 - [docker-security-best-practices.md](docker-security-best-practices.md) - Hardening guidance for containerized deployments
 - [for-security-teams/incident-response.md](for-security-teams/incident-response.md) - Incident response procedures
 - [oidc-conformance-checklist.md](oidc-conformance-checklist.md) - Protocol compliance checklist
+- [oidc-openid-certification-readiness.md](oidc-openid-certification-readiness.md) - OpenID Foundation certification and conformance-suite readiness
 
 ## Common Workflows
 
@@ -76,4 +77,4 @@ This hub points to the active documentation path for the current codebase. Use i
 - Historical implementation notes, backlog documents, and archived assessments are intentionally not the primary entry path from this hub.
 - Local development and production deployment are documented separately because the development stack auto-seeds data while production requires explicit bootstrap.
 
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-04-09
